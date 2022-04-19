@@ -42,12 +42,16 @@ namespace RNSkia {
     };
 
     class NodeCircle: public Node {
+    private:
+        double cx;
+        double cy;
+        double r;
+        const SkPaint _paint;
     public:
-        NodeCircle(): Node() {}
+        NodeCircle(double cx, double cy, double r, const SkPaint &paint): Node(), cx(cx), cy(cy), r(r), _paint(paint) {}
 
         void render(SkCanvas* canvas, SkPaint* paint) {
-            paint->setColor(SK_ColorCYAN);
-            canvas->drawCircle(100, 100, 50, *paint);
+            canvas->drawCircle(cx, cy, r, _paint);
         }
     };
 
