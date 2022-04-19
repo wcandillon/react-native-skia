@@ -21,9 +21,9 @@ namespace RNSkia {
 
     using namespace facebook;
 
-    class NodeCanvas: public Node {
+    class CanvasNode: public Node {
     public:
-        NodeCanvas(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
+        CanvasNode(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
 
         std::string name() {
             return "CanvasNode";

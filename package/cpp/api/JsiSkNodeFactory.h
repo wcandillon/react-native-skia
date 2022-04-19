@@ -9,6 +9,7 @@
 #include "JsiSkNode.h"
 #include "nodes/CanvasNode.h"
 #include "nodes/CircleNode.h"
+#include "nodes/FillNode.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -26,18 +27,25 @@ namespace RNSkia {
         JSI_HOST_FUNCTION(MakeCanvas) {
             auto props = arguments[0].getObject(runtime);
             return jsi::Object::createFromHostObject(
-                runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCanvas>(runtime, props)));
+                runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<CanvasNode>(runtime, props)));
         }
 
         JSI_HOST_FUNCTION(MakeCircle) {
             auto props = arguments[0].getObject(runtime);
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCircle>(runtime, props)));
+                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<CircleNode>(runtime, props)));
+        }
+
+        JSI_HOST_FUNCTION(MakeFill) {
+            auto props = arguments[0].getObject(runtime);
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<FillNode>(runtime, props)));
         }
 
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas),
-            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle)
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeFill)
         )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)

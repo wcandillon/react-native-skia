@@ -1,4 +1,4 @@
-import type { AnimatedProps, CircleProps } from "../renderer";
+import type { AnimatedProps, CircleProps, FillProps } from "../renderer";
 
 import type { SkJSIInstance } from "./JsiInstance";
 
@@ -8,6 +8,7 @@ interface Node<T extends string = string> extends SkJSIInstance<T> {
 
 export interface NodeFactory {
   // eslint-disable-next-line @typescript-eslint/ban-types
-  MakeCanvas(props: {}): Node<"NodeCanvas">;
-  MakeCircle(props: AnimatedProps<CircleProps>): Node<"NodeCircle">;
+  MakeCanvas(props: {}): Node<"CanvasNode">;
+  MakeCircle(props: AnimatedProps<CircleProps>): Node<"CircleNode">;
+  MakeFill(props: AnimatedProps<FillProps>): Node<"FillNode">;
 }

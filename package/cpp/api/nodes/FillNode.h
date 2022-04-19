@@ -10,21 +10,17 @@ namespace RNSkia {
 
     using namespace facebook;
 
-
-    class CircleNode: public Node {
+    class FillNode: public Node {
     public:
-        CircleNode(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
+        FillNode(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
 
         std::string name() {
-            return "CircleNode";
+            return "FillNode";
         }
 
         void render(SkCanvas* canvas, SkPaint& parentPaint) {
-            auto cx = materializeNumber("cx");
-            auto cy = materializeNumber("cy");
-            auto r = materializeNumber("r");
             auto paint = processPaint(parentPaint);
-            canvas->drawCircle(cx, cy, r, paint);
+            canvas->drawPaint(paint);
         }
     };
 } // namespace RNSkia
