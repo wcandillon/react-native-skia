@@ -28,12 +28,8 @@ namespace RNSkia {
 
         JSI_HOST_FUNCTION(MakeCircle) {
             auto props = arguments[0].getObject(runtime);
-            auto r = props.getProperty(runtime, "r").asNumber();
-            auto cx = props.getProperty(runtime, "cx").asNumber();
-            auto cy = props.getProperty(runtime, "cy").asNumber();
-            auto paint = JsiSkPaint::fromValue(runtime, props.getProperty(runtime, "paint"));
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCircle>(cx, cy, r, *paint)));
+                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCircle>(runtime, props)));
         }
 
         JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas), JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle))

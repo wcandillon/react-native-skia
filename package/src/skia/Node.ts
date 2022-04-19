@@ -1,3 +1,5 @@
+import type SkiaReadonlyValue from "@shopify/react-native-skia";
+
 import type { SkJSIInstance } from "./JsiInstance";
 import type { SkPaint } from "./Paint/Paint";
 
@@ -7,8 +9,8 @@ interface PaintProps {
 
 interface CircleProps extends PaintProps {
   r: number;
-  cx: number;
-  cy: number;
+  cx: number | SkiaReadonlyValue<number>;
+  cy: number | SkiaReadonlyValue<number>;
 }
 
 interface Node<T extends string = string> extends SkJSIInstance<T> {

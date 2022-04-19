@@ -12,6 +12,8 @@
 
 #include <modules/svg/include/SkSVGDOM.h>
 
+#include <values/RNSkReadonlyValue.h>
+
 #pragma clang diagnostic pop
 
 namespace RNSkia {
@@ -43,15 +45,25 @@ namespace RNSkia {
 
     class NodeCircle: public Node {
     private:
-        double cx;
-        double cy;
-        double r;
-        const SkPaint _paint;
+        jsi::Runtime &runtime;
+        jsi::Object &props;
     public:
-        NodeCircle(double cx, double cy, double r, const SkPaint &paint): Node(), cx(cx), cy(cy), r(r), _paint(paint) {}
+        NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(), runtime(runtime), props(props) {}
 
         void render(SkCanvas* canvas, SkPaint* paint) {
-            canvas->drawCircle(cx, cy, r, _paint);
+            auto r = props.getProperty(runtime, "r");
+            auto jsiCx = props.getProperty(runtime, "cx");
+            double cx = 0;
+            if (jsiCx.isObject()) {
+                cx = jsiCx.asObject(runtime)
+                        .asHostObject<RNSkReadonlyValue>(runtime)
+                        ->getCurrent(runtime).asNumber();
+            } else {
+                cx = jsiCx.asNumber();
+            }
+            auto cy = props.getProperty(runtime, "cy");
+            auto p = JsiSkPaint::fromValue(runtime, props.getProperty(runtime, "paint"));
+            canvas->drawCircle(cx, cy.asNumber(), r.asNumber(), *p);
         }
     };
 
