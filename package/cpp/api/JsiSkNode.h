@@ -21,6 +21,12 @@ namespace RNSkia {
     class NodeCanvas {
     public:
         NodeCanvas() {}
+
+        void render(SkCanvas* canvas) {
+            auto paint = std::make_shared<SkPaint>();
+            paint->setColor(SK_ColorCYAN);
+            canvas->drawPaint(*paint);
+        }
     };
 
     class JsiSkNodeCanvas : public JsiSkWrappingSharedPtrHostObject<NodeCanvas> {

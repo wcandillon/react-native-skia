@@ -19,6 +19,7 @@ import type { SkPoint } from "./Point";
 import type { SkVertices, VertexMode } from "./Vertices/Vertices";
 import type { DataFactory } from "./Data";
 import type { SVGFactory } from "./SVG";
+import type { NodeFactory } from "./Node";
 import type { TextBlobFactory } from "./TextBlob";
 import type { FontMgrFactory } from "./FontMgr/FontMgrFactory";
 import type { SurfaceFactory } from "./Surface";
@@ -75,6 +76,7 @@ export interface Skia {
   Data: DataFactory;
   Image: ImageFactory;
   SVG: SVGFactory;
+  Node: NodeFactory;
   FontMgr: FontMgrFactory;
   TextBlob: TextBlobFactory;
   Surface: SurfaceFactory;
@@ -100,6 +102,7 @@ export const Skia = {
   PathEffect: SkiaApi.PathEffect,
   Data: SkiaApi.Data,
   SVG: SkiaApi.SVG,
+  Node: SkiaApi.Node,
   FontMgr: SkiaApi.FontMgr,
   TextBlob: SkiaApi.TextBlob,
   // Constructors

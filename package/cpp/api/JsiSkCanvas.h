@@ -16,6 +16,7 @@
 #include "JsiSkVertices.h"
 #include "JsiSkTextBlob.h"
 #include "JsiSkPicture.h"
+#include "JsiSkNode.h"
 
 #include <jsi/jsi.h>
 
@@ -385,6 +386,12 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(drawNode) {
+    auto root = JsiSkNodeCanvas::fromValue(runtime, arguments[0]);
+    root->render(_canvas);
+    return jsi::Value::undefined();
+  }
+
   JSI_HOST_FUNCTION(clipPath) {
     auto path = JsiSkPath::fromValue(runtime, arguments[0]);
     auto op = (SkClipOp)arguments[1].asNumber();
@@ -509,6 +516,7 @@ public:
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawTextBlob),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawGlyphs),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawSvg),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawNode),
                        JSI_EXPORT_FUNC(JsiSkCanvas, clipPath),
                        JSI_EXPORT_FUNC(JsiSkCanvas, clipRect),
                        JSI_EXPORT_FUNC(JsiSkCanvas, clipRRect),

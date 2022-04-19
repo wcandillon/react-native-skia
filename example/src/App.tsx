@@ -18,6 +18,7 @@ import {
   PerformanceDrawingTest,
   Wallpaper,
   Vertices,
+  Nodes,
 } from "./Examples";
 import { HomeScreen } from "./Home";
 
@@ -79,6 +80,7 @@ const App = () => {
           <Stack.Screen name="Graphs" component={GraphsScreen} />
           <Stack.Screen name="Animation" component={AnimationExample} />
           <Stack.Screen name="Performance" component={PerformanceDrawingTest} />
+          <Stack.Screen name="Nodes" component={Nodes} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

@@ -72,6 +72,7 @@ export const HomeScreen = () => {
         description="Drawing Performance Test"
         route="Performance"
       />
+      <HomeScreenButton title="🌲 Nodes" description="Nodes" route="Nodes" />
     </ScrollView>
   );
 };
