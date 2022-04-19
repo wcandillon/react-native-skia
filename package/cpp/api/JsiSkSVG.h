@@ -43,7 +43,7 @@ public:
 
 class JsiSkSVGSVG : public JsiSkWrappingSkPtrHostObject<SkSVGSVG> {
 public:
-    JsiSkSVG(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkSVGSVG>> svg)
+    JsiSkSVGSVG(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkSVGSVG> svg)
             : JsiSkWrappingSkPtrHostObject<SkSVGSVG>(std::move(context), std::move(svg)){}
 
     JSI_PROPERTY_GET(__typename__) {
@@ -58,7 +58,7 @@ public:
     static sk_sp<SkSVGSVG> fromValue(jsi::Runtime &runtime,
                                      const jsi::Value &obj) {
         return obj.asObject(runtime)
-                .asHostObject<SkSVGSVG>(runtime)
+                .asHostObject<JsiSkSVGSVG>(runtime)
                 ->getObject();
     }
 };
