@@ -3,6 +3,7 @@ import type {
   BlurMaskNodeProps,
   CircleProps,
   FillProps,
+  GlyphsProps,
 } from "../renderer";
 
 import type { SkJSIInstance } from "./JsiInstance";
@@ -17,4 +18,5 @@ export interface NodeFactory {
   MakeCircle(props: AnimatedProps<CircleProps>): Node<"CircleNode">;
   MakeFill(props: AnimatedProps<FillProps>): Node<"FillNode">;
   MakeBlurMask(props: AnimatedProps<BlurMaskNodeProps>): Node<"BlurMaskNode">;
+  MakeGlyphs(props: AnimatedProps<GlyphsProps>): Node<"GlyphsNode">;
 }

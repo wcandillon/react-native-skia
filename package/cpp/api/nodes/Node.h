@@ -27,10 +27,12 @@ namespace RNSkia {
 
         jsi::Value materialize(const char* name) {
             auto value = props.getProperty(runtime, name);
+            // TODO: check if is host object of derived value
+            // TODO: support other skia values than derived values
             if (value.isObject() && value.asObject(runtime).isHostObject(runtime)) {
                 return value.asObject(runtime)
                         .asHostObject<RNSkReadonlyValue>(runtime)
-                        ->getCurrent(runtime).asNumber();
+                        ->getCurrent(runtime);
             }
             return value;
         }

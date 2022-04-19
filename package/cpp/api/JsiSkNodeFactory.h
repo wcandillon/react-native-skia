@@ -11,6 +11,7 @@
 #include "nodes/CircleNode.h"
 #include "nodes/FillNode.h"
 #include "nodes/BlurMaskNode.h"
+#include "nodes/GlyphsNode.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -49,11 +50,18 @@ namespace RNSkia {
                     runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<BlurMaskNode>(runtime, props)));
         }
 
+        JSI_HOST_FUNCTION(MakeGlyphs) {
+            auto props = arguments[0].getObject(runtime);
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<GlyphsNode>(runtime, props)));
+        }
+
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeFill),
-            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeBlurMask)
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeBlurMask),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeGlyphs)
         )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)
