@@ -18,37 +18,68 @@ namespace RNSkia {
 
     using namespace facebook;
 
-    class NodeCanvas {
+    class Node {
+    protected:
+        std::vector<Node*> children;
     public:
-        NodeCanvas() {}
+        Node() {}
+        void appendChild(Node* node) {
+            children.push_back(node);
+        }
 
-        void render(SkCanvas* canvas) {
-            auto paint = std::make_shared<SkPaint>();
-            paint->setColor(SK_ColorCYAN);
-            canvas->drawPaint(*paint);
+
+        virtual void render(SkCanvas* canvas, SkPaint* paint) {
+            for (auto it = children.begin() ; it != children.end(); ++it) {
+                (*it)->render(canvas, paint);
+            }
         }
     };
 
-    class JsiSkNodeCanvas : public JsiSkWrappingSharedPtrHostObject<NodeCanvas> {
+    class NodeCanvas: public Node {
+    public:
+        NodeCanvas(): Node() {}
+
+    };
+
+    class NodeCircle: public Node {
+    public:
+        NodeCircle(): Node() {}
+
+        void render(SkCanvas* canvas, SkPaint* paint) {
+            paint->setColor(SK_ColorCYAN);
+            canvas->drawCircle(100, 100, 50, *paint);
+        }
+    };
+
+    class JsiSkNode: public JsiSkWrappingSharedPtrHostObject<Node> {
     public:
 
-        JsiSkNodeCanvas(std::shared_ptr<RNSkPlatformContext> context)
-        : JsiSkWrappingSharedPtrHostObject<NodeCanvas>(
-                context, std::make_shared<NodeCanvas>()){};
+        JsiSkNode(std::shared_ptr<RNSkPlatformContext> context, std::shared_ptr<Node> node)
+        : JsiSkWrappingSharedPtrHostObject<Node>(
+                context, std::move(node)){};
 
         JSI_PROPERTY_GET(__typename__) {
-          return jsi::String::createFromUtf8(runtime, "NodeCanvas");
+          return jsi::String::createFromUtf8(runtime, "Node");
         }
 
-        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkNodeCanvas, __typename__))
+        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkNode, __typename__))
+
+        JSI_HOST_FUNCTION(appendChild) {
+            auto node = JsiSkNode::fromValue(runtime, arguments[0]);
+            getObject()->appendChild(node.get());
+            return jsi::Value::undefined();
+        }
+
+        JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNode, appendChild))
+
 
         /**
           Returns the underlying object from a host object of this type
          */
-        static std::shared_ptr<NodeCanvas> fromValue(jsi::Runtime &runtime,
+        static std::shared_ptr<Node> fromValue(jsi::Runtime &runtime,
                                          const jsi::Value &obj) {
             return obj.asObject(runtime)
-                    .asHostObject<JsiSkNodeCanvas>(runtime)
+                    .asHostObject<JsiSkNode>(runtime)
                     ->getObject();
         }
     };

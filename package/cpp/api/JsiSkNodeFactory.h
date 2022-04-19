@@ -23,10 +23,15 @@ namespace RNSkia {
     public:
         JSI_HOST_FUNCTION(MakeCanvas) {
             return jsi::Object::createFromHostObject(
-                runtime, std::make_shared<JsiSkNodeCanvas>(getContext()));
+                runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCanvas>()));
         }
 
-        JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas))
+        JSI_HOST_FUNCTION(MakeCircle) {
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCircle>()));
+        }
+
+        JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas), JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle))
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)
                 : JsiSkHostObject(std::move(context)) {}

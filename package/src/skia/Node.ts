@@ -1,7 +1,10 @@
 import type { SkJSIInstance } from "./JsiInstance";
 
-export type NodeCanvas = SkJSIInstance<"NodeCanvas">;
+interface Node<T extends string = string> extends SkJSIInstance<T> {
+  appendChild(node: Node): void;
+}
 
 export interface NodeFactory {
-  MakeCanvas(): NodeCanvas;
+  MakeCanvas(): Node<"NodeCanvas">;
+  MakeCircle(): Node<"NodeCircle">;
 }
