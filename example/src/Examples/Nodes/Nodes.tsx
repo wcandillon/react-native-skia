@@ -16,13 +16,12 @@ export const Nodes = () => {
   }, [clock]);
   const cx = useDerivedValue(() => clock.current / 50, [clock]);
   const node = useMemo(() => {
-    const paint = Skia.Paint();
-    paint.setColor(0xff00ffff);
     const root = Skia.Node.MakeCanvas({});
     const circle = Skia.Node.MakeCircle({
       r: 100,
       cx: cx,
       cy: cx,
+      color: "lightblue",
     });
     root.appendChild(circle);
     return root;
