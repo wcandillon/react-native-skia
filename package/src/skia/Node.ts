@@ -1,6 +1,6 @@
 import type {
   AnimatedProps,
-  BlurMaskProps,
+  BlurMaskNodeProps,
   CircleProps,
   FillProps,
 } from "../renderer";
@@ -16,5 +16,5 @@ export interface NodeFactory {
   MakeCanvas(props: {}): Node<"CanvasNode">;
   MakeCircle(props: AnimatedProps<CircleProps>): Node<"CircleNode">;
   MakeFill(props: AnimatedProps<FillProps>): Node<"FillNode">;
-  MakeBlurMask(props: AnimatedProps<BlurMaskProps>): Node<"BlurMaskNode">;
+  MakeBlurMask(props: AnimatedProps<BlurMaskNodeProps>): Node<"BlurMaskNode">;
 }

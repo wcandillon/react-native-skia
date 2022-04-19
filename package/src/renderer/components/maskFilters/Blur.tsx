@@ -7,10 +7,14 @@ import type { SkEnum } from "../../processors";
 import { enumKey } from "../../processors";
 import type { AnimatedProps } from "../../processors/Animations/Animations";
 
-export interface BlurMaskProps {
-  style: SkEnum<typeof BlurStyle>;
+export interface BlurMaskNodeProps {
+  style: BlurStyle;
   blur: number;
   respectCTM: boolean;
+}
+
+export interface BlurMaskProps extends Omit<BlurMaskNodeProps, "style"> {
+  style: SkEnum<typeof BlurStyle>;
 }
 
 const onDeclare = createDeclaration<BlurMaskProps>(
