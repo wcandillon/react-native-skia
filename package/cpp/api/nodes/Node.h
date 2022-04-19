@@ -37,7 +37,7 @@ namespace RNSkia {
             return value;
         }
 
-        SkPaint processPaint(SkPaint &parentPaint);
+        std::shared_ptr<SkPaint> processPaint(SkPaint *parentPaint);
 
     public:
         Node(jsi::Runtime &runtime, jsi::Object &props): runtime(runtime), props(std::move(props)) {}
@@ -48,9 +48,10 @@ namespace RNSkia {
             children.push_back(node);
         }
 
-        virtual void render(SkCanvas* canvas, SkPaint& paint) {
+        virtual void render(SkCanvas* canvas, SkPaint* paint) {
             for (auto it = children.begin() ; it != children.end(); ++it) {
-                (*it)->render(canvas, paint);
+                auto item = (*it);
+                item->render(canvas, paint);
             }
         }
     };

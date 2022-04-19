@@ -390,7 +390,7 @@ public:
     auto root = JsiSkNode::fromValue(runtime, arguments[0]);
     auto paint = std::make_shared<SkPaint>();
     paint->setAntiAlias(true);
-    root->render(_canvas, *paint);
+    root->render(_canvas, paint.get());
     return jsi::Value::undefined();
   }
 

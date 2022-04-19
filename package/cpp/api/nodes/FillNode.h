@@ -18,9 +18,9 @@ namespace RNSkia {
             return "FillNode";
         }
 
-        void render(SkCanvas* canvas, SkPaint& parentPaint) {
+        void render(SkCanvas* canvas, SkPaint* parentPaint) {
             auto paint = processPaint(parentPaint);
-            canvas->drawPaint(paint);
+            canvas->drawPaint(*paint);
         }
     };
 } // namespace RNSkia

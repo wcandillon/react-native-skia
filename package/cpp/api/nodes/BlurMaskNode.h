@@ -20,12 +20,12 @@ namespace RNSkia {
             return "BlurMaskNode";
         }
 
-        void render(SkCanvas* canvas, SkPaint& paint) {
+        void render(SkCanvas* canvas, SkPaint* paint) {
             auto style = materialize("style").asNumber();
             auto blur = materialize("blur").asNumber();
             auto respectCTM = materialize("respectCTM").getBool();
             auto mf = SkMaskFilter::MakeBlur(static_cast<SkBlurStyle>(style), blur, respectCTM);
-            paint.setMaskFilter(mf);
+            paint->setMaskFilter(mf);
         }
     };
 } // namespace RNSkia

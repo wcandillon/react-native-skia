@@ -19,12 +19,12 @@ namespace RNSkia {
             return "CircleNode";
         }
 
-        void render(SkCanvas* canvas, SkPaint& parentPaint) {
+        void render(SkCanvas* canvas, SkPaint* parentPaint) {
             auto cx = materialize("cx").asNumber();
             auto cy = materialize("cy").asNumber();
             auto r = materialize("r").asNumber();
             auto paint = processPaint(parentPaint);
-            canvas->drawCircle(cx, cy, r, paint);
+            canvas->drawCircle(cx, cy, r, *paint);
         }
     };
 } // namespace RNSkia

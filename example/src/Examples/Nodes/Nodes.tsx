@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Dimensions } from "react-native";
+import type { SkFont } from "@shopify/react-native-skia";
 import {
   useDerivedValue,
   SkiaView,
@@ -37,16 +38,29 @@ const streams = cols.map(() =>
     .flat()
 );
 
-export const Nodes = () => {
-  const font = useFont(require("../Matrix/matrix-code-nfi.otf"), SYMBOL.height);
+const offset = 0;
+const range = 500;
+
+interface MatrixProps {
+  font: SkFont;
+}
+
+const Matrix = ({ font }: MatrixProps) => {
   const ref = useRef<SkiaView>(null);
   const clock = useMemo(() => ValueApi.createClockValue(), []);
+  const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
   useEffect(() => {
     clock.start();
     return ref.current?.registerValues([clock]);
   }, [clock]);
-  const progress = useDerivedValue(() => clock.current, [clock]);
+
+  const glyphs = useDerivedValue(() => {
+    const idx = offset + Math.floor(clock.current / range);
+    return [{ id: symbols[idx % symbols.length], pos }];
+  }, [clock]);
+
   const node = useMemo(() => {
+    console.log("Build Tree");
     const root = Skia.Node.MakeCanvas({});
     const fill = Skia.Node.MakeFill({ color: "black" });
     const blurMask = Skia.Node.MakeBlurMask({
@@ -56,41 +70,37 @@ export const Nodes = () => {
     });
     root.appendChild(fill);
     root.appendChild(blurMask);
-    if (font) {
-      const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
-      cols.map((_i, i) =>
-        rows.map((_j, j) => {
-          const stream = streams[i];
-          const offset = Math.round(Math.random() * (symbols.length - 1));
-          const range = 100 + Math.random() * 900;
-          const x = i * SYMBOL.width;
-          const y = j * SYMBOL.height;
-          const idx = offset + Math.floor(progress.current / range);
-          const glyphs = [{ id: symbols[idx % symbols.length], pos }];
-          const idx2 = Math.round(progress.current / 100);
-          const opacity = stream[(stream.length - j + idx2) % stream.length];
-          const color = "rgb(0, 255, 70)";
-          const symbol = Skia.Node.MakeGlyphs({
-            color,
-            opacity,
-            glyphs,
-            font,
-            x,
-            y,
-          });
-          root.appendChild(symbol);
-        })
-      );
-    }
+
+    cols.map((_i, i) =>
+      rows.map((_j, j) => {
+        const x = i * SYMBOL.width;
+        const y = j * SYMBOL.height;
+        const symbol = Skia.Node.MakeGlyphs({
+          color: "rgb(0, 255, 70)",
+          glyphs,
+          font,
+          x,
+          y,
+        });
+        root.appendChild(symbol);
+      })
+    );
     return root;
-  }, [progress, font]);
+  }, [font, glyphs]);
   const onDraw = useDrawCallback(
     (canvas) => {
-      if (node != null) {
-        canvas.drawNode(node);
-      }
+      console.log("Draw Frame");
+      canvas.drawNode(node);
     },
     [font]
   );
   return <SkiaView ref={ref} onDraw={onDraw} style={{ flex: 1 }} debug />;
+};
+
+export const Nodes = () => {
+  const font = useFont(require("../Matrix/matrix-code-nfi.otf"), SYMBOL.height);
+  if (!font) {
+    return null;
+  }
+  return <Matrix font={font} />;
 };

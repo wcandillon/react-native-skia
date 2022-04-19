@@ -19,7 +19,7 @@ namespace RNSkia {
             return "GlyphsNode";
         }
 
-        void render(SkCanvas* canvas, SkPaint& parentPaint) {
+        void render(SkCanvas* canvas, SkPaint* parentPaint) {
             auto jsiGlyphs = materialize("glyphs").asObject(runtime).asArray(runtime);
             auto font = JsiSkFont::fromValue(runtime, props.getProperty(runtime, "font"));
             auto x = materialize("x").asNumber();
@@ -47,7 +47,7 @@ namespace RNSkia {
                 positions.data(),
                 origin,
                 *font,
-                paint
+                *paint
             );
         }
     };
