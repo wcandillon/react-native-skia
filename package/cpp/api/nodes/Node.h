@@ -25,24 +25,14 @@ namespace RNSkia {
         jsi::Runtime &runtime;
         jsi::Object props;
 
-        double materializeNumber(const char* name) {
+        jsi::Value materialize(const char* name) {
             auto value = props.getProperty(runtime, name);
-            if (value.isObject()) {
+            if (value.isObject() && value.asObject(runtime).isHostObject(runtime)) {
                 return value.asObject(runtime)
                         .asHostObject<RNSkReadonlyValue>(runtime)
                         ->getCurrent(runtime).asNumber();
             }
-            return value.asNumber();
-        }
-
-        std::string materializeString(const char* name) {
-            auto value = props.getProperty(runtime, name);
-            if (value.isObject()) {
-                return value.asObject(runtime)
-                        .asHostObject<RNSkReadonlyValue>(runtime)
-                        ->getCurrent(runtime).asString(runtime).utf8(runtime);
-            }
-            return value.asString(runtime).utf8(runtime);
+            return value;
         }
 
         SkPaint processPaint(SkPaint &parentPaint);

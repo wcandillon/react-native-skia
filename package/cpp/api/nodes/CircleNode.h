@@ -20,9 +20,9 @@ namespace RNSkia {
         }
 
         void render(SkCanvas* canvas, SkPaint& parentPaint) {
-            auto cx = materializeNumber("cx");
-            auto cy = materializeNumber("cy");
-            auto r = materializeNumber("r");
+            auto cx = materialize("cx").asNumber();
+            auto cy = materialize("cy").asNumber();
+            auto r = materialize("r").asNumber();
             auto paint = processPaint(parentPaint);
             canvas->drawCircle(cx, cy, r, paint);
         }

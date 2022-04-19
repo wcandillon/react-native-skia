@@ -12,11 +12,11 @@ namespace RNSkia {
 
     SkPaint Node::processPaint(SkPaint &parentPaint) {
         SkPaint paint(parentPaint);
-        auto color = props.getProperty(runtime, "color");
+        auto color = materialize("color");
         if (color.isNumber()) {
-            paint.setColor(materializeNumber("color"));
+            paint.setColor(color.asNumber());
         } else if (color.isString()) {
-            auto cl = CSSColorParser::parse(materializeString("color"));
+            auto cl = CSSColorParser::parse(color.asString(runtime).utf8(runtime));
             int a = round(cl.a * 255);
             paint.setColor((a << 24) | (cl.r << 16) | (cl.g << 8) | cl.b);
         }
