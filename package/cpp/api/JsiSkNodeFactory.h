@@ -7,6 +7,8 @@
 
 #include "JsiSkHostObjects.h"
 #include "JsiSkNode.h"
+#include "nodes/CanvasNode.h"
+#include "nodes/CircleNode.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -32,7 +34,10 @@ namespace RNSkia {
                     runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCircle>(runtime, props)));
         }
 
-        JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas), JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle))
+        JSI_EXPORT_FUNCTIONS(
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCanvas),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeCircle)
+        )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)
                 : JsiSkHostObject(std::move(context)) {}

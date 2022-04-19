@@ -20,10 +20,9 @@ export const Nodes = () => {
     paint.setColor(0xff00ffff);
     const root = Skia.Node.MakeCanvas();
     const circle = Skia.Node.MakeCircle({
-      paint,
       r: 100,
       cx: cx,
-      cy: 200,
+      cy: cx,
     });
     root.appendChild(circle);
     return root;
