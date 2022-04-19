@@ -46,9 +46,9 @@ namespace RNSkia {
     class NodeCircle: public Node {
     private:
         jsi::Runtime &runtime;
-        jsi::Object &props;
+        jsi::Object props;
     public:
-        NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(), runtime(runtime), props(props) {}
+        NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(), runtime(runtime), props(std::move(props)) {}
 
         void render(SkCanvas* canvas, SkPaint* paint) {
             auto r = props.getProperty(runtime, "r");

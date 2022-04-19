@@ -11,7 +11,7 @@ export const Nodes = () => {
   const ref = useRef<SkiaView>(null);
   const clock = useMemo(() => ValueApi.createClockValue(), []);
   useEffect(() => {
-    //clock.start();
+    clock.start();
     return ref.current?.registerValues([clock]);
   }, [clock]);
   const cx = useDerivedValue(() => clock.current / 50, [clock]);
