@@ -1,4 +1,9 @@
-import type { AnimatedProps, CircleProps, FillProps } from "../renderer";
+import type {
+  AnimatedProps,
+  BlurMaskProps,
+  CircleProps,
+  FillProps,
+} from "../renderer";
 
 import type { SkJSIInstance } from "./JsiInstance";
 
@@ -11,4 +16,5 @@ export interface NodeFactory {
   MakeCanvas(props: {}): Node<"CanvasNode">;
   MakeCircle(props: AnimatedProps<CircleProps>): Node<"CircleNode">;
   MakeFill(props: AnimatedProps<FillProps>): Node<"FillNode">;
+  MakeBlurMask(props: AnimatedProps<BlurMaskProps>): Node<"BlurMaskNode">;
 }

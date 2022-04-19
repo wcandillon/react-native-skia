@@ -5,6 +5,7 @@ import {
   useDrawCallback,
   Skia,
   ValueApi,
+  BlurStyle,
 } from "@shopify/react-native-skia";
 
 export const Nodes = () => {
@@ -18,6 +19,11 @@ export const Nodes = () => {
   const node = useMemo(() => {
     const root = Skia.Node.MakeCanvas({});
     const fill = Skia.Node.MakeFill({ color: "black" });
+    const blurMask = Skia.Node.MakeBlurMask({
+      blur: 5,
+      respectCTM: true,
+      style: BlurStyle.Normal,
+    });
     const circle = Skia.Node.MakeCircle({
       r: 100,
       cx: cx,
@@ -25,6 +31,7 @@ export const Nodes = () => {
       color: "lightblue",
     });
     root.appendChild(fill);
+    root.appendChild(blurMask);
     root.appendChild(circle);
     return root;
   }, [cx]);
