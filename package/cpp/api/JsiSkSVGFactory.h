@@ -10,6 +10,8 @@
 #include "JsiSkData.h"
 #include "JsiSkSVG.h"
 
+#include "modules/svg/include/SkSVGSVG.h"
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -23,6 +25,12 @@ namespace RNSkia {
 
     class JsiSkSVGFactory : public JsiSkHostObject {
     public:
+        JSI_HOST_FUNCTION(MakeSVG) {
+            auto svg = SkSVGSVG::Make(SkSVGSVG::Type::kRoot);
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSVGSVG>(getContext(), svg);
+        }
+
         JSI_HOST_FUNCTION(MakeFromData) {
             auto data = JsiSkData::fromValue(runtime, arguments[0]);
             auto stream = SkMemoryStream::Make(data);

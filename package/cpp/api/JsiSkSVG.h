@@ -11,6 +11,7 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include <modules/svg/include/SkSVGDOM.h>
+#include <modules/svg/include/SkSVGSVG.h>
 
 #pragma clang diagnostic pop
 
@@ -40,4 +41,25 @@ public:
   }
 };
 
+class JsiSkSVGSVG : public JsiSkWrappingSkPtrHostObject<SkSVGSVG> {
+public:
+    JsiSkSVG(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkSVGSVG>> svg)
+            : JsiSkWrappingSkPtrHostObject<SkSVGSVG>(std::move(context), std::move(svg)){}
+
+    JSI_PROPERTY_GET(__typename__) {
+        return jsi::String::createFromUtf8(runtime, "SVGSVG");
+    }
+
+    JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkSVG, __typename__))
+
+    /**
+      Returns the underlying object from a host object of this type
+     */
+    static sk_sp<SkSVGSVG> fromValue(jsi::Runtime &runtime,
+                                     const jsi::Value &obj) {
+        return obj.asObject(runtime)
+                .asHostObject<SkSVGSVG>(runtime)
+                ->getObject();
+    }
+};
 } // namespace RNSkia
