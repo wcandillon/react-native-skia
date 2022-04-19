@@ -23,24 +23,8 @@ interface ProcessedGlyphs {
   positions: SkPoint[];
 }
 
-const onDraw = createDrawing<GlyphsProps>(
-  ({ canvas, paint, fontMgr }, { glyphs: rawGlyphs, x, y, ...fontDef }) => {
-    const font = processFont(fontMgr, fontDef);
-    const { glyphs, positions } = rawGlyphs.reduce<ProcessedGlyphs>(
-      (acc, glyph) => {
-        const { id, pos } = glyph;
-        acc.glyphs.push(id);
-        acc.positions.push(pos);
-        return acc;
-      },
-      { glyphs: [], positions: [] }
-    );
-    canvas.drawGlyphs(glyphs, positions, x, y, font, paint);
-  }
-);
-
 export const Glyphs = (props: AnimatedProps<GlyphsProps>) => {
-  return <skDrawing onDraw={onDraw} {...props} />;
+  return <skGlyphs {...props} />;
 };
 
 Glyphs.defaultProps = {

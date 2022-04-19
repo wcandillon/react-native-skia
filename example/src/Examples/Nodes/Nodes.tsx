@@ -104,10 +104,5 @@ export const Nodes = () => {
   if (!font) {
     return null;
   }
-  return (
-    <Canvas2 style={{ flex: 1 }} debug>
-      <Fill color="lightblue" />
-    </Canvas2>
-  );
-  //  return <Matrix font={font} />;
+  return <Matrix font={font} />;
 };

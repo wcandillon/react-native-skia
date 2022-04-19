@@ -1,10 +1,10 @@
 import {
   BlurMask,
-  Canvas,
   Fill,
   Group,
   useClockValue,
   useFont,
+  Canvas2,
 } from "@shopify/react-native-skia";
 import React from "react";
 
@@ -38,24 +38,22 @@ export const Matrix = () => {
   }
   const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
   return (
-    <Canvas style={{ flex: 1 }}>
+    <Canvas2 style={{ flex: 1 }} mode="continous" debug>
       <Fill color="black" />
-      <Group>
-        <BlurMask blur={8} style="solid" />
-        {cols.map((_i, i) =>
-          rows.map((_j, j) => (
-            <Symbol
-              symbols={symbols}
-              font={font}
-              timestamp={clock}
-              key={`${i}-${j}`}
-              i={i}
-              j={j}
-              stream={streams[i]}
-            />
-          ))
-        )}
-      </Group>
-    </Canvas>
+      <BlurMask blur={8} style="solid" />
+      {cols.map((_i, i) =>
+        rows.map((_j, j) => (
+          <Symbol
+            symbols={symbols}
+            font={font}
+            timestamp={clock}
+            key={`${i}-${j}`}
+            i={i}
+            j={j}
+            stream={streams[i]}
+          />
+        ))
+      )}
+    </Canvas2>
   );
 };

@@ -16,6 +16,8 @@ export const debug = (...args: Parameters<typeof console.log>) => {
 
 export enum NodeType {
   Fill = "skFill",
+  BlurMask = "skBlurMask",
+  Glyphs = "skGlyphs",
 }
 
 declare global {
@@ -23,6 +25,8 @@ declare global {
   namespace JSX {
     interface IntrinsicElements {
       skFill: Parameters<typeof Skia.Node.MakeFill>[0];
+      skBlurMask: Parameters<typeof Skia.Node.MakeBlurMask>[0];
+      skGlyph: Parameters<typeof Skia.Node.MakeGlyphs>[0];
     }
   }
 }
@@ -72,6 +76,10 @@ const createNode = (_container: Container, type: NodeType, props: Props) => {
   switch (type) {
     case NodeType.Fill:
       return Skia.Node.MakeFill(props);
+    case NodeType.BlurMask:
+      return Skia.Node.MakeBlurMask(props);
+    case NodeType.Glyphs:
+      return Skia.Node.MakeGlyphs(props);
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)
