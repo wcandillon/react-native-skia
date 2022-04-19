@@ -20,7 +20,7 @@
     "build-skia": "yarn build-skia-ios && yarn build-skia-android",
     "clean-skia": "yarn rimraf ./package/libs && yarn rimraf ./externals/skia/out",
     "copy-skia-include-headers": "yarn rimraf ./package/cpp/skia/include/ && cp -a ./externals/skia/include/. ./package/cpp/skia/include",
-    "copy-skia-module-headers": "yarn rimraf ./package/cpp/skia/modules/ && mkdir -p ./package/cpp/skia/modules/svg/include && mkdir -p ./package/cpp/skia/modules/skvg/include && mkdir -p ./package/cpp/skia/modules/skresources/include && cp -a ./externals/skia/modules/svg/include/. ./package/cpp/skia/modules/svg/include && cp -a ./externals/skia/modules/skvg/include/. ./package/cpp/skia/modules/skvg/include && cp -a ./externals/skia/modules/skresources/include/. ./package/cpp/skia/modules/skresources/include",
+    "copy-skia-module-headers": "yarn rimraf ./package/cpp/skia/modules/ && mkdir -p ./package/cpp/skia/modules/svg/include && mkdir -p ./package/cpp/skia/modules/sksg/include && mkdir -p ./package/cpp/skia/modules/skresources/include && cp -a ./externals/skia/modules/svg/include/. ./package/cpp/skia/modules/svg/include && cp -a ./externals/skia/modules/sksg/include/. ./package/cpp/skia/modules/sksg/include && cp -a ./externals/skia/modules/skresources/include/. ./package/cpp/skia/modules/skresources/include",
     "copy-skia-headers": "yarn copy-skia-module-headers && yarn copy-skia-include-headers",
     "build-npm": "yarn ts-node ./scripts/build-npm-package.ts",
     "get-filename-npm": "yarn ts-node ./scripts/get-npm-filename.ts",
