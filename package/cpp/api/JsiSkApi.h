@@ -29,6 +29,8 @@
 #include "JsiSkShaderFactory.h"
 #include "JsiSkSVG.h"
 #include "JsiSkSVGFactory.h"
+#include "JsiSkSG.h"
+#include "JsiSkSGFactory.h"
 #include "JsiSkTypeface.h"
 #include "JsiSkVertices.h"
 #include "JsiSkTypefaceFactory.h"
@@ -73,6 +75,8 @@ namespace RNSkia
       // Static members
       installReadonlyProperty("FontMgr",
                               std::make_shared<JsiSkFontMgrFactory>(context));
+      installReadonlyProperty("SG",
+                              std::make_shared<JsiSkSGFactory>(context));
       installReadonlyProperty("SVG",
                               std::make_shared<JsiSkSVGFactory>(context));
       installReadonlyProperty("Image",
