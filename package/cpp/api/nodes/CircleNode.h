@@ -21,23 +21,21 @@ namespace RNSkia {
 
     using namespace facebook;
 
+
     class NodeCircle: public Node {
-    private:
-        jsi::Runtime &runtime;
-        jsi::Object props;
     public:
-        NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(), runtime(runtime), props(std::move(props)) {}
+        NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
 
         std::string name() {
             return "NodeCircle";
         }
 
-        void render(SkCanvas* canvas, SkPaint* paint) {
-            double cx = materializeNumber(runtime, props, "cx");
-            double cy = materializeNumber(runtime, props, "cy");
-            double r = materializeNumber(runtime, props, "r");
-            paint->setColor(SK_ColorCYAN);
-            canvas->drawCircle(cx, cy, r, *paint);
+        void render(SkCanvas* canvas, SkPaint& parentPaint) {
+            double cx = materializeNumber("cx");
+            double cy = materializeNumber("cy");
+            double r = materializeNumber("r");
+            auto paint = processPaint(parentPaint);
+            canvas->drawCircle(cx, cy, r, paint);
         }
     };
 } // namespace RNSkia

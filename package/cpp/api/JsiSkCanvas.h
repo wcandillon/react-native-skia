@@ -389,7 +389,7 @@ public:
   JSI_HOST_FUNCTION(drawNode) {
     auto root = JsiSkNode::fromValue(runtime, arguments[0]);
     auto paint = std::make_shared<SkPaint>();
-    root->render(_canvas, paint.get());
+    root->render(_canvas, *paint);
     return jsi::Value::undefined();
   }
 

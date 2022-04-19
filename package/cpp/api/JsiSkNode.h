@@ -43,10 +43,6 @@ namespace RNSkia {
 
         JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNode, appendChild))
 
-
-        /**
-          Returns the underlying object from a host object of this type
-         */
         static std::shared_ptr<Node> fromValue(jsi::Runtime &runtime,
                                                const jsi::Value &obj) {
             return obj.asObject(runtime)

@@ -18,7 +18,7 @@ export const Nodes = () => {
   const node = useMemo(() => {
     const paint = Skia.Paint();
     paint.setColor(0xff00ffff);
-    const root = Skia.Node.MakeCanvas();
+    const root = Skia.Node.MakeCanvas({});
     const circle = Skia.Node.MakeCircle({
       r: 100,
       cx: cx,

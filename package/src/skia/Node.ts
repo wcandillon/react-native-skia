@@ -7,6 +7,7 @@ interface Node<T extends string = string> extends SkJSIInstance<T> {
 }
 
 export interface NodeFactory {
-  MakeCanvas(): Node<"NodeCanvas">;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  MakeCanvas(props: {}): Node<"NodeCanvas">;
   MakeCircle(props: AnimatedProps<CircleProps>): Node<"NodeCircle">;
 }

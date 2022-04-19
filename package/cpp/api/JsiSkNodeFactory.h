@@ -24,8 +24,9 @@ namespace RNSkia {
     class JsiSkNodeFactory : public JsiSkHostObject {
     public:
         JSI_HOST_FUNCTION(MakeCanvas) {
+            auto props = arguments[0].getObject(runtime);
             return jsi::Object::createFromHostObject(
-                runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCanvas>()));
+                runtime, std::make_shared<JsiSkNode>(getContext(), std::make_shared<NodeCanvas>(runtime, props)));
         }
 
         JSI_HOST_FUNCTION(MakeCircle) {
