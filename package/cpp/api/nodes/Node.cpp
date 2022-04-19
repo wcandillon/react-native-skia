@@ -14,9 +14,9 @@ namespace RNSkia {
         SkPaint paint(parentPaint);
         auto color = props.getProperty(runtime, "color");
         if (color.isNumber()) {
-            paint.setColor(color.asNumber());
+            paint.setColor(materializeNumber("color"));
         } else if (color.isString()) {
-            auto cl = CSSColorParser::parse(color.asString(runtime).utf8(runtime));
+            auto cl = CSSColorParser::parse(materializeString("color"));
             int a = round(cl.a * 255);
             paint.setColor((a << 24) | (cl.r << 16) | (cl.g << 8) | cl.b);
         }

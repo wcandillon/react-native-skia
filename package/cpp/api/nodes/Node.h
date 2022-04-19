@@ -35,6 +35,16 @@ namespace RNSkia {
             return value.asNumber();
         }
 
+        std::string materializeString(const char* name) {
+            auto value = props.getProperty(runtime, name);
+            if (value.isObject()) {
+                return value.asObject(runtime)
+                        .asHostObject<RNSkReadonlyValue>(runtime)
+                        ->getCurrent(runtime).asString(runtime).utf8(runtime);
+            }
+            return value.asString(runtime).utf8(runtime);
+        }
+
         SkPaint processPaint(SkPaint &parentPaint);
 
     public:
