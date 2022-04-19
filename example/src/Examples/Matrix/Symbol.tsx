@@ -9,8 +9,8 @@ import {
 import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
-export const COLS = 5;
-export const ROWS = 10;
+export const COLS = 20;
+export const ROWS = 30;
 export const SYMBOL = { width: width / COLS, height: height / ROWS };
 const pos = vec(0, 0);
 
@@ -42,7 +42,7 @@ export const Symbol = ({
   }, [timestamp]);
 
   const opacity = useDerivedValue(() => {
-    const idx = Math.round(timestamp.current / 100);
+    const idx = Math.round(timestamp.current / 50);
     return stream[(stream.length - j + idx) % stream.length];
   }, [timestamp]);
 
