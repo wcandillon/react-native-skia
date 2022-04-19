@@ -57,5 +57,20 @@ namespace RNSkia {
                 item->render(canvas, paint);
             }
         }
+
+        void setProps(jsi::Object lProps) {
+          //  props = lProps;
+        }
+
+        void removeChild(std::shared_ptr<Node> node) {
+        }
+
+        void insertBefore(std::shared_ptr<Node> before, std::shared_ptr<Node> node) {
+
+        }
+
+        void clearChildren() {
+            children.clear();
+        }
     };
 } // namespace RNSkia

@@ -11,6 +11,8 @@ import {
   useFont,
   vec,
   interpolateColors,
+  Fill,
+  Canvas2,
 } from "@shopify/react-native-skia";
 
 const { width, height } = Dimensions.get("window");
@@ -102,5 +104,10 @@ export const Nodes = () => {
   if (!font) {
     return null;
   }
-  return <Matrix font={font} />;
+  return (
+    <Canvas2 style={{ flex: 1 }} debug>
+      <Fill color="lightblue" />
+    </Canvas2>
+  );
+  //  return <Matrix font={font} />;
 };

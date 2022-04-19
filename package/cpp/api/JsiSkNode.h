@@ -41,7 +41,28 @@ namespace RNSkia {
             return jsi::Value::undefined();
         }
 
-        JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkNode, appendChild))
+        JSI_HOST_FUNCTION(setProps) {
+
+            return jsi::Value::undefined();
+        }
+
+        JSI_HOST_FUNCTION(insertBefore) {
+            auto before = JsiSkNode::fromValue(runtime, arguments[0]);
+            auto node = JsiSkNode::fromValue(runtime, arguments[1]);
+
+            return jsi::Value::undefined();
+        }
+
+        JSI_HOST_FUNCTION(clearChildren) {
+            getObject()->clearChildren();
+            return jsi::Value::undefined();
+        }
+
+        JSI_EXPORT_FUNCTIONS(
+                JSI_EXPORT_FUNC(JsiSkNode, setProps),
+                JSI_EXPORT_FUNC(JsiSkNode, insertBefore),
+                JSI_EXPORT_FUNC(JsiSkNode, appendChild),
+                JSI_EXPORT_FUNC(JsiSkNode, clearChildren))
 
         static std::shared_ptr<Node> fromValue(jsi::Runtime &runtime,
                                                const jsi::Value &obj) {

@@ -13,7 +13,7 @@ import type { SkImageFilter } from "./ImageFilter";
 import type { SkVertices } from "./Vertices";
 import type { SkTextBlob } from "./TextBlob";
 import type { SkPicture } from "./Picture";
-import type { NodeCanvas } from "./Node";
+import type { CanvasNode } from "./Node";
 
 export enum ClipOp {
   Difference,
@@ -364,7 +364,7 @@ export interface SkCanvas {
    * the SVG will be rendered to fit the canvas.
    */
   drawSvg: (svgDom: SkSVG, width?: number, height?: number) => void;
-  drawNode: (node: NodeCanvas) => void;
+  drawNode: (node: CanvasNode) => void;
   /** Saves SkMatrix and clip.
         Calling restore() discards changes to SkMatrix and clip,
         restoring the SkMatrix and clip to their state when save() was called.
