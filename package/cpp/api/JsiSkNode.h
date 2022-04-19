@@ -37,7 +37,7 @@ namespace RNSkia {
 
         JSI_HOST_FUNCTION(appendChild) {
             auto node = JsiSkNode::fromValue(runtime, arguments[0]);
-            getObject()->appendChild(node.get());
+            getObject()->appendChild(node);
             return jsi::Value::undefined();
         }
 

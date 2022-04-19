@@ -21,7 +21,7 @@ namespace RNSkia {
 
     class Node {
     protected:
-        std::vector<Node*> children;
+        std::vector<std::shared_ptr<Node>> children;
         jsi::Runtime &runtime;
         jsi::Object props;
 
@@ -41,11 +41,14 @@ namespace RNSkia {
 
     public:
         Node(jsi::Runtime &runtime, jsi::Object &props): runtime(runtime), props(std::move(props)) {}
+        ~Node() {
+
+        }
 
         virtual std::string name() = 0;
 
-        void appendChild(Node* node) {
-            children.push_back(node);
+        void appendChild(std::shared_ptr<Node> node) {
+            children.push_back(std::move(node));
         }
 
         virtual void render(SkCanvas* canvas, SkPaint* paint) {

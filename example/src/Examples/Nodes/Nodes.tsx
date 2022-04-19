@@ -14,8 +14,8 @@ import {
 } from "@shopify/react-native-skia";
 
 const { width, height } = Dimensions.get("window");
-const COLS = 5;
-const ROWS = 10;
+const COLS = 30;
+const ROWS = 50;
 const SYMBOL = { width: width / COLS, height: height / ROWS };
 const pos = vec(0, 0);
 const cols = new Array(COLS).fill(0).map((_, i) => i);
@@ -39,7 +39,7 @@ const streams = cols.map(() =>
 );
 
 const offset = 0;
-const range = 500;
+const range = 100;
 
 interface MatrixProps {
   font: SkFont;
