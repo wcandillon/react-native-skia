@@ -9,7 +9,7 @@ import {
 import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
-export const COLS = 20;
+export const COLS = 15;
 export const ROWS = 30;
 export const SYMBOL = { width: width / COLS, height: height / ROWS };
 const pos = vec(0, 0);
@@ -62,8 +62,8 @@ export const Symbol = ({
       y={y + SYMBOL.height}
       font={font}
       glyphs={glyphs}
-      opacity={opacity}
       color={color}
+      opacity={opacity}
     />
   );
 };
