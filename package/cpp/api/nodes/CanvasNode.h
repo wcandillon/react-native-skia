@@ -26,7 +26,7 @@ namespace RNSkia {
         NodeCanvas(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
 
         std::string name() {
-            return "NodeCanvas";
+            return "CanvasNode";
         }
 
     };

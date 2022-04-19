@@ -1,5 +1,8 @@
 #pragma once
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdocumentation"
+
 #include "third_party/CSSColorParser.h"
 
 #include <memory>
@@ -7,10 +10,10 @@
 
 #include <jsi/jsi.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdocumentation"
-
 #include <values/RNSkReadonlyValue.h>
+
+#include <SkPaint.h>
+#include <SkCanvas.h>
 
 #pragma clang diagnostic pop
 

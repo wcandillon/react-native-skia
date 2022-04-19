@@ -27,13 +27,13 @@ namespace RNSkia {
         NodeCircle(jsi::Runtime &runtime, jsi::Object &props): Node(runtime, props) {}
 
         std::string name() {
-            return "NodeCircle";
+            return "CircleNode";
         }
 
         void render(SkCanvas* canvas, SkPaint& parentPaint) {
-            double cx = materializeNumber("cx");
-            double cy = materializeNumber("cy");
-            double r = materializeNumber("r");
+            auto cx = materializeNumber("cx");
+            auto cy = materializeNumber("cy");
+            auto r = materializeNumber("r");
             auto paint = processPaint(parentPaint);
             canvas->drawCircle(cx, cy, r, paint);
         }
