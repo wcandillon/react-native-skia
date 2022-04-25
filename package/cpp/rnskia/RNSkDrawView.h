@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
 #include <string>
 
@@ -20,8 +19,6 @@
 
 #pragma clang diagnostic pop
 
-#define LOG_ALL_DRAWING 0
-
 class SkPicture;
 class SkRect;
 class SkImage;
@@ -35,7 +32,7 @@ using RNSkDrawCallback =
 
 enum RNSkDrawingMode { Default, Continuous };
 
-class RNSkDrawView {
+class RNSkDrawView: public std::enable_shared_from_this<RNSkDrawView> {
 public:
   /**
    * Constructor
@@ -45,7 +42,7 @@ public:
   /**
    Destructor
    */
-  ~RNSkDrawView();
+  virtual ~RNSkDrawView();
 
   /**
    * Repaints the Skia view using the underlying context and the drawcallback.
@@ -96,13 +93,7 @@ public:
   sk_sp<SkImage> makeImageSnapshot(std::shared_ptr<SkRect> bounds);
 
 protected:
-  void setNativeDrawFunc(std::function<void(const sk_sp<SkPicture>)> drawFunc) {
-    if(!_gpuDrawingLock->try_lock_for(250ms)) {
-      RNSkLogger::logToConsole("Could not lock drawing when clearing drawing function - %i", _nativeId);
-    }
-    _nativeDrawFunc = drawFunc;
-    _gpuDrawingLock->unlock();
-  }
+  virtual void drawPicture(const sk_sp<SkPicture>) = 0;
   
   /**
    Returns the scaled width of the view
@@ -113,11 +104,6 @@ protected:
    Returns the scaled height of the view
    */
   virtual int getHeight() { return -1; };
-  
-  /**
-   Returns true if the view is invalidated
-   */
-  volatile bool isInvalidated() { return _isInvalidated; }
   
   /**
    Override to be notified on invalidation
@@ -168,14 +154,14 @@ private:
   std::shared_ptr<JsiSkCanvas> _jsiCanvas;
   
   /**
-   * JS Drawing mutex
+   * Flag for js rendering busy
    */
-  std::shared_ptr<std::timed_mutex> _jsDrawingLock;
+  std::atomic<bool> _isBusyInJsDrawing = { false };
   
   /**
-   * SKIA Drawing mutex
+   * Flag for gpu rendering busy
    */
-  std::shared_ptr<std::timed_mutex> _gpuDrawingLock;
+  std::atomic<bool> _isBusyInGpuDrawing = { false };
 
   /**
    * Pointer to the platform context
@@ -213,11 +199,6 @@ private:
   RNSkTimingInfo _gpuTimingInfo;
   
   /**
-   Measures vsync framerate
-   */
-  RNSkTimingInfo _vsyncTimingInfo;
-  
-  /**
    Redraw queue counter
    */
   std::atomic<int> _redrawRequestCounter = { 1 };
@@ -225,17 +206,7 @@ private:
   /**
    * Native id
    */
-  size_t _nativeId;
-  
-  /**
-   Invalidation flag
-   */
-  std::atomic<bool> _isInvalidated = { false };
-  
-  /**
-   Native draw handler
-   */
-  std::function<void(const sk_sp<SkPicture>)> _nativeDrawFunc;  
+  size_t _nativeId = -1;    
   
 };
 

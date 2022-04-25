@@ -1,5 +1,5 @@
 #import <RNSkDrawViewImpl.h>
-
+#import <RNSkLog.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -8,7 +8,6 @@
 
 #pragma clang diagnostic pop
 
-#import <SkiaDrawView.h>
 #import <RNSkLog.h>
 
 // These static class members are used by all Skia Views
@@ -17,21 +16,27 @@ id<MTLCommandQueue> RNSkDrawViewImpl::_commandQueue = id<MTLCommandQueue>(CFReta
 
 sk_sp<GrDirectContext> RNSkDrawViewImpl::_skContext = nullptr;
 
-RNSkDrawViewImpl::RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> context):
+RNSkDrawViewImpl::RNSkDrawViewImpl(CALayer* parentLayer,
+                                   std::shared_ptr<RNSkia::RNSkPlatformContext> context):
   _context(context), RNSkia::RNSkDrawView(context) {
     
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
-    _layer = [CAMetalLayer layer];
+  _layer = [CAMetalLayer layer];
 #pragma clang diagnostic pop
     
-    _layer.framebufferOnly = NO;
-    _layer.device = _device;
-    _layer.opaque = false;
-    _layer.contentsScale = _context->getPixelDensity();
-    _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-    
-    setNativeDrawFunc(std::bind(&RNSkDrawViewImpl::drawFrame, this, std::placeholders::_1));
+  _layer.framebufferOnly = NO;
+  _layer.device = _device;
+  _layer.opaque = false;
+  _layer.contentsScale = _context->getPixelDensity();
+  _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  
+  // Add layer to parent layer
+  [parentLayer addSublayer:_layer];
+}
+
+RNSkDrawViewImpl::~RNSkDrawViewImpl() {
+  [_layer removeFromSuperlayer];
 }
 
 void RNSkDrawViewImpl::setSize(int width, int height) {
@@ -44,8 +49,12 @@ void RNSkDrawViewImpl::setSize(int width, int height) {
   requestRedraw();
 }
 
-void RNSkDrawViewImpl::drawFrame(const sk_sp<SkPicture> picture) {
+void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
   if(_width == -1 && _height == -1) {
+    return;
+  }
+  
+  if(_layer == nullptr) {
     return;
   }
   

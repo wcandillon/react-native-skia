@@ -47,7 +47,7 @@ void JniSkiaManager::initializeRuntime() {
 }
 
 void JniSkiaManager::registerSkiaView(int viewTag, JniSkiaDrawView *skiaView) {
-    _skManager->registerSkiaDrawView(viewTag, skiaView);
+    _skManager->registerSkiaDrawView(viewTag, skiaView->getDrawViewImpl());
 }
 
 void JniSkiaManager::unregisterSkiaView(int viewTag) {

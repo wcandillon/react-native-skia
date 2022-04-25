@@ -14,7 +14,7 @@ class RNSkDrawViewImpl;
 
 - (instancetype)initWithManager: (RNSkia::RNSkManager*)manager;
 
-- (std::shared_ptr<RNSkDrawViewImpl>) impl;
+- (const std::shared_ptr<RNSkDrawViewImpl>) impl;
 
 - (void) setDrawingMode:(std::string) mode;
 - (void) setDebugMode:(bool) debugMode;

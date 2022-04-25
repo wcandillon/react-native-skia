@@ -19,22 +19,22 @@ export const PerformanceDrawingTest: React.FC = () => {
         .map((_) => ({ visible: Math.random() > 0.5 }))
     );
   };
-  useEffect(() => {
-    let to: ReturnType<typeof setTimeout>;
-    const setup = () => {
-      shuffle();
-      to = setTimeout(setup, 20 + Math.round(Math.random() * 100));
-    };
-    setup();
-    return () => clearTimeout(to);
-  }, []);
+  // useEffect(() => {
+  //   let to: ReturnType<typeof setTimeout>;
+  //   const setup = () => {
+  //     shuffle();
+  //     to = setTimeout(setup, 20 + Math.round(Math.random() * 100));
+  //   };
+  //   setup();
+  //   return () => clearTimeout(to);
+  // }, []);
 
   if (image === null) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchEnd={shuffle}>
       <View style={styles.mode}>
         {items.map((item, index) => (
           <View

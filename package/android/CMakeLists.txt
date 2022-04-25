@@ -31,6 +31,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaManager.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaDrawView.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/jni/RNSkDrawViewImpl.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/jni/SkiaOpenGLRenderer.cpp"
         
         "${PROJECT_SOURCE_DIR}/cpp/jsi/JsiHostObject.cpp"

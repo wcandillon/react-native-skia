@@ -60,17 +60,17 @@ namespace RNSkia
     {
         if (mode.compare("continuous") == 0)
         {
-            setDrawingMode(RNSkDrawingMode::Continuous);
+            _drawView->setDrawingMode(RNSkDrawingMode::Continuous);
         }
         else
         {
-            setDrawingMode(RNSkDrawingMode::Default);
+            _drawView->setDrawingMode(RNSkDrawingMode::Default);
         }
     }
 
     void JniSkiaDrawView::setDebugMode(bool show)
     {
-        setShowDebugOverlays(show);
+        _drawView->setShowDebugOverlays(show);
     }
 
     void JniSkiaDrawView::updateTouchPoints(jni::JArrayDouble touches)
@@ -78,7 +78,7 @@ namespace RNSkia
         // Create touch points
         std::vector<RNSkia::RNSkTouchPoint> points;
         auto pin = touches.pin();
-        auto scale = getPlatformContext()->getPixelDensity();
+        auto scale = _drawView->getPixelDensity();
         points.reserve(pin.size() / 4);
         for (size_t i = 0; i < pin.size(); i += 4)
         {
@@ -89,81 +89,21 @@ namespace RNSkia
             point.type = (RNSkia::RNSkTouchType)pin[i + 3];
             points.push_back(point);
         }
-        updateTouchState(std::move(points));
+        _drawView->updateTouchState(std::move(points));
     }
 
     void JniSkiaDrawView::surfaceAvailable(jobject surface, int width, int height)
     {
-#if LOG_ALL_DRAWING
-        RNSkLogger::logToConsole("JniSkiaDrawView::surfaceAvailable %i", getNativeId());
-#endif
-
-        _width = width;
-        _height = height;
-
-        if (_renderer == nullptr)
-        {
-            // Create renderer!
-            _renderer = new SkiaOpenGLRenderer(
-                ANativeWindow_fromSurface(Environment::current(), surface), getNativeId());
-
-            // Set the draw function
-            setNativeDrawFunc(std::bind(&JniSkiaDrawView::drawFrame, this, std::placeholders::_1));
-
-            // Redraw
-            requestRedraw();
-        }
+        _drawView->surfaceAvailable(ANativeWindow_fromSurface(Environment::current(), surface), width, height);
     }
 
     void JniSkiaDrawView::surfaceSizeChanged(int width, int height)
     {
-#if LOG_ALL_DRAWING
-        RNSkLogger::logToConsole("JniSkiaDrawView::surfaceSizeChanged %i", getNativeId());
-#endif
-
-        _width = width;
-        _height = height;
-
-        // Redraw after size change
-        requestRedraw();
+        _drawView->surfaceSizeChanged(width, height);
     }
 
     void JniSkiaDrawView::surfaceDestroyed()
     {
-#if LOG_ALL_DRAWING
-        RNSkLogger::logToConsole("JniSkiaDrawView::surfaceDestroyed %i", getNativeId());
-#endif
-        if (_renderer != nullptr)
-        {
-            // Turn off drawing
-            setNativeDrawFunc(nullptr);
-
-            // Start teardown
-            _renderer->teardown();
-
-            // Ask for a redraw to tear down the render pipeline. This
-            // needs to be done on the render thread since OpenGL demands
-            // same thread access for OpenGL contexts.
-            getPlatformContext()->runOnRenderThread([this]()
-                                                    {
-                if(_renderer != nullptr) {
-                    _renderer->run(nullptr, 0, 0);
-                } });
-
-            // Wait until the above render has finished.
-            _renderer->waitForTeardown();
-
-            // Delete renderer. All resources should be released during teardown.
-            delete _renderer;
-            _renderer = nullptr;
-        }
-    }
-
-    /**** Render method ****/
-
-    void JniSkiaDrawView::drawFrame(const sk_sp<SkPicture> picture)
-    {
-        // No need to check if the renderer is nullptr since we only get here if it is not.
-        _renderer->run(picture, _width, _height);
+        _drawView->surfaceDestroyed();
     }
 } // namespace RNSkia

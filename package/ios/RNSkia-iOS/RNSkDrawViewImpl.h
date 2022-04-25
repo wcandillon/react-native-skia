@@ -20,18 +20,16 @@
 
 class RNSkDrawViewImpl : public RNSkia::RNSkDrawView {
 public:
-  RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> context);
+  RNSkDrawViewImpl(CALayer* parentLayer, std::shared_ptr<RNSkia::RNSkPlatformContext> context);
+  virtual ~RNSkDrawViewImpl();
   
-  void setSize(int width, int height);
-  
-  CALayer* getLayer() { return _layer; };
+  void setSize(int width, int height);    
 
 protected:
   int getWidth() override { return _width * _context->getPixelDensity(); };
   int getHeight() override { return _height * _context->getPixelDensity(); };
-  void onInvalidated() override {
-    setNativeDrawFunc(nullptr);
-  };
+  
+  void drawPicture(const sk_sp<SkPicture>) override;
   
 private:
   void drawFrame(const sk_sp<SkPicture> picture);
@@ -46,9 +44,9 @@ private:
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
 
-  static id<MTLCommandQueue> _commandQueue;
   static id<MTLDevice> _device;
+  static id<MTLCommandQueue> _commandQueue;
   static sk_sp<GrDirectContext> _skContext;
-
+  
   std::shared_ptr<RNSkia::RNSkPlatformContext> _context;
 };

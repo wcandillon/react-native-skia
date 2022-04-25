@@ -5,17 +5,16 @@
 #include <thread>
 #include <string>
 
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
 #include <fbjni/fbjni.h>
 #include <jni.h>
 #include <jsi/jsi.h>
 #include <thread>
 
 #include <RNSkDrawView.h>
-#include "JniSkiaManager.h"
-#include "JniSkiaDrawView.h"
-#include "SkiaOpenGLRenderer.h"
+#include <JniSkiaManager.h>
+#include <JniSkiaDrawView.h>
+
+#include <RNSkDrawViewImpl.h>
 
 #include <SkSurface.h>
 #include <SkRefCnt.h>
@@ -31,8 +30,7 @@ namespace RNSkia
 
     using JavaSkiaManager = jni::alias_ref<JniSkiaManager::javaobject>;
 
-    class JniSkiaDrawView : public jni::HybridClass<JniSkiaDrawView>,
-                            public RNSkDrawView
+    class JniSkiaDrawView : public jni::HybridClass<JniSkiaDrawView>
     {
     public:
         static auto constexpr kJavaDescriptor = "Lcom/shopify/reactnative/skia/SkiaDrawView;";
@@ -52,22 +50,18 @@ namespace RNSkia
 
         ~JniSkiaDrawView();
 
-    protected:
-        int getWidth() override { return _width; }
-        int getHeight() override { return _height; }
+        std::shared_ptr<RNSkDrawView> getDrawViewImpl() {
+            return _drawView;
+        }
 
+    protected:
         void setMode(std::string mode);
         void setDebugMode(bool show);
 
     private:
         friend HybridBase;
 
-        void drawFrame(const sk_sp<SkPicture> picture);
-
-        int _width = 0;
-        int _height = 0;
-
-        SkiaOpenGLRenderer* _renderer = nullptr;
+        std::shared_ptr<RNSkDrawViewImpl> _drawView;
 
         jni::global_ref<JniSkiaDrawView::javaobject> javaPart_;
 
@@ -75,7 +69,7 @@ namespace RNSkia
             jni::alias_ref<JniSkiaDrawView::jhybridobject> jThis,
             JavaSkiaManager skiaManager)
             : javaPart_(jni::make_global(jThis)),
-              RNSkDrawView(skiaManager->cthis()->getPlatformContext()) {
+              _drawView(std::make_shared<RNSkDrawViewImpl>(skiaManager->cthis()->getPlatformContext())) {
         }
     };
 
