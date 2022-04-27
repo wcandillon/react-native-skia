@@ -10,11 +10,19 @@ set (SKIA_SVG_LIB "svg")
 set (SKIA_SKSHAPER_LIB "skshaper")
 
 set(build_DIR ${CMAKE_SOURCE_DIR}/build)
-file (GLOB LIBRN_DIR "${build_DIR}/react-native-0*/jni/${ANDROID_ABI}")
+file(GLOB LIBRN_DIR "${PREBUILT_DIR}/${ANDROID_ABI}")
 file(GLOB libfbjni_link_DIRS "${build_DIR}/fbjni*.aar/jni/${ANDROID_ABI}")
 file(GLOB libfbjni_include_DIRS "${build_DIR}/fbjni-*-headers.jar/")
 
 link_directories(../libs/android/${ANDROID_ABI}/)
+
+if(${REACT_NATIVE_VERSION} LESS 66)
+        file(
+                TO_CMAKE_PATH 
+                "${NODE_MODULES_DIR}/react-native/ReactCommon/jsi/jsi/jsi.cpp"
+                INCLUDE_JSI_CPP
+        )
+endif()
 
 add_library(
         ${PACKAGE_NAME}
@@ -39,16 +47,10 @@ target_include_directories(
         PRIVATE
 
         # When installed in the development environment
-        "../node_modules/react-native/ReactCommon/callinvoker"
-        "../node_modules/react-native/ReactCommon/jsi"
-        "../node_modules/react-native/ReactCommon/react/nativemodule/core"
-        "../node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/turbomodule/core/jni"
-
-        # When installed as a package the paths are a bit different
-        "../../../react-native/ReactCommon/callinvoker"
-        "../../../react-native/ReactCommon/jsi"
-        "../../../react-native/ReactCommon/react/nativemodule/core"
-        "../../../react-native/ReactAndroid/src/main/java/com/facebook/react/turbomodule/core/jni"
+        "${NODE_MODULES_DIR}/react-native/ReactCommon/callinvoker"
+        "${NODE_MODULES_DIR}/react-native/ReactCommon/jsi"
+        "${NODE_MODULES_DIR}/react-native/ReactCommon/react/nativemodule/core"
+        "${NODE_MODULES_DIR}/react-native/ReactAndroid/src/main/java/com/facebook/react/turbomodule/core/jni"
 
         cpp/skia/include/config/
         cpp/skia/include/core/
@@ -87,11 +89,23 @@ find_library(
 )
 
 find_library(
-        JSI_LIB
-        jsi
-        PATHS ${LIBRN_DIR}
-        NO_CMAKE_FIND_ROOT_PATH
-)
+         JSI_LIB
+         jsi
+         PATHS ${LIBRN_DIR}
+         NO_CMAKE_FIND_ROOT_PATH
+ )
+ if(${REACT_NATIVE_VERSION} LESS 66)
+         # JSI lib didn't exist on RN 0.65 and before. Simply omit it.
+         set (JSI_LIB "")
+ else()
+         # RN 0.66 distributes libjsi.so, can be used instead of compiling jsi.cpp manually.
+         find_library(
+                 JSI_LIB
+                 jsi
+                 PATHS ${LIBRN_DIR}
+                 NO_CMAKE_FIND_ROOT_PATH
+         )
+ endif()
 
 find_library(
         REACT_LIB

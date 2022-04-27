@@ -66,7 +66,7 @@ public class PlatformContext {
         Choreographer.getInstance().postFrameCallback(frameCallback);
     }
 
-    public void raise(String message) {
+    public void raise(final String message) {
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {

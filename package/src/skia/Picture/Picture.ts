@@ -2,7 +2,7 @@ import type { InputColorMatrix } from "../ColorFilter";
 import type { FilterMode } from "../Image";
 import type { TileMode } from "../ImageFilter";
 import type { SkRect } from "../Rect";
-import type { IShader } from "../Shader";
+import type { SkShader } from "../Shader";
 
 export interface SkPicture {
   /**
@@ -24,7 +24,7 @@ export interface SkPicture {
     mode: FilterMode,
     localMatrix?: InputColorMatrix,
     tileRect?: SkRect
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns the serialized format of this SkPicture. The format may change at anytime and

@@ -23,6 +23,7 @@ import { Skia } from "../skia";
 import type { FontMgr } from "../skia/FontMgr/FontMgr";
 import { useValue } from "../values/hooks/useValue";
 import type { SkiaReadonlyValue } from "../values/types";
+import { SkiaPaint } from "../skia/Paint/Paint";
 
 import { debug as hostDebug, skHostConfig } from "./HostConfig";
 // import { debugTree } from "./nodes";
@@ -112,8 +113,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
         ) {
           canvasCtx.current = { width, height };
         }
-        const paint = Skia.Paint();
-        paint.setAntiAlias(true);
+        const paint = SkiaPaint();
         const ctx = {
           width,
           height,

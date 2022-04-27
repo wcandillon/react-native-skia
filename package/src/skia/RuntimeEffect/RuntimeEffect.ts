@@ -1,4 +1,4 @@
-import type { IShader } from "../Shader";
+import type { SkShader } from "../Shader";
 import type { SkJSIInstance } from "../JsiInstance";
 import type { SkMatrix } from "../Matrix";
 
@@ -21,7 +21,7 @@ export interface IRuntimeEffect extends SkJSIInstance<"RuntimeEffect"> {
     uniforms: number[],
     isOpaque?: boolean,
     localMatrix?: SkMatrix
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader executed using the given uniform data and the children as inputs.
@@ -33,9 +33,9 @@ export interface IRuntimeEffect extends SkJSIInstance<"RuntimeEffect"> {
   makeShaderWithChildren(
     uniforms: number[],
     isOpaque?: boolean,
-    children?: IShader[],
+    children?: SkShader[],
     localMatrix?: SkMatrix
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns the nth uniform from the effect.

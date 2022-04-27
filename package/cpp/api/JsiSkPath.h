@@ -29,9 +29,9 @@ namespace RNSkia {
 
 using namespace facebook;
 
+
 class JsiSkPath : public JsiSkWrappingSharedPtrHostObject<SkPath> {
 public:
-
     // TODO: declare in JsiSkWrappingSkPtrHostObject via extra template parameter?
     JSI_PROPERTY_GET(__typename__) {
       return jsi::String::createFromUtf8(runtime, "Path");
@@ -484,6 +484,33 @@ public:
             runtime, std::make_shared<JsiSkPath>(getContext(), std::move(result)));
   }
 
+  JSI_HOST_FUNCTION(toCmds) {
+    auto path = *getObject();
+    auto cmds = jsi::Array(runtime, path.countVerbs());
+    auto it = SkPath::Iter(path, false);
+    //                       { "Move", "Line", "Quad", "Conic", "Cubic", "Close", "Done" };
+    const int pointCount[] = {     1 ,     2 ,     3 ,      3 ,      4 ,      1 ,     0  };
+    const int cmdCount[] =   {     3 ,     5 ,     7 ,      8 ,      9 ,      3 ,     0  };
+    SkPoint points[4];
+    SkPath::Verb verb;
+    auto k = 0;
+    while (SkPath::kDone_Verb != (verb = it.next(points))) {
+      auto verbVal = static_cast<int>(verb);
+      auto cmd = jsi::Array(runtime, cmdCount[verbVal]);
+      auto j = 0;
+      cmd.setValueAtIndex(runtime, j++, jsi::Value(verbVal));
+      for (int i = 0; i < pointCount[verbVal]; ++i) {
+        cmd.setValueAtIndex(runtime, j++, jsi::Value(static_cast<double>(points[i].fX)));
+        cmd.setValueAtIndex(runtime, j++, jsi::Value(static_cast<double>(points[i].fY)));
+      }
+      if (SkPath::kConic_Verb == verb) {
+        cmd.setValueAtIndex(runtime, j, jsi::Value(static_cast<double>(it.conicWeight())));
+      }
+      cmds.setValueAtIndex(runtime, k++, cmd);
+    }
+    return cmds;
+  }
+
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkPath, __typename__))
 
   JSI_EXPORT_FUNCTIONS(
@@ -518,7 +545,9 @@ public:
     JSI_EXPORT_FUNC(JsiSkPath, simplify),
     JSI_EXPORT_FUNC(JsiSkPath, countPoints), JSI_EXPORT_FUNC(JsiSkPath, copy),
     JSI_EXPORT_FUNC(JsiSkPath, fromText), JSI_EXPORT_FUNC(JsiSkPath, op),
-    JSI_EXPORT_FUNC(JsiSkPath, isInterpolatable), JSI_EXPORT_FUNC(JsiSkPath, interpolate)
+    JSI_EXPORT_FUNC(JsiSkPath, isInterpolatable),
+    JSI_EXPORT_FUNC(JsiSkPath, interpolate),
+    JSI_EXPORT_FUNC(JsiSkPath, toCmds),
   )
 
   JsiSkPath(std::shared_ptr<RNSkPlatformContext> context, SkPath path)

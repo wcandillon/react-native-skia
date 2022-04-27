@@ -9,7 +9,7 @@ const createSymlink = (p) => {
   const dstDir = path.resolve(`./android/cpp/${p}`);
 
   if (!fs.existsSync(dstDir) || !fs.lstatSync(dstDir).isSymbolicLink()) {
-    fs.symlinkSync(srcDir, dstDir, "dir");
+    fs.symlinkSync(srcDir, dstDir, "junction");
   }
 };
 

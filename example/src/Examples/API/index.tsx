@@ -17,6 +17,7 @@ import { Data } from "./Data";
 import { PictureExample } from "./Picture";
 import { ImageFilters } from "./ImageFilters";
 import { UseCanvas } from "./UseCanvas";
+import { FreezeExample } from "./Freeze";
 
 const Stack = createNativeStackNavigator<Routes>();
 export const API = () => {
@@ -119,6 +120,13 @@ export const API = () => {
         component={PictureExample}
         options={{
           title: "🖼 Picture",
+        }}
+      />
+      <Stack.Screen
+        name="Freeze"
+        component={FreezeExample}
+        options={{
+          title: "❄️ Freeze",
         }}
       />
       <Stack.Screen

@@ -4,7 +4,7 @@ import type { SkMatrix } from "../Matrix";
 import type { SkColor } from "../Color";
 import type { BlendMode } from "../Paint/BlendMode";
 
-import type { IShader } from "./Shader";
+import type { SkShader } from "./Shader";
 
 export interface ShaderFactory {
   /**
@@ -31,7 +31,7 @@ export interface ShaderFactory {
     localMatrix?: SkMatrix,
     flags?: number
     // colorSpace: ColorSpace
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader that generates a radial gradient given the center and radius.
@@ -54,7 +54,7 @@ export interface ShaderFactory {
     localMatrix?: SkMatrix,
     flags?: number
     // colorSpace?: ColorSpace
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader that generates a conical gradient given two circles.
@@ -80,7 +80,7 @@ export interface ShaderFactory {
     localMatrix?: SkMatrix,
     flags?: number
     //  colorSpace?: ColorSpace
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader that generates a sweep gradient given a center.
@@ -107,7 +107,7 @@ export interface ShaderFactory {
     startAngleInDegrees?: number,
     endAngleInDegrees?: number
     //  colorSpace?: ColorSpace
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader with Perlin Turbulence.
@@ -128,7 +128,7 @@ export interface ShaderFactory {
     seed: number,
     tileW: number,
     tileH: number
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader with Perlin Fractal Noise.
@@ -149,7 +149,7 @@ export interface ShaderFactory {
     seed: number,
     tileW: number,
     tileH: number
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns a shader that combines the given shaders with a BlendMode.
@@ -157,7 +157,7 @@ export interface ShaderFactory {
    * @param one
    * @param two
    */
-  MakeBlend(mode: BlendMode, one: IShader, two: IShader): IShader;
+  MakeBlend(mode: BlendMode, one: SkShader, two: SkShader): SkShader;
 
   /**
    * Returns a shader with a given color and colorspace.
@@ -165,5 +165,5 @@ export interface ShaderFactory {
    */
   MakeColor(
     color: SkColor //,space: ColorSpace
-  ): IShader;
+  ): SkShader;
 }

@@ -1,10 +1,11 @@
 import type { SkImageFilter } from "../ImageFilter";
 import type { IMaskFilter } from "../MaskFilter";
 import type { SkColorFilter } from "../ColorFilter";
-import type { IShader } from "../Shader";
+import type { SkShader } from "../Shader";
 import type { SkColor } from "../Color";
 import type { IPathEffect } from "../PathEffect";
 import type { SkJSIInstance } from "../JsiInstance";
+import { Skia } from "../Skia";
 
 import type { BlendMode } from "./BlendMode";
 
@@ -24,6 +25,12 @@ export enum StrokeJoin {
   Miter,
   Round,
 }
+
+export const SkiaPaint = () => {
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  return paint;
+};
 
 export const isPaint = (obj: SkJSIInstance<string> | null): obj is SkPaint =>
   obj !== null && obj.__typename__ === "Paint";
@@ -119,7 +126,7 @@ export interface SkPaint extends SkJSIInstance<"Paint"> {
    * Sets the current shader, replacing the existing one if there was one.
    * @param shader
    */
-  setShader(shader: IShader | null): void;
+  setShader(shader: SkShader | null): void;
 
   /**
    * Sets the geometry drawn at the beginning and end of strokes.

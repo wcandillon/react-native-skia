@@ -1,3 +1,5 @@
+import java.nio.file.Paths
+
 // android/build.gradle
 
 // based on:
@@ -25,6 +27,60 @@ def safeExtGet(prop, fallback) {
 }
 
 apply plugin: 'com.android.library'
+
+static def findNodeModules(baseDir) {
+  def basePath = baseDir.toPath().normalize()
+  // Node's module resolution algorithm searches up to the root directory,
+  // after which the base path will be null
+  while (basePath) {
+    def nodeModulesPath = Paths.get(basePath.toString(), "node_modules")
+    def reactNativePath = Paths.get(nodeModulesPath.toString(), "react-native")
+    if (nodeModulesPath.toFile().exists() && reactNativePath.toFile().exists()) {
+      return nodeModulesPath.toString()
+    }
+    basePath = basePath.getParent()
+  }
+  throw new GradleException("React-Native-Skia: Failed to find node_modules/ path!")
+}
+
+def nodeModules = findNodeModules(projectDir)
+logger.warn("react-native-skia: node_modules/ found at: ${nodeModules}")
+
+def sourceBuild = false
+def defaultDir = null
+def androidSourcesDir = null
+def androidSourcesName = 'React Native sources'
+
+if (rootProject.ext.has('reactNativeAndroidRoot')) {
+  defaultDir = rootProject.ext.get('reactNativeAndroidRoot')
+  androidSourcesDir = defaultDir.parentFile.toString()
+} else if (findProject(':ReactAndroid') != null) {
+    sourceBuild = true
+    defaultDir = project(':ReactAndroid').projectDir
+    androidSourcesDir = defaultDir.parentFile.toString()
+} else {
+  defaultDir = file("$nodeModules/react-native/android")
+  androidSourcesDir = defaultDir.parentFile.toString()
+}
+
+if (!defaultDir.exists()) {
+    throw new GradleException(
+      "${project.name}: React Native android directory (node_modules/react-native/android) does not exist! Resolved node_modules to: ${nodeModules}"
+    )
+}
+
+def prebuiltDir = sourceBuild
+    ? "$nodeModules/react-native/ReactAndroid/src/main/jni/prebuilt/lib"
+    : "$buildDir/react-native-0*/jni"
+
+
+def reactProperties = new Properties()
+file("$nodeModules/react-native/ReactAndroid/gradle.properties").withInputStream { reactProperties.load(it) }
+def REACT_NATIVE_VERSION = reactProperties.getProperty("VERSION_NAME").split("\\.")[1].toInteger()
+
+logger.warn("react-native-skia: React Native version: ${REACT_NATIVE_VERSION}")
+logger.warn("react-native-skia: Is Source build: ${sourceBuild}")
+logger.warn("react-native-skia: Prebuilt dir: ${prebuiltDir}")
 
 buildscript {
     // The Android Gradle plugin is only required when opening the android folder stand-alone.
@@ -56,7 +112,10 @@ android {
             cmake {
                 cppFlags "-fexceptions", "-frtti", "-std=c++1y", "-DONANDROID"
                 abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-                arguments '-DANDROID_STL=c++_shared'
+                arguments '-DANDROID_STL=c++_shared',
+                          "-DREACT_NATIVE_VERSION=${REACT_NATIVE_VERSION}",
+                          "-DNODE_MODULES_DIR=${nodeModules}",
+                          "-DPREBUILT_DIR=${prebuiltDir}"
             }
         }
     }
@@ -72,7 +131,13 @@ android {
     }
 
     packagingOptions {
-        excludes = ["**/libc++_shared.so"]
+        excludes = [
+             "**/libc++_shared.so",
+             "**/libfbjni.so",
+             "**/libjsi.so",
+             "**/libreact_nativemodule_core.so",
+             "**/libturbomodulejsijni.so"
+        ]
     }
 
 
@@ -112,33 +177,6 @@ dependencies {
 
     def rnAAR = fileTree("${rootDir}/../node_modules/react-native/android").matching({ it.include "**/**/*.aar" }).singleFile
     extractJNI(files(rnAAR))
-}
-
-def configureReactNativePom(def pom) {
-    def packageJson = new groovy.json.JsonSlurper().parseText(file('../package.json').text)
-
-    pom.project {
-        name packageJson.title
-        artifactId packageJson.name
-        version = packageJson.version
-        group = "com.shopify.reactnative.skia"
-        description packageJson.description
-        url packageJson.repository.baseUrl
-
-        licenses {
-            license {
-                name packageJson.license
-                url packageJson.repository.baseUrl + '/blob/master/' + packageJson.licenseFilename
-                distribution 'repo'
-            }
-        }
-
-        developers {
-            developer {
-                name packageJson.author
-            }
-        }
-    }
 }
 
 afterEvaluate { project ->
@@ -188,9 +226,18 @@ task extractJNIFiles {
     }
 }
 
-tasks.whenTaskAdded { task ->
-    if (task.name.contains('externalNativeBuild')) {
-        task.dependsOn(extractAARHeaders)
-        task.dependsOn(extractJNIFiles)
-    }
+extractJNIFiles.mustRunAfter extractAARHeaders
+
+def nativeBuildDependsOn(dependsOnTask, variant) {
+  def buildTasks = tasks.findAll({ task ->
+      !task.name.contains("Clean") && (task.name.contains("externalNative") || task.name.contains("CMake")) })
+  if (variant != null) {
+    buildTasks = buildTasks.findAll({ task -> task.name.contains(variant) })
+  }
+  buildTasks.forEach { task -> task.dependsOn(dependsOnTask) }
+}
+
+afterEvaluate {
+  nativeBuildDependsOn(extractAARHeaders, null)
+  nativeBuildDependsOn(extractJNIFiles, null)  
 }

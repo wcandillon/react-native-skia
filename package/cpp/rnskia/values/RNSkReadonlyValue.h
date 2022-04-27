@@ -4,9 +4,7 @@
 #include <algorithm>
 #include <functional>
 #include <chrono>
-#include <mutex>
 #include <unordered_map>
-#include <utility>
 #include <memory>
 
 #include <jsi/jsi.h>
@@ -22,16 +20,15 @@ using namespace facebook;
  Implements a readonly Value that is updated every time the screen is redrawn. Its value will be the
  number of milliseconds since the animation value was started.
  */
-class RNSkReadonlyValue : public JsiSkHostObject
+class RNSkReadonlyValue : public JsiSkHostObject,
+                          public std::enable_shared_from_this<RNSkReadonlyValue>
 {
 public:
   RNSkReadonlyValue(std::shared_ptr<RNSkPlatformContext> platformContext)
       : JsiSkHostObject(platformContext),
     _propNameId(jsi::PropNameID::forUtf8(*platformContext->getJsRuntime(), "value")) {}
   
-  ~RNSkReadonlyValue() {
-    _invalidated = true;
-  }
+  virtual ~RNSkReadonlyValue() { }
 
   JSI_PROPERTY_GET(__typename__) {
     return jsi::String::createFromUtf8(runtime, "RNSkValue");
@@ -43,8 +40,7 @@ public:
   
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(RNSkReadonlyValue, __typename__),
                               JSI_EXPORT_PROP_GET(RNSkReadonlyValue, current))
-    
-  
+      
   JSI_HOST_FUNCTION(addListener) {
     if(!arguments[0].isObject() || !arguments[0].asObject(runtime).isFunction(runtime)) {
       jsi::detail::throwJSError(runtime, "Expected function as first parameter.");
@@ -52,7 +48,9 @@ public:
     }
     auto callback = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
     
-    auto unsubscribe = addListener([this, callback = std::move(callback)](jsi::Runtime& runtime){
+    auto unsubscribe = addListener([self = shared_from_this(),
+                                    this,
+                                    callback = std::move(callback)](jsi::Runtime& runtime){
       callback->call(runtime, get_current(runtime));
     });
     
@@ -76,10 +74,8 @@ public:
     std::lock_guard<std::mutex> lock(_mutex);
     auto listenerId = _listenerId++;
     _listeners.emplace(listenerId, cb);
-    return [this, listenerId]() {
-      if(!_invalidated) {
-        removeListener(listenerId);
-      }
+    return [self = shared_from_this(), this, listenerId]() {
+      removeListener(listenerId);
     };
   }
   
@@ -127,8 +123,6 @@ protected:
     std::lock_guard<std::mutex> lock(_mutex);
     _listeners.erase(listenerId);
   }
-
-  std::atomic<bool> _invalidated = { false };
 
 private:
   jsi::PropNameID _propNameId;

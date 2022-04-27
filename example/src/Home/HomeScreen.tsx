@@ -47,6 +47,7 @@ export const HomeScreen = () => {
         description="Glassmorphism"
         route="Glassmorphism"
       />
+      <HomeScreenButton title="💳 Wallet" description="Wallet" route="Wallet" />
       <HomeScreenButton
         title="📉 Graphs"
         description="Animated graphs with Skia"

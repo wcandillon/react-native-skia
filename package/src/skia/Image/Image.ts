@@ -1,5 +1,5 @@
 import type { TileMode } from "../ImageFilter";
-import type { IShader } from "../Shader";
+import type { SkShader } from "../Shader";
 import type { SkMatrix } from "../Matrix";
 import type { SkJSIInstance } from "../JsiInstance";
 
@@ -46,7 +46,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
     fm: FilterMode,
     mm: MipmapMode,
     localMatrix?: SkMatrix
-  ): IShader;
+  ): SkShader;
 
   /**
    * Returns this image as a shader with the specified tiling. It will use cubic sampling.
@@ -62,7 +62,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
     B: number,
     C: number,
     localMatrix?: SkMatrix
-  ): IShader;
+  ): SkShader;
 
   /** Encodes Image pixels, returning result as UInt8Array. Returns existing
      encoded data if present; otherwise, SkImage is encoded with

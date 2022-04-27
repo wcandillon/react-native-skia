@@ -1,8 +1,8 @@
-import { Platform, processColor as processColorRN } from "react-native";
+import { Skia } from "./Skia";
 
 // This is the JSI color. Currently a number. This may change.
 export type SkColor = number;
-
+// Input colors can be string or number
 export type Color = string | number;
 
 export const alphaf = (c: number) => ((c >> 24) & 255) / 255;
@@ -14,25 +14,8 @@ export const rgbaColor = (r: number, g: number, b: number, af: number) => {
   return ((a << 24) | (r << 16) | (g << 8) | b) >>> 0;
 };
 
-export const processColorAsInt = (color?: number | string): SkColor => {
-  let processedColor = processColorRN(color);
-  if (typeof processedColor !== "number") {
-    throw new Error(`Couldn't process color: ${color}`);
-  }
-  // On android we need to move the alpha byte to the start of the structure
-  if (Platform.OS === "android") {
-    processedColor = processedColor >>> 0;
-    const a = (processedColor >> 24) & 0xff;
-    const r = (processedColor >> 16) & 0xff;
-    const g = (processedColor >> 8) & 0xff;
-    const b = processedColor & 0xff;
-    processedColor = ((a << 24) | (r << 16) | (g << 8) | b) >>> 0;
-  }
-  return processedColor;
-};
-
 const processColorAsArray = (cl: Color) => {
-  const icl = typeof cl === "string" ? processColorAsInt(cl) : cl;
+  const icl = typeof cl === "string" ? Skia.Color(cl) : cl;
   const r = red(icl);
   const g = green(icl);
   const b = blue(icl);

@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <functional>
 #include <chrono>
-#include <mutex>
 
 namespace RNSkia
 {
@@ -38,7 +37,7 @@ public:
     update(_runtime, static_cast<double>(0));
   }
   
-  ~RNSkClockValue() {
+  virtual ~RNSkClockValue() {
     stopClock();
   }
   
@@ -100,10 +99,11 @@ protected:
       return;
     }
     
-    // Avoid moving on if we are being called after the dtor was started
     // Ensure we call any updates from the draw loop on the javascript thread
     getContext()->runOnJavascriptThread(
-      [this]() {
+      // To ensure that this shared_ptr instance is not deallocated before we are done
+      // running the update lambda we pass a shared from this to the lambda scope.
+      [self = shared_from_this(), this]() {
       if(_state == RNSkClockState::Running) {
         auto now = std::chrono::high_resolution_clock::now();
         auto deltaFromStart = std::chrono::duration_cast<std::chrono::milliseconds>(now - _start).count();

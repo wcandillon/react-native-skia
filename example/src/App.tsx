@@ -18,6 +18,7 @@ import {
   PerformanceDrawingTest,
   Wallpaper,
   Vertices,
+  Wallet,
 } from "./Examples";
 import { HomeScreen } from "./Home";
 
@@ -76,6 +77,7 @@ const App = () => {
               header: () => null,
             }}
           />
+          <Stack.Screen name="Wallet" component={Wallet} />
           <Stack.Screen name="Graphs" component={GraphsScreen} />
           <Stack.Screen name="Animation" component={AnimationExample} />
           <Stack.Screen name="Performance" component={PerformanceDrawingTest} />

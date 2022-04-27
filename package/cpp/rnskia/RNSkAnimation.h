@@ -15,7 +15,7 @@ using namespace facebook;
 /**
  Implements an animation that can be used to drive other values
  */
-class RNSkAnimation : public RNSkClockValue, public std::enable_shared_from_this<RNSkAnimation>
+class RNSkAnimation : public RNSkClockValue
 {
   
 public:
@@ -23,8 +23,8 @@ public:
                      size_t identifier,
                      jsi::Runtime& runtime,
                      const jsi::Value *arguments,
-                     size_t count)
-      : RNSkClockValue(platformContext, identifier, runtime, arguments, count) {
+                     size_t count) :
+    RNSkClockValue(platformContext, identifier, runtime, arguments, count) {
     // Save the update function
     _updateFunction = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
         
@@ -32,10 +32,7 @@ public:
     _args[1] = jsi::Value::undefined();
   }
   
-  ~RNSkAnimation() {
-    // We need to stop/unsubscribe
-    stopClock();
-  }
+  virtual ~RNSkAnimation() {}
   
   JSI_HOST_FUNCTION(cancel) {
     stopClock();

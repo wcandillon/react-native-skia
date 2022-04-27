@@ -10,7 +10,7 @@ Draws vertices.
 | Name       | Type         | Description              |
 | :--------- | :----------- | :----------------------- |
 | vertices   | `Point[]`    | Vertices to draw |
-| mode?      | `VertexMode` | Can be `triangles`, `trianglesStripe` or `triangleFan`. Default is `triangles` |
+| mode?      | `VertexMode` | Can be `triangles`, `trianglesStrip` or `triangleFan`. Default is `triangles` |
 | indices?   | `number[]`   | Indices of the vertices that form the triangles. If not provided, the order of the vertices will be taken. Using this property enables you not to duplicate vertices. |
 | textures   | `Point[]`.   | [Texture mapping](https://en.wikipedia.org/wiki/Texture_mapping). The texture is the shader provided by the paint. |
 | colors?    | `string[]`   | Optional colors to be associated to each vertex |

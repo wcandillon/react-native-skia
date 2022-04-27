@@ -59,6 +59,10 @@ const examples = [
     title: "🖼 Picture",
   },
   {
+    screen: "Freeze",
+    title: "❄️ Freeze",
+  },
+  {
     screen: "UseCanvas",
     title: "↕️ useCanvas()",
   },

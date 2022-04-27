@@ -73,7 +73,7 @@ public:
     dependencyUpdated(runtime);
   }
   
-  ~RNSkDerivedValue() {
+  virtual ~RNSkDerivedValue() {
     // Unregister listeners
     for(const auto &unsubscribe: _unsubscribers) {
       unsubscribe();

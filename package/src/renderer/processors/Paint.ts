@@ -32,6 +32,7 @@ export interface CustomPaintProps extends ChildrenProps {
   strokeCap?: SkEnum<typeof StrokeCap>;
   strokeMiter?: number;
   opacity?: number;
+  antiAlias?: boolean;
 }
 
 export const enumKey = <K extends string>(k: K) =>
@@ -50,6 +51,7 @@ export const processPaint = (
     strokeCap,
     strokeMiter,
     opacity,
+    antiAlias,
   }: CustomPaintProps,
   children: DeclarationResult[]
 ) => {
@@ -84,6 +86,9 @@ export const processPaint = (
   }
   if (opacity !== undefined) {
     paint.setAlphaf(opacity);
+  }
+  if (antiAlias !== undefined) {
+    paint.setAntiAlias(antiAlias);
   }
   children.forEach((child) => {
     if (isShader(child)) {

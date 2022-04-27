@@ -1,4 +1,4 @@
-import type { SkPath, PathOp } from "./Path";
+import type { SkPath, PathOp, PathCommand } from "./Path";
 
 export interface PathFactory {
   Make(): SkPath;
@@ -17,4 +17,11 @@ export interface PathFactory {
    * @param op
    */
   MakeFromOp(one: SkPath, two: SkPath, op: PathOp): SkPath | null;
+
+  /**
+   * Creates a new path from the given list of path commands. If this fails, null will be
+   * returned instead.
+   * @param cmds
+   */
+  MakeFromCmds(cmds: PathCommand[]): SkPath | null;
 }

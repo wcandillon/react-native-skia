@@ -1,6 +1,6 @@
 import type { SkColor } from "../Color";
 import type { SkColorFilter } from "../ColorFilter/ColorFilter";
-import type { IShader } from "../Shader/Shader";
+import type { SkShader } from "../Shader/Shader";
 import type { SkRect } from "../Rect";
 import type { BlendMode } from "../Paint/BlendMode";
 
@@ -48,7 +48,7 @@ export interface ImageFilterFactory {
    * @param shader - The Shader to be transformed
    * @param input - if null, it will use the dynamic source image
    */
-  MakeShader(shader: IShader, input: SkImageFilter | null): SkImageFilter;
+  MakeShader(shader: SkShader, input: SkImageFilter | null): SkImageFilter;
   /**
    * Create a filter that blurs its input by the separate X and Y sigmas. The provided tile mode
    * is used when the blur kernel goes outside the input image.

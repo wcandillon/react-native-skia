@@ -38,6 +38,17 @@ export enum PathOp {
   ReverseDifference,
 }
 
+export enum PathVerb {
+  Move,
+  Line,
+  Quad,
+  Conic,
+  Cubic,
+  Close,
+}
+
+export type PathCommand = number[];
+
 export const isPath = (obj: SkJSIInstance<string> | null): obj is SkPath =>
   obj !== null && obj.__typename__ === "Path";
 
@@ -535,4 +546,9 @@ export interface SkPath extends SkJSIInstance<"Path"> {
    *
    * */
   isInterpolatable(compare: SkPath): boolean;
+
+  /**
+   * Serializes the contents of this path as a series of commands.
+   */
+  toCmds(): PathCommand[];
 }
