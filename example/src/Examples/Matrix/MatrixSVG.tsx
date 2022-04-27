@@ -3,13 +3,19 @@ import {
   Canvas,
   Fill,
   Group,
+  ImageSVG,
+  Skia,
   useClockValue,
   useFont,
 } from "@shopify/react-native-skia";
 import React from "react";
+import { Dimensions } from "react-native";
+
+import { SVG } from "../API/SVG";
 
 import { COLS, ROWS, Symbol, SYMBOL } from "./Symbol";
 
+const { width, height } = Dimensions.get("window");
 const cols = new Array(COLS).fill(0).map((_, i) => i);
 const rows = new Array(ROWS).fill(0).map((_, i) => i);
 
@@ -32,30 +38,13 @@ const streams = cols.map(() =>
 
 export const Matrix = () => {
   const clock = useClockValue();
-  const font = useFont(require("./matrix-code-nfi.otf"), SYMBOL.height);
-  if (font === null) {
-    return null;
-  }
-  const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
+  const svg = Skia.SVG.MakeFromString(`<svg>
+  <rect x="0" y="0" width="${width}" height="${height}" fill="black" />
+</svg>`)!;
+
   return (
     <Canvas style={{ flex: 1 }} debug>
-      <Fill color="black" />
-      <Group>
-        <BlurMask blur={8} style="solid" />
-        {cols.map((_i, i) =>
-          rows.map((_j, j) => (
-            <Symbol
-              symbols={symbols}
-              font={font}
-              timestamp={clock}
-              key={`${i}-${j}`}
-              i={i}
-              j={j}
-              stream={streams[i]}
-            />
-          ))
-        )}
-      </Group>
+      <ImageSVG svg={svg} x={0} y={0} width={width} height={height} />
     </Canvas>
   );
 };
