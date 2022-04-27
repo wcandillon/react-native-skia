@@ -23,13 +23,13 @@ import { Skia } from "../skia";
 import type { FontMgr } from "../skia/FontMgr/FontMgr";
 import { useValue } from "../values/hooks/useValue";
 import type { SkiaReadonlyValue } from "../values/types";
+import { SkiaPaint } from "../skia/Paint/Paint";
 
 import { debug as hostDebug, skHostConfig } from "./HostConfig";
 // import { debugTree } from "./nodes";
 import { vec } from "./processors";
 import { Container } from "./nodes";
 import { DependencyManager } from "./DependencyManager";
-import { SkiaPaint } from "./processors/Paint";
 
 const CanvasContext = React.createContext<SkiaReadonlyValue<{
   width: number;

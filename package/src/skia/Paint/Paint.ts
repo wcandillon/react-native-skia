@@ -5,6 +5,7 @@ import type { SkShader } from "../Shader";
 import type { SkColor } from "../Color";
 import type { IPathEffect } from "../PathEffect";
 import type { SkJSIInstance } from "../JsiInstance";
+import { Skia } from "../Skia";
 
 import type { BlendMode } from "./BlendMode";
 
@@ -24,6 +25,12 @@ export enum StrokeJoin {
   Miter,
   Round,
 }
+
+export const SkiaPaint = () => {
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  return paint;
+};
 
 export const isPaint = (obj: SkJSIInstance<string> | null): obj is SkPaint =>
   obj !== null && obj.__typename__ === "Paint";

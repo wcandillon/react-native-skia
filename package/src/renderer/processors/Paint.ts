@@ -17,12 +17,6 @@ import type { SkPaint, Color, SkImageFilter } from "../../skia";
 import type { DeclarationResult } from "../nodes";
 export type SkEnum<T> = Uncapitalize<keyof T extends string ? keyof T : never>;
 
-export const SkiaPaint = () => {
-  const paint = Skia.Paint();
-  paint.setAntiAlias(true);
-  return paint;
-};
-
 export interface ChildrenProps {
   children?: ReactNode | ReactNode[];
 }

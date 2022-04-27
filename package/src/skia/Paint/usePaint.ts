@@ -1,8 +1,7 @@
 import type { DependencyList } from "react";
 import { useMemo } from "react";
 
-import { SkiaPaint } from "../../renderer/processors/Paint";
-
+import { SkiaPaint } from "./Paint";
 import type { SkPaint } from "./Paint";
 
 /**
