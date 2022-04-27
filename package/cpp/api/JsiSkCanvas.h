@@ -22,6 +22,7 @@
 #include "modules/sksg/include/SkSGRect.h"
 #include "modules/sksg/include/SkSGPaint.h"
 #include "modules/sksg/include/SkSGDraw.h"
+#include "modules/sksg/include/SkSGPlane.h"
 
 #include <jsi/jsi.h>
 
@@ -495,12 +496,15 @@ public:
   JSI_HOST_FUNCTION(drawScene) {
 //    auto m = sksg::Matrix<SkMatrix>::Make(SkMatrix::I());
 //    auto group = sksg::Group::Make();
+    auto bg = sksg::Plane::Make();
+    auto bgPaint = sksg::Color::Make(SK_ColorBLACK);
     auto rect = sksg::RRect::Make(SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 200, 200), 15, 15));
     auto rectPaint = sksg::Color::Make(SK_ColorGREEN);
 //
 //    auto root = sksg::TransformEffect::Make(std::move(group), m);
 //    auto scene = sksg::Scene::Make(std::move(root));
     auto group = sksg::Group::Make();
+    group->addChild(sksg::Draw::Make(bg, bgPaint));
     group->addChild(sksg::Draw::Make(rect, rectPaint));
     auto scene = sksg::Scene::Make(std::move(group));
     scene->render(_canvas);
