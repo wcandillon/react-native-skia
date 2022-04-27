@@ -10,8 +10,8 @@ import {
 import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
-export const COLS = 20;
-export const ROWS = 30;
+export const COLS = 10;
+export const ROWS = 20;
 export const SYMBOL = { width: width / COLS, height: height / ROWS };
 const pos = vec(0, 0);
 
