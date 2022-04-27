@@ -41,7 +41,7 @@ if (process.env.GITHUB_RUN_NUMBER === undefined) {
 
 // Check that Android Skia libs are built
 ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"].forEach((cpu) => {
-  ["libskia.a", "libskshaper.a", "libsvg.a"].forEach((target) => {
+  ["libskia.a", "libskshaper.a", "libsvg.a", "libsksg.a"].forEach((target) => {
     const path = `./package/libs/android/${cpu}/${target}`;
     checkFileExists(
       path,
@@ -56,6 +56,7 @@ if (process.env.GITHUB_RUN_NUMBER === undefined) {
   "libskia.xcframework",
   "libskshaper.xcframework",
   "libsvg.xcframework",
+  "libsksg.xcframework",
 ].forEach((lib) => {
   checkFileExists(
     `./package/libs/ios/${lib}`,

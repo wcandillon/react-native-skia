@@ -17,6 +17,12 @@
 #include "JsiSkTextBlob.h"
 #include "JsiSkPicture.h"
 
+#include "modules/sksg/include/SkSGGroup.h"
+#include "modules/sksg/include/SkSGScene.h"
+#include "modules/sksg/include/SkSGRect.h"
+#include "modules/sksg/include/SkSGPaint.h"
+#include "modules/sksg/include/SkSGDraw.h"
+
 #include <jsi/jsi.h>
 
 #pragma clang diagnostic push
@@ -30,6 +36,7 @@
 #include <SkSurface.h>
 #include <SkTypeface.h>
 #include <SkPicture.h>
+#include <SkMatrix.h>
 
 #pragma clang diagnostic pop
 
@@ -484,6 +491,22 @@ public:
     return jsi::Value::undefined();
   }
 
+
+  JSI_HOST_FUNCTION(drawScene) {
+//    auto m = sksg::Matrix<SkMatrix>::Make(SkMatrix::I());
+//    auto group = sksg::Group::Make();
+    auto rect = sksg::RRect::Make(SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 200, 200), 15, 15));
+    auto rectPaint = sksg::Color::Make(SK_ColorGREEN);
+//
+//    auto root = sksg::TransformEffect::Make(std::move(group), m);
+//    auto scene = sksg::Scene::Make(std::move(root));
+    auto group = sksg::Group::Make();
+    group->addChild(sksg::Draw::Make(rect, rectPaint));
+    auto scene = sksg::Scene::Make(std::move(group));
+    scene->render(_canvas);
+    return jsi::Value::undefined();
+  }
+
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkCanvas, drawPaint),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawLine),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawRect),
@@ -522,7 +545,8 @@ public:
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawColor),
                        JSI_EXPORT_FUNC(JsiSkCanvas, clear),
                        JSI_EXPORT_FUNC(JsiSkCanvas, concat),
-                       JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture))
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawScene))
 
   JsiSkCanvas(std::shared_ptr<RNSkPlatformContext> context)
       : JsiSkHostObject(std::move(context)) {}

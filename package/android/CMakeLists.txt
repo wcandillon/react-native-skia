@@ -7,6 +7,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_BUILD_FOR_ANDROID -DFOLLY_
 set (PACKAGE_NAME "reactskia")
 set (SKIA_LIB "skia")
 set (SKIA_SVG_LIB "svg")
+set (SKIA_SKSG_LIB "sksg")
 set (SKIA_SKSHAPER_LIB "skshaper")
 
 set(build_DIR ${CMAKE_SOURCE_DIR}/build)
@@ -79,6 +80,9 @@ set_property(TARGET skia PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskia.a
 add_library(svg STATIC IMPORTED)
 set_property(TARGET svg PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libsvg.a")
 
+add_library(sksg STATIC IMPORTED)
+set_property(TARGET sksg PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libsksg.a")
+
 add_library(skshaper STATIC IMPORTED)
 set_property(TARGET skshaper PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskshaper.a")
 
@@ -137,6 +141,7 @@ target_link_libraries(
         ${JSI_LIB}
         ${TURBOMODULES_LIB}
         ${SKIA_SVG_LIB}
+        ${SKIA_SKSG_LIB}
         ${SKIA_SKSHAPER_LIB}
         ${SKIA_LIB}
         -ljnigraphics

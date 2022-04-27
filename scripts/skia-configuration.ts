@@ -13,7 +13,7 @@ export const commonArgs = [
   ["skia_use_system_zlib", false],
   ["skia_enable_tools", false],
   ["is_official_build", true],
-  ["skia_enable_skottie", false],
+  ["skia_enable_skottie", true],
   ["is_debug", false],
   ["skia_enable_pdf", false],
   ["skia_enable_flutter_defines", true],
@@ -84,7 +84,7 @@ export const configurations: Configuration = {
       ],
     ],
     outputRoot: "package/libs/android",
-    outputNames: ["libskia.a", "libskshaper.a", "libsvg.a"],
+    outputNames: ["libskia.a", "libskshaper.a", "libsvg.a", "libsksg.a"],
   },
   ios: {
     targets: {
@@ -143,6 +143,6 @@ export const configurations: Configuration = {
       ["cxx", '"clang++"'],
     ],
     outputRoot: "package/libs/ios",
-    outputNames: ["libskia.a", "libskshaper.a", "libsvg.a"],
+    outputNames: ["libskia.a", "libskshaper.a", "libsvg.a", "libsksg.a"],
   },
 };

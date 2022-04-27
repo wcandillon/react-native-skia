@@ -1,1 +1,1 @@
-export { Matrix } from "./MatrixSVG";
+export { Matrix } from "./Matrix2";

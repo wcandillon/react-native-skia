@@ -41,6 +41,7 @@ local.properties
 libs
 package/cpp/skia/include/
 package/cpp/skia/modules/
+package/cpp/skia/src/core
 
 # BUCK
 buck-out/

@@ -492,4 +492,5 @@ export interface SkCanvas {
    * @param skp
    */
   drawPicture(skp: SkPicture): void;
+  drawScene(): void;
 }
