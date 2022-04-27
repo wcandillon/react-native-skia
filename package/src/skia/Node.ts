@@ -5,6 +5,7 @@ import type {
   FillProps,
   GlyphsProps,
 } from "../renderer";
+import type { RectProps } from "../renderer/components/shapes/Rect";
 
 import type { SkJSIInstance } from "./JsiInstance";
 
@@ -25,4 +26,5 @@ export interface NodeFactory {
   MakeFill(props: AnimatedProps<FillProps>): Node<"FillNode">;
   MakeBlurMask(props: AnimatedProps<BlurMaskNodeProps>): Node<"BlurMaskNode">;
   MakeGlyphs(props: AnimatedProps<GlyphsProps>): Node<"GlyphsNode">;
+  MakeRect(props: AnimatedProps<RectProps>): Node<"RectNode">;
 }

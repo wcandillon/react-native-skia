@@ -16,5 +16,5 @@ const onDraw = createDrawing<RectProps>(({ canvas, paint }, rectProps) => {
 });
 
 export const Rect = (props: AnimatedProps<RectProps>) => {
-  return <skDrawing onDraw={onDraw} {...props} />;
+  return <skRect {...props} />;
 };

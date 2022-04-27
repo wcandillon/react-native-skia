@@ -18,6 +18,7 @@ export enum NodeType {
   Fill = "skFill",
   BlurMask = "skBlurMask",
   Glyphs = "skGlyphs",
+  Rect = "skRect",
 }
 
 declare global {
@@ -80,6 +81,8 @@ const createNode = (_container: Container, type: NodeType, props: Props) => {
       return Skia.Node.MakeBlurMask(props);
     case NodeType.Glyphs:
       return Skia.Node.MakeGlyphs(props);
+    case NodeType.Rect:
+      return Skia.Node.MakeRect(props);
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)
