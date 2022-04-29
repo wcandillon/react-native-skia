@@ -40,6 +40,7 @@
 #include "JsiSkPictureRecorder.h"
 #include "JsiSkPictureFactory.h"
 #include "JsiSkColor.h"
+#include "JsiSkNodeFactory.h"
 
 namespace RNSkia
 {
@@ -98,6 +99,7 @@ namespace RNSkia
       installReadonlyProperty("TextBlob", std::make_shared<JsiSkTextBlobFactory>(context));
       installReadonlyProperty("Surface", std::make_shared<JsiSkSurfaceFactory>(context));
       installReadonlyProperty("Picture", std::make_shared<JsiSkPictureFactory>(context));
+      installReadonlyProperty("Node", std::make_shared<JsiSkNodeFactory>(context));
     };
   };
 } // namespace RNSkia

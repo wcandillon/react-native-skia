@@ -73,6 +73,16 @@ public:
       : JsiSkWrappingHostObject<std::shared_ptr<T>>(std::move(context), std::move(object)) {}
 };
 
+
+template <typename T>
+class JsiSkWrappingUniquePtrHostObject
+        : public JsiSkWrappingHostObject<std::unique_ptr<T>> {
+public:
+    JsiSkWrappingUniquePtrHostObject(std::shared_ptr<RNSkPlatformContext> context,
+                                     std::unique_ptr<T> object)
+            : JsiSkWrappingHostObject<std::unique_ptr<T>>(std::move(context), std::move(object)) {}
+};
+
 template <typename T>
 class JsiSkWrappingSkPtrHostObject : public JsiSkWrappingHostObject<sk_sp<T>> {
 public:

@@ -16,6 +16,7 @@
 #include "JsiSkVertices.h"
 #include "JsiSkTextBlob.h"
 #include "JsiSkPicture.h"
+#include "nodes/JsiSkScene.h"
 
 #include "modules/sksg/include/SkSGGroup.h"
 #include "modules/sksg/include/SkSGScene.h"
@@ -492,21 +493,18 @@ public:
     return jsi::Value::undefined();
   }
 
-
-  JSI_HOST_FUNCTION(drawScene) {
-//    auto m = sksg::Matrix<SkMatrix>::Make(SkMatrix::I());
-//    auto group = sksg::Group::Make();
+  JSI_HOST_FUNCTION(getScene) {
     auto bg = sksg::Plane::Make();
-    auto bgPaint = sksg::Color::Make(SK_ColorBLACK);
-    auto rect = sksg::RRect::Make(SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 200, 200), 15, 15));
-    auto rectPaint = sksg::Color::Make(SK_ColorGREEN);
-//
-//    auto root = sksg::TransformEffect::Make(std::move(group), m);
-//    auto scene = sksg::Scene::Make(std::move(root));
+    auto bgPaint = sksg::Color::Make(SK_ColorBLUE);
     auto group = sksg::Group::Make();
     group->addChild(sksg::Draw::Make(bg, bgPaint));
-    group->addChild(sksg::Draw::Make(rect, rectPaint));
     auto scene = sksg::Scene::Make(std::move(group));
+    return jsi::Object::createFromHostObject(
+              runtime, std::make_shared<JsiSkScene>(getContext(), std::move(scene)));
+  }
+
+  JSI_HOST_FUNCTION(drawScene) {
+    auto scene = JsiSkScene::fromValue(runtime, arguments[0]);
     scene->render(_canvas);
     return jsi::Value::undefined();
   }
@@ -550,6 +548,7 @@ public:
                        JSI_EXPORT_FUNC(JsiSkCanvas, clear),
                        JSI_EXPORT_FUNC(JsiSkCanvas, concat),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, getScene),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawScene))
 
   JsiSkCanvas(std::shared_ptr<RNSkPlatformContext> context)

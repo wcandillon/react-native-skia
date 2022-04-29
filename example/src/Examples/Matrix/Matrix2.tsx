@@ -14,7 +14,7 @@ export const Matrix = () => {
     <Canvas style={styles.container} debug>
       <Drawing
         drawing={({ canvas }) => {
-          canvas.drawScene();
+          canvas.drawScene(canvas.getScene());
         }}
       />
     </Canvas>

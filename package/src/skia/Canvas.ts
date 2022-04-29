@@ -13,6 +13,7 @@ import type { SkImageFilter } from "./ImageFilter";
 import type { SkVertices } from "./Vertices";
 import type { SkTextBlob } from "./TextBlob";
 import type { SkPicture } from "./Picture";
+import type { SkScene } from "./Scene";
 
 export enum ClipOp {
   Difference,
@@ -492,5 +493,6 @@ export interface SkCanvas {
    * @param skp
    */
   drawPicture(skp: SkPicture): void;
-  drawScene(): void;
+  getScene: () => SkScene;
+  drawScene(scene: SkScene): void;
 }
