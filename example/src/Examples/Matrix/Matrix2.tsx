@@ -11,7 +11,7 @@ const { width, height } = Dimensions.get("window");
 
 export const Matrix = () => {
   return (
-    <Canvas style={styles.container} debug>
+    <Canvas style={styles.container} mode="continuous" debug>
       <Drawing
         drawing={({ canvas }) => {
           canvas.drawScene(canvas.getScene());
