@@ -25,7 +25,7 @@ namespace RNSkia
         _renderId(renderId) {
     }
 
-    void SkiaOpenGLRenderer::run(const sk_sp<SkPicture> picture, int width, int height)
+    void SkiaOpenGLRenderer::run(std::function<void(SkCanvas*)> cb, int width, int height)
     {
         switch (_renderState)
         {
@@ -51,7 +51,7 @@ namespace RNSkia
                 return;
             }
 
-            if (picture != nullptr)
+            if (cb != nullptr)
             {
                 // Reset Skia Context since it might be modified by another Skia View during
                 // rendering.
@@ -62,7 +62,7 @@ namespace RNSkia
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 // Draw picture into surface
-                _skSurface->getCanvas()->drawPicture(picture);
+                cb(_skSurface->getCanvas());
 
                 // Flush
                 _skSurface->getCanvas()->flush();

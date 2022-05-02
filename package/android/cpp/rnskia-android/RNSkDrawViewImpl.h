@@ -32,7 +32,7 @@ namespace RNSkia {
 
         int getHeight() override { return _height * getPlatformContext()->getPixelDensity(); };
 
-        void drawPicture(const sk_sp <SkPicture> picture) override;
+        void drawWithCanvasCallback(std::function<void(SkCanvas*)>) override;
 
     private:
         bool createSkiaSurface();

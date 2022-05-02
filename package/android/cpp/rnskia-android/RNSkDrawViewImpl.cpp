@@ -60,9 +60,9 @@ namespace RNSkia {
         requestRedraw();
     }
 
-    void RNSkDrawViewImpl::drawPicture(const sk_sp <SkPicture> picture) {
+    void RNSkDrawViewImpl::drawWithCanvasCallback(std::function<void(SkCanvas *)> cb) {
         if(_renderer != nullptr) {
-            _renderer->run(picture, _width, _height);
+            _renderer->run(cb, _width, _height);
         }
     }
 }

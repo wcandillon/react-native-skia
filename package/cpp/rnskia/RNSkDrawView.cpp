@@ -182,7 +182,7 @@ void RNSkDrawView::performDraw() {
   // Start timing
   _jsTimingInfo.beginTiming();
   
-  drawWithCanvasCallback([this](SkCanvas* c){
+  /*drawWithCanvasCallback([this](SkCanvas* c){
     // Get current milliseconds
     milliseconds ms = duration_cast<milliseconds>(
             system_clock::now().time_since_epoch());
@@ -196,7 +196,7 @@ void RNSkDrawView::performDraw() {
     _jsTimingInfo.stopTiming();
     _jsDrawingLock->unlock();
   });
-  return;
+  return;*/
   
   // Record the drawing operations on the JS thread so that we can
   // move the actual drawing onto the render thread later
@@ -233,7 +233,7 @@ void RNSkDrawView::performDraw() {
       auto self = weakSelf.lock();
       if (self) {
         // Draw the picture recorded on the real GPU canvas
-        self->_gpuTimingInfo.beginTiming();
+        self->_gpuTimingInfo.beginTiming();        
         self->drawWithCanvasCallback([p = std::move(p)](SkCanvas* c){
           c->drawPicture(p);
         });
