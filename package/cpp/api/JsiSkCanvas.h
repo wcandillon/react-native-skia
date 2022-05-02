@@ -36,6 +36,16 @@
 namespace RNSkia {
 using namespace facebook;
 
+class JsiRenderWrapperTest: public JsiSkHostObject {
+public:
+    JsiRenderWrapperTest(std::shared_ptr<RNSkPlatformContext> context)
+      : JsiSkHostObject(std::move(context)) {}
+
+    std::shared_ptr<SkPaint> paint1;
+    std::shared_ptr<SkPaint> paint2;
+    std::vector<std::shared_ptr<SkRect>> rects;
+};
+
 class JsiSkCanvas : public JsiSkHostObject {
 public:
   JSI_HOST_FUNCTION(drawPaint) {
@@ -483,9 +493,39 @@ public:
     _canvas->drawPicture(picture);
     return jsi::Value::undefined();
   }
+  
+  JSI_HOST_FUNCTION(drawPerftest) {
+    auto wrapper = arguments[0].asObject(runtime).asHostObject<JsiRenderWrapperTest>(runtime);
+    for(int i=0; i<wrapper->rects.size(); i++) {
+      _canvas->drawRect(*wrapper->rects[i], *wrapper->paint1);
+      _canvas->drawRect(*wrapper->rects[i], *wrapper->paint2);
+    }
+    
+    return jsi::Value::undefined();
+  }
+  
+  JSI_HOST_FUNCTION(createWrapper) {
+    auto retVal = std::make_shared<JsiRenderWrapperTest>(getContext());
+
+    auto jsRects = arguments[0].asObject(runtime).asArray(runtime);
+    retVal->paint1 = JsiSkPaint::fromValue(runtime, arguments[1]);
+    retVal->paint2 = JsiSkPaint::fromValue(runtime, arguments[2]);
+
+    retVal->rects.reserve(jsRects.size(runtime));
+    for(int i=0; i<jsRects.size(runtime); i++) {
+      retVal->rects.emplace_back(JsiSkRect::fromValue(runtime, jsRects.getValueAtIndex(runtime, i)));
+    }
+
+    return jsi::Object::createFromHostObject(runtime, retVal);
+
+  }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkCanvas, drawPaint),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawLine),
+                       
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawPerftest),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, createWrapper),
+                       
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawRect),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawImage),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawImageRect),

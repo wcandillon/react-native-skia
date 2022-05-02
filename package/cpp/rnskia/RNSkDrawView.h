@@ -17,6 +17,7 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include <SkRefCnt.h>
+#include <SkCanvas.h>
 
 #pragma clang diagnostic pop
 
@@ -105,9 +106,9 @@ protected:
   virtual int getHeight() { return -1; };
   
   /**
-   Override to render picture to GPU
+   Override to render on GPU
    */
-  virtual void drawPicture(const sk_sp<SkPicture> picture) = 0;
+  virtual void drawWithCanvasCallback(std::function<void(SkCanvas*)> cb) = 0;
   
   /**
    * @return The platformcontext

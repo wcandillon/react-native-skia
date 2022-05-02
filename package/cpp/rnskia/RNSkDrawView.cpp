@@ -109,16 +109,14 @@ void RNSkDrawView::setDrawCallback(std::shared_ptr<jsi::Function> callback) {
 
           // Display average rendering timer
           auto jsAvg = self->_jsTimingInfo.getAverage();
-          //auto jsFps = _jsTimingInfo.getFps();
-          
           auto gpuAvg = self->_gpuTimingInfo.getAverage();
-          //auto gpuFps = _gpuTimingInfo.getFps();
-          
           auto total = jsAvg + gpuAvg;
           
           // Build string
           std::ostringstream stream;
-          stream << "js: " << jsAvg << "ms gpu: " << gpuAvg << "ms " << " total: " << total << "ms";
+          stream << "js: " << RNSkTimingInfo::valueToStr(jsAvg) << "ms " <<
+            "gpu: " << RNSkTimingInfo::valueToStr(gpuAvg) << "ms " <<
+            "total: " << RNSkTimingInfo::valueToStr(total) << "ms";
           
           std::string debugString = stream.str();
           
@@ -184,6 +182,22 @@ void RNSkDrawView::performDraw() {
   // Start timing
   _jsTimingInfo.beginTiming();
   
+  drawWithCanvasCallback([this](SkCanvas* c){
+    // Get current milliseconds
+    milliseconds ms = duration_cast<milliseconds>(
+            system_clock::now().time_since_epoch());
+    
+    _jsiCanvas->setCanvas(c);
+    drawInCanvas(_jsiCanvas,
+                 getWidth(),
+                 getHeight(),
+                 ms.count() / 1000.0);
+  
+    _jsTimingInfo.stopTiming();
+    _jsDrawingLock->unlock();
+  });
+  return;
+  
   // Record the drawing operations on the JS thread so that we can
   // move the actual drawing onto the render thread later
   SkPictureRecorder recorder;
@@ -220,7 +234,9 @@ void RNSkDrawView::performDraw() {
       if (self) {
         // Draw the picture recorded on the real GPU canvas
         self->_gpuTimingInfo.beginTiming();
-        self->drawPicture(p);
+        self->drawWithCanvasCallback([p = std::move(p)](SkCanvas* c){
+          c->drawPicture(p);
+        });
         self->_gpuTimingInfo.stopTiming();
       }
       // Unlock GPU drawing

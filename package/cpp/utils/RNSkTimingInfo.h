@@ -2,8 +2,10 @@
 
 #include <RNSkLog.h>
 #include <chrono>
+#include <sstream>
+#include <iomanip>
 
-#define NUMBER_OF_DURATION_SAMPLES 10
+#define NUMBER_OF_DURATION_SAMPLES 60
 
 namespace RNSkia {
 
@@ -23,9 +25,6 @@ public:
     _lastDurationIndex = 0;
     _lastDurationsCount = 0;
     _lastDuration = 0;
-    _prevFpsTimer = -1;
-    _frameCount = 0;
-    _lastFrameCount = -1;
     _didSkip = false;
   }
   
@@ -36,7 +35,6 @@ public:
   void stopTiming() {
     time_point<steady_clock> stop = high_resolution_clock::now();
     addLastDuration(duration_cast<milliseconds>(stop - _start).count());
-    tick(stop);
     if(_didSkip) {
       _didSkip = false;
       RNSkLogger::logToConsole("%s: Skipped frame. Previous frame time: %lldms", _name.c_str(), _lastDuration);
@@ -46,9 +44,20 @@ public:
   void markSkipped() {
     _didSkip = true;
   }
-
-  long getAverage() { return static_cast<long>(_average); }
-  long getFps() { return _lastFrameCount; }
+  
+  static std::string valueToStr(double v) {
+    // Create an output string stream
+    std::ostringstream ss;
+    // Set Fixed -Point Notation
+    ss << std::fixed;
+    ss << std::setprecision(2);
+    //Add double to stream
+    ss << v;
+    // Get string from output string stream
+    return ss.str();
+  }
+  
+  double getAverage() { return _average; }
 
   void addLastDuration(long duration) {
     _lastDuration = duration;
@@ -68,23 +77,10 @@ public:
     for (size_t i = 0; i < _lastDurationsCount; i++) {
       _average = _average + _lastDurations[i];
     }
-    _average = _average / _lastDurationsCount;
+    _average = _average / static_cast<double>(_lastDurationsCount);
   }
 
 private:
-  
-  void tick(time_point<steady_clock> now) {
-    auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count();
-    
-    if(_prevFpsTimer == -1) {
-      _prevFpsTimer = ms;
-    } else if(ms - _prevFpsTimer >= 1000) {
-      _lastFrameCount = _frameCount;
-      _prevFpsTimer = ms;
-      _frameCount = 0;
-    }
-    _frameCount++;
-  }
   
   double _lastTimeStamp;
   long _lastDurations[NUMBER_OF_DURATION_SAMPLES];
@@ -93,9 +89,6 @@ private:
   long _lastDuration;
   std::atomic<double> _average;
   time_point<steady_clock> _start;
-  long _prevFpsTimer;
-  double _frameCount;
-  double _lastFrameCount;
   double _didSkip;
   std::string _name;
 };

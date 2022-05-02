@@ -8,12 +8,14 @@
 #import <GrMtlBackendContext.h>
 #import <MetalKit/MetalKit.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <JsiSkCanvas.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #import <SkPicture.h>
 #import <SkRefCnt.h>
+#import <SkCanvas.h>
 #import <include/gpu/GrDirectContext.h>
 
 #pragma clang diagnostic pop
@@ -32,7 +34,7 @@ protected:
   int getHeight() override { return _height * _context->getPixelDensity(); };  
   
 private:
-  void drawPicture(const sk_sp<SkPicture> picture) override;
+  void drawWithCanvasCallback(std::function<void(SkCanvas*)>) override;
   bool createSkiaSurface();
 
   int _nativeId;

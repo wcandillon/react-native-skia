@@ -59,7 +59,7 @@ void RNSkDrawViewImpl::setSize(int width, int height) {
   requestRedraw();
 }
 
-void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
+void RNSkDrawViewImpl::drawWithCanvasCallback(std::function<void(SkCanvas*)> cb) {
   if(_width == -1 && _height == -1) {
     return;
   }
@@ -102,7 +102,7 @@ void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
     }
     
     skSurface->getCanvas()->clear(SK_AlphaTRANSPARENT);
-    skSurface->getCanvas()->drawPicture(picture);
+    cb(skSurface->getCanvas());
     
     id<MTLCommandBuffer> commandBuffer([_commandQueue commandBuffer]);
     [commandBuffer presentDrawable:currentDrawable];

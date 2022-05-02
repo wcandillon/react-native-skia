@@ -9,7 +9,13 @@ import {
   usePaintRef,
 } from "@shopify/react-native-skia";
 import type { SkCanvas } from "@shopify/react-native-skia";
-import React, { useMemo, useCallback, useState } from "react";
+import React, {
+  useMemo,
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+} from "react";
 import {
   Switch,
   StyleSheet,
@@ -19,12 +25,11 @@ import {
   Button,
 } from "react-native";
 
-// Load font
-const Size = 15;
+const Size = 5;
 
 export const PerformanceDrawingTest: React.FC = () => {
   const [isDeclarative, setIsDeclarative] = useState(false);
-  const [numberOfBoxes, setNumberOfBoxes] = useState(300);
+  const [numberOfBoxes, setNumberOfBoxes] = useState(1000);
 
   const { width } = useWindowDimensions();
   const paint1 = usePaint((p) => {
@@ -43,24 +48,39 @@ export const PerformanceDrawingTest: React.FC = () => {
         .fill(0)
         .map((_, i) =>
           Skia.XYWHRect(
-            5 + ((i * Size) % width),
-            25 + Math.floor(i / (width / Size)) * Size,
-            Size * 0.8,
-            Size * 0.25
+            5 + ((i * Size) % (width * 0.95)),
+            25 + Math.floor(i / ((width * 0.95) / Size)) * Size,
+            Size * 0.5,
+            Size * 0.5
           )
         ),
     [width, numberOfBoxes]
   );
 
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    wrapperRef.current = null;
+  }, [numberOfBoxes]);
+
   const draw = useCallback(
     (canvas: SkCanvas) => {
-      for (let i = 0; i < rects.length; i++) {
-        canvas.drawRect(rects[i], paint1);
-        canvas.drawRect(rects[i], paint2);
+      if (wrapperRef.current === null) {
+        wrapperRef.current = canvas.createWrapper(rects, paint1, paint2);
+      }
+
+      if (isDeclarative) {
+        for (let i = 0; i < rects.length; i++) {
+          canvas.drawRect(rects[i], paint1);
+          canvas.drawRect(rects[i], paint2);
+        }
+      } else {
+        canvas.drawPerftest(wrapperRef.current);
       }
     },
-    [paint1, paint2, rects]
+    [isDeclarative, paint1, paint2, rects]
   );
+
   const paint1Ref = usePaintRef();
   const paint2Ref = usePaintRef();
 
@@ -73,19 +93,19 @@ export const PerformanceDrawingTest: React.FC = () => {
             onPress={() => setNumberOfBoxes((n) => Math.max(0, n - 50))}
           />
           <Text>&nbsp;Size&nbsp;</Text>
-          <Text>{numberOfBoxes}</Text>
+          <Text>{(numberOfBoxes * 2).toString()}</Text>
           <Text>&nbsp;</Text>
           <Button title="⬆️" onPress={() => setNumberOfBoxes((n) => n + 50)} />
         </View>
         <View style={styles.panel}>
-          <Text>Use Declarative model&nbsp;</Text>
+          <Text>Use JS&nbsp;</Text>
           <Switch
             value={isDeclarative}
             onValueChange={() => setIsDeclarative((p) => !p)}
           />
         </View>
       </View>
-      {isDeclarative ? (
+      {/* {isDeclarative ? (
         <Canvas style={styles.container} debug mode="continuous">
           <Paint ref={paint1Ref} color="#A2AE6A" style={"fill"} />
           <Paint
@@ -101,14 +121,14 @@ export const PerformanceDrawingTest: React.FC = () => {
             </React.Fragment>
           ))}
         </Canvas>
-      ) : (
-        <SkiaView
-          style={styles.container}
-          onDraw={draw}
-          debug
-          mode="continuous"
-        />
-      )}
+      ) : ( */}
+      <SkiaView
+        style={styles.container}
+        onDraw={draw}
+        debug
+        mode="continuous"
+      />
+      {/* )} */}
     </View>
   );
 };
