@@ -27,6 +27,7 @@ import type { SkRSXform } from "./RSXform";
 import type { SkPath } from "./Path/Path";
 import type { SkContourMeasureIter } from "./ContourMeasure";
 import type { PictureFactory, SkPictureRecorder } from "./Picture";
+import type { NodeFactory } from "./Node";
 import type { Color, SkColor } from "./Color";
 
 /*
@@ -84,6 +85,7 @@ export interface Skia {
   Paint: () => SkPaint;
   PictureRecorder: () => SkPictureRecorder;
   Picture: PictureFactory;
+  Node: NodeFactory;
   Path: PathFactory;
   Matrix: () => SkMatrix;
   ColorFilter: ColorFilterFactory;
@@ -151,6 +153,7 @@ export const Skia = {
   Paint: SkiaApi.Paint,
   PictureRecorder: SkiaApi.PictureRecorder,
   Picture: SkiaApi.Picture,
+  Node: SkiaApi.Node,
   Path: SkiaApi.Path,
   ColorFilter: SkiaApi.ColorFilter,
   ContourMeasureIter: SkiaApi.ContourMeasureIter,
