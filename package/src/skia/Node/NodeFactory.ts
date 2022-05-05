@@ -10,11 +10,16 @@ interface GroupNode extends SkJSIInstance<"GroupNode"> {
   addChild: (child: RenderNode) => void;
 }
 
+interface RectNode extends SkJSIInstance<"RectNode"> {
+  setL: (l: number) => void;
+  to: () => GeometryNode;
+}
+
 export interface NodeFactory {
-  MakeScene: (root: RenderNode) => Scene;
+  MakeScene: (root: GroupNode) => Scene;
   MakePlane: () => GeometryNode;
   MakeColor: (color: number) => PaintNode;
   MakeDraw: (geometry: GeometryNode, paint: PaintNode) => RenderNode;
-  MakeRect: (rect: SkRect) => GeometryNode;
+  MakeRect: (rect: SkRect) => RectNode;
   MakeGroup: () => GroupNode;
 }

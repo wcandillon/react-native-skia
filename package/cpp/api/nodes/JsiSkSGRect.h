@@ -13,6 +13,8 @@
 #include "modules/sksg/include/SkSGRect.h"
 #include <values/RNSkReadonlyValue.h>
 
+#include "nodes/JsiSkSGGeometryNode.h"
+
 #pragma clang diagnostic pop
 
 namespace RNSkia {
@@ -27,10 +29,27 @@ namespace RNSkia {
                 context, std::move(node)) {};
 
         JSI_PROPERTY_GET(__typename__) {
-                return jsi::String::createFromUtf8(runtime, "Rect");
+            return jsi::String::createFromUtf8(runtime, "Rect");
         }
 
         JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkSGRect, __typename__))
+
+        JSI_HOST_FUNCTION(to) {
+            // TODO: std::move?
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSGGeometryNode>(getContext(), getObject()));
+        }
+
+        JSI_HOST_FUNCTION(setL) {
+            auto l = arguments[0].asNumber();
+            getObject()->setL(l);
+            return jsi::Value::undefined();
+        }
+
+        JSI_EXPORT_FUNCTIONS(
+            JSI_EXPORT_FUNC(JsiSkSGRect, setL),
+            JSI_EXPORT_FUNC(JsiSkSGRect, to)
+        )
 
         static sk_sp<sksg::Draw> fromValue(jsi::Runtime &runtime,
                                            const jsi::Value &obj) {
