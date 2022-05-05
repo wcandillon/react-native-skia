@@ -12,6 +12,9 @@ interface GroupNode extends SkJSIInstance<"GroupNode"> {
 
 interface RectNode extends SkJSIInstance<"RectNode"> {
   setL: (l: number) => void;
+  setR: (l: number) => void;
+  setB: (l: number) => void;
+  setT: (l: number) => void;
   to: () => GeometryNode;
 }
 

@@ -28,7 +28,9 @@ export const Matrix = () => {
     <Canvas style={styles.container} mode="continuous" debug>
       <Drawing
         drawing={({ canvas }) => {
-          rct.setL(clock.current / 10000);
+          const x = clock.current / 50;
+          rct.setL(x);
+          rct.setR(x + 100);
           canvas.drawScene(scene);
         }}
       />

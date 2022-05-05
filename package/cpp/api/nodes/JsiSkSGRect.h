@@ -46,8 +46,29 @@ namespace RNSkia {
             return jsi::Value::undefined();
         }
 
+        JSI_HOST_FUNCTION(setR) {
+            auto r = arguments[0].asNumber();
+            getObject()->setR(r);
+            return jsi::Value::undefined();
+        }
+
+        JSI_HOST_FUNCTION(setT) {
+            auto t = arguments[0].asNumber();
+            getObject()->setT(t);
+            return jsi::Value::undefined();
+        }
+
+        JSI_HOST_FUNCTION(setB) {
+            auto b = arguments[0].asNumber();
+            getObject()->setB(b);
+            return jsi::Value::undefined();
+        }
+
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkSGRect, setL),
+            JSI_EXPORT_FUNC(JsiSkSGRect, setR),
+            JSI_EXPORT_FUNC(JsiSkSGRect, setT),
+            JSI_EXPORT_FUNC(JsiSkSGRect, setB),
             JSI_EXPORT_FUNC(JsiSkSGRect, to)
         )
 
