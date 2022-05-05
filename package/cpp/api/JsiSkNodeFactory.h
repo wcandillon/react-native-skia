@@ -9,8 +9,9 @@
 #include "nodes/JsiSkRenderNode.h"
 #include "nodes/JsiSkScene.h"
 #include "nodes/JsiSkPlane.h"
-#include "nodes/JsiSkSGColor.h"
+#include "nodes/JsiSkSGPaintNode.h"
 #include "nodes/JsiSkSGDraw.h"
+#include "nodes/JsiSkSGGeometryNode.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -27,33 +28,34 @@ namespace RNSkia {
     public:
         JSI_HOST_FUNCTION(MakeScene) {
             auto root = JsiSkRenderNode::fromValue(runtime, arguments[0]);
+            // TODO: std::move(root)?
             return jsi::Object::createFromHostObject(
-                runtime, std::make_shared<JsiSkScene>(getContext(), sksg::Scene::Make(std::move(root))));
+                runtime, std::make_shared<JsiSkScene>(getContext(), sksg::Scene::Make(root)));
         }
 
         JSI_HOST_FUNCTION(MakePlane) {
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkPlane>(getContext(), sksg::Plane::Make()));
+                    runtime, std::make_shared<JsiSkSGGeometryNode>(getContext(), sksg::Plane::Make()));
         }
-
 
         JSI_HOST_FUNCTION(MakeColor) {
             auto color = arguments[0].asNumber();
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkSGColor>(getContext(), sksg::Color::Make(color)));
+                    runtime, std::make_shared<JsiSkSGPaintNode>(getContext(), sksg::Color::Make(color)));
         }
 
         JSI_HOST_FUNCTION(MakeDraw) {
-            auto render = JsiSkPlane::fromValue(runtime, arguments[0]);
-            auto paint = JsiSkSGColor::fromValue(runtime, arguments[0]);
+            auto render = JsiSkSGGeometryNode::fromValue(runtime, arguments[0]);
+            auto paint = JsiSkSGPaintNode::fromValue(runtime, arguments[1]);
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkSGDraw>(getContext(), sksg::Draw::Make(render, paint)));
+                   runtime, std::make_shared<JsiSkRenderNode>(getContext(), sksg::Draw::Make(render, paint)));
         }
 
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeScene),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakePlane),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeColor),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeDraw),
         )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)

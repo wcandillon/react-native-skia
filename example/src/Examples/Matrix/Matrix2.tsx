@@ -10,11 +10,15 @@ import {
 const { width, height } = Dimensions.get("window");
 
 export const Matrix = () => {
+  const color = Skia.Node.MakeColor(0xffff00ff);
+  const plane = Skia.Node.MakePlane();
+  const draw = Skia.Node.MakeDraw(plane, color);
+  const scene = Skia.Node.MakeScene(draw);
   return (
     <Canvas style={styles.container} mode="continuous" debug>
       <Drawing
         drawing={({ canvas }) => {
-          canvas.drawScene(canvas.getScene());
+          canvas.drawScene(scene);
         }}
       />
     </Canvas>

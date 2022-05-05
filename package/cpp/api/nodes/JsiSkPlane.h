@@ -30,7 +30,7 @@ namespace RNSkia {
                 return jsi::String::createFromUtf8(runtime, "Plane");
         }
 
-        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkRenderNode, __typename__))
+        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkPlane, __typename__))
 
         static sk_sp<sksg::Plane> fromValue(jsi::Runtime &runtime,
                                                  const jsi::Value &obj) {

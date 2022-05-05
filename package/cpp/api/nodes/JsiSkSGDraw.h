@@ -27,7 +27,7 @@ namespace RNSkia {
                 context, std::move(node)) {};
 
         JSI_PROPERTY_GET(__typename__) {
-                return jsi::String::createFromUtf8(runtime, "Draw");
+            return jsi::String::createFromUtf8(runtime, "Draw");
         }
 
         JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkSGDraw, __typename__))

@@ -30,7 +30,7 @@ namespace RNSkia {
                 return jsi::String::createFromUtf8(runtime, "Color");
         }
 
-        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkRenderNode, __typename__))
+        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkSGColor, __typename__))
 
         static sk_sp<sksg::Color> fromValue(jsi::Runtime &runtime,
                                             const jsi::Value &obj) {
@@ -40,4 +40,24 @@ namespace RNSkia {
         }
     };
 
+    class JsiSkSGPaintNode: public JsiSkWrappingSkPtrHostObject<sksg::PaintNode> {
+    public:
+
+        JsiSkSGPaintNode(std::shared_ptr<RNSkPlatformContext> context, sk_sp<sksg::PaintNode> node)
+                : JsiSkWrappingSkPtrHostObject<sksg::PaintNode>(
+                context, std::move(node)) {};
+
+        JSI_PROPERTY_GET(__typename__) {
+                return jsi::String::createFromUtf8(runtime, "PaintNode");
+        }
+
+        JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkSGPaintNode, __typename__))
+
+        static sk_sp<sksg::PaintNode> fromValue(jsi::Runtime &runtime,
+                                            const jsi::Value &obj) {
+            return obj.asObject(runtime)
+                    .asHostObject<JsiSkSGPaintNode>(runtime)
+                    ->getObject();
+        }
+    };
 } // namespace RNSkia
