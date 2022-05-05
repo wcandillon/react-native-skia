@@ -20,11 +20,11 @@ namespace RNSkia {
 
     using namespace facebook;
 
-    class JsiSkScene: public JsiSkWrappingUniquePtrHostObject<sksg::Scene> {
+    class JsiSkScene: public JsiSkWrappingSharedPtrHostObject<sksg::Scene> {
     public:
 
-        JsiSkScene(std::shared_ptr<RNSkPlatformContext> context, std::unique_ptr<sksg::Scene> scene)
-                : JsiSkWrappingUniquePtrHostObject<sksg::Scene>(
+        JsiSkScene(std::shared_ptr<RNSkPlatformContext> context, std::shared_ptr<sksg::Scene> scene)
+                : JsiSkWrappingSharedPtrHostObject<sksg::Scene>(
                 context, std::move(scene)){};
 
         JSI_PROPERTY_GET(__typename__) {
@@ -38,11 +38,11 @@ namespace RNSkia {
 //          JSI_EXPORT_FUNC(JsiSkNode, setProps)
 //        )
 
-        static std::unique_ptr<sksg::Scene> fromValue(jsi::Runtime &runtime,
+        static std::shared_ptr<sksg::Scene> fromValue(jsi::Runtime &runtime,
                                                  const jsi::Value &obj) {
-            return std::move(obj.asObject(runtime)
+            return obj.asObject(runtime)
                     .asHostObject<JsiSkScene>(runtime)
-                    ->getObject());
+                    ->getObject();
         }
     };
 
