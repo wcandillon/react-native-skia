@@ -28,9 +28,8 @@ namespace RNSkia {
     public:
         JSI_HOST_FUNCTION(MakeScene) {
             auto root = JsiSkRenderNode::fromValue(runtime, arguments[0]);
-            // TODO: std::move(root)?
             return jsi::Object::createFromHostObject(
-                runtime, std::make_shared<JsiSkScene>(getContext(), sksg::Scene::Make(root)));
+                runtime, std::make_shared<JsiSkScene>(getContext(), sksg::Scene::Make(std::move(root))));
         }
 
         JSI_HOST_FUNCTION(MakePlane) {
@@ -41,14 +40,14 @@ namespace RNSkia {
         JSI_HOST_FUNCTION(MakeColor) {
             auto color = arguments[0].asNumber();
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkSGPaintNode>(getContext(), sksg::Color::Make(color)));
+                    runtime, std::make_shared<JsiSkSGPaintNode>(getContext(), sksg::Color::Make(std::move(color))));
         }
 
         JSI_HOST_FUNCTION(MakeDraw) {
             auto render = JsiSkSGGeometryNode::fromValue(runtime, arguments[0]);
             auto paint = JsiSkSGPaintNode::fromValue(runtime, arguments[1]);
             return jsi::Object::createFromHostObject(
-                   runtime, std::make_shared<JsiSkRenderNode>(getContext(), sksg::Draw::Make(render, paint)));
+                   runtime, std::make_shared<JsiSkRenderNode>(getContext(), sksg::Draw::Make(std::move(render), std::move(paint))));
         }
 
         JSI_EXPORT_FUNCTIONS(

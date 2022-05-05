@@ -9,11 +9,12 @@ import {
 
 const { width, height } = Dimensions.get("window");
 
+const color = Skia.Node.MakeColor(0xffadd8e6);
+const plane = Skia.Node.MakePlane();
+const draw = Skia.Node.MakeDraw(plane, color);
+const scene = Skia.Node.MakeScene(draw);
+
 export const Matrix = () => {
-  const color = Skia.Node.MakeColor(0xffff00ff);
-  const plane = Skia.Node.MakePlane();
-  const draw = Skia.Node.MakeDraw(plane, color);
-  const scene = Skia.Node.MakeScene(draw);
   return (
     <Canvas style={styles.container} mode="continuous" debug>
       <Drawing
