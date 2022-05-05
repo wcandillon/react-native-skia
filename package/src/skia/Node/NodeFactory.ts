@@ -23,7 +23,7 @@ interface OpacityEffect extends SkJSIInstance<"OpacityEffect"> {
   to: () => RenderNode;
 }
 
-interface ColorNode extends SkJSIInstance<"Color"> {
+export interface ColorNode extends SkJSIInstance<"Color"> {
   setColor: (color: number) => void;
   to: () => PaintNode;
 }

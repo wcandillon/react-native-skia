@@ -44,14 +44,14 @@ namespace RNSkia {
                     runtime, std::make_shared<JsiSkSGColor>(getContext(), sksg::Color::Make(std::move(color))));
         }
 
-        JSI_HOST_FUNCTION(MakeBlurMaskFilter) {
-            int blurStyle = arguments[0].asNumber();
-            float sigma = arguments[1].asNumber();
-            bool respectCTM = arguments[2].getBool();
-            auto mf = SkMaskFilter::MakeBlur((SkBlurStyle)blurStyle, sigma, respectCTM);
-            return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkSGMaskFilter>(getContext(), MaskFilter::Make(std::move(mf))));
-        }
+//        JSI_HOST_FUNCTION(MakeBlurMaskFilter) {
+//            int blurStyle = arguments[0].asNumber();
+//            float sigma = arguments[1].asNumber();
+//            bool respectCTM = arguments[2].getBool();
+//            auto mf = SkMaskFilter::MakeBlur((SkBlurStyle)blurStyle, sigma, respectCTM);
+//            return jsi::Object::createFromHostObject(
+//                    runtime, std::make_shared<JsiSkSGMaskFilter>(getContext(), MaskFilter::Make(std::move(mf))));
+//        }
 
         // Geometry Nodes
         JSI_HOST_FUNCTION(MakePlane) {
@@ -89,7 +89,6 @@ namespace RNSkia {
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeScene),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakePlane),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeColor),
-            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeBlurMaskFilter),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeDraw),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeRect),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeGroup),
