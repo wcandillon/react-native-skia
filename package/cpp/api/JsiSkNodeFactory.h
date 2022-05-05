@@ -11,7 +11,9 @@
 #include "nodes/JsiSkPlane.h"
 #include "nodes/JsiSkSGPaintNode.h"
 #include "nodes/JsiSkSGDraw.h"
+#include "nodes/JsiSkSGRect.h"
 #include "nodes/JsiSkSGGeometryNode.h"
+#include "nodes/JsiSkSGGroup.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -27,7 +29,7 @@ namespace RNSkia {
     class JsiSkNodeFactory : public JsiSkHostObject {
     public:
         JSI_HOST_FUNCTION(MakeScene) {
-            auto root = JsiSkRenderNode::fromValue(runtime, arguments[0]);
+            auto root = JsiSkSGGroup::fromValue(runtime, arguments[0]);
             return jsi::Object::createFromHostObject(
                 runtime, std::make_shared<JsiSkScene>(getContext(), sksg::Scene::Make(std::move(root))));
         }
@@ -50,11 +52,24 @@ namespace RNSkia {
                    runtime, std::make_shared<JsiSkRenderNode>(getContext(), sksg::Draw::Make(std::move(render), std::move(paint))));
         }
 
+        JSI_HOST_FUNCTION(MakeRect) {
+            auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSGGeometryNode>(getContext(), sksg::Rect::Make(std::move(*rect))));
+        }
+
+        JSI_HOST_FUNCTION(MakeGroup) {
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSGGroup>(getContext(), sksg::Group::Make()));
+        }
+
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeScene),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakePlane),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeColor),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeDraw),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeRect),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeGroup),
         )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)
