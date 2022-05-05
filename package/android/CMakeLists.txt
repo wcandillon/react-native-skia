@@ -36,10 +36,11 @@ add_library(
         
         "${PROJECT_SOURCE_DIR}/cpp/jsi/JsiHostObject.cpp"
 
+     #   "${PROJECT_SOURCE_DIR}/cpp/api/nodes/MaskFilter.cpp"
+
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkManager.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDrawView.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDispatchQueue.cpp"
-        
 )
 
 

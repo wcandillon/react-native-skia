@@ -14,11 +14,14 @@
 #include "nodes/JsiSkSGRect.h"
 #include "nodes/JsiSkSGGeometryNode.h"
 #include "nodes/JsiSkSGGroup.h"
+#include "nodes/JsiSkSGOpacityEffect.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include <SkStream.h>
+#include <sksg/include/SkSGGeometryEffect.h>
+#include <sksg/include/SkSGOpacityEffect.h>
 
 #pragma clang diagnostic pop
 
@@ -38,7 +41,16 @@ namespace RNSkia {
         JSI_HOST_FUNCTION(MakeColor) {
             auto color = arguments[0].asNumber();
             return jsi::Object::createFromHostObject(
-                    runtime, std::make_shared<JsiSkSGPaintNode>(getContext(), sksg::Color::Make(std::move(color))));
+                    runtime, std::make_shared<JsiSkSGColor>(getContext(), sksg::Color::Make(std::move(color))));
+        }
+
+        JSI_HOST_FUNCTION(MakeBlurMaskFilter) {
+            int blurStyle = arguments[0].asNumber();
+            float sigma = arguments[1].asNumber();
+            bool respectCTM = arguments[2].getBool();
+            auto mf = SkMaskFilter::MakeBlur((SkBlurStyle)blurStyle, sigma, respectCTM);
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSGMaskFilter>(getContext(), MaskFilter::Make(std::move(mf))));
         }
 
         // Geometry Nodes
@@ -66,13 +78,22 @@ namespace RNSkia {
                     runtime, std::make_shared<JsiSkSGGroup>(getContext(), sksg::Group::Make()));
         }
 
+        JSI_HOST_FUNCTION(MakeOpacityEffect) {
+            auto child = JsiSkRenderNode::fromValue(runtime, arguments[0]);
+            auto opacity = arguments[1].asNumber();
+            return jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiSkSGOpacityEffect>(getContext(), sksg::OpacityEffect::Make(std::move(child), opacity)));
+        }
+
         JSI_EXPORT_FUNCTIONS(
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeScene),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakePlane),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeColor),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeBlurMaskFilter),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeDraw),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeRect),
             JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeGroup),
+            JSI_EXPORT_FUNC(JsiSkNodeFactory, MakeOpacityEffect),
         )
 
         JsiSkNodeFactory(std::shared_ptr<RNSkPlatformContext> context)
