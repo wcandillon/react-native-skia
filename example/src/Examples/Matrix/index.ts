@@ -1,1 +1,1 @@
-export { Matrix } from "./Matrix2";
+export { Matrix } from "./Matrix3";

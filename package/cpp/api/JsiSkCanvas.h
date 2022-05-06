@@ -493,18 +493,6 @@ public:
     return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(getScene) {
-    auto bg = sksg::Plane::Make();
-    auto bgPaint = sksg::Color::Make(SK_ColorBLUE);
-    // auto color = ((double)rand() / (RAND_MAX + 1.0)) < 0.5 ? SK_ColorCYAN : SK_ColorMAGENTA;
-    // bgPaint->setColor(color);
-    auto group = sksg::Group::Make();
-    group->addChild(sksg::Draw::Make(bg, bgPaint));
-    auto scene = sksg::Scene::Make(std::move(group));
-    return jsi::Object::createFromHostObject(
-              runtime, std::make_shared<JsiSkScene>(getContext(), std::move(scene)));
-  }
-
   JSI_HOST_FUNCTION(drawScene) {
     auto scene = JsiSkScene::fromValue(runtime, arguments[0]);
     scene->render(_canvas);
@@ -550,7 +538,6 @@ public:
                        JSI_EXPORT_FUNC(JsiSkCanvas, clear),
                        JSI_EXPORT_FUNC(JsiSkCanvas, concat),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture),
-                       JSI_EXPORT_FUNC(JsiSkCanvas, getScene),
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawScene))
 
   JsiSkCanvas(std::shared_ptr<RNSkPlatformContext> context)
