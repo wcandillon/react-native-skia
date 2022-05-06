@@ -1,6 +1,8 @@
 import React, { useRef } from "react";
 import type { SkiaReadonlyValue, SkFont } from "@shopify/react-native-skia";
 import {
+  Skia,
+  mixColors,
   Rect,
   useDerivedValue,
   interpolateColors,
@@ -9,8 +11,8 @@ import {
 import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
-export const COLS = 20;
-export const ROWS = 40;
+export const COLS = 40;
+export const ROWS = 60;
 export const SYMBOL = { width: width / COLS, height: height / ROWS };
 const pos = vec(0, 0);
 
@@ -23,21 +25,21 @@ interface SymbolProps {
   symbols: number[];
 }
 
-export const Symbol = ({ i, j, timestamp, stream, symbols }: SymbolProps) => {
+export const Symbol = ({ i, j, timestamp, stream }: SymbolProps) => {
   const x = i * SYMBOL.width;
   const y = j * SYMBOL.height;
 
   const opacity = useDerivedValue(() => {
-    const idx = Math.round(timestamp.current / 100);
+    const idx = Math.round(timestamp.current / 50);
     return stream[(stream.length - j + idx) % stream.length];
   }, [timestamp]);
 
   const color = useDerivedValue(
     () =>
-      interpolateColors(
+      mixColors(
         opacity.current,
-        [0.8, 1],
-        ["rgb(0, 255, 70)", "rgb(140, 255, 170)"]
+        Skia.Color("rgb(0, 255, 70)"),
+        Skia.Color("rgb(140, 255, 170)")
       ),
     [opacity]
   );

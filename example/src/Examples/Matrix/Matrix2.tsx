@@ -9,6 +9,7 @@ import {
   useDrawCallback,
   vec,
   mix,
+  rgbaColor,
 } from "@shopify/react-native-skia";
 import type { ColorNode } from "@shopify/react-native-skia/src/skia/Node";
 
@@ -67,13 +68,7 @@ export const Matrix = () => {
         const stream = streams[i];
         const opacity = stream[(stream.length - j + idx) % stream.length];
         paint.setColor(
-          Skia.Color(
-            `rgba(${mix(opacity, 255, 140)}, 255, ${mix(
-              opacity,
-              70,
-              170
-            )}, ${opacity})`
-          )
+          rgbaColor(mix(opacity, 0, 140), 255, mix(opacity, 70, 170), opacity)
         );
       })
     );
