@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Canvas,
   Circle,
@@ -20,7 +20,11 @@ import { polar2Color } from "./Helpers";
 const { width, height } = Dimensions.get("window");
 const c = vec(width / 2, height / 2);
 const center = vec(width / 2, height / 2);
-const source = Skia.RuntimeEffect.Make(`
+
+export const Hue = () => {
+  const source = useMemo(
+    () =>
+      Skia.RuntimeEffect.Make(`
 uniform float2 c;
 uniform float r;
 
@@ -35,9 +39,10 @@ half4 main(vec2 uv) {
   float mag = distance(uv, c);
   float theta = normalizeRad(canvas2Polar(uv, c).x);
   return hsv2rgb(vec3(theta/TAU, quadraticIn(mag/r), 1.0));
-}`)!;
+}`)!,
+    []
+  );
 
-export const Hue = () => {
   const r = (width - 32) / 2;
   const translateX = useValue(c.x);
   const translateY = useValue(c.y);

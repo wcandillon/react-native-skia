@@ -1,7 +1,6 @@
 import React from "react";
 import { StyleSheet, Dimensions, ScrollView } from "react-native";
 import {
-  Skia,
   rect,
   Canvas,
   Rect,
@@ -24,8 +23,6 @@ const { width } = Dimensions.get("window");
 const SIZE = width / 2;
 const R = SIZE / 2;
 
-const paint = Skia.Paint();
-paint.setAntiAlias(true);
 const r1 = rect(0, 0, SIZE, SIZE);
 const r2 = rect(SIZE, 0, SIZE, SIZE);
 const r3 = rect(0, SIZE, SIZE, SIZE);

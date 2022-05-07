@@ -7,8 +7,6 @@ import {
   Canvas,
   Circle,
   translate,
-  Skia,
-  PaintStyle,
   DiscretePathEffect,
   DashPathEffect,
   CornerPathEffect,
@@ -19,16 +17,13 @@ import {
   Line2DPathEffect,
   Group,
   processTransform2d,
+  useSvgPath,
 } from "@shopify/react-native-skia";
 
 import { Title } from "./components/Title";
 
 const { width } = Dimensions.get("window");
 const SIZE = width;
-const path = Skia.Path.MakeFromSVGString(
-  // eslint-disable-next-line max-len
-  "M466 91C466 141.258 361.682 182 233 182C104.318 182 0 141.258 0 91C0 40.7421 104.318 0 233 0C361.682 0 466 40.7421 466 91Z"
-)!;
 
 const vWidth = 466;
 const vHeight = 182;
@@ -36,21 +31,13 @@ const vOrigin = { x: vWidth / 2, y: vHeight / 2 };
 const scale = (SIZE - 64) / vWidth;
 const origin = { x: (vWidth * scale) / 2, y: (vHeight * scale) / 2 };
 const center = { x: SIZE / 2, y: SIZE / 2 };
-const basePaint = Skia.Paint();
-basePaint.setAntiAlias(true);
-basePaint.setColor(Skia.Color("#61DAFB"));
-
-const strokePaint = basePaint.copy();
-strokePaint.setStyle(PaintStyle.Stroke);
-strokePaint.setStrokeWidth(15);
-strokePaint.setPathEffect(Skia.PathEffect.MakeDiscrete(10, 4, 0));
-
-const transparentPaint = basePaint.copy();
-transparentPaint.setStyle(PaintStyle.Stroke);
-transparentPaint.setStrokeWidth(15);
-transparentPaint.setAlphaf(0.2);
 
 const Logo = () => {
+  const path = useSvgPath(
+    // eslint-disable-next-line max-len
+    "M466 91C466 141.258 361.682 182 233 182C104.318 182 0 141.258 0 91C0 40.7421 104.318 0 233 0C361.682 0 466 40.7421 466 91Z"
+  )!;
+
   return (
     <>
       <Circle c={center} r={30} style="fill" />

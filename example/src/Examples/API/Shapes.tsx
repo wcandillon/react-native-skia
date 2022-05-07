@@ -1,8 +1,6 @@
 import React from "react";
 import { StyleSheet, Dimensions, ScrollView, PixelRatio } from "react-native";
 import {
-  Skia,
-  PaintStyle,
   Canvas,
   Rect,
   DiffRect,
@@ -18,19 +16,13 @@ import {
   Vertices,
   RoundedRect,
   Patch,
+  Skia,
 } from "@shopify/react-native-skia";
 
 import { Title } from "./components/Title";
 
 const { width } = Dimensions.get("window");
 const SIZE = width / 4;
-const paint = Skia.Paint();
-paint.setAntiAlias(true);
-paint.setColor(Skia.Color("#61DAFB"));
-
-const strokePaint = paint.copy();
-strokePaint.setStyle(PaintStyle.Stroke);
-strokePaint.setStrokeWidth(2);
 
 const c = { x: width / 2, y: SIZE / 2 + 16 };
 const S = 25;
@@ -71,7 +63,7 @@ export const Shapes = () => {
       <Title>Rectangles</Title>
       <Canvas style={styles.container}>
         <Group color="#61DAFB">
-          <Rect rect={{ x: PADDING, y: PADDING, width: 100, height: 100 }} />
+          <Rect rect={{ x: PADDING, y: PADDING, width: SIZE, height: SIZE }} />
           <RoundedRect
             x={SIZE + 2 * PADDING}
             y={PADDING}

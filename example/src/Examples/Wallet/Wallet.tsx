@@ -10,7 +10,7 @@ import {
   vec,
 } from "@shopify/react-native-skia";
 
-import { graphs, PADDING, WIDTH, HEIGHT, COLORS } from "./Model";
+import { PADDING, WIDTH, HEIGHT, useColorTheme, useGraphs } from "./Model";
 import { getYForX } from "./Math";
 import { Cursor } from "./components/Cursor";
 import { Selection } from "./components/Selection";
@@ -28,6 +28,7 @@ const styles = StyleSheet.create({
 });
 
 export const Wallet = () => {
+  const graphs = useGraphs();
   // animation value to transition from one graph to the next
   const transition = useValue(0);
   // indicices of the current and next graphs
@@ -49,6 +50,7 @@ export const Wallet = () => {
     [x, path]
   );
   const onTouch = useGraphTouchHandler(x, y);
+  const COLORS = useColorTheme();
   return (
     <View style={styles.container}>
       <Header />
@@ -56,7 +58,7 @@ export const Wallet = () => {
         style={{ width: WIDTH, height: 2 * HEIGHT + 30 }}
         onTouch={onTouch}
       >
-        <Label state={state} y={y} />
+        <Label graphs={graphs} state={state} y={y} />
         <Group transform={[{ translateY }]}>
           <Path
             style="stroke"
@@ -74,7 +76,7 @@ export const Wallet = () => {
           <Cursor x={x} y={y} />
         </Group>
       </Canvas>
-      <Selection state={state} transition={transition} />
+      <Selection graphs={graphs} state={state} transition={transition} />
       <List />
     </View>
   );

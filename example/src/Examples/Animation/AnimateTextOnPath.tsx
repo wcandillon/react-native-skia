@@ -4,26 +4,21 @@ import {
   Canvas,
   Easing,
   Fill,
-  Skia,
   TextPath,
   useDerivedValue,
   usePath,
   useLoop,
+  useFont,
 } from "@shopify/react-native-skia";
 
 import { AnimationDemo, Padding } from "./Components";
-
-// Load font
-const typeface = Skia.FontMgr.RefDefault().matchFamilyStyle("helvetica");
-if (!typeface) {
-  throw new Error("Helvetica not found");
-}
-const font = Skia.Font(typeface, 14);
 
 const ExampleHeight = 60;
 
 export const AnimateTextOnPath = () => {
   const { width } = useWindowDimensions();
+
+  const font = useFont("helvetica", 14);
 
   // Create a progress going from 0..1 and back
   const progress = useLoop({
@@ -62,14 +57,14 @@ export const AnimateTextOnPath = () => {
     [progress]
   );
 
-  return (
+  return font ? (
     <AnimationDemo title={"Interpolating text on path."}>
       <Canvas style={styles.canvas}>
         <Fill color="white" />
         <TextPath path={path} font={font} text="Hello World from RN Skia!" />
       </Canvas>
     </AnimationDemo>
-  );
+  ) : null;
 };
 
 const styles = StyleSheet.create({

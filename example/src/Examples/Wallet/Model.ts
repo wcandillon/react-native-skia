@@ -1,5 +1,6 @@
 /* eslint-disable camelcase */
 import { Skia } from "@shopify/react-native-skia";
+import { useMemo } from "react";
 import { Dimensions } from "react-native";
 
 import data from "./data.json";
@@ -9,9 +10,11 @@ export const WIDTH = Dimensions.get("window").width;
 export const HEIGHT = WIDTH / 2;
 export const PADDING = 16;
 export const AJUSTED_SIZE = HEIGHT - PADDING * 2;
-export const COLORS = ["#F69D69", "#FFC37D", "#61E0A1", "#31CBD1"].map(
-  Skia.Color
-);
+export const useColorTheme = () =>
+  useMemo(
+    () => ["#F69D69", "#FFC37D", "#61E0A1", "#31CBD1"].map(Skia.Color),
+    []
+  );
 
 interface Amount {
   amount: string;
@@ -81,32 +84,37 @@ const buildGraph = (datapoints: DataPoints, label: string) => {
   };
 };
 
-export const graphs = [
-  {
-    label: "1H",
-    value: 0,
-    data: buildGraph(values.hour, "Last Hour"),
-  },
-  {
-    label: "1D",
-    value: 1,
-    data: buildGraph(values.day, "Today"),
-  },
-  {
-    label: "1M",
-    value: 2,
-    data: buildGraph(values.month, "Last Month"),
-  },
-  {
-    label: "1Y",
-    value: 3,
-    data: buildGraph(values.year, "This Year"),
-  },
-  {
-    label: "All",
-    value: 4,
-    data: buildGraph(values.all, "All time"),
-  },
-] as const;
+export const useGraphs = () =>
+  useMemo(
+    () =>
+      [
+        {
+          label: "1H",
+          value: 0,
+          data: buildGraph(values.hour, "Last Hour"),
+        },
+        {
+          label: "1D",
+          value: 1,
+          data: buildGraph(values.day, "Today"),
+        },
+        {
+          label: "1M",
+          value: 2,
+          data: buildGraph(values.month, "Last Month"),
+        },
+        {
+          label: "1Y",
+          value: 3,
+          data: buildGraph(values.year, "This Year"),
+        },
+        {
+          label: "All",
+          value: 4,
+          data: buildGraph(values.all, "All time"),
+        },
+      ] as const,
+    []
+  );
 
 export type GraphIndex = 0 | 1 | 2 | 3 | 4;

@@ -41,9 +41,9 @@ export const FreezeExample = () => {
       <Text
         x={20}
         y={size + 100}
-        text={`n = ${n}`}
+        text={`Render ${n * n} items`}
         familyName="serif"
-        size={32}
+        size={12}
       />
     </Canvas>
   );

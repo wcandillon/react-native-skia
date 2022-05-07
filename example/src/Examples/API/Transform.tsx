@@ -4,8 +4,8 @@ import {
   Skia,
   useDrawCallback,
   SkiaView,
-  PaintStyle,
   useImage,
+  usePaint,
 } from "@shopify/react-native-skia";
 
 import { Title } from "./components/Title";
@@ -19,18 +19,15 @@ const aspectRatio = 836 / 1324;
 const CARD_WIDTH = width - 64;
 const CARD_HEIGHT = CARD_WIDTH * aspectRatio;
 
-const paint = Skia.Paint();
-paint.setAntiAlias(true);
-paint.setColor(Skia.Color("#61DAFB"));
-
-const strokePaint = paint.copy();
-strokePaint.setStyle(PaintStyle.Stroke);
-strokePaint.setStrokeWidth(2);
-
 // TODO: use examples from https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform
 // Once the Path API is available.
 export const Transform = () => {
   const image = useImage(card);
+
+  const paint = usePaint((p) => {
+    p.setAntiAlias(true);
+    p.setColor(Skia.Color("#61DAFB"));
+  });
 
   const onRotateDraw = useDrawCallback(
     (canvas) => {

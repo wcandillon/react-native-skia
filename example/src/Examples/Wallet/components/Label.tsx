@@ -5,15 +5,12 @@ import {
   Skia,
   useDerivedValue,
 } from "@shopify/react-native-skia";
-import React from "react";
+import React, { useMemo } from "react";
 
-import { graphs, AJUSTED_SIZE, WIDTH, HEIGHT, PADDING } from "../Model";
+import type { useGraphs } from "../Model";
+import { AJUSTED_SIZE, WIDTH, HEIGHT, PADDING } from "../Model";
 
 import type { GraphState } from "./Selection";
-
-const tf = Skia.FontMgr.RefDefault().matchFamilyStyle("helvetica")!;
-const titleFont = Skia.Font(tf, 64);
-const subtitleFont = Skia.Font(tf, 24);
 
 const currency = new Intl.NumberFormat("en-EN", {
   maximumFractionDigits: 0,
@@ -25,9 +22,19 @@ const currency = new Intl.NumberFormat("en-EN", {
 interface LabelProps {
   y: SkiaReadonlyValue<number>;
   state: SkiaReadonlyValue<GraphState>;
+  graphs: ReturnType<typeof useGraphs>;
 }
 
-export const Label = ({ state, y }: LabelProps) => {
+export const Label = ({ graphs, state, y }: LabelProps) => {
+  const fonts = useMemo(() => {
+    const tf = Skia.FontMgr.RefDefault().matchFamilyStyle("helvetica")!;
+    const titleFont = Skia.Font(tf, 64);
+    const subtitleFont = Skia.Font(tf, 24);
+    return {
+      titleFont,
+      subtitleFont,
+    };
+  }, []);
   const translateY = HEIGHT + PADDING;
   const text = useDerivedValue(() => {
     const graph = graphs[state.current.current];
@@ -44,24 +51,25 @@ export const Label = ({ state, y }: LabelProps) => {
     const graph = graphs[state.current.current];
     return (
       WIDTH / 2 -
-      titleFont.measureText(currency.format(graph.data.maxPrice)).width / 2
+      fonts.titleFont.measureText(currency.format(graph.data.maxPrice)).width /
+        2
     );
   }, [state]);
-  const subtitlePos = subtitleFont.measureText(subtitle);
+  const subtitlePos = fonts.subtitleFont.measureText(subtitle);
   return (
     <>
       <Text
         x={titleX}
         y={translateY - 120}
         text={text}
-        font={titleFont}
+        font={fonts.titleFont}
         color="white"
       />
       <Text
         x={WIDTH / 2 - subtitlePos.width / 2}
         y={translateY - 60}
         text={subtitle}
-        font={subtitleFont}
+        font={fonts.subtitleFont}
         color="#8E8E93"
       />
     </>

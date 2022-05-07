@@ -4,9 +4,9 @@ import {
   Skia,
   useDrawCallback,
   SkiaView,
-  PaintStyle,
   useImage,
   TileMode,
+  usePaint,
 } from "@shopify/react-native-skia";
 
 import { Title } from "./components/Title";
@@ -18,18 +18,15 @@ const aspectRatio = 3057 / 5435;
 const IMG_WIDTH = width / 2;
 const IMG_HEIGHT = IMG_WIDTH * aspectRatio;
 
-const paint = Skia.Paint();
-paint.setAntiAlias(true);
-paint.setColor(Skia.Color("#61DAFB"));
-
-const strokePaint = paint.copy();
-strokePaint.setStyle(PaintStyle.Stroke);
-strokePaint.setStrokeWidth(2);
-
 // TODO: use examples from https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform
 // Once the Path API is available.
 export const ColorFilter = () => {
   const image = useImage(card);
+
+  const paint = usePaint((p) => {
+    p.setAntiAlias(true);
+    p.setColor(Skia.Color("#61DAFB"));
+  });
 
   const onMatrixDraw = useDrawCallback(
     (canvas) => {

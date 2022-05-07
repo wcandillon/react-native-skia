@@ -2,11 +2,11 @@ import React from "react";
 import { Dimensions } from "react-native";
 import {
   Skia,
-  PaintStyle,
   Group,
   Path,
   Rect,
   translate,
+  useSvgPath,
 } from "@shopify/react-native-skia";
 
 const { width } = Dimensions.get("window");
@@ -20,15 +20,6 @@ const strokeWidth = 10;
 
 const c1 = "#204E71";
 const c2 = "#4A759B";
-
-const whitePaint = Skia.Paint();
-whitePaint.setAntiAlias(true);
-whitePaint.setColor(Skia.Color("white"));
-
-const strokePaint = Skia.Paint();
-whitePaint.setAntiAlias(true);
-strokePaint.setStyle(PaintStyle.Stroke);
-strokePaint.setStrokeWidth(strokeWidth);
 
 export const Circles = () => {
   const c = 12;
@@ -90,17 +81,16 @@ const Pattern = () => {
   );
 };
 
-const borders = Skia.Path.MakeFromSVGString(
-  // eslint-disable-next-line max-len
-  "M447.955 756.37H44.699C20.5664 756.37 0.820374 736.624 0.820374 712.492V44.8242C0.820374 20.6898 20.5664 0.945557 44.699 0.945557H447.955C472.088 0.945557 491.834 20.6898 491.834 44.8242V712.492C491.834 736.624 472.088 756.37 447.955 756.37Z"
-)!;
-
-const bg = Skia.Path.MakeFromSVGString(
-  // eslint-disable-next-line max-len
-  "M423.554 40.0679H69.3443C51.3334 40.0679 36.6796 54.7199 36.6796 72.7307V685.881C36.6796 703.892 51.3334 718.546 69.3443 718.546H423.554C441.565 718.546 456.219 703.892 456.219 685.881V72.7307C456.219 54.7199 441.565 40.0679 423.554 40.0679Z"
-)!;
-
 export const Backface = () => {
+  const borders = useSvgPath(
+    // eslint-disable-next-line max-len
+    "M447.955 756.37H44.699C20.5664 756.37 0.820374 736.624 0.820374 712.492V44.8242C0.820374 20.6898 20.5664 0.945557 44.699 0.945557H447.955C472.088 0.945557 491.834 20.6898 491.834 44.8242V712.492C491.834 736.624 472.088 756.37 447.955 756.37Z"
+  )!;
+
+  const bg = useSvgPath(
+    // eslint-disable-next-line max-len
+    "M423.554 40.0679H69.3443C51.3334 40.0679 36.6796 54.7199 36.6796 72.7307V685.881C36.6796 703.892 51.3334 718.546 69.3443 718.546H423.554C441.565 718.546 456.219 703.892 456.219 685.881V72.7307C456.219 54.7199 441.565 40.0679 423.554 40.0679Z"
+  )!;
   return (
     <Group transform={[{ scale }]}>
       <Path path={borders} color="white" />
