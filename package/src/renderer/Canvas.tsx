@@ -16,13 +16,12 @@ import type {
 } from "react";
 import type { OpaqueRoot } from "react-reconciler";
 import ReactReconciler from "react-reconciler";
+import { Platform } from "react-native";
 
 import { SkiaView, useDrawCallback } from "../views";
 import type { TouchHandler } from "../views";
 import { Skia } from "../skia";
 import type { FontMgr } from "../skia/FontMgr/FontMgr";
-import { useValue } from "../values/hooks/useValue";
-import type { SkiaReadonlyValue } from "../values/types";
 import { SkiaPaint } from "../skia/Paint/Paint";
 
 import { debug as hostDebug, skHostConfig } from "./HostConfig";
@@ -31,7 +30,7 @@ import { vec } from "./processors";
 import { Container } from "./nodes";
 import { DependencyManager } from "./DependencyManager";
 
-const CanvasContext = React.createContext<SkiaReadonlyValue<{
+const CanvasContext = React.createContext<RefObject<{
   width: number;
   height: number;
 }> | null>(null);
@@ -69,11 +68,11 @@ export interface CanvasProps extends ComponentProps<typeof SkiaView> {
   fontMgr?: FontMgr;
 }
 
-const defaultFontMgr = Skia.FontMgr.RefDefault();
+const defaultFontMgr: { current: FontMgr | undefined } = { current: undefined };
 
 export const Canvas = forwardRef<SkiaView, CanvasProps>(
   ({ children, style, debug, mode, onTouch, fontMgr }, forwardedRef) => {
-    const canvasCtx = useValue({ width: 0, height: 0 });
+    const canvasCtx = useRef({ width: 0, height: 0 });
     const innerRef = useCanvasRef();
     const ref = useCombinedRefs(forwardedRef, innerRef);
     const [tick, setTick] = useState(0);
@@ -113,6 +112,12 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
         ) {
           canvasCtx.current = { width, height };
         }
+        if (defaultFontMgr.current === undefined) {
+          defaultFontMgr.current =
+            Platform.OS === "web"
+              ? (Skia.FontMgr as unknown as FontMgr)
+              : Skia.FontMgr.RefDefault();
+        }
         const paint = SkiaPaint();
         const ctx = {
           width,
@@ -123,7 +128,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
           opacity: 1,
           ref,
           center: vec(width / 2, height / 2),
-          fontMgr: fontMgr ?? defaultFontMgr,
+          fontMgr: fontMgr ?? defaultFontMgr.current!,
         };
         container.draw(ctx);
       },

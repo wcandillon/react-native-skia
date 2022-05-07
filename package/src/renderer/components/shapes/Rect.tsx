@@ -12,6 +12,7 @@ export type RectProps = RectDef & CustomPaintProps;
 
 const onDraw = createDrawing<RectProps>(({ canvas, paint }, rectProps) => {
   const rect = processRect(rectProps);
+  console.log("RECT", rect);
   canvas.drawRect(rect, paint);
 });
 

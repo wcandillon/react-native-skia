@@ -12,6 +12,7 @@ export interface DiffRectProps extends CustomPaintProps {
 
 const onDraw = createDrawing<DiffRectProps>(
   ({ canvas, paint }, { inner, outer }) => {
+    console.log("***", paint);
     canvas.drawDRRect(outer, inner, paint);
   }
 );
