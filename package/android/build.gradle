@@ -26,6 +26,14 @@ def safeExtGet(prop, fallback) {
     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
+def isNewArchitectureEnabled() {
+    // To opt-in for the New Architecture, you can either:
+    // - Set `newArchEnabled` to true inside the `gradle.properties` file
+    // - Invoke gradle with `-newArchEnabled=true`
+    // - Set an environment variable `ORG_GRADLE_PROJECT_newArchEnabled=true`
+    return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
+}
+
 apply plugin: 'com.android.library'
 
 static def findNodeModules(baseDir) {
@@ -140,7 +148,13 @@ android {
         ]
     }
 
-
+    sourceSets.main {
+        java {
+            if (isNewArchitectureEnabled()) {
+                srcDirs += "${project.buildDir}/generated/source/codegen/java"
+            }
+        }
+    }
 
     // Create new configurations that can be referred to in dependencies.
     // The Android Gradle Plugin 3.* does not allow hooking into existing
@@ -168,7 +182,11 @@ repositories {
 
 dependencies {
     //noinspection GradleDynamicVersion
-    implementation 'com.facebook.react:react-native:+'  // From node_modules
+    if (isNewArchitectureEnabled()) {
+        implementation project(":ReactAndroid")
+    } else {
+        implementation 'com.facebook.react:react-native:+'
+    }
 
     //noinspection GradleDynamicVersion
     extractHeaders("com.facebook.fbjni:fbjni:0.2.2:headers")
@@ -179,6 +197,50 @@ dependencies {
     extractJNI(files(rnAAR))
 }
 
+<<<<<<< Updated upstream
+=======
+if (isNewArchitectureEnabled()) {
+    apply plugin: "com.facebook.react"
+}
+
+if (isNewArchitectureEnabled()) {
+    react {
+        reactRoot = rootProject.file("../node_modules/react-native/")
+        jsRootDir = file("../src/fabric/")
+        codegenDir = rootProject.file("../node_modules/react-native-codegen/")
+        libraryName = "rnskia"
+        codegenJavaPackageName = "com.shopify.reactnative.skia"
+    }
+}
+
+def configureReactNativePom(def pom) {
+    def packageJson = new groovy.json.JsonSlurper().parseText(file('../package.json').text)
+
+    pom.project {
+        name packageJson.title
+        artifactId packageJson.name
+        version = packageJson.version
+        group = "com.shopify.reactnative.skia"
+        description packageJson.description
+        url packageJson.repository.baseUrl
+
+        licenses {
+            license {
+                name packageJson.license
+                url packageJson.repository.baseUrl + '/blob/master/' + packageJson.licenseFilename
+                distribution 'repo'
+            }
+        }
+
+        developers {
+            developer {
+                name packageJson.author
+            }
+        }
+    }
+}
+
+>>>>>>> Stashed changes
 afterEvaluate { project ->
     task androidSourcesJar(type: Jar) {
         classifier = 'sources'
