@@ -1,11 +1,12 @@
 /*global NodeJS, performance*/
 import type { HostConfig } from "react-reconciler";
+import type { RefObject } from "react";
 
 import type { CircleProps } from "./components";
-import { CircleNode } from "./components";
+import { FillNode, CircleNode } from "./components";
 import type { Container, Node } from "./nodes";
 import { NodeType } from "./nodes";
-import { exhaustiveCheck, shallowEq } from "./typeddash";
+import { exhaustiveCheck } from "./typeddash";
 import type { GroupProps } from "./components/Group";
 import { GroupNode } from "./components/Group";
 
@@ -16,12 +17,15 @@ export const debug = (...args: Parameters<typeof console.log>) => {
   }
 };
 
+type HostComponent<N, T> = { ref: RefObject<N> } & T;
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
-      skGroup: GroupProps;
-      skCircle: CircleProps;
+      skGroup: HostComponent<GroupNode, GroupProps>;
+      skCircle: HostComponent<CircleNode, CircleProps>;
+      skFill: Record<string, never>;
     }
   }
 }
@@ -79,6 +83,8 @@ const createNode = (container: Container, type: NodeType, props: Props) => {
       return new CircleNode(props);
     case NodeType.Group:
       return new GroupNode(props);
+    case NodeType.Fill:
+      return new FillNode();
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)

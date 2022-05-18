@@ -1,97 +1,76 @@
-import { NavigationContainer } from "@react-navigation/native";
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { StatusBar } from "react-native";
-
+import { Dimensions, StyleSheet } from "react-native";
+import type { SkiaReadonlyValue } from "@shopify/react-native-skia";
 import {
-  AnimationExample,
-  API,
-  Aurora,
-  Breathe,
-  Filters,
-  Gooey,
-  GraphsScreen,
-  Hue,
-  Matrix,
-  Glassmorphism,
-  Neumorphism,
-  PerformanceDrawingTest,
-  Wallpaper,
-  Vertices,
-  Wallet,
-} from "./Examples";
-import { HomeScreen } from "./Home";
+  polar2Canvas,
+  Fill,
+  Group,
+  useDerivedValue,
+  useLoop,
+  vec,
+  Canvas,
+  Circle,
+  Easing,
+  mix,
+} from "@shopify/react-native-skia";
 
-const App = () => {
-  const Stack = createNativeStackNavigator();
+const { width, height } = Dimensions.get("window");
+const c1 = "#61bea2";
+const c2 = "#529ca0";
+const R = width / 4;
+const center = vec(width / 2, height / 2 - 64);
+
+interface RingProps {
+  index: number;
+  progress: SkiaReadonlyValue<number>;
+}
+
+const Ring = ({ index, progress }: RingProps) => {
+  const theta = (index * (2 * Math.PI)) / 6;
+  const transform = useDerivedValue(() => {
+    const { x, y } = polar2Canvas(
+      { theta, radius: progress.current * R },
+      { x: 0, y: 0 }
+    );
+    const scale = mix(progress.current, 0.3, 1);
+    return [{ translateX: x }, { translateY: y }, { scale }];
+  }, [progress]);
+
   return (
-    <>
-      <StatusBar hidden />
-      <NavigationContainer>
-        <Stack.Navigator>
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{
-              title: "🎨 Skia",
-            }}
-          />
-          <Stack.Screen
-            name="Vertices"
-            component={Vertices}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen name="API" component={API} />
-          <Stack.Screen name="Breathe" component={Breathe} />
-          <Stack.Screen name="Filters" component={Filters} />
-          <Stack.Screen name="Gooey" component={Gooey} />
-          <Stack.Screen name="Hue" component={Hue} />
-          <Stack.Screen
-            name="Matrix"
-            component={Matrix}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen
-            name="Aurora"
-            component={Aurora}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen
-            name="Glassmorphism"
-            component={Glassmorphism}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen name="Neumorphism" component={Neumorphism} />
-          <Stack.Screen
-            name="Wallpaper"
-            component={Wallpaper}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen
-            name="Wallet"
-            component={Wallet}
-            options={{
-              header: () => null,
-            }}
-          />
-          <Stack.Screen name="Graphs" component={GraphsScreen} />
-          <Stack.Screen name="Animation" component={AnimationExample} />
-          <Stack.Screen name="Performance" component={PerformanceDrawingTest} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </>
+    <Group origin={center} transform={transform}>
+      <Circle c={center} r={R} color={index % 2 ? c1 : c2} />
+    </Group>
   );
 };
 
-// eslint-disable-next-line import/no-default-export
+export const App = () => {
+  const progress = useLoop({
+    duration: 3000,
+    easing: Easing.inOut(Easing.ease),
+  });
+
+  const transform = useDerivedValue(
+    () => [{ rotate: mix(progress.current, -Math.PI, 0) }],
+    [progress]
+  );
+
+  return (
+    <Canvas style={styles.container} debug mode="continuous">
+      <Fill color="rgb(36,43,56)" />
+      <Group origin={center} transform={transform} blendMode="screen">
+        {/* <BlurMask style="solid" blur={40} /> */}
+        {new Array(6).fill(0).map((_, index) => {
+          return <Ring key={index} index={index} progress={progress} />;
+        })}
+      </Group>
+    </Canvas>
+  );
+};
+
 export default App;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

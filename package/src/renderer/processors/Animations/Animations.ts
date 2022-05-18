@@ -1,3 +1,5 @@
+import { useEffect, useMemo } from "react";
+
 import type { SkiaReadonlyValue } from "../../../values";
 import type { DrawingContext } from "../../DrawingContext";
 import { mapKeys } from "../../typeddash";

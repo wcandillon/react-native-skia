@@ -1,11 +1,11 @@
 import type { SkCanvas } from "../../skia";
-import type { DrawingContext } from "../DrawingContext";
 
 import type { RenderContext } from "./RenderContext";
 
 export enum NodeType {
   Circle = "skCircle",
   Group = "skGroup",
+  Fill = "skFill",
 }
 
 export abstract class Node {

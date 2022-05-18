@@ -1,15 +1,29 @@
 import React from "react";
 
-import type { AnimatedProps } from "../../processors/Animations/Animations";
-import type { CustomPaintProps } from "../../processors/Paint";
-import { createDrawing } from "../../nodes/Drawing";
+import type { CustomPaintProps, AnimatedProps } from "../../processors";
+import { materialize } from "../../processors";
+import type { SkCanvas } from "../../../skia";
+import { RenderNode } from "../../nodes";
+import type { RenderContext } from "../../nodes/RenderContext";
 
 export type FillProps = CustomPaintProps;
 
-const onDraw = createDrawing(({ canvas, paint }) => {
-  canvas.drawPaint(paint);
-});
+export class FillNode extends RenderNode {
+  constructor() {
+    super();
+  }
+
+  render(canvas: SkCanvas, ctx: RenderContext) {
+    canvas.drawPaint(ctx.paint);
+  }
+}
 
 export const Fill = (props: AnimatedProps<FillProps>) => {
-  return <skDrawing onDraw={onDraw} {...props} />;
+  const materialized = materialize(props);
+
+  return (
+    <skGroup {...materialized}>
+      <skFill />
+    </skGroup>
+  );
 };

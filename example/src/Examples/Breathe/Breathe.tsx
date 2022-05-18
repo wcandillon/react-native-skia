@@ -57,13 +57,14 @@ export const Breathe = () => {
 
   return (
     <Canvas style={styles.container} debug>
-      <Fill color="rgb(36,43,56)" />
+      {/* <Fill color="rgb(36,43,56)" />
       <Group origin={center} transform={transform} blendMode="screen">
         <BlurMask style="solid" blur={40} />
         {new Array(6).fill(0).map((_, index) => {
           return <Ring key={index} index={index} progress={progress} />;
         })}
-      </Group>
+      </Group> */}
+      <Circle color={c1} r={128} cx={128} cy={128} />
     </Canvas>
   );
 };
