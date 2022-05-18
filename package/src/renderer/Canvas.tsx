@@ -30,6 +30,7 @@ import { debug as hostDebug, skHostConfig } from "./HostConfig";
 import { vec } from "./processors";
 import { Container } from "./nodes";
 import { DependencyManager } from "./DependencyManager";
+import { RenderContext } from "./nodes/RenderContext";
 
 const CanvasContext = React.createContext<SkiaReadonlyValue<{
   width: number;
@@ -132,7 +133,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
           center: vec(width / 2, height / 2),
           fontMgr: fontMgr ?? defaultFontMgr,
         };
-        container.draw(ctx);
+        container.render(canvas, new RenderContext(ctx));
       },
       [tick, onTouch]
     );

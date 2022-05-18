@@ -1,6 +1,8 @@
 import type { DrawingContext } from "../DrawingContext";
+import type { SkCanvas } from "../../skia/Canvas";
 
 import { Node } from "./Node";
+import type { RenderContext } from "./RenderContext";
 
 export class Container extends Node {
   redraw: () => void;
@@ -10,5 +12,9 @@ export class Container extends Node {
     this.redraw = redraw;
   }
 
-  draw(ctx: DrawingContext) {}
+  render(canvas: SkCanvas, ctx: RenderContext) {
+    for (const child of this.children) {
+      child.render(canvas, ctx);
+    }
+  }
 }

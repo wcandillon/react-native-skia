@@ -21,7 +21,6 @@ export interface ChildrenProps {
   children?: ReactNode | ReactNode[];
 }
 
-// TODO: rename to paint props?
 export interface CustomPaintProps extends ChildrenProps {
   paint?: RefObject<SkPaint>;
   color?: Color;

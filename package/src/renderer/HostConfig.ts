@@ -6,6 +6,8 @@ import { CircleNode } from "./components";
 import type { Container, Node } from "./nodes";
 import { NodeType } from "./nodes";
 import { exhaustiveCheck, shallowEq } from "./typeddash";
+import type { GroupProps } from "./components/Group";
+import { GroupNode } from "./components/Group";
 
 const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
@@ -18,7 +20,7 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      skGroup: GroupProps;
       skCircle: CircleProps;
     }
   }
@@ -75,6 +77,8 @@ const createNode = (container: Container, type: NodeType, props: Props) => {
   switch (type) {
     case NodeType.Circle:
       return new CircleNode(props);
+    case NodeType.Group:
+      return new GroupNode(props);
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)

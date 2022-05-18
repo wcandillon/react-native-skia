@@ -9,8 +9,8 @@ import type {
 import { materialize, processCircle } from "../../processors";
 import { vec } from "../../processors/math/Vector";
 import type { SkCanvas } from "../../../skia";
-import type { DrawingContext } from "../../DrawingContext";
-import { RenderNode } from "../../nodes/Node";
+import { RenderNode } from "../../nodes";
+import type { RenderContext } from "../../nodes/RenderContext";
 
 export type CircleProps = CircleDef & CustomPaintProps;
 
@@ -25,14 +25,19 @@ export class CircleNode extends RenderNode {
     this.r = r;
   }
 
-  render(canvas: SkCanvas, ctx: DrawingContext) {
+  render(canvas: SkCanvas, ctx: RenderContext) {
     canvas.drawCircle(this.c.x, this.c.y, this.r, ctx.paint);
   }
 }
 
 export const Circle = (props: AnimatedProps<CircleProps>) => {
   const materialized = materialize(props);
-  return <skCircle {...materialized} />;
+
+  return (
+    <skGroup {...materialized}>
+      <skCircle {...materialized} />
+    </skGroup>
+  );
 };
 
 Circle.defaultProps = {
