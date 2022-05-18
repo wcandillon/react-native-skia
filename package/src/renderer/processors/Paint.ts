@@ -14,7 +14,7 @@ import {
   Skia,
 } from "../../skia";
 import type { SkPaint, Color, SkImageFilter } from "../../skia";
-import type { DeclarationResult } from "../nodes";
+//import type { DeclarationResult } from "../nodes";
 export type SkEnum<T> = Uncapitalize<keyof T extends string ? keyof T : never>;
 
 export interface ChildrenProps {
@@ -53,7 +53,7 @@ export const processPaint = (
     opacity,
     antiAlias,
   }: CustomPaintProps,
-  children: DeclarationResult[]
+  children: any[]
 ) => {
   if (paintRef && paintRef.current) {
     return paintRef.current;

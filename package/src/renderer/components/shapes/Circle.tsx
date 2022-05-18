@@ -4,20 +4,35 @@ import type {
   CustomPaintProps,
   AnimatedProps,
   CircleDef,
+  Vector,
 } from "../../processors";
-import { createDrawing } from "../../nodes/Drawing";
+import { materialize, processCircle } from "../../processors";
 import { vec } from "../../processors/math/Vector";
-import { processCircle } from "../../processors";
+import type { SkCanvas } from "../../../skia";
+import type { DrawingContext } from "../../DrawingContext";
+import { RenderNode } from "../../nodes/Node";
 
 export type CircleProps = CircleDef & CustomPaintProps;
 
-const onDraw = createDrawing<CircleProps>(({ canvas, paint }, def) => {
-  const { c, r } = processCircle(def);
-  canvas.drawCircle(c.x, c.y, r, paint);
-});
+export class CircleNode extends RenderNode {
+  c: Vector;
+  r: number;
+
+  constructor(props: CircleProps) {
+    super();
+    const { c, r } = processCircle(props);
+    this.c = c;
+    this.r = r;
+  }
+
+  render(canvas: SkCanvas, ctx: DrawingContext) {
+    canvas.drawCircle(this.c.x, this.c.y, this.r, ctx.paint);
+  }
+}
 
 export const Circle = (props: AnimatedProps<CircleProps>) => {
-  return <skDrawing onDraw={onDraw} {...props} />;
+  const materialized = materialize(props);
+  return <skCircle {...materialized} />;
 };
 
 Circle.defaultProps = {

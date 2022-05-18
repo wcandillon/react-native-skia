@@ -1,8 +1,10 @@
 /*global NodeJS, performance*/
 import type { HostConfig } from "react-reconciler";
 
-import type { Node, Container, DeclarationProps, DrawingProps } from "./nodes";
-import { DeclarationNode, DrawingNode, NodeType } from "./nodes";
+import type { CircleProps } from "./components";
+import { CircleNode } from "./components";
+import type { Container, Node } from "./nodes";
+import { NodeType } from "./nodes";
 import { exhaustiveCheck, shallowEq } from "./typeddash";
 
 const DEBUG = false;
@@ -17,9 +19,7 @@ declare global {
   namespace JSX {
     interface IntrinsicElements {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      skDeclaration: DeclarationProps<any>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      skDrawing: DrawingProps<any>;
+      skCircle: CircleProps;
     }
   }
 }
@@ -53,63 +53,16 @@ type SkiaHostConfig = HostConfig<
   NoTimeout
 >;
 
-const allChildrenAreMemoized = (node: Instance) => {
-  if (!node.memoizable) {
-    return false;
-  }
-  for (const child of node.children) {
-    if (!child.memoized) {
-      return false;
-    }
-  }
-  return true;
-};
-
-const bustBranchMemoization = (parent: Node) => {
-  if (parent.memoizable) {
-    let ancestor: Node | undefined = parent;
-    while (ancestor) {
-      ancestor.memoized = null;
-      ancestor = ancestor.parent;
-    }
-  }
-};
-
-const bustBranchMemoizable = (parent: Node) => {
-  if (parent.memoizable) {
-    let ancestor: Node | undefined = parent;
-    while (ancestor) {
-      ancestor.memoizable = false;
-      ancestor = ancestor.parent;
-    }
-  }
-};
-
 const appendNode = (parent: Node, child: Node) => {
-  child.parent = parent;
-  bustBranchMemoization(parent);
-  if (!child.memoizable) {
-    bustBranchMemoizable(parent);
-  }
-  if (!parent.memoizable) {
-    child.memoizable = false;
-  }
   parent.children.push(child);
 };
 
 const removeNode = (parent: Node, child: Node) => {
-  bustBranchMemoization(parent);
   const index = parent.children.indexOf(child);
   parent.children.splice(index, 1);
-  child.depMgr.unSubscribeNode(child);
-  // unsubscribe to all children as well
-  for (const c of child.children) {
-    removeNode(child, c);
-  }
 };
 
 const insertBefore = (parent: Node, child: Node, before: Node) => {
-  bustBranchMemoization(parent);
   const index = parent.children.indexOf(child);
   if (index !== -1) {
     parent.children.splice(index, 1);
@@ -120,12 +73,8 @@ const insertBefore = (parent: Node, child: Node, before: Node) => {
 
 const createNode = (container: Container, type: NodeType, props: Props) => {
   switch (type) {
-    case NodeType.Drawing:
-      const { onDraw, skipProcessing, ...p1 } = props;
-      return new DrawingNode(container.depMgr, onDraw, skipProcessing, p1);
-    case NodeType.Declaration:
-      const { onDeclare, ...p2 } = props;
-      return new DeclarationNode(container.depMgr, onDeclare, p2);
+    case NodeType.Circle:
+      return new CircleNode(props);
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)
@@ -244,10 +193,10 @@ export const skHostConfig: SkiaHostConfig = {
     _hostContext
   ) => {
     debug("prepareUpdate");
-    const propsAreEqual = shallowEq(oldProps, newProps);
-    if (propsAreEqual && !instance.memoizable) {
-      return null;
-    }
+    // const propsAreEqual = shallowEq(oldProps, newProps);
+    // if (propsAreEqual && !instance.memoizable) {
+    //   return null;
+    // }
     debug("update ", type);
     return true;
   },
@@ -261,11 +210,11 @@ export const skHostConfig: SkiaHostConfig = {
     _internalHandle
   ) {
     debug("commitUpdate: ", type);
-    if (shallowEq(prevProps, nextProps) && allChildrenAreMemoized(instance)) {
-      return;
-    }
-    bustBranchMemoization(instance);
-    instance.props = nextProps;
+    // if (shallowEq(prevProps, nextProps) && allChildrenAreMemoized(instance)) {
+    //   return;
+    // }
+    // bustBranchMemoization(instance);
+    // instance.props = nextProps;
   },
 
   commitTextUpdate: (

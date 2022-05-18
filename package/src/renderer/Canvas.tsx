@@ -63,7 +63,7 @@ const render = (element: ReactNode, root: OpaqueRoot, container: Container) => {
   skiaReconciler.updateContainer(element, root, null, () => {
     hostDebug("updateContainer");
 
-    container.depMgr.subscribe();
+    //container.depMgr.subscribe();
   });
 };
 
@@ -87,8 +87,8 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
     const redraw = useCallback(() => setTick((t) => t + 1), []);
 
     const container = useMemo(
-      () => new Container(new DependencyManager(ref), redraw),
-      [redraw, ref]
+      () => new Container(redraw), //new DependencyManager(ref),
+      [redraw]
     );
 
     const root = useMemo(
@@ -139,7 +139,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
 
     useEffect(() => {
       return () => {
-        container.depMgr.unsubscribe();
+        // container.depMgr.unsubscribe();
       };
     }, [container]);
 
