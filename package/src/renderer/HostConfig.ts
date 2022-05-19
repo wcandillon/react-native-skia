@@ -5,7 +5,7 @@ import type { RefObject } from "react";
 import type { CircleProps } from "./components";
 import { FillNode, CircleNode } from "./components";
 import type { Container, Node } from "./nodes";
-import { NodeType } from "./nodes";
+import { RenderNode, NodeType } from "./nodes";
 import { exhaustiveCheck } from "./typeddash";
 import type { GroupProps } from "./components/Group";
 import { GroupNode } from "./components/Group";
@@ -61,9 +61,15 @@ type SkiaHostConfig = HostConfig<
 
 const appendNode = (parent: Node, child: Node) => {
   parent.children.push(child);
+  if (child instanceof RenderNode) {
+    (child as RenderNode<unknown>).added();
+  }
 };
 
 const removeNode = (parent: Node, child: Node) => {
+  if (child instanceof RenderNode) {
+    (child as RenderNode<unknown>).remove();
+  }
   const index = parent.children.indexOf(child);
   parent.children.splice(index, 1);
 };
@@ -84,7 +90,7 @@ const createNode = (container: Container, type: NodeType, props: Props) => {
     case NodeType.Group:
       return new GroupNode(props);
     case NodeType.Fill:
-      return new FillNode();
+      return new FillNode(props);
     default:
       // TODO: here we need to throw a nice error message
       // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)

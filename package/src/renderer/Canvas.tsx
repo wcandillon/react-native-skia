@@ -29,7 +29,7 @@ import { debug as hostDebug, skHostConfig } from "./HostConfig";
 // import { debugTree } from "./nodes";
 import { vec } from "./processors";
 import { Container } from "./nodes";
-import { DependencyManager } from "./DependencyManager";
+//import { DependencyManager } from "./DependencyManager";
 import { RenderContext } from "./nodes/RenderContext";
 
 const CanvasContext = React.createContext<SkiaReadonlyValue<{

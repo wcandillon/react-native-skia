@@ -1,16 +1,15 @@
 import React from "react";
 
 import type { CustomPaintProps, AnimatedProps } from "../../processors";
-import { materialize } from "../../processors";
 import type { SkCanvas } from "../../../skia";
 import { RenderNode } from "../../nodes";
 import type { RenderContext } from "../../nodes/RenderContext";
 
 export type FillProps = CustomPaintProps;
 
-export class FillNode extends RenderNode {
-  constructor() {
-    super();
+export class FillNode extends RenderNode<FillProps> {
+  constructor(props: AnimatedProps<FillProps>) {
+    super(props);
   }
 
   render(canvas: SkCanvas, ctx: RenderContext) {
@@ -19,10 +18,8 @@ export class FillNode extends RenderNode {
 }
 
 export const Fill = (props: AnimatedProps<FillProps>) => {
-  const materialized = materialize(props);
-
   return (
-    <skGroup {...materialized}>
+    <skGroup {...props}>
       <skFill />
     </skGroup>
   );
