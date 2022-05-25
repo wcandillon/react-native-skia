@@ -15,6 +15,7 @@
     "@react-navigation/native": "^6.0.6",
     "@react-navigation/native-stack": "^6.2.5",
     "@shopify/react-native-skia": "link:../package/",
+    "adaptive-bezier-curve": "^1.0.3",
     "cdt2d": "^1.0.0",
     "color": "^4.2.1",
     "react": "17.0.2",

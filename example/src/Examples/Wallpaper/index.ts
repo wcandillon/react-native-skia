@@ -1,1 +1,1 @@
-export * from "./Wallpaper";
+export * from "./Logo";
