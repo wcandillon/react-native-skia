@@ -1,5 +1,6 @@
 import type { SkPath, SkiaReadonlyValue } from "@shopify/react-native-skia";
 import {
+  interpolateColors,
   dist,
   StrokeCap,
   PaintStyle,
@@ -48,22 +49,44 @@ export const PathGradient = ({
   return (
     <Drawing
       drawing={({ canvas }) => {
-        //const trimmed = path.copy();
-        //trimmed.trim(0, progress.current, false);
-
-        return points.reduce<null | [number, number]>((acc, pt) => {
-          if (acc && pt) {
+        return points.reduce<null | {
+          point: [number, number];
+          length: number;
+        }>((acc, point) => {
+          if (acc && point) {
+            const [x1, y1] = acc.point;
+            const [x2, y2] = point;
+            const length = acc.length + dist(toVec(acc.point), toVec(point));
             const paint = Skia.Paint();
             paint.setAntiAlias(true);
             paint.setStyle(PaintStyle.Stroke);
             paint.setStrokeWidth(strokeWidth);
             paint.setStrokeCap(StrokeCap.Round);
-            paint.setColor(Float32Array.of(0.3, 0.6, 0.7, 1));
-            const [x1, y1] = acc;
-            const [x2, y2] = pt;
+            const delta = totalLength / colors.length;
+            paint.setColor(
+              interpolateColors(
+                length,
+                colors.map((_, i) => i * delta),
+                colors
+              )
+            );
             canvas.drawLine(x1, y1, x2, y2, paint);
+            console.log({
+              point,
+              length,
+            });
+            return {
+              point,
+              length,
+            };
           }
-          return pt;
+          if (point) {
+            return {
+              point,
+              length: 0,
+            };
+          }
+          return null;
         }, null);
       }}
     />
