@@ -23,7 +23,6 @@ interface Line {
   from: [number, number];
   to: [number, number];
   paint: SkPaint;
-  length: number;
   totalLength: number;
 }
 
@@ -73,33 +72,28 @@ export const PathGradient = ({
     }
     if (tmp === null) {
       tmp = point;
-    } else {
-      const length = dist(toVec(tmp), toVec(point));
-      const prevLength = lines[lines.length - 1]
-        ? lines[lines.length - 1].totalLength
-        : 0;
-      const totalLength = prevLength + length;
-      const c1 = interpolateColors(prevLength, inputRange, outputRange);
-      const c2 = interpolateColors(totalLength, inputRange, outputRange);
-      const p = paint.copy();
-      p.setShader(
-        Skia.Shader.MakeLinearGradient(
-          toVec(tmp),
-          toVec(point),
-          [c1, c2],
-          null,
-          TileMode.Clamp
-        )
-      );
-      lines.push({
-        from: tmp,
-        to: point,
-        paint: p,
-        length,
-        totalLength,
-      });
-      tmp = null;
+      return;
     }
+    const from = toVec(tmp);
+    const to = toVec(point);
+    const length = dist(from, to);
+    const prevLength = lines[lines.length - 1]
+      ? lines[lines.length - 1].totalLength
+      : 0;
+    const totalLength = prevLength + length;
+    const c1 = interpolateColors(prevLength, inputRange, outputRange);
+    const c2 = interpolateColors(totalLength, inputRange, outputRange);
+    const p = paint.copy();
+    p.setShader(
+      Skia.Shader.MakeLinearGradient(from, to, [c1, c2], null, TileMode.Clamp)
+    );
+    lines.push({
+      from: tmp,
+      to: point,
+      paint: p,
+      totalLength,
+    });
+    tmp = null;
   });
 
   return (
