@@ -1,30 +1,37 @@
-import type { SkPath, SkiaReadonlyValue } from "@shopify/react-native-skia";
+import type {
+  SkPath,
+  SkiaReadonlyValue,
+  SkPaint,
+} from "@shopify/react-native-skia";
 import {
-  StrokeJoin,
-  Group,
+  SkColor,
+  TileMode,
   interpolateColors,
   dist,
   StrokeCap,
   PaintStyle,
   Skia,
   Drawing,
-  Points,
-  Circle,
   PathVerb,
-  Path,
-  useDerivedValue,
 } from "@shopify/react-native-skia";
 import React from "react";
 import bezier from "adaptive-bezier-curve";
 
-const toVec = ([x, y]: [number, number]) => ({ x, y });
+const toVec = ([x, y]: [number, number]) => Skia.Point(x, y);
+
+interface Line {
+  from: [number, number];
+  to: [number, number];
+  paint: SkPaint;
+  length: number;
+  totalLength: number;
+}
 
 interface PathGradientProps {
   path: SkPath;
   colors: string[];
   progress: SkiaReadonlyValue<number>;
   strokeWidth: number;
-  relative?: boolean;
 }
 
 export const PathGradient = ({
@@ -32,9 +39,13 @@ export const PathGradient = ({
   colors,
   progress,
   strokeWidth,
-  relative,
 }: PathGradientProps) => {
-  const pt = path
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  paint.setStyle(PaintStyle.Stroke);
+  paint.setStrokeWidth(strokeWidth);
+  paint.setStrokeCap(StrokeCap.Round);
+  const points = path
     .toCmds()
     .map(([verb, sx, sy, c1x, c1y, c2X, c2Y, ex, ey]) => {
       if (verb === PathVerb.Cubic) {
@@ -43,91 +54,66 @@ export const PathGradient = ({
       return null;
     })
     .flat();
-  const totalLength = pt.reduce((acc, point, i) => {
-    const prev = pt[i - 1];
+  const LENGTH = points.reduce((acc, point, i) => {
+    const prev = points[i - 1];
     if (i === 0 || point === null || prev === null) {
       return acc;
     }
     return acc + dist(toVec(prev), toVec(point));
   }, 0);
+  const delta = LENGTH / colors.length;
+  const inputRange = colors.map((_, j) => j * delta);
+  const outputRange = colors.map((cl) => Skia.Color(cl));
+  const lines: Line[] = [];
+  let tmp: [number, number] | null = null;
+  points.forEach((point, i) => {
+    if (point === null) {
+      tmp = null;
+      return;
+    }
+    if (tmp === null) {
+      tmp = point;
+    } else {
+      const length = dist(toVec(tmp), toVec(point));
+      const prevLength = lines[lines.length - 1]
+        ? lines[lines.length - 1].totalLength
+        : 0;
+      const totalLength = prevLength + length;
+      const c1 = interpolateColors(prevLength, inputRange, outputRange);
+      const c2 = interpolateColors(totalLength, inputRange, outputRange);
+      const p = paint.copy();
+      p.setShader(
+        Skia.Shader.MakeLinearGradient(
+          toVec(tmp),
+          toVec(point),
+          [c1, c2],
+          null,
+          TileMode.Clamp
+        )
+      );
+      lines.push({
+        from: tmp,
+        to: point,
+        paint: p,
+        length,
+        totalLength,
+      });
+      tmp = null;
+    }
+  });
+
   return (
     <Drawing
       drawing={({ canvas }) => {
-        const trimmed = path.copy();
-        trimmed.trim(0, progress.current, false);
-        const points = trimmed
-          .toCmds()
-          .map(([verb, sx, sy, c1x, c1y, c2X, c2Y, ex, ey]) => {
-            if (verb === PathVerb.Cubic) {
-              return bezier([sx, sy], [c1x, c1y], [c2X, c2Y], [ex, ey]);
+        const t = progress.current * LENGTH;
+        lines.forEach(
+          ({ from: [x1, y1], to: [x2, y2], paint: p, totalLength }) => {
+            if (totalLength <= t) {
+              canvas.drawLine(x1, y1, x2, y2, p);
             }
-            return null;
-          })
-          .flat();
-        const relativeTotalLength = points.reduce((acc, point, i) => {
-          const prev = points[i - 1];
-          if (i === 0 || point === null || prev === null) {
-            return acc;
-          }
-          return acc + dist(toVec(prev), toVec(point));
-        }, 0);
-        return points.reduce<{
-          point: null | [number, number];
-          length: number;
-        }>(
-          (acc, point) => {
-            if (acc.point && point) {
-              const [x1, y1] = acc.point;
-              const [x2, y2] = point;
-              const length = acc.length + dist(toVec(acc.point), toVec(point));
-              const paint = Skia.Paint();
-              paint.setAntiAlias(true);
-              paint.setStyle(PaintStyle.Stroke);
-              paint.setStrokeWidth(strokeWidth);
-              paint.setStrokeCap(StrokeCap.Round);
-              const delta =
-                (relative ? relativeTotalLength : totalLength) / colors.length;
-              paint.setColor(
-                interpolateColors(
-                  length,
-                  colors.map((_, i) => i * delta),
-                  colors
-                )
-              );
-              canvas.drawLine(x1, y1, x2, y2, paint);
-              return {
-                point,
-                length,
-              };
-            }
-            return {
-              point,
-              length: acc.length,
-            };
-          },
-          {
-            point: null,
-            length: 0,
           }
         );
       }}
     />
   );
-  // const points = useDerivedValue(() => {
-
-  // }, [progress]);
-  // return (
-  //   <>
-  //     {/* {points.map(([cx, cy], i) => (
-  //       <Circle r={10} cx={cx} cy={cy} key={i} color="white" />
-  //     ))} */}
-  //     <Points
-  //       points={points}
-  //       color="white"
-  //       style="stroke"
-  //       strokeWidth={strokeWidth}
-  //       mode="lines"
-  //     />
-  //   </>
-  // );
 };
