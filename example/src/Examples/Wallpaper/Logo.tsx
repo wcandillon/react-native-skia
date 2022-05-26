@@ -25,12 +25,12 @@ const PADDING = 32;
 
 export const Wallpaper = () => {
   const progress = useTiming(
-    { to: 1, loop: false },
+    { to: 1, loop: true },
     { duration: 3000, easing: Easing.bezier(0.65, 0, 0.35, 1) }
   );
 
   return (
-    <Canvas style={{ flex: 1 }} debug mode="continuous">
+    <Canvas style={{ flex: 1 }} debug>
       <Background progress={progress} />
       <FitBox
         src={rect(0, 0, 2139, 928)}
