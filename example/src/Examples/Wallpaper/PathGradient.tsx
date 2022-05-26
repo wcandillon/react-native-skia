@@ -4,8 +4,6 @@ import type {
   SkPaint,
 } from "@shopify/react-native-skia";
 import {
-  SkColor,
-  TileMode,
   interpolateColors,
   dist,
   StrokeCap,
@@ -17,13 +15,16 @@ import {
 import React from "react";
 import bezier from "adaptive-bezier-curve";
 
+import { getPointAtLength } from "../Aurora/components/Math";
+
 const toVec = ([x, y]: [number, number]) => Skia.Point(x, y);
 
 interface Line {
   from: [number, number];
   to: [number, number];
   paint: SkPaint;
-  totalLength: number;
+  startLength: number;
+  endLength: number;
 }
 
 interface PathGradientProps {
@@ -75,14 +76,14 @@ export const PathGradient = ({
     const from = toVec(prev);
     const to = toVec(point);
     const length = dist(from, to);
-    const prevLength = lines[lines.length - 1]
-      ? lines[lines.length - 1].totalLength
+    const startLength = lines[lines.length - 1]
+      ? lines[lines.length - 1].endLength
       : 0;
-    const totalLength = prevLength + length;
+    const endLength = startLength + length;
     // const c1 = interpolateColors(prevLength, inputRange, outputRange);
     // const c2 = interpolateColors(totalLength, inputRange, outputRange);
     const p = paint.copy();
-    p.setColor(interpolateColors(prevLength, inputRange, outputRange));
+    p.setColor(interpolateColors(startLength, inputRange, outputRange));
     // p.setShader(
     //   Skia.Shader.MakeLinearGradient(from, to, [c1, c2], null, TileMode.Clamp)
     // );
@@ -90,7 +91,8 @@ export const PathGradient = ({
       from: prev,
       to: point,
       paint: p,
-      totalLength,
+      startLength,
+      endLength,
     });
   });
 
@@ -99,9 +101,23 @@ export const PathGradient = ({
       drawing={({ canvas }) => {
         const t = progress.current * LENGTH;
         lines.forEach(
-          ({ from: [x1, y1], to: [x2, y2], paint: p, totalLength }) => {
-            if (totalLength <= t) {
+          ({
+            from: [x1, y1],
+            to: [x2, y2],
+            paint: p,
+            startLength,
+            endLength,
+          }) => {
+            if (endLength <= t) {
               canvas.drawLine(x1, y1, x2, y2, p);
+            } else if (startLength <= t) {
+              const u = t - startLength;
+              const { x: x3, y: y3 } = getPointAtLength(
+                u,
+                { x: x1, y: y1 },
+                { x: x2, y: y2 }
+              );
+              canvas.drawLine(x1, y1, x3, y3, p);
             }
           }
         );
