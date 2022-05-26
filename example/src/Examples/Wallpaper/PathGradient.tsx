@@ -24,6 +24,7 @@ interface PathGradientProps {
   colors: string[];
   progress: SkiaReadonlyValue<number>;
   strokeWidth: number;
+  relative?: boolean;
 }
 
 export const PathGradient = ({
@@ -31,7 +32,24 @@ export const PathGradient = ({
   colors,
   progress,
   strokeWidth,
+  relative,
 }: PathGradientProps) => {
+  const pt = path
+    .toCmds()
+    .map(([verb, sx, sy, c1x, c1y, c2X, c2Y, ex, ey]) => {
+      if (verb === PathVerb.Cubic) {
+        return bezier([sx, sy], [c1x, c1y], [c2X, c2Y], [ex, ey]);
+      }
+      return null;
+    })
+    .flat();
+  const totalLength = pt.reduce((acc, point, i) => {
+    const prev = pt[i - 1];
+    if (i === 0 || point === null || prev === null) {
+      return acc;
+    }
+    return acc + dist(toVec(prev), toVec(point));
+  }, 0);
   return (
     <Drawing
       drawing={({ canvas }) => {
@@ -46,7 +64,7 @@ export const PathGradient = ({
             return null;
           })
           .flat();
-        const totalLength = points.reduce((acc, point, i) => {
+        const relativeTotalLength = points.reduce((acc, point, i) => {
           const prev = points[i - 1];
           if (i === 0 || point === null || prev === null) {
             return acc;
@@ -67,7 +85,8 @@ export const PathGradient = ({
               paint.setStyle(PaintStyle.Stroke);
               paint.setStrokeWidth(strokeWidth);
               paint.setStrokeCap(StrokeCap.Round);
-              const delta = totalLength / colors.length;
+              const delta =
+                (relative ? relativeTotalLength : totalLength) / colors.length;
               paint.setColor(
                 interpolateColors(
                   length,
