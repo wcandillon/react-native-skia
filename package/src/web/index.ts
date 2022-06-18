@@ -1,7 +1,6 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
-import CanvasKitInit from "canvaskit-wasm/bin/full/canvaskit";
 import type { CanvasKit as CanvasKitType } from "canvaskit-wasm";
+
+import CanvasKitInit from "../../build/canvaskit";
 
 declare global {
   var CanvasKit: CanvasKitType;

@@ -62,6 +62,11 @@ export class JsiSkColorFilterFactory
   }
 
   MakeLumaColorFilter(): SkColorFilter {
-    throw new NotImplementedOnRNWeb();
+    return new JsiSkColorFilter(
+      this.CanvasKit,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error
+      this.CanvasKit.ColorFilter.MakeLumaColorFilter()
+    );
   }
 }
