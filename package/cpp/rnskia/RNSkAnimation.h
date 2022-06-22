@@ -20,11 +20,10 @@ class RNSkAnimation : public RNSkClockValue
   
 public:
   RNSkAnimation(std::shared_ptr<RNSkPlatformContext> platformContext,
-                     size_t identifier,
                      jsi::Runtime& runtime,
                      const jsi::Value *arguments,
                      size_t count) :
-    RNSkClockValue(platformContext, identifier, runtime, arguments, count) {
+    RNSkClockValue(platformContext, runtime, arguments, count) {
     // Save the update function
     _updateFunction = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
         

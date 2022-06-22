@@ -16,7 +16,7 @@ class RNSkDrawView;
 class RNSkJsiViewApi;
 using namespace facebook;
 
-class RNSkManager {
+class RNSkManager: public std::enable_shared_from_this<RNSkManager> {
 public:
   /**
     Initialializes a new instance of the RNSkManager
@@ -70,12 +70,18 @@ private:
    * module.
    */
   void installBindings();
+  
+  /**
+   Installs the DisplaySync callback
+   */
+  void installDrawLoop();
 
   jsi::Runtime *_jsRuntime;
   std::shared_ptr<RNSkPlatformContext> _platformContext;
   std::shared_ptr<facebook::react::CallInvoker> _jsCallInvoker;
   std::shared_ptr<RNSkJsiViewApi> _viewApi;
   std::atomic<bool> _isInvalidated = {false};
+  size_t _drawLoopId = 0;
 };
 
 } // namespace RNSkia

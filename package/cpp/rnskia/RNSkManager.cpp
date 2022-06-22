@@ -39,7 +39,13 @@ void RNSkManager::invalidate() {
     return;
   }
   _isInvalidated = true;
-  
+
+  // Remove draw loop
+  if(_drawLoopId != 0) {
+    _platformContext->endDrawLoop(_drawLoopId);
+    _drawLoopId = 0;
+  }
+
   // Invalidate members
   _viewApi->invalidate();
   _platformContext->invalidate();
@@ -56,8 +62,11 @@ void RNSkManager::unregisterSkiaDrawView(size_t nativeId) {
 }
 
 void RNSkManager::setSkiaDrawView(size_t nativeId, std::shared_ptr<RNSkDrawView> view) {
-  if (!_isInvalidated && _viewApi != nullptr)
+  if (!_isInvalidated && _viewApi != nullptr) {
     _viewApi->setSkiaDrawView(nativeId, view);
+    // This one can't be called from the ctor since it uses shared_from_this (weak referencing)
+    installDrawLoop();
+  }
 }
 
 void RNSkManager::installBindings() {
@@ -78,4 +87,45 @@ void RNSkManager::installBindings() {
     *_jsRuntime, "SkiaValueApi",
     jsi::Object::createFromHostObject(*_jsRuntime, std::move(skiaValueApi)));
 }
+
+void RNSkManager::installDrawLoop() {
+  if(_drawLoopId == 0) {
+    _drawLoopId = _platformContext->beginDrawLoop([weakSelf = weak_from_this()](bool invalidated) {
+      // This callback is called on the main thread. This
+      // callback is responsible for going through all registered Skia Views
+      // and let them render a Skia Picture (list of drawing operations) that
+      // can be passed to the render thread and rendered on screen.
+      auto self = weakSelf.lock();
+      if (self) {
+
+        // Let's begin with calling all render methods for all active views
+       // self->getPlatformContext()->runOnJavascriptThread([self = std::move(self)]() {
+          
+          // Get all active views
+          auto viewCallbacks = self->_viewApi->getCallbackInfos();
+
+          // Set aside a list of pictures / drawing operations
+          std::vector<std::tuple<sk_sp<SkPicture>, std::shared_ptr<RNSkDrawView>>> pics;
+
+          // Call drawing ops on all views
+          for (const auto &vinfo: viewCallbacks) {
+            if (vinfo.second.view != nullptr) {
+              auto pic = vinfo.second.view->performDraw();
+              pics.push_back(std::make_tuple(pic, vinfo.second.view));
+            }
+          }
+
+          //self->getPlatformContext()->runOnMainThread([viewCallbacks, pics = std::move(pics)]() {
+            for (size_t i = 0; i < pics.size(); ++i) {
+              if(std::get<0>(pics.at(i)) != nullptr) {
+                std::get<1>(pics.at(i))->drawPicture(std::get<0>(pics.at(i)));
+              }
+           }
+        // });
+        //});
+      }
+    });
+  }
+}
+
 } // namespace RNSkia

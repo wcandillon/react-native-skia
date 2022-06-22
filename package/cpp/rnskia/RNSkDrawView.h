@@ -55,7 +55,7 @@ public:
   /**
    Calls the drawing callback on the javascript thread
    */
-  void performDraw();
+  sk_sp<SkPicture> performDraw();
 
   /**
    * Installs the draw callback for the view
@@ -93,6 +93,11 @@ public:
    */
   sk_sp<SkImage> makeImageSnapshot(std::shared_ptr<SkRect> bounds);
 
+  /**
+   Override to render picture to GPU
+   */
+  virtual void drawPicture(const sk_sp<SkPicture> picture) = 0;
+
 protected:
   /**
    Returns the scaled width of the view
@@ -105,11 +110,6 @@ protected:
   virtual float getScaledHeight() = 0;
   
   /**
-   Override to render picture to GPU
-   */
-  virtual void drawPicture(const sk_sp<SkPicture> picture) = 0;
-  
-  /**
    * @return The platformcontext
    */
   std::shared_ptr<RNSkPlatformContext> getPlatformContext() {
@@ -117,21 +117,6 @@ protected:
   }
 
 private:  
-  /**
-   Starts beginDrawCallback loop if the drawing mode is continuous
-   */
-  void beginDrawingLoop();
-
-  /**
-   Ends an ongoing beginDrawCallback loop for this view
-   */
-  void endDrawingLoop();
-  
-  /**
-    Draw loop callback
-   */
-  void drawLoopCallback(bool invalidated);
-  
   /**
    Draw in canvas
    */

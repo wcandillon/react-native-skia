@@ -26,12 +26,10 @@ enum RNSkClockState {
   
 public:
   RNSkClockValue(std::shared_ptr<RNSkPlatformContext> platformContext,
-                 size_t identifier,
                  jsi::Runtime& runtime,
                  const jsi::Value *arguments,
                  size_t count) : RNSkReadonlyValue(platformContext),
-        _runtime(runtime),
-        _identifier(identifier) {
+        _runtime(runtime) {
     // Start by updating to zero (start value)
     update(_runtime, static_cast<double>(0));
   }
@@ -71,8 +69,8 @@ public:
     _start += timeSinceStop;
     
     _state = RNSkClockState::Running;
-    
-    getContext()->beginDrawLoop(_identifier, [weakSelf = weak_from_this()](bool invalidated){
+
+    _identifier = getContext()->beginDrawLoop([weakSelf = weak_from_this()](bool invalidated){
       auto self = weakSelf.lock();
       if(self) {
         std::dynamic_pointer_cast<RNSkClockValue>(self)->notifyUpdate(invalidated);
@@ -119,12 +117,6 @@ protected:
         }
     });
   }
-  
-  /**
-   Returns the draw identifier for the clock. This identifier is used
-   for the draw loop.
-   */
-  size_t getIdentifier() { return _identifier; }
   
   /**
    Returns the state of the clock

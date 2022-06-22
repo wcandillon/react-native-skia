@@ -10,12 +10,13 @@
 
 #include <RNSkLog.h>
 
-namespace RNSkia {
-    RNSkDrawViewImpl::RNSkDrawViewImpl(std::shared_ptr <RNSkia::RNSkPlatformContext> context, std::function<void()> releaseSurfaceCallback) :
-        RNSkia::RNSkDrawView(context),
-        _releaseSurfaceCallback(std::move(releaseSurfaceCallback)) {}
+namespace RNSkia
+{
+    RNSkDrawViewImpl::RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> context, std::function<void()> releaseSurfaceCallback) : RNSkia::RNSkDrawView(context),
+                                                                                                                                             _releaseSurfaceCallback(std::move(releaseSurfaceCallback)) {}
 
-    void RNSkDrawViewImpl::surfaceAvailable(ANativeWindow* surface, int width, int height) {
+    void RNSkDrawViewImpl::surfaceAvailable(ANativeWindow *surface, int width, int height)
+    {
         _scaledWidth = width;
         _scaledHeight = height;
 
@@ -24,12 +25,21 @@ namespace RNSkia {
             // Create renderer!
             _renderer = std::make_unique<SkiaOpenGLRenderer>(surface, getNativeId());
 
+            auto p = this->performDraw();
+
+            if(p != nullptr) {
+                _renderer->run(p, width, height);
+            } else {
+                requestRedraw();
+            }
+
             // Redraw
-            requestRedraw();
+            // requestRedraw();
         }
     }
 
-    void RNSkDrawViewImpl::surfaceDestroyed() {
+    void RNSkDrawViewImpl::surfaceDestroyed()
+    {
         if (_renderer != nullptr)
         {
             // Start teardown
@@ -37,7 +47,8 @@ namespace RNSkia {
 
             // Teardown renderer on the render thread since OpenGL demands
             // same thread access for OpenGL contexts.
-            getPlatformContext()->runOnRenderThread([weakSelf = weak_from_this()]() {
+            getPlatformContext()->runOnRenderThread([weakSelf = weak_from_this()]()
+                                                    {
                 auto self = weakSelf.lock();
                 if(self) {
                     auto drawViewImpl = std::dynamic_pointer_cast<RNSkDrawViewImpl>(self);
@@ -47,13 +58,14 @@ namespace RNSkia {
                     // Remove renderer
                     drawViewImpl->_renderer = nullptr;
                     drawViewImpl->_releaseSurfaceCallback();
-                }
-            });
+                } });
         }
     }
 
-    void RNSkDrawViewImpl::surfaceSizeChanged(int width, int height) {
-        if(width == 0 && height == 0) {
+    void RNSkDrawViewImpl::surfaceSizeChanged(int width, int height)
+    {
+        if (width == 0 && height == 0)
+        {
             // Setting width/height to zero is nothing we need to care about when
             // it comes to invalidating the surface.
             return;
@@ -65,8 +77,10 @@ namespace RNSkia {
         requestRedraw();
     }
 
-    void RNSkDrawViewImpl::drawPicture(const sk_sp <SkPicture> picture) {
-        if(_renderer != nullptr) {
+    void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture)
+    {
+        if (_renderer != nullptr)
+        {
             _renderer->run(picture, _scaledWidth, _scaledHeight);
         }
     }

@@ -19,7 +19,6 @@ public:
    */
   RNSkValueApi(std::shared_ptr<RNSkPlatformContext> platformContext)
       : JsiHostObject(), _platformContext(platformContext) {
-        _valueIdentifier = 50000;
       }
 
   /**
@@ -45,7 +44,6 @@ public:
   JSI_HOST_FUNCTION(createAnimation) {
     return jsi::Object::createFromHostObject(runtime,
       std::make_shared<RNSkAnimation>(_platformContext,
-                                      ++_valueIdentifier,
                                       runtime,
                                       arguments,
                                       count));
@@ -54,7 +52,6 @@ public:
   JSI_HOST_FUNCTION(createClockValue) {
     return jsi::Object::createFromHostObject(runtime,
       std::make_shared<RNSkClockValue>(_platformContext,
-                                      ++_valueIdentifier,
                                       runtime,
                                       arguments,
                                       count));
@@ -68,6 +65,5 @@ public:
 private:
   // Platform context
   std::shared_ptr<RNSkPlatformContext> _platformContext;
-  std::atomic<long> _valueIdentifier;  
 };
 } // namespace RNSkia

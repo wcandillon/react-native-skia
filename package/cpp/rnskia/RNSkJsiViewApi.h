@@ -221,6 +221,10 @@ public:
     _callbackInfos.clear();
   }
 
+  const std::unordered_map<size_t, CallbackInfo>& getCallbackInfos() {
+    return _callbackInfos;
+  }
+
   /**
    * Registers a skia view
    * @param nativeId Id of view to register

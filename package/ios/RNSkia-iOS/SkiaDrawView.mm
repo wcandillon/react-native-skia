@@ -80,7 +80,7 @@
 - (void) layoutSubviews {
   [super layoutSubviews];
   if(_impl != nullptr) {
-    _impl->setSize(self.bounds.size.width, self.bounds.size.height);
+    _impl->setSize(self.bounds.size.width, self.bounds.size.height);    
   }
 }
 

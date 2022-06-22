@@ -1,17 +1,25 @@
 package com.shopify.reactnative.skia;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
 import android.view.Surface;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.MotionEvent;
+import android.widget.FrameLayout;
+
+import androidx.annotation.NonNull;
 
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
 import com.facebook.react.bridge.ReactContext;
 
-public class SkiaDrawView extends TextureView implements TextureView.SurfaceTextureListener {
+public class SkiaDrawView extends FrameLayout implements TextureView.SurfaceTextureListener, SurfaceHolder.Callback {
 
     private static final String TAG = "Java::JniSkiaDrawView";
 
@@ -28,15 +36,23 @@ public class SkiaDrawView extends TextureView implements TextureView.SurfaceText
         super(ctx);
         RNSkiaModule skiaModule = ((ReactContext)ctx).getNativeModule(RNSkiaModule.class);
         mHybridData = initHybrid(skiaModule.getSkiaManager());
-        setSurfaceTextureListener(this);
-        setOpaque(false);
+
+        TextureView t = new TextureView(ctx);
+        t.setSurfaceTextureListener(this);
+        t.setOpaque(false);
+
+        //SurfaceView t = new SurfaceView(ctx);
+        //t.getHolder().addCallback(this);
+
+        addView(t);
     }
 
     @Override
     public void setBackgroundColor(int color) {
-        // Texture view does not support setting the background color.
+        // Override since TextureView does not support background color
     }
 
+    @DoNotStrip
     public void releaseSurface() {
         if(mSurface != null) {
             mSurface.release();
@@ -88,6 +104,22 @@ public class SkiaDrawView extends TextureView implements TextureView.SurfaceText
     }
 
     @Override
+    public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+        mSurface = surfaceHolder.getSurface();
+        surfaceAvailable(mSurface, getWidth(), getHeight());
+    }
+
+    @Override
+    public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int width, int height) {
+        surfaceSizeChanged(width, height);
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+        surfaceDestroyed();
+    }
+
+    @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
         mSurface = new Surface(surface);
         surfaceAvailable(mSurface, width, height);
@@ -128,4 +160,5 @@ public class SkiaDrawView extends TextureView implements TextureView.SurfaceText
     public native void setDebugMode(boolean show);
 
     public native void updateTouchPoints(double[] points);
+
 }
