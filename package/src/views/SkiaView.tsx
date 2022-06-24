@@ -39,6 +39,14 @@ export class SkiaView extends React.Component<SkiaViewProps> {
   }
 
   /**
+   * Called when view is about to be unmounted
+   */
+  componentWillUnmount() {
+    assertDrawCallbacksEnabled();
+    SkiaViewApi.setDrawCallback(this._nativeId, undefined);
+  }
+
+  /**
    * Creates a snapshot from the canvas in the surface
    * @param rect Rect to use as bounds. Optional.
    * @returns An Image object.
