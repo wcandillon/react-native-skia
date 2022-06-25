@@ -6,6 +6,7 @@
 #include <JsiHostObject.h>
 #include <RNSkPlatformContext.h>
 #include <RNSkClockValue.h>
+#include <JsiWorklet.h>
 #include <jsi/jsi.h>
 
 namespace RNSkia
@@ -25,8 +26,10 @@ public:
                      const jsi::Value *arguments,
                      size_t count) :
     RNSkClockValue(platformContext, identifier, runtime, arguments, count) {
+
     // Save the update function
-    _updateFunction = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
+    auto function = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
+    _worklet = std::make_shared<RNJsi::JsiWorklet>(platformContext->getWorkletContext(), function);
         
     // Set state to undefined initially.
     _args[1] = jsi::Value::undefined();
@@ -39,13 +42,12 @@ public:
   
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(RNSkAnimation, cancel))
 
-    
 protected:
    
   void tick(jsi::Runtime &runtime, const jsi::Value &value) override {
     // Set up arguments and call the update function
     _args[0] = value.asNumber();
-    _args[1] = _updateFunction->call(runtime, static_cast<const jsi::Value*>(_args.data()), _args.size());
+    _args[1] = _worklet->call(static_cast<const jsi::Value*>(_args.data()), _args.size());
     
     // Get finished
     auto finished = _args[1].asObject(runtime).getProperty(runtime, "finished").getBool();
@@ -62,7 +64,7 @@ protected:
   
 private:
   
-  std::shared_ptr<jsi::Function> _updateFunction;
+  std::shared_ptr<RNJsi::JsiWorklet> _worklet;
   std::array<jsi::Value, 2> _args;
 };
 }
