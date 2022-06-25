@@ -11,6 +11,8 @@
 
 #include <RNSkDispatchQueue.h>
 
+#include <JsiWorkletContext.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -36,9 +38,7 @@ public:
       float pixelDensity)
       : _pixelDensity(pixelDensity), _jsRuntime(runtime),
         _callInvoker(callInvoker),
-        _dispatchQueue(std::make_unique<RNSkDispatchQueue>("skia-render-thread")) {
-          _jsThreadId = std::this_thread::get_id();
-        }
+        _dispatchQueue(std::make_unique<RNSkDispatchQueue>("skia-render-thread")) {}
 
   /**
    * Destructor
@@ -58,14 +58,7 @@ public:
     notifyDrawLoop(true);
     _isValid = false;
   }
-  
-  /*
-   Returns true if the current execution context is the javascript thread.
-   */
-  bool isOnJavascriptThread() {
-    return _jsThreadId == std::this_thread::get_id();
-  };
-  
+    
   /**
    * Schedules the function to be run on the javascript thread async
    * @param func Function to run
@@ -87,6 +80,18 @@ public:
    Returns the javascript runtime
    */
   jsi::Runtime *getJsRuntime() { return _jsRuntime; }
+  
+  /**
+   Returns the worklet context
+   */
+  std::shared_ptr<RNJsi::JsiWorkletContext> getWorkletContext() {
+    if(_workletContext == nullptr) {
+      _workletContext = std::make_shared<RNJsi::JsiWorkletContext>(_jsRuntime, [&](const std::exception &err){
+
+      });
+    }
+    return _workletContext;
+  }
 
   /**
    * Returns an SkStream wrapping the require uri provided.
@@ -125,33 +130,34 @@ public:
    * @param callback Callback to call on sync
    * @returns Identifier of the draw loop entry
    */
-  size_t beginDrawLoop(size_t nativeId, std::function<void(bool)> callback) {
+  size_t beginDrawLoop(std::function<void(bool)> callback) {
     if(!_isValid) { return 0; }
     auto shouldStart = false;
+    auto identifier = _drawLoopidentifier++;
     {
       std::lock_guard<std::mutex> lock(_drawCallbacksLock);
-      _drawCallbacks.emplace(nativeId, std::move(callback));
+      _drawCallbacks.emplace(identifier, std::move(callback));
       shouldStart = _drawCallbacks.size() == 1;
     }
     if (shouldStart) {
       // Start
       startDrawLoop();
     }
-    return nativeId;
+    return identifier;
   }
 
   /**
    * Ends (if running) the drawing loop that was started with beginDrawLoop.
    * This method must be called symmetrically with the beginDrawLoop method.
-   * @param nativeId Identifier of view to end
+   * @param identifier Identifier of view to end
    */
-  void endDrawLoop(size_t nativeId) {
+  void endDrawLoop(size_t identifier) {
     if(!_isValid) { return; }
     auto shouldStop = false;
     {
       std::lock_guard<std::mutex> lock(_drawCallbacksLock);
-      if (_drawCallbacks.count(nativeId) > 0) {
-        _drawCallbacks.erase(nativeId);
+      if (_drawCallbacks.count(identifier) > 0) {
+        _drawCallbacks.erase(identifier);
       }
       shouldStop = _drawCallbacks.size() == 0;
     }
@@ -183,14 +189,14 @@ public:
 private:
   float _pixelDensity;
   
-  std::thread::id _jsThreadId;
-
   jsi::Runtime *_jsRuntime;
+  std::shared_ptr<RNJsi::JsiWorkletContext> _workletContext;
   std::shared_ptr<react::CallInvoker> _callInvoker;
   std::unique_ptr<RNSkDispatchQueue> _dispatchQueue;
 
   std::unordered_map<size_t, std::function<void(bool)>> _drawCallbacks;
   std::mutex _drawCallbacksLock;
   std::atomic<bool> _isValid = {true};
+  std::atomic<size_t> _drawLoopidentifier = {1000};
 };
 } // namespace RNSkia
