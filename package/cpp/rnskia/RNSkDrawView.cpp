@@ -54,15 +54,18 @@ void RNSkDrawView::setNativeId(size_t nativeId) {
   beginDrawingLoop();
 }
 
-void RNSkDrawView::setDrawCallback(std::shared_ptr<jsi::Function> callback) {
+void RNSkDrawView::setDrawCallback(std::shared_ptr<RNJsi::JsiWorklet> worklet) {
 
-  if (callback == nullptr) {
+  if (worklet == nullptr) {
     _drawCallback = nullptr;
     // We can just reset everything - this is a signal that we're done.
     endDrawingLoop();
     return;
   }
-  
+
+  // Store isWorklet info
+  _isWorklet = worklet->isWorklet();
+
   // Reset timing info
   _jsTimingInfo.reset();
   _gpuTimingInfo.reset();
@@ -70,28 +73,25 @@ void RNSkDrawView::setDrawCallback(std::shared_ptr<jsi::Function> callback) {
   // Create draw drawCallback wrapper
   _drawCallback = std::make_shared<RNSkDrawCallback>(
       [weakSelf = weak_from_this(),
-       callback = std::move(callback)](std::shared_ptr<JsiSkCanvas> canvas,
-                                       int width,
-                                       int height,
-                                       double timestamp,
-                                       std::shared_ptr<RNSkPlatformContext> context) {
+       worklet = std::move(worklet)](std::shared_ptr<JsiSkCanvas> canvas,
+                                     int width,
+                                     int height,
+                                     double timestamp,
+                                     std::shared_ptr<RNSkPlatformContext> context) {
 
        auto self = weakSelf.lock();
        if(self) {
-         auto runtime = context->getJsRuntime();
+         jsi::Runtime& runtime = worklet->getRuntime();
                            
          // Update info parameter
          self->_infoObject->beginDrawOperation(width, height, timestamp);
          
          // Set up arguments array
          std::vector<jsi::Value> args(2);
-         args[0] = jsi::Object::createFromHostObject(*runtime, canvas);
-         args[1] = jsi::Object::createFromHostObject(*runtime, self->_infoObject);
+         args[0] = jsi::Object::createFromHostObject(runtime, canvas);
+         args[1] = jsi::Object::createFromHostObject(runtime, self->_infoObject);
 
-         // To be able to call the drawing function we'll wrap it once again
-         callback->call(*runtime,
-                        static_cast<const jsi::Value *>(args.data()),
-                        (size_t)2);
+         worklet->call(static_cast<const jsi::Value *>(args.data()), 2);
          
          // Reset touches
          self->_infoObject->endDrawOperation();
@@ -110,7 +110,11 @@ void RNSkDrawView::setDrawCallback(std::shared_ptr<jsi::Function> callback) {
           
           // Build string
           std::ostringstream stream;
-          stream << "js: " << jsAvg << "ms gpu: " << gpuAvg << "ms " << " total: " << total << "ms";
+          if(worklet->isWorklet()) {
+            stream << "render: " << jsAvg << "ms - worklet: true";
+          } else {
+            stream << "js: " << jsAvg << "ms gpu: " << gpuAvg << "ms " << " total: " << total << "ms";
+          }
           
           std::string debugString = stream.str();
 
@@ -177,6 +181,45 @@ void RNSkDrawView::updateTouchState(std::vector<RNSkTouchPoint>&& points) {
   requestRedraw();
 }
 
+bool RNSkDrawView::performDirectDraw() {
+  if(_redrawRequestCounter > 0 ||
+     _drawingMode == RNSkDrawingMode::Continuous) {
+    
+    _jsTimingInfo.beginTiming();
+    
+    auto didRender = draw([&](SkCanvas* canvas){
+      _jsiCanvas->setCanvas(canvas);
+      
+      // Get current milliseconds
+      milliseconds ms = duration_cast<milliseconds>(
+              system_clock::now().time_since_epoch());
+      
+      try {
+        // Perform the javascript drawing
+        drawInCanvas(_jsiCanvas, getScaledWidth(), getScaledHeight(), ms.count() / 1000.0);
+      } catch(...) {
+        _jsTimingInfo.stopTiming();
+        _jsDrawingLock->unlock();
+        throw;
+      }
+    });
+    
+    _jsTimingInfo.stopTiming();
+    _jsDrawingLock->unlock();
+    
+    if(didRender) {
+      // Reset redraw requests
+      _redrawRequestCounter = 0;
+    }
+    
+    return didRender;
+    
+  } else {
+    _jsDrawingLock->unlock();
+    return false;
+  }
+}
+
 void RNSkDrawView::performDraw() {
   // Start timing
   _jsTimingInfo.beginTiming();
@@ -235,6 +278,12 @@ void RNSkDrawView::performDraw() {
   _jsDrawingLock->unlock();
 }
 
+bool RNSkDrawView::drawPicture(const sk_sp<SkPicture> picture) {
+  return draw([p = std::move(picture)](SkCanvas* c){
+    c->drawPicture(p);
+  });
+}
+
 void RNSkDrawView::requestRedraw() {
   _redrawRequestCounter++;
 }
@@ -244,7 +293,7 @@ void RNSkDrawView::beginDrawingLoop() {
     return;
   }
   // Set to zero to avoid calling beginDrawLoop before we return
-  _drawingLoopId = _platformContext->beginDrawLoop(_nativeId,
+  _drawingLoopId = _platformContext->beginDrawLoop(
     [weakSelf = weak_from_this()](bool invalidated) {
     auto self = weakSelf.lock();
     if(self) {
@@ -254,11 +303,18 @@ void RNSkDrawView::beginDrawingLoop() {
 }
 
 void RNSkDrawView::drawLoopCallback(bool invalidated) {
+  // Skip procesing when we don't have a drawCallback or the drawCallback is
+  // a worklet (rendering is then done from main callback).
+  if(isWorkletBased() || _drawCallback == nullptr) {
+    return;
+  }
+  
   if(_redrawRequestCounter > 0 || _drawingMode == RNSkDrawingMode::Continuous) {
       _redrawRequestCounter = 0;
       
-    // We render on the javascript thread.
     if(_jsDrawingLock->try_lock()) {
+      // We render on the javascript thread if there is no worklet support installed.
+      // For worklet based rendering we render from the RNSkManager
       _platformContext->runOnJavascriptThread([weakSelf = weak_from_this()](){
         auto self = weakSelf.lock();
         if(self) {
@@ -276,8 +332,8 @@ void RNSkDrawView::drawLoopCallback(bool invalidated) {
 
 void RNSkDrawView::endDrawingLoop() {
   if(_drawingLoopId != 0) {
+    _platformContext->endDrawLoop(_drawingLoopId);
     _drawingLoopId = 0;
-    _platformContext->endDrawLoop(_nativeId);
   }
 }
 

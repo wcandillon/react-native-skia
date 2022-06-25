@@ -12,11 +12,13 @@
 #include <RNSkPlatformContext.h>
 #include <RNSkTimingInfo.h>
 #include <RNSkLog.h>
+#include <JsiWorklet.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include <SkRefCnt.h>
+#include <SkCanvas.h>
 
 #pragma clang diagnostic pop
 
@@ -53,14 +55,21 @@ public:
   void requestRedraw();
   
   /**
-   Calls the drawing callback on the javascript thread
+   Calls the drawing callback and renders to screen on the main thread if there are
+   any drawing requests scheduled or if the drawing mode is continous. Returns true if
+   the view did render anything.
    */
-  void performDraw();
-
+  bool performDirectDraw();
+  
+  /**
+   Returns true if the draw callback can be called as a worklet
+   */
+  bool isWorkletBased() { return _isWorklet; }
+  
   /**
    * Installs the draw callback for the view
    */
-  void setDrawCallback(std::shared_ptr<jsi::Function> callback);
+  void setDrawCallback(std::shared_ptr<RNJsi::JsiWorklet> worklet);
   
   /**
    Sets the native id of the view
@@ -107,7 +116,12 @@ protected:
   /**
    Override to render picture to GPU
    */
-  virtual void drawPicture(const sk_sp<SkPicture> picture) = 0;
+  bool drawPicture(const sk_sp<SkPicture> picture);
+  
+  /**
+   Override to render on GPU canvas directly
+   */
+  virtual bool draw(std::function<void(SkCanvas*)> cb) = 0;
   
   /**
    * @return The platformcontext
@@ -116,7 +130,12 @@ protected:
     return _platformContext;
   }
 
-private:  
+private:
+  /**
+   Calls the drawing callback on the javascript thread and renders to screen on the GPU thread
+   */
+  void performDraw();
+  
   /**
    Starts beginDrawCallback loop if the drawing mode is continuous
    */
@@ -206,7 +225,11 @@ private:
    * Native id
    */
   size_t _nativeId;
-  
+
+  /**
+   * True if the draw callback is a valid worklet
+   */
+  bool _isWorklet = false;
 };
 
 } // namespace RNSkia

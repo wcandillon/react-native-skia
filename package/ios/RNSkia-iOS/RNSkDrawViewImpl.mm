@@ -51,18 +51,23 @@ RNSkDrawViewImpl::~RNSkDrawViewImpl() {
 }
 
 void RNSkDrawViewImpl::setSize(int width, int height) {
+  auto shouldDrawDirectly = isWorkletBased() && _width == -1 && _height == -1;
   _width = width;
   _height = height;
   _layer.frame = CGRectMake(0, 0, width, height);
   _layer.drawableSize = CGSizeMake(width * _context->getPixelDensity(),
                                    height* _context->getPixelDensity());
   
-  requestRedraw();
+  if(shouldDrawDirectly) {
+    performDirectDraw();
+  } else {
+    requestRedraw();
+  }
 }
 
-void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
+bool RNSkDrawViewImpl::draw(std::function<void (SkCanvas *)> cb) {
   if(_width == -1 && _height == -1) {
-    return;
+    return false;
   }
   
   if(_skContext == nullptr) {
@@ -79,7 +84,7 @@ void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
   {
     id<CAMetalDrawable> currentDrawable = [_layer nextDrawable];
     if(currentDrawable == nullptr) {
-      return;
+      return false;
     }
     
     GrMtlTextureInfo fbInfo;
@@ -99,14 +104,16 @@ void RNSkDrawViewImpl::drawPicture(const sk_sp<SkPicture> picture) {
     
     if(skSurface == nullptr || skSurface->getCanvas() == nullptr) {
       RNSkia::RNSkLogger::logToConsole("Skia surface could not be created from parameters.");
-      return;
+      return false;
     }
     
     skSurface->getCanvas()->clear(SK_AlphaTRANSPARENT);
-    skSurface->getCanvas()->drawPicture(picture);
+    cb(skSurface->getCanvas());
     
     id<MTLCommandBuffer> commandBuffer([_commandQueue commandBuffer]);
     [commandBuffer presentDrawable:currentDrawable];
     [commandBuffer commit];
+    
+    return false;
   }
 }

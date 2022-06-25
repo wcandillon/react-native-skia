@@ -52,11 +52,11 @@ namespace RNSkia
          * renderer. All OpenGL/Skia context operations are done on a separate thread which must
          * be the same for all calls to the render method.
          *
-         * @param picture Picture to render, can be nullptr, then no rendering will be performed
+         * @param cb Render callback with canvas as parameter.
          * @param width Width of surface to render if there is a picture
          * @param height Height of surface to render if there is a picture
          */
-        void run(const sk_sp<SkPicture> picture, int width, int height);
+        void run(std::function<void(SkCanvas*)> cb, int width, int height);
 
         /**
          * Sets the state to finishing. Next time the renderer will be called it
