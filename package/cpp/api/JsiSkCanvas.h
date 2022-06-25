@@ -38,11 +38,28 @@ using namespace facebook;
 
 class JsiSkCanvas : public JsiSkHostObject {
 public:
+
+  std::unique_ptr<jsi::Function> _cb;
+
   JSI_HOST_FUNCTION(drawPaint) {
     auto paint = JsiSkPaint::fromValue(runtime, arguments[0]);
     _canvas->drawPaint(*paint);
     return jsi::Value::undefined();
   }
+
+  JSI_HOST_FUNCTION(drawCB) {
+    if (arguments[0].isNull()) {
+      _cb = nullptr;
+      return jsi::Value::undefined();
+    }
+    _cb = std::make_unique<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
+    return jsi::Value::undefined();
+  }
+
+    JSI_HOST_FUNCTION(drawTest) {
+      _cb->call(runtime);
+      return jsi::Value::undefined();
+    }
 
   JSI_HOST_FUNCTION(drawLine) {
     SkScalar x1 = arguments[0].asNumber();
@@ -522,7 +539,9 @@ public:
                        JSI_EXPORT_FUNC(JsiSkCanvas, drawColor),
                        JSI_EXPORT_FUNC(JsiSkCanvas, clear),
                        JSI_EXPORT_FUNC(JsiSkCanvas, concat),
-                       JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture))
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawPicture),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawCB),
+                       JSI_EXPORT_FUNC(JsiSkCanvas, drawTest))
 
   JsiSkCanvas(std::shared_ptr<RNSkPlatformContext> context)
       : JsiSkHostObject(std::move(context)) {}
