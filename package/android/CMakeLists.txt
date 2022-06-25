@@ -2,19 +2,20 @@ cmake_minimum_required(VERSION 3.4.1)
 
 set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 17)
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_BUILD_FOR_ANDROID -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_BUILD_FOR_ANDROID -DFOLLY_NO_CONFIG=1 -DFOR_HERMES=${FOR_HERMES} -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 
 set (PACKAGE_NAME "reactskia")
 set (SKIA_LIB "skia")
 set (SKIA_SVG_LIB "svg")
 set (SKIA_SKSHAPER_LIB "skshaper")
 
-set(build_DIR ${CMAKE_SOURCE_DIR}/build)
-file(GLOB LIBRN_DIR "${PREBUILT_DIR}/${ANDROID_ABI}")
-file(GLOB libfbjni_link_DIRS "${build_DIR}/fbjni*.aar/jni/${ANDROID_ABI}")
-file(GLOB libfbjni_include_DIRS "${build_DIR}/fbjni-*-headers.jar/")
+set(BUILD_DIR ${CMAKE_SOURCE_DIR}/build)
+file(GLOB libfbjni_link_DIRS "${BUILD_DIR}/fbjni*.aar/jni/${ANDROID_ABI}")
+file(GLOB libfbjni_include_DIRS "${BUILD_DIR}/fbjni-*-headers.jar/")
 
 link_directories(../libs/android/${ANDROID_ABI}/)
+
+message("Hermes defined: ${FOR_HERMES}, ${BUILD_DIR}/third-party-ndk/hermes/jni/${ANDROID_ABI}")
 
 if(${REACT_NATIVE_VERSION} LESS 66)
         file(
@@ -39,7 +40,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkManager.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDrawView.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDispatchQueue.cpp"
-
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia/worklets/wrappers/JsiWrapper.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/api/third_party/CSSColorParser.cpp"
         
@@ -55,6 +56,7 @@ target_include_directories(
         "${NODE_MODULES_DIR}/react-native/ReactCommon"
         "${NODE_MODULES_DIR}/react-native/ReactCommon/react/nativemodule/core"
         "${NODE_MODULES_DIR}/react-native/ReactAndroid/src/main/java/com/facebook/react/turbomodule/core/jni"
+        "${NODE_MODULES_DIR}/hermes-engine/android/include/"
 
         cpp/skia/include/config/
         cpp/skia/include/core/
@@ -71,6 +73,8 @@ target_include_directories(
         cpp/rnskia-android
         cpp/rnskia
         cpp/rnskia/values
+        cpp/rnskia/worklets
+        cpp/rnskia/worklets/wrappers
         cpp/utils  
 
         ${libfbjni_include_DIRS}
@@ -87,10 +91,25 @@ set_property(TARGET svg PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libsvg.a")
 add_library(skshaper STATIC IMPORTED)
 set_property(TARGET skshaper PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskshaper.a")
 
+# Find libraries
+file(GLOB LIBRN_DIR "${PREBUILT_DIR}/${ANDROID_ABI}")
+file (GLOB HERMES_DIR "${BUILD_DIR}/third-party-ndk/hermes/jni/${ANDROID_ABI}")
 
 find_library(
         LOG_LIB
         log
+)
+find_library(
+        HERMES_LIB
+        hermes
+        PATHS ${HERMES_DIR}
+        NO_CMAKE_FIND_ROOT_PATH
+)
+find_library(
+        JSEXECUTOR_LIB
+        jscexecutor
+        PATHS ${LIBRN_DIR}
+        NO_CMAKE_FIND_ROOT_PATH
 )
 
 find_library(
@@ -134,18 +153,38 @@ find_library(
 )
 
 # Link
-target_link_libraries(
-        ${PACKAGE_NAME}
-        ${LOG_LIB}
-        ${FBJNI_LIBRARY}
-        ${REACT_LIB}
-        ${JSI_LIB}
-        ${TURBOMODULES_LIB}
-        ${SKIA_SVG_LIB}
-        ${SKIA_SKSHAPER_LIB}
-        ${SKIA_LIB}
-        -ljnigraphics
-        -lGLESv2
-        -lEGL
-        -landroid
+if(${FOR_HERMES})
+    target_link_libraries(
+            ${PACKAGE_NAME}
+            ${LOG_LIB}
+            ${HERMES_LIB}
+            ${FBJNI_LIBRARY}
+            ${REACT_LIB}
+            ${JSI_LIB}
+            ${TURBOMODULES_LIB}
+            ${SKIA_SVG_LIB}
+            ${SKIA_SKSHAPER_LIB}
+            ${SKIA_LIB}
+            -ljnigraphics
+            -lGLESv2
+            -lEGL
+            -landroid
     )
+else()
+    target_link_libraries(
+            ${PACKAGE_NAME}
+            ${LOG_LIB}
+            ${JSEXECUTOR_LIB}
+            ${FBJNI_LIBRARY}
+            ${REACT_LIB}
+            ${JSI_LIB}
+            ${TURBOMODULES_LIB}
+            ${SKIA_SVG_LIB}
+            ${SKIA_SKSHAPER_LIB}
+            ${SKIA_LIB}
+            -ljnigraphics
+            -lGLESv2
+            -lEGL
+            -landroid
+    )
+endif()
