@@ -3,6 +3,7 @@
 
 #include "RNSkReadonlyValue.h"
 #include <RNSkPlatformContext.h>
+#include <JsiWorklet.h>
 #include <jsi/jsi.h>
 
 #include <algorithm>
@@ -40,7 +41,8 @@ public:
     }
         
     // Get callback for calculating result
-    _callback = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
+    auto function = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
+    _worklet = std::make_shared<RNJsi::JsiWorklet>(platformContext->getWorkletContext(), function);
   }
   
   void initializeDependencies(jsi::Runtime &runtime, const jsi::Value *arguments, size_t count) {
@@ -61,7 +63,16 @@ public:
       if(value == nullptr) {
         continue;
       }
+      // Push to dependencies array
       dependencies.push_back(value);
+    }
+
+    // Ensure that all parent dependencies supports worklets or not - we don't allow
+    // a mix of this.
+    for(const auto &dep: dependencies) {
+      if(dep->isLimitedToJSThread() && _worklet->isWorklet()) {
+        throw std::runtime_error("One of the dependencies cannot be run as a worklet.");
+      }
     }
     
     // register change handler on dependencies
@@ -87,13 +98,28 @@ public:
     }
   }
   
+  bool isLimitedToJSThread() override {
+    return !_worklet->isWorklet();
+  }
+  
 private:
   void dependencyUpdated(jsi::Runtime &runtime) {
     // Calculate new value
-    update(runtime, _callback->call(runtime, nullptr, 0));
+    if(_worklet->isWorklet()) {
+      update(runtime, _worklet->call(nullptr, 0));
+    } else {
+      getContext()->runOnJavascriptThread([weakSelf = weak_from_this(), &runtime](){
+          auto self = weakSelf.lock();
+          if(self) {
+            self->update(runtime,
+                         std::dynamic_pointer_cast<RNSkDerivedValue>(self)->_worklet->call(
+                                 nullptr, 0));
+          }
+      });
+    }
   }
 
-  std::shared_ptr<jsi::Function> _callback;
+  std::shared_ptr<RNJsi::JsiWorklet> _worklet;
   std::vector<std::function<void()>> _unsubscribers;
 };
 }

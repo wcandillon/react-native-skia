@@ -106,6 +106,14 @@ public:
     return _valueHolder->getCurrent(runtime);
   }
   
+  /**
+   Return true/false depending on wether this value type is a worklet and can be updated
+   from any context.
+   */
+  virtual bool isLimitedToJSThread() {
+    return false;
+  }
+  
 protected:
   
   /**

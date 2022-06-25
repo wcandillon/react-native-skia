@@ -72,7 +72,7 @@ public:
     
     _state = RNSkClockState::Running;
     
-    getContext()->beginDrawLoop(_identifier, [weakSelf = weak_from_this()](bool invalidated){
+    getContext()->beginDrawLoop([weakSelf = weak_from_this()](bool invalidated){
       auto self = weakSelf.lock();
       if(self) {
         std::dynamic_pointer_cast<RNSkClockValue>(self)->notifyUpdate(invalidated);
@@ -90,7 +90,7 @@ public:
   
 protected:
   virtual void tick(jsi::Runtime &runtime, const jsi::Value &value) {
-    RNSkClockValue::update(runtime, value);
+    update(runtime, value);
   }
   
   void notifyUpdate(bool invalidated) {
@@ -103,21 +103,12 @@ protected:
       return;
     }
     
-    // Ensure we call any updates from the draw loop on the javascript thread
-    getContext()->runOnJavascriptThread(
-      // To ensure that this shared_ptr instance is not deallocated before we are done
-      // running the update lambda we pass a shared from this to the lambda scope.
-      [weakSelf = weak_from_this()]() {
-        auto self = weakSelf.lock();
-        if(self) {
-          auto selfClockValue = std::dynamic_pointer_cast<RNSkClockValue>(self);
-          if(selfClockValue->getState() == RNSkClockState::Running) {
-            auto now = std::chrono::high_resolution_clock::now();
-            auto deltaFromStart = std::chrono::duration_cast<std::chrono::milliseconds>(now - selfClockValue->_start).count();
-            selfClockValue->tick(selfClockValue->_runtime, static_cast<double>(deltaFromStart));
-          }
-        }
-    });
+    // Update method
+    if(getState() == RNSkClockState::Running) {
+      auto now = std::chrono::high_resolution_clock::now();
+      auto deltaFromStart = std::chrono::duration_cast<std::chrono::milliseconds>(now - _start).count();
+      tick(_runtime, static_cast<double>(deltaFromStart));
+    }    
   }
   
   /**
