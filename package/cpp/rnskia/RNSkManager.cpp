@@ -40,6 +40,12 @@ void RNSkManager::invalidate() {
   }
   _isInvalidated = true;
   
+  // Remove draw loop
+  if(_drawingLoopId != 0) {
+    _platformContext->endDrawLoop(_drawingLoopId);
+    _drawingLoopId = 0;
+  }
+
   // Invalidate members
   _viewApi->invalidate();
   _platformContext->invalidate();
@@ -58,6 +64,28 @@ void RNSkManager::unregisterSkiaDrawView(size_t nativeId) {
 void RNSkManager::setSkiaDrawView(size_t nativeId, std::shared_ptr<RNSkDrawView> view) {
   if (!_isInvalidated && _viewApi != nullptr)
     _viewApi->setSkiaDrawView(nativeId, view);
+  
+  if(_drawingLoopId == 0) {
+    _drawingLoopId = _platformContext->beginDrawLoop([weakSelf = weak_from_this()](bool invalidated) {
+      // This callback is called on the main thread. This
+      // callback is responsible for going through all registered Skia Views
+      // and let them render a Skia Picture (list of drawing operations) that
+      // can be passed to the render thread and rendered on screen.
+      auto self = weakSelf.lock();
+      if (self) {
+
+        // Get all active views
+        auto viewCallbacks = self->_viewApi->getCallbackInfos();
+        
+        // Call drawing ops on all views
+        for (const auto &vinfo: viewCallbacks) {
+          if (vinfo.second.view != nullptr && vinfo.second.view->isWorkletBased()) {
+            vinfo.second.view->performDirectDraw();
+          }
+        }        
+      }
+    });
+  }
 }
 
 void RNSkManager::installBindings() {
