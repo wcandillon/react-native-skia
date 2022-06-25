@@ -9,6 +9,7 @@
 #include <RNSkDrawView.h>
 #include <RNSkPlatformContext.h>
 #include <RNSkValue.h>
+#include <JsiWorklet.h>
 #include <jsi/jsi.h>
 
 namespace RNSkia {
@@ -19,7 +20,7 @@ using CallbackInfo = struct CallbackInfo {
     drawCallback = nullptr;
     view = nullptr;
   }
-  std::shared_ptr<jsi::Function> drawCallback;
+  std::shared_ptr<RNJsi::JsiWorklet> drawCallback;
   std::shared_ptr<RNSkDrawView> view;
 };
 
@@ -61,8 +62,9 @@ public:
     if (arguments[1].isUndefined()) {
       info->drawCallback = nullptr;
     } else {
-      info->drawCallback = std::make_shared<jsi::Function>(
-          arguments[1].asObject(runtime).asFunction(runtime));
+      info->drawCallback = std::make_shared<RNJsi::JsiWorklet>(
+              _platformContext->getWorkletContext(), std::make_shared<jsi::Function>(
+                      arguments[1].asObject(runtime).asFunction(runtime)));
     }
 
     // Update view if set
@@ -207,6 +209,13 @@ public:
    */
   void invalidate() {
     unregisterAll();
+  }
+
+  /**
+    Returns the list of callback infos
+  */
+  const std::unordered_map<size_t, CallbackInfo>& getCallbackInfos() {
+    return _callbackInfos;
   }
 
   /**
