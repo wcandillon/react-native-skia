@@ -72,6 +72,44 @@ public:
       return *_context->getJsRuntime();
     }
   }
+  
+  /**
+   Returns true if the provided value is a valid worklet - a function that can be installed in another
+   runtime.
+   */
+  static bool isWorklet(jsi::Runtime& runtime, const jsi::Value &value) {
+    if(!value.isObject() && !value.asObject(runtime).isFunction(runtime)) {
+      return false;
+    }
+    
+    auto obj = value.asObject(runtime);
+    
+    // Try to get the closure
+    jsi::Value closure = obj.getProperty(runtime, "_closure");
+    
+    // Return if this is not a worklet
+    if (closure.isUndefined() || closure.isNull()) {
+      return false;
+    }
+    
+    // Try to get the asString function
+    jsi::Value asStringProp = obj.getProperty(runtime, "asString");
+    if (asStringProp.isUndefined() ||
+        asStringProp.isNull() ||
+        !asStringProp.isString()) {
+      return false;
+    }
+    
+    // Get location
+    jsi::Value locationProp = obj.getProperty(runtime, "__location");
+    if (locationProp.isUndefined() ||
+        locationProp.isNull() ||
+        !locationProp.isString()) {
+      return false;
+    }
+    
+    return true;
+  }
     
 private:
   /**
@@ -164,7 +202,7 @@ private:
     // TODO: Add support for caching based on worklet hash
     
     // Create closure wrapper so it will be accessible across runtimes
-    _closureWrapper = JsiWrapper::wrap(runtime, closure);
+    _closureWrapper = JsiWrapper::wrap(runtime, closure, _context);
 
     // Let us try to install the function in the worklet context
     auto code = asStringProp.asString(runtime).utf8(runtime);

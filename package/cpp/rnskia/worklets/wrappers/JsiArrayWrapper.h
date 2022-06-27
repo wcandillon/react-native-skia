@@ -18,9 +18,11 @@ public:
    * @param value Value to wrap
    * @param parent Parent wrapper object
    */
-  JsiArrayWrapper(jsi::Runtime &runtime, const jsi::Value &value,
-                  JsiWrapper *parent)
-      : JsiWrapper(runtime, value, parent, JsiWrapperType::Array) {}
+  JsiArrayWrapper(jsi::Runtime &runtime,
+                  const jsi::Value &value,
+                  JsiWrapper *parent,
+                  std::shared_ptr<JsiWorkletContext> context)
+      : JsiWrapper(runtime, value, parent, JsiWrapperType::Array, context) {}
 
   JSI_PROPERTY_GET(prototype) {
     auto retVal = runtime.global().getPropertyAsObject(runtime, "Array")
@@ -64,7 +66,7 @@ public:
     auto lastIndex = _array.size();
     for (size_t i = 0; i < count; i++) {
       std::string indexString = std::to_string(lastIndex++);
-      _array.push_back(JsiWrapper::wrap(runtime, arguments[i], this));
+      _array.push_back(JsiWrapper::wrap(runtime, arguments[i], this, getContext()));
     }
     notify();
     return (double)_array.size();
@@ -157,7 +159,7 @@ public:
   };
                           
   JSI_HOST_FUNCTION(indexOf) {
-    auto wrappedArg = JsiWrapper::wrap(runtime, arguments[0]);
+    auto wrappedArg = JsiWrapper::wrap(runtime, arguments[0], getContext());
     for (size_t i = 0; i < _array.size(); i++) {
       // TODO: Add == operator to JsiWrapper
       if(wrappedArg->getType() == _array[i]->getType()) {
@@ -201,7 +203,7 @@ public:
   };
                           
   JSI_HOST_FUNCTION(includes) {
-    auto wrappedArg = JsiWrapper::wrap(runtime, arguments[0]);
+    auto wrappedArg = JsiWrapper::wrap(runtime, arguments[0], getContext());
     for (size_t i = 0; i < _array.size(); i++) {
       // TODO: Add == operator to JsiWrapper!!!
       if(wrappedArg->getType() == _array[i]->getType()) {
@@ -241,9 +243,9 @@ public:
                           
   JSI_HOST_FUNCTION(reduce) {
     auto callbackFn = arguments[0].asObject(runtime).asFunction(runtime);
-    std::shared_ptr<JsiWrapper> acc = JsiWrapper::wrap(runtime, jsi::Value::undefined());
+    std::shared_ptr<JsiWrapper> acc = JsiWrapper::wrap(runtime, jsi::Value::undefined(), getContext());
     if(count > 1) {
-      acc = JsiWrapper::wrap(runtime, arguments[1]);
+      acc = JsiWrapper::wrap(runtime, arguments[1], getContext());
     }
     for (size_t i = 0; i < _array.size(); i++) {
       std::vector<jsi::Value> args(3);
@@ -255,7 +257,8 @@ public:
                                           callbackFn,
                                           thisValue,
                                           static_cast<const jsi::Value *>(args.data()),
-                                          3)
+                                          3),
+                             getContext()
                               );
     }
     return JsiWrapper::unwrap(runtime, acc);
@@ -320,7 +323,7 @@ public:
 
     for (size_t i = 0; i < size; i++) {
       _array[i] =
-          JsiWrapper::wrap(runtime, array.getValueAtIndex(runtime, i), this);
+          JsiWrapper::wrap(runtime, array.getValueAtIndex(runtime, i), this, getContext());
     }
     
     // Update prototype
@@ -353,7 +356,7 @@ public:
         std::all_of(nameStr.begin(), nameStr.end(), ::isdigit)) {
       // Return property by index
       auto index = std::stoi(nameStr.c_str());
-      _array[index] = JsiWrapper::wrap(runtime, value);
+      _array[index] = JsiWrapper::wrap(runtime, value, getContext());
       notify();
     } else {
       // This is an edge case where the array is used as a

@@ -6,6 +6,8 @@
 
 #include <jsi/jsi.h>
 
+#include <JsiWorkletContext.h>
+
 namespace RNJsi {
 
 using namespace facebook;
@@ -34,8 +36,12 @@ public:
    * @param parent Optional parent wrapper
    * @paran type Type of wrapper
    */
-  JsiWrapper(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent, JsiWrapperType type)
-      : JsiWrapper(parent) {
+  JsiWrapper(jsi::Runtime &runtime,
+             const jsi::Value &value,
+             JsiWrapper *parent,
+             JsiWrapperType type,
+             std::shared_ptr<JsiWorkletContext> context)
+      : JsiWrapper(parent, context) {
     _type = type;
   }
   
@@ -45,8 +51,11 @@ public:
    * @param value Value to wrap
    * @param parent Optional parent wrapper
    */
-  JsiWrapper(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent)
-      : JsiWrapper(parent) {}
+  JsiWrapper(jsi::Runtime &runtime,
+             const jsi::Value &value,
+             JsiWrapper *parent,
+             std::shared_ptr<JsiWorkletContext> context)
+      : JsiWrapper(parent, context) {}
 
   /**
    * Returns a wrapper for the a jsi value
@@ -55,8 +64,9 @@ public:
    * @return A new JsiWrapper
    */
   static std::shared_ptr<JsiWrapper> wrap(jsi::Runtime &runtime,
-                                          const jsi::Value &value) {
-    return JsiWrapper::wrap(runtime, value, nullptr);
+                                          const jsi::Value &value,
+                                          std::shared_ptr<JsiWorkletContext> context) {
+    return JsiWrapper::wrap(runtime, value, nullptr, context);
   }
 
   /**
@@ -118,7 +128,10 @@ protected:
    * @return A new JsiWrapper
    */
   static std::shared_ptr<JsiWrapper>
-  wrap(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent);
+  wrap(jsi::Runtime &runtime,
+       const jsi::Value &value,
+       JsiWrapper *parent,
+       std::shared_ptr<JsiWorkletContext> context);
 
   /**
    * Call to notify parent that something has changed
@@ -128,6 +141,13 @@ protected:
       _parent->notify();
     }
     notifyListeners();
+  }
+  
+  /**
+   Returns the worklet context
+   */
+  std::shared_ptr<JsiWorkletContext> getContext() {
+    return _context;
   }
 
   /**
@@ -179,13 +199,18 @@ private:
    * Base Constructor
    * @param parent Parent wrapper
    */
-  JsiWrapper(JsiWrapper *parent) : _parent(parent) {
+  JsiWrapper(JsiWrapper *parent,
+             std::shared_ptr<JsiWorkletContext> context) :
+  _parent(parent),
+  _context(context) {
     _readWriteMutex = new std::mutex();
   }
 
   std::mutex *_readWriteMutex;
   JsiWrapper *_parent;
 
+  std::shared_ptr<JsiWorkletContext> _context;
+  
   JsiWrapperType _type;
 
   bool _boolValue;

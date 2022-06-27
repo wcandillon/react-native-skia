@@ -2,6 +2,7 @@
 
 #include <JsiWrapper.h>
 #include <JsiHostObject.h>
+#include <JsiWorklet.h>
 #include <jsi/jsi.h>
 #include <JsiPromiseWrapper.h>
 
@@ -19,9 +20,11 @@ public:
    * @param value value to wrap
    * @param parent optional parent wrapper
    */
-  JsiObjectWrapper(jsi::Runtime &runtime, const jsi::Value &value,
-                   JsiWrapper *parent)
-      : JsiWrapper(runtime, value, parent) {}
+  JsiObjectWrapper(jsi::Runtime &runtime,
+                   const jsi::Value &value,
+                   JsiWrapper *parent,
+                   std::shared_ptr<JsiWorkletContext> context)
+      : JsiWrapper(runtime, value, parent, context) {}
                            
    JSI_PROPERTY_GET(__proto__) {
      // Update prototype
@@ -90,10 +93,20 @@ public:
       return jsi::Object::createFromHostObject(runtime, _hostObject);
       case JsiWrapper::JsiWrapperType::HostFunction:
       return jsi::Function::createFromHostFunction(
-          runtime, jsi::PropNameID::forUtf8(runtime, "fn"), 0,
+          runtime,
+          jsi::PropNameID::forUtf8(runtime, "fn"),
+          0,
           *_hostFunction.get());
       case JsiWrapper::JsiWrapperType::Object:
       return jsi::Object::createFromHostObject(runtime, shared_from_this());
+      case JsiWrapperType::Worklet: {
+        return jsi::Function::createFromHostFunction(runtime,
+                 jsi::PropNameID::forUtf8(runtime, "fn"),
+                 0,
+                 JSI_HOST_FUNCTION_LAMBDA{
+          return _workletObject->call(arguments, count);
+        });
+      }
       case JsiWrapper::JsiWrapperType::Promise:
         jsi::detail::throwJSError(runtime, "Promise type not supported.");
     default:
@@ -112,7 +125,7 @@ public:
            const jsi::Value &value) override {
     auto nameStr = name.utf8(runtime);
     if (_properties.count(nameStr) == 0) {
-      _properties.emplace(nameStr, JsiWrapper::wrap(runtime, value, this));
+      _properties.emplace(nameStr, JsiWrapper::wrap(runtime, value, this, getContext()));
     } else {
       _properties.at(nameStr)->updateValue(runtime, value);
     }
@@ -168,10 +181,12 @@ public:
   }
 
 private:
+                           
   void setArrayBufferValue(jsi::Runtime &runtime, jsi::Object &obj) {
     jsi::detail::throwJSError(
         runtime, "Array buffers are not supported as shared values.");
   }
+  
                            
   void setObjectValue(jsi::Runtime &runtime, jsi::Object &obj) {
     setType(JsiWrapper::JsiWrapperType::Object);
@@ -182,27 +197,10 @@ private:
           propNames.getValueAtIndex(runtime, i).asString(runtime).utf8(runtime);
 
       auto value = obj.getProperty(runtime, nameString.c_str());
-      _properties.emplace(nameString, JsiWrapper::wrap(runtime, value, this));
+      _properties.emplace(nameString, JsiWrapper::wrap(runtime, value, this, getContext()));
     }
   }
                            
-  /* void visitPrototype(jsi::Runtime &runtime, jsi::Object &obj) {
-    auto prototype = obj.getProperty(runtime, "__proto__");
-    if(prototype.isObject()) {
-      // We have a prototype
-      auto prototypeObj = prototype.asObject(runtime);
-      auto propNames = prototypeObj.getPropertyNames(runtime);
-      for (size_t i = 0; i < propNames.size(runtime); i++) {
-        auto nameString =
-            propNames.getValueAtIndex(runtime, i).asString(runtime).utf8(runtime);
-        if(nameString != "") {
-          
-        }
-      }
-      visitPrototype(runtime, prototypeObj);
-    }
-  }*/
-
   void setHostObjectValue(jsi::Runtime &runtime, jsi::Object &obj) {
     setType(JsiWrapper::JsiWrapperType::HostObject);
     _hostObject = obj.asHostObject(runtime);
@@ -215,13 +213,25 @@ private:
   }
 
   void setFunctionValue(jsi::Runtime &runtime, const jsi::Value &value) {
-    jsi::detail::throwJSError(
-        runtime, "Regular javascript functions cannot be shared.");
+    // Check for worklet
+    auto isWklt = JsiWorklet::isWorklet(runtime, value);
+    if(isWklt) {
+      // Create worklet
+      _workletObject = std::make_shared<JsiWorklet>(getContext(),
+                                                  std::make_shared<jsi::Function>(value.asObject(runtime).asFunction(runtime)));
+      setType(JsiWrapperType::Worklet);
+      
+    } else {
+      // If it is not a worklet then we'll have to fail.
+      jsi::detail::throwJSError(
+          runtime, "Regular javascript functions cannot be shared.");
+    }
   }
 
   std::map<std::string, std::shared_ptr<JsiWrapper>> _properties;
   std::shared_ptr<jsi::HostFunctionType> _hostFunction;
   std::shared_ptr<jsi::HostObject> _hostObject;
+  std::shared_ptr<JsiWorklet> _workletObject;
 };
 } // namespace RNWorklet
 
