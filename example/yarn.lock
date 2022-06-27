@@ -2001,14 +2001,6 @@
   dependencies:
     nanoid "^3.1.23"
 
-"@shopify/react-native-skia@^0.1.133":
-  version "0.1.133"
-  resolved "https://registry.yarnpkg.com/@shopify/react-native-skia/-/react-native-skia-0.1.133.tgz#9ed8e2fabdabdbd49ecb9ba2bf403a81bfec906d"
-  integrity sha512-H6s89wEkIWCQHfe3F8qjoEDsVErmkldWlsvLmg+YI60VcllEB8E00s8SUb+h4H//1oSvG/8T+YHLnJJ3qdc3sQ==
-  dependencies:
-    canvaskit-wasm "^0.34.0"
-    react-reconciler "^0.26.2"
-
 "@shopify/react-native-skia@link:../package":
   version "0.0.0"
   uid ""
@@ -4430,10 +4422,10 @@ eslint-plugin-react@^7.20.0:
     semver "^6.3.0"
     string.prototype.matchall "^4.0.6"
 
-eslint-plugin-reanimated@^1.2.6:
-  version "1.2.6"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-reanimated/-/eslint-plugin-reanimated-1.2.6.tgz#47339041d8127e36e5f1ecf7a489e2f344baf3a2"
-  integrity sha512-CdvxY8YZrUW/K7KeX2DPI8yM7Fj8PQK1Oky+URmpgSQBkaNFc0AmH3Tcw6AN6AAoLLAaEy/UEj2f5lUFN14OWA==
+eslint-plugin-reanimated@^1.2.7:
+  version "1.2.7"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-reanimated/-/eslint-plugin-reanimated-1.2.7.tgz#7921a809003b0ff56ee9ae2762f087afcef5c247"
+  integrity sha512-zd/OEWTUC2y6MGwHNGU0cW9nbXfyO7DaKe57r+cSnr7cyITkbRW3UgHO2R6qQA251BmbGZs4PKFAhpL1r9rETw==
   dependencies:
     "@typescript-eslint/experimental-utils" "^4.12.0"
 
@@ -9316,11 +9308,6 @@ typescript@4.3.5:
   version "4.3.5"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.3.5.tgz#4d1c37cc16e893973c45a06886b7113234f119f4"
   integrity sha512-DqQgihaQ9cUrskJo9kIyW/+g0Vxsk8cDtZ52a3NGh0YNTfpUSArXSohyUGnvbPazEPLu398C0UxmKSOrPumUzA==
-
-typescript@^4.1.3:
-  version "4.7.4"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.7.4.tgz#1a88596d1cf47d59507a1bcdfb5b9dfe4d488235"
-  integrity sha512-C0WQT0gezHuw6AdY1M2jxUO83Rjf0HP7Sk1DtXj6j1EwkQNZrHAg2XPWlq62oqEhYvONq5pkC2Y9oPljWToLmQ==
 
 typescript@^4.6.2:
   version "4.6.3"

@@ -41,7 +41,7 @@
     "copy-webpack-plugin": "^11.0.0",
     "eslint": "^7.32.0",
     "eslint-config-react-native-wcandillon": "^3.7.2",
-    "eslint-plugin-reanimated": "^1.2.6",
+    "eslint-plugin-reanimated": "^1.2.7",
     "glob-to-regexp": "^0.4.1",
     "html-webpack-plugin": "^5.5.0",
     "jest": "^26.6.3",

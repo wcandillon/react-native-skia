@@ -70,7 +70,7 @@
     "@types/react-reconciler": "^0.26.4",
     "eslint": "7.32.0",
     "eslint-config-react-native-wcandillon": "^3.7.2",
-    "eslint-plugin-reanimated": "^1.2.6",
+    "eslint-plugin-reanimated": "^1.2.7",
     "jest": "^27.4.3",
     "patch-package": "^6.4.7",
     "react": "17.0.2",
