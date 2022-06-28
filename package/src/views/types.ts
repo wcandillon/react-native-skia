@@ -2,6 +2,7 @@ import type { ViewProps } from "react-native";
 
 import type { SkImage, SkRect, SkCanvas } from "../skia/types";
 import type { SkiaValue } from "../values";
+import type { SkSurface } from "../skia/types/Surface/Surface";
 
 export type DrawMode = "continuous" | "default";
 
@@ -58,6 +59,7 @@ export interface ValueListener {
 }
 
 export interface ISkiaViewApi {
+  getCanvas: (nativeId: number) => SkCanvas;
   invalidateSkiaView: (nativeId: number) => void;
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
   setDrawCallback: (

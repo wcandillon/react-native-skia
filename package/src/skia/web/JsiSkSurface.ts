@@ -22,4 +22,8 @@ export class JsiSkSurface
     const image = this.ref.makeImageSnapshot(toUndefinedableValue(bounds));
     return new JsiSkImage(this.CanvasKit, image);
   }
+
+  flush() {
+    this.ref.flush();
+  }
 }

@@ -16,6 +16,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
+#include <SkSurface.h>
 #include <SkRefCnt.h>
 
 #pragma clang diagnostic pop
@@ -92,6 +93,8 @@ public:
    return an SkImage
    */
   sk_sp<SkImage> makeImageSnapshot(std::shared_ptr<SkRect> bounds);
+
+  virtual sk_sp<SkSurface> getSurface() = 0;
 
 protected:
   /**

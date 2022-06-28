@@ -1,7 +1,9 @@
-import React, { useMemo } from "react";
-import { StyleSheet, useWindowDimensions } from "react-native";
+import React, { useMemo, useRef, useEffect, useState } from "react";
+import { PixelRatio, StyleSheet, useWindowDimensions } from "react-native";
 import type { SkiaValue } from "@shopify/react-native-skia";
 import {
+  Skia,
+  SkiaView,
   useComputedValue,
   useLoop,
   BlurMask,
@@ -14,6 +16,13 @@ import {
   Easing,
   mix,
 } from "@shopify/react-native-skia";
+import {
+  useAnimatedReaction,
+  useAnimatedRef,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 const c1 = "#61bea2";
 const c2 = "#529ca0";
@@ -50,36 +59,38 @@ const Ring = ({ index, progress }: RingProps) => {
 
 export const Breathe = () => {
   const { width, height } = useWindowDimensions();
-  const center = useMemo(
-    () => vec(width / 2, height / 2 - 64),
-    [height, width]
-  );
+  const progress = useSharedValue(0);
+  const [nativeId, setNativeId] = useState(0);
+  const ref = useAnimatedRef<SkiaView>();
+  useEffect(() => {
+    progress.value = withRepeat(withTiming(1, { duration: 1000 }), -1, true);
+  }, [progress]);
+  const cb = (value: number) => {
+    "worklet";
+    SkiaViewApi;
+    if (nativeId === 0) {
+      return;
+    }
 
-  const progress = useLoop({
-    duration: 3000,
-    easing: Easing.inOut(Easing.ease),
-  });
-
-  const transform = useComputedValue(
-    () => [{ rotate: mix(progress.current, -Math.PI, 0) }],
-    [progress]
-  );
-
+    const canvas = SkiaViewApi.getCanvas(nativeId);
+    // const canvas = surface.getCanvas();
+    // canvas.save();
+    // canvas.scale(3, 3);
+    // const paint = Skia.Paint();
+    // paint.setColor(Skia.Color("lightblue"));
+    // canvas.drawCircle(100, 100, 100 * value, paint);
+    // canvas.restore();
+  };
+  console.log({ closure: cb._closure });
+  console.log({ asString: cb.asString });
+  useAnimatedReaction(() => progress.value, cb, [nativeId]);
   return (
-    <Canvas style={styles.container} debug>
-      <Fill color="rgb(36,43,56)" />
-      <Group origin={center} transform={transform} blendMode="screen">
-        <BlurMask style="solid" blur={40} />
-        {new Array(6).fill(0).map((_, index) => {
-          return <Ring key={index} index={index} progress={progress} />;
-        })}
-      </Group>
-    </Canvas>
+    <SkiaView
+      ref={ref}
+      style={{ flex: 1 }}
+      onDraw={() => {
+        setNativeId(ref.current!.nativeId);
+      }}
+    />
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

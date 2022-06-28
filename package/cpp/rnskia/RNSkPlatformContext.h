@@ -180,13 +180,14 @@ public:
   virtual void startDrawLoop() = 0;
   virtual void stopDrawLoop() = 0;
 
+  // TODO: use friend instead
+  std::shared_ptr<react::CallInvoker> _callInvoker;
 private:
   float _pixelDensity;
   
   std::thread::id _jsThreadId;
 
   jsi::Runtime *_jsRuntime;
-  std::shared_ptr<react::CallInvoker> _callInvoker;
   std::unique_ptr<RNSkDispatchQueue> _dispatchQueue;
 
   std::unordered_map<size_t, std::function<void(bool)>> _drawCallbacks;

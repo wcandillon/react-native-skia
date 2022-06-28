@@ -24,4 +24,9 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
       example: https://fiddle.skia.org/c/@Surface_makeImageSnapshot
   */
   makeImageSnapshot(bounds?: SkRect): SkImage;
+
+  /**
+   * Make sure any queued draws are sent to the screen or the GPU.
+   */
+  flush(): void;
 }

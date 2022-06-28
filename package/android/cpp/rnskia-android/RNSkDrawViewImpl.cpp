@@ -70,4 +70,8 @@ namespace RNSkia {
             _renderer->run(picture, _scaledWidth, _scaledHeight);
         }
     }
+
+    sk_sp<SkSurface> RNSkDrawViewImpl::getSurface() {
+        return _renderer->_skSurface;
+    }
 }

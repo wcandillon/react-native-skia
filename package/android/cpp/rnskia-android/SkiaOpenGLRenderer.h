@@ -126,6 +126,7 @@ namespace RNSkia
         size_t _renderId;
 
         std::atomic<RenderState> _renderState = { RenderState::Initializing };
+        friend class RNSkDrawViewImpl;
     };
 
 }

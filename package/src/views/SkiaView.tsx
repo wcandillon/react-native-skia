@@ -3,6 +3,7 @@ import { requireNativeComponent } from "react-native";
 
 import type { SkRect } from "../skia/types";
 import type { SkiaValue } from "../values";
+import type { SkSurface } from "../skia/types/Surface/Surface";
 
 import { SkiaViewApi } from "./api";
 import type { DrawMode, NativeSkiaViewProps, SkiaViewProps } from "./types";
@@ -36,6 +37,11 @@ export class SkiaView extends React.Component<SkiaViewProps> {
       assertDrawCallbacksEnabled();
       SkiaViewApi.setDrawCallback(this._nativeId, onDraw);
     }
+  }
+
+  getSurface(): SkSurface {
+    assertDrawCallbacksEnabled();
+    return SkiaViewApi.getSurface(this._nativeId);
   }
 
   /**

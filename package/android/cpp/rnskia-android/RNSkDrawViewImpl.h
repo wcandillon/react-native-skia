@@ -33,6 +33,7 @@ namespace RNSkia {
         float getScaledHeight() override { return _scaledHeight; };
 
         void drawPicture(const sk_sp <SkPicture> picture) override;
+        sk_sp<SkSurface> getSurface() override;
 
     private:
         bool createSkiaSurface();

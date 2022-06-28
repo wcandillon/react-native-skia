@@ -25,6 +25,23 @@ using CallbackInfo = struct CallbackInfo {
 
 class RNSkJsiViewApi : public JsiHostObject {
 public:
+  JSI_HOST_FUNCTION(getCanvas) {
+    // find skia draw view
+    jsi::Value workletRuntimeValue = runtime.global().getProperty(runtime, "_WORKLET_RUNTIME");
+    if (workletRuntimeValue.isNumber()) {
+      jsi::Runtime * workletRuntime = reinterpret_cast<jsi::Runtime *>(
+              static_cast<uintptr_t>(workletRuntimeValue.getNumber()));
+      int nativeId = arguments[0].asNumber();
+      auto info = getEnsuredCallbackInfo(nativeId);
+      auto surface = info->view->getSurface();
+      auto skiaApi = std::make_shared<JsiSkApi>(*workletRuntime, _platformContext);
+      return jsi::Object::createFromHostObject(
+              runtime,
+              skiaApi);
+    }
+    return jsi::Value::null();
+  }
+
   JSI_HOST_FUNCTION(setDrawCallback) {
     if (count != 2) {
       _platformContext->raiseError(
@@ -193,7 +210,8 @@ public:
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, invalidateSkiaView),
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, makeImageSnapshot),
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, setDrawMode),
-                       JSI_EXPORT_FUNC(RNSkJsiViewApi, registerValuesInView))
+                       JSI_EXPORT_FUNC(RNSkJsiViewApi, registerValuesInView),
+                       JSI_EXPORT_FUNC(RNSkJsiViewApi, getCanvas))
 
   /**
    * Constructor
