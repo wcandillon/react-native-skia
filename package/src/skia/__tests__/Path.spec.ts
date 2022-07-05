@@ -185,7 +185,12 @@ describe("Path", () => {
     const path3 = Skia.Path.Make();
     path3.moveTo(0, 0);
     path3.lineTo(200, 200);
-    const path = interpolatePaths(-1, [0, 0.5, 1], [path1, path2, path3]);
+    const path = interpolatePaths(
+      -1,
+      [0, 0.5, 1],
+      [path1, path2, path3],
+      "clamp"
+    );
     expect(path.toCmds().flat()).toEqual(path1.toCmds().flat());
   });
 
@@ -200,7 +205,12 @@ describe("Path", () => {
     const path3 = Skia.Path.Make();
     path3.moveTo(0, 0);
     path3.lineTo(200, 200);
-    const path = interpolatePaths(2, [0, 0.5, 1], [path1, path2, path3]);
+    const path = interpolatePaths(
+      2,
+      [0, 0.5, 1],
+      [path1, path2, path3],
+      "clamp"
+    );
     expect(path.toCmds()).toEqual(path3.toCmds());
   });
 
@@ -299,5 +309,72 @@ describe("Path", () => {
       canvas.translate(30, 0);
     }
     processResult(surface, "snapshots/path/interpolate.png");
+  });
+
+  it("should support overshooting values in path interpolation", () => {
+    const { Skia } = setupSkia();
+    const p1 = Skia.Path.Make();
+    p1.moveTo(0, 0);
+    p1.lineTo(100, 100);
+
+    const p2 = Skia.Path.Make();
+    p2.moveTo(0, 100);
+    p2.lineTo(100, 0);
+
+    const p3 = p2.interpolate(p1, 1.1)!;
+    expect(p3).not.toBeNull();
+    const [[, moveX, moveY], [, lineX, lineY]] = p3.toCmds();
+    expect(moveX).toBe(0);
+    expect(moveY).toBe(110);
+    expect(lineX).toBe(100);
+    expect(lineY).toBe(-10);
+
+    const p4 = p2.interpolate(p1, -0.1)!;
+    expect(p4).not.toBeNull();
+    const [[, moveX1, moveY1], [, lineX1, lineY1]] = p4.toCmds();
+    expect(moveX1).toBe(0);
+    expect(moveY1).toBe(-10);
+    expect(lineX1).toBe(100);
+    expect(lineY1).toBe(110);
+  });
+
+  it("interpolatePath() should support overshooting values", () => {
+    const { Skia } = setupSkia();
+    const p1 = Skia.Path.Make();
+    p1.moveTo(0, 0);
+    p1.lineTo(100, 100);
+
+    const p2 = Skia.Path.Make();
+    p2.moveTo(0, 100);
+    p2.lineTo(100, 0);
+
+    const ref1 = Skia.Path.Make();
+    ref1.moveTo(0, -10);
+    ref1.lineTo(100, 110);
+
+    const ref2 = Skia.Path.Make();
+    ref2.moveTo(0, 110);
+    ref2.lineTo(100, -10);
+
+    const p3 = interpolatePaths(-0.1, [0, 1], [p1, p2]);
+    expect(p3.toCmds()).toEqual(ref1.toCmds());
+    const p4 = interpolatePaths(1.1, [0, 1], [p1, p2]);
+    expect(p4.toCmds()).toEqual(ref2.toCmds());
+  });
+
+  it("interpolatePath() should support clamping left and right values", () => {
+    const { Skia } = setupSkia();
+    const p1 = Skia.Path.Make();
+    p1.moveTo(0, 0);
+    p1.lineTo(100, 100);
+
+    const p2 = Skia.Path.Make();
+    p2.moveTo(0, 100);
+    p2.lineTo(100, 0);
+
+    const p3 = interpolatePaths(-0.1, [0, 1], [p1, p2], "clamp");
+    expect(p3.toCmds()).toEqual(p1.toCmds());
+    const p4 = interpolatePaths(1.1, [0, 1], [p1, p2], "clamp");
+    expect(p4.toCmds()).toEqual(p2.toCmds());
   });
 });

@@ -1,3 +1,5 @@
+import fs from "fs";
+
 import React from "react";
 import type { ReactNode } from "react";
 import ReactReconciler from "react-reconciler";
@@ -12,6 +14,15 @@ import { ValueApi } from "../../values/web";
 import { LoadSkia } from "../../web";
 
 export let Skia: ReturnType<typeof JsiSkApi>;
+
+jest.mock("react-native", () => ({
+  Platform: { OS: "web" },
+  Image: {
+    resolveAssetSource: jest.fn,
+  },
+}));
+
+export const nodeRequire = (uri: string) => fs.readFileSync(uri);
 
 beforeAll(async () => {
   await LoadSkia();
@@ -39,6 +50,7 @@ export const drawOnNode = (element: ReactNode) => {
 };
 
 export const mountCanvas = (element: ReactNode) => {
+  global.SkiaApi = Skia;
   expect(Skia).toBeDefined();
   const surface = Skia.Surface.Make(width, height)!;
   expect(surface).toBeDefined();

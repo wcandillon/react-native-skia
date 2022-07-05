@@ -8,4 +8,9 @@ import { useRawData } from "./Data";
 export const useTypeface = (
   source: DataSource | null | undefined,
   onError?: (err: Error) => void
-) => useRawData(source, Skia.Typeface.MakeFreeTypeFaceFromData, onError);
+) =>
+  useRawData(
+    source,
+    Skia.Typeface.MakeFreeTypeFaceFromData.bind(Skia.Typeface),
+    onError
+  );

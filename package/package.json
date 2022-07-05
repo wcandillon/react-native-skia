@@ -21,6 +21,7 @@
     "android/src/**",
     "libs/android/**",
     "index.js",
+    "jestSetup.js",
     "cpp/**/*.{h,cpp}",
     "ios",
     "libs/ios/libskia.xcframework",
@@ -34,7 +35,7 @@
     "tsc": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0",
     "test": "jest",
-    "postinstall": "node scripts/install-npm.js && patch-package",
+    "postinstall": "node scripts/install-npm.js",
     "build": "bob build"
   },
   "repository": {
@@ -72,7 +73,6 @@
     "eslint-config-react-native-wcandillon": "^3.7.2",
     "eslint-plugin-reanimated": "^1.2.7",
     "jest": "^27.4.3",
-    "patch-package": "^6.4.7",
     "react": "17.0.2",
     "react-native": "0.66.2",
     "react-native-builder-bob": "^0.18.2",
@@ -80,7 +80,7 @@
     "typescript": "^4.6.4"
   },
   "dependencies": {
-    "canvaskit-wasm": "^0.34.0",
+    "canvaskit-wasm": "^0.35.0",
     "react-reconciler": "^0.26.2"
   },
   "eslintIgnore": [

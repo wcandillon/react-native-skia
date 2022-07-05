@@ -60,7 +60,9 @@ function isExtrapolate(value: string): value is Extrapolate {
 
 // validates extrapolations type
 // if type is correct, converts it to ExtrapolationConfig
-function validateType(type: ExtrapolationType): RequiredExtrapolationConfig {
+export function validateInterpolationOptions(
+  type: ExtrapolationType
+): RequiredExtrapolationConfig {
   // initialize extrapolationConfig with default extrapolation
   const extrapolationConfig: RequiredExtrapolationConfig = {
     extrapolateLeft: Extrapolate.EXTEND,
@@ -151,7 +153,7 @@ export function interpolate(
     );
   }
 
-  const extrapolationConfig = validateType(type);
+  const extrapolationConfig = validateInterpolationOptions(type);
   const { length } = input;
   const narrowedInput: InterpolationNarrowedInput = {
     leftEdgeInput: input[0],

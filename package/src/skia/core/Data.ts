@@ -11,71 +11,88 @@ const resolveAsset = (source: ReturnType<typeof require>) => {
     : Image.resolveAssetSource(source).uri;
 };
 
-export const useDataCollection = <T>(
+const factoryWrapper = <T>(
+  data2: SkData,
+  factory: (data: SkData) => T,
+  onError?: (err: Error) => void
+) => {
+  const factoryResult = factory(data2);
+  if (factoryResult === null) {
+    onError && onError(new Error("Could not load data"));
+    return null;
+  } else {
+    return factoryResult;
+  }
+};
+
+const loadDataCollection = <T>(
   sources: DataSource[],
-  factory: (data: SkData[]) => T,
+  factory: (data: SkData) => T,
+  onError?: (err: Error) => void
+): Promise<(T | null)[]> =>
+  Promise.all(sources.map((source) => loadData(source, factory, onError)));
+
+const loadData = <T>(
+  source: DataSource,
+  factory: (data: SkData) => T,
+  onError?: (err: Error) => void
+): Promise<T | null> => {
+  if (source instanceof Uint8Array) {
+    return new Promise((resolve) =>
+      resolve(factoryWrapper(Skia.Data.fromBytes(source), factory, onError))
+    );
+  } else {
+    const uri = typeof source === "string" ? source : resolveAsset(source);
+    return Skia.Data.fromURI(uri).then((d) =>
+      factoryWrapper(d, factory, onError)
+    );
+  }
+};
+
+type Source = DataSource | null | undefined;
+
+const useLoading = <T>(
+  source: Source,
+  loader: () => Promise<T | null>,
   deps: DependencyList = []
 ) => {
   const [data, setData] = useState<T | null>(null);
+  const prevSourceRef = useRef<Source>();
   useEffect(() => {
-    const bytesOrURIs = sources.map((source) => {
-      if (source instanceof Uint8Array) {
-        return source;
-      }
-      return typeof source === "string" ? source : resolveAsset(source);
-    });
-    Promise.all(
-      bytesOrURIs.map((bytesOrURI) =>
-        bytesOrURI instanceof Uint8Array
-          ? Skia.Data.fromBytes(bytesOrURI)
-          : Skia.Data.fromURI(bytesOrURI)
-      )
-    ).then((d) => setData(factory(d)));
+    if (prevSourceRef.current !== source) {
+      prevSourceRef.current = source;
+      loader().then(setData);
+    } else {
+      setData(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return data;
 };
 
+export const useDataCollection = <T>(
+  sources: DataSource[],
+  factory: (data: SkData) => T,
+  onError?: (err: Error) => void,
+  deps?: DependencyList
+) =>
+  useLoading(
+    sources,
+    () => loadDataCollection(sources, factory, onError),
+    deps
+  );
+
 export const useRawData = <T>(
   source: DataSource | null | undefined,
   factory: (data: SkData) => T,
-  onError?: (err: Error) => void
-) => {
-  const [data, setData] = useState<T | null>(null);
-  const prevSourceRef = useRef<DataSource | null | undefined>();
-  useEffect(() => {
-    // Track to avoid re-fetching the same data
-    if (prevSourceRef.current !== source) {
-      prevSourceRef.current = source;
-      if (source !== null && source !== undefined) {
-        const factoryWrapper = (data2: SkData) => {
-          const factoryResult = factory(data2);
-          if (factoryResult === null) {
-            onError && onError(new Error("Could not load data"));
-            setData(null);
-          } else {
-            setData(factoryResult);
-          }
-        };
-        if (source instanceof Uint8Array) {
-          factoryWrapper(Skia.Data.fromBytes(source));
-        } else {
-          const uri =
-            typeof source === "string" ? source : resolveAsset(source);
-          Skia.Data.fromURI(uri).then((d) => factoryWrapper(d));
-        }
-      } else {
-        // new source is null or undefined -> remove cached data
-        setData(null);
-      }
-    }
-  }, [factory, onError, source]);
-  return data;
-};
+  onError?: (err: Error) => void,
+  deps?: DependencyList
+) => useLoading(source, () => loadData(source, factory, onError), deps);
 
 const identity = (data: SkData) => data;
 
 export const useData = (
   source: DataSource | null | undefined,
-  onError?: (err: Error) => void
-) => useRawData(source, identity, onError);
+  onError?: (err: Error) => void,
+  deps?: DependencyList
+) => useRawData(source, identity, onError, deps);
