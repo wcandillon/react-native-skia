@@ -29,14 +29,19 @@ interface CardProps {
 
 export const Card = ({ scheme }: CardProps) => {
   const { width, height } = useWindowDimensions();
+  const c = vec(width / 2, height / 2);
   const CARD_WIDTH = width - 64;
-  const CARD_HEIGHT = CARD_WIDTH * 0.61;
+  const CARD_HEIGHT = CARD_WIDTH * 0.7;
+  const clip = rrect(
+    rect(c.x - CARD_WIDTH / 2, c.y - CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT),
+    25,
+    25
+  );
   const colors = schemes[scheme];
   const animatedSensor = useAnimatedSensor(SensorType.ROTATION, {
     interval: 10,
   });
 
-  const c = vec(width / 2, height / 2);
   const offsetX = useValue(c.x);
   const offsetY = useValue(c.y);
   const x = useValue(offsetX.current);
@@ -66,18 +71,7 @@ export const Card = ({ scheme }: CardProps) => {
     [x, y]
   );
   return (
-    <Group
-      clip={rrect(
-        rect(
-          c.x - CARD_WIDTH / 2,
-          c.y - CARD_HEIGHT / 2,
-          CARD_WIDTH,
-          CARD_HEIGHT
-        ),
-        25,
-        25
-      )}
-    >
+    <Group clip={clip}>
       <Fill>
         <SweepGradient c={c} colors={colors} positions={positions} />
       </Fill>

@@ -6,8 +6,8 @@ import { Card } from "./Card";
 export const MetalicEffect = () => {
   return (
     <Canvas style={{ flex: 1 }}>
-      <Fill color="#020203" />
-      <Card />
+      <Fill color="white" />
+      <Card scheme="pastel" />
     </Canvas>
   );
 };
