@@ -16,7 +16,7 @@ import {
 import { SensorType, useAnimatedSensor } from "react-native-reanimated";
 
 const schemes = {
-  metalic: ["#e4e9f1", "#6F7D95", "#020203", "#e4e9f1", "#020203", "#B2C1D6"],
+  metalic: ["#e4e9f1", "#6F7D95", "#ffffff", "#B2C1D6", "#ffffff", "#B2C1D6"],
   pastel: ["#BFB2F3", "#96CAF7", "#9CDCAA", "#E5E1AB", "#F3C6A5", "#F8A3A8"],
   barbie: ["#6BB6B1", "#F8D8BB", "#FFAFC1", "#F4ED85", "#B1A7D1", "#6BB6B1"],
 };
