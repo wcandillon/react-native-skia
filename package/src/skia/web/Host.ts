@@ -54,3 +54,17 @@ export const optEnum = (
   value: number | undefined
 ): EmbindEnumEntity | undefined =>
   value === undefined ? undefined : { value };
+
+export const toDeg = (rad: number | undefined) => {
+  if (rad === undefined) {
+    return rad;
+  }
+  return (rad * 180) / Math.PI;
+};
+
+export const toRad = (deg: number | undefined) => {
+  if (deg === undefined) {
+    return deg;
+  }
+  return (deg * Math.PI) / 180;
+};

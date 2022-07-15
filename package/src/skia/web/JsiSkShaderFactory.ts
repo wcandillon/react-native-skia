@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import type { ShaderFactory } from "../types/Shader/ShaderFactory";
 
-import { Host, toValue, ckEnum } from "./Host";
+import { Host, toValue, ckEnum, toDeg } from "./Host";
 import { JsiSkShader } from "./JsiSkShader";
 
 export class JsiSkShaderFactory extends Host implements ShaderFactory {
@@ -99,8 +99,8 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
     mode: TileMode,
     localMatrix?: SkMatrix | null,
     flags?: number,
-    startAngleInDegrees?: number,
-    endAngleInDegrees?: number
+    startAngleInRad?: number,
+    endAngleInRad?: number
   ) {
     return new JsiSkShader(
       this.CanvasKit,
@@ -114,8 +114,8 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
           ? undefined
           : toValue(localMatrix),
         flags,
-        startAngleInDegrees,
-        endAngleInDegrees
+        toDeg(startAngleInRad),
+        toDeg(endAngleInRad)
       )
     );
   }

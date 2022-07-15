@@ -78,6 +78,11 @@ export const HomeScreen = () => {
         description="Drawing Performance Test"
         route="Performance"
       />
+      <HomeScreenButton
+        title="👨🏻‍🏭 Metallic Effect"
+        description="Metallic Effect"
+        route="MetalicEffect"
+      />
     </ScrollView>
   );
 };

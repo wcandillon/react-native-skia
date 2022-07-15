@@ -93,8 +93,8 @@ export interface ShaderFactory {
    * @param mode
    * @param localMatrix
    * @param flags - 0 to interpolate colors in unpremul, 1 to interpolate colors in premul.
-   * @param startAngle - angle corresponding to 0.0. Defaults to 0 degrees.
-   * @param endAngle - angle corresponding to 1.0. Defaults to 360 degrees.
+   * @param startAngle - angle corresponding to 0.0. Defaults to 0 rad.
+   * @param endAngle - angle corresponding to 1.0. Defaults to 2 * PI rad.
    */
   MakeSweepGradient(
     cx: number,
@@ -104,8 +104,8 @@ export interface ShaderFactory {
     mode: TileMode,
     localMatrix?: SkMatrix | null,
     flags?: number,
-    startAngleInDegrees?: number,
-    endAngleInDegrees?: number
+    startAngleInRad?: number,
+    endAngleInRad?: number
     //  colorSpace?: ColorSpace
   ): SkShader;
 

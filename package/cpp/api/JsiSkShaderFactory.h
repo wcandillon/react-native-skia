@@ -121,11 +121,11 @@ public:
     auto startAngle =
         (count < 8 || arguments[7].isUndefined()) ? 0 : arguments[7].asNumber();
     auto endAngle = (count < 9 || arguments[8].isUndefined())
-                        ? 360
+                        ? 2 * SK_ScalarPI
                         : arguments[8].asNumber();
     sk_sp<SkShader> gradient = SkGradientShader::MakeSweep(
-        x, y, colors.data(), positions.data(), static_cast<int>(colors.size()), tileMode, startAngle,
-        endAngle, flag, localMatrix);
+        x, y, colors.data(), positions.data(), static_cast<int>(colors.size()), tileMode, SkRadiansToDegrees(startAngle),
+        SkRadiansToDegrees(endAngle), flag, localMatrix);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiSkShader>(getContext(), std::move(gradient)));
   }
