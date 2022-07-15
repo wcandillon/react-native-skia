@@ -288,32 +288,32 @@ PODS:
     - RCTTypeSafety
     - React
     - ReactCommon/turbomodule/core
-  - react-native-skia (0.0.1-development):
+  - react-native-skia (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
-    - react-native-skia/Api (= 0.0.1-development)
-    - react-native-skia/Jsi (= 0.0.1-development)
-    - react-native-skia/RNSkia (= 0.0.1-development)
-    - react-native-skia/SkiaHeaders (= 0.0.1-development)
-    - react-native-skia/Utils (= 0.0.1-development)
-  - react-native-skia/Api (0.0.1-development):
+    - react-native-skia/Api (= 0.1.0-development)
+    - react-native-skia/Jsi (= 0.1.0-development)
+    - react-native-skia/RNSkia (= 0.1.0-development)
+    - react-native-skia/SkiaHeaders (= 0.1.0-development)
+    - react-native-skia/Utils (= 0.1.0-development)
+  - react-native-skia/Api (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
-  - react-native-skia/Jsi (0.0.1-development):
+  - react-native-skia/Jsi (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
-  - react-native-skia/RNSkia (0.0.1-development):
+  - react-native-skia/RNSkia (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
-  - react-native-skia/SkiaHeaders (0.0.1-development):
+  - react-native-skia/SkiaHeaders (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
-  - react-native-skia/Utils (0.0.1-development):
+  - react-native-skia/Utils (0.1.0-development):
     - React
     - React-callinvoker
     - React-Core
@@ -601,7 +601,7 @@ SPEC CHECKSUMS:
   React-jsinspector: 90f0bfd5d04e0b066c29216a110ffb9a6c34f23f
   React-logger: 8474fefa09d05f573a13c044cb0dfd751d4e52e3
   react-native-safe-area-context: f98b0b16d1546d208fc293b4661e3f81a895afd9
-  react-native-skia: f9ccb4d45e3f6111683ad480db812169d28c05de
+  react-native-skia: 21527265391c4744ec0390150987ef87dafd85d8
   React-perflogger: 15cb741d6c2379f4d3fc8f9e4d4e1110ef3020cb
   React-RCTActionSheet: ea9099db0597bd769430db1e2d011fd5fdb7fc5e
   React-RCTAnimation: 252df4749866f2654f37612f839522cac91c1165

@@ -8,6 +8,7 @@ import {
   useComputedValue,
   interpolate,
   Circle,
+  useSharedValueEffect,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { useWindowDimensions } from "react-native";
@@ -34,16 +35,28 @@ export const MetalicEffect = () => {
   const offsetY = useValue(c.y);
   const x = useValue(offsetX.current);
   const y = useValue(offsetY.current);
-  const onTouch = useTouchHandler({
-    onStart: (pos) => {
-      offsetX.current = x.current - pos.x;
-      offsetY.current = y.current - pos.y;
-    },
-    onActive: (pos) => {
-      x.current = offsetX.current + pos.x;
-      y.current = offsetY.current + pos.y;
-    },
-  });
+  // const onTouch = useTouchHandler({
+  //   onStart: (pos) => {
+  //     offsetX.current = x.current - pos.x;
+  //     offsetY.current = y.current - pos.y;
+  //   },
+  //   onActive: (pos) => {
+  //     x.current = offsetX.current + pos.x;
+  //     y.current = offsetY.current + pos.y;
+  //   },
+  // });
+  useSharedValueEffect(() => {
+    x.current = interpolate(
+      animatedSensor.sensor.value.pitch,
+      [-Math.PI, Math.PI],
+      [-width, width * 2]
+    );
+    y.current = interpolate(
+      animatedSensor.sensor.value.yaw,
+      [-Math.PI, Math.PI],
+      [-height, height * 2]
+    );
+  }, animatedSensor.sensor);
   const positions = useComputedValue(
     () => [
       0,
@@ -56,7 +69,7 @@ export const MetalicEffect = () => {
     [x, y]
   );
   return (
-    <Canvas style={{ flex: 1 }} onTouch={onTouch}>
+    <Canvas style={{ flex: 1 }}>
       <Fill>
         <SweepGradient c={c} colors={colors} positions={positions} />
       </Fill>
