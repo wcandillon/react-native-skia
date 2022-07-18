@@ -81,7 +81,7 @@ export const HomeScreen = () => {
       <HomeScreenButton
         title="👨🏻‍🏭 Metallic Effect"
         description="Metallic Effect"
-        route="MetalicEffect"
+        route="MetallicEffect"
       />
     </ScrollView>
   );

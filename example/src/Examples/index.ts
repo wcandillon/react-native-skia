@@ -19,4 +19,4 @@ export * from "./Wallpaper";
 export * from "./Vertices";
 export * from "./Wallet";
 export * from "./Severance";
-export * from "./MetalicEffect";
+export * from "./MetallicEffect";

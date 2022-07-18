@@ -20,7 +20,7 @@ import {
   Vertices,
   Wallet,
   Severance,
-  MetalicEffect,
+  MetallicEffect,
 } from "./Examples";
 import { HomeScreen } from "./Home";
 
@@ -44,7 +44,7 @@ const linking = {
       Graphs: "graphs",
       Animation: "animation",
       Performance: "performance",
-      MetalicEffect: "metalic-effect",
+      MetallicEffect: "metallic-effect",
     },
   },
   prefixes: ["rnskia://"],
@@ -124,7 +124,7 @@ const App = () => {
           <Stack.Screen name="Graphs" component={GraphsScreen} />
           <Stack.Screen name="Animation" component={AnimationExample} />
           <Stack.Screen name="Performance" component={PerformanceDrawingTest} />
-          <Stack.Screen name="MetalicEffect" component={MetalicEffect} />
+          <Stack.Screen name="MetalicEffect" component={MetallicEffect} />
         </Stack.Navigator>
       </NavigationContainer>
     </>
