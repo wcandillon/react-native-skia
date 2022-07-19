@@ -87,7 +87,7 @@ namespace RNSkia
             point.id = pin[i + 4];
             points.push_back(point);
         }
-        _drawView->updateTouchState(std::move(points));
+        _drawView->updateTouchState(points);
     }
 
     void JniSkiaDrawView::surfaceAvailable(jobject surface, int width, int height)

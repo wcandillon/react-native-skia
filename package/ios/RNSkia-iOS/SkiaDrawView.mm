@@ -161,7 +161,7 @@
       nextTouches.push_back(nextTouch);
     }
     if(_impl != nullptr) {
-      _impl->updateTouchState(std::move(nextTouches));
+      _impl->updateTouchState(nextTouches);
     }
   }
 }

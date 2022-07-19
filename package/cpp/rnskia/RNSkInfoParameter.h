@@ -77,7 +77,7 @@ public:
 
   void endDrawOperation() { _touchesCache.clear(); }
 
-  void updateTouches(std::vector<RNSkTouchPoint>&& touches) {
+  void updateTouches(std::vector<RNSkTouchPoint>& touches) {
     std::lock_guard<std::mutex> lock(_mutex);
     // Add timestamp
     auto ms = std::chrono::duration_cast<milliseconds>(
