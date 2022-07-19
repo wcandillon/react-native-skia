@@ -45,10 +45,10 @@ private:
   /**
    Draw in canvas
    */
-  void drawInCanvas(std::shared_ptr<JsiSkCanvas> canvas,
-                    int width,
-                    int height,
-                    double time);
+  void renderToJsiCanvas(std::shared_ptr<JsiSkCanvas> canvas,
+                         int width,
+                         int height,
+                         double time);
     
   /**
    * Stores a pointer to the jsi wrapper for the canvas. The reason for

@@ -103,10 +103,10 @@ void RNSkDrawView::updateTouchState(std::vector<RNSkTouchPoint> &points) {
   _infoObject->updateTouches(points);
 }
 
-void RNSkDrawView::drawInCanvas(std::shared_ptr<JsiSkCanvas> canvas,
-                                int width,
-                                int height,
-                                double time) {
+void RNSkDrawView::renderToJsiCanvas(std::shared_ptr<JsiSkCanvas> canvas,
+                                     int width,
+                                     int height,
+                                     double time) {
   
   // Call the draw drawCallback and perform js based drawing
   auto skCanvas = canvas->getCanvas();
@@ -134,8 +134,8 @@ sk_sp<SkImage> RNSkDrawView::makeImageSnapshot(std::shared_ptr<SkRect> bounds) {
   
   milliseconds ms = duration_cast<milliseconds>(
       system_clock::now().time_since_epoch());
-  
-  drawInCanvas(jsiCanvas, getScaledWidth(), getScaledHeight(), ms.count() / 1000);
+
+  renderToJsiCanvas(jsiCanvas, getScaledWidth(), getScaledHeight(), ms.count() / 1000);
   
   if(bounds != nullptr) {
     SkIRect b = SkIRect::MakeXYWH(bounds->x(), bounds->y(), bounds->width(), bounds->height());
@@ -174,7 +174,8 @@ void RNSkDrawView::performDraw() {
         try
         {
           // Perform the javascript drawing
-          drawInCanvas(_jsiCanvas, selfDrawView->getScaledWidth(), selfDrawView->getScaledHeight(), ms.count() / 1000.0);
+          renderToJsiCanvas(_jsiCanvas, selfDrawView->getScaledWidth(),
+                            selfDrawView->getScaledHeight(), ms.count() / 1000.0);
         }
         catch (...)
         {
@@ -201,7 +202,9 @@ void RNSkDrawView::performDraw() {
               auto selfDrawView = std::dynamic_pointer_cast<RNSkDrawView>(self);
               // Draw the picture recorded on the real GPU canvas
               selfDrawView->_gpuTimingInfo.beginTiming();
-              selfDrawView->drawPicture(p);
+              selfDrawView->renderToSkCanvas([p = std::move(p)](SkCanvas *canvas) {
+                  canvas->drawPicture(p);
+              });
               selfDrawView->_gpuTimingInfo.stopTiming();
             }
           // Unlock GPU drawing

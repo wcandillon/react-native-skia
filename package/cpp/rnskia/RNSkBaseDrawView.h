@@ -7,9 +7,7 @@
 #include <RNSkTimingInfo.h>
 #include <RNSkLog.h>
 
-class SkPicture;
-class SkRect;
-class SkImage;
+class SkCanvas;
 
 namespace RNSkia
 {
@@ -89,9 +87,9 @@ namespace RNSkia
     virtual float getScaledHeight() = 0;
 
     /**
-     Override to render picture to GPU
+     Override to render on GPU
      */
-    virtual void drawPicture(const sk_sp<SkPicture> picture) = 0;
+    virtual void renderToSkCanvas(std::function<void(SkCanvas*)> cb) = 0;
 
     /**
      * @return The platformcontext

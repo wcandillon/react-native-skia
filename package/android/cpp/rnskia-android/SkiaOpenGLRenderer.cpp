@@ -25,7 +25,7 @@ namespace RNSkia
         _renderId(renderId) {
     }
 
-    void SkiaOpenGLRenderer::run(const sk_sp<SkPicture> picture, int width, int height)
+    void SkiaOpenGLRenderer::run(std::function<void(SkCanvas*)> cb, int width, int height)
     {
         switch (_renderState)
         {
@@ -51,28 +51,25 @@ namespace RNSkia
                 return;
             }
 
-            if (picture != nullptr)
+            // Reset Skia Context since it might be modified by another Skia View during
+            // rendering.
+            getThreadDrawingContext()->skContext->resetContext();
+
+            // Clear with transparent
+            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            // Draw picture into surface
+            cb(_skSurface->getCanvas());
+
+            // Flush
+            _skSurface->getCanvas()->flush();
+            getThreadDrawingContext()->skContext->flush();
+
+            if (!eglSwapBuffers(getThreadDrawingContext()->glDisplay, _glSurface))
             {
-                // Reset Skia Context since it might be modified by another Skia View during
-                // rendering.
-                getThreadDrawingContext()->skContext->resetContext();
-
-                // Clear with transparent
-                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-                glClear(GL_COLOR_BUFFER_BIT);
-
-                // Draw picture into surface
-                _skSurface->getCanvas()->drawPicture(picture);
-
-                // Flush
-                _skSurface->getCanvas()->flush();
-                getThreadDrawingContext()->skContext->flush();
-
-                if (!eglSwapBuffers(getThreadDrawingContext()->glDisplay, _glSurface))
-                {
-                    RNSkLogger::logToConsole(
-                        "eglSwapBuffers failed: %d\n", eglGetError());
-                }
+                RNSkLogger::logToConsole(
+                    "eglSwapBuffers failed: %d\n", eglGetError());
             }
             break;
         }

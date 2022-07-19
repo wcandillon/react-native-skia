@@ -8,7 +8,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
-#include <SkPicture.h>
+#include <SkCanvas.h>
 #include <SkRefCnt.h>
 
 #pragma clang diagnostic pop
@@ -32,7 +32,7 @@ namespace RNSkia {
 
         float getScaledHeight() override { return _scaledHeight; };
 
-        void drawPicture(const sk_sp <SkPicture> picture) override;
+        void renderToSkCanvas(std::function<void(SkCanvas*)> cb) override;
 
     private:
         bool createSkiaSurface();

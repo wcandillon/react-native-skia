@@ -12,7 +12,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
-#import <SkPicture.h>
+#import <SkCanvas.h>
 #import <SkRefCnt.h>
 #import <include/gpu/GrDirectContext.h>
 
@@ -32,7 +32,7 @@ protected:
   float getScaledHeight() override { return _height * _context->getPixelDensity(); };
   
 private:
-  void drawPicture(const sk_sp<SkPicture> picture) override;
+  void renderToSkCanvas(std::function<void(SkCanvas*)> cb) override;
   bool createSkiaSurface();
 
   int _nativeId;
