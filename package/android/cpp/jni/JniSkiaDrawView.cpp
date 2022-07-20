@@ -75,7 +75,7 @@ namespace RNSkia
         // Create touch points
         std::vector<RNSkia::RNSkTouchPoint> points;
         auto pin = touches.pin();
-        auto scale = _drawView->getPixelDensity();
+        auto scale = _renderer->getPixelDensity();
         points.reserve(pin.size() / 5);
         for (size_t i = 0; i < pin.size(); i += 5)
         {
@@ -92,17 +92,18 @@ namespace RNSkia
 
     void JniSkiaDrawView::surfaceAvailable(jobject surface, int width, int height)
     {
-        _drawView->surfaceAvailable(ANativeWindow_fromSurface(Environment::current(), surface), width, height);
+        _renderer->surfaceAvailable(ANativeWindow_fromSurface(Environment::current(), surface), width, height);
+        _drawView->requestRedraw();
     }
 
     void JniSkiaDrawView::surfaceSizeChanged(int width, int height)
     {
-        _drawView->surfaceSizeChanged(width, height);
+        _renderer->surfaceSizeChanged(width, height);
     }
 
     void JniSkiaDrawView::surfaceDestroyed()
     {
-        _drawView->surfaceDestroyed();
+        _renderer->surfaceDestroyed();
     }
 
     void JniSkiaDrawView::releaseSurface() {

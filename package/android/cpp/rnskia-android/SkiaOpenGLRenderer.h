@@ -10,6 +10,9 @@
 #include <thread>
 #include <unordered_map>
 
+#include <RNSkPlatformContextImpl.h>
+#include <RNSkRenderer.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -21,7 +24,6 @@
 #include <SkPicture.h>
 
 #pragma clang diagnostic pop
-
 
 namespace RNSkia
 {
@@ -42,21 +44,11 @@ namespace RNSkia
         Done,
     };
 
-    class SkiaOpenGLRenderer
+    class SkiaOpenGLRenderer: public RNSkRenderer, public std::enable_shared_from_this<SkiaOpenGLRenderer>
     {
     public:
-        SkiaOpenGLRenderer(ANativeWindow *surface, size_t renderId);
-
-        /**
-         * Initializes, renders and tears down the render pipeline depending on the state of the
-         * renderer. All OpenGL/Skia context operations are done on a separate thread which must
-         * be the same for all calls to the render method.
-         *
-         * @param cb Render callback
-         * @param width Width of surface to render if there is a picture
-         * @param height Height of surface to render if there is a picture
-         */
-        void run(std::function<void(SkCanvas*)> cb, int width, int height);
+        SkiaOpenGLRenderer(std::shared_ptr<RNSkPlatformContextImpl> context,
+                           std::function<void()> releaseSurfaceCallback);
 
         /**
          * Sets the state to finishing. Next time the renderer will be called it
@@ -69,7 +61,44 @@ namespace RNSkia
          */
         void teardown();
 
+        /**
+         * Signals the renderer that we now have a surface object
+         * @param surface
+         */
+        void surfaceAvailable(ANativeWindow *surface, int, int);
+
+        /**
+         * The surface object was destroyed
+         */
+        void surfaceDestroyed();
+
+        /**
+         * The surface changed size
+         */
+        void surfaceSizeChanged(int, int);
+
+        /*
+         * Returns the current pixel density
+         */
+        double getPixelDensity();
+
+    protected:
+        float getScaledWidth() override { return _prevWidth; };
+        float getScaledHeight() override { return _prevHeight; };
+        void renderToSkCanvas(std::function<void(SkCanvas*)> cb) override;
+
     private:
+        /**
+         * Initializes, renders and tears down the render pipeline depending on the state of the
+         * renderer. All OpenGL/Skia context operations are done on a separate thread which must
+         * be the same for all calls to the render method.
+         *
+         * @param cb Render callback
+         * @param width Width of surface to render if there is a picture
+         * @param height Height of surface to render if there is a picture
+         */
+        void run(std::function<void(SkCanvas*)> cb, int width, int height);
+
         /**
          * Initializes all required OpenGL and Skia objects
          * @return True if initialization went well.
@@ -120,10 +149,11 @@ namespace RNSkia
         GrBackendRenderTarget _skRenderTarget;
         sk_sp<SkSurface> _skSurface;
 
+        std::shared_ptr<RNSkPlatformContextImpl> _context;
+        std::function<void()> _releaseSurfaceCallback;
+
         int _prevWidth = 0;
         int _prevHeight = 0;
-
-        size_t _renderId;
 
         std::atomic<RenderState> _renderState = { RenderState::Initializing };
     };

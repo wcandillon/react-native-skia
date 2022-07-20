@@ -14,7 +14,7 @@
 #include <JniSkiaManager.h>
 #include <JniSkiaDrawView.h>
 
-#include <RNSkDrawViewImpl.h>
+#include <SkiaOpenGLRenderer.h>
 
 #include <SkSurface.h>
 #include <SkRefCnt.h>
@@ -61,17 +61,22 @@ namespace RNSkia
     private:
         friend HybridBase;
 
-        std::shared_ptr<RNSkDrawViewImpl> _drawView;
+        std::shared_ptr<RNSkDrawView> _drawView;
+        std::shared_ptr<SkiaOpenGLRenderer> _renderer;
 
         jni::global_ref<JniSkiaDrawView::javaobject> javaPart_;
 
         explicit JniSkiaDrawView(
                 jni::alias_ref<JniSkiaDrawView::jhybridobject> jThis,
                 JavaSkiaManager skiaManager)
-                : javaPart_(jni::make_global(jThis)),
-                  _drawView(std::make_shared<RNSkDrawViewImpl>(skiaManager->cthis()->getPlatformContext(), [this]() {
+                : javaPart_(jni::make_global(jThis)) {
+          _renderer = (std::make_shared<SkiaOpenGLRenderer>(
+                  skiaManager->cthis()->getPlatformContext(),
+                  [this](){
                       releaseSurface();
-                  })) {
+                  }));
+          _drawView = (std::make_shared<RNSkDrawView>(
+                  _renderer, skiaManager->cthis()->getPlatformContext()));
         }
     };
 

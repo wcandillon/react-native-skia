@@ -20,13 +20,64 @@ namespace RNSkia
         return threadContexts.at(threadId);
     }
 
-    SkiaOpenGLRenderer::SkiaOpenGLRenderer(ANativeWindow *surface, size_t renderId):
-        _surfaceTexture(surface),
-        _renderId(renderId) {
+    SkiaOpenGLRenderer::SkiaOpenGLRenderer(std::shared_ptr<RNSkPlatformContextImpl> context,
+                                           std::function<void()> releaseSurfaceCallback):
+        _releaseSurfaceCallback(releaseSurfaceCallback),
+        _context(context),
+        RNSkRenderer() {}
+
+    double SkiaOpenGLRenderer::getPixelDensity() {
+      return _context->getPixelDensity();
+    }
+
+    void SkiaOpenGLRenderer::surfaceAvailable(ANativeWindow* surface, int width, int height) {
+        _prevWidth = width;
+        _prevHeight = height;
+        _surfaceTexture = surface;
+        run(nullptr, width, height);
+    }
+
+    void SkiaOpenGLRenderer::surfaceDestroyed() {
+        if (_surfaceTexture != nullptr)
+        {
+            // Start teardown
+            teardown();
+
+            // Teardown renderer on the render thread since OpenGL demands
+            // same thread access for OpenGL contexts.
+            _context->runOnRenderThread([weakSelf = weak_from_this()]() {
+                auto self = weakSelf.lock();
+                if(self) {
+                    self->run(nullptr, 0, 0);
+                    self->_releaseSurfaceCallback();
+                }
+            });
+        }
+    }
+
+    void SkiaOpenGLRenderer::surfaceSizeChanged(int width, int height) {
+        if(width == 0 && height == 0) {
+            // Setting width/height to zero is nothing we need to care about when
+            // it comes to invalidating the surface.
+            return;
+        }
+        _prevWidth = width;
+        _prevHeight = height;
+
+    }
+
+    void SkiaOpenGLRenderer::renderToSkCanvas(std::function<void(SkCanvas*)> cb) {
+        if(_surfaceTexture != nullptr) {
+            run(cb, _prevWidth, _prevHeight);
+        }
     }
 
     void SkiaOpenGLRenderer::run(std::function<void(SkCanvas*)> cb, int width, int height)
     {
+        if(_surfaceTexture == nullptr) {
+            return;
+        }
+
         switch (_renderState)
         {
         case RenderState::Initializing:
@@ -51,25 +102,28 @@ namespace RNSkia
                 return;
             }
 
-            // Reset Skia Context since it might be modified by another Skia View during
-            // rendering.
-            getThreadDrawingContext()->skContext->resetContext();
+            if(cb != nullptr) {
 
-            // Clear with transparent
-            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
+              // Reset Skia Context since it might be modified by another Skia View during
+              // rendering.
+              getThreadDrawingContext()->skContext->resetContext();
 
-            // Draw picture into surface
-            cb(_skSurface->getCanvas());
+              // Clear with transparent
+              glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+              glClear(GL_COLOR_BUFFER_BIT);
 
-            // Flush
-            _skSurface->getCanvas()->flush();
-            getThreadDrawingContext()->skContext->flush();
+              // Draw picture into surface
+              cb(_skSurface->getCanvas());
 
-            if (!eglSwapBuffers(getThreadDrawingContext()->glDisplay, _glSurface))
-            {
-                RNSkLogger::logToConsole(
-                    "eglSwapBuffers failed: %d\n", eglGetError());
+              // Flush
+              _skSurface->getCanvas()->flush();
+              getThreadDrawingContext()->skContext->flush();
+
+              if (!eglSwapBuffers(getThreadDrawingContext()->glDisplay, _glSurface))
+              {
+                  RNSkLogger::logToConsole(
+                      "eglSwapBuffers failed: %d\n", eglGetError());
+              }
             }
             break;
         }
