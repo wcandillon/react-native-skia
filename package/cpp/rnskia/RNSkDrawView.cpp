@@ -12,8 +12,9 @@ namespace RNSkia {
 
 using namespace std::chrono;
 
-RNSkDrawView::RNSkDrawView(std::shared_ptr<RNSkPlatformContext> context)
-    : RNSkBaseDrawView(context),
+RNSkDrawView::RNSkDrawView(std::shared_ptr<RNSkRenderer> renderer,
+                           std::shared_ptr<RNSkPlatformContext> context)
+    : RNSkBaseDrawView(renderer, context),
       _jsiCanvas(std::make_shared<JsiSkCanvas>(context)),
       _infoObject(std::make_shared<RNSkInfoObject>()),
       _jsDrawingLock(std::make_shared<std::timed_mutex>()),
@@ -127,7 +128,7 @@ void RNSkDrawView::renderToJsiCanvas(std::shared_ptr<JsiSkCanvas> canvas,
 
 sk_sp<SkImage> RNSkDrawView::makeImageSnapshot(std::shared_ptr<SkRect> bounds) {
   // Assert width/height
-  auto surface = SkSurface::MakeRasterN32Premul(getScaledWidth(), getScaledHeight());
+  auto surface = SkSurface::MakeRasterN32Premul(getRenderer()->getScaledWidth(), getRenderer()->getScaledHeight());
   auto canvas = surface->getCanvas();
   auto jsiCanvas = std::make_shared<JsiSkCanvas>(getPlatformContext());
   jsiCanvas->setCanvas(canvas);
@@ -135,7 +136,7 @@ sk_sp<SkImage> RNSkDrawView::makeImageSnapshot(std::shared_ptr<SkRect> bounds) {
   milliseconds ms = duration_cast<milliseconds>(
       system_clock::now().time_since_epoch());
 
-  renderToJsiCanvas(jsiCanvas, getScaledWidth(), getScaledHeight(), ms.count() / 1000);
+  renderToJsiCanvas(jsiCanvas, getRenderer()->getScaledWidth(), getRenderer()->getScaledHeight(), ms.count() / 1000);
   
   if(bounds != nullptr) {
     SkIRect b = SkIRect::MakeXYWH(bounds->x(), bounds->y(), bounds->width(), bounds->height());
@@ -163,7 +164,10 @@ void RNSkDrawView::performDraw() {
         // move the actual drawing onto the render thread later
         SkPictureRecorder recorder;
         SkRTreeFactory factory;
-        SkCanvas *canvas = recorder.beginRecording(selfDrawView->getScaledWidth(), selfDrawView->getScaledHeight(), &factory);
+        SkCanvas *canvas = recorder.beginRecording(
+                selfDrawView->getRenderer()->getScaledWidth(),
+                selfDrawView->getRenderer()->getScaledHeight(),
+                &factory);
         
         selfDrawView->_jsiCanvas->setCanvas(canvas);
 
@@ -174,8 +178,8 @@ void RNSkDrawView::performDraw() {
         try
         {
           // Perform the javascript drawing
-          renderToJsiCanvas(_jsiCanvas, selfDrawView->getScaledWidth(),
-                            selfDrawView->getScaledHeight(), ms.count() / 1000.0);
+          renderToJsiCanvas(_jsiCanvas, selfDrawView->getRenderer()->getScaledWidth(),
+                            selfDrawView->getRenderer()->getScaledHeight(), ms.count() / 1000.0);
         }
         catch (...)
         {
@@ -202,7 +206,7 @@ void RNSkDrawView::performDraw() {
               auto selfDrawView = std::dynamic_pointer_cast<RNSkDrawView>(self);
               // Draw the picture recorded on the real GPU canvas
               selfDrawView->_gpuTimingInfo.beginTiming();
-              selfDrawView->renderToSkCanvas([p = std::move(p)](SkCanvas *canvas) {
+              selfDrawView->getRenderer()->renderToSkCanvas([p = std::move(p)](SkCanvas *canvas) {
                   canvas->drawPicture(p);
               });
               selfDrawView->_gpuTimingInfo.stopTiming();

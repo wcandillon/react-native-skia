@@ -21,7 +21,7 @@ public:
   /**
    Constructor
    */
-  RNSkDrawView(std::shared_ptr<RNSkPlatformContext> context);
+  RNSkDrawView(std::shared_ptr<RNSkRenderer> renderer, std::shared_ptr<RNSkPlatformContext> context);
 
   /**
    * Installs the draw callback for the view

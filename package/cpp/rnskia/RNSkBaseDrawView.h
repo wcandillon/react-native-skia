@@ -6,6 +6,7 @@
 #include <RNSkPlatformContext.h>
 #include <RNSkTimingInfo.h>
 #include <RNSkLog.h>
+#include <RNSkRenderer.h>
 
 class SkCanvas;
 
@@ -25,7 +26,7 @@ namespace RNSkia
     /**
      * Constructor
      */
-    RNSkBaseDrawView(std::shared_ptr<RNSkPlatformContext> context);
+    RNSkBaseDrawView(std::shared_ptr<RNSkRenderer> renderer, std::shared_ptr<RNSkPlatformContext> context);
 
     /**
      Destructor
@@ -68,6 +69,11 @@ namespace RNSkia
       Update touch state with new touch points
      */
     virtual void updateTouchState(std::vector<RNSkTouchPoint> &points);
+    
+    /**
+     Returns the renderer for the view
+     */
+    std::shared_ptr<RNSkRenderer> getRenderer() { return _renderer; }
 
   protected:
     /**
@@ -77,28 +83,13 @@ namespace RNSkia
     virtual void performDraw() = 0;
     
     /**
-     Returns the scaled width of the view
-     */
-    virtual float getScaledWidth() = 0;
-
-    /**
-     Returns the scaled height of the view
-     */
-    virtual float getScaledHeight() = 0;
-
-    /**
-     Override to render on GPU
-     */
-    virtual void renderToSkCanvas(std::function<void(SkCanvas*)> cb) = 0;
-
-    /**
      * @return The platformcontext
      */
     std::shared_ptr<RNSkPlatformContext> getPlatformContext()
     {
       return _platformContext;
     }
-
+        
   private:
     /**
      Starts beginDrawCallback loop if the drawing mode is continuous
@@ -144,6 +135,11 @@ namespace RNSkia
      * Native id
      */
     size_t _nativeId;
+    
+    /**
+     Renderer
+     */
+    std::shared_ptr<RNSkRenderer> _renderer;
   };
 
 } // namespace RNSkia

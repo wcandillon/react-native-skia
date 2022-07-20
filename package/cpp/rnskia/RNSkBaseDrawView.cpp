@@ -6,8 +6,9 @@ namespace RNSkia
 
   using namespace std::chrono;
 
-  RNSkBaseDrawView::RNSkBaseDrawView(std::shared_ptr<RNSkPlatformContext> context)
-      : _platformContext(std::move(context)) {
+  RNSkBaseDrawView::RNSkBaseDrawView(std::shared_ptr<RNSkRenderer> renderer,
+                                     std::shared_ptr<RNSkPlatformContext> context)
+      : _renderer(renderer), _platformContext(std::move(context)) {
   }
 
   RNSkBaseDrawView::~RNSkBaseDrawView()
