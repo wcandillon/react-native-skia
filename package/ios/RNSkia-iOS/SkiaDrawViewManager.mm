@@ -3,7 +3,6 @@
 
 #include <SkiaManager.h>
 #include <RNSkiaModule.h>
-#include <RNSkDrawViewImpl.h>
 #include <SkiaDrawView.h>
 
 @implementation SkiaDrawViewManager
@@ -17,17 +16,17 @@
 RCT_CUSTOM_VIEW_PROPERTY(nativeID, NSNumber, SkiaDrawView) {
   // Get parameter
   int nativeId = [[RCTConvert NSString:json] intValue];
-  [(SkiaDrawView*)view setNativeId:nativeId];            
+  [view setNativeId:nativeId];            
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(mode, NSString, SkiaDrawView) {
   std::string mode = json != NULL ? [[RCTConvert NSString:json] UTF8String] : "default";
-  [(SkiaDrawView*)view setDrawingMode: mode];
+  [view setDrawingMode: mode];
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(debug, BOOL, SkiaDrawView) {
   bool debug = json != NULL ? [RCTConvert BOOL:json] : false;
-  [(SkiaDrawView*)view setDebugMode: debug];
+  [view setDebugMode: debug];
 }
 
 RCT_EXPORT_MODULE(ReactNativeSkiaView)

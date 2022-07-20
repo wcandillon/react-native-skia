@@ -1,9 +1,8 @@
+
 #pragma once
 
 #import "PlatformContext.h"
-#import "RNSKDrawView.h"
-#import <CoreFoundation/CoreFoundation.h>
-#import <UIKit/UIKit.h>
+#import "RNSkRenderer.h"
 
 #import <GrMtlBackendContext.h>
 #import <MetalKit/MetalKit.h>
@@ -18,10 +17,10 @@
 
 #pragma clang diagnostic pop
 
-class RNSkDrawViewImpl : public RNSkia::RNSkDrawView {
+class SkiaMetalRenderer: public RNSkia::RNSkRenderer {
 public:
-  RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> context);
-  ~RNSkDrawViewImpl();
+  SkiaMetalRenderer(std::shared_ptr<RNSkia::RNSkPlatformContext> context);
+  ~SkiaMetalRenderer();
   
   CALayer* getLayer() { return _layer; }
   
@@ -30,12 +29,10 @@ public:
 protected:
   float getScaledWidth() override { return _width * _context->getPixelDensity(); };
   float getScaledHeight() override { return _height * _context->getPixelDensity(); };
+  void renderToSkCanvas(std::function<void(SkCanvas*)> cb) override;
   
 private:
-  void renderToSkCanvas(std::function<void(SkCanvas*)> cb) override;
-  bool createSkiaSurface();
-
-  int _nativeId;
+  
   float _width = -1;
   float _height = -1;
 

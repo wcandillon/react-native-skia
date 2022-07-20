@@ -1,4 +1,5 @@
-#import <RNSkDrawViewImpl.h>
+
+#import <SkiaMetalRenderer.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -13,13 +14,13 @@
 #import <RNSkLog.h>
 
 // These static class members are used by all Skia Views
-id<MTLDevice> RNSkDrawViewImpl::_device = MTLCreateSystemDefaultDevice();
-id<MTLCommandQueue> RNSkDrawViewImpl::_commandQueue = id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
+id<MTLDevice> SkiaMetalRenderer::_device = MTLCreateSystemDefaultDevice();
+id<MTLCommandQueue> SkiaMetalRenderer::_commandQueue = id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
 
-sk_sp<GrDirectContext> RNSkDrawViewImpl::_skContext = nullptr;
+sk_sp<GrDirectContext> SkiaMetalRenderer::_skContext = nullptr;
 
-RNSkDrawViewImpl::RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> context):
-  _context(context), RNSkia::RNSkDrawView(context) {
+SkiaMetalRenderer::SkiaMetalRenderer(std::shared_ptr<RNSkia::RNSkPlatformContext> context):
+  _context(context), RNSkia::RNSkRenderer() {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
@@ -32,7 +33,7 @@ RNSkDrawViewImpl::RNSkDrawViewImpl(std::shared_ptr<RNSkia::RNSkPlatformContext> 
   _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 }
 
-RNSkDrawViewImpl::~RNSkDrawViewImpl() {
+SkiaMetalRenderer::~SkiaMetalRenderer() {
   if([[NSThread currentThread] isMainThread]) {
     _layer = NULL;
   } else {
@@ -50,17 +51,15 @@ RNSkDrawViewImpl::~RNSkDrawViewImpl() {
   }
 }
 
-void RNSkDrawViewImpl::setSize(int width, int height) {
+void SkiaMetalRenderer::setSize(int width, int height) {
   _width = width;
   _height = height;
   _layer.frame = CGRectMake(0, 0, width, height);
   _layer.drawableSize = CGSizeMake(width * _context->getPixelDensity(),
-                                   height* _context->getPixelDensity());
-  
-  requestRedraw();
+                                   height* _context->getPixelDensity());  
 }
 
-void RNSkDrawViewImpl::renderToSkCanvas(std::function<void(SkCanvas*)> cb) {
+void SkiaMetalRenderer::renderToSkCanvas(std::function<void(SkCanvas*)> cb) {
   if(_width == -1 && _height == -1) {
     return;
   }
