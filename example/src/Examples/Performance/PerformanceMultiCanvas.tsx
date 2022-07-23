@@ -6,7 +6,7 @@ import {
   SkiaView,
   useClockValue,
   useDrawCallback,
-  useDerivedSkiaValue,
+  useComputedValue,
 } from "@shopify/react-native-skia";
 
 export const PerformanceDrawingTest = () => {
@@ -19,7 +19,7 @@ export const PerformanceDrawingTest = () => {
   }, []);
 
   const clock = useClockValue(); // Readonly Value
-  const radius = useDerivedSkiaValue(() => {
+  const radius = useComputedValue(() => {
     "worklet";
     const c = clock;
     const a = (c.current / 1000) % 1;

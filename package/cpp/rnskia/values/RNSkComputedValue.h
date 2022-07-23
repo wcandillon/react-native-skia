@@ -112,7 +112,7 @@ private:
           auto self = weakSelf.lock();
           if(self) {
             self->update(runtime,
-                         std::dynamic_pointer_cast<RNSkDerivedValue>(self)->_worklet->call(
+                         std::dynamic_pointer_cast<RNSkComputedValue>(self)->_worklet->call(
                                  nullptr, 0));
           }
       });
