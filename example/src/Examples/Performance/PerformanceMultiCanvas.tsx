@@ -7,6 +7,7 @@ import {
   useClockValue,
   useDrawCallback,
   useComputedValue,
+  mix,
 } from "@shopify/react-native-skia";
 
 export const PerformanceDrawingTest = () => {
@@ -23,7 +24,7 @@ export const PerformanceDrawingTest = () => {
     "worklet";
     const c = clock;
     const a = (c.current / 1000) % 1;
-    return 1 * (1 - a) + 5 * a; // mix(a.current, 1, 10);
+    return mix(a, 1, 15);
   }, [clock]); // Derived Value
 
   const onDraw = useDrawCallback(

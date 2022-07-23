@@ -4,8 +4,10 @@
  * @param x
  * @param y
  */
-export const mix = (value: number, x: number, y: number) =>
-  x * (1 - value) + y * value;
+export const mix = (value: number, x: number, y: number) => {
+  "worklet";
+  return x * (1 - value) + y * value;
+};
 
 /**
  *  @summary Clamps a node with a lower and upper bound.
