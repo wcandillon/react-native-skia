@@ -41,6 +41,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDrawView.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/RNSkDispatchQueue.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia/worklets/wrappers/JsiWrapper.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia/worklets/JsiWorklet.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/api/third_party/CSSColorParser.cpp"
         
