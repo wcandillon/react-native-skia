@@ -62,7 +62,7 @@ public:
     if (arguments[1].isUndefined()) {
       info->drawCallback = nullptr;
     } else {
-      info->drawCallback = std::make_shared<RNJsi::JsiWorklet>(
+      info->drawCallback = RNJsi::JsiWorklet::makeWorklet(
               _platformContext->getWorkletContext(), std::make_shared<jsi::Function>(
                       arguments[1].asObject(runtime).asFunction(runtime)));
     }

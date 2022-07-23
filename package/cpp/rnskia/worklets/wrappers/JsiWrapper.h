@@ -6,11 +6,20 @@
 
 #include <jsi/jsi.h>
 
+#include <JsiHostObject.h>
+
 namespace RNJsi {
 
 using namespace facebook;
 
-class JsiWrapper {
+class JsiWrapper;
+
+using JsiFunctionResolverResult = std::function<jsi::Value(jsi::Runtime &runtime, const jsi::Value &thisValue,
+                                                           const jsi::Value *arguments, size_t count)>;
+
+using JsiFunctionResolver = std::function<JsiFunctionResolverResult(jsi::Runtime&, const jsi::Value&)>;
+
+class JsiWrapper: public JsiHostObject, public std::enable_shared_from_this<JsiWrapper> {
 public:
   
   enum JsiWrapperType {
@@ -28,25 +37,17 @@ public:
   };
   
   /**
-   * Constructor - called from static members
+   * Constructs a new JsiWrapper
    * @param runtime Calling runtime
    * @param value Value to wrap
-   * @param parent Optional parent wrapper
-   * @paran type Type of wrapper
-   */
-  JsiWrapper(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent, JsiWrapperType type)
-      : JsiWrapper(parent) {
-    _type = type;
-  }
-  
-  /**
-   * Constructor - called from static members
-   * @param runtime Calling runtime
-   * @param value Value to wrap
+   * @param resolver Function resolver
    * @param parent Optional parent wrapper
    */
-  JsiWrapper(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent)
-      : JsiWrapper(parent) {}
+  JsiWrapper(jsi::Runtime &runtime,
+             const jsi::Value &value,
+             JsiFunctionResolver resolver,
+             std::weak_ptr<JsiWrapper> parent)
+      : JsiWrapper(resolver, parent) {}
 
   /**
    * Returns a wrapper for the a jsi value
@@ -55,8 +56,9 @@ public:
    * @return A new JsiWrapper
    */
   static std::shared_ptr<JsiWrapper> wrap(jsi::Runtime &runtime,
-                                          const jsi::Value &value) {
-    return JsiWrapper::wrap(runtime, value, nullptr);
+                                          const jsi::Value &value,
+                                          JsiFunctionResolver resolver) {
+    return JsiWrapper::wrap_child(runtime, value, resolver, std::weak_ptr<JsiWrapper>());
   }
 
   /**
@@ -86,6 +88,13 @@ public:
    * @return The type of wrapper
    */
   JsiWrapperType getType() { return _type; }
+  
+  /**
+   Returns the function resolver for the wrapper
+   */
+  JsiFunctionResolver getFunctionResolver() {
+    return _resolver;
+  }
 
   /**
    * Returns the object as a string
@@ -111,22 +120,52 @@ public:
     
 protected:
   /**
+   * Constructor
+   * @param runtime Calling runtime
+   * @param value Value to wrap
+   * @param resolver Function resolver
+   * @param parent Optional parent wrapper
+   * @param type Type of wrapper
+   */
+  JsiWrapper(jsi::Runtime &runtime,
+             const jsi::Value &value,
+             JsiFunctionResolver resolver,
+             std::weak_ptr<JsiWrapper> parent,
+             JsiWrapperType type)
+      : JsiWrapper(resolver, parent) {
+    _type = type;
+  }
+  
+  /**
    * Returns a wrapper for the value
    * @param runtime Runtime to wrap value in
    * @param value Value to wrap
+   * @return A new JsiWrapper
+   */
+  std::shared_ptr<JsiWrapper> wrap_child(jsi::Runtime &runtime, const jsi::Value &value);
+  
+  /**
+   * Returns a wrapper for the value
+   * @param runtime Runtime to wrap value in
+   * @param value Value to wrap
+   * @param resolver function resolver
    * @param parent Parent wrapper (for nested hierarchies)
    * @return A new JsiWrapper
    */
-  static std::shared_ptr<JsiWrapper>
-  wrap(jsi::Runtime &runtime, const jsi::Value &value, JsiWrapper *parent);
+  static std::shared_ptr<JsiWrapper> wrap_child(jsi::Runtime &runtime,
+                                                const jsi::Value &value,
+                                                JsiFunctionResolver resolver,
+                                                std::weak_ptr<JsiWrapper> parent);
 
   /**
    * Call to notify parent that something has changed
    */
   void notify() {
-    if (_parent != nullptr) {
-      _parent->notify();
+    auto parent = _parent.lock();
+    if(parent) {
+      parent->notify();
     }
+        
     notifyListeners();
   }
 
@@ -139,7 +178,7 @@ protected:
   /**
    * @return The parent object
    */
-  JsiWrapper *getParent() { return _parent; }
+  std::weak_ptr<JsiWrapper> getParent() { return _parent; }
   
   /**
    Calls the Function and returns its value. This function will call the
@@ -150,7 +189,6 @@ protected:
                           const jsi::Value &thisValue,
                           const jsi::Value *arguments, size_t count);  
 
-protected:
   /**
    * Sets the value from a JS value
    * @param runtime runtime for the value
@@ -166,6 +204,7 @@ protected:
   virtual jsi::Value getValue(jsi::Runtime &runtime);
   
 private:
+  
   /**
    * Notify listeners that the value has changed
    */
@@ -179,12 +218,15 @@ private:
    * Base Constructor
    * @param parent Parent wrapper
    */
-  JsiWrapper(JsiWrapper *parent) : _parent(parent) {
+  JsiWrapper(JsiFunctionResolver resolver, std::weak_ptr<JsiWrapper> parent):
+    _parent(parent),
+    _resolver(resolver) {
     _readWriteMutex = new std::mutex();
   }
 
   std::mutex *_readWriteMutex;
-  JsiWrapper *_parent;
+  std::weak_ptr<JsiWrapper> _parent;
+  JsiFunctionResolver _resolver;
 
   JsiWrapperType _type;
 
@@ -193,7 +235,7 @@ private:
   std::string _stringValue;
 
   size_t _listenerId = 1000;
-  std::map<size_t, std::shared_ptr<std::function<void()>>> _listeners;
+  std::map<size_t, std::shared_ptr<std::function<void()>>> _listeners;  
 };
 
 } // namespace RNWorklet

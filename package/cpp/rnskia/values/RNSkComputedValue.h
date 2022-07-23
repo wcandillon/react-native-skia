@@ -42,7 +42,7 @@ public:
         
     // Get callback for calculating result
     auto function = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
-    _worklet = std::make_shared<RNJsi::JsiWorklet>(platformContext->getWorkletContext(), function);
+    _worklet = RNJsi::JsiWorklet::makeWorklet(platformContext->getWorkletContext(), function);
   }
   
   void initializeDependencies(jsi::Runtime &runtime, const jsi::Value *arguments, size_t count) {

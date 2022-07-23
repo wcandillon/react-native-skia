@@ -1,6 +1,5 @@
 #pragma once
 
-#include <JsiHostObject.h>
 #include <JsiWrapper.h>
 
 #include <jsi/jsi.h>
@@ -10,13 +9,14 @@
 
 namespace RNJsi {
 using namespace facebook;
-class JsiWrapper;
 
-class JsiPromiseWrapper : public JsiHostObject,
-                          public JsiWrapper {
+class JsiPromiseWrapper : public JsiWrapper {
 public:
-  JsiPromiseWrapper(jsi::Runtime &runtime, const jsi::Value &value,
-    JsiWrapper *parent) : JsiWrapper(runtime, value, parent) {}
+  JsiPromiseWrapper(jsi::Runtime &runtime,
+                    const jsi::Value &value,
+                    JsiFunctionResolver resolver,
+                    std::weak_ptr<JsiWrapper> parent):
+    JsiWrapper(runtime, value, resolver, parent) {}
      
   static bool isPromise(jsi::Runtime &runtime, jsi::Object &obj) {
     auto then = obj.getProperty(runtime, "then");
@@ -105,7 +105,7 @@ private:
       jsi::detail::throwJSError(runtime, "Promise is already resolved");
     }
     _resultSet = true;
-    _result = JsiWrapper::wrap(runtime, arguments[0]);
+    _result = JsiWrapper::wrap(runtime, arguments[0], getFunctionResolver());
     for(auto listener: _resolveListeners) {
       listener();
     }

@@ -29,7 +29,7 @@ public:
 
     // Save the update function
     auto function = std::make_shared<jsi::Function>(arguments[0].asObject(runtime).asFunction(runtime));
-    _worklet = std::make_shared<RNJsi::JsiWorklet>(platformContext->getWorkletContext(), function);
+    _worklet = RNJsi::JsiWorklet::makeWorklet(platformContext->getWorkletContext(), function);
         
     // Set state to undefined initially.
     _args[1] = jsi::Value::undefined();

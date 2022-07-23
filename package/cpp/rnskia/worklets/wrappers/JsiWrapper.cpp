@@ -25,22 +25,23 @@ jsi::Value JsiWrapper::getValue(jsi::Runtime &runtime) {
   }
 }
 
-std::shared_ptr<JsiWrapper> JsiWrapper::wrap(jsi::Runtime &runtime,
-                                             const jsi::Value &value,
-                                             JsiWrapper *parent) {
+std::shared_ptr<JsiWrapper> JsiWrapper::wrap_child(jsi::Runtime &runtime,
+                                                   const jsi::Value &value,
+                                                   JsiFunctionResolver resolver,
+                                                   std::weak_ptr<JsiWrapper> parent) {
   std::shared_ptr<JsiWrapper> retVal = nullptr;
 
   if (value.isUndefined() || value.isNull() || value.isBool() ||
       value.isNumber() || value.isString()) {
-    retVal = std::make_shared<JsiWrapper>(runtime, value, parent);
+    retVal = std::make_shared<JsiWrapper>(runtime, value, resolver, parent);
   } else if (value.isObject()) {
     auto obj = value.asObject(runtime);
     if (obj.isArray(runtime)) {
-      retVal = std::make_shared<JsiArrayWrapper>(runtime, value, parent);
+      retVal = std::make_shared<JsiArrayWrapper>(runtime, value, resolver, parent);
     } else if (JsiPromiseWrapper::isPromise(runtime, obj)) {
-      retVal = std::make_shared<JsiPromiseWrapper>(runtime, value, parent);
+      retVal = std::make_shared<JsiPromiseWrapper>(runtime, value, resolver, parent);
     } else {
-      retVal = std::make_shared<JsiObjectWrapper>(runtime, value, parent);
+      retVal = std::make_shared<JsiObjectWrapper>(runtime, value, resolver, parent);
     }
   }
 
@@ -51,6 +52,11 @@ std::shared_ptr<JsiWrapper> JsiWrapper::wrap(jsi::Runtime &runtime,
 
   retVal->setValue(runtime, value);
   return retVal;
+}
+
+std::shared_ptr<JsiWrapper> JsiWrapper::wrap_child(jsi::Runtime &runtime,
+                                                   const jsi::Value &value) {
+  return wrap_child(runtime, value, getFunctionResolver(), weak_from_this());
 }
 
 void JsiWrapper::setValue(jsi::Runtime &runtime, const jsi::Value &value) {
