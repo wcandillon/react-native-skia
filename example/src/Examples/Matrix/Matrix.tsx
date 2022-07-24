@@ -3,7 +3,10 @@ import {
   Canvas,
   Fill,
   Group,
+  Skia,
+  SkiaView,
   useClockValue,
+  useDrawCallback,
   useFont,
 } from "@shopify/react-native-skia";
 import React from "react";
@@ -11,6 +14,7 @@ import { useWindowDimensions } from "react-native";
 
 import { COLS, ROWS, Symbol } from "./Symbol";
 
+// This is an interesting one!
 const cols = new Array(COLS).fill(0).map((_, i) => i);
 const rows = new Array(ROWS).fill(0).map((_, i) => i);
 
@@ -31,7 +35,7 @@ const streams = cols.map(() =>
     .flat()
 );
 
-export const Matrix = () => {
+export const MatrixOld = () => {
   const clock = useClockValue();
   const { width, height } = useWindowDimensions();
   const symbol = { width: width / COLS, height: height / ROWS };
@@ -63,3 +67,38 @@ export const Matrix = () => {
     </Canvas>
   );
 };
+
+export const Matrix = () => {
+  const _clock = useClockValue();
+  const { width, height } = useWindowDimensions();
+  const symbol = { width: width / COLS, height: height / ROWS };
+  const _font = useFont(require("./matrix-code-nfi.otf"), symbol.height);
+
+  const onDraw = useDrawCallback((canvas) => {
+    "worklet";
+    const font = _font!;
+    const clock = _clock;
+    const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("rgb(0, 255, 70)"));
+    const pos = Skia.Point(0, 0);
+    canvas.drawColor(Skia.Color("black"));
+    const offset = 0;
+    const range = 1; 
+    const idx = Math.round(clock.current % 2000 / 2000);
+    const glyphs = [symbols[idx]];
+    for (let i = 0; i < COLS; i++) {
+      for (let j = 0; j < ROWS; j++) {
+        const x = i * symbol.width;
+        const y = j * symbol.height;
+        canvas.drawGlyphs(glyphs, [pos], x, y, font, paint);
+      }
+    }
+  }, [_font]);
+  if (_font === null) {
+    return null;
+  }
+  return (
+    <SkiaView style={{ flex: 1 }} onDraw={onDraw} mode="continuous"  />
+  );
+}

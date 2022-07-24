@@ -107,5 +107,6 @@ const exhaustiveCheck = (a: never): never => {
 };
 
 export const toDegrees = (rad: number) => {
+  "worklet";
   return (rad * 180) / Math.PI;
 };
