@@ -10,7 +10,7 @@ import { Slider } from "./Slider";
 import { Slide } from "./Slide";
 
 interface SlideModel {
-  color: string;
+  colors: [string, string];
   title: string;
   description: string;
   picture: SkImage | null;
@@ -24,35 +24,35 @@ export const LiquidSwipe = () => {
   const img5 = useImage(require("./assets/3.png"));
   const slides: SlideModel[] = [
     {
-      color: "#F2A1AD",
+      colors: ["#F2A1AD", "#f4b3bd"],
       title: "Dessert Recipes",
       description:
         "Hot or cold, our dessert recipes can turn an average meal into a memorable event",
       picture: img1,
     },
     {
-      color: "#0090D6",
+      colors: ["#0090D6", "#32a6de"],
       title: "Healthy Foods",
       description:
         "Discover healthy recipes that are easy to do with detailed cooking instructions from top chefs",
       picture: img2,
     },
     {
-      color: "#69C743",
+      colors: ["#69C743", "#87d268"],
       title: "Easy Meal Ideas",
       description:
         "explore recipes by food type, preparation method, cuisine, country and more",
       picture: img3,
     },
     {
-      color: "#FB3A4D",
+      colors: ["#FB3A4D", "#fb6170"],
       title: "10000+ Recipes",
       description:
         "Browse thousands of curated recipes from top chefs, each with detailled cooking instructions",
       picture: img4,
     },
     {
-      color: "#F2AD62",
+      colors: ["#F2AD62", "#f4bd81"],
       title: "Video Tutorials",
       description:
         "Browse our best themed recipes, cooking tips, and how-to food video & photos",

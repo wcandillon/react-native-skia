@@ -9,7 +9,6 @@ import {
   useFont,
   Text,
 } from "@shopify/react-native-skia";
-import Color from "color";
 import React from "react";
 import { Dimensions } from "react-native";
 
@@ -19,7 +18,7 @@ const SIZE = width - 150;
 export interface SlideProps {
   slide: SkiaValue<
     | {
-        color: string;
+        colors: [string, string];
         title: string;
         description: string;
         picture: SkImage | null;
@@ -34,8 +33,7 @@ export const Slide = ({ slide }: SlideProps) => {
     if (slide.current === undefined) {
       return ["transparent", "transparent"];
     }
-    const { color } = slide.current;
-    return [color, Color(color).lighten(0.8).toString()];
+    return slide.current.colors;
   }, [slide]);
   //  const image = useComputedValue(() => slide.current.picture, [slide]);
   // const title = useComputedValue(() => slide.current.title, [slide]);
