@@ -66,7 +66,7 @@ export const Breathe = () => {
   );
 
   return (
-    <Canvas style={styles.container} debug>
+    <Canvas style={styles.container}>
       <Fill color="rgb(36,43,56)" />
       <Group origin={center} transform={transform} blendMode="screen">
         <BlurMask style="solid" blur={40} />

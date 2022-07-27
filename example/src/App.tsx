@@ -20,6 +20,7 @@ import {
   Vertices,
   Wallet,
   Severance,
+  LiquidSwipe
 } from "./Examples";
 import { HomeScreen } from "./Home";
 
@@ -41,6 +42,7 @@ const linking = {
       Wallpaper: "wallpaper",
       Wallet: "wallet",
       Graphs: "graphs",
+      LiquidSwipe: "liquid-swipe",
       Animation: "animation",
       Performance: "performance",
     },
@@ -120,6 +122,13 @@ const App = () => {
             }}
           />
           <Stack.Screen name="Graphs" component={GraphsScreen} />
+          <Stack.Screen
+            name="LiquidSwipe"
+            component={LiquidSwipe} 
+            options={{
+              header: () => null,
+            }}
+          />
           <Stack.Screen name="Animation" component={AnimationExample} />
           <Stack.Screen name="Performance" component={PerformanceDrawingTest} />
         </Stack.Navigator>

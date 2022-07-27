@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import type { SkiaView } from "../views";
 import type { SkiaValue } from "../values";
 
-import { isValue } from "./processors";
+import { isRealValue, isValue } from "./processors";
 import type { Node } from "./nodes";
 
 type Unsubscribe = () => void;
@@ -29,7 +29,7 @@ export class DependencyManager {
   }
 
   subscribeNode(node: Node, props: Props) {
-    const values = Object.values(props).filter(isValue);
+    const values = Object.values(props).filter(isRealValue);
     if (values.length > 0) {
       this.subscriptions.set(node, { values, unsubscribe: null });
     }

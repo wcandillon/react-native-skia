@@ -69,6 +69,11 @@ export const HomeScreen = () => {
         route="Severance"
       />
       <HomeScreenButton
+        title="💧 LiquidSwipe"
+        description="Liquid Swipe"
+        route="LiquidSwipe"
+      />
+      <HomeScreenButton
         title="🎥 Animation"
         description="Animated with Skia"
         route="Animation"

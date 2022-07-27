@@ -8,8 +8,8 @@ import {
 } from "@shopify/react-native-skia";
 import { Platform } from "react-native";
 
-export const COLS = Platform.OS === "web" ? 15 : 5;
-export const ROWS = Platform.OS === "web" ? 30 : 10;
+export const COLS = Platform.OS === "web" ? 15 : 15;
+export const ROWS = Platform.OS === "web" ? 30 : 30;
 const pos = vec(0, 0);
 
 interface SymbolProps {

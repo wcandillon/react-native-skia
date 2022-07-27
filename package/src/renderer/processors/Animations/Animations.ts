@@ -1,7 +1,7 @@
 import type { SkiaValue } from "../../../values";
 import { mapKeys } from "../../typeddash";
 
-export const isValue = (value: unknown): value is SkiaValue<unknown> => {
+export const isRealValue = (value: unknown): value is SkiaValue<unknown> => {
   if (value === undefined || value === null) {
     return false;
   }
@@ -10,6 +10,22 @@ export const isValue = (value: unknown): value is SkiaValue<unknown> => {
       typeof value === "object" &&
       "__typename__" in value &&
       (value as unknown as SkiaValue<unknown>).__typename__ === "RNSkValue"
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
+};
+
+export const isValue = (value: unknown): value is SkiaValue<unknown> => {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  try {
+    if (
+      typeof value === "object" &&
+      "__typename__" in value &&
+      (["RNSkValue2", "RNSkValue"].indexOf((value as unknown as SkiaValue<unknown>).__typename__) !== -1)
     ) {
       return true;
     }
