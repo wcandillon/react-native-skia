@@ -10,16 +10,12 @@ import {
   useComputedValue,
   useValueEffect,
 } from "@shopify/react-native-skia";
+import { useWindowDimensions } from "react-native";
 
-import { Wave, HEIGHT, MARGIN_WIDTH, Side, WIDTH } from "./Wave";
+import { Wave, MARGIN_WIDTH, Side } from "./Wave";
 import { Button } from "./Button";
 import type { SlideProps } from "./Slide";
 import { Reverse } from "./Reverse";
-
-const PREV = WIDTH;
-const NEXT = 0;
-const LEFT_SNAP_POINTS = [MARGIN_WIDTH, PREV];
-const RIGHT_SNAP_POINTS = [NEXT, WIDTH - MARGIN_WIDTH];
 
 const useVector = (x1: number, y1: number) => {
   const x = useValue(x1);
@@ -54,18 +50,24 @@ export const Slider = ({
   next,
   setIndex,
 }: SliderProps) => {
+  const { width, height } = useWindowDimensions();
+  const PREV = width;
+  const NEXT = 0;
+  const LEFT_SNAP_POINTS = [MARGIN_WIDTH, PREV];
+  const RIGHT_SNAP_POINTS = [NEXT, width - MARGIN_WIDTH];
   const hasPrev = !!prev;
   const hasNext = !!next;
-  const left = useVector(0, HEIGHT / 2);
-  const right = useVector(0, HEIGHT / 2);
+  const left = useVector(0, height / 2);
+  const right = useVector(0, height / 2);
   const activeSide = useValue(Side.NONE);
   const isTransitioningLeft = useValue(false);
   const isTransitioningRight = useValue(false);
+  const down = useValue(false);
   useValueEffect(index, () => {
     left.x.current = 0;
-    left.y.current = HEIGHT / 2;
+    left.y.current = height / 2;
     right.x.current = 0;
-    right.y.current = HEIGHT / 2;
+    right.y.current = height / 2;
     activeSide.current = Side.NONE;
     isTransitioningLeft.current = false;
     isTransitioningRight.current = false;
@@ -76,24 +78,28 @@ export const Slider = ({
 
   const onTouch = useTouchHandler({
     onStart: ({ x }) => {
+      down.current = true;
       if (x <= MARGIN_WIDTH && hasPrev) {
         activeSide.current = Side.LEFT;
-      } else if (x >= WIDTH - MARGIN_WIDTH && hasNext) {
+      } else if (x >= width - MARGIN_WIDTH && hasNext) {
         activeSide.current = Side.RIGHT;
       } else {
         activeSide.current = Side.NONE;
       }
     },
     onActive: ({ x, y }) => {
-      if (activeSide.current === Side.LEFT) {
-        left.x.current = Math.max(x, MARGIN_WIDTH);
-        left.y.current = y;
-      } else if (activeSide.current === Side.RIGHT) {
-        right.x.current = Math.max(WIDTH - x, MARGIN_WIDTH);
-        right.y.current = y;
+      if (down.current === true) {
+        if (activeSide.current === Side.LEFT) {
+          left.x.current = Math.max(x, MARGIN_WIDTH);
+          left.y.current = y;
+        } else if (activeSide.current === Side.RIGHT) {
+          right.x.current = Math.max(width - x, MARGIN_WIDTH);
+          right.y.current = y;
+        }
       }
     },
     onEnd: ({ velocityX, velocityY, x }) => {
+      down.current = false;
       if (activeSide.current === Side.LEFT) {
         const dest = snapPoint(x, velocityX, LEFT_SNAP_POINTS);
         isTransitioningLeft.current = dest === PREV;
@@ -120,14 +126,14 @@ export const Slider = ({
             }
           );
         }
-        runSpring(left.y, HEIGHT / 2, { velocity: velocityY });
+        runSpring(left.y, height / 2, { velocity: velocityY });
       } else if (activeSide.current === Side.RIGHT) {
         const dest = snapPoint(x, velocityX, RIGHT_SNAP_POINTS);
         isTransitioningRight.current = dest === NEXT;
         if (isTransitioningRight.current) {
           runTiming(
             right.x,
-            WIDTH - dest,
+            width - dest,
             {
               duration: 300,
             },
@@ -138,7 +144,7 @@ export const Slider = ({
         } else {
           runSpring(
             right.x,
-            WIDTH - dest,
+            width - dest,
             {
               velocity: velocityX,
             },
@@ -147,7 +153,7 @@ export const Slider = ({
             }
           );
         }
-        runSpring(right.y, HEIGHT / 2, { velocity: velocityY });
+        runSpring(right.y, height / 2, { velocity: velocityY });
       }
     },
   });

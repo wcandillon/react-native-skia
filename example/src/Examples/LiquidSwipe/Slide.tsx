@@ -8,10 +8,7 @@ import {
   Text,
 } from "@shopify/react-native-skia";
 import React from "react";
-import { Dimensions } from "react-native";
-
-const { width, height } = Dimensions.get("screen");
-const SIZE = width - 150;
+import { useWindowDimensions } from "react-native";
 
 export interface SlideModel {
   colors: [string, string];
@@ -27,6 +24,8 @@ export interface SlideProps {
 }
 
 export const Slide = ({ slide, font, picture }: SlideProps) => {
+  const { width, height } = useWindowDimensions();
+  const SIZE = width - 150;
   const colors = useComputedValue(() => {
     if (slide.current === undefined) {
       return ["transparent", "transparent"];
@@ -63,7 +62,13 @@ export const Slide = ({ slide, font, picture }: SlideProps) => {
         width={SIZE}
         height={SIZE}
       />
-      <Text x={x} y={c.y + 200} text={title} font={font} color="white" />
+      <Text
+        x={x}
+        y={c.y + SIZE / 2 + 20}
+        text={title}
+        font={font}
+        color="white"
+      />
     </>
   );
 };

@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import React from "react";
-import { Dimensions } from "react-native";
+import { useWindowDimensions } from "react-native";
 import type { SkiaValue, Vector, SkPath } from "@shopify/react-native-skia";
 import {
   Group,
@@ -13,10 +13,8 @@ import {
 
 import type { SlideProps } from "./Slide";
 
-export const { width: WIDTH, height: HEIGHT } = Dimensions.get("screen");
 export const MIN_LEDGE = 25;
 export const MARGIN_WIDTH = MIN_LEDGE + 50;
-const { width, height } = Dimensions.get("screen");
 
 const curve = (path: SkPath, c1: Vector, c2: Vector, to: Vector) => {
   path.cubicTo(c1.x, c1.y, c2.x, c2.y, to.x, to.y);
@@ -41,8 +39,9 @@ export const Wave = ({
   children,
   isTransitioning,
 }: WaveProps) => {
+  const { width, height } = useWindowDimensions();
   const R = useComputedValue(() => {
-    return Math.min(x.current - MIN_LEDGE, WIDTH / 2);
+    return Math.min(x.current - MIN_LEDGE, width / 2);
   }, [x]);
   const ledge = useComputedValue(() => {
     const minLedge = interpolate(
@@ -87,8 +86,8 @@ export const Wave = ({
     curve(path, c21, c22, p3);
     curve(path, c31, c32, p4);
     curve(path, c41, c42, p5);
-    path.lineTo(path.getLastPt().x, HEIGHT);
-    path.lineTo(0, HEIGHT);
+    path.lineTo(path.getLastPt().x, height);
+    path.lineTo(0, height);
     if (side === Side.RIGHT) {
       const transform = Skia.Matrix();
       transform.translate(width / 2, height / 2);
