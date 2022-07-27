@@ -11,10 +11,10 @@ import React from "react";
 import { useWindowDimensions } from "react-native";
 
 export interface SlideModel {
-  colors: [string, string];
+  colors: Float32Array[];
   title: string;
   description: string;
-  picture: SkImage | null;
+  picture: SkImage;
 }
 
 export interface SlideProps {
