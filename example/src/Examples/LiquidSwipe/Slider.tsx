@@ -1,10 +1,16 @@
-import React, { ReactElement, useEffect } from "react";
+import type { ReactElement } from "react";
+import React, { useEffect } from "react";
+import {
+  Canvas,
+  runSpring,
+  runTiming,
+  useTouchHandler,
+  useValue,
+} from "@shopify/react-native-skia";
 
-
-import  { Wave, HEIGHT, MARGIN_WIDTH, Side, WIDTH } from "./Wave";
-import {Button} from "./Button";
-import { SlideProps } from "./Slide";
-import { Canvas, runSpring, useTouchHandler, useValue } from "@shopify/react-native-skia";
+import { Wave, HEIGHT, MARGIN_WIDTH, Side, WIDTH } from "./Wave";
+import { Button } from "./Button";
+import type { SlideProps } from "./Slide";
 
 const PREV = WIDTH;
 const NEXT = 0;
@@ -74,79 +80,93 @@ export const Slider = ({
       if (activeSide.current === Side.LEFT) {
         const dest = snapPoint(x, velocityX, LEFT_SNAP_POINTS);
         isTransitioningLeft.current = dest === PREV;
-        runSpring( left.x,
-          dest,
-          {
-            velocity: velocityX,
-          },
-          () => {
-            if (isTransitioningLeft.current) {
+        if (isTransitioningLeft.current) {
+          runTiming(
+            left.x,
+            dest,
+            {
+              duration: 300,
+            },
+            () => {
               setIndex(index - 1);
-            } else {
+            }
+          );
+        } else {
+          runSpring(
+            left.x,
+            dest,
+            {
+              velocity: velocityX,
+            },
+            () => {
               activeSide.current = Side.NONE;
             }
-          }
-        );
+          );
+        }
         runSpring(left.y, HEIGHT / 2, { velocity: velocityY });
       } else if (activeSide.current === Side.RIGHT) {
         const dest = snapPoint(x, velocityX, RIGHT_SNAP_POINTS);
         isTransitioningRight.current = dest === NEXT;
-        runSpring(right.x,
-          WIDTH - dest,
-          {
-            velocity: velocityX,
-          },
-          () => {
-            if (isTransitioningRight.current) {
+        if (isTransitioningRight.current) {
+          runTiming(
+            right.x,
+            WIDTH - dest,
+            {
+              duration: 300,
+            },
+            () => {
               setIndex(index + 1);
-            } else {
+            }
+          );
+        } else {
+          runSpring(
+            right.x,
+            WIDTH - dest,
+            {
+              velocity: velocityX,
+            },
+            () => {
               activeSide.current = Side.NONE;
             }
-          }
-        );
+          );
+        }
         runSpring(right.y, HEIGHT / 2, { velocity: velocityY });
       }
     },
   });
 
-
- useEffect(() => {
+  useEffect(() => {
     runSpring(left.x, MARGIN_WIDTH);
-    runSpring( right.x, MARGIN_WIDTH);
+    runSpring(right.x, MARGIN_WIDTH);
   }, [index, left, right]);
 
   return (
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
-        {current}
-        {prev && (
-          <>
-            <Wave
-              position={left}
-              side={Side.LEFT}
-              isTransitioning={isTransitioningLeft}
-            >
-              {prev}
-            </Wave>
-            <Button position={left} side={Side.LEFT} activeSide={activeSide} />
-          </>
-        )}
-        {next && (
-          <>
-            <Wave
-              position={right}
-              side={Side.RIGHT}
-              isTransitioning={isTransitioningRight}
-            >
-              {next}
-            </Wave>
-            <Button
-              position={right}
-              side={Side.RIGHT}
-              activeSide={activeSide}
-            />
-          </>
-        )}
+      {current}
+      {prev && (
+        <>
+          <Wave
+            position={left}
+            side={Side.LEFT}
+            isTransitioning={isTransitioningLeft}
+          >
+            {prev}
+          </Wave>
+          <Button position={left} side={Side.LEFT} activeSide={activeSide} />
+        </>
+      )}
+      {next && (
+        <>
+          <Wave
+            position={right}
+            side={Side.RIGHT}
+            isTransitioning={isTransitioningRight}
+          >
+            {next}
+          </Wave>
+          <Button position={right} side={Side.RIGHT} activeSide={activeSide} />
+        </>
+      )}
     </Canvas>
   );
 };
-

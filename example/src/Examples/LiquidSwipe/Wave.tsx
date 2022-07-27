@@ -1,14 +1,22 @@
-import React, { ReactElement} from "react";
+import type { ReactElement } from "react";
+import React from "react";
 import { Dimensions } from "react-native";
+import type { SkiaValue, Vector, SkPath } from "@shopify/react-native-skia";
+import {
+  Group,
+  useComputedValue,
+  vec,
+  Skia,
+  interpolate,
+  Extrapolate,
+} from "@shopify/react-native-skia";
 
-import { SlideProps } from "./Slide";
-import { Group, SkiaValue, Vector, useComputedValue, vec, Skia, SkPath, interpolate, Extrapolate } from '@shopify/react-native-skia';
+import type { SlideProps } from "./Slide";
 
 export const { width: WIDTH, height: HEIGHT } = Dimensions.get("screen");
 export const MIN_LEDGE = 25;
 export const MARGIN_WIDTH = MIN_LEDGE + 50;
-const {width, height} = Dimensions.get("screen");
-
+const { width, height } = Dimensions.get("screen");
 
 const curve = (path: SkPath, c1: Vector, c2: Vector, to: Vector) => {
   path.cubicTo(c1.x, c1.y, c2.x, c2.y, to.x, to.y);
@@ -22,7 +30,7 @@ export enum Side {
 
 interface WaveProps {
   side: Side;
-  position: { x: SkiaValue<number>, y: SkiaValue<number> };
+  position: { x: SkiaValue<number>; y: SkiaValue<number> };
   children: ReactElement<SlideProps>;
   isTransitioning: SkiaValue<boolean>;
 }
@@ -84,9 +92,9 @@ export const Wave = ({
     path.lineTo(0, HEIGHT);
     if (side === Side.RIGHT) {
       const transform = Skia.Matrix();
-      transform.translate(width/2, height/2);
-      transform.rotate(Math.PI);
-      transform.translate(-width/2, -height/2);
+      transform.translate(width / 2, height / 2);
+      transform.scale(-1, 1);
+      transform.translate(-width / 2, -height / 2);
       path.transform(transform);
     }
     return path;
@@ -94,10 +102,7 @@ export const Wave = ({
 
   return (
     <>
-      <Group clip={clip}>
-        {children}
-      </Group>
+      <Group clip={clip}>{children}</Group>
     </>
   );
 };
-

@@ -1,7 +1,7 @@
 import { Fill, RadialGradient, useImage, vec, Image, useFont, Text } from "@shopify/react-native-skia";
 import Color from "color";
 import React from "react";
-import { StyleSheet, Dimensions } from "react-native";
+import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("screen");
 const SIZE = width - 150;
