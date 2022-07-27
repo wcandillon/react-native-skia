@@ -18,7 +18,11 @@ const sidebars = {
       collapsed: false,
       type: "category",
       label: "Getting started",
-      items: ["getting-started/installation", "getting-started/hello-world"],
+      items: [
+        "getting-started/installation",
+        "getting-started/hello-world",
+        "getting-started/web",
+      ],
     },
     {
       collapsed: true,

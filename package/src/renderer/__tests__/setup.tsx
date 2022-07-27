@@ -11,7 +11,7 @@ import { Container } from "../nodes";
 import type { DrawingContext } from "../DrawingContext";
 import { CanvasProvider } from "../useCanvas";
 import { ValueApi } from "../../values/web";
-import { LoadSkia } from "../../web/LoadSkia";
+import { LoadSkiaWeb } from "../../web/LoadSkiaWeb";
 
 export let Skia: ReturnType<typeof JsiSkApi>;
 
@@ -25,7 +25,7 @@ jest.mock("react-native", () => ({
 export const nodeRequire = (uri: string) => fs.readFileSync(uri);
 
 beforeAll(async () => {
-  await LoadSkia();
+  await LoadSkiaWeb();
   Skia = JsiSkApi(global.CanvasKit);
 });
 

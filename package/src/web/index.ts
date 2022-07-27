@@ -1,2 +1,2 @@
-export * from "./LoadSkia";
-export * from "./WithSkia";
+export * from "./LoadSkiaWeb";
+export * from "./WithSkiaWeb";

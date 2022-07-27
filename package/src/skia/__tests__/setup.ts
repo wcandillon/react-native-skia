@@ -1,11 +1,11 @@
-import { LoadSkia } from "../../web/LoadSkia";
+import { LoadSkiaWeb } from "../../web/LoadSkiaWeb";
 import { Skia } from "../types";
 import { JsiSkApi } from "../web";
 
 let Skia: ReturnType<typeof JsiSkApi>;
 
 beforeAll(async () => {
-  await LoadSkia();
+  await LoadSkiaWeb();
   Skia = JsiSkApi(global.CanvasKit);
 });
 

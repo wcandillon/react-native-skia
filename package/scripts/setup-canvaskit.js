@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable max-len */
 
 /**
  * A script to automate the setup of `@shopify/react-native-skia` for web.
@@ -8,7 +9,8 @@
  * This script does the following:
  * 1. Resolve the public path relative to wherever the script is being run.
  * 2. Log out some useful info about the web setup, just in case anything goes wrong.
- * 3. Resolve the installed wasm file `canvaskit-wasm/bin/full/canvaskit.wasm` from `@shopify/react-native-skia -> canvaskit`.
+ * 3. Resolve the installed wasm file `canvaskit-wasm/bin/full/canvaskit.wasm`
+ *  from `@shopify/react-native-skia -> canvaskit`.
  * 4. Recursively ensure the path exists and copy the file into the desired location.
  *
  *
@@ -34,7 +36,6 @@ function getWasmFilePath() {
   try {
     return require.resolve("canvaskit-wasm/bin/full/canvaskit.wasm");
   } catch (error) {
-    // No idea how this could happen.
     console.error(
       `Could not find 'canvaskit-wasm'. Please install '@shopify/react-native-skia' and ensure it can be resolved from your project: ${process.cwd()}`
     );
@@ -51,9 +52,6 @@ function getOutputFilePath() {
   console.log(
     `› Copying 'canvaskit.wasm' file to static folder:\n  ${gray(output)}\n`
   );
-  // A doc explaining what a public folder is -- React Native developers may not be familiar with the concept.
-  console.log(gray(`› Learn more: [TODO: Link to RNSkia docs]`));
-
   return output;
 }
 
@@ -67,5 +65,10 @@ function copyFile(from, to) {
 (() => {
   copyFile(getWasmFilePath(), getOutputFilePath());
 
-  console.log(lime(`› Success! You may need to restart your dev server`));
+  console.log(lime("› Success! You are almost there:"));
+  console.log(
+    gray(
+      "› To load React Native Skia Web, follow these instructions : https://shopify.github.io/react-native-skia/docs/getting-started/web"
+    )
+  );
 })();
