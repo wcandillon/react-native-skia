@@ -90,7 +90,7 @@ export const LiquidSwipe = () => {
     ];
   }, [img1, img2, img3, img4, img5]);
   const font = useFont(require("./assets/SF-Pro-Display-Bold.otf"), 32);
-  if (!font || !img1 || !img2 || !img3 || !img4 || !img5) {
+  if (!font || slides.length === 0) {
     return null;
   }
   return <Container slides={slides} font={font} />;
