@@ -1,20 +1,14 @@
 import React, { useCallback } from "react";
-import type { SkImage } from "@shopify/react-native-skia";
 import {
+  useFont,
   useValue,
   useComputedValue,
   useImage,
 } from "@shopify/react-native-skia";
 
 import { Slider } from "./Slider";
+import type { SlideModel } from "./Slide";
 import { Slide } from "./Slide";
-
-interface SlideModel {
-  colors: [string, string];
-  title: string;
-  description: string;
-  picture: SkImage | null;
-}
 
 export const LiquidSwipe = () => {
   const img1 = useImage(require("./assets/1.png"));
@@ -66,18 +60,30 @@ export const LiquidSwipe = () => {
     },
     [index]
   );
-  const prev = useComputedValue(() => slides[index.current - 1], [index]);
-  const current = useComputedValue(() => slides[index.current], [index]);
-  const next = useComputedValue(() => slides[index.current + 1], [index]);
-
+  const prev = useComputedValue(
+    () => slides[index.current - 1],
+    [index, slides]
+  );
+  const current = useComputedValue(
+    () => slides[index.current],
+    [index, slides]
+  );
+  const next = useComputedValue(
+    () => slides[index.current + 1],
+    [index, slides]
+  );
+  const font = useFont(require("./assets/SF-Pro-Display-Bold.otf"), 32);
+  if (!font || !img1 || !img2 || !img3 || !img4 || !img5) {
+    return null;
+  }
   return (
     <Slider
       index={index}
       setIndex={setIndex}
-      prev={<Slide slide={prev} />}
-      next={<Slide slide={next} />}
+      prev={<Slide slide={prev} font={font} picture={img1} />}
+      next={<Slide slide={next} font={font} picture={img1} />}
     >
-      <Slide slide={current} />
+      <Slide slide={current} font={font} picture={img1} />
     </Slider>
   );
 };
