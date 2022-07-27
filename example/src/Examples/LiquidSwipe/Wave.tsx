@@ -56,7 +56,6 @@ export const Wave = ({
     //return withSpring(isTransitioning.current ? x.current : baseLedge);
   }, [x, R]);
   const clip = useComputedValue(() => {
-    console.log("CLIP: " + x.current);
     const stepY = x.current - MIN_LEDGE; // R = 50
     const stepX = R.current / 2; // R/2
     // 0.5522847498 is taken from https://spencermortensen.com/articles/bezier-circle/
@@ -100,9 +99,5 @@ export const Wave = ({
     return path;
   }, [x, y, R, ledge]);
 
-  return (
-    <>
-      <Group clip={clip}>{children}</Group>
-    </>
-  );
+  return <Group clip={clip}>{children}</Group>;
 };

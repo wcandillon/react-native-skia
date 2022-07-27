@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import React, { useEffect } from "react";
+import type { SkiaValue } from "@shopify/react-native-skia";
 import {
   Canvas,
   runSpring,
@@ -7,6 +8,7 @@ import {
   useTouchHandler,
   useValue,
   useComputedValue,
+  useValueEffect,
 } from "@shopify/react-native-skia";
 
 import { Wave, HEIGHT, MARGIN_WIDTH, Side, WIDTH } from "./Wave";
@@ -38,11 +40,11 @@ const snapPoint = (
 };
 
 interface SliderProps {
-  index: number;
+  index: SkiaValue<number>;
   setIndex: (value: number) => void;
   children: ReactElement<SlideProps>;
-  prev?: ReactElement<SlideProps>;
-  next?: ReactElement<SlideProps>;
+  prev: ReactElement<SlideProps>;
+  next: ReactElement<SlideProps>;
 }
 
 export const Slider = ({
@@ -59,6 +61,19 @@ export const Slider = ({
   const activeSide = useValue(Side.NONE);
   const isTransitioningLeft = useValue(false);
   const isTransitioningRight = useValue(false);
+  useValueEffect(index, () => {
+    left.x.current = 0;
+    left.y.current = HEIGHT / 2;
+    right.x.current = 0;
+    right.y.current = HEIGHT / 2;
+    activeSide.current = Side.NONE;
+    isTransitioningLeft.current = false;
+    isTransitioningRight.current = false;
+
+    runSpring(left.x, MARGIN_WIDTH);
+    runSpring(right.x, MARGIN_WIDTH);
+  });
+
   const onTouch = useTouchHandler({
     onStart: ({ x }) => {
       if (x <= MARGIN_WIDTH && hasPrev) {
@@ -90,7 +105,7 @@ export const Slider = ({
               duration: 300,
             },
             () => {
-              setIndex(index - 1);
+              setIndex(index.current - 1);
             }
           );
         } else {
@@ -117,7 +132,7 @@ export const Slider = ({
               duration: 300,
             },
             () => {
-              setIndex(index + 1);
+              setIndex(index.current + 1);
             }
           );
         } else {
@@ -140,7 +155,9 @@ export const Slider = ({
   useEffect(() => {
     runSpring(left.x, MARGIN_WIDTH);
     runSpring(right.x, MARGIN_WIDTH);
-  }, [index, left, right]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const reverse = useComputedValue(
     () => activeSide.current === Side.LEFT,
     [activeSide]
@@ -149,34 +166,23 @@ export const Slider = ({
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
       {current}
       <Reverse reverse={reverse}>
-        {prev && (
-          <>
-            <Wave
-              position={left}
-              side={Side.LEFT}
-              isTransitioning={isTransitioningLeft}
-            >
-              {prev}
-            </Wave>
-            <Button position={left} side={Side.LEFT} activeSide={activeSide} />
-          </>
-        )}
-        {next && (
-          <>
-            <Wave
-              position={right}
-              side={Side.RIGHT}
-              isTransitioning={isTransitioningRight}
-            >
-              {next}
-            </Wave>
-            <Button
-              position={right}
-              side={Side.RIGHT}
-              activeSide={activeSide}
-            />
-          </>
-        )}
+        <Wave
+          position={left}
+          side={Side.LEFT}
+          isTransitioning={isTransitioningLeft}
+        >
+          {prev}
+        </Wave>
+        <Button position={left} side={Side.LEFT} activeSide={activeSide} />
+
+        <Wave
+          position={right}
+          side={Side.RIGHT}
+          isTransitioning={isTransitioningRight}
+        >
+          {next}
+        </Wave>
+        <Button position={right} side={Side.RIGHT} activeSide={activeSide} />
       </Reverse>
     </Canvas>
   );
