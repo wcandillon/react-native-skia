@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-import {Slider} from "./Slider";
-import {Slide} from "./Slide";
+import { Slider } from "./Slider";
+import { Slide } from "./Slide";
 
 const slides = [
   {
@@ -59,4 +59,3 @@ export const LiquidSwipe = () => {
     </Slider>
   );
 };
-

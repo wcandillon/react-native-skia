@@ -6,11 +6,13 @@ import {
   runTiming,
   useTouchHandler,
   useValue,
+  useComputedValue,
 } from "@shopify/react-native-skia";
 
 import { Wave, HEIGHT, MARGIN_WIDTH, Side, WIDTH } from "./Wave";
 import { Button } from "./Button";
 import type { SlideProps } from "./Slide";
+import { Reverse } from "./Reverse";
 
 const PREV = WIDTH;
 const NEXT = 0;
@@ -139,34 +141,43 @@ export const Slider = ({
     runSpring(left.x, MARGIN_WIDTH);
     runSpring(right.x, MARGIN_WIDTH);
   }, [index, left, right]);
-
+  const reverse = useComputedValue(
+    () => activeSide.current === Side.LEFT,
+    [activeSide]
+  );
   return (
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
       {current}
-      {prev && (
-        <>
-          <Wave
-            position={left}
-            side={Side.LEFT}
-            isTransitioning={isTransitioningLeft}
-          >
-            {prev}
-          </Wave>
-          <Button position={left} side={Side.LEFT} activeSide={activeSide} />
-        </>
-      )}
-      {next && (
-        <>
-          <Wave
-            position={right}
-            side={Side.RIGHT}
-            isTransitioning={isTransitioningRight}
-          >
-            {next}
-          </Wave>
-          <Button position={right} side={Side.RIGHT} activeSide={activeSide} />
-        </>
-      )}
+      <Reverse reverse={reverse}>
+        {prev && (
+          <>
+            <Wave
+              position={left}
+              side={Side.LEFT}
+              isTransitioning={isTransitioningLeft}
+            >
+              {prev}
+            </Wave>
+            <Button position={left} side={Side.LEFT} activeSide={activeSide} />
+          </>
+        )}
+        {next && (
+          <>
+            <Wave
+              position={right}
+              side={Side.RIGHT}
+              isTransitioning={isTransitioningRight}
+            >
+              {next}
+            </Wave>
+            <Button
+              position={right}
+              side={Side.RIGHT}
+              activeSide={activeSide}
+            />
+          </>
+        )}
+      </Reverse>
     </Canvas>
   );
 };
