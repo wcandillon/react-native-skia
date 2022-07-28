@@ -10,6 +10,7 @@
     "build:web": "rm -rf dist/ && webpack --mode=production --config webpack.config.js",
     "test": "jest",
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0",
+    "pod-install-fabric": "RCT_NEW_ARCH_ENABLED=1 npx pod-install ios",
     "pod-install": "npx pod-install ios",
     "android-reverse-tcp": "adb devices | grep '\t' | awk '{print $1}' | sed 's/\\s//g' | xargs -I {} adb -s {} reverse tcp:8081 tcp:8081"
   },
@@ -23,7 +24,7 @@
     "react": "17.0.2",
     "react-dom": "^17.0.0",
     "react-native": "0.68.0",
-    "react-native-reanimated": "^2.8.0",
+    "react-native-reanimated": "^3.0.0-rc.0",
     "react-native-safe-area-context": "^4.1.4",
     "react-native-screens": "^3.13.1",
     "react-native-web": "^0.17.7",
