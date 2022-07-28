@@ -99,5 +99,14 @@
       "module",
       "typescript"
     ]
+  },
+  "codegenConfig": {
+    "libraries": [
+      {
+        "name": "rnskia",
+        "type": "components",
+        "jsSrcsDir": "./src/fabric"
+      }
+    ]
   }
 }
