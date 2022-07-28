@@ -4,6 +4,8 @@ require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
+fabric_enabled = ENV['RCT_NEW_ARCH_ENABLED']
+
 Pod::Spec.new do |s|
   s.name         = "react-native-skia"
   s.version      = package["version"]
@@ -34,38 +36,42 @@ Pod::Spec.new do |s|
     'libs/ios/libskshaper.xcframework'
   ]
 
-  # All iOS cpp/h files
-  s.source_files = [
-    "ios/**/*.{h,c,cc,cpp,m,mm,swift}",  
-  ]
+  if fabric_enabled
 
-  s.subspec 'SkiaHeaders' do |ss|
-    ss.header_mappings_dir = 'cpp/skia'
-    ss.source_files = "cpp/skia/**/*.{h,cpp}"
+    # folly_version must match the version used in React Native
+    # See folly_version in react-native/React/FBReactNativeSpec/FBReactNativeSpec.podspec
+    folly_version = '2021.06.28.00-v2'
+    folly_compiler_flags = '-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32'
+
+    # All common iOS cpp/h files
+    s.source_files = [
+      "ios/*.{h,c,cc,cpp,m,mm,swift}",
+      "ios/RNSkia-iOS/*.{h,c,cc,cpp,m,mm,swift}",
+      "ios/RNSkia-iOS-Fabric/*.{h,c,cc,cpp,m,mm,swift}",
+    ]
+
+    s.dependency "React"
+    s.dependency "React-RCTFabric"
+    s.dependency "React-Codegen"
+    s.dependency "RCT-Folly", folly_version
+    s.dependency "RCTRequired"
+    s.dependency "RCTTypeSafety"
+    s.dependency "ReactCommon/turbomodule/core"
+
+    s.compiler_flags  = folly_compiler_flags
+    s.pod_target_xcconfig = {
+      'HEADER_SEARCH_PATHS' => '"$(PODS_ROOT)/boost" "$(PODS_ROOT)/boost-for-react-native"  "$(PODS_ROOT)/RCT-Folly"',      
+    }
+  else
+    # All common iOS cpp/h files
+    s.source_files = [
+      "ios/*.{h,c,cc,cpp,m,mm,swift}",
+      "ios/RNSkia-iOS/*.{h,c,cc,cpp,m,mm,swift}",
+    ]
+
+    s.dependency "React"
+    s.dependency "React-callinvoker"
+    s.dependency "React-Core"
   end
-
-  s.subspec 'Utils' do |ss|
-    ss.header_mappings_dir = 'cpp/utils'
-    ss.source_files = "cpp/utils/**/*.{h,cpp}"
-  end
-
-  s.subspec 'Jsi' do |ss|
-    ss.header_mappings_dir = 'cpp/jsi'
-    ss.source_files = "cpp/jsi/**/*.{h,cpp}"
-  end
-
-  s.subspec 'Api' do |ss|
-    ss.header_mappings_dir = 'cpp/api'
-    ss.source_files = "cpp/api/**/*.{h,cpp}"
-  end
-
-  s.subspec 'RNSkia' do |ss|
-    ss.header_mappings_dir = 'cpp/rnskia'
-    ss.source_files = "cpp/rnskia/**/*.{h,cpp}"
-  end
-
-  s.dependency "React"
-  s.dependency "React-callinvoker"
-  s.dependency "React-Core"
 end
 
