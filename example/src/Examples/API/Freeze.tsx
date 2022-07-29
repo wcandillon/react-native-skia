@@ -8,30 +8,36 @@ import {
   useClockValue,
   useComputedValue,
   rect,
-  Picture
+  Picture,
 } from "@shopify/react-native-skia";
+import { Dimensions } from "react-native";
+
 import { createPicture } from "./createPicture";
 
 const size = 200;
 const n = 99;
-
+const { width, height } = Dimensions.get("window");
 
 export const FreezeExample = () => {
   const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), 32);
   const clock = useClockValue();
   const transform = useComputedValue(
-    () => [{ translateY: 100 }, { rotate: (Math.PI * clock.current) / 4000 }],
+    () => [
+      { translateY: 100 },
+      { rotate: (Math.PI * clock.current) / 4000 },
+      { scale: 12 },
+    ],
     [clock]
   );
   if (font === null) {
     return null;
   }
   return (
-    <Canvas style={{ flex: 1, margin: 50 }} debug>
+    <Canvas style={{ flex: 1 }}>
       <Group origin={{ x: size / 2, y: size / 2 }} transform={transform}>
         <Picture picture={picture} />
       </Group>
-      {font && <Text x={20} y={size + 100} text={`n = ${n}`} font={font} />}
+      {font && <Text x={20} y={size + 150} text={`n = ${n * n}`} font={font} />}
     </Canvas>
   );
 };
@@ -54,4 +60,7 @@ const Checkerboard = ({ color }: { color: string }) => {
   );
 };
 
-const picture = createPicture(<Checkerboard color="black" />, rect(0, 0, size, size));
+const picture = createPicture(
+  <Checkerboard color="black" />,
+  rect(0, 0, width, height)
+);

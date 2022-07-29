@@ -1,7 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useWindowDimensions } from "react-native";
-import { BlendMode, BlurStyle, Skia, SkiaView, useClockValue, useDrawCallback } from "@shopify/react-native-skia";
 import {
+  BlendMode,
+  BlurStyle,
+  Skia,
+  SkiaView,
+  useClockValue,
+  useDrawCallback,
   useComputedValue,
   polar2Canvas,
   mix,
@@ -10,12 +15,37 @@ import {
 const c1 = "#61bea2";
 const c2 = "#529ca0";
 
+const fibonacci = (num: number) => {
+  let a = 1,
+    b = 0,
+    temp;
+
+  while (num >= 0) {
+    temp = a;
+    a = a + b;
+    b = temp;
+    num--;
+  }
+
+  return b;
+};
+
+export const useMakeJsThreadBusy = () =>
+  useEffect(() => {
+    setInterval(() => {
+      console.log("JS thread is busy now");
+      while (true) {
+        fibonacci(10000);
+      }
+    }, 2000);
+  }, []);
+
 export const Breathe = () => {
   const { width, height } = useWindowDimensions();
   const R = width / 4;
-
+  useMakeJsThreadBusy();
   const _clock = useClockValue(); // Readonly Value
-  
+
   const _progress = useComputedValue(() => {
     "worklet";
     const clock = _clock;
@@ -24,7 +54,6 @@ export const Breathe = () => {
     const odd = Math.floor(clock.current / duration) % 2;
     return odd ? 1 - progress : progress;
   }, [_clock]);
-
 
   const onDraw = useDrawCallback((canvas) => {
     "worklet";
@@ -37,7 +66,7 @@ export const Breathe = () => {
     const paint = Skia.Paint();
     paint.setBlendMode(BlendMode.Screen);
     paint.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Solid, 40, true));
-    for (let index = 0; index<6; index++) {
+    for (let index = 0; index < 6; index++) {
       const theta = (index * (2 * Math.PI)) / 6;
       const { x, y } = polar2Canvas(
         { theta, radius: progress.current * R },
@@ -50,7 +79,7 @@ export const Breathe = () => {
       canvas.translate(center.x, center.y);
       canvas.scale(scale, scale);
       canvas.translate(-center.x, -center.y);
-        
+
       canvas.drawCircle(center.x, center.y, R, paint);
       canvas.restore();
     }
