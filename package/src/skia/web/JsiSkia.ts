@@ -34,7 +34,6 @@ import { JsiSkDataFactory } from "./JsiSkDataFactory";
 import { JsiSkImageFactory } from "./JsiSkImageFactory";
 import { JsiSkSVGFactory } from "./JsiSkSVGFactory";
 import { JsiSkTextBlobFactory } from "./JsiSkTextBlobFactory";
-import { JsiSkFontMgrFactory } from "./JsiSkFontMgrFactory";
 import { JsiSkFont } from "./JsiSkFont";
 import { MakeVertices } from "./JsiSkVerticesFactory";
 
@@ -90,7 +89,6 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   Image: new JsiSkImageFactory(CanvasKit),
   SVG: new JsiSkSVGFactory(CanvasKit),
   TextBlob: new JsiSkTextBlobFactory(CanvasKit),
-  FontMgr: new JsiSkFontMgrFactory(CanvasKit),
   XYWHRect: (x: number, y: number, width: number, height: number) => {
     return new JsiSkRect(CanvasKit, CanvasKit.XYWHRect(x, y, width, height));
   },

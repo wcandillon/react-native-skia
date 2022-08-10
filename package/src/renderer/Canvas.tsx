@@ -18,7 +18,6 @@ import ReactReconciler from "react-reconciler";
 
 import { SkiaView, useDrawCallback } from "../views";
 import type { TouchHandler } from "../views";
-import type { SkFontMgr } from "../skia/types";
 import { useValue } from "../values/hooks/useValue";
 import { Skia } from "../skia/Skia";
 
@@ -50,13 +49,10 @@ export interface CanvasProps extends ComponentProps<typeof SkiaView> {
   ref?: RefObject<SkiaView>;
   children: ReactNode;
   onTouch?: TouchHandler;
-  fontMgr?: SkFontMgr;
 }
 
-const defaultFontMgr = Skia.FontMgr.RefDefault();
-
 export const Canvas = forwardRef<SkiaView, CanvasProps>(
-  ({ children, style, debug, mode, onTouch, fontMgr }, forwardedRef) => {
+  ({ children, style, debug, mode, onTouch }, forwardedRef) => {
     const size = useValue({ width: 0, height: 0 });
     const canvasCtx = useMemo(() => ({ Skia, size }), [size]);
     const innerRef = useCanvasRef();
@@ -106,7 +102,6 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
           opacity: 1,
           ref,
           center: Skia.Point(width / 2, height / 2),
-          fontMgr: fontMgr ?? defaultFontMgr,
           Skia,
         };
         container.draw(ctx);
@@ -116,9 +111,11 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
 
     useEffect(() => {
       return () => {
-        container.depMgr.unsubscribe();
+        skiaReconciler.updateContainer(null, root, null, () => {
+          container.depMgr.unsubscribe();
+        });
       };
-    }, [container]);
+    }, [container, root]);
 
     return (
       <SkiaView

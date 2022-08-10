@@ -58,7 +58,7 @@ const onDraw = createDrawing<GroupProps>(
       } else {
         canvas.save();
       }
-      processCanvasTransform(ctx, groupProps);
+      processCanvasTransform(canvas, groupProps);
       if (clip) {
         const op = invertClip ? ClipOp.Difference : ClipOp.Intersect;
         processClip(Skia, canvas, clip, op);

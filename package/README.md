@@ -1,52 +1,9 @@
 # React Native Skia
 
-React Native Skia brings the [Skia Graphics Library](https://skia.org/) to React Native.
-Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox, Firefox OS, and many other products.
+High-performance 2d Graphics for React Native using Skia
+
+<img width="400" alt="skia" src="https://user-images.githubusercontent.com/306134/146549218-b7959ad9-0107-4c1c-b439-b96c780f5230.png">
 
 Checkout the full documentation [here](https://shopify.github.io/react-native-skia).
 
-```sh
-yarn add @shopify/react-native-skia
-```
-
-Or using npm:
-
-```sh
-npm install @shopify/react-native-skia
-```
-
-## iOS
-
-Run `pod install` on the `ios/` directory.
-
-## Android
-
-> **Version compatibility**: `react-native@>=0.66` is required.
-
-Currently, you will need Android NDK to be installed.
-If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
-`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk-bundle` for instance.
-
-If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_
-
-And then the _SDK Location_ section. It will show you the NDK path, or the option to download it if you don't have it installed.
-
-### Proguard
-
-If you're using Proguard, make sure to add the following rule:
-
-```
--keep class com.shopify.reactnative.skia.** { *; }
-```
-
-## Playground
-
-We have an example project you can play with [here](https://github.com/Shopify/react-native-skia/tree/main/example).
-
-```sh
-yarn
-cd package && yarn && cd ..
-cd example && yarn && yarn start
-```
-
-To run the example project on iOS, you will need to run `pod install`, and on Android, you will also need Android NDK to be installed ([see here](#android)).
+Documentation on the library development is available [here](https://github.com/Shopify/react-native-skia#library-development).

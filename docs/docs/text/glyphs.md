@@ -12,7 +12,7 @@ This component draws a run of glyphs, at corresponding positions, in a given fon
 | glyphs      | `Glyph[]`  | Glyphs to draw                                                         |
 | x?          | `number`.  | x coordinate of the origin of the entire run. Default is 0             |
 | y?          | `number`.  | y coordinate of the origin of the entire run. Default is 0             |
-| font        | `Font`     | Font to use (see [Fonts](/docs/text/fonts))                            |
+| font        | `SkFont`     | Font to use                                                          |
 
 ## Draw text vertically
 
@@ -20,13 +20,14 @@ This component draws a run of glyphs, at corresponding positions, in a given fon
 import {Canvas, Glyphs, vec, useFont} from "@shopify/react-native-skia";
 
 export const HelloWorld = () => {
-  const font = useFont(require("./my-font.otf"), 16);
+  const fontSize = 32;
+  const font = useFont(require("./my-font.otf"), fontSize);
   if (font === null) {
     return null;
   }
   const glyphs = font
     .getGlyphIDs("Hello World!")
-    .map((id, i) => ({ id, pos: vec(0, i*32) }));
+    .map((id, i) => ({ id, pos: vec(0, (i + 1) * fontSize) }));
   return (
     <Canvas style={{ flex:  1 }}>
       <Glyphs
@@ -37,3 +38,5 @@ export const HelloWorld = () => {
   );
 }
 ```
+
+<img src={require("/static/img/text/hello-world-vertical.png").default} width="256" height="256" />

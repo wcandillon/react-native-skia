@@ -37,7 +37,9 @@ const loadData = <T>(
   factory: (data: SkData) => T,
   onError?: (err: Error) => void
 ): Promise<T | null> => {
-  if (source instanceof Uint8Array) {
+  if (source === null) {
+    return new Promise((resolve) => resolve(null));
+  } else if (source instanceof Uint8Array) {
     return new Promise((resolve) =>
       resolve(factoryWrapper(Skia.Data.fromBytes(source), factory, onError))
     );

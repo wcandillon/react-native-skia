@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 
 import React from "react";
 import type { ReactNode } from "react";
@@ -11,9 +12,11 @@ import { Container } from "../nodes";
 import type { DrawingContext } from "../DrawingContext";
 import { CanvasProvider } from "../useCanvas";
 import { ValueApi } from "../../values/web";
-import { LoadSkia } from "../../web";
+import { LoadSkiaWeb } from "../../web/LoadSkiaWeb";
+import type { SkFont } from "../../skia";
 
 export let Skia: ReturnType<typeof JsiSkApi>;
+export let font: SkFont;
 
 jest.mock("react-native", () => ({
   Platform: { OS: "web" },
@@ -25,12 +28,23 @@ jest.mock("react-native", () => ({
 export const nodeRequire = (uri: string) => fs.readFileSync(uri);
 
 beforeAll(async () => {
-  await LoadSkia();
+  await LoadSkiaWeb();
   Skia = JsiSkApi(global.CanvasKit);
+  const data = Skia.Data.fromBytes(
+    fs.readFileSync(
+      path.resolve(__dirname, "../../skia/__tests__/assets/Roboto-Medium.ttf")
+    )
+  );
+  const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+  expect(tf).toBeTruthy();
+  font = Skia.Font(tf, fontSize);
+  expect(font).toBeTruthy();
 });
 
-export const width = 256;
-export const height = 256;
+const pixelDensity = 3;
+export const fontSize = 32 * pixelDensity;
+export const width = 256 * pixelDensity;
+export const height = 256 * pixelDensity;
 export const center = { x: width / 2, y: height / 2 };
 const redraw = () => {};
 const ref = { current: null };

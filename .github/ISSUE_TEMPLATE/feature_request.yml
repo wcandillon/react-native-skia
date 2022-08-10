@@ -1,0 +1,10 @@
+name: 🆕 Feature Request
+description: React Native Skia feature request
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+    - name: 🤔 Questions and Help
+      url: https://github.com/Shopify/react-native-skia/discussions
+      about: Looking for help with React Native Skia?
+   - name: 🚀 Discussions and Proposals
+      url: https://github.com/Shopify/react-native-skia/discussions/categories/ideas
+      about: Discuss the future of React Native Skia.

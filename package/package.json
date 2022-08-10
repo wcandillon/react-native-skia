@@ -3,8 +3,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "bin": {
+    "setup-skia-web": "./scripts/setup-canvaskit.js"
+  },
   "title": "React Native Skia",
-  "version": "0.0.1-development",
+  "version": "0.1.0-development",
   "description": "High-performance React Native Graphics using Skia",
   "main": "index.ts",
   "files": [
@@ -29,6 +32,7 @@
     "libs/ios/libsvg.xcframework",
     "react-native-skia.podspec",
     "scripts/install-npm.js",
+    "scripts/setup-canvaskit.js",
     "dist/**"
   ],
   "scripts": {

@@ -4,7 +4,6 @@ import type { CustomPaintProps, AnimatedProps } from "../../processors";
 import { createDrawing } from "../../nodes/Drawing";
 import type { SkPoint } from "../../../skia/types";
 import type { FontDef } from "../../processors/Font";
-import { processFont } from "../../processors/Font";
 
 export interface Glyph {
   id: number;
@@ -24,11 +23,8 @@ interface ProcessedGlyphs {
 }
 
 const onDraw = createDrawing<GlyphsProps>(
-  (
-    { canvas, paint, fontMgr, Skia },
-    { glyphs: rawGlyphs, x, y, ...fontDef }
-  ) => {
-    const font = processFont(Skia, fontMgr, fontDef);
+  ({ canvas, paint }, { glyphs: rawGlyphs, x, y, ...fontDef }) => {
+    const { font } = fontDef;
     const { glyphs, positions } = rawGlyphs.reduce<ProcessedGlyphs>(
       (acc, glyph) => {
         const { id, pos } = glyph;

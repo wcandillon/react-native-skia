@@ -30,7 +30,7 @@ export class JsiSkTextBlobFactory extends Host implements TextBlobFactory {
       this.CanvasKit,
       this.CanvasKit.TextBlob.MakeFromRSXform(
         str,
-        rsxforms.map((f) => toValue(f)),
+        rsxforms.map((f) => Array.from(toValue<Float32Array>(f))).flat(),
         toValue(font)
       )
     );

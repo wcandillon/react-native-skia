@@ -10,7 +10,7 @@ describe("Drawings", () => {
     paint.setColor(Skia.Color("lightblue"));
     const rct = Skia.XYWHRect(64, 64, 128, 128);
     canvas.drawRect(rct, paint);
-    processResult(surface, "snapshots/drawings/lightblue-rect.png");
+    processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
   });
 
   it("Multiply blend mode", () => {
@@ -91,6 +91,6 @@ describe("Drawings", () => {
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("lightblue"));
     canvas.drawRect({ x: 64, y: 64, width: 128, height: 128 }, paint);
-    processResult(surface, "snapshots/drawings/lightblue-rect.png");
+    processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
   });
 });

@@ -1,6 +1,6 @@
-import type { DrawingContext } from "../DrawingContext";
 import type { SkMatrix, Vector, Transforms2d } from "../../skia/types";
 import { processTransform } from "../../skia/types";
+import type { SkCanvas } from "../../skia/types/Canvas";
 
 export interface TransformProps {
   transform?: Transforms2d;
@@ -9,25 +9,22 @@ export interface TransformProps {
 }
 
 export const processCanvasTransform = (
-  { canvas, Skia }: DrawingContext,
+  canvas: SkCanvas,
   { transform, origin, matrix }: TransformProps
 ) => {
   if (matrix) {
     if (origin) {
-      const m3 = Skia.Matrix();
-      m3.translate(origin.x, origin.y);
-      m3.concat(matrix);
-      m3.translate(-origin.x, -origin.y);
-      canvas.concat(m3);
+      canvas.translate(origin.x, origin.y);
+      canvas.concat(matrix);
+      canvas.translate(-origin.x, -origin.y);
     } else {
       canvas.concat(matrix);
     }
   } else if (transform) {
-    const m3 = processTransform(
-      Skia.Matrix(),
+    processTransform(
+      canvas,
       origin ? transformOrigin(origin, transform) : transform
     );
-    canvas.concat(m3);
   }
 };
 

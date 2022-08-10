@@ -16,7 +16,7 @@ A playground to build color matrices is available [here](https://fecolormatrix.c
 | children? | `ColorFilter` | Optional color filter to be applied first. |
 
 ```tsx twoslash
-import { Canvas,ColorMatrix, Image, useImage } from "@shopify/react-native-skia";
+import { Canvas, ColorMatrix, Image, useImage } from "@shopify/react-native-skia";
 
 const MatrixColorFilter = () => {
   const image = useImage(require("./assets/oslo.jpg"));

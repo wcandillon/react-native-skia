@@ -6,7 +6,7 @@ import * as SkiaRenderer from "../index";
 
 import { center, drawOnNode, width, Skia } from "./setup";
 
-const size = 128;
+const size = width / 2;
 
 describe("Renderer", () => {
   it("Loads renderer without Skia", () => {

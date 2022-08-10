@@ -18,7 +18,11 @@ const sidebars = {
       collapsed: false,
       type: "category",
       label: "Getting started",
-      items: ["getting-started/installation", "getting-started/hello-world"],
+      items: [
+        "getting-started/installation",
+        "getting-started/hello-world",
+        "getting-started/web",
+      ],
     },
     {
       collapsed: true,
@@ -60,13 +64,7 @@ const sidebars = {
       collapsed: true,
       type: "category",
       label: "Text",
-      items: [
-        "text/fonts",
-        "text/text",
-        "text/glyphs",
-        "text/path",
-        "text/blob",
-      ],
+      items: ["text/text", "text/glyphs", "text/path", "text/blob"],
     },
     {
       collapsed: true,

@@ -6,7 +6,6 @@ import type {
   SkFont,
   SkPaint,
   SkPoint,
-  SkRect,
   SkTypeface,
 } from "../types";
 
@@ -17,14 +16,6 @@ import { JsiSkTypeface } from "./JsiSkTypeface";
 export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
   constructor(CanvasKit: CanvasKit, ref: Font) {
     super(CanvasKit, ref, "Font");
-  }
-
-  measureText(_text: string, _paint?: SkPaint): SkRect {
-    console.warn(
-      `measureText() is deprecated an returns an empty rectangle on React Native Web.
-Clients should use "Font.getGlyphWidths" instead (the latter does no shaping)`
-    );
-    return new JsiSkRect(this.CanvasKit, this.CanvasKit.XYWHRect(0, 0, 0, 0));
   }
 
   getTextWidth(text: string, paint?: SkPaint | undefined) {

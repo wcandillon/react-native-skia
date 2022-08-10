@@ -23,18 +23,45 @@ import {
 } from "./Examples";
 import { HomeScreen } from "./Home";
 
+const linking = {
+  config: {
+    screens: {
+      Home: "",
+      Vertices: "vertices",
+      API: "api",
+      Breathe: "breathe",
+      Filters: "filters",
+      Gooey: "gooey",
+      Hue: "hue",
+      Matrix: "matrix",
+      Severance: "severance",
+      Aurora: "aurora",
+      Glassmorphism: "glassmorphism",
+      Neumorphism: "neumorphism",
+      Wallpaper: "wallpaper",
+      Wallet: "wallet",
+      Graphs: "graphs",
+      Animation: "animation",
+      Performance: "performance",
+    },
+  },
+  prefixes: ["rnskia://"],
+};
+
 const App = () => {
   const Stack = createNativeStackNavigator();
+
   return (
     <>
       <StatusBar hidden />
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <Stack.Navigator>
           <Stack.Screen
             name="Home"
             component={HomeScreen}
             options={{
               title: "🎨 Skia",
+              headerTitleAlign: "center",
             }}
           />
           <Stack.Screen

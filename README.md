@@ -41,7 +41,7 @@ brew install ninja
 ```
 
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
-`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk-bundle` for instance.
+`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/<version>` for instance.
 
 If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_
 
@@ -49,12 +49,10 @@ And then the _SDK Location_ section. It will show you the NDK path, or the optio
 
 ### Building
 
-- Install dependencies in the root project `yarn`
-- Install dependencies in the root project `cd package && yarn && cd ..`
-- Install dependencies in the example `cd example && yarn && cd ..`
+- Install dependencies `yarn bootstrap`
 - Build the Skia libraries with `yarn build-skia` (this can take a while)
 - Copy Skia headers `yarn copy-skia-headers`
-- Run pod install in the example project
+- Run `pod install` in the example project
 
 ### Upgrading
 

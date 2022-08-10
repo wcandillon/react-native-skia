@@ -1,0 +1,39 @@
+name: 🐛 Bug Report
+description: Report a reproducible bug or regression in React Native Skia
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide all the information requested. Issues that do not follow this format are likely to stall.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What react-native-skia version does this appear on?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide a detailed list of steps that reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Snack, code example, screenshot, or link to a repository
+      description: |
+        Please provide a Snack (https://snack.expo.io/), a link to a repository on GitHub, or provide a minimal code example that reproduces the problem.
+        You may provide a screenshot of the application if you think it is relevant to your bug report.
+        Here are some tips for providing a minimal example: https://stackoverflow.com/help/mcve
+        Please note that a reproducer is mandatory. Issues without reproducer are more likely to stall and will be closed.
+    validations:
+      required: true

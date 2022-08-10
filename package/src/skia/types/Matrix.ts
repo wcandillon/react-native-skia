@@ -1,4 +1,5 @@
 import type { SkJSIInstance } from "./JsiInstance";
+import type { SkCanvas } from "./Canvas";
 export enum MatrixIndex {
   ScaleX = 0,
   SkewX = 1,
@@ -8,8 +9,11 @@ export enum MatrixIndex {
   TransY = 5,
   Persp0 = 6,
   Persp1 = 7,
-  persp2 = 8,
+  Persp2 = 8,
 }
+
+export const isMatrix = (obj: unknown): obj is SkMatrix =>
+  obj !== null && (obj as SkJSIInstance<string>).__typename__ === "Matrix";
 
 export interface SkMatrix extends SkJSIInstance<"Matrix"> {
   concat: (matrix: SkMatrix) => void;
@@ -17,6 +21,7 @@ export interface SkMatrix extends SkJSIInstance<"Matrix"> {
   scale: (x: number, y?: number) => void;
   skew: (x: number, y: number) => void;
   rotate: (theta: number) => void;
+  identity: () => void;
 }
 
 type Transform2dName =
@@ -49,7 +54,10 @@ export interface TransformProp {
   transform?: Transforms2d;
 }
 
-export const processTransform = (m: SkMatrix, transforms: Transforms2d) => {
+export const processTransform = <T extends SkMatrix | SkCanvas>(
+  m: T,
+  transforms: Transforms2d
+) => {
   for (const transform of transforms) {
     const key = Object.keys(transform)[0] as Transform2dName;
     const value = (transform as Pick<Transformations, typeof key>)[key];
@@ -82,7 +90,11 @@ export const processTransform = (m: SkMatrix, transforms: Transforms2d) => {
       continue;
     }
     if (key === "rotate" || key === "rotateZ") {
-      m.rotate(value);
+      if (isMatrix(m)) {
+        m.rotate(value);
+      } else {
+        m.rotate(toDegrees(value), 0, 0);
+      }
       continue;
     }
     exhaustiveCheck(key);
@@ -92,4 +104,8 @@ export const processTransform = (m: SkMatrix, transforms: Transforms2d) => {
 
 const exhaustiveCheck = (a: never): never => {
   throw new Error(`Unknown transformation: ${a}`);
+};
+
+export const toDegrees = (rad: number) => {
+  return (rad * 180) / Math.PI;
 };

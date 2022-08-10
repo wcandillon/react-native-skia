@@ -1,0 +1,10 @@
+name: 📖 Documentation issue
+description: Report an issue with React Native Skia documentation
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

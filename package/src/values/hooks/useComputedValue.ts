@@ -16,8 +16,3 @@ export const useComputedValue = <R>(cb: () => R, values: unknown[]) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
     values
   );
-
-export const useDerivedValue = <R>(cb: () => R, values: unknown[]) => {
-  console.warn("useDerivedValue is deprecated. Use useComputedValue instead.");
-  return useComputedValue(cb, values);
-};

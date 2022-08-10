@@ -32,7 +32,6 @@ export const PerformanceDrawingTest: React.FC = () => {
   if (image === null) {
     return null;
   }
-
   return (
     <View style={styles.container}>
       <View style={styles.mode}>

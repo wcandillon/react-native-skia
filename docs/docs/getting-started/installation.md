@@ -29,7 +29,7 @@ Run `pod install` on the `ios/` directory.
 
 Currently, you will need Android NDK to be installed.
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
-`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk-bundle` for instance.
+`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/<version>` for instance.
 
 If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_
 
@@ -50,14 +50,17 @@ For error **_CMake 'X.X.X' was not found in SDK, PATH, or by cmake.dir property.
 open _Tools > SDK Manager_, switch to the _SDK Tools_ tab.
 Find `CMake` and click _Show Package Details_ and download compatiable version **'X.X.X'**, and apply to install.
 
+## Web
+
+To use this library in the browser, see [these instructions](/docs/getting-started/web).
+
 ## Playground
 
 We have an example project you can play with [here](https://github.com/Shopify/react-native-skia/tree/main/example).
 
 ```sh
-yarn
-cd package && yarn && cd ..
-cd example && yarn && yarn start
+yarn boostrap
+cd example && yarn start
 ```
 
 To run the example project on iOS, you will need to run `pod install`, and on Android, you will also need Android NDK to be installed ([see here](#android)). 
@@ -66,16 +69,16 @@ To run the example project on iOS, you will need to run `pod install`, and on An
 
 In order to load the mock provided by React Native Skia add following to your jest config:
 
-```json
-"setupFiles": ["./node_modules/@shopify/react-native-skia/jestSetup.js"]
+```js
+"setupFiles": [require.resolve("@shopify/react-native-skia/jestSetup.js")]
 ```
 
 Example:
 
-```json
-"jest": {
+```js
+module.exports = {
   "preset": "react-native",
-  "setupFiles": ["./node_modules/@shopify/react-native-skia/jestSetup.js"]
+  "setupFiles": [require.resolve("@shopify/react-native-skia/jestSetup.js")]
 }
 ```
 

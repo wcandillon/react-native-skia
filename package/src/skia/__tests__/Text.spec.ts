@@ -5,7 +5,7 @@ import { processResult } from "../../__tests__/setup";
 
 import { setupSkia } from "./setup";
 
-describe("FontMgr", () => {
+describe("Text API", () => {
   it("Hello world text", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();

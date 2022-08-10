@@ -6,7 +6,6 @@ import type {
   FontDef,
 } from "../../processors";
 import { createDrawing } from "../../nodes/Drawing";
-import { processFont } from "../../processors";
 
 type TextProps = CustomPaintProps &
   FontDef & {
@@ -16,8 +15,8 @@ type TextProps = CustomPaintProps &
   };
 
 const onDraw = createDrawing<TextProps>(
-  ({ canvas, paint, fontMgr, Skia }, { text, x, y, ...fontDef }) => {
-    const font = processFont(Skia, fontMgr, fontDef);
+  ({ canvas, paint }, { text, x, y, ...fontDef }) => {
+    const { font } = fontDef;
     canvas.drawText(text, x, y, paint, font);
   }
 );
