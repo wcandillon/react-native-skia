@@ -152,7 +152,7 @@ namespace RNSkia
 
             if (glyphs.size() > positions.size())
             {
-                getContext()->raiseJsError("Not enough x,y position pairs for glyphs");
+                throw jsi::JSError(runtime, "Not enough x,y position pairs for glyphs");
                 return jsi::Value::null();
             }
             auto sects = getObject()->getIntercepts(glyphs.data(), SkToInt(glyphs.size()), positions.data(), top, bottom);

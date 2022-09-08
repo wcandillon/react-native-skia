@@ -116,15 +116,6 @@ public:
   }
   
   /**
-    Raises a Javascript error. This function is a bit different from the raiseError since it
-    raises a javascript error on the main js runtime giving us nice javascript errors in
-    React Native development.
-   */
-  void raiseJsError(const std::string &message) {
-    throw jsi::JSError(*getJsRuntime(), message);
-  }
-
-  /**
    * @return Current scale factor for pixels
    */
   float getPixelDensity() { return _pixelDensity; };

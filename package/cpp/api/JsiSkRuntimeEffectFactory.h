@@ -21,7 +21,7 @@ public:
     auto effect = result.effect;
     auto errorText = result.errorText;
     if (!effect) {
-      getContext()->raiseJsError(
+      throw jsi::JSError(runtime, 
           std::string("Error in sksl:\n" + std::string(errorText.c_str()))
               .c_str());
       return jsi::Value::null();
