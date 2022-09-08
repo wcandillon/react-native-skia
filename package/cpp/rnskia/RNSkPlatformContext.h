@@ -112,7 +112,16 @@ public:
    * @param message Message to show
    */
   void raiseError(const std::string &message) {
-    return raiseError(std::runtime_error(message));
+    raiseError(std::runtime_error(message));
+  }
+  
+  /**
+    Raises a Javascript error. This function is a bit different from the raiseError since it
+    raises a javascript error on the main js runtime giving us nice javascript errors in
+    React Native development.
+   */
+  void raiseJsError(const std::string &message) {
+    throw jsi::JSError(*getJsRuntime(), message);
   }
 
   /**

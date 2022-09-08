@@ -33,20 +33,20 @@ public:
    */
   JSI_HOST_FUNCTION(setJsiProperty) {
     if (count != 3) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           std::string("setJsiProperty: Expected 3 arguments, got " +
                       std::to_string(count) + "."));
       return jsi::Value::undefined();
     }
 
     if (!arguments[0].isNumber()) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           "setJsiProperty: First argument must be a number");
       return jsi::Value::undefined();
     }
     
     if (!arguments[1].isString()) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           "setJsiProperty: Second argument must be the name of the property to set.");
       
       return jsi::Value::undefined();
@@ -73,7 +73,7 @@ public:
    */
   JSI_HOST_FUNCTION(callJsiMethod) {
     if (count < 2) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           std::string("callCustomCommand: Expected at least 2 arguments, got " +
                       std::to_string(count) + "."));
       
@@ -81,14 +81,14 @@ public:
     }
 
     if (!arguments[0].isNumber()) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           "callCustomCommand: First argument must be a number");
       
       return jsi::Value::undefined();
     }
     
     if (!arguments[1].isString()) {
-      _platformContext->raiseError(
+      _platformContext->raiseJsError(
           "callCustomCommand: Second argument must be the name of the action to call.");
       
       return jsi::Value::undefined();
@@ -100,7 +100,7 @@ public:
     auto info = getEnsuredViewInfo(nativeId);
     
     if(info->view == nullptr) {
-      jsi::detail::throwJSError(runtime,
+      _platformContext->raiseJsError(
           std::string("callCustomCommand: Could not call action " + action +
                       " on view - view not ready.").c_str());
       
@@ -115,14 +115,14 @@ public:
   
   JSI_HOST_FUNCTION(requestRedraw) {
     if (count < 2) {
-       _platformContext->raiseError(
+       _platformContext->raiseJsError(
          std::string("requestRedraw: Expected 2 arguments, got " + std::to_string(count) + "."));
 
        return jsi::Value::undefined();
      }
 
      if (!arguments[0].isNumber()) {
-       _platformContext->raiseError(
+       _platformContext->raiseJsError(
            "requestRedraw: First argument must be a number");
 
        return jsi::Value::undefined();
@@ -140,12 +140,12 @@ public:
   
   JSI_HOST_FUNCTION(makeImageSnapshot) {
     if (count < 1) {
-      _platformContext->raiseError(std::string("makeImageSnapshot: Expected at least 1 argument, got " + std::to_string(count) + "."));
+      _platformContext->raiseJsError(std::string("makeImageSnapshot: Expected at least 1 argument, got " + std::to_string(count) + "."));
       return jsi::Value::undefined();
     }
 
     if (!arguments[0].isNumber()) {
-      _platformContext->raiseError("makeImageSnapshot: First argument must be a number");
+      _platformContext->raiseJsError("makeImageSnapshot: First argument must be a number");
       return jsi::Value::undefined();
     }
     
@@ -161,19 +161,19 @@ public:
         image = info->view->makeImageSnapshot(nullptr);
       }
       if(image == nullptr) {
-        jsi::detail::throwJSError(runtime, "Could not create image from current surface.");
+        _platformContext->raiseJsError("Could not create image from current surface.");
         return jsi::Value::undefined();
       }
       return jsi::Object::createFromHostObject(runtime, std::make_shared<JsiSkImage>(_platformContext, image));
     }
-    jsi::detail::throwJSError(runtime, "No Skia View currently available.");
+    _platformContext->raiseJsError("No Skia View currently available.");
     return jsi::Value::undefined();
   }
   
   JSI_HOST_FUNCTION(registerValuesInView) {
       // Check params
       if(!arguments[1].isObject() || !arguments[1].asObject(runtime).isArray(runtime)) {
-        jsi::detail::throwJSError(runtime, "Expected array of Values as second parameter");
+        _platformContext->raiseJsError("Expected array of Values as second parameter");
         return jsi::Value::undefined();
       }
       

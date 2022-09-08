@@ -31,12 +31,12 @@ public:
     // Verify input
     if(!arguments[0].isObject() ||
        !arguments[0].asObject(runtime).isFunction(runtime)) {
-      jsi::detail::throwJSError(runtime, "Expected callback function as first parameter");
+      getContext()->raiseJsError("Expected callback function as first parameter");
     }
         
     if(!arguments[1].isObject() ||
        !arguments[1].asObject(runtime).isArray(runtime)) {
-      jsi::detail::throwJSError(runtime, "Expected array of dependencies as second parameter");
+      getContext()->raiseJsError("Expected array of dependencies as second parameter");
     }
         
     // Get callback for calculating result

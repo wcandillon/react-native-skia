@@ -96,7 +96,7 @@ namespace RNSkia
     {
       auto i = static_cast<int>(arguments[0].asNumber());
       if (i < 0 || i >= getObject()->uniforms().size()) {
-        jsi::detail::throwJSError(runtime, "invalid uniform index");
+        getContext()->raiseJsError("invalid uniform index");
       }
       auto it = getObject()->uniforms().begin() + i;
       return jsi::String::createFromAscii(runtime, it->name.c_str());
@@ -106,7 +106,7 @@ namespace RNSkia
     {
       auto i = static_cast<int>(arguments[0].asNumber());
       if (i < 0 || i >= getObject()->uniforms().size()) {
-        jsi::detail::throwJSError(runtime, "invalid uniform index");
+        getContext()->raiseJsError("invalid uniform index");
       }
       auto it = getObject()->uniforms().begin() + i;
       auto result = jsi::Object(runtime);
@@ -144,7 +144,7 @@ namespace RNSkia
                 std::to_string(jsiUniformsSize) +
                 " expected " +
                 std::to_string(getObject()->uniformSize() / sizeof(float));
-        jsi::detail::throwJSError(runtime, msg.c_str());
+        getContext()->raiseJsError(msg.c_str());
       }
 
       auto uniforms = SkData::MakeUninitialized(getObject()->uniformSize());
