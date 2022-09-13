@@ -22,7 +22,7 @@ import {
   Severance,
 } from "./Examples";
 import { HomeScreen } from "./Home";
-import { AppleBreathe } from "./S5/Breathe";
+import { S5 } from "./S5";
 
 const linking = {
   config: {
@@ -57,7 +57,11 @@ const App = () => {
       <StatusBar hidden />
       <NavigationContainer linking={linking}>
         <Stack.Navigator>
-          <Stack.Screen name="S5" component={AppleBreathe} />
+          <Stack.Screen
+            name="S5"
+            component={S5}
+            options={{ header: () => null }}
+          />
           <Stack.Screen
             name="Home"
             component={HomeScreen}
