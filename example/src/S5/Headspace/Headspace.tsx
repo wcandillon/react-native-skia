@@ -8,8 +8,14 @@ import {
   vec,
   Group,
   useLoop,
+  fitbox,
+  Circle,
+  useValue,
+  useSpring,
+  useTouchHandler,
+  Spring,
 } from "@shopify/react-native-skia";
-import React from "react";
+import React, { useState } from "react";
 import { Dimensions } from "react-native";
 import SimplexNoise from "simplex-noise";
 // @ts-exppect-error
@@ -26,18 +32,21 @@ const n2 = new SimplexNoise(1);
 const n3 = new SimplexNoise(2);
 const n4 = new SimplexNoise(3);
 
+const bounds = { x: 0, y: 0, width: 100, height: 126 };
 const pauseRight = Skia.Path.MakeFromSVGString(
   "M 0 0 V 10.3 V 20.6 V 41.1 V 61.7 V 82.2 L 22.3 66.9 L 44.5 51.5 C 46.2 50.3 47.6 48.8 48.6 47 C 49.5 45.2 50 43.2 50 41.1 C 50 39.1 49.5 37 48.6 35.2 C 47.6 33.4 46.2 31.9 44.5 30.7 L 22.3 15.4 L 0 0 Z"
 )!;
-const m3 = Skia.Matrix();
-m3.translate(50, (126 - pauseRight.computeTightBounds().height) / 2);
-pauseRight.transform(m3);
-
 const playRight = Skia.Path.MakeFromSVGString(
   "M16.6667 0C12.2464 0 8.00716 1.75595 4.88155 4.88155C1.75595 8.00716 0 12.2464 0 16.6667V105.556C0 109.976 1.75595 114.215 4.88155 117.341C8.00716 120.466 12.2464 122.222 16.6667 122.222C21.0869 122.222 25.3262 120.466 28.4518 117.341C31.5774 114.215 33.3333 109.976 33.3333 105.556V16.6667C33.3333 12.2464 31.5774 8.00716 28.4518 4.88155C25.3262 1.75595 21.0869 0 16.6667 0Z"
 )!;
+
+const tx = bounds.width - playRight.computeTightBounds().width;
+const m3 = Skia.Matrix();
+m3.translate(tx, (126 - pauseRight.computeTightBounds().height) / 2);
+pauseRight.transform(m3);
+
 m3.identity();
-m3.translate(50, 0);
+m3.translate(tx, 0);
 playRight.transform(m3);
 
 const leftInterpolator = interpolate(
@@ -47,13 +56,17 @@ const leftInterpolator = interpolate(
 
 const rightInterpolator = interpolate(
   pauseRight.toSVGString(),
-  playRight.toSVGString()
+  playRight.toSVGString(),
+  {
+    maxSegmentLength: 1,
+  }
 );
 
-const bounds = { x: 0, y: 0, width: 100, height: 126 };
-
 export const Headspace = () => {
-  const progress = useLoop({ duration: 4000 });
+  const [toggled, setToggled] = useState(false);
+  const onTouch = useTouchHandler({ onEnd: () => setToggled((t) => !t) });
+  const progress = useSpring(toggled ? 1 : 0, Spring.Config.Gentle);
+
   const clock = useClockValue();
 
   const path = useComputedValue(() => {
@@ -83,11 +96,19 @@ export const Headspace = () => {
     [progress]
   );
   return (
-    <Canvas style={{ flex: 1 }}>
+    <Canvas style={{ flex: 1 }} onTouch={onTouch}>
       <Path path={path} />
-      <Group color="red">
+      <Group
+        color="white"
+        transform={fitbox("contain", bounds, {
+          x: c.x - r * 0.61,
+          y: c.y - r * 0.61,
+          width: 2 * r * 0.61,
+          height: 2 * r * 0.61,
+        })}
+      >
         <Path path={left} />
-        <Path path={right} color="blue" />
+        <Path path={right} />
       </Group>
     </Canvas>
   );
