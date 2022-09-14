@@ -65,16 +65,6 @@ const rightInterpolator = interpolate(
   playRight.toSVGString()
 );
 
-const sf = 0.45;
-const centroid = bounds.width / 3;
-
-// const transform = fitbox("contain", bounds, {
-//   x: c.x - r * sf,
-//   y: c.y - r * sf,
-//   width: 2 * r * sf,
-//   height: 2 * r * sf,
-// });
-
 const c1 = "#3a9dbb";
 const c2 = "#60d1b9";
 const c3 = "#2a7fb8";
@@ -125,14 +115,17 @@ export const Headspace = () => {
     return pathRight;
   }, [progress]);
   const transform = useComputedValue(() => {
+    const sf = 0.45;
+    const h = r * sf * 2;
+    console.log({ h: h / 3 });
     return [
       ...fitbox("contain", bounds, {
-        x: c.x - r * sf,
-        y: c.y - r * sf,
-        width: 2 * r * sf,
-        height: 2 * r * sf,
+        x: c.x - h / 2,
+        y: c.y - h / 2,
+        width: h,
+        height: h,
       }),
-      { translateX: mix(progress.current, 10, 0) },
+      { translateX: mix(progress.current, h / 3, 0) },
     ];
   }, [progress]);
   return (
