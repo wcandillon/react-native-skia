@@ -33,13 +33,12 @@ const TestRasterization = () => {
   return (
     <>
       <Paint ref={paint}>
+        <Blur blur={20 * PIXEL_RATIO} />
         <ColorMatrix
           matrix={[
             1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 18, -7,
           ]}
-        >
-          <Blur blur={20 * PIXEL_RATIO} />
-        </ColorMatrix>
+        />
       </Paint>
       <Group layer={paint}>
         <Circle cx={0} cy={c.y} r={radius} color="lightblue" />

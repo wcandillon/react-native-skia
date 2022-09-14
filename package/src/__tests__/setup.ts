@@ -25,4 +25,5 @@ export const processResult = (
   } else {
     fs.writeFileSync(p, png);
   }
+  ckSurface.getCanvas().clear(Float32Array.of(0, 0, 0, 0));
 };

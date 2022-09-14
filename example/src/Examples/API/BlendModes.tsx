@@ -4,12 +4,12 @@ import {
   BlendMode,
   Canvas,
   Circle,
-  enumKey,
   Group,
   Path,
   Skia,
   Text,
   useFont,
+  enumKey,
 } from "@shopify/react-native-skia";
 
 const r = 50;

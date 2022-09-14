@@ -1,11 +1,9 @@
 import {
   Canvas,
-  Paint,
   Rect,
   Skia,
   SkiaView,
   PaintStyle,
-  usePaintRef,
   Group,
   useTouchHandler,
   useValue,
@@ -116,9 +114,6 @@ export const PerformanceDrawingTest: React.FC = () => {
     [paint1, paint2, rects]
   );
 
-  const paint1Ref = usePaintRef();
-  const paint2Ref = usePaintRef();
-
   return (
     <View style={styles.container}>
       <View style={styles.mode}>
@@ -145,21 +140,19 @@ export const PerformanceDrawingTest: React.FC = () => {
       </View>
       {isDeclarative ? (
         <Canvas style={styles.container} debug mode="default" onTouch={onTouch}>
-          <Paint ref={paint1Ref} color="#00ff00" style={"fill"} />
-          <Paint
-            ref={paint2Ref}
-            color="#4060A3"
-            style="stroke"
-            strokeWidth={2}
-          />
           {rects.map((_, i) => (
             <Group
               key={i}
               transform={Selector(rotationTransforms, (v) => v[i])}
               origin={rects[i]}
             >
-              <Rect rect={rects[i]} paint={paint1Ref} />
-              <Rect rect={rects[i]} paint={paint2Ref} />
+              <Rect rect={rects[i]} color="#00ff00" />
+              <Rect
+                rect={rects[i]}
+                color="#4060A3"
+                style="stroke"
+                strokeWidth={2}
+              />
             </Group>
           ))}
         </Canvas>

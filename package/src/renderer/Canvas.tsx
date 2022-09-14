@@ -24,7 +24,7 @@ import type { SkiaValue } from "../values";
 
 import { debug as hostDebug, skHostConfig } from "./HostConfig";
 // import { debugTree } from "./nodes";
-import { Container } from "./nodes";
+import { Container } from "./Container";
 import { DependencyManager } from "./DependencyManager";
 import { CanvasProvider } from "./useCanvas";
 
@@ -58,7 +58,9 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
     const innerRef = useCanvasRef();
     const ref = useCombinedRefs(forwardedRef, innerRef);
     const [tick, setTick] = useState(0);
-    const redraw = useCallback(() => setTick((t) => t + 1), []);
+    const redraw = useCallback(() => {
+      setTick((t) => t + 1);
+    }, []);
 
     const registerValues = useCallback(
       (values: Array<SkiaValue<unknown>>) => {
@@ -70,10 +72,9 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
       [ref]
     );
 
-    const container = useMemo(
-      () => new Container(new DependencyManager(registerValues), redraw),
-      [redraw, registerValues]
-    );
+    const container = useMemo(() => {
+      return new Container(Skia, new DependencyManager(registerValues), redraw);
+    }, [redraw, registerValues]);
 
     const root = useMemo(
       () => skiaReconciler.createContainer(container, 0, false, null),

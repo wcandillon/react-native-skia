@@ -14,7 +14,7 @@ export type Routes = {
   BlendModes: undefined;
   Data: undefined;
   Picture: undefined;
-  Freeze: undefined;
+  Checker: undefined;
   UseCanvas: undefined;
   Reanimated: undefined;
 };

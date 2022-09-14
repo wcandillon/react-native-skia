@@ -182,11 +182,7 @@ describe("Test Shader component", () => {
         </Blend>
       </Fill>
     );
-    processResult(
-      surface,
-      "snapshots/runtime-effects/blend-color-burn.png",
-      true
-    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn.png");
     surface = drawOnNode(
       <Fill>
         <Blend mode="colorBurn">
@@ -196,11 +192,7 @@ describe("Test Shader component", () => {
         </Blend>
       </Fill>
     );
-    processResult(
-      surface,
-      "snapshots/runtime-effects/blend-color-burn2.png",
-      true
-    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn2.png");
   });
 
   it("should blend using multiply", () => {

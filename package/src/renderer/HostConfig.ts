@@ -1,9 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /*global NodeJS*/
 import type { HostConfig } from "react-reconciler";
 
-import type { Node, Container, DeclarationProps, DrawingProps } from "./nodes";
-import { DeclarationNode, DrawingNode, NodeType } from "./nodes";
-import { exhaustiveCheck, shallowEq } from "./typeddash";
+import type { NodeType, Node } from "../dom/types";
+import type { SkiaValue } from "../values";
+
+import type { Container } from "./Container";
+import { createNode } from "./HostComponents";
+import type { AnimatedProps } from "./processors";
+import { isSelector, isValue } from "./processors";
+import { mapKeys, shallowEq } from "./typeddash";
 
 const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
@@ -12,27 +18,15 @@ export const debug = (...args: Parameters<typeof console.log>) => {
   }
 };
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace JSX {
-    interface IntrinsicElements {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      skDeclaration: DeclarationProps<any>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      skDrawing: DrawingProps<any>;
-    }
-  }
-}
+type Instance = Node<unknown>;
 
-type Instance = Node;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Props = any;
-type TextInstance = Node;
+type TextInstance = Node<unknown>;
 type SuspenseInstance = Instance;
 type HydratableInstance = Instance;
 type PublicInstance = Instance;
 type HostContext = null;
-type UpdatePayload = true;
+type UpdatePayload = Container;
 type ChildSet = unknown;
 type TimeoutHandle = NodeJS.Timeout;
 type NoTimeout = -1;
@@ -53,84 +47,20 @@ type SkiaHostConfig = HostConfig<
   NoTimeout
 >;
 
-const allChildrenAreMemoized = (node: Instance) => {
-  if (!node.memoizable) {
-    return false;
-  }
-  for (const child of node.children) {
-    if (!child.memoized) {
-      return false;
-    }
-  }
-  return true;
+const appendNode = (parent: Node<unknown>, child: Node<unknown>) => {
+  parent.addChild(child);
 };
 
-const bustBranchMemoization = (parent: Node) => {
-  if (parent.memoizable) {
-    let ancestor: Node | undefined = parent;
-    while (ancestor) {
-      ancestor.memoized = null;
-      ancestor = ancestor.parent;
-    }
-  }
+const removeNode = (parent: Node<unknown>, child: Node<unknown>) => {
+  return parent.removeChild(child);
 };
 
-const bustBranchMemoizable = (parent: Node) => {
-  if (parent.memoizable) {
-    let ancestor: Node | undefined = parent;
-    while (ancestor) {
-      ancestor.memoizable = false;
-      ancestor = ancestor.parent;
-    }
-  }
-};
-
-const appendNode = (parent: Node, child: Node) => {
-  child.parent = parent;
-  bustBranchMemoization(parent);
-  if (!child.memoizable) {
-    bustBranchMemoizable(parent);
-  }
-  if (!parent.memoizable) {
-    child.memoizable = false;
-  }
-  parent.children.push(child);
-};
-
-const removeNode = (parent: Node, child: Node) => {
-  bustBranchMemoization(parent);
-  const index = parent.children.indexOf(child);
-  parent.children.splice(index, 1);
-  child.depMgr.unsubscribeNode(child);
-  // unsubscribe to all children as well
-  for (const c of child.children) {
-    removeNode(child, c);
-  }
-};
-
-const insertBefore = (parent: Node, child: Node, before: Node) => {
-  bustBranchMemoization(parent);
-  const index = parent.children.indexOf(child);
-  if (index !== -1) {
-    parent.children.splice(index, 1);
-  }
-  const beforeIndex = parent.children.indexOf(before);
-  parent.children.splice(beforeIndex, 0, child);
-};
-
-const createNode = (container: Container, type: NodeType, props: Props) => {
-  switch (type) {
-    case NodeType.Drawing:
-      const { onDraw, skipProcessing, ...p1 } = props;
-      return new DrawingNode(container.depMgr, onDraw, skipProcessing, p1);
-    case NodeType.Declaration:
-      const { onDeclare, ...p2 } = props;
-      return new DeclarationNode(container.depMgr, onDeclare, p2);
-    default:
-      // TODO: here we need to throw a nice error message
-      // This is the error that will show up when the user uses nodes not supported by Skia (View, Audio, etc)
-      return exhaustiveCheck(type);
-  }
+const insertBefore = (
+  parent: Node<unknown>,
+  child: Node<unknown>,
+  before: Node<unknown>
+) => {
+  parent.insertChildBefore(child, before);
 };
 
 export const skHostConfig: SkiaHostConfig = {
@@ -151,7 +81,7 @@ export const skHostConfig: SkiaHostConfig = {
 
   appendChildToContainer(container, child) {
     debug("appendChildToContainer", container, child);
-    appendNode(container, child);
+    appendNode(container.root, child);
   },
 
   appendChild(parent, child) {
@@ -159,7 +89,7 @@ export const skHostConfig: SkiaHostConfig = {
     appendNode(parent, child);
   },
 
-  getRootHostContext: (_rootContainerInstance: Node) => {
+  getRootHostContext: (_rootContainerInstance: Container) => {
     debug("getRootHostContext");
     return null;
   },
@@ -186,13 +116,16 @@ export const skHostConfig: SkiaHostConfig = {
 
   createInstance(
     type,
-    props,
+    pristineProps,
     container,
     _hostContext,
     _internalInstanceHandle
   ) {
     debug("createInstance", type);
-    return createNode(container, type, props) as Node;
+    const props = { ...pristineProps };
+    const node = createNode(container, type, materialize(props));
+    container.depMgr.subscribeNode(node, props);
+    return node;
   },
 
   appendInitialChild(parentInstance, child) {
@@ -221,10 +154,6 @@ export const skHostConfig: SkiaHostConfig = {
     return null;
   },
 
-  finalizeContainerChildren: () => {
-    debug("finalizeContainerChildren");
-  },
-
   resetAfterCommit(container) {
     debug("resetAfterCommit");
     container.redraw();
@@ -236,46 +165,38 @@ export const skHostConfig: SkiaHostConfig = {
   },
 
   prepareUpdate: (
-    instance,
+    _instance,
     type,
     oldProps,
     newProps,
-    _rootContainerInstance,
+    rootContainerInstance,
     _hostContext
   ) => {
     debug("prepareUpdate");
     const propsAreEqual = shallowEq(oldProps, newProps);
-    if (propsAreEqual && !instance.memoizable) {
+    if (propsAreEqual) {
       return null;
     }
     debug("update ", type);
-    return true;
+    return rootContainerInstance;
   },
 
   commitUpdate(
     instance,
-    _updatePayload,
+    updatePayload,
     type,
     prevProps,
     nextProps,
     _internalHandle
   ) {
     debug("commitUpdate: ", type);
-    if (shallowEq(prevProps, nextProps) && allChildrenAreMemoized(instance)) {
+    if (shallowEq(prevProps, nextProps)) {
       return;
     }
-    bustBranchMemoization(instance);
-    if (instance instanceof DrawingNode) {
-      const { onDraw, skipProcessing, ...props } = nextProps;
-      instance.props = props;
-    } else if (instance instanceof DeclarationNode) {
-      const { onDeclare, ...props } = nextProps;
-      instance.props = props;
-    } else {
-      throw new Error(
-        "Unsupported instance commitUpdate " + instance.constructor.name
-      );
-    }
+    const props = { ...nextProps };
+    updatePayload.depMgr.unsubscribeNode(instance);
+    instance.setProps(materialize(props));
+    updatePayload.depMgr.subscribeNode(instance, props);
   },
 
   commitTextUpdate: (
@@ -288,7 +209,9 @@ export const skHostConfig: SkiaHostConfig = {
 
   clearContainer: (container) => {
     debug("clearContainer");
-    container.children.splice(0);
+    container.root.children().forEach((child) => {
+      container.root.removeChild(child);
+    });
   },
 
   preparePortalMount: () => {
@@ -299,15 +222,29 @@ export const skHostConfig: SkiaHostConfig = {
     removeNode(parent, child);
   },
 
-  removeChildFromContainer: (parent, child) => {
-    removeNode(parent, child);
+  removeChildFromContainer: (container, child) => {
+    removeNode(container.root, child);
   },
 
-  insertInContainerBefore: (parent, child, before) => {
-    insertBefore(parent, child, before);
+  insertInContainerBefore: (container, child, before) => {
+    insertBefore(container.root, child, before);
   },
 
   insertBefore: (parent, child, before) => {
     insertBefore(parent, child, before);
   },
+};
+
+const materialize = <P>(props: AnimatedProps<P>) => {
+  const result = { ...props };
+  mapKeys(props).forEach((key) => {
+    const prop = props[key];
+    if (isValue(prop)) {
+      result[key] = (prop as SkiaValue<P[typeof key]>).current;
+    } else if (isSelector(prop)) {
+      result[key] = prop.selector(prop.value.current) as P[typeof key];
+    }
+  });
+
+  return result as any;
 };

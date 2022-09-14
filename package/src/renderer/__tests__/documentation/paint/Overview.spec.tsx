@@ -84,6 +84,6 @@ describe("Paint", () => {
         />
       </Group>
     );
-    processResult(surface, docPath("paint/opacity.png"), true);
+    processResult(surface, docPath("paint/opacity.png"));
   });
 });

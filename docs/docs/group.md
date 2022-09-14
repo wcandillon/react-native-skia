@@ -247,13 +247,12 @@ const Clip = () => {
   return (
     <Canvas style={{ flex: 1 }}>
       <Paint ref={paint}>
+        <Blur blur={20} />
         <ColorMatrix
           matrix={[
             1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 18, -7,
           ]}
-        >
-          <Blur blur={20} />
-        </ColorMatrix>
+        />
       </Paint>
       <Group color="lightblue" layer={paint}>
         <Circle cx={0} cy={128} r={128 * 0.95} />

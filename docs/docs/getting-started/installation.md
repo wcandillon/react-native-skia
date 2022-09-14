@@ -19,6 +19,14 @@ Or using npm:
 npm install @shopify/react-native-skia
 ```
 
+### Bundle Size
+
+Below is the app size increase to be expected when adding React Native Skia to your project ([learn more](bundle-size)).
+
+| iOS  | Android | Web   |
+| ---- | ------- | ----- |
+| 6 MB | 4 MB     | 7,2 MB |
+
 ## iOS
 
 Run `pod install` on the `ios/` directory.

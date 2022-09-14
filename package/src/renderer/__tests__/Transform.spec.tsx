@@ -29,6 +29,7 @@ describe("Renderer", () => {
     matrix.translate(origin.x, origin.y);
     matrix.scale(0.5);
     matrix.translate(-origin.x, -origin.y);
+    expect(matrix.get()).toStrictEqual([0.5, 0, 192, 0, 0.5, 192, 0, 0, 1]);
     const surface = drawOnNode(
       <Group matrix={matrix}>
         <Rect x={0} y={0} width={size} height={size} color="lightblue" />

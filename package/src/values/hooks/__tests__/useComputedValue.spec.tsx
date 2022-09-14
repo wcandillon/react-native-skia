@@ -60,7 +60,7 @@ describe("useComputedValue", () => {
     const id1 = global.SkiaValueApi.createValue(0);
     const id2 = global.SkiaValueApi.createValue(1);
     // We draw
-    const { surface, draw, container } = mountCanvas(
+    const { surface, draw } = mountCanvas(
       <TestComputedDeps id1={id1} id2={id2} />
     );
     draw();
@@ -70,10 +70,6 @@ describe("useComputedValue", () => {
     draw();
     processResult(surface, "snapshots/animations/green.png");
     expect(counter.value).toBe(2);
-    expect(container.children.length).toBe(1);
-    const props = container.children[0].props as Record<string, unknown>;
-    expect(props.onDraw).not.toBeDefined();
-    expect(Object.keys(props).length).toBe(1);
   });
 
   it("should clean up stable version", async () => {

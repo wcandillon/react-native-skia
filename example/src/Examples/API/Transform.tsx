@@ -126,19 +126,19 @@ export const Transform = () => {
         const pers0 = 0;
         const pers1 = 0;
         const pers2 = 1;
-        canvas.concat(
-          Skia.Matrix([
-            scaleX,
-            skewX,
-            transX,
-            skewY,
-            scaleY,
-            transY,
-            pers0,
-            pers1,
-            pers2,
-          ])
-        );
+        const m = Skia.Matrix([
+          scaleX,
+          skewX,
+          transX,
+          skewY,
+          scaleY,
+          transY,
+          pers0,
+          pers1,
+          pers2,
+        ]);
+        //console.log({ matrix: m.get() });
+        canvas.concat(m);
 
         canvas.drawImageRect(image, imgRect, rect, paint);
         canvas.restore();

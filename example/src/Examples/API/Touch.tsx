@@ -1,6 +1,10 @@
 import React, { useCallback, useRef } from "react";
 import { StyleSheet, View } from "react-native";
-import type { SkColor, TouchInfo } from "@shopify/react-native-skia";
+import type {
+  DrawingContext,
+  SkColor,
+  TouchInfo,
+} from "@shopify/react-native-skia";
 import {
   Group,
   useMultiTouchHandler,
@@ -10,7 +14,6 @@ import {
   Skia,
   TouchType,
 } from "@shopify/react-native-skia";
-import type { DrawingContext } from "@shopify/react-native-skia/src/renderer/DrawingContext";
 
 import { Title } from "./components/Title";
 

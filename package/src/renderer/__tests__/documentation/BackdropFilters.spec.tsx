@@ -4,11 +4,14 @@ import { docPath, processResult } from "../../../__tests__/setup";
 import {
   BackdropBlur,
   BackdropFilter,
+  Blur,
+  Circle,
   ColorMatrix,
   Fill,
   Image,
+  LinearGradient,
 } from "../../components";
-import { drawOnNode, width, loadImage } from "../setup";
+import { drawOnNode, width, loadImage, importSkia, height } from "../setup";
 import { Group } from "../../components/Group";
 
 const size = width;
@@ -61,5 +64,27 @@ describe("Backdrop Filters", () => {
       </Group>
     );
     processResult(surface, docPath("blur-backdrop-filter.png"));
+  });
+  it("should display the Aurora Example", () => {
+    const { vec } = importSkia();
+    const c = vec(width / 2, height / 2);
+    const r = c.x - 32;
+    const clip = { x: 0, y: c.y, width, height: c.y };
+    const surface = drawOnNode(
+      <>
+        <Fill color="black" />
+        <Circle c={c} r={r}>
+          <LinearGradient
+            start={vec(c.x - r, c.y - r)}
+            end={vec(c.x + r, c.y + r)}
+            colors={["#FFF723", "#E70696"]}
+          />
+        </Circle>
+        <BackdropFilter filter={<Blur blur={10} />} clip={clip}>
+          <Fill color="rgba(0, 0, 0, 0.3)" />
+        </BackdropFilter>
+      </>
+    );
+    processResult(surface, docPath("blur-backdrop-aurora.png"));
   });
 });
