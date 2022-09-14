@@ -117,7 +117,7 @@ export const Headspace = () => {
   const transform = useComputedValue(() => {
     const sf = 0.45;
     const h = r * sf * 2;
-    console.log({ h: h / 3 });
+    const centroid = h / 2 - h / 3;
     return [
       ...fitbox("contain", bounds, {
         x: c.x - h / 2,
@@ -125,7 +125,7 @@ export const Headspace = () => {
         width: h,
         height: h,
       }),
-      { translateX: mix(progress.current, h / 3, 0) },
+      { translateX: mix(progress.current, centroid, 0) },
     ];
   }, [progress]);
   return (
@@ -136,7 +136,6 @@ export const Headspace = () => {
         <Path path={left} />
         <Path path={right} />
       </Group>
-      <Circle r={10} color="red" c={c} />
     </Canvas>
   );
 };
