@@ -20,6 +20,7 @@
     "@svgr/webpack": "^6.2.1",
     "cdt2d": "^1.0.0",
     "color": "^4.2.1",
+    "flubber": "^0.4.2",
     "react": "17.0.2",
     "react-dom": "^17.0.0",
     "react-native": "0.68.0",

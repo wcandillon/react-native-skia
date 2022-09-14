@@ -12,6 +12,8 @@ import {
 import React from "react";
 import { Dimensions } from "react-native";
 import SimplexNoise from "simplex-noise";
+// @ts-exppect-error
+import { interpolate } from "flubber";
 
 const C = 0.55228474983079;
 const F = 20000;
@@ -23,24 +25,30 @@ const n1 = new SimplexNoise(0);
 const n2 = new SimplexNoise(1);
 const n3 = new SimplexNoise(2);
 const n4 = new SimplexNoise(3);
-const p1 =
-  "M8,125C3.5,123,0.4,118.6,0,113.6C0,113.6,0,12.7,0,12.7C0.2,10.3,1,7.9,2.4,5.9C3.9,3.9,5.8,2.3,8,1.3C9.8,0.4,11.8,0,13.7,0C14.2,0,14.7,0,15.1,0.1C17.6,0.3,19.9,1.2,21.9,2.7C21.9,2.7,50,22,50,22C50,22,50,104.3,50,104.3C50,104.3,21.9,123.6,21.9,123.6C20.3,124.8,18.5,125.6,16.6,126C16.6,126,10.9,126,10.9,126C9.9,125.8,8.9,125.5,8,125C8,125,8,125,8,125";
-const p2 =
-  "M0,0C0,0,0,10.3,0,10.3C0,10.3,0,20.6,0,20.6C0,20.6,0,41.1,0,41.1C0,41.1,0,61.7,0,61.7C0,61.7,0,82.2,0,82.2C0,82.2,22.3,66.9,22.3,66.9C22.3,66.9,44.5,51.5,44.5,51.5C46.2,50.3,47.6,48.8,48.6,47C49.5,45.2,50,43.2,50,41.1C50,39.1,49.5,37,48.6,35.2C47.6,33.4,46.2,31.9,44.5,30.7C44.5,30.7,22.3,15.4,22.3,15.4C22.3,15.4,0,0,0,0C0,0,0,0,0,0";
-const s1 =
-  "M16.7,0C12.2,0,8,1.8,4.9,4.9C1.8,8,0,12.2,0,16.7C0,16.7,0,105.6,0,105.6C0,110,1.8,114.2,4.9,117.3C8,120.5,12.2,122.2,16.7,122.2C21.1,122.2,25.3,120.5,28.5,117.3C31.6,114.2,33.3,110,33.3,105.6C33.3,105.6,33.3,83.3,33.3,83.3C33.3,83.3,33.3,61.1,33.3,61.1C33.3,61.1,33.3,38.9,33.3,38.9C33.3,38.9,33.3,16.7,33.3,16.7C33.3,12.2,31.6,8,28.5,4.9C25.3,1.8,21.1,0,16.7,0C16.7,0,16.7,0,16.7,0";
 
-const playLeft = Skia.Path.MakeFromSVGString(p1)!;
-const playRight = Skia.Path.MakeFromSVGString(p2)!;
+const pauseRight = Skia.Path.MakeFromSVGString(
+  "M 0 0 V 10.3 V 20.6 V 41.1 V 61.7 V 82.2 L 22.3 66.9 L 44.5 51.5 C 46.2 50.3 47.6 48.8 48.6 47 C 49.5 45.2 50 43.2 50 41.1 C 50 39.1 49.5 37 48.6 35.2 C 47.6 33.4 46.2 31.9 44.5 30.7 L 22.3 15.4 L 0 0 Z"
+)!;
 const m3 = Skia.Matrix();
-m3.translate(50, (126 - playRight.computeTightBounds().height) / 2);
-playRight.transform(m3);
+m3.translate(50, (126 - pauseRight.computeTightBounds().height) / 2);
+pauseRight.transform(m3);
 
-const pauseLeft = Skia.Path.MakeFromSVGString(s1)!;
-const pauseRight = Skia.Path.MakeFromSVGString(s1)!;
+const playRight = Skia.Path.MakeFromSVGString(
+  "M16.6667 0C12.2464 0 8.00716 1.75595 4.88155 4.88155C1.75595 8.00716 0 12.2464 0 16.6667V105.556C0 109.976 1.75595 114.215 4.88155 117.341C8.00716 120.466 12.2464 122.222 16.6667 122.222C21.0869 122.222 25.3262 120.466 28.4518 117.341C31.5774 114.215 33.3333 109.976 33.3333 105.556V16.6667C33.3333 12.2464 31.5774 8.00716 28.4518 4.88155C25.3262 1.75595 21.0869 0 16.6667 0Z"
+)!;
 m3.identity();
 m3.translate(50, 0);
-pauseRight.transform(m3);
+playRight.transform(m3);
+
+const leftInterpolator = interpolate(
+  "M 8 125 C 3.5 123 0.4 118.6 0 113.6 V 12.7 C 0.2 10.3 1 7.9 2.4 5.9 C 3.9 3.9 5.8 2.3 8 1.3 C 9.8 0.4 11.8 0 13.7 0 C 14.2 0 14.7 0 15.1 0.1 C 17.6 0.3 19.9 1.2 21.9 2.7 L 50 22 V 104.3 L 21.9 123.6 C 20.3 124.8 18.5 125.6 16.6 126 H 10.9 C 9.9 125.8 8.9 125.5 8 125 Z",
+  "M16.6667 0C12.2464 0 8.00716 1.75595 4.88155 4.88155C1.75595 8.00716 0 12.2464 0 16.6667V105.556C0 109.976 1.75595 114.215 4.88155 117.341C8.00716 120.466 12.2464 122.222 16.6667 122.222C21.0869 122.222 25.3262 120.466 28.4518 117.341C31.5774 114.215 33.3333 109.976 33.3333 105.556V16.6667C33.3333 12.2464 31.5774 8.00716 28.4518 4.88155C25.3262 1.75595 21.0869 0 16.6667 0Z"
+);
+
+const rightInterpolator = interpolate(
+  pauseRight.toSVGString(),
+  playRight.toSVGString()
+);
 
 const bounds = { x: 0, y: 0, width: 100, height: 126 };
 
@@ -67,11 +75,11 @@ export const Headspace = () => {
     return p;
   }, [clock]);
   const left = useComputedValue(
-    () => playLeft.interpolate(pauseLeft, progress.current)!,
+    () => leftInterpolator(progress.current)!,
     [progress]
   );
   const right = useComputedValue(
-    () => playRight.interpolate(pauseRight, progress.current)!,
+    () => rightInterpolator(progress.current)!,
     [progress]
   );
   return (
@@ -79,7 +87,7 @@ export const Headspace = () => {
       <Path path={path} />
       <Group color="red">
         <Path path={left} />
-        <Path path={right} />
+        <Path path={right} color="blue" />
       </Group>
     </Canvas>
   );
