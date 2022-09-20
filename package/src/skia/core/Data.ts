@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image } from "react-native";
 
 import { Skia } from "../Skia";
@@ -47,9 +47,18 @@ const useLoading = <T>(
   source: DataSourceParam,
   loader: () => Promise<T | null>
 ) => {
+  const mounted = useRef(false);
   const [data, setData] = useState<T | null>(null);
   useEffect(() => {
-    loader().then(setData);
+    mounted.current = true;
+    loader().then((value) => {
+      if (mounted.current) {
+        setData(value);
+      }
+    });
+    return () => {
+      mounted.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
   return data;

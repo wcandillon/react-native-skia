@@ -71,7 +71,7 @@ namespace RNSkia
 
         JSI_HOST_FUNCTION(getTextWidth) {
             auto str = arguments[0].asString(runtime).utf8(runtime);
-            auto numGlyphIDs = str.length();
+            auto numGlyphIDs = getObject()->countText(str.c_str(), str.length(), SkTextEncoding::kUTF8);
             std::vector<SkGlyphID> glyphs;
             glyphs.resize(numGlyphIDs);
             int glyphsSize = static_cast<int>(numGlyphIDs);
@@ -111,9 +111,9 @@ namespace RNSkia
         JSI_HOST_FUNCTION(getGlyphIDs)
         {
             auto str = arguments[0].asString(runtime).utf8(runtime);
-            auto numGlyphIDs = count > 1 && !arguments[1].isNull() && !arguments[1].isUndefined()
-                                   ? arguments[1].asNumber()
-                                   : str.length();
+            int numGlyphIDs = count > 1 && !arguments[1].isNull() && !arguments[1].isUndefined()
+                                   ? static_cast<int>(arguments[1].asNumber())
+                                   : getObject()->countText(str.c_str(), str.length(), SkTextEncoding::kUTF8);
             std::vector<SkGlyphID> glyphIDs;
             glyphIDs.resize(numGlyphIDs);
             getObject()->textToGlyphs(str.c_str(), str.length(), SkTextEncoding::kUTF8,

@@ -23,6 +23,13 @@ $ expo install @shopify/react-native-skia
 $ yarn setup-skia-web
 ```
 
+:::info
+
+You need to run `yarn setup-skia-web` everytime you upgrade `@shopify/react-native-skia`.
+Consider adding it to your `postinstall` script.
+
+:::
+
 Once you are done, you need to pick your strategy to [Load Skia](#loading-skia).
 
 If you are [loading CanvasKit from a CDN](#using-a-cdn), you don't need to run the `setup-skia-web` script. If you are not using `react-native-reanimated`, webpack will output a warning because React Native Skia refers to Reanimated. We describe how to fix this warning [here](#manual-webpack-installation).

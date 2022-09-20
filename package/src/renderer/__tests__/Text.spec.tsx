@@ -6,7 +6,14 @@ import React from "react";
 import { processResult, docPath } from "../../__tests__/setup";
 import { TextPath, Fill, Text, Glyphs, TextBlob, Group } from "../components";
 
-import { drawOnNode, width, fontSize, importSkia, loadFont } from "./setup";
+import {
+  drawOnNode,
+  width,
+  fontSize,
+  importSkia,
+  loadFont,
+  height,
+} from "./setup";
 
 describe("Test different text examples", () => {
   it("Should draw Hello World", () => {
@@ -85,5 +92,43 @@ describe("Test different text examples", () => {
       </>
     );
     processResult(surface, docPath("text/text-emoji.png"));
+  });
+
+  it("Should calculate chinese text width correctly", () => {
+    const { Skia } = importSkia();
+    const data = Skia.Data.fromBytes(
+      fs.readFileSync(
+        nodePath.resolve(
+          __dirname,
+          "../../skia/__tests__/assets/NotoSansSC-Regular.otf"
+        )
+      )
+    );
+    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+    expect(tf).toBeTruthy();
+    const font = Skia.Font(tf, fontSize);
+    const text = "欢迎";
+    const padding = 16;
+    const surface = drawOnNode(
+      <>
+        <Text
+          text={text}
+          font={font}
+          y={height / 2}
+          x={(width - font.getTextWidth(text)) / 2}
+        />
+
+        <Text
+          text={text}
+          font={font}
+          y={height / 2 + fontSize + padding}
+          x={(width - font.getTextWidth(text)) / 2}
+          style={"stroke"}
+          color={"black"}
+          strokeWidth={1}
+        />
+      </>
+    );
+    processResult(surface, docPath("text/welcome.png"));
   });
 });
