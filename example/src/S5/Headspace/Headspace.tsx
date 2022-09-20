@@ -6,7 +6,6 @@ import {
   Canvas,
   vec,
   useTouchHandler,
-  Fill,
   useTiming,
 } from "@shopify/react-native-skia";
 import React, { useEffect, useState } from "react";
@@ -16,6 +15,7 @@ import { Easing } from "react-native-reanimated";
 
 //import { Play } from "./Play";
 import { Play2 } from "./Play2";
+import { Background } from "./Background";
 
 const C = 0.55228474983079;
 const F = 20000;
@@ -27,10 +27,6 @@ const n1 = new SimplexNoise(0);
 const n2 = new SimplexNoise(1);
 const n3 = new SimplexNoise(2);
 const n4 = new SimplexNoise(3);
-
-// const c1 = "#3a9dbb";
-// const c2 = "#60d1b9";
-// const c3 = "#2a7fb8";
 
 export const Headspace = () => {
   const [toggled, setToggled] = useState(false);
@@ -68,7 +64,7 @@ export const Headspace = () => {
 
   return (
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
-      <Fill color="#55c2bb" />
+      <Background clock={clock} />
       <Path path={path} color="#3B3A3A" />
       <Play2 progress={progress} c={c} r={r} />
     </Canvas>
