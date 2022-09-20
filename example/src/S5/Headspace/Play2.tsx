@@ -44,7 +44,7 @@ play.close();
 
 const { width, height } = Dimensions.get("window");
 const c = vec(width / 2, height / 2);
-const r = 25;
+const r = 20;
 const dst = Skia.XYWHRect(c.x - r, c.y - r, r * 2, r * 2);
 const m3 = Skia.Matrix();
 processTransform(m3, fitbox("contain", src, dst));
@@ -63,8 +63,13 @@ export const Play2 = ({ progress }: Play2Props) => {
     p.simplify();
     return p;
   }, [progress]);
+  const transform = useComputedValue(() => {
+    const h = r * 2;
+    const centroid = h / 2 - h / 3;
+    return [{ translateX: mix(progress.current, centroid, 0) }];
+  }, [progress]);
   return (
-    <Path path={path} color="white">
+    <Path path={path} color="white" transform={transform}>
       <CornerPathEffect r={8} />
     </Path>
   );
