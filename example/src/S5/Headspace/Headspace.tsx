@@ -7,11 +7,13 @@ import {
   vec,
   useTouchHandler,
   useTiming,
+  useContextBridge,
 } from "@shopify/react-native-skia";
 import React, { useEffect, useState } from "react";
 import { Dimensions } from "react-native";
 import SimplexNoise from "simplex-noise";
 import { Easing } from "react-native-reanimated";
+import { SafeAreaInsetsContext } from "react-native-safe-area-context";
 
 import { Play } from "./Play";
 import { Background } from "./Background";
@@ -29,6 +31,8 @@ const n3 = new SimplexNoise(2);
 const n4 = new SimplexNoise(3);
 
 export const Headspace = () => {
+  const ContextBridge = useContextBridge(SafeAreaInsetsContext);
+
   const [toggled, setToggled] = useState(false);
   const onTouch = useTouchHandler({ onEnd: () => setToggled((t) => !t) });
   const progress = useTiming(toggled ? 1 : 0, {
@@ -64,10 +68,12 @@ export const Headspace = () => {
 
   return (
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
-      <Background clock={clock} />
-      <Path path={path} color="#3B3A3A" />
-      <Play progress={progress} c={c} r={r} />
-      <Overlay />
+      <ContextBridge>
+        <Background clock={clock} />
+        <Path path={path} color="#3B3A3A" />
+        <Play progress={progress} c={c} r={r} />
+        <Overlay />
+      </ContextBridge>
     </Canvas>
   );
 };

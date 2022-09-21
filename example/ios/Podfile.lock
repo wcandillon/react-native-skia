@@ -282,11 +282,11 @@ PODS:
   - React-jsinspector (0.68.0)
   - React-logger (0.68.0):
     - glog
-  - react-native-safe-area-context (4.2.4):
+  - react-native-safe-area-context (4.3.3):
     - RCT-Folly
     - RCTRequired
     - RCTTypeSafety
-    - React
+    - React-Core
     - ReactCommon/turbomodule/core
   - react-native-skia (0.1.0-development):
     - React
@@ -382,7 +382,7 @@ PODS:
     - React-jsi (= 0.68.0)
     - React-logger (= 0.68.0)
     - React-perflogger (= 0.68.0)
-  - RNReanimated (2.8.0):
+  - RNReanimated (2.10.0):
     - DoubleConversion
     - FBLazyVector
     - FBReactNativeSpec
@@ -409,7 +409,7 @@ PODS:
     - React-RCTText
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNScreens (3.13.1):
+  - RNScreens (3.17.0):
     - React-Core
     - React-RCTImage
   - SocketRocket (0.6.0)
@@ -600,7 +600,7 @@ SPEC CHECKSUMS:
   React-jsiexecutor: 010a66edf644339f6da72b34208b070089680415
   React-jsinspector: 90f0bfd5d04e0b066c29216a110ffb9a6c34f23f
   React-logger: 8474fefa09d05f573a13c044cb0dfd751d4e52e3
-  react-native-safe-area-context: f98b0b16d1546d208fc293b4661e3f81a895afd9
+  react-native-safe-area-context: b456e1c40ec86f5593d58b275bd0e9603169daca
   react-native-skia: 21527265391c4744ec0390150987ef87dafd85d8
   React-perflogger: 15cb741d6c2379f4d3fc8f9e4d4e1110ef3020cb
   React-RCTActionSheet: ea9099db0597bd769430db1e2d011fd5fdb7fc5e
@@ -614,8 +614,8 @@ SPEC CHECKSUMS:
   React-RCTVibration: 82fc52d3d96549b8c59a6c8c017d5a1a11457049
   React-runtimeexecutor: 9b1304f48e344c55bb3c36e13bf11461cb4da5d8
   ReactCommon: fab89a13b52f1ac42b59a0e4b4f76f21aea9eebe
-  RNReanimated: 64573e25e078ae6bec03b891586d50b9ec284393
-  RNScreens: 40a2cb40a02a609938137a1e0acfbf8fc9eebf19
+  RNReanimated: 5bdcbcc3a72aedeee7bb099604262403aa75a1e5
+  RNScreens: 0df01424e9e0ed7827200d6ed1087ddd06c493f9
   SocketRocket: fccef3f9c5cedea1353a9ef6ada904fde10d6608
   Yoga: 6671cf077f614314c22fd09ddf87d7abeee64e96
   YogaKit: f782866e155069a2cca2517aafea43200b01fd5a
