@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 import type { Vector } from "@shopify/react-native-skia";
 import {
+  Text,
   Skia,
   Circle,
   Group,
@@ -11,31 +12,84 @@ import {
 } from "@shopify/react-native-skia";
 import type { ReactNode } from "react";
 import React, { useMemo } from "react";
+import { Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface OverlayProps {}
+const padding = 32;
+const { width, height } = Dimensions.get("window");
+const c = vec(width / 2, height / 2);
+const title = "Following the breath";
 
 export const Overlay = () => {
   const insets = useSafeAreaInsets();
   const titleFont = useFont(require("./assets/Roboto-Bold.ttf"), 32);
-  const normalFont = useFont(require("./assets/Roboto-Bold.ttf"), 16);
+  const normalFont = useFont(require("./assets/Roboto-Bold.ttf"), 14);
   if (!titleFont || !normalFont) {
     return null;
   }
   return (
     <>
       <Group />
-      <Group transform={[{ translateY: insets.top }]}>
+      <Group
+        transform={[
+          { translateY: insets.top + padding },
+          { translateX: padding },
+        ]}
+      >
         <Info />
       </Group>
-      <Group transform={[{ translateY: 150 }]}>
+      <Group
+        transform={[
+          { translateY: insets.top + padding },
+          { translateX: width - padding - 24 },
+        ]}
+      >
         <Close />
       </Group>
-      <Group transform={[{ translateY: 200 }]}>
+      <Text
+        font={titleFont}
+        x={(width - titleFont.getTextWidth(title)) / 2}
+        y={c.y - 150}
+        color="white"
+        text={title}
+      />
+      <Group
+        transform={[{ translateY: height - 175 }, { translateX: padding }]}
+      >
+        <AirPlay />
+      </Group>
+      <Group
+        transform={[
+          { translateY: height - 175 },
+          { translateX: width - padding - 24 },
+        ]}
+      >
         <Settings />
       </Group>
-      <Group transform={[{ translateY: 250 }]}>
-        <AirPlay />
+      <Group transform={[{ translateY: height - 125 }]} strokeCap="round">
+        <Line
+          p1={vec(padding, 0)}
+          p2={vec(width - padding, 0)}
+          color="rgba(255, 255, 255, 0.5)"
+          style="stroke"
+          strokeWidth={2}
+        />
+        <Line
+          p1={vec(padding, 0)}
+          p2={vec(200, 0)}
+          color="white"
+          style="stroke"
+          strokeWidth={2}
+        />
+        <Circle c={vec(200, 0)} color="white" r={6} />
+        <Text text="0:25" font={normalFont} x={padding} y={20} color="white" />
+        <Text
+          text="3:16"
+          font={normalFont}
+          x={width - padding - normalFont.getTextWidth("3:16")}
+          y={20}
+          color="white"
+        />
       </Group>
     </>
   );
