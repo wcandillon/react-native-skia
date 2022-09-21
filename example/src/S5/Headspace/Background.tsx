@@ -20,8 +20,7 @@ const c1 = "#2ab8aa";
 const c2 = "#3a9dbb";
 const c3 = "#2a7fb8";
 const easing = Easing.bezier(0.37, 0, 0.63, 1);
-const durationInFrames = 4000;
-const getProgress = (t: number) => {
+const getProgress = (t: number, durationInFrames = 4000) => {
   const p = (t % durationInFrames) / durationInFrames;
   const currentIteration = Math.floor(t / durationInFrames);
   const isGoingBack = currentIteration % 2 === 0;
@@ -46,9 +45,9 @@ interface BackgroundProps {
 export const Background = ({ clock }: BackgroundProps) => {
   // getCurve(200, 50);
   const p1 = useComputedValue(() => {
-    const progress = getProgress(clock.current);
+    const progress = getProgress(clock.current, 4100);
     return getCurve(
-      mix(easing(progress), 200, 300),
+      mix(easing(progress), c.y - 300, 200),
       mix(easing(progress), 50, 60)
     );
   }, [clock]);
@@ -60,7 +59,7 @@ export const Background = ({ clock }: BackgroundProps) => {
     );
   }, [clock]);
   const p3 = useComputedValue(() => {
-    const progress = getProgress(clock.current);
+    const progress = getProgress(clock.current, 3800);
     return getCurve(
       mix(easing(progress), c.y + 75, c.y + 225),
       mix(easing(progress), 30, 50)

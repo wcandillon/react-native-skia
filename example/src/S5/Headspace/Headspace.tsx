@@ -13,8 +13,7 @@ import { Dimensions } from "react-native";
 import SimplexNoise from "simplex-noise";
 import { Easing } from "react-native-reanimated";
 
-//import { Play } from "./Play";
-import { Play2 } from "./Play2";
+import { Play } from "./Play";
 import { Background } from "./Background";
 
 const C = 0.55228474983079;
@@ -66,7 +65,7 @@ export const Headspace = () => {
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
       <Background clock={clock} />
       <Path path={path} color="#3B3A3A" />
-      <Play2 progress={progress} c={c} r={r} />
+      <Play progress={progress} c={c} r={r} />
     </Canvas>
   );
 };
