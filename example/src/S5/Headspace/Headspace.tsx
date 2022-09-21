@@ -15,6 +15,7 @@ import { Easing } from "react-native-reanimated";
 
 import { Play } from "./Play";
 import { Background } from "./Background";
+import { Overlay } from "./Overlay";
 
 const C = 0.55228474983079;
 const F = 20000;
@@ -66,6 +67,7 @@ export const Headspace = () => {
       <Background clock={clock} />
       <Path path={path} color="#3B3A3A" />
       <Play progress={progress} c={c} r={r} />
+      <Overlay />
     </Canvas>
   );
 };
