@@ -2,10 +2,8 @@ import type { SkiaValue } from "@shopify/react-native-skia";
 import {
   Easing,
   mix,
-  Vector,
   vec,
   Path,
-  Rect,
   Skia,
   Fill,
   useComputedValue,

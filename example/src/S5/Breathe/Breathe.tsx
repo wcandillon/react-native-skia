@@ -5,7 +5,6 @@ import {
   Fill,
   Group,
   LinearGradient,
-  mix,
   polar2Canvas,
   vec,
 } from "@shopify/react-native-skia";
