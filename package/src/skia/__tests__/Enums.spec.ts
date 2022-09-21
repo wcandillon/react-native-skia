@@ -26,13 +26,12 @@ import {
 } from "../types";
 import { Path1DEffectStyle } from "../types/PathEffect";
 import { BlendMode } from "../types/Paint/BlendMode";
+import { mapKeys } from "../../renderer/typeddash";
 
 import { setupSkia } from "./setup";
 
 const checkEnum = <T>(skiaEnum: T, canvasKitEnum: EmbindEnum) => {
-  Object.keys(canvasKitEnum.values).forEach((key) => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
+  mapKeys(canvasKitEnum.values).forEach((key) => {
     const namedKey = skiaEnum[key as keyof T] as keyof T;
     const expected = skiaEnum[namedKey];
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment

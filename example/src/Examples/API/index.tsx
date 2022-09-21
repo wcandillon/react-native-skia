@@ -20,6 +20,7 @@ import { UseCanvas } from "./UseCanvas";
 import { FreezeExample } from "./Freeze";
 import { Touch } from "./Touch";
 import { Reanimated } from "./Reanimated";
+import { PictureViewExample } from "./PictureView";
 
 const Stack = createNativeStackNavigator<Routes>();
 export const API = () => {
@@ -129,6 +130,13 @@ export const API = () => {
         component={PictureExample}
         options={{
           title: "🖼 Picture",
+        }}
+      />
+      <Stack.Screen
+        name="PictureView"
+        component={PictureViewExample}
+        options={{
+          title: "🖼 Picture View",
         }}
       />
       <Stack.Screen

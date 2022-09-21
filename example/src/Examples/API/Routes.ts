@@ -17,4 +17,5 @@ export type Routes = {
   Checker: undefined;
   UseCanvas: undefined;
   Reanimated: undefined;
+  PictureView: undefined;
 };

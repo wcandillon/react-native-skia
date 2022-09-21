@@ -1,8 +1,9 @@
-#include <SkiaDrawViewManager.h>
+
+#include <SkiaPictureViewManager.h>
 #include <React/RCTBridge+Private.h>
 
 #include <RNSkPlatformContext.h>
-#include <RNSkJsView.h>
+#include <RNSkPictureView.h>
 #include <RNSkIOSView.h>
 
 #include <SkiaManager.h>
@@ -11,9 +12,9 @@
 
 
 
-@implementation SkiaDrawViewManager
+@implementation SkiaPictureViewManager
 
-RCT_EXPORT_MODULE(SkiaDrawView)
+RCT_EXPORT_MODULE(SkiaPictureView)
 
 - (SkiaManager*) skiaManager {
   auto bridge = [RCTBridge currentBridge];
@@ -24,7 +25,7 @@ RCT_EXPORT_MODULE(SkiaDrawView)
 RCT_CUSTOM_VIEW_PROPERTY(nativeID, NSNumber, SkiaUIView) {
   // Get parameter
   int nativeId = [[RCTConvert NSString:json] intValue];
-  [(SkiaUIView*)view setNativeId:nativeId];            
+  [(SkiaUIView*)view setNativeId:nativeId];
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(mode, NSString, SkiaUIView) {
@@ -43,7 +44,7 @@ RCT_CUSTOM_VIEW_PROPERTY(debug, BOOL, SkiaUIView) {
   // Pass SkManager as a raw pointer to avoid circular dependenciesr
   return [[SkiaUIView alloc] initWithManager: skManager.get()
                                      factory: [](std::shared_ptr<RNSkia::RNSkPlatformContext> context) {
-    return std::make_shared<RNSkiOSView<RNSkia::RNSkJsView>>(context);
+    return std::make_shared<RNSkiOSView<RNSkia::RNSkPictureView>>(context);
   }];
 }
 

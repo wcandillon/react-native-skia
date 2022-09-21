@@ -46,11 +46,18 @@ export const isAnimated = <T>(props: AnimatedProps<T>) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnimatedProp<T, P = any> = T | SkiaValue<T> | SkiaSelector<T, P>;
 
-export type AnimatedProps<T> = {
-  [K in keyof T]: AnimatedProp<T[K]>;
+export type AnimatedProps<T, O extends keyof T | never = never> = {
+  [K in keyof T]: K extends "children"
+    ? T[K]
+    : K extends O
+    ? T[K]
+    : AnimatedProp<T[K]>;
 };
 
 // TODO: switch to AnimatedProps<GroupProps> and remove duplicate properties.
 // For instance matrix in color filter becomes colorMatrix
-// eslint-disable-next-line @typescript-eslint/ban-types
-export type SkiaProps<P = {}> = AnimatedProps<P>;
+
+export type SkiaProps<
+  P = object,
+  O extends keyof P | never = never
+> = AnimatedProps<P, O>;

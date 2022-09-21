@@ -3,6 +3,8 @@
 #include <RNSkLog.h>
 
 #include "android/native_window.h"
+#include <fbjni/fbjni.h>
+#include <jni.h>
 #include "EGL/egl.h"
 #include "GLES2/gl2.h"
 
@@ -45,7 +47,8 @@ namespace RNSkia
     class SkiaOpenGLRenderer
     {
     public:
-        SkiaOpenGLRenderer(ANativeWindow *surface, size_t renderId);
+        SkiaOpenGLRenderer(jobject surface);
+        ~SkiaOpenGLRenderer();
 
         /**
          * Initializes, renders and tears down the render pipeline depending on the state of the
@@ -116,14 +119,12 @@ namespace RNSkia
 
         EGLSurface _glSurface = EGL_NO_SURFACE;
 
-        ANativeWindow *_surfaceTexture = nullptr;
+        ANativeWindow *_nativeWindow = nullptr;
         GrBackendRenderTarget _skRenderTarget;
         sk_sp<SkSurface> _skSurface;
 
         int _prevWidth = 0;
         int _prevHeight = 0;
-
-        size_t _renderId;
 
         std::atomic<RenderState> _renderState = { RenderState::Initializing };
     };

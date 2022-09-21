@@ -6,7 +6,7 @@
 #include <jni.h>
 #include <jsi/jsi.h>
 
-#include <RNSkJsView.h>
+#include <RNSkPictureView.h>
 #include <RNSkAndroidView.h>
 #include <JniSkiaBaseView.h>
 #include <JniSkiaManager.h>
@@ -19,10 +19,10 @@ namespace RNSkia {
     using namespace facebook;
     using namespace jni;
 
-    class JniSkiaDrawView
-            : public HybridClass<JniSkiaDrawView>, public JniSkiaBaseView {
+    class JniSkiaPictureView
+            : public HybridClass<JniSkiaPictureView>, public JniSkiaBaseView {
     public:
-        static auto constexpr kJavaDescriptor = "Lcom/shopify/reactnative/skia/SkiaDrawView;";
+        static auto constexpr kJavaDescriptor = "Lcom/shopify/reactnative/skia/SkiaPictureView;";
 
         static jni::local_ref<jhybriddata>
         initHybrid(jni::alias_ref<jhybridobject> jThis,
@@ -32,19 +32,20 @@ namespace RNSkia {
 
         static void registerNatives() {
           registerHybrid({
-                                 makeNativeMethod("initHybrid", JniSkiaDrawView::initHybrid),
+                                 makeNativeMethod("initHybrid", JniSkiaPictureView::initHybrid),
                                  makeNativeMethod("surfaceAvailable",
-                                                  JniSkiaDrawView::surfaceAvailable),
+                                                  JniSkiaPictureView::surfaceAvailable),
                                  makeNativeMethod("surfaceDestroyed",
-                                                  JniSkiaDrawView::surfaceDestroyed),
+                                                  JniSkiaPictureView::surfaceDestroyed),
                                  makeNativeMethod("surfaceSizeChanged",
-                                                  JniSkiaDrawView::surfaceSizeChanged),
-                                 makeNativeMethod("setMode", JniSkiaDrawView::setMode),
-                                 makeNativeMethod("setDebugMode", JniSkiaDrawView::setDebugMode),
+                                                  JniSkiaPictureView::surfaceSizeChanged),
+                                 makeNativeMethod("setMode", JniSkiaPictureView::setMode),
+                                 makeNativeMethod("setDebugMode", JniSkiaPictureView::setDebugMode),
                                  makeNativeMethod("updateTouchPoints",
-                                                  JniSkiaDrawView::updateTouchPoints),
-                                 makeNativeMethod("registerView", JniSkiaDrawView::registerView),
-                                 makeNativeMethod("unregisterView", JniSkiaDrawView::unregisterView)
+                                                  JniSkiaPictureView::updateTouchPoints),
+                                 makeNativeMethod("registerView", JniSkiaPictureView::registerView),
+                                 makeNativeMethod("unregisterView",
+                                                  JniSkiaPictureView::unregisterView)
                          });
         }
 
@@ -82,10 +83,10 @@ namespace RNSkia {
     private:
         friend HybridBase;
 
-        explicit JniSkiaDrawView(jni::alias_ref<jhybridobject> jThis,
-                                 jni::alias_ref<JniSkiaManager::javaobject> skiaManager) :
+        explicit JniSkiaPictureView(jni::alias_ref<jhybridobject> jThis,
+                                    jni::alias_ref<JniSkiaManager::javaobject> skiaManager) :
                 JniSkiaBaseView(skiaManager,
-                                std::make_shared<RNSkAndroidView<RNSkia::RNSkJsView>>(
+                                std::make_shared<RNSkAndroidView<RNSkia::RNSkPictureView>>(
                                         skiaManager->cthis()->getPlatformContext())) {
         }
 

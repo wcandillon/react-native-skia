@@ -6,11 +6,11 @@ import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
 import com.facebook.react.bridge.ReactContext;
 
-public class SkiaDrawView extends SkiaBaseView {
+public class SkiaPictureView extends SkiaBaseView {
     @DoNotStrip
     private HybridData mHybridData;
 
-    public SkiaDrawView(Context context) {
+    public SkiaPictureView(Context context) {
         super(context);
         RNSkiaModule skiaModule = ((ReactContext) context).getNativeModule(RNSkiaModule.class);
         mHybridData = initHybrid(skiaModule.getSkiaManager());

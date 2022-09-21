@@ -59,6 +59,10 @@ const examples = [
     title: "📊 Data",
   },
   {
+    screen: "PictureView",
+    title: "🖼 Picture View",
+  },
+  {
     screen: "Picture",
     title: "🖼 Picture",
   },

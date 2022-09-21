@@ -1,6 +1,6 @@
 import type { ViewProps } from "react-native";
 
-import type { SkCanvas, SkImage, SkRect } from "../skia/types";
+import type { SkCanvas, SkImage, SkPicture, SkRect } from "../skia/types";
 import type { SkiaValue } from "../values";
 
 export type DrawMode = "continuous" | "default";
@@ -72,7 +72,7 @@ export interface ISkiaViewApi {
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
 }
 
-export interface SkiaViewProps extends ViewProps {
+export interface SkiaBaseViewProps extends ViewProps {
   /**
    * Sets the drawing mode for the skia view. There are two drawing
    * modes, "continuous" and "default", where the continuous mode will
@@ -86,6 +86,9 @@ export interface SkiaViewProps extends ViewProps {
    * average time it takes to render.
    */
   debug?: boolean;
+}
+
+export interface SkiaDrawViewProps extends SkiaBaseViewProps {
   /**
    * Draw callback. Will be called whenever the view is invalidated and
    * needs to redraw. This is either caused by a change in a react
@@ -94,4 +97,8 @@ export interface SkiaViewProps extends ViewProps {
    * by the native view.
    */
   onDraw?: RNSkiaDrawCallback;
+}
+
+export interface SkiaPictureViewProps extends SkiaBaseViewProps {
+  picture?: SkPicture;
 }

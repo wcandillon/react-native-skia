@@ -13,7 +13,7 @@ export const BackdropFilter = ({
   filter,
   children: groupChildren,
   ...props
-}: SkiaProps<BackdropFilterProps>) => {
+}: SkiaProps<BackdropFilterProps, "filter">) => {
   return (
     <Group {...props}>
       <skBackdropFilter>{filter}</skBackdropFilter>

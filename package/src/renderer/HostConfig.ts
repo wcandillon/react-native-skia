@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*global NodeJS*/
 import type { HostConfig } from "react-reconciler";
 
@@ -20,7 +19,7 @@ export const debug = (...args: Parameters<typeof console.log>) => {
 
 type Instance = Node<unknown>;
 
-type Props = any;
+type Props = object;
 type TextInstance = Node<unknown>;
 type SuspenseInstance = Instance;
 type HydratableInstance = Instance;
@@ -236,7 +235,7 @@ export const skHostConfig: SkiaHostConfig = {
 };
 
 const materialize = <P>(props: AnimatedProps<P>) => {
-  const result = { ...props };
+  const result = { ...props } as P;
   mapKeys(props).forEach((key) => {
     const prop = props[key];
     if (isValue(prop)) {
@@ -246,5 +245,5 @@ const materialize = <P>(props: AnimatedProps<P>) => {
     }
   });
 
-  return result as any;
+  return result;
 };
