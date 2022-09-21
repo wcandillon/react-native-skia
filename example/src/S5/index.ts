@@ -1,3 +1,3 @@
-import { Headspace } from "./Headspace";
+import { Riveo } from "./Riveo";
 
-export const S5 = Headspace;
+export const S5 = Riveo;
