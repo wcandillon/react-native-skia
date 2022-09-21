@@ -16,6 +16,7 @@ export const useContextBridge = (...contexts: Context<any>[]) => {
           ),
           children
         ) as ReactElement,
-    [contexts, values]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [...contexts, ...values]
   );
 };

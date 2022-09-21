@@ -19,11 +19,13 @@ const padding = 32;
 const { width, height } = Dimensions.get("window");
 const c = vec(width / 2, height / 2);
 const title = "Following the breath";
+const boldTf = require("./assets/Roboto-Bold.ttf");
+const regularTf = require("./assets/Roboto-Regular.ttf");
 
 export const Overlay = () => {
   const insets = useSafeAreaInsets();
-  const titleFont = useFont(require("./assets/Roboto-Bold.ttf"), 32);
-  const normalFont = useFont(require("./assets/Roboto-Bold.ttf"), 14);
+  const titleFont = useFont(boldTf, 32);
+  const normalFont = useFont(regularTf, 14);
   if (!titleFont || !normalFont) {
     return null;
   }
