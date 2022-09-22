@@ -30,18 +30,23 @@ vec4 point(vec2 v, vec2 xy, vec4 cl) {
   return cl;
 }
 
+vec4 line(vec2 p1, vec2 p2, vec2 xy, vec4 cl) {
+  vec2 p12 = p2 - p1;
+  vec2 p13 = xy - p1;
+  float d = dot(p12, p13) / length(p12); // = length(p13) * cos(angle)
+  vec2 p4 = p1 + normalize(p12) * d;
+  if (length(p4 - xy) < 5) {
+    return vec4(0.0, 1.0, 0.0, 1.0);
+  }
+  return cl;
+}
+
 half4 main(float2 xy) {
   half4 cl = vec4(0, 0, 0, 1);
   cl = image.eval(xy);
   cl = point(pointer, xy, cl);
   cl = point(origin, xy, cl);
-  vec2 p12 = pointer - origin;
-  vec2 p13 = xy - origin;
-  float d = dot(p12, p13) / length(p12); // = length(p13) * cos(angle)
-  vec2 p4 = origin + normalize(p12) * d;
-  if (length(p4 - xy) < 5) {
-      return vec4(0.0, 1.0, 0.0, 1.0);
-  }
+  cl = line(origin, pointer, xy, cl);
   return cl;
 }`)!;
 
