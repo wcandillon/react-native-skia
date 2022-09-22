@@ -1,4 +1,3 @@
-import type { Vector } from "@shopify/react-native-skia";
 import {
   Circle,
   useTouchHandler,
@@ -11,6 +10,10 @@ import {
   Shader,
   Skia,
   useImage,
+  Group,
+  Line,
+  rotate,
+  useComputedValue,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
@@ -29,8 +32,8 @@ export const Riveo = () => {
   const pointer = useValue(vec(0, 0));
   const oslo = useImage(require("../../assets/oslo.jpg"));
   const onTouch = useTouchHandler({
-    onStart: ({ y }) => {
-      origin.current = vec(width, y);
+    onStart: ({ y, x }) => {
+      origin.current = vec(x, y);
     },
     onActive: ({ x, y }) => {
       pointer.current = vec(x, y);
@@ -40,6 +43,20 @@ export const Riveo = () => {
       pointer.current = vec(0, 0);
     },
   });
+  const p1 = useComputedValue(() => {
+    const delta = width - origin.current.x;
+    return vec(pointer.current.x + delta, pointer.current.y);
+  }, [pointer]);
+  const p2 = useComputedValue(() => {
+    const delta = width - origin.current.x;
+    return vec(origin.current.x + delta, origin.current.y);
+  }, [origin]);
+  const p3 = useComputedValue(() => {
+    return rotate(vec(p1.current.x, 0), p1.current, 0);
+  }, [p1]);
+  const p4 = useComputedValue(() => {
+    return rotate(vec(p1.current.x, height), p1.current, 0);
+  }, [p1]);
   if (oslo === null) {
     return null;
   }
@@ -54,8 +71,11 @@ export const Riveo = () => {
           />
         </Shader>
       </Fill>
-      <Circle color="cyan" c={origin} r={10} />
-      <Circle color="cyan" c={pointer} r={10} />
+      <Group color="cyan">
+        <Circle c={p1} r={10} color="red" />
+        <Circle c={p2} r={10} color="green" />
+        <Line p1={p3} p2={p4} style="stroke" strokeWidth={2} />
+      </Group>
     </Canvas>
   );
 };
