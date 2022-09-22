@@ -1,5 +1,4 @@
 import {
-  Circle,
   useTouchHandler,
   vec,
   useValue,
@@ -10,10 +9,6 @@ import {
   Shader,
   Skia,
   useImage,
-  Group,
-  dist,
-  Line,
-  useComputedValue,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
@@ -28,16 +23,26 @@ uniform vec2 pointer;
 uniform vec2 origin;
 uniform vec2 resolution;
 
-
-float dist(vec2 a, vec2 b) {
-  return sqrt(pow((a.x - b.x), 2) + pow((a.y - b.y), 2));
+vec4 point(vec2 v, vec2 xy, vec4 cl) {
+  if (distance(xy, v) < 10) {
+    return vec4(0, 0, 1, 1);
+  }
+  return cl;
 }
 
 half4 main(float2 xy) {
-  if (dist(xy, pointer) < 10 || dist(xy, origin) < 10) {
-    return half4(0, 0, 1, 1);
+  half4 cl = vec4(0, 0, 0, 1);
+  cl = image.eval(xy);
+  cl = point(pointer, xy, cl);
+  cl = point(origin, xy, cl);
+  vec2 p12 = pointer - origin;
+  vec2 p13 = xy - origin;
+  float d = dot(p12, p13) / length(p12); // = length(p13) * cos(angle)
+  vec2 p4 = origin + normalize(p12) * d;
+  if (length(p4 - xy) < 5) {
+      return vec4(0.0, 1.0, 0.0, 1.0);
   }
-  return image.eval(xy);
+  return cl;
 }`)!;
 
 const defaultUniforms = {
@@ -65,7 +70,7 @@ export const Riveo = () => {
   }
   return (
     <Canvas style={{ flex: 1 }} onTouch={onTouch}>
-      <Fill color="black" />
+      <Fill color="cyan" />
       <Fill>
         <Shader source={source} uniforms={uniforms}>
           <ImageShader
