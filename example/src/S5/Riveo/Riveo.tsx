@@ -26,6 +26,8 @@ const source = Skia.RuntimeEffect.Make(`
 uniform shader image;
 uniform vec2 pointer;
 uniform vec2 origin;
+uniform vec2 resolution;
+
 
 float dist(vec2 a, vec2 b) {
   return sqrt(pow((a.x - b.x), 2) + pow((a.y - b.y), 2));
@@ -38,8 +40,14 @@ half4 main(float2 xy) {
   return image.eval(xy);
 }`)!;
 
+const defaultUniforms = {
+  pointer: vec(0, 0),
+  origin: vec(0, 0),
+  resolution: vec(width, height),
+};
+
 export const Riveo = () => {
-  const uniforms = useValue({ pointer: vec(0, 0), origin: vec(0, 0) });
+  const uniforms = useValue(defaultUniforms);
   const oslo = useImage(require("../../assets/oslo.jpg"));
   const onTouch = useTouchHandler({
     onStart: ({ y, x }) => {
@@ -49,7 +57,7 @@ export const Riveo = () => {
       uniforms.current = { ...uniforms.current, pointer: vec(x, y) };
     },
     onEnd: () => {
-      uniforms.current = { pointer: vec(0, 0), origin: vec(0, 0) };
+      uniforms.current = defaultUniforms;
     },
   });
   if (oslo === null) {
