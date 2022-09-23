@@ -9,7 +9,6 @@ import {
   Shader,
   Skia,
   useImage,
-  ShaderLib,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
@@ -24,7 +23,8 @@ uniform vec2 pointer;
 uniform vec2 origin;
 uniform vec2 resolution;
 
-${ShaderLib.Math}
+const float PI = 3.1415926535897932384626433832795;
+const float r = 100.0;
 
 vec4 point(vec2 v, vec2 xy, vec4 cl) {
   if (distance(xy, v) < 5) {
@@ -33,15 +33,12 @@ vec4 point(vec2 v, vec2 xy, vec4 cl) {
   return cl;
 }
 
-vec2 rotate(vec2 point, vec2 pivot, float radAngle)
-{
-    float x = point.x;
-    float y = point.y;
-
-    float rX = pivot.x + (x - pivot.x) * cos(radAngle) - (y - pivot.y) * sin(radAngle);
-    float rY = pivot.y + (x - pivot.x) * sin(radAngle) + (y - pivot.y) * cos(radAngle);
-
-    return vec2(rX, rY);
+vec2 rotate(vec2 point, vec2 pivot, float angle) {
+    float dx = point.x - pivot.x;
+    float dy = point.y - pivot.y;
+    float x = pivot.x + dx * cos(angle) - dy * sin(angle);
+    float y = pivot.y + dx * sin(angle) + dy * cos(angle);
+    return vec2(x, y);
 }
 
 
@@ -58,18 +55,28 @@ vec4 line(vec2 a, vec2 b, vec2 p, vec4 cl) {
   return cl;
 }
 
+float dline(vec2 p, vec2 a, vec2 b) {  
+  vec2 v = a, w = b;
+  float l2 = pow(distance(w, v), 2.);
+  if(l2 == 0.0) return distance(p, v);
+  //float t = clamp(dot(p - v, w - v) / l2, 0., 1.);
+  float t = dot(p - v, w - v) / l2;
+  vec2 j = v + t * (w - v);
+  return distance(p, j);
+}
+
 half4 main(float2 xy) {
   half4 cl = vec4(0, 0, 0, 1);
   cl = image.eval(xy);
   cl = line(origin, pointer, xy, cl);
-  cl = line(rotate(origin, pointer, -PI/2), pointer, xy, cl);
+  vec2 p = rotate(origin, pointer, -PI/2);
+  cl = line(p, pointer, xy, cl);
   cl = point(pointer, xy, cl);
   cl = point(origin, xy, cl);
-
-  //float d = lengthToAxis(pointer, vec2(pointer.y, -pointer.x), xy, cl);
-  // if (d > 50) {
-  //   return vec4(0, 0, 0, 1);
-  // }
+  float d = dline(xy, pointer, p);
+  if (d > r) {
+    return vec4(0, 0, 0, 0);
+  }
   return cl;
 }`)!;
 
