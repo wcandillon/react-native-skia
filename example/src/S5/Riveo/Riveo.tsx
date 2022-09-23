@@ -66,8 +66,6 @@ vec4 main(float2 xy) {
   }
   if (d > r) {
     return vec4(0., 0., 0., 0.);
-  } else {
-    return image.eval(xy);
   }
   cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
