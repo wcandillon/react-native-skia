@@ -63,7 +63,8 @@ vec4 main(float2 xy) {
     return cl;
   }
   if (d > r) {
-    return vec4(0., 0., 0., 0.);
+    cl = vec4(1.0, 0.0, 0.0, 1.0);
+    cl.rgb *= pow(clamp(d - r, 0., 1.) * 1.5, .2);
   } else if (d > 0) {
     float theta = asin(d / r);
     float d1 = theta * r;
@@ -71,12 +72,12 @@ vec4 main(float2 xy) {
     vec2 p1 = vec2(x + d1, xy.y);
     vec2 p2 = vec2(x + d2, xy.y);
     cl = image.eval((p2.x > 0. && p2.y > 0. && p2.x <= resolution.x && p2.y <= resolution.y) ? p2 : p1);
+    cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
   } else {
     vec2 p = vec2(x + abs(d) + PI * r, xy.y);
     cl = image.eval((p.x > 0. && p.y > 0. && p.x <= resolution.x && p.y <= resolution.y) ? p : xy);
-
   }
-  cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
+  //cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
 }`)!;
 
