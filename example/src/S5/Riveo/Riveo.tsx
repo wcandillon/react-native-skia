@@ -64,10 +64,10 @@ vec4 main(float2 xy) {
   if (origin == vec2(0., 0.) || pointer == vec2(0., 0.)) {
     return cl;
   }
-  if (d > 0) {
-    return vec4(0., 1.0, 0., 1);
+  if (d > r) {
+    return vec4(0., 0., 0., 0.);
   } else {
-    return vec4(0., 0., 1.0, 1);
+    return image.eval(xy);
   }
   cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
