@@ -15,8 +15,6 @@ import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
 
-const d = 600;
-const r = 100;
 const source = Skia.RuntimeEffect.Make(`
 uniform shader image;
 uniform vec2 pointer;
@@ -24,7 +22,7 @@ uniform vec2 origin;
 uniform vec2 resolution;
 
 const float PI = 3.1415926535897932384626433832795;
-const float r = 100.0;
+const float r = 50.0;
 
 vec4 point(vec2 v, vec2 xy, vec4 cl) {
   if (distance(xy, v) < 5) {
@@ -66,6 +64,17 @@ vec4 main(float2 xy) {
   }
   if (d > r) {
     return vec4(0., 0., 0., 0.);
+  } else if (d > 0) {
+    float theta = asin(d / r);
+    float d1 = theta * r;
+    float d2 = (PI - theta) * r;
+    vec2 p1 = vec2(x + d1, xy.y);
+    vec2 p2 = vec2(x + d2, xy.y);
+    cl = image.eval((p2.x > 0. && p2.y > 0. && p2.x <= resolution.x && p2.y <= resolution.y) ? p2 : p1);
+  } else {
+    vec2 p = vec2(x + abs(d) + PI * r, xy.y);
+    cl = image.eval((p.x > 0. && p.y > 0. && p.x <= resolution.x && p.y <= resolution.y) ? p : xy);
+
   }
   cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
