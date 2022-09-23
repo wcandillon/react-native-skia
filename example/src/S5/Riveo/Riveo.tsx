@@ -55,28 +55,21 @@ vec4 line(vec2 a, vec2 b, vec2 p, vec4 cl) {
   return cl;
 }
 
-float dline(vec2 p, vec2 a, vec2 b) {  
-  vec2 v = a, w = b;
-  float l2 = pow(distance(w, v), 2.);
-  if(l2 == 0.0) return distance(p, v);
-  //float t = clamp(dot(p - v, w - v) / l2, 0., 1.);
-  float t = dot(p - v, w - v) / l2;
-  vec2 j = v + t * (w - v);
-  return distance(p, j);
-}
-
-half4 main(float2 xy) {
-  half4 cl = vec4(0, 0, 0, 1);
+vec4 main(float2 xy) {
+  vec4 cl = vec4(0, 0, 0, 1);
+  float dx = origin.x - pointer.x;
+  float x = resolution.x - dx;
+  float d = xy.x - x;
   cl = image.eval(xy);
-  cl = line(origin, pointer, xy, cl);
-  vec2 p = rotate(origin, pointer, -PI/2);
-  cl = line(p, pointer, xy, cl);
-  cl = point(pointer, xy, cl);
-  cl = point(origin, xy, cl);
-  float d = dline(xy, pointer, p);
-  if (d > r) {
-    return vec4(0, 0, 0, 0);
+  if (origin == vec2(0., 0.) || pointer == vec2(0., 0.)) {
+    return cl;
   }
+  if (d > 0) {
+    return vec4(0., 1.0, 0., 1);
+  } else {
+    return vec4(0., 0., 1.0, 1);
+  }
+  cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
 }`)!;
 
