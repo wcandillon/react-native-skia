@@ -9,6 +9,7 @@ import {
   Shader,
   Skia,
   useImage,
+  ShaderLib,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
@@ -23,11 +24,24 @@ uniform vec2 pointer;
 uniform vec2 origin;
 uniform vec2 resolution;
 
+${ShaderLib.Math}
+
 vec4 point(vec2 v, vec2 xy, vec4 cl) {
   if (distance(xy, v) < 5) {
     return vec4(0, 0, 1, 1);
   }
   return cl;
+}
+
+vec2 rotate(vec2 point, vec2 pivot, float radAngle)
+{
+    float x = point.x;
+    float y = point.y;
+
+    float rX = pivot.x + (x - pivot.x) * cos(radAngle) - (y - pivot.y) * sin(radAngle);
+    float rY = pivot.y + (x - pivot.x) * sin(radAngle) + (y - pivot.y) * cos(radAngle);
+
+    return vec2(rX, rY);
 }
 
 
@@ -44,21 +58,11 @@ vec4 line(vec2 a, vec2 b, vec2 p, vec4 cl) {
   return cl;
 }
 
-vec4 perpendicular(vec2 a, vec2 b, vec2 p, vec4 cl) {
-  vec2 ba = b - a;
-  vec2 pa = p - a;
-
-  if (dot(ba, pa) < 0) {
-    return cl;
-  }
-  return vec4(1.0, 0.0, 0.0, 1.0);
-}
-
 half4 main(float2 xy) {
   half4 cl = vec4(0, 0, 0, 1);
   cl = image.eval(xy);
   cl = line(origin, pointer, xy, cl);
-  cl = perpendicular(pointer, origin, xy, cl);
+  cl = line(rotate(origin, pointer, -PI/2), pointer, xy, cl);
   cl = point(pointer, xy, cl);
   cl = point(origin, xy, cl);
 
