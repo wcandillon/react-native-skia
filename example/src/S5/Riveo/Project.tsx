@@ -41,10 +41,6 @@ vec2 rotate(vec2 point, vec2 pivot, float angle) {
     return vec2(x, y);
 }
 
-bool inBound(vec2 p) {
-  return (p.x > 0. && p.y > 0. && p.x <= resolution.x && p.y <= resolution.y);
-}
-
 bool transparent(vec2 p) {
   return image.eval(p).a < 1.;
 }
@@ -62,24 +58,19 @@ vec4 line(vec2 a, vec2 b, vec2 p, vec4 cl) {
   return cl;
 }
 
-mat3 scale(vec2 s) {
-  return mat3(s.x,0.0,0.0,0.0,s.y,0.0,0.0,0.0,1.0);
-}
-
 mat3 translate(vec2 p) {
   return mat3(1.0,0.0,0.0,0.0,1.0,0.0,p.x,p.y,1.0);
 }
 
-vec2 project(vec2 p, mat3 m) {
-  vec3 pr = m * vec3(p, 1.);
-  return vec2(pr.x/pr.z, pr.y/pr.z);
+mat3 scale(vec2 s, vec2 p) {
+  return translate(p) * mat3(s.x,0.0,0.0,0.0,s.y,0.0,0.0,0.0,1.0) * translate(-p);
 }
 
-vec4 gradient(vec4 color, float value, float start, float end) {
-  float progress = (value - start) / (end - start);
-  vec4 overlay = mix(vec4(0., 0., 0., 0.5), vec4(0.), progress);
-  return overlay;
+vec2 project(vec2 p, mat3 m) {
+  vec3 pr = m * vec3(p, 1.);
+  return pr.xy;
 }
+
 
 vec4 darken(vec4 color) {
   return color * vec4(vec3(0.7), 1.);
@@ -87,7 +78,7 @@ vec4 darken(vec4 color) {
 
 vec4 main(float2 xy) {
   float maxScale = 1.1;
-  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/maxScale, 1/maxScale)) * translate(-0.5 * resolution);
+  mat3 transform = scale(vec2(1/maxScale, 1/maxScale), 0.5 * resolution);
 
   vec4 cl = vec4(0, 0, 0, 1);
   float dx = origin.x - pointer.x;
@@ -104,7 +95,7 @@ vec4 main(float2 xy) {
     float theta = asin(d / r);
     float dp = cos(theta);
     vec2 s = vec2(1./(1. + dp * 0.1));
-    transform = translate(0.5 * resolution) * scale(s) * translate(-0.5 * resolution);
+    transform = scale(s, 0.5 * resolution);
     vec2 uv = project(xy, transform);
 
     float d1 = theta * r;
@@ -120,7 +111,7 @@ vec4 main(float2 xy) {
     float theta = asin(abs(d) / r);
     float dp = cos(theta);
     vec2 s = vec2(1./(1. + dp * 0.1));
-    transform = translate(0.5 * resolution) * scale(s) * translate(-0.5 * resolution);
+    transform = scale(s, 0.5 * resolution);
     vec2 uv = project(xy, transform);
     vec2 p = vec2(x + abs(d) + PI * r, uv.y);
     cl = image.eval(!transparent(p) ? p : xy);
