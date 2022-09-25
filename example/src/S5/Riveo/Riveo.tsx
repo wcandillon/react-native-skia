@@ -27,6 +27,7 @@ const defaultUniforms = {
   pointer: vec(width - 32, 150),
   origin: vec(width - 32, 150),
   resolution: vec(width - 32, 150),
+  window: vec(width, height),
 };
 
 export const Riveo = () => {

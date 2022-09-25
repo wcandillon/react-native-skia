@@ -77,12 +77,28 @@ vec4 line(vec2 a, vec2 b, vec2 p, vec4 cl) {
   //float k = clamp(dot(ba, pa) / dot(ba, ba), 0.0, 1.0);
   float k = dot(ba, pa) / dot(ba, ba);
   float d = length(pa - ba * k);
-  if (d < 1.0) {
+  if (d < 1) {
     return vec4(0.3, 0.6, 1.0, 1.0);
   }
   return cl;
 }
+
+mat3 scale(vec2 s) {
+  return mat3(s.x,0.0,0.0,0.0,s.y,0.0,0.0,0.0,1.0);
+}
+
+mat3 translate(vec2 p) {
+  return mat3(1.0,0.0,0.0,0.0,1.0,0.0,p.x,p.y,1.0);
+}
+
+vec2 project(vec2 p, mat3 m) {
+  vec3 pr = m * vec3(p, 1.);
+  return vec2(pr.x/pr.z, pr.y/pr.z);
+}
+
 vec4 main(float2 xy) {
+  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/1.1, 1/1.1)) * translate(-0.5 * resolution);
+
   vec4 cl = vec4(0, 0, 0, 1);
   float dx = origin.x - pointer.x;
   float x = resolution.x - dx;
@@ -98,15 +114,45 @@ vec4 main(float2 xy) {
     float d2 = (PI - theta) * r;
     vec2 p1 = vec2(x + d1, xy.y);
     vec2 p2 = vec2(x + d2, xy.y);
-    cl = image.eval(inBound(p2) && !transparent(p2) ? p2  : p1);
+    cl = image.eval(!transparent(p2) ? p2 : p1);
     cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
   } else {
     vec2 p = vec2(x + abs(d) + PI * r, xy.y);
-    cl = image.eval(inBound(p) && !transparent(p) ? p  : xy);
+    cl = image.eval(!transparent(p) ? p : xy);
+    cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
+
   }
-  //cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
+  cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
 }`)!;
+
+const debug = Skia.RuntimeEffect.Make(`
+uniform shader image;
+uniform vec2 pointer;
+uniform vec2 origin;
+uniform vec2 resolution;
+uniform vec2 window;
+
+mat3 scale(vec2 s) {
+  return mat3(s.x,0.0,0.0,0.0,s.y,0.0,0.0,0.0,1.0);
+}
+
+mat3 translate(vec2 p) {
+  return mat3(1.0,0.0,0.0,0.0,1.0,0.0,p.x,p.y,1.0);
+}
+
+vec2 project(vec2 p, mat3 m) {
+  vec3 pr = m * vec3(p, 1.);
+  return vec2(pr.x/pr.z, pr.y/pr.z);
+}
+
+vec4 main(float2 xy) {
+  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/1.1, 1/1.1)) * translate(-0.5 * resolution);
+  vec2 p = project(xy, transform);
+  vec4 cl = image.eval(p);
+  return cl;
+}
+`)!;
 
 interface ProjectProps {
   font: SkFont;
