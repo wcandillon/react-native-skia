@@ -27,13 +27,12 @@ const defaultUniforms = {
   pointer: vec(width - 32, 150),
   origin: vec(width - 32, 150),
   resolution: vec(width - 32, 150),
-  window: vec(width, height),
 };
 
 export const Riveo = () => {
   const uniforms = useValue(defaultUniforms);
   const image = useImage(bg);
-  const titleFont = useFont(boldTf, 32);
+  const titleFont = useFont(boldTf, 36);
   const normalFont = useFont(regularTf, 14);
   const onTouch = useTouchHandler({
     onStart: ({ y, x }) => {

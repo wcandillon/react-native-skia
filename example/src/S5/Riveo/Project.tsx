@@ -1,7 +1,5 @@
 import type { SkiaValue, Vector, SkFont } from "@shopify/react-native-skia";
 import {
-  BlurMask,
-  Fill,
   Rect,
   rect,
   Group,
@@ -10,7 +8,6 @@ import {
   RuntimeShader,
   Skia,
   usePaintRef,
-  vec,
   Text,
 } from "@shopify/react-native-skia";
 import React from "react";
@@ -26,8 +23,10 @@ uniform shader image;
 uniform vec2 pointer;
 uniform vec2 origin;
 uniform vec2 resolution;
+
 const float PI = 3.1415926535897932384626433832795;
-const float r = 50.0;
+const float r = 75.0;
+
 vec4 point(vec2 v, vec2 xy, vec4 cl) {
   if (distance(xy, v) < 5) {
     return vec4(0, 0, 1, 1);
@@ -40,26 +39,6 @@ vec2 rotate(vec2 point, vec2 pivot, float angle) {
     float x = pivot.x + dx * cos(angle) - dy * sin(angle);
     float y = pivot.y + dx * sin(angle) + dy * cos(angle);
     return vec2(x, y);
-}
-
-bool inRRBound(vec2 p) {
-  bool inRect = (p.x > 0. && p.y > 0. && p.x <= resolution.x && p.y <= resolution.y);
-  if (!inRect) {
-    return false;
-  }
-  if(distance(p, vec2(resolution.x - 16.0, 16.0)) > 16.0) {
-    return false;
-  }
-  if(distance(p, vec2(resolution.x - 16.0, resolution.y - 16.0)) > 16.0) {
-    return false;
-  }
-  if(distance(p, vec2(16.0, 16.0)) > 16.0) {
-    return false;
-  }
-  if(distance(p, vec2(16.0, resolution.y - 16.0)) > 16.0) {
-    return false;
-  }
-  return true;
 }
 
 bool inBound(vec2 p) {
@@ -96,8 +75,19 @@ vec2 project(vec2 p, mat3 m) {
   return vec2(pr.x/pr.z, pr.y/pr.z);
 }
 
+vec4 gradient(vec4 color, float value, float start, float end) {
+  float progress = (value - start) / (end - start);
+  vec4 overlay = mix(vec4(0., 0., 0., 0.5), vec4(0.), progress);
+  return overlay;
+}
+
+vec4 darken(vec4 color) {
+  return color * vec4(vec3(0.7), 1.);
+}
+
 vec4 main(float2 xy) {
-  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/1.1, 1/1.1)) * translate(-0.5 * resolution);
+  float maxScale = 1.1;
+  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/maxScale, 1/maxScale)) * translate(-0.5 * resolution);
 
   vec4 cl = vec4(0, 0, 0, 1);
   float dx = origin.x - pointer.x;
@@ -107,52 +97,40 @@ vec4 main(float2 xy) {
 
   if (d > r) {
     cl = vec4(0.0, 0.0, 0.0, 0.0);
-    cl.rgb *= pow(clamp(d - r, 0., 1.) * 1.5, .2);
+    if (!transparent(xy)) {
+      cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
+    }
   } else if (d > 0) {
     float theta = asin(d / r);
+    float dp = cos(theta);
+    vec2 s = vec2(1./(1. + dp * 0.1));
+    transform = translate(0.5 * resolution) * scale(s) * translate(-0.5 * resolution);
+    vec2 uv = project(xy, transform);
+
     float d1 = theta * r;
     float d2 = (PI - theta) * r;
-    vec2 p1 = vec2(x + d1, xy.y);
-    vec2 p2 = vec2(x + d2, xy.y);
-    cl = image.eval(!transparent(p2) ? p2 : p1);
+    vec2 p1 = vec2(x + d1, uv.y);
+    vec2 p2 = vec2(x + d2, uv.y);
+    cl = image.eval(!transparent(p2) ? p2 : vec2(x + d1, xy.y));
+    if (!transparent(p2)) {
+      cl = darken(cl);
+    }
     cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
   } else {
-    vec2 p = vec2(x + abs(d) + PI * r, xy.y);
+    float theta = asin(abs(d) / r);
+    float dp = cos(theta);
+    vec2 s = vec2(1./(1. + dp * 0.1));
+    transform = translate(0.5 * resolution) * scale(s) * translate(-0.5 * resolution);
+    vec2 uv = project(xy, transform);
+    vec2 p = vec2(x + abs(d) + PI * r, uv.y);
     cl = image.eval(!transparent(p) ? p : xy);
-    cl.rgb *= pow(clamp((r - d) / r, 0., 1.), .2);
-
+    if (!transparent(p)) {
+      cl = darken(cl);
+    }
   }
-  cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
+  //cl = line(vec2(x, 0), vec2(x, resolution.y), xy, cl);
   return cl;
 }`)!;
-
-const debug = Skia.RuntimeEffect.Make(`
-uniform shader image;
-uniform vec2 pointer;
-uniform vec2 origin;
-uniform vec2 resolution;
-uniform vec2 window;
-
-mat3 scale(vec2 s) {
-  return mat3(s.x,0.0,0.0,0.0,s.y,0.0,0.0,0.0,1.0);
-}
-
-mat3 translate(vec2 p) {
-  return mat3(1.0,0.0,0.0,0.0,1.0,0.0,p.x,p.y,1.0);
-}
-
-vec2 project(vec2 p, mat3 m) {
-  vec3 pr = m * vec3(p, 1.);
-  return vec2(pr.x/pr.z, pr.y/pr.z);
-}
-
-vec4 main(float2 xy) {
-  mat3 transform = translate(0.5 * resolution) * scale(vec2(1/1.1, 1/1.1)) * translate(-0.5 * resolution);
-  vec2 p = project(xy, transform);
-  vec4 cl = image.eval(p);
-  return cl;
-}
-`)!;
 
 interface ProjectProps {
   font: SkFont;
@@ -174,6 +152,10 @@ export const Project = ({ uniforms, font }: ProjectProps) => {
             colors={["#dafb61", "#61DAFB", "#fb61da", "#61fbcf"]}
           />
         </RoundedRect>
+        <Rect
+          rect={rect(0, 0, width - 32, 30)}
+          color="rgba(0.3, 0.3, 0.3, 0.3)"
+        />
         <Text x={32} y={150 - 16} text="Untitled Project" font={font} />
       </Group>
     </>
