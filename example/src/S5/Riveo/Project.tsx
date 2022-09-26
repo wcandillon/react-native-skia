@@ -1,5 +1,7 @@
 import type { SkiaValue, Vector, SkFont } from "@shopify/react-native-skia";
 import {
+  SkImage,
+  ImageShader,
   Rect,
   rect,
   Group,
@@ -9,6 +11,7 @@ import {
   Skia,
   usePaintRef,
   Text,
+  useImage,
 } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
@@ -123,31 +126,47 @@ vec4 main(float2 xy) {
   return cl;
 }`)!;
 
+export interface Project {
+  id: string;
+  title: string;
+  size: string;
+  duration: string;
+  picture: number;
+  color: string;
+}
+
 interface ProjectProps {
+  project: Project;
   font: SkFont;
   uniforms: SkiaValue<{ resolution: Vector; pointer: Vector; origin: Vector }>;
 }
 
-export const Project = ({ uniforms, font }: ProjectProps) => {
+export const Project = ({
+  uniforms,
+  font,
+  project: { picture, title, color },
+}: ProjectProps) => {
+  const image = useImage(picture);
   const paint = usePaintRef();
+  if (!image) {
+    return null;
+  }
   return (
     <>
       <Paint ref={paint}>
         <RuntimeShader source={source} uniforms={uniforms} />
       </Paint>
       <RoundedRect rect={project} color="red" />
-      <Group layer={paint}>
+      <Group>
         <RoundedRect rect={project}>
-          <BilinearGradient
-            rect={project.rect}
-            colors={["#dafb61", "#61DAFB", "#fb61da", "#61fbcf"]}
-          />
+          <ImageShader image={image} rect={project.rect} fit="cover" />
         </RoundedRect>
         <Rect
-          rect={rect(0, 0, width - 32, 30)}
-          color="rgba(0.3, 0.3, 0.3, 0.3)"
+          rect={rect(0, 120, width - 32, 30)}
+          color={color}
+          clip={project}
         />
-        <Text x={32} y={150 - 16} text="Untitled Project" font={font} />
+        <Text x={32} y={150 - 40} text={title} color="white" font={font} />
       </Group>
     </>
   );
