@@ -8,9 +8,13 @@ import {
   useImage,
   useTouchHandler,
   useValue,
+  useComputedValue,
+  runSpring,
+  runTiming,
+  Easing,
 } from "@shopify/react-native-skia";
 import React from "react";
-import { Dimensions } from "react-native";
+import { Dimensions, PixelRatio } from "react-native";
 
 import { Project } from "./Project";
 
@@ -54,28 +58,37 @@ const projects: Project[] = [
   // },
 ];
 
-const defaultUniforms = {
-  pointer: vec(width - 32, 150),
-  origin: vec(width - 32, 150),
-  resolution: vec(width - 32, 150),
-};
-
 export const Riveo = () => {
-  const uniforms = useValue(defaultUniforms);
+  const origin = useValue(width - 32);
+  const pointer = useValue(width - 32);
   const image = useImage(bg);
   const titleFont = useFont(boldTf, 36);
   const normalFont = useFont(regularTf, 18);
   const onTouch = useTouchHandler({
-    onStart: ({ y, x }) => {
-      uniforms.current = { ...uniforms.current, origin: vec(x, y) };
+    onStart: ({ x }) => {
+      origin.current = x;
     },
-    onActive: ({ x, y }) => {
-      uniforms.current = { ...uniforms.current, pointer: vec(x, y) };
+    onActive: ({ x }) => {
+      pointer.current = x;
     },
     onEnd: () => {
-      uniforms.current = defaultUniforms;
+      runTiming(pointer, width - 32, {
+        duration: 450,
+        easing: Easing.inOut(Easing.ease),
+      });
+      runTiming(origin, width - 32, {
+        duration: 450,
+        easing: Easing.inOut(Easing.ease),
+      });
     },
   });
+  const uniforms = useComputedValue(() => {
+    return {
+      pointer: pointer.current * PixelRatio.get(),
+      origin: origin.current * PixelRatio.get(),
+      resolution: vec((width - 32) * PixelRatio.get(), 150 * PixelRatio.get()),
+    };
+  }, [origin, pointer]);
   if (!titleFont || !normalFont || !image) {
     return null;
   }
@@ -89,6 +102,7 @@ export const Riveo = () => {
             transform={[{ translateY: 116 + index * 166 }, { translateX: 16 }]}
           >
             <Project
+              active={index === 1}
               uniforms={uniforms}
               font={titleFont}
               smallFont={normalFont}

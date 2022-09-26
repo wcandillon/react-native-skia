@@ -71,6 +71,15 @@ export const Calendar = () => (
 export const Clock = () => (
   <Icon>
     <Circle c={vec(12, 12)} r={10} />
-    <Points points={[vec(12, 6), vec(12, 12), vec(16, 14)]} mode="lines" />
+    <Points points={[vec(12, 6), vec(12, 12), vec(16, 14)]} mode="polygon" />
+  </Icon>
+);
+
+export const Trash = () => (
+  <Icon>
+    <Points points={[vec(3, 6), vec(5, 6), vec(21, 6)]} mode="polygon" />
+    <Path path="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <Line p1={vec(10, 11)} p2={vec(10, 17)} />
+    <Line p1={vec(14, 11)} p2={vec(14, 17)} />
   </Icon>
 );
