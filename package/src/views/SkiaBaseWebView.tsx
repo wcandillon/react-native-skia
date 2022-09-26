@@ -3,6 +3,7 @@ import React from "react";
 import type { PointerEvent } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { PixelRatio, View } from "react-native";
+import type { GrDirectContext } from "canvaskit-wasm";
 
 import type { SkRect, SkCanvas } from "../skia/types";
 import type { SkiaValue } from "../values";
@@ -21,6 +22,7 @@ export abstract class SkiaBaseWebView<
     this._mode = props.mode ?? "default";
   }
 
+  private _grContext: GrDirectContext | null = null;
   private _surface: JsiSkSurface | null = null;
   private _unsubscriptions: Array<() => void> = [];
   private _touches: Array<TouchInfo> = [];
@@ -48,7 +50,19 @@ export abstract class SkiaBaseWebView<
       const canvas = this._canvasRef.current;
       canvas.width = canvas.clientWidth * pd;
       canvas.height = canvas.clientHeight * pd;
-      const surface = CanvasKit.MakeWebGLCanvasSurface(this._canvasRef.current);
+      const ctx = CanvasKit.GetWebGLContext(this._canvasRef.current, {
+        antialias: 0,
+      });
+      this._grContext = CanvasKit.MakeGrContext(ctx);
+      if (!this._grContext) {
+        throw new Error("Could not create a graphics context");
+      }
+      const surface = CanvasKit.MakeOnScreenGLSurface(
+        this._grContext,
+        canvas.width,
+        canvas.height,
+        CanvasKit.ColorSpace.SRGB
+      );
       if (!surface) {
         throw new Error("Could not create surface");
       }
@@ -70,6 +84,15 @@ export abstract class SkiaBaseWebView<
   componentWillUnmount() {
     this.unsubscribeAll();
     cancelAnimationFrame(this.requestId);
+    if (this._surface) {
+      this._surface.ref.dispose();
+      this._surface = null;
+    }
+    if (this._grContext) {
+      this._grContext.releaseResourcesAndAbandonContext();
+      this._grContext.delete();
+      this._grContext = null;
+    }
   }
 
   /**
