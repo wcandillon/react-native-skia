@@ -64,7 +64,7 @@ export const Riveo = () => {
   const uniforms = useValue(defaultUniforms);
   const image = useImage(bg);
   const titleFont = useFont(boldTf, 36);
-  const normalFont = useFont(regularTf, 14);
+  const normalFont = useFont(regularTf, 18);
   const onTouch = useTouchHandler({
     onStart: ({ y, x }) => {
       uniforms.current = { ...uniforms.current, origin: vec(x, y) };
@@ -88,7 +88,12 @@ export const Riveo = () => {
             key={project.id}
             transform={[{ translateY: 116 + index * 166 }, { translateX: 16 }]}
           >
-            <Project uniforms={uniforms} font={titleFont} project={project} />
+            <Project
+              uniforms={uniforms}
+              font={titleFont}
+              smallFont={normalFont}
+              project={project}
+            />
           </Group>
         );
       })}

@@ -1,5 +1,6 @@
 import type { SkiaValue, Vector, SkFont } from "@shopify/react-native-skia";
 import {
+  Fill,
   SkImage,
   ImageShader,
   Rect,
@@ -17,6 +18,9 @@ import React from "react";
 import { Dimensions } from "react-native";
 
 import { BilinearGradient } from "../../Examples/Aurora/components/BilinearGradient";
+
+import { Calendar, Clock, Database } from "./Icons";
+import { Labels } from "./Labels";
 
 const { width } = Dimensions.get("window");
 const project = Skia.RRectXY(Skia.XYWHRect(0, 0, width - 32, 150), 16, 16);
@@ -138,13 +142,15 @@ export interface Project {
 interface ProjectProps {
   project: Project;
   font: SkFont;
+  smallFont: SkFont;
   uniforms: SkiaValue<{ resolution: Vector; pointer: Vector; origin: Vector }>;
 }
 
 export const Project = ({
   uniforms,
   font,
-  project: { picture, title, color },
+  smallFont,
+  project: { picture, title, color, size, duration },
 }: ProjectProps) => {
   const image = useImage(picture);
   const paint = usePaintRef();
@@ -157,15 +163,12 @@ export const Project = ({
         <RuntimeShader source={source} uniforms={uniforms} />
       </Paint>
       <RoundedRect rect={project} color="red" />
-      <Group>
-        <RoundedRect rect={project}>
+      <Group clip={project}>
+        <Fill>
           <ImageShader image={image} rect={project.rect} fit="cover" />
-        </RoundedRect>
-        <Rect
-          rect={rect(0, 120, width - 32, 30)}
-          color={color}
-          clip={project}
-        />
+        </Fill>
+        <Rect rect={rect(0, 120, width - 32, 30)} color={color} />
+        <Labels size={size} font={smallFont} duration={duration} />
         <Text x={32} y={150 - 40} text={title} color="white" font={font} />
       </Group>
     </>
