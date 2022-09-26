@@ -77,7 +77,7 @@ vec4 darken(vec4 color) {
 }
 
 vec4 main(float2 xy) {
-  float maxScale = 1.1;
+  float maxScale = 1.2;
   mat3 transform = scale(vec2(1/maxScale, 1/maxScale), 0.5 * resolution);
 
   vec4 cl = vec4(0, 0, 0, 1);
