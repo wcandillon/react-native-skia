@@ -53,8 +53,7 @@ mat3 scale(vec2 s, vec2 p) {
 }
 
 vec2 project(vec2 p, mat3 m) {
-  vec3 pr = m * vec3(p, 1.);
-  return pr.xy;
+  return (inverse(m) * vec3(p, 1.)).xy;
 }
 
 void darken() {
@@ -79,7 +78,7 @@ vec4 main(float2 xy) {
   } else if (d > 0) {
     float theta = asin(d / r);
     float dp = cos(theta);
-    vec2 s = vec2(1./(1. + dp * 0.2));
+    vec2 s = vec2((1. + dp * 0.2));
     transform = scale(s, 0.5 * resolution);
     vec2 uv = project(xy, transform);
     float d1 = theta * r;
@@ -94,7 +93,7 @@ vec4 main(float2 xy) {
   } else {
     float theta = asin(abs(d) / r);
     float dp = cos(theta);
-    vec2 s = vec2(1./(1. + dp * 0.2));
+    vec2 s = vec2((1. + dp * 0.2));
     transform = scale(s, 0.5 * resolution);
     vec2 uv = project(xy, transform);
     vec2 p = vec2(x + abs(d) + PI * r, uv.y);
