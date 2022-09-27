@@ -10,14 +10,14 @@
 // see also this discussion:
 // https://github.com/brodybits/create-react-native-module/issues/232
 
-const path = require('path');
-const exclusionList = require('metro-config/src/defaults/exclusionList');
+const path = require("path");
+const exclusionList = require("metro-config/src/defaults/exclusionList");
 
-const glob = require('glob-to-regexp');
+const glob = require("glob-to-regexp");
 
 function getBlacklist() {
   const nodeModuleDirs = [
-    glob(`${path.resolve(__dirname, '../package')}/node_modules/*`),
+    glob(`${path.resolve(__dirname, "../package")}/node_modules/*`),
   ];
   return exclusionList(nodeModuleDirs);
 }
@@ -29,12 +29,21 @@ module.exports = {
   resolver: {
     extraNodeModules: new Proxy(
       {},
-      {get: (_, name) => path.resolve('.', 'node_modules', name)},
+      { get: (_, name) => path.resolve(".", "node_modules", name) }
     ),
     // /dist\/.*/
     blacklistRE: getBlacklist(),
   },
 
   // quick workaround for another issue with symlinks
-  watchFolders: [path.resolve('.'), path.resolve('../package')],
+  watchFolders: [path.resolve("."), path.resolve("../package")],
+
+  transformer: {
+    getTransformOptions: async () => ({
+      transform: {
+        experimentalImportSupport: false,
+        inlineRequires: true,
+      },
+    }),
+  },
 };

@@ -8,15 +8,11 @@ import com.facebook.soloader.SoLoader;
 import java.util.List;
 
 /**
- * Class responsible to load the TurboModules. This class has native methods and
- * needs a
- * corresponding C++ implementation/header file to work correctly (already
- * placed inside the jni/
+ * Class responsible to load the TurboModules. This class has native methods and needs a
+ * corresponding C++ implementation/header file to work correctly (already placed inside the jni/
  * folder for you).
  *
- * <p>
- * Please note that this class is used ONLY if you opt-in for the New
- * Architecture (see the
+ * <p>Please note that this class is used ONLY if you opt-in for the New Architecture (see the
  * `newArchEnabled` property). Is ignored otherwise.
  */
 public class MainApplicationTurboModuleManagerDelegate

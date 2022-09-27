@@ -31,6 +31,9 @@ jobs:
       - name: Install root node dependencies
         run: yarn
 
+      - name: Typecheck the build scripts
+        run: yarn tsc
+
       - name: Install Package
         run: cd package; yarn;
 

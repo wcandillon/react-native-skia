@@ -13,15 +13,21 @@
 #pragma clang diagnostic pop
 
 // These static class members are used by all Skia Views
-id<MTLDevice> RNSkMetalCanvasProvider::_device = MTLCreateSystemDefaultDevice();
-id<MTLCommandQueue> RNSkMetalCanvasProvider::_commandQueue = id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
-
+id<MTLDevice> RNSkMetalCanvasProvider::_device = nullptr;
+id<MTLCommandQueue> RNSkMetalCanvasProvider::_commandQueue = nullptr;
 sk_sp<GrDirectContext> RNSkMetalCanvasProvider::_skContext = nullptr;
 
 RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(std::function<void()> requestRedraw,
                         std::shared_ptr<RNSkia::RNSkPlatformContext> context):
 RNSkCanvasProvider(requestRedraw),
   _context(context) {
+  if (!_device) {
+    _device = MTLCreateSystemDefaultDevice();
+  }
+  if (!_commandQueue) {
+    _commandQueue = id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
+  }
+
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
