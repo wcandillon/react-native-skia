@@ -18,13 +18,13 @@ import ReactReconciler from "react-reconciler";
 
 import { SkiaView, useDrawCallback } from "../views";
 import type { TouchHandler } from "../views";
-import type { SkFontMgr } from "../skia/types";
 import { useValue } from "../values/hooks/useValue";
 import { Skia } from "../skia/Skia";
+import type { SkiaValue } from "../values";
 
 import { debug as hostDebug, skHostConfig } from "./HostConfig";
 // import { debugTree } from "./nodes";
-import { Container } from "./nodes";
+import { Container } from "./Container";
 import { DependencyManager } from "./DependencyManager";
 import { CanvasProvider } from "./useCanvas";
 
@@ -39,8 +39,7 @@ skiaReconciler.injectIntoDevTools({
 const render = (element: ReactNode, root: OpaqueRoot, container: Container) => {
   skiaReconciler.updateContainer(element, root, null, () => {
     hostDebug("updateContainer");
-
-    container.depMgr.subscribe();
+    container.depMgr.update();
   });
 };
 
@@ -50,24 +49,32 @@ export interface CanvasProps extends ComponentProps<typeof SkiaView> {
   ref?: RefObject<SkiaView>;
   children: ReactNode;
   onTouch?: TouchHandler;
-  fontMgr?: SkFontMgr;
 }
 
-const defaultFontMgr = Skia.FontMgr.RefDefault();
-
 export const Canvas = forwardRef<SkiaView, CanvasProps>(
-  ({ children, style, debug, mode, onTouch, fontMgr }, forwardedRef) => {
+  ({ children, style, debug, mode, onTouch }, forwardedRef) => {
     const size = useValue({ width: 0, height: 0 });
     const canvasCtx = useMemo(() => ({ Skia, size }), [size]);
     const innerRef = useCanvasRef();
     const ref = useCombinedRefs(forwardedRef, innerRef);
     const [tick, setTick] = useState(0);
-    const redraw = useCallback(() => setTick((t) => t + 1), []);
+    const redraw = useCallback(() => {
+      setTick((t) => t + 1);
+    }, []);
 
-    const container = useMemo(
-      () => new Container(new DependencyManager(ref), redraw),
-      [redraw, ref]
+    const registerValues = useCallback(
+      (values: Array<SkiaValue<unknown>>) => {
+        if (ref.current === null) {
+          throw new Error("Canvas ref is not set");
+        }
+        return ref.current.registerValues(values);
+      },
+      [ref]
     );
+
+    const container = useMemo(() => {
+      return new Container(Skia, new DependencyManager(registerValues), redraw);
+    }, [redraw, registerValues]);
 
     const root = useMemo(
       () => skiaReconciler.createContainer(container, 0, false, null),
@@ -81,6 +88,8 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
         container
       );
     }, [children, root, redraw, container, canvasCtx]);
+
+    const paint = useMemo(() => Skia.Paint(), []);
 
     // Draw callback
     const onDraw = useDrawCallback(
@@ -96,7 +105,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
         ) {
           canvasCtx.size.current = { width, height };
         }
-        const paint = Skia.Paint();
+        paint.reset();
         const ctx = {
           width,
           height,
@@ -105,8 +114,7 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
           paint,
           opacity: 1,
           ref,
-          center: Skia.Point(width / 2, height / 2),
-          fontMgr: fontMgr ?? defaultFontMgr,
+          center: { x: width / 2, y: height / 2 },
           Skia,
         };
         container.draw(ctx);
@@ -116,9 +124,11 @@ export const Canvas = forwardRef<SkiaView, CanvasProps>(
 
     useEffect(() => {
       return () => {
-        container.depMgr.unsubscribe();
+        skiaReconciler.updateContainer(null, root, null, () => {
+          container.depMgr.remove();
+        });
       };
-    }, [container]);
+    }, [container, root]);
 
     return (
       <SkiaView

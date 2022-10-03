@@ -89,7 +89,7 @@ half4 main(float2 xy) {
 export const ImageFilters = () => {
   const r = 128;
   return (
-    <Examples>
+    <Examples exportable>
       <DisplacementMapDemo />
       <OffsetDemo />
       <MorphologyDemo />

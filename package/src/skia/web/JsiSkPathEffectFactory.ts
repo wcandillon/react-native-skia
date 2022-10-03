@@ -8,7 +8,9 @@ import type {
   SkPathEffect,
 } from "../types";
 
-import { ckEnum, Host, NotImplementedOnRNWeb, toValue } from "./Host";
+import { ckEnum, Host, NotImplementedOnRNWeb } from "./Host";
+import { JsiSkMatrix } from "./JsiSkMatrix";
+import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkPathEffect } from "./JsiSkPathEffect";
 
 export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
@@ -47,7 +49,10 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
   }
 
   MakeLine2D(width: number, matrix: SkMatrix) {
-    const pe = this.CanvasKit.PathEffect.MakeLine2D(width, toValue(matrix));
+    const pe = this.CanvasKit.PathEffect.MakeLine2D(
+      width,
+      JsiSkMatrix.fromValue(matrix)
+    );
     if (pe === null) {
       return null;
     }
@@ -61,7 +66,7 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
     style: Path1DEffectStyle
   ) {
     const pe = this.CanvasKit.PathEffect.MakePath1D(
-      toValue(path),
+      JsiSkPath.fromValue(path),
       advance,
       phase,
       ckEnum(style)
@@ -74,8 +79,8 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
 
   MakePath2D(matrix: SkMatrix, path: SkPath) {
     const pe = this.CanvasKit.PathEffect.MakePath2D(
-      toValue(matrix),
-      toValue(path)
+      JsiSkMatrix.fromValue(matrix),
+      JsiSkPath.fromValue(path)
     );
     if (pe === null) {
       return null;

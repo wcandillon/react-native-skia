@@ -46,7 +46,7 @@ const Demo = () => (
 
 ### Result
 
-![Alpha Mask](assets/mask/alpha.png)
+<img src={require("/static/img/mask/alpha-mask.png").default} width="256" height="256" />
 
 ## Luminance Mask
 
@@ -74,4 +74,4 @@ const Demo = () => (
 
 ### Result
 
-![Luminance Mask](assets/mask/luminance.png)
+<img src={require("/static/img/mask/luminance-mask.png").default} width="256" height="256" />

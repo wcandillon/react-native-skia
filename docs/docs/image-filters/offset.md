@@ -41,4 +41,4 @@ const Filter = () => {
 };
 ```
 
-![Offset](./assets/offset.png)
+<img src={require("/static/img/image-filters/offset.png").default} width="256" height="256" />

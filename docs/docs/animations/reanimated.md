@@ -13,7 +13,7 @@ When using the `useSharedValueEffect` hook, the canvas will redraw whenever the 
 ## Definition
 
 ```tsx
-useSharedValueEffect(callback: () => void, values: Reanimated.SharedValue<any>[]);
+useSharedValueEffect(callback: () => void, ...values: Reanimated.SharedValue<any>[]);
 ```
 
 ## Example

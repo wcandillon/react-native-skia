@@ -2,7 +2,7 @@ import type { CanvasKit, Matrix3x3 } from "canvaskit-wasm";
 
 import type { SkMatrix } from "../types";
 
-import { HostObject, toValue } from "./Host";
+import { HostObject } from "./Host";
 
 export class JsiSkMatrix
   extends HostObject<Matrix3x3, "Matrix">
@@ -13,7 +13,9 @@ export class JsiSkMatrix
   }
 
   concat(matrix: SkMatrix) {
-    this.ref.set(this.CanvasKit.Matrix.multiply(this.ref, toValue(matrix)));
+    this.ref.set(
+      this.CanvasKit.Matrix.multiply(this.ref, JsiSkMatrix.fromValue(matrix))
+    );
   }
 
   translate(x: number, y: number) {
@@ -54,5 +56,9 @@ export class JsiSkMatrix
 
   identity() {
     this.ref.set(this.CanvasKit.Matrix.identity());
+  }
+
+  get() {
+    return Array.from(this.ref);
   }
 }

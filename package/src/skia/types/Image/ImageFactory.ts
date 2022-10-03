@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import type { SkData } from "../Data";
 
 import type { SkImage } from "./Image";

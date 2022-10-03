@@ -3,7 +3,8 @@ import type { CanvasKit, RuntimeEffect } from "canvaskit-wasm";
 import type { SkMatrix, SkShader } from "../types";
 import type { SkRuntimeEffect } from "../types/RuntimeEffect/RuntimeEffect";
 
-import { HostObject, toValue } from "./Host";
+import { HostObject } from "./Host";
+import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkShader } from "./JsiSkShader";
 
 export class JsiSkRuntimeEffect
@@ -19,7 +20,9 @@ export class JsiSkRuntimeEffect
       this.CanvasKit,
       this.ref.makeShader(
         uniforms,
-        localMatrix !== undefined ? toValue(localMatrix) : localMatrix
+        localMatrix !== undefined
+          ? JsiSkMatrix.fromValue(localMatrix)
+          : localMatrix
       )
     );
   }
@@ -33,8 +36,10 @@ export class JsiSkRuntimeEffect
       this.CanvasKit,
       this.ref.makeShaderWithChildren(
         uniforms,
-        children?.map((child) => toValue(child)),
-        localMatrix !== undefined ? toValue(localMatrix) : localMatrix
+        children?.map((child) => JsiSkShader.fromValue(child)),
+        localMatrix !== undefined
+          ? JsiSkMatrix.fromValue(localMatrix)
+          : localMatrix
       )
     );
   }

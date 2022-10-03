@@ -11,7 +11,12 @@ export class RNSkComputedValue<T> extends RNSkReadonlyValue<T> {
       current: undefined,
     };
     dependencies.forEach((dep) => {
-      if ("__typename__" in dep && "addListener" in dep) {
+      if (
+        dep &&
+        typeof dep === "object" &&
+        "__typename__" in dep &&
+        "addListener" in dep
+      ) {
         unsubscribers.push(
           (dep as RNSkReadonlyValue<unknown>).addListener(() =>
             notifyUpdateRef.current?.()
@@ -34,5 +39,11 @@ export class RNSkComputedValue<T> extends RNSkReadonlyValue<T> {
 
   public unsubscribe() {
     this._unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this._unsubscribers = [];
+  }
+
+  public __invalidate(): void {
+    this._unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this._unsubscribers = [];
   }
 }

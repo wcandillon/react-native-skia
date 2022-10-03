@@ -5,22 +5,21 @@ import type { SkRect } from "../skia/types";
 import type { SkiaValue } from "../values";
 
 import { SkiaViewApi } from "./api";
-import type { DrawMode, NativeSkiaViewProps, SkiaViewProps } from "./types";
+import type { NativeSkiaViewProps, SkiaDrawViewProps } from "./types";
 
 let SkiaViewNativeId = 1000;
 
-const NativeSkiaView = requireNativeComponent<NativeSkiaViewProps>(
-  "ReactNativeSkiaView"
-);
+const NativeSkiaView =
+  requireNativeComponent<NativeSkiaViewProps>("SkiaDrawView");
 
-export class SkiaView extends React.Component<SkiaViewProps> {
-  constructor(props: SkiaViewProps) {
+export class SkiaView extends React.Component<SkiaDrawViewProps> {
+  constructor(props: SkiaDrawViewProps) {
     super(props);
     this._nativeId = SkiaViewNativeId++;
     const { onDraw } = props;
     if (onDraw) {
-      assertDrawCallbacksEnabled();
-      SkiaViewApi.setDrawCallback(this._nativeId, onDraw);
+      assertSkiaViewApi();
+      SkiaViewApi.setJsiProperty(this._nativeId, "drawCallback", onDraw);
     }
   }
 
@@ -30,11 +29,11 @@ export class SkiaView extends React.Component<SkiaViewProps> {
     return this._nativeId;
   }
 
-  componentDidUpdate(prevProps: SkiaViewProps) {
+  componentDidUpdate(prevProps: SkiaDrawViewProps) {
     const { onDraw } = this.props;
     if (onDraw !== prevProps.onDraw) {
-      assertDrawCallbacksEnabled();
-      SkiaViewApi.setDrawCallback(this._nativeId, onDraw);
+      assertSkiaViewApi();
+      SkiaViewApi.setJsiProperty(this._nativeId, "drawCallback", onDraw);
     }
   }
 
@@ -44,7 +43,7 @@ export class SkiaView extends React.Component<SkiaViewProps> {
    * @returns An Image object.
    */
   public makeImageSnapshot(rect?: SkRect) {
-    assertDrawCallbacksEnabled();
+    assertSkiaViewApi();
     return SkiaViewApi.makeImageSnapshot(this._nativeId, rect);
   }
 
@@ -52,22 +51,8 @@ export class SkiaView extends React.Component<SkiaViewProps> {
    * Sends a redraw request to the native SkiaView.
    */
   public redraw() {
-    assertDrawCallbacksEnabled();
-    SkiaViewApi.invalidateSkiaView(this._nativeId);
-  }
-
-  /**
-   * Updates the drawing mode for the skia view. This is the same
-   * as declaratively setting the mode property on the SkiaView.
-   * There are two drawing modes, "continuous" and "default",
-   * where the continuous mode will continuously redraw the view and
-   * the default mode will only redraw when any of the regular react
-   * properties are changed like size and margins.
-   * @param mode Drawing mode to use.
-   */
-  public setDrawMode(mode: DrawMode) {
-    assertDrawCallbacksEnabled();
-    SkiaViewApi.setDrawMode(this._nativeId, mode);
+    assertSkiaViewApi();
+    SkiaViewApi.requestRedraw(this._nativeId);
   }
 
   /**
@@ -75,8 +60,8 @@ export class SkiaView extends React.Component<SkiaViewProps> {
    * The view will redraw itself when any of the values change.
    * @param values Values to register
    */
-  public registerValues(values: SkiaValue<unknown>[]) {
-    assertDrawCallbacksEnabled();
+  public registerValues(values: SkiaValue<unknown>[]): () => void {
+    assertSkiaViewApi();
     return SkiaViewApi.registerValuesInView(this._nativeId, values);
   }
 
@@ -94,12 +79,15 @@ export class SkiaView extends React.Component<SkiaViewProps> {
   }
 }
 
-const assertDrawCallbacksEnabled = () => {
+const assertSkiaViewApi = () => {
   if (
     SkiaViewApi === null ||
-    SkiaViewApi.setDrawCallback == null ||
-    SkiaViewApi.invalidateSkiaView == null
+    SkiaViewApi.setJsiProperty === null ||
+    SkiaViewApi.callJsiMethod === null ||
+    SkiaViewApi.registerValuesInView === null ||
+    SkiaViewApi.requestRedraw === null ||
+    SkiaViewApi.makeImageSnapshot === null
   ) {
-    throw Error("Skia Api is not enabled.");
+    throw Error("Skia View Api was not found.");
   }
 };

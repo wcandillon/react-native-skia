@@ -32,7 +32,7 @@ Make sure to check out the sub modules:
 
 You also need to install some tools for the build scripts to work. Run `yarn` in the root of the project to install them.
 
-Make sure you have all the tools required for building the skia libraries (XCode, Ninja, CMake, Android NDK / build tools)
+Make sure you have all the tools required for building the skia libraries (XCode, Ninja, CMake, Android NDK / build tools).
 
 On MacOS you can install Ninja via homebrew:
 
@@ -43,7 +43,7 @@ brew install ninja
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
 `ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/<version>` for instance.
 
-If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_
+If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_.
 
 And then the _SDK Location_ section. It will show you the NDK path, or the option to Download it if you don't have it installed.
 
@@ -66,9 +66,9 @@ If a new version of Skia is included in an upgrade of this library, you need to 
 
 ### Publishing
 
-- Run the commands in the `Building` section
+- Run the commands in the [Building](#building) section
 - Build the Android binaries with `yarn build-android`
-- Build the NPM package with `yarn build-npm`;
+- Build the NPM package with `yarn build-npm`
 
 Publish the NPM package manually. The output is found in the `dist` folder.
 

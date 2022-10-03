@@ -1,14 +1,14 @@
-import type { DependencyList } from "react";
-import { useRef, useEffect, useState } from "react";
-import { Image, Platform } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Image } from "react-native";
 
 import { Skia } from "../Skia";
-import type { SkData, DataSource } from "../types";
+import { isRNModule } from "../types";
+import type { SkData, DataModule, DataSourceParam } from "../types";
 
-const resolveAsset = (source: ReturnType<typeof require>) => {
-  return Platform.OS === "web"
-    ? source.default
-    : Image.resolveAssetSource(source).uri;
+const resolveAsset = (source: DataModule) => {
+  return isRNModule(source)
+    ? Image.resolveAssetSource(source).uri
+    : source.default;
 };
 
 const factoryWrapper = <T>(
@@ -25,19 +25,14 @@ const factoryWrapper = <T>(
   }
 };
 
-const loadDataCollection = <T>(
-  sources: DataSource[],
-  factory: (data: SkData) => T,
-  onError?: (err: Error) => void
-): Promise<(T | null)[]> =>
-  Promise.all(sources.map((source) => loadData(source, factory, onError)));
-
 const loadData = <T>(
-  source: DataSource,
+  source: DataSourceParam,
   factory: (data: SkData) => T,
   onError?: (err: Error) => void
 ): Promise<T | null> => {
-  if (source instanceof Uint8Array) {
+  if (source === null || source === undefined) {
+    return new Promise((resolve) => resolve(null));
+  } else if (source instanceof Uint8Array) {
     return new Promise((resolve) =>
       resolve(factoryWrapper(Skia.Data.fromBytes(source), factory, onError))
     );
@@ -48,51 +43,36 @@ const loadData = <T>(
     );
   }
 };
-
-type Source = DataSource | null | undefined;
-
 const useLoading = <T>(
-  source: Source,
-  loader: () => Promise<T | null>,
-  deps: DependencyList = []
+  source: DataSourceParam,
+  loader: () => Promise<T | null>
 ) => {
+  const mounted = useRef(false);
   const [data, setData] = useState<T | null>(null);
-  const prevSourceRef = useRef<Source>();
   useEffect(() => {
-    if (prevSourceRef.current !== source) {
-      prevSourceRef.current = source;
-      loader().then(setData);
-    } else {
-      setData(null);
-    }
+    mounted.current = true;
+    loader().then((value) => {
+      if (mounted.current) {
+        setData(value);
+      }
+    });
+    return () => {
+      mounted.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [source]);
   return data;
 };
 
-export const useDataCollection = <T>(
-  sources: DataSource[],
-  factory: (data: SkData) => T,
-  onError?: (err: Error) => void,
-  deps?: DependencyList
-) =>
-  useLoading(
-    sources,
-    () => loadDataCollection(sources, factory, onError),
-    deps
-  );
-
 export const useRawData = <T>(
-  source: DataSource | null | undefined,
+  source: DataSourceParam,
   factory: (data: SkData) => T,
-  onError?: (err: Error) => void,
-  deps?: DependencyList
-) => useLoading(source, () => loadData(source, factory, onError), deps);
+  onError?: (err: Error) => void
+) => useLoading(source, () => loadData(source, factory, onError));
 
 const identity = (data: SkData) => data;
 
 export const useData = (
-  source: DataSource | null | undefined,
-  onError?: (err: Error) => void,
-  deps?: DependencyList
-) => useRawData(source, identity, onError, deps);
+  source: DataSourceParam,
+  onError?: (err: Error) => void
+) => useRawData(source, identity, onError);

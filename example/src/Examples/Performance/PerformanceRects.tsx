@@ -1,14 +1,17 @@
 import {
   Canvas,
-  Paint,
   Rect,
   Skia,
   SkiaView,
   PaintStyle,
-  usePaintRef,
+  Group,
+  useTouchHandler,
+  useValue,
+  useComputedValue,
+  Selector,
 } from "@shopify/react-native-skia";
-import type { SkCanvas } from "@shopify/react-native-skia";
-import React, { useMemo, useCallback, useState } from "react";
+import type { SkCanvas, DrawingInfo } from "@shopify/react-native-skia";
+import React, { useMemo, useCallback, useState, useRef } from "react";
 import {
   Switch,
   StyleSheet,
@@ -18,23 +21,43 @@ import {
   Button,
 } from "react-native";
 
-// Load font
-const Size = 15;
-const paint1 = Skia.Paint();
-paint1.setAntiAlias(true);
-paint1.setColor(Skia.Color("#A2AE6A"));
-
-const paint2 = Skia.Paint();
-paint2.setAntiAlias(true);
-paint2.setColor(Skia.Color("#4060A3"));
-paint2.setStyle(PaintStyle.Stroke);
-paint2.setStrokeWidth(2);
+const Size = 25;
+const Increaser = 50;
 
 export const PerformanceDrawingTest: React.FC = () => {
-  const [isDeclarative, setIsDeclarative] = useState(false);
-  const [numberOfBoxes, setNumberOfBoxes] = useState(300);
+  const [isDeclarative, setIsDeclarative] = useState(true);
+  const [numberOfBoxes, setNumberOfBoxes] = useState(150);
 
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+
+  const SizeWidth = Size;
+  const SizeHeight = Size * 0.45;
+
+  const paint1 = useMemo(() => {
+    const p = Skia.Paint();
+    p.setAntiAlias(true);
+    p.setColor(Skia.Color("#00ff00"));
+    return p;
+  }, []);
+
+  const paint2 = useMemo(() => {
+    const p = Skia.Paint();
+    p.setAntiAlias(true);
+    p.setColor(Skia.Color("#4060A3"));
+    p.setStyle(PaintStyle.Stroke);
+    p.setStrokeWidth(2);
+    return p;
+  }, []);
+
+  const currentTouch = useValue<{ x: number; y: number }>({
+    x: width / 2,
+    y: height * 0.25,
+  });
+  const onTouch = useTouchHandler({
+    onActive: ({ x, y }) => {
+      currentTouch.current = { x, y };
+    },
+  });
 
   const rects = useMemo(
     () =>
@@ -44,24 +67,52 @@ export const PerformanceDrawingTest: React.FC = () => {
           Skia.XYWHRect(
             5 + ((i * Size) % width),
             25 + Math.floor(i / (width / Size)) * Size,
-            Size * 0.8,
-            Size * 0.25
+            SizeWidth,
+            SizeHeight
           )
         ),
-    [width, numberOfBoxes]
+    [numberOfBoxes, width, SizeWidth, SizeHeight]
   );
 
+  const rotationTransforms = useComputedValue(() => {
+    return rects.map((rect) => {
+      const p1 = { x: rect.x, y: rect.y };
+      const p2 = currentTouch.current;
+      const r = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      return [{ rotate: r }];
+    });
+  }, [currentTouch, rects]);
+
+  const currentTouch2 = useRef({ x: width / 2, y: height * 0.25 });
   const draw = useCallback(
-    (canvas: SkCanvas) => {
+    (canvas: SkCanvas, info: DrawingInfo) => {
       for (let i = 0; i < rects.length; i++) {
+        canvas.save();
+        const t =
+          info.touches.length > 0 && info.touches[0].length > 0
+            ? info.touches[0][0]
+            : undefined;
+
+        if (t) {
+          currentTouch2.current = { x: t.x, y: t.y };
+        }
+
+        var p1 = { x: rects[i].x, y: rects[i].y };
+        var p2 = currentTouch2.current;
+        var a = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+        canvas.rotate(
+          a,
+          rects[i].x - rects[i].width / 2,
+          rects[i].y - rects[i].height / 2
+        );
+
         canvas.drawRect(rects[i], paint1);
         canvas.drawRect(rects[i], paint2);
+        canvas.restore();
       }
     },
-    [rects]
+    [paint1, paint2, rects]
   );
-  const paint1Ref = usePaintRef();
-  const paint2Ref = usePaintRef();
 
   return (
     <View style={styles.container}>
@@ -69,12 +120,15 @@ export const PerformanceDrawingTest: React.FC = () => {
         <View style={styles.panel}>
           <Button
             title="⬇️"
-            onPress={() => setNumberOfBoxes((n) => Math.max(0, n - 50))}
+            onPress={() => setNumberOfBoxes((n) => Math.max(0, n - Increaser))}
           />
           <Text>&nbsp;Size&nbsp;</Text>
           <Text>{numberOfBoxes}</Text>
           <Text>&nbsp;</Text>
-          <Button title="⬆️" onPress={() => setNumberOfBoxes((n) => n + 50)} />
+          <Button
+            title="⬆️"
+            onPress={() => setNumberOfBoxes((n) => n + Increaser)}
+          />
         </View>
         <View style={styles.panel}>
           <Text>Use Declarative model&nbsp;</Text>
@@ -85,27 +139,29 @@ export const PerformanceDrawingTest: React.FC = () => {
         </View>
       </View>
       {isDeclarative ? (
-        <Canvas style={styles.container} debug mode="continuous">
-          <Paint ref={paint1Ref} color="#A2AE6A" style={"fill"} />
-          <Paint
-            ref={paint2Ref}
-            color="#4060A3"
-            style="stroke"
-            strokeWidth={2}
-          />
+        <Canvas style={styles.container} debug mode="default" onTouch={onTouch}>
           {rects.map((_, i) => (
-            <React.Fragment key={i}>
-              <Rect rect={rects[i]} paint={paint1Ref} />
-              <Rect rect={rects[i]} paint={paint2Ref} />
-            </React.Fragment>
+            <Group
+              key={i}
+              transform={Selector(rotationTransforms, (v) => v[i])}
+              origin={rects[i]}
+            >
+              <Rect rect={rects[i]} color="#00ff00" />
+              <Rect
+                rect={rects[i]}
+                color="#4060A3"
+                style="stroke"
+                strokeWidth={2}
+              />
+            </Group>
           ))}
         </Canvas>
       ) : (
         <SkiaView
           style={styles.container}
           onDraw={draw}
-          debug
           mode="continuous"
+          debug
         />
       )}
     </View>

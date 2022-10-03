@@ -1,9 +1,11 @@
 import { Skia } from "../Skia";
-import type { DataSource } from "../types";
+import type { DataSourceParam } from "../types";
 
 import { useRawData } from "./Data";
 
+const svgFactory = Skia.SVG.MakeFromData.bind(Skia.SVG);
+
 export const useSVG = (
-  source: DataSource | null | undefined,
+  source: DataSourceParam,
   onError?: (err: Error) => void
-) => useRawData(source, Skia.SVG.MakeFromData, onError);
+) => useRawData(source, svgFactory, onError);

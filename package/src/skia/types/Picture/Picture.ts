@@ -3,8 +3,9 @@ import type { TileMode } from "../ImageFilter";
 import type { SkRect } from "../Rect";
 import type { SkShader } from "../Shader";
 import type { SkMatrix } from "../Matrix";
+import type { SkJSIInstance } from "../JsiInstance";
 
-export interface SkPicture {
+export interface SkPicture extends SkJSIInstance<"Picture"> {
   /**
    *  Returns a new shader that will draw with this picture.
    *

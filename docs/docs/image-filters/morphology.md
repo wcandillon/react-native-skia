@@ -54,4 +54,4 @@ export const MorphologyDemo = () => {
 };
 ```
 
-![Morphology Image Filter](./assets/morphology.png)
+<img src={require("/static/img/image-filters/morphology.png").default} width="256" height="256" />

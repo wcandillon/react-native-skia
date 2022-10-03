@@ -4,7 +4,7 @@ import type { SkRSXform } from "../types";
 
 import { HostObject } from "./Host";
 
-type RSXform = Float32Array;
+export type RSXform = Float32Array;
 
 export class JsiSkRSXform
   extends HostObject<RSXform, "RSXform">

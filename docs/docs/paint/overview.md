@@ -35,14 +35,18 @@ When drawing something, you can pass Paint components as children to add strokes
 In the example below, the circle has one light blue fill and two stroke paints.
 
 ```tsx twoslash
-import {Canvas, Circle, Paint} from "@shopify/react-native-skia";
+import {Canvas, Circle, Paint, vec} from "@shopify/react-native-skia";
+
+const width = 256;
+const height = 256;
 
 export const PaintDemo = () => {
   const strokeWidth = 10;
-  const r = 128 - strokeWidth / 2;
+  const c = vec(width / 2, height / 2);
+  const r = (width - strokeWidth) / 2;
   return (
-    <Canvas style={{ flex: 1 }}>
-       <Circle cx={r + strokeWidth / 2} cy={r} r={r} color="red">
+    <Canvas style={{ width, height}}>
+       <Circle c={c} r={r} color="red">
         <Paint color="lightblue" />
         <Paint color="#adbce6" style="stroke" strokeWidth={strokeWidth} />
         <Paint color="#ade6d8" style="stroke" strokeWidth={strokeWidth / 2} />
@@ -52,7 +56,7 @@ export const PaintDemo = () => {
 };
 ```
 
-![Paint Fill and strokes](assets/strokes.png)
+<img alt="Paint Fill and strokes" src={require("/static/img/paint/stroke.png").default} width="256" height="256" />
 
 ## Inheritance
 
@@ -62,10 +66,13 @@ In the example below, the first circle will be filled with a light blue color, a
 ```tsx twoslash
 import {Canvas, Circle, Paint, Group} from "@shopify/react-native-skia";
 
+const width = 256;
+const height = 256;
+
 export const PaintDemo = () => {
-  const r = 128;
+  const r = width / 6;
   return (
-    <Canvas style={{ flex: 1 }}>
+    <Canvas style={{ width, height }}>
       <Group color="lightblue">
         <Circle cx={r} cy={r} r={r} />
         <Group style="stroke" strokeWidth={10}>
@@ -77,17 +84,21 @@ export const PaintDemo = () => {
 };
 ```
 
-![Paint Inheritance](assets/inheritance.png)
+<img alt="Paint Inheritance" src={require("/static/img/paint/inheritance.png").default} width="256" height="256" />
+
 
 Complex painting attributes like a shader or an image filter can be passed as children to a group or a drawing.
 
 ```tsx twoslash
 import {Canvas, Circle, Group, LinearGradient, vec} from "@shopify/react-native-skia";
 
+const width = 256;
+const height = 256;
+
 export const PaintDemo = () => {
-  const r = 128;
+  const r = width/2;
   return (
-    <Canvas style={{ flex: 1 }}>
+    <Canvas style={{ width, height }}>
       <Circle cx={r} cy={r} r={r}>
         <LinearGradient
           start={vec(0, 0)}
@@ -118,14 +129,21 @@ Finally, we can assign a ref to a Paint component for later use.
 ```tsx twoslash
 import {Canvas, Circle, Paint, usePaintRef} from "@shopify/react-native-skia";
 
+const width = 256;
+const height = 256;
+const r = width / 2;
+
 export const PaintDemo = () => {
   const paint = usePaintRef();
   return (
     <Canvas style={{ flex: 1 }}>
         <Paint ref={paint} color="lightblue" />
         {/* We can assign the ref to any shape. This will be handy in advanced use-case */}
-        <Circle paint={paint} cx={128} cy={128} r={128} />
+        <Circle paint={paint} cx={r} cy={r} r={r} />
     </Canvas>
   );
 };
 ```
+
+<img src={require("/static/img/paint/assignement.png").default} width="256" height="256" />
+

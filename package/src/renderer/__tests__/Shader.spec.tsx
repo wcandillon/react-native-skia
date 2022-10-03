@@ -1,10 +1,18 @@
 import React from "react";
 
-import { processResult } from "../../__tests__/setup";
-import { Fill, Group, ShaderLib } from "../components";
-import { Shader } from "../components/shaders/Shader";
+import { docPath, processResult } from "../../__tests__/setup";
+import {
+  Blend,
+  Fill,
+  Group,
+  RadialGradient,
+  LinearGradient,
+  ShaderLib,
+  Shader,
+  ColorShader,
+} from "../components";
 
-import { drawOnNode, Skia, height, width } from "./setup";
+import { drawOnNode, height, width, importSkia } from "./setup";
 
 const bilinearInterpolation = `
 uniform vec4 position;
@@ -54,6 +62,7 @@ half4 main(float2 p) {
 
 describe("Test Shader component", () => {
   it("should flatten shader uniforms", () => {
+    const { Skia } = importSkia();
     const source = Skia.RuntimeEffect.Make(bilinearInterpolation)!;
     expect(source).toBeTruthy();
     const surface = drawOnNode(
@@ -72,7 +81,9 @@ describe("Test Shader component", () => {
     );
     processResult(surface, "snapshots/shader/bilinear-interpolation.png");
   });
+
   it("should display a hue wheel", () => {
+    const { Skia } = importSkia();
     const source = Skia.RuntimeEffect.Make(hue)!;
     expect(source).toBeTruthy();
     const surface = drawOnNode(
@@ -89,7 +100,9 @@ describe("Test Shader component", () => {
     );
     processResult(surface, "snapshots/shader/hue.png");
   });
+
   it("should display a green and red spiral", () => {
+    const { Skia } = importSkia();
     const source = Skia.RuntimeEffect.Make(spiral)!;
     expect(source).toBeTruthy();
     const surface = drawOnNode(
@@ -109,5 +122,104 @@ describe("Test Shader component", () => {
       </Group>
     );
     processResult(surface, "snapshots/runtime-effects/spiral.png");
+  });
+
+  it("should display a linear gradient", () => {
+    const { Skia } = importSkia();
+    const source = Skia.RuntimeEffect.Make(spiral)!;
+    expect(source).toBeTruthy();
+    const surface = drawOnNode(
+      <Group>
+        <LinearGradient
+          colors={["cyan", "magenta", "yellow"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: width, y: height }}
+        />
+        <Fill />
+      </Group>
+    );
+    processResult(surface, "snapshots/runtime-effects/linear-gradient.png");
+  });
+
+  it("should display a color", () => {
+    const { Skia } = importSkia();
+    const source = Skia.RuntimeEffect.Make(spiral)!;
+    expect(source).toBeTruthy();
+    const surface = drawOnNode(
+      <Fill>
+        <ColorShader color="lightblue" />
+      </Fill>
+    );
+    processResult(surface, docPath("shaders/color.png"));
+  });
+
+  it("should blend cyan/magenta/yellow to black (multiply)", () => {
+    const { vec } = importSkia();
+    const r = width / 2;
+    const c = vec(r, r);
+    const surface = drawOnNode(
+      <Fill>
+        <Blend mode="multiply">
+          <RadialGradient r={r} c={c} colors={["cyan", "magenta"]} />
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+          <RadialGradient r={r} c={c} colors={["yellow", "cyan"]} />
+        </Blend>
+      </Fill>
+    );
+    processResult(surface, "snapshots/runtime-effects/blend-multiply.png");
+  });
+
+  it("should blend using color burn", () => {
+    const { vec } = importSkia();
+    const r = width / 2;
+    const c = vec(r, r);
+    let surface = drawOnNode(
+      <Fill>
+        <Blend mode="colorBurn">
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+          <RadialGradient r={r} c={c} colors={["yellow", "cyan"]} />
+        </Blend>
+      </Fill>
+    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn.png");
+    surface = drawOnNode(
+      <Fill>
+        <Blend mode="colorBurn">
+          <RadialGradient r={r} c={c} colors={["yellow", "cyan"]} />
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+        </Blend>
+      </Fill>
+    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn2.png");
+  });
+
+  it("should blend using multiply", () => {
+    const { vec } = importSkia();
+    const r = width / 2;
+    const c = vec(r, r);
+    let surface = drawOnNode(
+      <Fill>
+        <Blend mode="colorBurn">
+          <RadialGradient r={r} c={c} colors={["yellow", "cyan"]} />
+          <RadialGradient r={r} c={c} colors={["cyan", "magenta"]} />
+          <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+        </Blend>
+      </Fill>
+    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn3.png");
+    surface = drawOnNode(
+      <Fill>
+        <Blend mode="colorBurn">
+          <RadialGradient r={r} c={c} colors={["yellow", "cyan"]} />
+          <Blend mode="colorBurn">
+            <RadialGradient r={r} c={c} colors={["cyan", "magenta"]} />
+            <RadialGradient r={r} c={c} colors={["magenta", "yellow"]} />
+          </Blend>
+        </Blend>
+      </Fill>
+    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn3.png");
   });
 });

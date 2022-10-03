@@ -9,8 +9,10 @@ import type {
   SkMatrix,
 } from "../types";
 
-import { HostObject, toValue, ckEnum } from "./Host";
+import { HostObject, ckEnum } from "./Host";
 import { JsiSkShader } from "./JsiSkShader";
+import { JsiSkMatrix } from "./JsiSkMatrix";
+import { JsiSkRect } from "./JsiSkRect";
 
 export class JsiSkPicture
   extends HostObject<Picture, "Picture">
@@ -33,8 +35,8 @@ export class JsiSkPicture
         ckEnum(tmx),
         ckEnum(tmy),
         ckEnum(mode),
-        localMatrix ? toValue(localMatrix) : undefined,
-        tileRect ? toValue(tileRect) : undefined
+        localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined,
+        tileRect ? JsiSkRect.fromValue(this.CanvasKit, tileRect) : undefined
       )
     );
   }

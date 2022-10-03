@@ -1,5 +1,4 @@
-import type { SkiaValue } from "../../../values";
-import { mapKeys } from "../../typeddash";
+import type { SkiaSelector, SkiaValue } from "../../../values";
 
 export const isValue = (value: unknown): value is SkiaValue<unknown> => {
   if (value === undefined || value === null) {
@@ -17,26 +16,48 @@ export const isValue = (value: unknown): value is SkiaValue<unknown> => {
   return false;
 };
 
+export const isSelector = <T, R>(
+  value: unknown
+): value is {
+  selector: (v: T) => R;
+  value: SkiaValue<T>;
+} => {
+  if (value) {
+    return (
+      typeof value === "object" &&
+      "selector" in value &&
+      "value" in value &&
+      (value as Record<string, unknown>).selector !== undefined &&
+      (value as Record<string, unknown>).value !== undefined
+    );
+  }
+  return false;
+};
+
 export const isAnimated = <T>(props: AnimatedProps<T>) => {
   for (const value of Object.values(props)) {
-    if (isValue(value)) {
+    if (isValue(value) || isSelector(value)) {
       return true;
     }
   }
   return false;
 };
 
-export const materialize = <T>(props: AnimatedProps<T>) => {
-  const result = { ...props };
-  mapKeys(props).forEach((key) => {
-    const value = props[key];
-    if (isValue(value)) {
-      result[key] = (value as SkiaValue<T[typeof key]>).current;
-    }
-  });
-  return result as T;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnimatedProp<T, P = any> = T | SkiaValue<T> | SkiaSelector<T, P>;
+
+export type AnimatedProps<T, O extends keyof T | never = never> = {
+  [K in keyof T]: K extends "children"
+    ? T[K]
+    : K extends O
+    ? T[K]
+    : AnimatedProp<T[K]>;
 };
 
-export type AnimatedProps<T> = {
-  [K in keyof T]: T[K] | SkiaValue<T[K]>;
-};
+// TODO: switch to AnimatedProps<GroupProps> and remove duplicate properties.
+// For instance matrix in color filter becomes colorMatrix
+
+export type SkiaProps<
+  P = object,
+  O extends keyof P | never = never
+> = AnimatedProps<P, O>;

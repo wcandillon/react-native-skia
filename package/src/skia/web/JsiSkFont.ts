@@ -6,25 +6,18 @@ import type {
   SkFont,
   SkPaint,
   SkPoint,
-  SkRect,
   SkTypeface,
 } from "../types";
 
-import { HostObject, toValue, ckEnum } from "./Host";
+import { HostObject, ckEnum } from "./Host";
+import { JsiSkPaint } from "./JsiSkPaint";
+import { JsiSkPoint } from "./JsiSkPoint";
 import { JsiSkRect } from "./JsiSkRect";
 import { JsiSkTypeface } from "./JsiSkTypeface";
 
 export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
   constructor(CanvasKit: CanvasKit, ref: Font) {
     super(CanvasKit, ref, "Font");
-  }
-
-  measureText(_text: string, _paint?: SkPaint): SkRect {
-    console.warn(
-      `measureText() is deprecated an returns an empty rectangle on React Native Web.
-Clients should use "Font.getGlyphWidths" instead (the latter does no shaping)`
-    );
-    return new JsiSkRect(this.CanvasKit, this.CanvasKit.XYWHRect(0, 0, 0, 0));
   }
 
   getTextWidth(text: string, paint?: SkPaint | undefined) {
@@ -52,7 +45,12 @@ Clients should use "Font.getGlyphWidths" instead (the latter does no shaping)`
 
   // TODO: Fix return value in the C++ implementation, it return float32
   getGlyphWidths(glyphs: number[], paint?: SkPaint | null) {
-    return [...this.ref.getGlyphWidths(glyphs, paint ? toValue(paint) : null)];
+    return [
+      ...this.ref.getGlyphWidths(
+        glyphs,
+        paint ? JsiSkPaint.fromValue(paint) : null
+      ),
+    ];
   }
 
   getGlyphIntercepts(
@@ -64,7 +62,7 @@ Clients should use "Font.getGlyphWidths" instead (the latter does no shaping)`
     return [
       ...this.ref.getGlyphIntercepts(
         glyphs,
-        positions.map((p) => toValue(p)),
+        positions.map((p) => Array.from(JsiSkPoint.fromValue(p))).flat(),
         top,
         bottom
       ),
@@ -129,6 +127,6 @@ Clients should use "Font.getGlyphWidths" instead (the latter does no shaping)`
   }
 
   setTypeface(face: SkTypeface | null) {
-    this.ref.setTypeface(face ? toValue(face) : null);
+    this.ref.setTypeface(face ? JsiSkTypeface.fromValue(face) : null);
   }
 }

@@ -2,6 +2,7 @@
 import { Buffer } from "buffer";
 
 import type { JsiSkData } from "../web/JsiSkData";
+import { importSkia, resolveFile } from "../../renderer/__tests__/setup";
 
 import { setupSkia } from "./setup";
 
@@ -28,5 +29,15 @@ describe("Data", () => {
       "o".charCodeAt(0)
     );
     expect(data.ref).toEqual(ref);
+  });
+  it("Should create a SkData instance from a uri", async () => {
+    const zurich = resolveFile("skia/__tests__/assets/zurich.jpg");
+    const oslo = resolveFile("skia/__tests__/assets/oslo.jpg");
+    const { Skia } = importSkia();
+    const data = (await Skia.Data.fromURI(
+      "skia/__tests__/assets/zurich.jpg"
+    )) as JsiSkData;
+    expect(data.ref.byteLength).toEqual(zurich.byteLength);
+    expect(data.ref.byteLength).not.toEqual(oslo.byteLength);
   });
 });

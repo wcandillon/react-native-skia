@@ -34,26 +34,40 @@ Replaces alpha, leaving RGBA unchanged. 0 means fully transparent, 1.0 means opa
 When setting opacity in a Group component, the alpha component of all descending colors will inherit that value.
 
 ```tsx twoslash
-import {Canvas, Circle, Group, Paint} from "@shopify/react-native-skia";
+import {Canvas, Circle, Group, Paint, vec} from "@shopify/react-native-skia";
+
+const width = 256;
+const height = 256;
+const strokeWidth = 30;
+const r = width / 2 - strokeWidth / 2;
+const c = vec(width / 2, height / 2);
 
 export const OpacityDemo = () => {
-  const strokeWidth = 10;
-  const r = 128 - strokeWidth / 2;
   return (
-    <Canvas style={{ flex: 1 }}>
+    <Canvas style={{ width, height }}>
       <Group opacity={0.5}>
-        <Circle cx={r + strokeWidth / 2} cy={r} r={r} color="red">
-          <Paint color="red" />
-          <Paint color="#adbce6" style="stroke" strokeWidth={strokeWidth} />
-          <Paint color="#ade6d8" style="stroke" strokeWidth={strokeWidth / 2} />
-        </Circle>
+        <Circle c={c} r={r} color="red" />
+        <Circle
+          c={c}
+          r={r}
+          color="lightblue"
+          style="stroke"
+          strokeWidth={strokeWidth}
+        />
+        <Circle
+          c={c}
+          r={r}
+          color="mint"
+          style="stroke"
+          strokeWidth={strokeWidth / 2}
+        />
       </Group>
     </Canvas>
-  )
+  );
 };
 ```
 
-![Opacity](./assets/opacity.png)
+<img alt="Paint Opacity" src={require("/static/img/paint/opacity.png").default} width="256" height="256" />
 
 ## blendMode
 

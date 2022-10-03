@@ -16,7 +16,9 @@ export const WithSkiaWeb = ({
   opts,
 }: WithSkiaProps) => {
   const Inner = useMemo(
-    () =>
+    // TODO: investigate
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (): any =>
       lazy(async () => {
         if (Platform.OS === "web") {
           await LoadSkiaWeb(opts);

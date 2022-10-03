@@ -14,6 +14,6 @@ describe("ImageFilter", () => {
       Skia.ImageFilter.MakeBlur(40, 40, TileMode.Clamp, null)
     );
     canvas.drawCircle(r, r, r, paint);
-    processResult(surface, "snapshots/image-filter/blur.png", true);
+    processResult(surface, "snapshots/image-filter/blur.png");
   });
 });

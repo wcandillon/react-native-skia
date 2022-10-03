@@ -42,9 +42,13 @@ const Ring = ({ index, progress }: RingProps) => {
   }, [progress]);
 
   return (
-    <Group origin={center} transform={transform}>
-      <Circle c={center} r={R} color={index % 2 ? c1 : c2} />
-    </Group>
+    <Circle
+      c={center}
+      r={R}
+      color={index % 2 ? c1 : c2}
+      origin={center}
+      transform={transform}
+    />
   );
 };
 

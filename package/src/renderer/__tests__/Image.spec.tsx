@@ -6,10 +6,11 @@ import React from "react";
 import { processResult } from "../../__tests__/setup";
 import { Fill, ImageShader, Shader } from "../components";
 
-import { drawOnNode, width, Skia, height } from "./setup";
+import { drawOnNode, width, height, importSkia } from "./setup";
 
 describe("Test Image Component", () => {
   it("Should display the image with a filter", () => {
+    const { Skia } = importSkia();
     const image = Skia.Image.MakeImageFromEncoded(
       Skia.Data.fromBytes(
         fs.readFileSync(

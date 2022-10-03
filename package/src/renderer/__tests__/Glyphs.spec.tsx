@@ -7,13 +7,14 @@ import type { SkFont } from "../../skia/types";
 import { processResult } from "../../__tests__/setup";
 import { Glyphs } from "../components";
 
-import { drawOnNode, Skia } from "./setup";
+import { drawOnNode, importSkia } from "./setup";
 
 let font: SkFont;
 const fontSize = 64;
 
 describe("Glyphs", () => {
   beforeAll(() => {
+    const { Skia } = importSkia();
     const data = Skia.Data.fromBytes(
       fs.readFileSync(
         path.resolve(__dirname, "../../skia/__tests__/assets/Roboto-Medium.ttf")
@@ -25,6 +26,7 @@ describe("Glyphs", () => {
     expect(font !== null).toBe(true);
   });
   it("Should draw glyphs in lightblue", () => {
+    const { Skia } = importSkia();
     const ids = font.getGlyphIDs("ab");
     const glyphs = [
       { id: ids[0], pos: Skia.Point(0, fontSize) },

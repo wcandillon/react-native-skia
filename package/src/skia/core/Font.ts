@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 
 import { Skia } from "../Skia";
-import type { DataSource, SkFont } from "../types";
+import type { DataSourceParam } from "../types";
 
 import { useTypeface } from "./Typeface";
 
@@ -10,10 +10,10 @@ import { useTypeface } from "./Typeface";
  * Returns a Skia Font object
  * */
 export const useFont = (
-  font: DataSource | null | undefined,
+  font: DataSourceParam,
   size?: number,
   onError?: (err: Error) => void
-): SkFont | null => {
+) => {
   const typeface = useTypeface(font, onError);
   return useMemo(() => {
     if (typeface && size) {
@@ -23,6 +23,5 @@ export const useFont = (
     } else {
       return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeface]);
+  }, [size, typeface]);
 };

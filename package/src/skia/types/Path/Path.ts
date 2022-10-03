@@ -11,7 +11,6 @@ import type { SkJSIInstance } from "../JsiInstance";
 export interface StrokeOpts {
   /** The width of the stroked lines. */
   width?: number;
-  // eslint-disable-next-line camelcase
   miter_limit?: number;
   /**
    * if > 1, increase precision, else if (0 < resScale < 1) reduce precision to

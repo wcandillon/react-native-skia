@@ -9,6 +9,10 @@ export interface SkiaValue<T = number> {
    */
   addListener: (cb: (value: T) => void) => () => void;
   /**
+   * Invalidates the value. Has different meaning depending on the type of the value.
+   */
+  __invalidate: () => void;
+  /**
    * Field to make typechecking easier
    */
   __typename__: "RNSkValue";

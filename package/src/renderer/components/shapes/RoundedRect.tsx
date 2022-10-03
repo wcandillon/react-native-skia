@@ -1,23 +1,10 @@
 import React from "react";
 
-import { createDrawing } from "../../nodes";
-import type {
-  CustomPaintProps,
-  RRectDef,
-  AnimatedProps,
-} from "../../processors";
-import { processRRect } from "../../processors";
+import type { RoundedRectProps } from "../../../dom/types";
+import type { SkiaProps } from "../../processors";
 
-export type RoundedRectProps = RRectDef & CustomPaintProps;
-
-const onDraw = createDrawing<RoundedRectProps>(
-  ({ canvas, paint, Skia }, rectProps) => {
-    const rrect = processRRect(Skia, rectProps);
-    canvas.drawRRect(rrect, paint);
-  }
-);
-export const RoundedRect = (props: AnimatedProps<RoundedRectProps>) => {
-  return <skDrawing onDraw={onDraw} {...props} />;
+export const RoundedRect = (props: SkiaProps<RoundedRectProps>) => {
+  return <skRRect {...props} />;
 };
 
 RoundedRect.defaultProps = {

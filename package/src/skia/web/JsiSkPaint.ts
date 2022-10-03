@@ -14,16 +14,24 @@ import type {
   SkPathEffect,
 } from "../types";
 
-import { HostObject, toNullableValue, ckEnum } from "./Host";
+import { HostObject, ckEnum } from "./Host";
+import { JsiSkColorFilter } from "./JsiSkColorFilter";
+import { JsiSkImageFilter } from "./JsiSkImageFilter";
+import { JsiSkMaskFilter } from "./JsiSkMaskFilter";
+import { JsiSkPathEffect } from "./JsiSkPathEffect";
+import { JsiSkShader } from "./JsiSkShader";
 
 export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
   constructor(CanvasKit: CanvasKit, ref: Paint) {
-    ref.setAntiAlias(true);
     super(CanvasKit, ref, "Paint");
   }
 
   copy() {
     return new JsiSkPaint(this.CanvasKit, this.ref.copy());
+  }
+
+  reset() {
+    this.ref = new this.CanvasKit.Paint();
   }
 
   getColor() {
@@ -63,23 +71,23 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
   }
 
   setColorFilter(filter: SkColorFilter | null) {
-    this.ref.setColorFilter(toNullableValue(filter));
+    this.ref.setColorFilter(filter ? JsiSkColorFilter.fromValue(filter) : null);
   }
 
   setImageFilter(filter: SkImageFilter | null) {
-    this.ref.setImageFilter(toNullableValue(filter));
+    this.ref.setImageFilter(filter ? JsiSkImageFilter.fromValue(filter) : null);
   }
 
   setMaskFilter(filter: SkMaskFilter | null) {
-    this.ref.setMaskFilter(toNullableValue(filter));
+    this.ref.setMaskFilter(filter ? JsiSkMaskFilter.fromValue(filter) : null);
   }
 
   setPathEffect(effect: SkPathEffect | null) {
-    this.ref.setPathEffect(toNullableValue(effect));
+    this.ref.setPathEffect(effect ? JsiSkPathEffect.fromValue(effect) : null);
   }
 
   setShader(shader: SkShader | null) {
-    this.ref.setShader(toNullableValue(shader));
+    this.ref.setShader(shader ? JsiSkShader.fromValue(shader) : null);
   }
 
   setStrokeCap(cap: StrokeCap) {

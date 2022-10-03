@@ -3,7 +3,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 import type { PathCommand, PathOp, SkFont, SkPath } from "../types";
 import type { PathFactory } from "../types/Path/PathFactory";
 
-import { Host, ckEnum, toValue, NotImplementedOnRNWeb } from "./Host";
+import { Host, ckEnum, NotImplementedOnRNWeb } from "./Host";
 import { JsiSkPath } from "./JsiSkPath";
 
 export class JsiSkPathFactory extends Host implements PathFactory {
@@ -25,8 +25,8 @@ export class JsiSkPathFactory extends Host implements PathFactory {
 
   MakeFromOp(one: SkPath, two: SkPath, op: PathOp) {
     const path = this.CanvasKit.Path.MakeFromOp(
-      toValue(one),
-      toValue(two),
+      JsiSkPath.fromValue(one),
+      JsiSkPath.fromValue(two),
       ckEnum(op)
     );
     if (path === null) {

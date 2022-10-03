@@ -21,7 +21,6 @@ import type { SkVertices, VertexMode } from "./Vertices/Vertices";
 import type { DataFactory } from "./Data";
 import type { SVGFactory } from "./SVG";
 import type { TextBlobFactory } from "./TextBlob";
-import type { FontMgrFactory } from "./FontMgr/FontMgrFactory";
 import type { SurfaceFactory } from "./Surface";
 import type { SkRSXform } from "./RSXform";
 import type { SkPath } from "./Path/Path";
@@ -78,7 +77,6 @@ export interface Skia {
   Data: DataFactory;
   Image: ImageFactory;
   SVG: SVGFactory;
-  FontMgr: FontMgrFactory;
   TextBlob: TextBlobFactory;
   Surface: SurfaceFactory;
 }

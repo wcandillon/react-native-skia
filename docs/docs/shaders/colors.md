@@ -62,23 +62,21 @@ Returns a shader with a given color.
 import React from "react";
 import {
   Canvas,
-  Rect,
   Skia,
-  Shader,
   Fill,
-  ColorShader,
-  vec
+  ColorShader
 } from "@shopify/react-native-skia";
 
 export const BlendDemo = () => {
   return (
     <Canvas style={{ flex: 1 }}>
-      <Rect x={0} y={0} width={256} height={256}>
-        <ColorShader color="blue" />
-      </Rect>
+      <Fill>
+        <ColorShader color="lightBlue" />
+      </Fill>
     </Canvas>
   );
 };
 ```
 ### Result
-![Color](assets/color.png)
+<img src={require("/static/img/shaders/color.png").default} width="256" height="256" />
+

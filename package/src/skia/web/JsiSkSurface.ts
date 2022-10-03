@@ -2,9 +2,10 @@ import type { CanvasKit, Surface } from "canvaskit-wasm";
 
 import type { SkCanvas, SkImage, SkRect, SkSurface } from "../types";
 
-import { HostObject, toUndefinedableValue } from "./Host";
+import { HostObject } from "./Host";
 import { JsiSkCanvas } from "./JsiSkCanvas";
 import { JsiSkImage } from "./JsiSkImage";
+import { JsiSkRect } from "./JsiSkRect";
 
 export class JsiSkSurface
   extends HostObject<Surface, "Surface">
@@ -19,7 +20,11 @@ export class JsiSkSurface
   }
 
   makeImageSnapshot(bounds?: SkRect): SkImage {
-    const image = this.ref.makeImageSnapshot(toUndefinedableValue(bounds));
+    const image = this.ref.makeImageSnapshot(
+      bounds
+        ? Array.from(JsiSkRect.fromValue(this.CanvasKit, bounds))
+        : undefined
+    );
     return new JsiSkImage(this.CanvasKit, image);
   }
 }

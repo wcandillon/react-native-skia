@@ -22,6 +22,7 @@ const sidebars = {
         "getting-started/installation",
         "getting-started/hello-world",
         "getting-started/web",
+        "getting-started/bundle-size",
       ],
     },
     {
@@ -64,13 +65,7 @@ const sidebars = {
       collapsed: true,
       type: "category",
       label: "Text",
-      items: [
-        "text/fonts",
-        "text/text",
-        "text/glyphs",
-        "text/path",
-        "text/blob",
-      ],
+      items: ["text/text", "text/glyphs", "text/path", "text/blob"],
     },
     {
       collapsed: true,

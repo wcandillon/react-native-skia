@@ -1,10 +1,14 @@
 import type { CanvasKit } from "canvaskit-wasm";
 
-import type { SkFont, SkRSXform } from "../types";
+import type { SkFont } from "../types";
 import type { TextBlobFactory } from "../types/TextBlob";
+import type { SkRSXform } from "../types/RSXform";
 
-import { Host, toValue } from "./Host";
+import { Host } from "./Host";
+import { JsiSkFont } from "./JsiSkFont";
 import { JsiSkTextBlob } from "./JsiSkTextBlob";
+import type { RSXform } from "./JsiSkRSXform";
+import { JsiSkRSXform } from "./JsiSkRSXform";
 
 export class JsiSkTextBlobFactory extends Host implements TextBlobFactory {
   constructor(CanvasKit: CanvasKit) {
@@ -14,14 +18,14 @@ export class JsiSkTextBlobFactory extends Host implements TextBlobFactory {
   MakeFromText(str: string, font: SkFont) {
     return new JsiSkTextBlob(
       this.CanvasKit,
-      this.CanvasKit.TextBlob.MakeFromText(str, toValue(font))
+      this.CanvasKit.TextBlob.MakeFromText(str, JsiSkFont.fromValue(font))
     );
   }
 
   MakeFromGlyphs(glyphs: number[], font: SkFont) {
     return new JsiSkTextBlob(
       this.CanvasKit,
-      this.CanvasKit.TextBlob.MakeFromGlyphs(glyphs, toValue(font))
+      this.CanvasKit.TextBlob.MakeFromGlyphs(glyphs, JsiSkFont.fromValue(font))
     );
   }
 
@@ -30,8 +34,10 @@ export class JsiSkTextBlobFactory extends Host implements TextBlobFactory {
       this.CanvasKit,
       this.CanvasKit.TextBlob.MakeFromRSXform(
         str,
-        rsxforms.map((f) => toValue(f)),
-        toValue(font)
+        rsxforms
+          .map((f) => Array.from(JsiSkRSXform.fromValue<RSXform>(f)))
+          .flat(),
+        JsiSkFont.fromValue(font)
       )
     );
   }
@@ -41,8 +47,8 @@ export class JsiSkTextBlobFactory extends Host implements TextBlobFactory {
       this.CanvasKit,
       this.CanvasKit.TextBlob.MakeFromRSXformGlyphs(
         glyphs,
-        rsxforms.map((f) => toValue(f)),
-        toValue(font)
+        rsxforms.map((f) => JsiSkRSXform.fromValue(f)),
+        JsiSkFont.fromValue(font)
       )
     );
   }

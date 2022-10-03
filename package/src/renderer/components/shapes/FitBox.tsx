@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import React, { useMemo } from "react";
 
-import type { Fit } from "../image";
-import { rect2rect, fitRects } from "../image";
+import type { Fit } from "../../../dom/nodes";
+import { fitRects, rect2rect } from "../../../dom/nodes";
 import type { SkRect } from "../../../skia/types";
 import { Group } from "../Group";
 

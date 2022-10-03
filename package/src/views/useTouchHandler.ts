@@ -2,6 +2,8 @@ import type { DependencyList } from "react";
 import { useCallback, useRef } from "react";
 import { PixelRatio } from "react-native";
 
+import type { Vector } from "../skia/types";
+
 import type {
   ExtendedTouchInfo,
   TouchHandlers,
@@ -15,10 +17,8 @@ const useInternalTouchHandler = (
   deps: DependencyList = [],
   multiTouch = false
 ): TouchHandler => {
-  const prevTouchInfoRef = useRef<{ [key: number]: TouchInfo }>({});
-  const prevVelocityRef = useRef<{ [key: number]: { x: number; y: number } }>(
-    {}
-  );
+  const prevTouchInfoRef = useRef<{ [key: number]: TouchInfo | undefined }>({});
+  const prevVelocityRef = useRef<{ [key: number]: Vector | undefined }>({});
 
   return useCallback((history: Array<Array<TouchInfo>>) => {
     // Process all items in the current touch history
@@ -30,34 +30,31 @@ const useInternalTouchHandler = (
         }
 
         const touch = touches[i];
-
+        const prevTouch = prevTouchInfoRef.current[touch.id];
         // Calculate the velocity from the previous touch.
         const timeDiffseconds =
           touch.timestamp -
           (prevTouchInfoRef.current[touch.id]?.timestamp ?? touch.timestamp);
 
-        const distX =
-          touch.x - (prevTouchInfoRef.current[touch.id]?.x ?? touch.x);
-        const distY =
-          touch.y - (prevTouchInfoRef.current[touch.id]?.y ?? touch.y);
+        const distX = touch.x - (prevTouch?.x ?? touch.x);
+        const distY = touch.y - (prevTouch?.y ?? touch.y);
 
         if (
           touch.type !== TouchType.Start &&
           touch.type !== TouchType.End &&
-          touch.type !== TouchType.Cancelled
+          touch.type !== TouchType.Cancelled &&
+          timeDiffseconds > 0
         ) {
-          if (timeDiffseconds > 0) {
-            prevVelocityRef.current[touch.id] = {
-              x: distX / timeDiffseconds / PixelRatio.get(),
-              y: distY / timeDiffseconds / PixelRatio.get(),
-            };
-          }
+          prevVelocityRef.current[touch.id] = {
+            x: distX / timeDiffseconds / PixelRatio.get(),
+            y: distY / timeDiffseconds / PixelRatio.get(),
+          };
         }
 
         const extendedTouchInfo: ExtendedTouchInfo = {
           ...touch,
-          velocityX: prevVelocityRef.current[touch.id]?.x,
-          velocityY: prevVelocityRef.current[touch.id]?.y,
+          velocityX: prevVelocityRef.current[touch.id]?.x ?? 0,
+          velocityY: prevVelocityRef.current[touch.id]?.y ?? 0,
         };
 
         // Save previous touch
@@ -69,7 +66,6 @@ const useInternalTouchHandler = (
         } else if (touch.type === TouchType.Active) {
           handlers.onActive && handlers.onActive(extendedTouchInfo);
         } else {
-          handlers.onActive && handlers.onActive(extendedTouchInfo);
           handlers.onEnd && handlers.onEnd(extendedTouchInfo);
         }
       }

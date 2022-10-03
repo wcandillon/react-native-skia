@@ -15,6 +15,7 @@ const config = {
   favicon: "img/favicon.ico",
   organizationName: "shopify", // Usually your GitHub org/user name.
   projectName: "react-native-skia", // Usually your repo name.
+  // scripts: [{ src: "https://snack.expo.dev/embed.js", async: true }],
   // plugins: [
   //   (context, options) => {
   //     return {

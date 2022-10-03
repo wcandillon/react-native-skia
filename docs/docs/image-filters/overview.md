@@ -44,4 +44,4 @@ const ComposeImageFilter = () => {
 };
 ```
 
-![Clamp Blur](assets/color.png)
+<img src={require("/static/img/image-filters/composing.png").default} width="256" height="256" />

@@ -2,7 +2,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 
 import type { SkData, TypefaceFactory } from "../types";
 
-import { Host, toValue } from "./Host";
+import { Host } from "./Host";
 import { JsiSkTypeface } from "./JsiSkTypeface";
 
 export class JsiSkTypefaceFactory extends Host implements TypefaceFactory {
@@ -11,7 +11,9 @@ export class JsiSkTypefaceFactory extends Host implements TypefaceFactory {
   }
 
   MakeFreeTypeFaceFromData(data: SkData) {
-    const tf = this.CanvasKit.Typeface.MakeFreeTypeFaceFromData(toValue(data));
+    const tf = this.CanvasKit.Typeface.MakeFreeTypeFaceFromData(
+      JsiSkTypeface.fromValue(data)
+    );
     if (tf === null) {
       return null;
     }

@@ -84,7 +84,7 @@ const DRectDemo = () => {
 };
 ```
 
-![Diff Rectangle](assets/polygons/drect.png)
+<img src={require("/static/img/shapes/drect.png").default} width="256" height="256" />
 
 ## Line
 

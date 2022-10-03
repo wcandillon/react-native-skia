@@ -4,9 +4,9 @@ import { processResult } from "../../__tests__/setup";
 import { Group, Line, Points, Rect } from "../components";
 import * as SkiaRenderer from "../index";
 
-import { center, drawOnNode, width, Skia } from "./setup";
+import { center, drawOnNode, width, importSkia } from "./setup";
 
-const size = 128;
+const size = width / 2;
 
 describe("Renderer", () => {
   it("Loads renderer without Skia", () => {
@@ -41,7 +41,7 @@ describe("Renderer", () => {
     processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
   it("Points", () => {
-    const vec = Skia.Point;
+    const { vec } = importSkia();
     const c = { x: width / 2, y: size / 2 + 16 };
     const S = 25;
     const c1 = [

@@ -35,6 +35,12 @@ export interface SkPaint extends SkJSIInstance<"Paint"> {
   copy(): SkPaint;
 
   /**
+   * Sets all SkPaint contents to their initial values. This is equivalent to replacing
+     SkPaint with the result of SkPaint().
+   */
+  reset(): void;
+
+  /**
    * Retrieves the alpha and RGB unpremultiplied. RGB are extended sRGB values
    * (sRGB gamut, and encoded with the sRGB transfer function).
    */

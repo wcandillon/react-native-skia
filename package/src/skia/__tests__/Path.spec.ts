@@ -327,7 +327,7 @@ describe("Path", () => {
     expect(moveX).toBe(0);
     expect(moveY).toBe(110);
     expect(lineX).toBe(100);
-    expect(lineY).toBe(-10);
+    expect(lineY).toBeCloseTo(-10);
 
     const p4 = p2.interpolate(p1, -0.1)!;
     expect(p4).not.toBeNull();
@@ -354,7 +354,7 @@ describe("Path", () => {
 
     const ref2 = Skia.Path.Make();
     ref2.moveTo(0, 110);
-    ref2.lineTo(100, -10);
+    ref2.lineTo(100, -10.000001907348633);
 
     const p3 = interpolatePaths(-0.1, [0, 1], [p1, p2]);
     expect(p3.toCmds()).toEqual(ref1.toCmds());

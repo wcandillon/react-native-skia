@@ -29,4 +29,8 @@ export class RNSkReadonlyValue<T> implements SkiaValue<T> {
       this._listeners.splice(this._listeners.indexOf(cb), 1);
     };
   }
+
+  public __invalidate(): void {
+    this._listeners = [];
+  }
 }

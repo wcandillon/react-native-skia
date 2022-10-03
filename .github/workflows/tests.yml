@@ -17,7 +17,7 @@ jobs:
       - name: Setup Nodejs and npm
         uses: actions/setup-node@v2
         with:
-          node-version: "14"
+          node-version: "16"
 
       - name: Setup yarn
         run: npm install -g yarn
@@ -25,11 +25,14 @@ jobs:
       - name: Setup Nodejs with yarn caching
         uses: actions/setup-node@v2
         with:
-          node-version: "14"
+          node-version: "16"
           cache: yarn
 
       - name: Install root node dependencies
         run: yarn
+
+      - name: Typecheck the build scripts
+        run: yarn tsc
 
       - name: Install Package
         run: cd package; yarn;
@@ -53,7 +56,7 @@ jobs:
         run: cd example; yarn tsc;
 
       - name: Run Example Unit tests
-        run: cd package; yarn test;
+        run: cd example; yarn test;
 
       - name: Install Docs
         run: cd docs; yarn;

@@ -8,7 +8,7 @@ import type {
   BlendMode,
 } from "../types";
 
-import { ckEnum, Host, toValue, NotImplementedOnRNWeb } from "./Host";
+import { ckEnum, Host } from "./Host";
 import { JsiSkColorFilter } from "./JsiSkColorFilter";
 
 export class JsiSkColorFilterFactory
@@ -29,21 +29,28 @@ export class JsiSkColorFilterFactory
   MakeBlend(color: SkColor, mode: BlendMode) {
     return new JsiSkColorFilter(
       this.CanvasKit,
-      this.CanvasKit.ColorFilter.MakeBlend(toValue(color), ckEnum(mode))
+      this.CanvasKit.ColorFilter.MakeBlend(color, ckEnum(mode))
     );
   }
 
   MakeCompose(outer: SkColorFilter, inner: SkColorFilter) {
     return new JsiSkColorFilter(
       this.CanvasKit,
-      this.CanvasKit.ColorFilter.MakeCompose(toValue(outer), toValue(inner))
+      this.CanvasKit.ColorFilter.MakeCompose(
+        JsiSkColorFilter.fromValue(outer),
+        JsiSkColorFilter.fromValue(inner)
+      )
     );
   }
 
   MakeLerp(t: number, dst: SkColorFilter, src: SkColorFilter) {
     return new JsiSkColorFilter(
       this.CanvasKit,
-      this.CanvasKit.ColorFilter.MakeLerp(t, toValue(dst), toValue(src))
+      this.CanvasKit.ColorFilter.MakeLerp(
+        t,
+        JsiSkColorFilter.fromValue(dst),
+        JsiSkColorFilter.fromValue(src)
+      )
     );
   }
 
@@ -62,6 +69,9 @@ export class JsiSkColorFilterFactory
   }
 
   MakeLumaColorFilter(): SkColorFilter {
-    throw new NotImplementedOnRNWeb();
+    return new JsiSkColorFilter(
+      this.CanvasKit,
+      this.CanvasKit.ColorFilter.MakeLuma()
+    );
   }
 }

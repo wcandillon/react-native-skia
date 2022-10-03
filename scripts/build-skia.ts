@@ -8,7 +8,7 @@ import {
   PlatformName,
 } from "./skia-configuration";
 const fs = require("fs");
-const typedKeys = <T>(obj: T) => Object.keys(obj) as (keyof T)[];
+const typedKeys = <T extends object>(obj: T) => Object.keys(obj) as (keyof T)[];
 
 /**
  * This build script builds the Skia Binaries from the Skia repositories

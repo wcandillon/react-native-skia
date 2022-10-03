@@ -61,6 +61,6 @@ describe("RuntimeEffect", () => {
     );
     paint.setShader(shader);
     canvas.drawRect(Skia.XYWHRect(0, 0, width, height), paint);
-    processResult(surface, "snapshots/runtime-effects/spiral.png");
+    processResult(surface, "snapshots/runtime-effects/small-spiral.png");
   });
 });

@@ -88,6 +88,14 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(get) {
+    auto values = jsi::Array(runtime, 9);
+    for (auto i = 0; i < 9; i++) {
+      values.setValueAtIndex(runtime, i, getObject()->get(i));
+    }
+    return values;
+  }
+
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkMatrix, __typename__))
 
   JSI_EXPORT_FUNCTIONS(
@@ -97,6 +105,7 @@ public:
     JSI_EXPORT_FUNC(JsiSkMatrix, skew),
     JSI_EXPORT_FUNC(JsiSkMatrix, rotate),
     JSI_EXPORT_FUNC(JsiSkMatrix, identity),
+    JSI_EXPORT_FUNC(JsiSkMatrix, get),
   )
 
   /**

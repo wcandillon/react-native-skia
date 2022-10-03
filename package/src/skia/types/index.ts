@@ -2,7 +2,6 @@ export * from "./Picture";
 export * from "./Data";
 export * from "./SVG";
 export * from "./Surface";
-export * from "./FontMgr";
 export * from "./Vertices";
 export * from "./RuntimeEffect";
 export * from "./Shader";

@@ -9,7 +9,7 @@ export enum MatrixIndex {
   TransY = 5,
   Persp0 = 6,
   Persp1 = 7,
-  persp2 = 8,
+  Persp2 = 8,
 }
 
 export const isMatrix = (obj: unknown): obj is SkMatrix =>
@@ -22,6 +22,7 @@ export interface SkMatrix extends SkJSIInstance<"Matrix"> {
   skew: (x: number, y: number) => void;
   rotate: (theta: number) => void;
   identity: () => void;
+  get: () => number[];
 }
 
 type Transform2dName =

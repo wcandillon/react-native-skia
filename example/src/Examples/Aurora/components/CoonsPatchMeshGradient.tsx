@@ -24,7 +24,7 @@ import { useHandles } from "./useHandles";
 
 const rectToTexture = (
   vertices: CubicBezierHandle[],
-  [tl, tr, br, bl]: readonly [number, number, number, number]
+  [tl, tr, br, bl]: number[]
 ) =>
   [
     vertices[tl].pos,
@@ -33,15 +33,19 @@ const rectToTexture = (
     vertices[bl].pos,
   ] as const;
 
-const rectToColors = (
-  colors: string[],
-  [tl, tr, br, bl]: readonly [number, number, number, number]
-) => [colors[tl], colors[tr], colors[br], colors[bl]] as const;
+const rectToColors = (colors: string[], [tl, tr, br, bl]: number[]) => [
+  colors[tl],
+  colors[tr],
+  colors[br],
+  colors[bl],
+];
 
 const useRectToPatch = (
   mesh: SkiaValue<CubicBezierHandle[]>,
-  indices: readonly number[]
-) =>
+  indices: number[]
+): SkiaValue<
+  [CubicBezierHandle, CubicBezierHandle, CubicBezierHandle, CubicBezierHandle]
+> =>
   useComputedValue(() => {
     const tl = mesh.current[indices[0]];
     const tr = mesh.current[indices[1]];
@@ -68,7 +72,7 @@ const useRectToPatch = (
         c1: bl.c1,
         c2: symmetric(bl.c2, bl.pos),
       },
-    ] as const;
+    ];
   }, [mesh]);
 
 interface CoonsPatchMeshGradientProps {
@@ -127,7 +131,7 @@ export const CoonsPatchMeshGradient = ({
         const tr = tl + 1;
         const bl = (row + 1) * l + col;
         const br = bl + 1;
-        return [tl, tr, br, bl] as const;
+        return [tl, tr, br, bl];
       })
     )
     .flat();
@@ -203,7 +207,7 @@ export const CoonsPatchMeshGradient = ({
 };
 
 interface RectPatchProps {
-  r: readonly [number, number, number, number];
+  r: number[];
   debug?: boolean;
   lines?: boolean;
   colors: string[];

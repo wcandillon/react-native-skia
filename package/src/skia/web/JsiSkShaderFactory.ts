@@ -10,7 +10,9 @@ import type {
 } from "../types";
 import type { ShaderFactory } from "../types/Shader/ShaderFactory";
 
-import { Host, toValue, ckEnum } from "./Host";
+import { Host, ckEnum } from "./Host";
+import { JsiSkMatrix } from "./JsiSkMatrix";
+import { JsiSkPoint } from "./JsiSkPoint";
 import { JsiSkShader } from "./JsiSkShader";
 
 export class JsiSkShaderFactory extends Host implements ShaderFactory {
@@ -30,12 +32,14 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
     return new JsiSkShader(
       this.CanvasKit,
       this.CanvasKit.Shader.MakeLinearGradient(
-        toValue(start),
-        toValue(end),
+        JsiSkPoint.fromValue(start),
+        JsiSkPoint.fromValue(end),
         colors,
         pos,
         ckEnum(mode),
-        localMatrix === undefined ? undefined : toValue(localMatrix),
+        localMatrix === undefined
+          ? undefined
+          : JsiSkMatrix.fromValue(localMatrix),
         flags
       )
     );
@@ -53,12 +57,14 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
     return new JsiSkShader(
       this.CanvasKit,
       this.CanvasKit.Shader.MakeRadialGradient(
-        toValue(center),
+        JsiSkPoint.fromValue(center),
         radius,
         colors,
         pos,
         ckEnum(mode),
-        localMatrix === undefined ? undefined : toValue(localMatrix),
+        localMatrix === undefined
+          ? undefined
+          : JsiSkMatrix.fromValue(localMatrix),
         flags
       )
     );
@@ -78,14 +84,16 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
     return new JsiSkShader(
       this.CanvasKit,
       this.CanvasKit.Shader.MakeTwoPointConicalGradient(
-        toValue(start),
+        JsiSkPoint.fromValue(start),
         startRadius,
-        toValue(end),
+        JsiSkPoint.fromValue(end),
         endRadius,
         colors,
         pos,
         ckEnum(mode),
-        localMatrix === undefined ? undefined : toValue(localMatrix),
+        localMatrix === undefined
+          ? undefined
+          : JsiSkMatrix.fromValue(localMatrix),
         flags
       )
     );
@@ -112,7 +120,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
         ckEnum(mode),
         localMatrix === undefined || localMatrix === null
           ? undefined
-          : toValue(localMatrix),
+          : JsiSkMatrix.fromValue(localMatrix),
         flags,
         startAngleInDegrees,
         endAngleInDegrees
@@ -165,17 +173,18 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
   MakeBlend(mode: BlendMode, one: SkShader, two: SkShader) {
     return new JsiSkShader(
       this.CanvasKit,
-      this.CanvasKit.Shader.MakeBlend(ckEnum(mode), toValue(one), toValue(two))
+      this.CanvasKit.Shader.MakeBlend(
+        ckEnum(mode),
+        JsiSkShader.fromValue(one),
+        JsiSkShader.fromValue(two)
+      )
     );
   }
 
   MakeColor(color: SkColor) {
     return new JsiSkShader(
       this.CanvasKit,
-      this.CanvasKit.Shader.MakeColor(
-        toValue(color),
-        this.CanvasKit.ColorSpace.SRGB
-      )
+      this.CanvasKit.Shader.MakeColor(color, this.CanvasKit.ColorSpace.SRGB)
     );
   }
 }

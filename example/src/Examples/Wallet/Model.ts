@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import type { SkPath } from "@shopify/react-native-skia";
 import { Skia } from "@shopify/react-native-skia";
 

@@ -3,9 +3,10 @@ import type { CanvasKit, PictureRecorder } from "canvaskit-wasm";
 import type { SkRect } from "../types";
 import type { SkPictureRecorder } from "../types/Picture/PictureRecorder";
 
-import { HostObject, toValue } from "./Host";
+import { HostObject } from "./Host";
 import { JsiSkCanvas } from "./JsiSkCanvas";
 import { JsiSkPicture } from "./JsiSkPicture";
+import { JsiSkRect } from "./JsiSkRect";
 
 export class JsiSkPictureRecorder
   extends HostObject<PictureRecorder, "PictureRecorder">
@@ -18,7 +19,7 @@ export class JsiSkPictureRecorder
   beginRecording(bounds: SkRect) {
     return new JsiSkCanvas(
       this.CanvasKit,
-      this.ref.beginRecording(toValue(bounds))
+      this.ref.beginRecording(JsiSkRect.fromValue(this.CanvasKit, bounds))
     );
   }
 

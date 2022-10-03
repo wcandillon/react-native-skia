@@ -11,7 +11,8 @@ import type {
   TileMode,
 } from "../types";
 
-import { ckEnum, HostObject, toValue } from "./Host";
+import { ckEnum, HostObject } from "./Host";
+import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkShader } from "./JsiSkShader";
 
 export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
@@ -41,7 +42,7 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
         ckEnum(ty),
         ckEnum(fm),
         ckEnum(mm),
-        localMatrix ? toValue(localMatrix) : undefined
+        localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined
       )
     );
   }
@@ -60,7 +61,7 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
         ckEnum(ty),
         B,
         C,
-        localMatrix ? toValue(localMatrix) : undefined
+        localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined
       )
     );
   }

@@ -56,7 +56,7 @@ const Neumorphism = () => {
 
 ### Result
 
-![Drop Shadow](assets/drop-shadow.png)
+<img src={require("/static/img/image-filters/dropshadow.png").default} width="256" height="256" />
 
 ## Inner Shadow
 
@@ -83,4 +83,4 @@ const Neumorphism = () => {
 
 ### Result
 
-![Inner Shadow](assets/inner-shadow.png)
+<img src={require("/static/img/image-filters/innershadow.png").default} width="256" height="256" />
