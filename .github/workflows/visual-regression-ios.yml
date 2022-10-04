@@ -1,6 +1,6 @@
 name: Visual Regression - iOS
 
-on: [pull_request]
+on: workflow_dispatch
 
 jobs:
   run-visual-regression-ios:
@@ -24,22 +24,42 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
 
-      - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+      - name: Install root node dependencies
+        run: yarn
+
+      - name: Download Skia Binary Artifacts
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: "build-skia.yml"
+          path: artifacts
+
+      - name: Copy Artifacts to libs folder
+        run: yarn workflow-copy-libs
+
+      - name: Copy Skia Headers
+        run: yarn copy-skia-headers
+
+      - name: Install Package
+        run: yarn
+        working-directory: ./example
+
+      - name: Install Example
+        run: yarn
+        working-directory: ./example
 
       - name: Install CocoaPods
         run: gem install cocoapods -v 1.11.0
 
       - uses: actions/cache@v2
         with:
-          path: ./ios/Pods
+          path: ./example/ios/Pods
           key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-pods-
 
       - name: Install CocoaPods
         run: pod install
-        working-directory: ./ios
+        working-directory: ./example/ios
 
       - uses: futureware-tech/simulator-action@v1
         with:
@@ -48,9 +68,11 @@ jobs:
 
       - name: Run Owl Build
         run: yarn owl:build:ios
+        working-directory: ./example/ios
 
       - name: Run Owl Test
         run: yarn owl:test:ios
+        working-directory: ./example/ios
 
       - name: Store screenshots and report as artifacts
         uses: actions/upload-artifact@v2

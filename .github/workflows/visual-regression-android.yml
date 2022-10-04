@@ -1,6 +1,6 @@
 name: Visual Regression - Android
 
-on: [pull_request]
+on: workflow_dispatch
 
 jobs:
   run-visual-regression-android:
