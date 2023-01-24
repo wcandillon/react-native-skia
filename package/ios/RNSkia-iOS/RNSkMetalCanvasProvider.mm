@@ -105,7 +105,7 @@ void RNSkMetalCanvasProvider::renderToCanvas(
         kTopLeft_GrSurfaceOrigin, 1, kBGRA_8888_SkColorType, nullptr, nullptr,
         &drawableHandle);
 
-    if (skSurface == nullptr || skSurface->getCanvas() == nullptr) {
+if (skSurface == nullptr || skSurface->getCanvas() == nullptr) {
       RNSkia::RNSkLogger::logToConsole(
           "Skia surface could not be created from parameters.");
       return;
