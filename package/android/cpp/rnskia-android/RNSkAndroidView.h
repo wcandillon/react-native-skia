@@ -6,6 +6,7 @@
 
 #include "RNSkOpenGLCanvasProvider.h"
 #include <android/native_window.h>
+#include "WebGPUTriangle.h"
 
 namespace RNSkia {
 
@@ -39,12 +40,7 @@ public:
               std::bind(&RNSkia::RNSkView::requestRedraw, this), context)) {}
 
   void surfaceAvailable(jobject surface, int width, int height) override {
-    std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
-        ->surfaceAvailable(surface, width, height);
-
-    // Try to render directly when the surface has been set so that
-    // we don't have to wait until the draw loop returns.
-    RNSkView::renderImmediate();
+    runTriangleDemo(surface, width, height);
   }
 
   void surfaceDestroyed() override {
@@ -53,11 +49,11 @@ public:
   }
 
   void surfaceSizeChanged(int width, int height) override {
-    std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
-        ->surfaceSizeChanged(width, height);
-    // This is only need for the first time to frame, this renderImmediate call
-    // will invoke updateTexImage for the previous frame
-    RNSkView::renderImmediate();
+    // std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
+    //     ->surfaceSizeChanged(width, height);
+    // // This is only need for the first time to frame, this renderImmediate call
+    // // will invoke updateTexImage for the previous frame
+    // RNSkView::renderImmediate();
   }
 
   float getPixelDensity() override {

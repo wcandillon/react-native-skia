@@ -2,7 +2,7 @@ project(RNSkia)
 cmake_minimum_required(VERSION 3.4.1)
 
 set (CMAKE_VERBOSE_MAKEFILE ON)
-set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD 20)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_GANESH -DSK_BUILD_FOR_ANDROID -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 
 set (PACKAGE_NAME "rnskia")
@@ -47,6 +47,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/SkiaOpenGLSurfaceFactory.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/GrAHardwareBufferUtils.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/WebGPUTriangle.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiHostObject.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiValue.cpp"
@@ -116,6 +117,9 @@ set_property(TARGET skparagraph PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/li
 
 add_library(skunicode STATIC IMPORTED)
 set_property(TARGET skunicode PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskunicode.a")
+
+add_library(webgpu_c_bundled SHARED IMPORTED)
+set_property(TARGET webgpu_c_bundled PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libwebgpu_c_bundled.so")
 
 
 find_library(
@@ -237,4 +241,5 @@ target_link_libraries(
         -lGLESv2
         -lEGL
         -landroid
+        -lwebgpu_c_bundled
     )
