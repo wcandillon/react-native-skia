@@ -12,6 +12,7 @@ namespace RNSkia {
 
 class RNSkBaseAndroidView {
 public:
+  void* _window;
   virtual void surfaceAvailable(jobject surface, int width, int height) = 0;
 
   virtual void surfaceDestroyed() = 0;
@@ -40,7 +41,21 @@ public:
               std::bind(&RNSkia::RNSkView::requestRedraw, this), context)) {}
 
   void surfaceAvailable(jobject surface, int width, int height) override {
-    runTriangleDemo(surface, width, height);
+    JNIEnv *env = facebook::jni::Environment::current();
+    auto _jSurfaceTexture = env->NewGlobalRef(surface);
+    jclass surfaceClass = env->FindClass("android/view/Surface");
+    jmethodID surfaceConstructor = env->GetMethodID(
+        surfaceClass, "<init>", "(Landroid/graphics/SurfaceTexture;)V");
+    // Create a new Surface instance
+    jobject jSurface =
+        env->NewObject(surfaceClass, surfaceConstructor, _jSurfaceTexture);
+
+    // Acquire the native window from the Surface
+    _window = ANativeWindow_fromSurface(env, jSurface);
+    // Clean up local references
+    env->DeleteLocalRef(jSurface);
+    env->DeleteLocalRef(surfaceClass);
+
   }
 
   void surfaceDestroyed() override {
@@ -54,6 +69,7 @@ public:
     // // This is only need for the first time to frame, this renderImmediate call
     // // will invoke updateTexImage for the previous frame
     // RNSkView::renderImmediate();
+    runTriangleDemo(_window, width, height);
   }
 
   float getPixelDensity() override {
