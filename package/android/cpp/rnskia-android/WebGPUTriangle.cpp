@@ -105,7 +105,7 @@ void Render() {
   WGPURenderPassColorAttachment attachment {
       .view = view,
       .loadOp = WGPULoadOp_Clear,
-      .clearValue = WGPUColor{0, 0, 0, 1},
+      .clearValue = WGPUColor{0.3, 0.6, 0.9, 1},
       .storeOp = WGPUStoreOp_Store,
       .depthSlice = UINT32_MAX
   };
