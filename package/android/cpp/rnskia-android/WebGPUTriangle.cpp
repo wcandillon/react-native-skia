@@ -12,8 +12,8 @@ WGPURenderPipeline pipeline;
 void* window;
 
 WGPUSwapChain swapChain;
-const uint32_t kWidth = 512;
-const uint32_t kHeight = 512;
+uint32_t kWidth = -1;
+uint32_t kHeight = -1;
 
 void SetupSwapChain(WGPUSurface surface) {
   WGPUSwapChainDescriptor scDesc{
@@ -99,12 +99,15 @@ void CreateRenderPipeline() {
 
 void Render() {
   RNSkia::RNSkLogger::logToConsole("Render()");
-
+  auto view = wgpuSwapChainGetCurrentTextureView(swapChain);
+  //auto texture = wgpuSwapChainGetCurrentTexture(swapChain);
+  //auto dp = wgpuTextureGetDepthOrArrayLayers(texture);
   WGPURenderPassColorAttachment attachment {
-      .view = wgpuSwapChainGetCurrentTextureView(swapChain),
+      .view = view,
       .loadOp = WGPULoadOp_Clear,
       .clearValue = WGPUColor{0, 0, 0, 1},
       .storeOp = WGPUStoreOp_Store,
+      .depthSlice = UINT32_MAX
   };
 
   WGPURenderPassDescriptor renderpass{
@@ -147,12 +150,13 @@ void Start() {
 
 void runTriangleDemo(void* w, int width, int height) {
     window = w;
+    kWidth = width;
+    kHeight = height;
     instance = wgpuCreateInstance(nullptr);
     // Instance creation
 
     GetDevice([](WGPUDevice dev) {
       device = dev;
-
       Start();
     });
 

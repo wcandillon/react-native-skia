@@ -70,6 +70,7 @@ public:
     // // will invoke updateTexImage for the previous frame
     // RNSkView::renderImmediate();
     runTriangleDemo(_window, width, height);
+    
   }
 
   float getPixelDensity() override {
