@@ -4,7 +4,7 @@
 #include <jni.h>
 #include "RNSkLog.h"
 
-#include "webgpu.h"
+#include "webgpu.hpp"
 
 WGPUInstance instance;
 WGPUDevice device;
@@ -72,10 +72,11 @@ void CreateRenderPipeline() {
   WGPUShaderModuleWGSLDescriptor wgslDesc{};
   wgslDesc.code = shaderCode;
   wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor; // Ensure this is set correctly.
-  wgslDesc.chain.next = nullptr; // Assuming this is the end of the chain.
+ // wgslDesc.chain.next = nullptr; // Assuming this is the end of the chain.
 
-  WGPUShaderModuleDescriptor shaderModuleDescriptor{};
-  shaderModuleDescriptor.nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&wgslDesc);
+  WGPUShaderModuleDescriptor shaderModuleDescriptor{
+          .nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&wgslDesc)
+  };
   WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderModuleDescriptor);
 
   WGPUColorTargetState colorTargetState{
@@ -89,10 +90,10 @@ void CreateRenderPipeline() {
       .vertex = {.module = shaderModule},
       .fragment = &fragmentState,
       .multisample = {
-        .count = 1, // Set to 1 for no multisampling, higher for actual multisampling
-      //  .mask = ~0u, // Use all samples
-      //  .alphaToCoverageEnabled = false // Typically false unless using alpha-to-coverage as a multisampling technique
-      }
+       .count = 1, // Set to 1 for no multisampling, higher for actual multisampling
+       //.mask = ~0u, // Use all samples
+       //.alphaToCoverageEnabled = false // Typically false unless using alpha-to-coverage as a multisampling technique
+     },
   };
   pipeline = wgpuDeviceCreateRenderPipeline(device, &descriptor);
 }
@@ -105,14 +106,14 @@ void Render() {
   WGPURenderPassColorAttachment attachment {
       .view = view,
       .loadOp = WGPULoadOp_Clear,
-      .clearValue = WGPUColor{0.3, 0.6, 0.9, 1},
+      .clearValue = WGPUColor{0.3, 0.6, 0.9, 0.5},
       .storeOp = WGPUStoreOp_Store,
       .depthSlice = UINT32_MAX
   };
 
   WGPURenderPassDescriptor renderpass{
     .colorAttachmentCount = 1,
-    .colorAttachments = &attachment
+    .colorAttachments = &attachment,
   };
 
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
@@ -120,7 +121,7 @@ void Render() {
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass);
 
   wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-  wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+  wgpuRenderPassEncoderDraw(pass, 3);
   wgpuRenderPassEncoderEnd(pass);
   WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
 
@@ -143,9 +144,6 @@ void Start() {
     surfaceDesc.nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&androidSurfaceDesc);
     WGPUSurface s = wgpuInstanceCreateSurface(instance, &surfaceDesc);
     InitGraphics(s);
-    Render();
-    wgpuSwapChainPresent(swapChain);
-    //wgpuInstanceProcessEvents(instance);
 }
 
 void runTriangleDemo(void* w, int width, int height) {
@@ -158,6 +156,11 @@ void runTriangleDemo(void* w, int width, int height) {
     GetDevice([](WGPUDevice dev) {
       device = dev;
       Start();
+      //while(true) {
+        Render();
+        wgpuSwapChainPresent(swapChain);
+     //   wgpuInstanceProcessEvents(instance);
+     // }
     });
 
 }
