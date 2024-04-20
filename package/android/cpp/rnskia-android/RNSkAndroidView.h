@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "RNSkOpenGLCanvasProvider.h"
 #include <android/native_window.h>
@@ -42,20 +43,7 @@ public:
 
   void surfaceAvailable(jobject surface, int width, int height) override {
     JNIEnv *env = facebook::jni::Environment::current();
-    auto _jSurfaceTexture = env->NewGlobalRef(surface);
-    jclass surfaceClass = env->FindClass("android/view/Surface");
-    jmethodID surfaceConstructor = env->GetMethodID(
-        surfaceClass, "<init>", "(Landroid/graphics/SurfaceTexture;)V");
-    // Create a new Surface instance
-    jobject jSurface =
-        env->NewObject(surfaceClass, surfaceConstructor, _jSurfaceTexture);
-
-    // Acquire the native window from the Surface
-    _window = ANativeWindow_fromSurface(env, jSurface);
-    // Clean up local references
-    env->DeleteLocalRef(jSurface);
-    env->DeleteLocalRef(surfaceClass);
-
+    _window = ANativeWindow_fromSurface(env, surface);
   }
 
   void surfaceDestroyed() override {
@@ -69,8 +57,14 @@ public:
     // // This is only need for the first time to frame, this renderImmediate call
     // // will invoke updateTexImage for the previous frame
     // RNSkView::renderImmediate();
-    runTriangleDemo(_window, width, height);
-    
+    // T::getPlatformContext()->setOnNotifyDrawLoop([this]() {
+    //   // On Android we delegate all rendering to a separate thread
+    //   runOnRenderThread([&]() { this->notifyDrawLoop(false); });
+    // });    
+   // runTriangleDemo(_window, width, height);
+   std::thread renderThread(runTriangleDemo, _window, width, height);
+   renderThread.detach();  // Detach the thread to allow it to run independently
+
   }
 
   float getPixelDensity() override {

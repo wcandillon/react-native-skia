@@ -2,6 +2,7 @@
 
 #include <fbjni/fbjni.h>
 #include <jni.h>
+#include <android/native_window.h>
 #include "RNSkLog.h"
 
 #include "webgpu.hpp"
@@ -152,23 +153,15 @@ void runTriangleDemo(void* w, int width, int height) {
     kHeight = height;
     RNSkia::RNSkLogger::logToConsole("width: %d, height: %d", width, height);
     instance = wgpuCreateInstance(nullptr);
-    // Instance creation
 
     GetDevice([](WGPUDevice dev) {
         device = dev;
         Start();
-        //while(true) {
-//        Render();
-//        wgpuSwapChainPresent(swapChain);
-
-        for(int i = 0; i < 32; i++) {
-           Render();
-           wgpuSwapChainPresent(swapChain);
-           wgpuInstanceProcessEvents(instance);
+        while(true) {
+            Render();
+            wgpuSwapChainPresent(swapChain);
+            wgpuInstanceProcessEvents(instance);
         }
-
-        //   wgpuInstanceProcessEvents(instance);
-        // }
     });
 
 }
