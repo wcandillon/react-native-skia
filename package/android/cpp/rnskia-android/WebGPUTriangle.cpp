@@ -12,49 +12,49 @@ WGPURenderPipeline pipeline;
 void* window;
 
 WGPUSwapChain swapChain;
-uint32_t kWidth = -1;
-uint32_t kHeight = -1;
+uint32_t kWidth = 800;  // Set default width
+uint32_t kHeight = 600; // Set default height
 
 void SetupSwapChain(WGPUSurface surface) {
-  WGPUSwapChainDescriptor scDesc{
-      .usage = WGPUTextureUsage_RenderAttachment,
-      .format = WGPUTextureFormat_RGBA8Unorm,
-      .width = kWidth,
-      .height = kHeight,
-      .presentMode = WGPUPresentMode_Fifo};
-  swapChain = wgpuDeviceCreateSwapChain(device, surface, &scDesc);
+    WGPUSwapChainDescriptor scDesc{
+            .usage = WGPUTextureUsage_RenderAttachment,
+            .format = WGPUTextureFormat_RGBA8Unorm,
+            .width = kWidth,
+            .height = kHeight,
+            .presentMode = WGPUPresentMode_Fifo};
+    swapChain = wgpuDeviceCreateSwapChain(device, surface, &scDesc);
 }
 
 
 void GetDevice(void (*callback)(WGPUDevice)) {
-  wgpuInstanceRequestAdapter(
-      instance,
-      nullptr,
-      // TODO(https://bugs.chromium.org/p/dawn/issues/detail?id=1892): Use
-      // WGPURequestAdapterStatus, WGPUAdapter, and WGPUDevice.
-      [](WGPURequestAdapterStatus status, WGPUAdapter adapter,
-         const char* message, void* userdata) {
-        if (status != WGPURequestAdapterStatus_Success) {
-          exit(0);
-        }
-       // WGPUAdapter adapter = WGPUAdapter::Acquire(cAdapter);
-        wgpuAdapterRequestDevice(
-            adapter,
+    wgpuInstanceRequestAdapter(
+            instance,
             nullptr,
-            [](WGPURequestDeviceStatus status, WGPUDevice device,
+            // TODO(https://bugs.chromium.org/p/dawn/issues/detail?id=1892): Use
+            // WGPURequestAdapterStatus, WGPUAdapter, and WGPUDevice.
+            [](WGPURequestAdapterStatus status, WGPUAdapter adapter,
                const char* message, void* userdata) {
-              //WGPUDevice device = WGPUDevice::Acquire(cDevice);
-              wgpuDeviceSetUncapturedErrorCallback(device,
-                  [](WGPUErrorType type, const char* message, void* userdata) {
-                    RNSkia::RNSkLogger::logToConsole("Error: " + std::to_string(type) + " - message: " + message);
-                    //std::cout << "Error: " << type << " - message: " << message;
-                  },
-                  nullptr);
-              reinterpret_cast<void (*)(WGPUDevice)>(userdata)(device);
+                if (status != WGPURequestAdapterStatus_Success) {
+                    exit(0);
+                }
+                // WGPUAdapter adapter = WGPUAdapter::Acquire(cAdapter);
+                wgpuAdapterRequestDevice(
+                        adapter,
+                        nullptr,
+                        [](WGPURequestDeviceStatus status, WGPUDevice device,
+                           const char* message, void* userdata) {
+                            //WGPUDevice device = WGPUDevice::Acquire(cDevice);
+                            wgpuDeviceSetUncapturedErrorCallback(device,
+                                                                 [](WGPUErrorType type, const char* message, void* userdata) {
+                                                                     RNSkia::RNSkLogger::logToConsole("Error: " + std::to_string(type) + " - message: " + message);
+                                                                     //std::cout << "Error: " << type << " - message: " << message;
+                                                                 },
+                                                                 nullptr);
+                            reinterpret_cast<void (*)(WGPUDevice)>(userdata)(device);
+                        },
+                        userdata);
             },
-            userdata);
-      },
-      reinterpret_cast<void*>(callback));
+            reinterpret_cast<void*>(callback));
 }
 
 const char shaderCode[] = R"(
@@ -69,69 +69,69 @@ const char shaderCode[] = R"(
 )";
 
 void CreateRenderPipeline() {
-  WGPUShaderModuleWGSLDescriptor wgslDesc{};
-  wgslDesc.code = shaderCode;
-  wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor; // Ensure this is set correctly.
- // wgslDesc.chain.next = nullptr; // Assuming this is the end of the chain.
+    WGPUShaderModuleWGSLDescriptor wgslDesc{};
+    wgslDesc.code = shaderCode;
+    wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor; // Ensure this is set correctly.
+    // wgslDesc.chain.next = nullptr; // Assuming this is the end of the chain.
 
-  WGPUShaderModuleDescriptor shaderModuleDescriptor{
-          .nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&wgslDesc)
-  };
-  WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderModuleDescriptor);
+    WGPUShaderModuleDescriptor shaderModuleDescriptor{
+            .nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&wgslDesc)
+    };
+    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderModuleDescriptor);
 
-  WGPUColorTargetState colorTargetState{
-      .format = WGPUTextureFormat_RGBA8Unorm};
+    WGPUColorTargetState colorTargetState{
+            .format = WGPUTextureFormat_RGBA8Unorm};
 
-  WGPUFragmentState fragmentState{.module = shaderModule,
-                                    .targetCount = 1,
-                                    .targets = &colorTargetState};
+    WGPUFragmentState fragmentState{.module = shaderModule,
+            .targetCount = 1,
+            .targets = &colorTargetState};
 
-  WGPURenderPipelineDescriptor descriptor{
-      .vertex = {.module = shaderModule},
-      .fragment = &fragmentState,
-      .multisample = {
-       .count = 1, // Set to 1 for no multisampling, higher for actual multisampling
-       //.mask = ~0u, // Use all samples
-       //.alphaToCoverageEnabled = false // Typically false unless using alpha-to-coverage as a multisampling technique
-     },
-  };
-  pipeline = wgpuDeviceCreateRenderPipeline(device, &descriptor);
+    WGPURenderPipelineDescriptor descriptor{
+            .vertex = {.module = shaderModule},
+            .fragment = &fragmentState,
+            .multisample = {
+                    .count = 1, // Set to 1 for no multisampling, higher for actual multisampling
+                    //.mask = ~0u, // Use all samples
+                    //.alphaToCoverageEnabled = false // Typically false unless using alpha-to-coverage as a multisampling technique
+            },
+    };
+    pipeline = wgpuDeviceCreateRenderPipeline(device, &descriptor);
 }
 
 void Render() {
-  RNSkia::RNSkLogger::logToConsole("Render()");
-  auto view = wgpuSwapChainGetCurrentTextureView(swapChain);
-  //auto texture = wgpuSwapChainGetCurrentTexture(swapChain);
-  //auto dp = wgpuTextureGetDepthOrArrayLayers(texture);
-  WGPURenderPassColorAttachment attachment {
-      .view = view,
-      .loadOp = WGPULoadOp_Clear,
-      .clearValue = WGPUColor{0.3, 0.6, 0.9, 0.5},
-      .storeOp = WGPUStoreOp_Store,
-      .depthSlice = UINT32_MAX
-  };
+    RNSkia::RNSkLogger::logToConsole("Render(%d, %d)", kWidth, kHeight);
+    auto view = wgpuSwapChainGetCurrentTextureView(swapChain);
+    //auto texture = wgpuSwapChainGetCurrentTexture(swapChain);
+    //auto dp = wgpuTextureGetDepthOrArrayLayers(texture);
+    WGPURenderPassColorAttachment attachment {
+            .view = view,
+            .loadOp = WGPULoadOp_Clear,
+            .clearValue = WGPUColor{0.3, 0.6, 0.9, 1.0},
+            .storeOp = WGPUStoreOp_Store,
+            .depthSlice = UINT32_MAX
+    };
 
-  WGPURenderPassDescriptor renderpass{
-    .colorAttachmentCount = 1,
-    .colorAttachments = &attachment,
-  };
+    WGPURenderPassDescriptor renderpass{
+            .colorAttachmentCount = 1,
+            .colorAttachments = &attachment,
+    };
 
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
 
-  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass);
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass);
 
-  wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-  wgpuRenderPassEncoderDraw(pass, 3);
-  wgpuRenderPassEncoderEnd(pass);
-  WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
+    wgpuRenderPassEncoderSetPipeline(pass, pipeline);
+    wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+    wgpuRenderPassEncoderEnd(pass);
+    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
 
-  auto queue = wgpuDeviceGetQueue(device);
-  wgpuQueueSubmit(queue, 1, &commands);
+    auto queue = wgpuDeviceGetQueue(device);
+    wgpuQueueSubmit(queue, 1, &commands);
 }
 
 void InitGraphics(WGPUSurface surface) {
-  SetupSwapChain(surface);
-  CreateRenderPipeline();
+    SetupSwapChain(surface);
+    CreateRenderPipeline();
 }
 
 void Start() {
@@ -150,17 +150,25 @@ void runTriangleDemo(void* w, int width, int height) {
     window = w;
     kWidth = width;
     kHeight = height;
+    RNSkia::RNSkLogger::logToConsole("width: %d, height: %d", width, height);
     instance = wgpuCreateInstance(nullptr);
     // Instance creation
 
     GetDevice([](WGPUDevice dev) {
-      device = dev;
-      Start();
-      //while(true) {
-        Render();
-        wgpuSwapChainPresent(swapChain);
-     //   wgpuInstanceProcessEvents(instance);
-     // }
+        device = dev;
+        Start();
+        //while(true) {
+//        Render();
+//        wgpuSwapChainPresent(swapChain);
+
+        for(int i = 0; i < 32; i++) {
+           Render();
+           wgpuSwapChainPresent(swapChain);
+           wgpuInstanceProcessEvents(instance);
+        }
+
+        //   wgpuInstanceProcessEvents(instance);
+        // }
     });
 
 }

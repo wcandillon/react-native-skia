@@ -34,7 +34,7 @@
 
 #pragma once
 
-#include <webgpu/webgpu.h>
+#include <webgpu.h>
 
 #include <iostream>
 #include <vector>
@@ -3244,7 +3244,7 @@ void Device::injectError(ErrorType type, char const * message) {
 	return wgpuDeviceInjectError(m_raw, static_cast<WGPUErrorType>(type), message);
 }
 std::unique_ptr<ErrorCallback> Device::popErrorScope(ErrorCallback&& oldCallback) {
-	auto handle = std::make_unique<ErrorCallback>(callback);
+	auto handle = std::make_unique<ErrorCallback>(oldCallback);//callback
 	static auto cCallback = [](WGPUErrorType type, char const * message, void * userdata) -> void {
 		ErrorCallback& callback = *reinterpret_cast<ErrorCallback*>(userdata);
 		callback(static_cast<ErrorType>(type), message);
