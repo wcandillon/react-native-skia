@@ -44,10 +44,10 @@ const generatorMethod = (method: Method) => {
 `;
 };
 
-export const generateObject = (name: string, object: WGPUObject, methodFilter: string[]) => {
+export const generateObject = (name: string, object: WGPUObject) => {
   const className = `JsiWGPU${name}`;
   const objectName = `wgpu::${name}`;
-  const methods = object.methods.filter(method => !(method.tags ?? []).includes(MemberTag.Emscripten)).filter(method => methodFilter.includes(method.name))
+  const methods = object.methods.filter(method => !(method.tags ?? []).includes(MemberTag.Emscripten));
   return `#pragma once
 
 #include "webgpu.hpp"
@@ -61,7 +61,6 @@ public:
 ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
       : JsiSkWrappingSharedPtrHostObject<${objectName}>(
             context, std::make_shared<${objectName}>(std::move(m))) {}
-
 
   ${methods.map(method => generatorMethod(method)).join("\n  ")}
 

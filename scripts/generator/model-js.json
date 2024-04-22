@@ -1,0 +1,14 @@
+{
+  "adaptor": {
+    "category": "object",
+    "methods": [
+      {
+        "name": "request device",
+        "args": [
+            {"name": "descriptor", "type": "device descriptor", "annotation": "const*", "optional": true, "no_default": true},
+            {"name": "callback", "type": "request device callback"}
+        ]
+      }
+    ]
+  }
+}

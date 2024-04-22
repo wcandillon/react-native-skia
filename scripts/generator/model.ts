@@ -1,4 +1,4 @@
-import dawn from "./dawn.json";
+import dawn from "./model-js.json";
 
 export enum Annotation {
   Const = "const*",

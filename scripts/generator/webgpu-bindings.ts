@@ -4,20 +4,10 @@ import { generateObject } from "./generateObject";
 import { model } from "./model";
 import { objectName } from "./common";
 
-interface Filter { 
-  methods: string[];
-}
-
-const objects: Record<string, Filter> = {
-  "instance": { methods: ["request adapter"] },
-  "adapter": { methods: ["request device"] }
-};
-
 for (const key in model) {
   const value = model[key as keyof typeof model];
-  const objs = Object.keys(objects);
-  if (value.category === "object" && objs.includes(key)) {
-    const result = generateObject(`${objectName(key)}`, value, objects[key].methods);
+  if (value.category === "object") {
+    const result = generateObject(`${objectName(key)}`, value);
     console.log(result);
   }
 }
