@@ -1,17 +1,22 @@
 import _ from "lodash";
 
 import { generateObject } from "./generateObject";
-import {WGPUObject, model} from "./model";
+import { model } from "./model";
+import { objectName } from "./common";
 
+interface Filter { 
+  methods: string[];
+}
 
-const objects = [
-  "instance"
-];
+const objects: Record<string, Filter> = {
+  "instance": { methods: ["request adapter"] }
+};
 
 for (const key in model) {
   const value = model[key as keyof typeof model];
-  if (value.category === "object" && objects.includes(key)) {
-    const result = generateObject(`${_.upperFirst(_.camelCase(key))}`, value);
+  const objs = Object.keys(objects);
+  if (value.category === "object" && objs.includes(key)) {
+    const result = generateObject(`${objectName(key)}`, value, objects[key].methods);
     console.log(result);
   }
 }

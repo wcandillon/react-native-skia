@@ -24,8 +24,8 @@ export interface Arg {
 
 export interface Method {
   name: string;
-  returns: string;
-  args: Arg[]
+  returns?: string;
+  args?: Arg[]
   tags?: MemberTag[];
 }
 
