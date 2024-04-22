@@ -9,7 +9,8 @@ interface Filter {
 }
 
 const objects: Record<string, Filter> = {
-  "instance": { methods: ["request adapter"] }
+  "instance": { methods: ["request adapter"] },
+  "adapter": { methods: ["request device"] }
 };
 
 for (const key in model) {
