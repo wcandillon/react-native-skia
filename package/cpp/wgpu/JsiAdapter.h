@@ -55,8 +55,14 @@ public:
    */
   static std::shared_ptr<wgpu::Adapter> fromValue(jsi::Runtime &runtime,
                                                   const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiAdapter>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime)
+          .asHostObject<JsiAdapter>(runtime)
+          ->getObject();
+    } else {
+      throw jsi::JSError(runtime, "Expected a JsiAdapter object, but got a " +
+                                      obj.toString(runtime).utf8(runtime));
+    }
   }
 };
 } // namespace RNSkia

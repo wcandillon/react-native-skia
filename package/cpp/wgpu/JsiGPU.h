@@ -22,6 +22,10 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::Instance>(
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
+  JSI_HOST_FUNCTION(getPreferredCanvasFormat) {
+    return jsi::String::createFromUtf8(runtime, "bgra8unorm");
+  }
+
   JSI_HOST_FUNCTION(requestAdapter) {
     auto defaultOptions = std::make_shared<wgpu::RequestAdapterOptions>();
     auto options =
@@ -48,15 +52,20 @@ public:
 
   EXPORT_JSI_API_BRANDNAME(JsiGPU, GPU)
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiGPU, requestAdapter))
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiGPU, requestAdapter),
+                       JSI_EXPORT_FUNC(JsiGPU, getPreferredCanvasFormat))
 
   /**
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<wgpu::Instance> fromValue(jsi::Runtime &runtime,
                                                    const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiGPU>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime).asHostObject<JsiGPU>(runtime)->getObject();
+    } else {
+      throw jsi::JSError(runtime, "Expected a JsiGPU object, but got a " +
+                                      obj.toString(runtime).utf8(runtime));
+    }
   }
 };
 } // namespace RNSkia

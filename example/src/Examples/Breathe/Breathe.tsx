@@ -16,10 +16,53 @@ import { useDerivedValue } from "react-native-reanimated";
 
 import { useLoop } from "../../components/Animations";
 
+const triangleVertWGSL = `@vertex
+fn main(
+  @builtin(vertex_index) VertexIndex : u32
+) -> @builtin(position) vec4f {
+  var pos = array<vec2f, 3>(
+    vec2(0.0, 0.5),
+    vec2(-0.5, -0.5),
+    vec2(0.5, -0.5)
+  );
+
+  return vec4f(pos[VertexIndex], 0.0, 1.0);
+}
+`;
+
+const redFragWGSL = `@fragment
+fn main() -> @location(0) vec4f {
+  return vec4(1.0, 0.0, 0.0, 1.0);
+}`;
+
 (async () => {
   const adapter = await gpu.requestAdapter();
   const device = await adapter!.requestDevice();
-  console.log(device);
+  const presentationFormat = gpu.getPreferredCanvasFormat();
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      entryPoint: "main",
+      module: device.createShaderModule({
+        code: triangleVertWGSL,
+      }),
+    },
+    fragment: {
+      entryPoint: "main",
+      module: device.createShaderModule({
+        code: redFragWGSL,
+      }),
+      targets: [
+        {
+          format: presentationFormat,
+        },
+      ],
+    },
+    primitive: {
+      topology: "triangle-list",
+    },
+  });
+  console.log(pipeline);
 })();
 
 const c1 = "#61bea2";

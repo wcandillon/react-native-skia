@@ -29,8 +29,21 @@ public:
    */
   static std::shared_ptr<wgpu::RequestAdapterOptions>
   fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime)
+          .asHostObject<JsiRequestAdapterOptions>(runtime)
+          ->getObject();
+    } else {
+      wgpu::RequestAdapterOptions object;
+      const auto &o = obj.asObject(runtime);
+
+      auto powerPreference = o.getProperty(runtime, "powerPreference");
+      object.powerPreference = powerPreference;
+
+      auto forceFallbackAdapter =
+          o.getProperty(runtime, "forceFallbackAdapter");
+      object.forceFallbackAdapter = forceFallbackAdapter;
+    }
   }
 };
 } // namespace RNSkia

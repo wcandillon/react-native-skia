@@ -28,8 +28,15 @@ public:
    */
   static std::shared_ptr<wgpu::DeviceDescriptor>
   fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiDeviceDescriptor>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime)
+          .asHostObject<JsiDeviceDescriptor>(runtime)
+          ->getObject();
+    } else {
+      throw jsi::JSError(runtime,
+                         "Expected a JsiDeviceDescriptor object, but got a " +
+                             obj.toString(runtime).utf8(runtime));
+    }
   }
 };
 } // namespace RNSkia

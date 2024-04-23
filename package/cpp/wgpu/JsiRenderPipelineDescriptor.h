@@ -30,9 +30,35 @@ public:
    */
   static std::shared_ptr<wgpu::RenderPipelineDescriptor>
   fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiRenderPipelineDescriptor>(runtime)
-        ->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime)
+          .asHostObject<JsiRenderPipelineDescriptor>(runtime)
+          ->getObject();
+    } else {
+      wgpu::RenderPipelineDescriptor object;
+      const auto &o = obj.asObject(runtime);
+
+      auto label = o.getProperty(runtime, "label");
+      object.label = label;
+
+      auto layout = o.getProperty(runtime, "layout");
+      object.layout = layout;
+
+      auto vertex = o.getProperty(runtime, "vertex");
+      object.vertex = vertex;
+
+      auto primitive = o.getProperty(runtime, "primitive");
+      object.primitive = primitive;
+
+      auto depthStencil = o.getProperty(runtime, "depth stencil");
+      object.depthStencil = depthStencil;
+
+      auto multisample = o.getProperty(runtime, "multisample");
+      object.multisample = multisample;
+
+      auto fragment = o.getProperty(runtime, "fragment");
+      object.fragment = fragment;
+    }
   }
 };
 } // namespace RNSkia

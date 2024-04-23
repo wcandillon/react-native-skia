@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Arg, JSIObject, Method } from "./model";
+import { Arg, JSIObject, Method, Property } from "./model";
 import { computeDependencies, isAtomicType, objectName } from './common';
 
 // Special builtin: char, uint64_t, check if uint64_t is big it on Web
@@ -45,6 +45,12 @@ const argList = (args: Arg[]) => args.map(arg => `*${arg.name}.get()`).join(", "
 const generatorMethod = (method: Method) => {
   const args = method.args;
   const returns = method.returns;
+  if (method.implementation) {
+  return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
+    ${method.implementation}
+  }
+`;
+  }
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
     ${returns ? 'auto ret = ' : ''}getObject()->${_.camelCase(method.name)}(${argList(args)});
@@ -77,6 +83,17 @@ const generatorAsyncMethod = (method: Method) => {
   }
 `;
 };
+
+const unpackProperties = (name: string, properties: Property[]) => {
+  return `wgpu::${name} object;
+  const auto &o = obj.asObject(runtime);
+${properties.map(property => {
+  const name = _.camelCase(property.name);
+  return `auto ${name} = o.getProperty(runtime, "${property.name}");
+  object.${name} = ${name};`;
+}).join(`
+`)}`;
+}
 
 export const generateObject = (object: JSIObject) => {
   const className = `Jsi${object.name}`;
@@ -119,8 +136,13 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
    */
   static std::shared_ptr<${objectName}> fromValue(jsi::Runtime &runtime,
                                              const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<${className}>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime).asHostObject<${className}>(runtime)->getObject();
+    } else {
+    ${object.properties ? unpackProperties(object.name, object.properties) : `throw jsi::JSError(
+      runtime,
+      "Expected a ${className} object, but got a " + obj.toString(runtime).utf8(runtime));`}
+    }
   }
 };
 } // namespace RNSkia

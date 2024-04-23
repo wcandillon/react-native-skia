@@ -28,8 +28,15 @@ public:
    */
   static std::shared_ptr<wgpu::RenderPipeline>
   fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    return object.asHostObject<JsiRenderPipeline>(runtime)->getObject();
+    if (obj.isHostObject(runtime)) {
+      return obj.asObject(runtime)
+          .asHostObject<JsiRenderPipeline>(runtime)
+          ->getObject();
+    } else {
+      throw jsi::JSError(runtime,
+                         "Expected a JsiRenderPipeline object, but got a " +
+                             obj.toString(runtime).utf8(runtime));
+    }
   }
 };
 } // namespace RNSkia

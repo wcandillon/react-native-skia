@@ -3,7 +3,7 @@ import { JSIObject } from "./model";
 
 export const objectName = (name: string) => _.upperFirst(_.camelCase(name));
 
-export const isAtomicType = (type: string) => type === "bool" || type === "uint32_t";
+export const isAtomicType = (type: string) => type === "bool" || type === "uint32_t" || type === "string";
 
 export const computeDependencies = (obj: JSIObject) => {
   const deps = new Set<string>();

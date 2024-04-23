@@ -10,6 +10,7 @@ export interface Method {
   async?: boolean;
   args: Arg[];
   returns: string;
+  implementation?: string;
 }
 
 export interface Property {
@@ -21,7 +22,6 @@ export interface Property {
 export interface JSIObject {
   name: string;
   host?: string;
-  struct?: boolean;
   methods?: Method[];
   properties?: Property[]; 
 }
@@ -38,6 +38,12 @@ export const model: JSIObject[] = [
         ],
         returns: "Adapter",
         async: true
+      },
+      {
+        name: "getPreferredCanvasFormat",
+        args: [],
+        returns: "string",
+        implementation: `return jsi::String::createFromUtf8(runtime, "bgra8unorm");`
       }
     ]
   },
@@ -69,7 +75,6 @@ export const model: JSIObject[] = [
   },
   {
     name: "RenderPipelineDescriptor",
-    struct: true,
     properties: [
       {"name": "label", "type": "char", "optional": true},
       {"name": "layout", "type": "pipeline layout", "optional": true},
@@ -85,11 +90,9 @@ export const model: JSIObject[] = [
   },
   {
     name: "DeviceDescriptor",
-    struct: true,
   },
   {
     name: "RequestAdapterOptions",
-    struct: true,
     methods: [],
     properties: [
       { name: "powerPreference", type: "GPUPowerPreference", optional: true },
