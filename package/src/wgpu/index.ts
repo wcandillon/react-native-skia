@@ -1,1 +1,1 @@
-export const gpu: typeof GPU = GPU;
+export const gpu = GPU as unknown as typeof navigator.gpu;

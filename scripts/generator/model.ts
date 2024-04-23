@@ -1,6 +1,7 @@
 export interface Arg {
   name: string;
   type: string;
+  optional?: boolean;
 }
 
 export interface Method {
@@ -10,10 +11,18 @@ export interface Method {
   returns: string;
 }
 
+export interface Property {
+  name: string;
+  type: string;
+  optional?: boolean;
+}
+
 export interface JSIObject {
   name: string;
   host?: string;
-  methods: Method[];
+  struct?: boolean;
+  methods?: Method[];
+  properties?: Property[]; 
 }
 
 export const model: JSIObject[] = [
@@ -23,7 +32,9 @@ export const model: JSIObject[] = [
     methods: [
       {
         name: "requestAdapter",
-        args: [],
+        args: [
+          { name: "options", optional: true, type: "RequestAdapterOptions" }
+        ],
         returns: "Adapter",
         async: true
       }
@@ -32,5 +43,14 @@ export const model: JSIObject[] = [
   {
     name: "Adapter",
     methods: []
+  },
+  {
+    name: "RequestAdapterOptions",
+    struct: true,
+    methods: [],
+    properties: [
+      { name: "powerPreference", type: "GPUPowerPreference", optional: true },
+      { name: "forceFallbackAdapter", type: "bool", optional: true }
+    ]
   }
 ];

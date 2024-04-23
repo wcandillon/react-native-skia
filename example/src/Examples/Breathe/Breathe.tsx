@@ -17,7 +17,8 @@ import { useDerivedValue } from "react-native-reanimated";
 import { useLoop } from "../../components/Animations";
 
 (async () => {
-  const adapter = await gpu.requestAdapter();
+  const adapter = await gpu.requestAdapter()!;
+  //const device = await adapter.requestDevice();
   console.log(adapter);
 })();
 

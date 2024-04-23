@@ -57,7 +57,7 @@ const generatorAsyncMethod = (method: Method) => {
           // adapterOpts.compatibleSurface = surface;
           auto ret = instance->requestAdapter(adapterOpts);
           promise->resolve(jsi::Object::createFromHostObject(
-              runtime, std::make_shared<JsiAdapter>(std::move(context),
+              runtime, std::make_shared<Jsi${method.returns}>(std::move(context),
                                                     std::move(ret))));
         });
   }
@@ -67,7 +67,7 @@ const generatorAsyncMethod = (method: Method) => {
 export const generateObject = (object: JSIObject) => {
   const className = `Jsi${object.name}`;
   const objectName = `wgpu::${object.host ? object.host : object.name}`;
-  const methods = object.methods;
+  const methods = object.methods ?? [];
   return `#pragma once
 
 #include "webgpu.hpp"

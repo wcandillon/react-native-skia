@@ -9,7 +9,8 @@
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
-#include "JSIAdapter.h"
+#include "JsiAdapter.h"
+#include "JsiRequestAdapterOptions.h"
 
 namespace RNSkia {
 
@@ -22,7 +23,7 @@ public:
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(requestAdapter) {
-
+    //auto options = JsiWGPUOptions::fromValue(runtime, arguments[0]);
     auto context = getContext();
     auto instance = getObject();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(

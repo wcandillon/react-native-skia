@@ -7,7 +7,8 @@ export const isAtomicType = (type: string) => type === "bool" || type === "uint3
 
 export const computeDependencies = (obj: JSIObject) => {
   const deps = new Set<string>();
-  obj.methods.forEach(method => {
+  const methods = obj.methods ?? [];
+  methods.forEach(method => {
     method.args.forEach(arg => {
       if (!isAtomicType(arg.type)) {
         deps.add(objectName(arg.type));
@@ -17,5 +18,5 @@ export const computeDependencies = (obj: JSIObject) => {
       deps.add(objectName(method.returns));
     }
   });
-  return Array.from(deps).map(dep => `#include "JSI${dep}.h"`).join("\n")
+  return Array.from(deps).map(dep => `#include "Jsi${dep}.h"`).join("\n")
 };
