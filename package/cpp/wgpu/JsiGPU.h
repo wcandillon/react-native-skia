@@ -2,14 +2,14 @@
 
 #include "webgpu.hpp"
 
-#include "JsiAdapter.h"
-
 #include <jsi/jsi.h>
 
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
+
+#include "JSIAdapter.h"
 
 namespace RNSkia {
 
@@ -22,6 +22,7 @@ public:
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(requestAdapter) {
+
     auto context = getContext();
     auto instance = getObject();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(

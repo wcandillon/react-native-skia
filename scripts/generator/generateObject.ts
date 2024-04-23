@@ -1,10 +1,8 @@
 import _ from "lodash";
 import { Arg, JSIObject, Method } from "./model";
-import { objectName } from './common';
+import { computeDependencies, isAtomicType, objectName } from './common';
 
 // Special builtin: char, uint64_t, check if uint64_t is big it on Web
-
-const isAtomicType = (type: string) => type === "bool" || type === "uint32_t";
 
 const generateArg = (index: number, arg: Arg) => {
   const name = _.camelCase(arg.name);
@@ -72,12 +70,16 @@ export const generateObject = (object: JSIObject) => {
   const methods = object.methods;
   return `#pragma once
 
-#include <jsi/jsi.h>
-
 #include "webgpu.hpp"
 
+#include <jsi/jsi.h>
+
 #include "JsiHostObject.h"
+#include "JsiPromises.h"
+#include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
+
+${computeDependencies(object)}
 
 namespace RNSkia {
 
@@ -92,11 +94,11 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
-  EXPORT_JSI_API_BRANDNAME(${className}, WGPU${object.name})
+  EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})
 
-  JSI_EXPORT_FUNCTIONS(
+  ${methods.length > 0 ? `JSI_EXPORT_FUNCTIONS(
     ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
-  )
+  )` : ''}
 
   /**
    * Returns the underlying object from a host object of this type

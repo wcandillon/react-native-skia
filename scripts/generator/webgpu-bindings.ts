@@ -7,7 +7,7 @@ import { model } from "./model";
 model.forEach((object) => {
   const result = generateObject(object);
   const className = `Jsi${object.name}`;
-  const dst = `package/cpp/wgpu/${className}.ts`;
+  const dst = `package/cpp/wgpu/${className}.h`;
   console.log(`Writing ${dst}...`);
   writeFileSync(dst, result);
 });
