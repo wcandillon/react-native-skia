@@ -56,6 +56,22 @@ export const model: JSIObject[] = [
   },
   {
     name: "Device",
+    methods: [
+      {
+        name: "createRenderPipeline",
+        args: [{
+          name: "descriptor",
+          type: "RenderPipelineDescriptor",
+        }],
+        returns: "RenderPipeline",
+      }
+    ]
+  },
+  {
+    name: "RenderPipelineDescriptor"
+  },
+  {
+    name: "RenderPipeline"
   },
   {
     name: "DeviceDescriptor",

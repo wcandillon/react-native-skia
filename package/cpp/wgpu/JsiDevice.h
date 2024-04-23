@@ -9,6 +9,9 @@
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
+#include "JsiRenderPipeline.h"
+#include "JsiRenderPipelineDescriptor.h"
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -19,7 +22,17 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::Device>(
             context, std::make_shared<wgpu::Device>(std::move(m))) {}
 
+  JSI_HOST_FUNCTION(createRenderPipeline) {
+    auto descriptor =
+        JsiRenderPipelineDescriptor::fromValue(runtime, arguments[0]);
+    auto ret = getObject()->createRenderPipeline(*descriptor.get());
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
+  }
+
   EXPORT_JSI_API_BRANDNAME(JsiDevice, Device)
+
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline))
 
   /**
    * Returns the underlying object from a host object of this type

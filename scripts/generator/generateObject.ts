@@ -36,16 +36,18 @@ export const wrapReturnValue = (returns: string | undefined) => {
   } else {
     const name = objectName(returns);
     const className = `Jsi${name}`;
-    return `jsi::Object::createFromHostObject(runtime, std::make_shared<${className}>(getContext(), ret)`
+    return `jsi::Object::createFromHostObject(runtime, std::make_shared<${className}>(getContext(), ret))`
   }
 };
+
+const argList = (args: Arg[]) => args.map(arg => `*${arg.name}.get()`).join(", ");
 
 const generatorMethod = (method: Method) => {
   const args = method.args;
   const returns = method.returns;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
-    ${returns ? 'auto ret = ' : ''}getObject()->${_.camelCase(method.name)}(${args.map(arg => arg.name).join(", ")});
+    ${returns ? 'auto ret = ' : ''}getObject()->${_.camelCase(method.name)}(${argList(args)});
     return ${wrapReturnValue(returns)};
   }
 `;
@@ -53,7 +55,6 @@ const generatorMethod = (method: Method) => {
 
 const generatorAsyncMethod = (method: Method) => {
   const args = method.args;
-  const argList = args.map(arg => `*${arg.name}.get()`).join(", ");
   const depList = `,${args.map(arg => `${arg.name} = std::move(${arg.name})`).join(", ")}`;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
@@ -64,7 +65,7 @@ const generatorAsyncMethod = (method: Method) => {
         [context = std::move(context), object = std::move(object) ${depList}](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->${method.name}(${argList});
+          auto ret = object->${method.name}(${argList(args)});
           if (ret == nullptr) {
             promise->resolve(jsi::Value::null());
           } else {
