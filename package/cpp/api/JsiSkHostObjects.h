@@ -38,6 +38,15 @@ private:
     return jsi::String::createFromUtf8(runtime, #A);                           \
   }
 
+#define JSI_API_BRANDNAME(A)                                                    \
+  JSI_PROPERTY_GET(__brand) {                                             \
+    return jsi::String::createFromUtf8(runtime, #A);                           \
+  }
+
+#define EXPORT_JSI_API_BRANDNAME(CLASS, TYPENAME)                               \
+  JSI_API_BRANDNAME(TYPENAME)                                                   \
+  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(CLASS, __brand))
+
 #define EXPORT_JSI_API_TYPENAME(CLASS, TYPENAME)                               \
   JSI_API_TYPENAME(TYPENAME)                                                   \
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(CLASS, __typename__))

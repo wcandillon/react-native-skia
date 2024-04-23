@@ -44,7 +44,6 @@ const generatorMethod = (method: Method) => {
 `;
 };
 
-
 const generatorAsyncMethod = (method: Method) => {
   const a = method.args ?? [];
   const args = a.slice(0, -1) ?? [];
@@ -94,7 +93,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
-  EXPORT_JSI_API_TYPENAME(${className}, WGPU${name})
+  EXPORT_JSI_API_BRANDNAME(${className}, WGPU${name})
 
   JSI_EXPORT_FUNCTIONS(
     ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}

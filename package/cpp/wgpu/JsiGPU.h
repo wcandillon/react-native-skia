@@ -2,12 +2,14 @@
 
 #include "webgpu.hpp"
 
+#include "JsiAdapter.h"
+
 #include <jsi/jsi.h>
 
 #include "JsiHostObject.h"
+#include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
-#include "JsiPromises.h"
 
 namespace RNSkia {
 
@@ -28,13 +30,15 @@ public:
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
           wgpu::RequestAdapterOptions adapterOpts;
-          //adapterOpts.compatibleSurface = surface;
+          // adapterOpts.compatibleSurface = surface;
           auto ret = instance->requestAdapter(adapterOpts);
-          promise->resolve(jsi::Value(true));
+          promise->resolve(jsi::Object::createFromHostObject(
+              runtime, std::make_shared<JsiAdapter>(std::move(context),
+                                                    std::move(ret))));
         });
   }
 
-  EXPORT_JSI_API_TYPENAME(JsiGPU, GPU)
+  EXPORT_JSI_API_BRANDNAME(JsiGPU, GPU)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiGPU, requestAdapter))
 
