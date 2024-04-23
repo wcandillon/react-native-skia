@@ -2,18 +2,18 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 #include <thread>
+#include <vector>
 
 #include "RNSkOpenGLCanvasProvider.h"
-#include <android/native_window.h>
 #include "WebGPUTriangle.h"
+#include <android/native_window.h>
 
 namespace RNSkia {
 
 class RNSkBaseAndroidView {
 public:
-  void* _window;
+  void *_window;
   virtual void surfaceAvailable(jobject surface, int width, int height) = 0;
 
   virtual void surfaceDestroyed() = 0;
@@ -54,17 +54,17 @@ public:
   void surfaceSizeChanged(int width, int height) override {
     // std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
     //     ->surfaceSizeChanged(width, height);
-    // // This is only need for the first time to frame, this renderImmediate call
+    // // This is only need for the first time to frame, this renderImmediate
+    // call
     // // will invoke updateTexImage for the previous frame
     // RNSkView::renderImmediate();
     // T::getPlatformContext()->setOnNotifyDrawLoop([this]() {
     //   // On Android we delegate all rendering to a separate thread
     //   runOnRenderThread([&]() { this->notifyDrawLoop(false); });
-    // });    
-   // runTriangleDemo(_window, width, height);
-   std::thread renderThread(runTriangleDemo, _window, width, height);
-   renderThread.detach();  // Detach the thread to allow it to run independently
-
+    // });
+    // runTriangleDemo(_window, width, height);
+    std::thread renderThread(runTriangleDemo, _window, width, height);
+    renderThread.detach(); // Detach the thread to allow it to run independently
   }
 
   float getPixelDensity() override {

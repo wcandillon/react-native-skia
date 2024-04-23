@@ -1,12 +1,28 @@
 {
-  "adaptor": {
+  "instance": {
+    "jsiName": "JsiGPU",
     "category": "object",
+    "no autolock": true,
     "methods": [
       {
-        "name": "request device",
+        "name": "request adapter",
+        "tags": [
+          "dawn"
+        ],
+        "async": true,
+        "returns": "adapter",
         "args": [
-            {"name": "descriptor", "type": "device descriptor", "annotation": "const*", "optional": true, "no_default": true},
-            {"name": "callback", "type": "request device callback"}
+          {
+            "name": "options",
+            "type": "request adapter options",
+            "annotation": "const*",
+            "optional": true,
+            "no_default": true
+          },
+          {
+            "name": "callback info",
+            "type": "request adapter callback info"
+          }
         ]
       }
     ]

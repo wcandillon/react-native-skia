@@ -5,4 +5,4 @@
 
 #define WEBGPU_CPP_IMPLEMENTATION
 
-void runTriangleDemo(void* surface, int width, int height);
+void runTriangleDemo(void *surface, int width, int height);

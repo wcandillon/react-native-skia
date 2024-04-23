@@ -9,11 +9,17 @@ import {
   Group,
   polar2Canvas,
   mix,
+  gpu,
 } from "@shopify/react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
 import { useLoop } from "../../components/Animations";
+
+(async () => {
+  const adapter = await gpu.requestAdapter();
+  console.log(adapter);
+})();
 
 const c1 = "#61bea2";
 const c2 = "#529ca0";

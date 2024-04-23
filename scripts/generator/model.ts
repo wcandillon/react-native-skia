@@ -23,6 +23,7 @@ export interface Arg {
 }
 
 export interface Method {
+  async?: boolean;
   name: string;
   returns?: string;
   args?: Arg[]
@@ -31,6 +32,7 @@ export interface Method {
 
 export interface WGPUObject {
   category: "object";
+  jsiName?: string;
   methods: Method[];
 }
 

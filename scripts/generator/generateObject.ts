@@ -44,13 +44,42 @@ const generatorMethod = (method: Method) => {
 `;
 };
 
+
+const generatorAsyncMethod = (method: Method) => {
+  const a = method.args ?? [];
+  const args = a.slice(0, -1) ?? [];
+  const cb = a[a.length - 1];
+  return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
+    ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
+
+    return RNJsi::JsiPromises::createPromiseAsJSIValue(
+      runtime,
+      [context = std::move(context)](
+          jsi::Runtime &runtime,
+          std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
+            getObject()->${_.camelCase(method.name)}(${args.map(arg => arg.name).join(", ")}, [](${_.camelCase(cb.type)} result) -> {
+              promise->resolve(jsi::Object::createFromHostObject(
+                runtime, std::make_shared<${objectName(cb.type)}>(std::move(context),
+                                                     std::move(result))));
+              });
+            });
+      });
+  }
+`;
+};
+
 export const generateObject = (name: string, object: WGPUObject) => {
-  const className = `JsiWGPU${name}`;
+  const className = object.jsiName ? object.jsiName : `JsiGPU${name}`;
   const objectName = `wgpu::${name}`;
   const methods = object.methods.filter(method => !(method.tags ?? []).includes(MemberTag.Emscripten));
   return `#pragma once
 
+#include <jsi/jsi.h>
+
 #include "webgpu.hpp"
+
+#include "JsiHostObject.h"
+#include "RNSkPlatformContext.h"
 
 namespace RNSkia {
 
@@ -62,11 +91,12 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
       : JsiSkWrappingSharedPtrHostObject<${objectName}>(
             context, std::make_shared<${objectName}>(std::move(m))) {}
 
-  ${methods.map(method => generatorMethod(method)).join("\n  ")}
+  ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
+  ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
   EXPORT_JSI_API_TYPENAME(${className}, WGPU${name})
 
-  JSI_EXPORT_FUNCTION(
+  JSI_EXPORT_FUNCTIONS(
     ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
   )
 

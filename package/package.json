@@ -94,6 +94,7 @@
     "@types/react": "18.2.37",
     "@types/react-reconciler": "0.26.7",
     "@types/ws": "8.5.3",
+    "@webgpu/types": "^0.1.40",
     "eslint": "8.21.0",
     "eslint-config-react-native-wcandillon": "3.10.2",
     "eslint-plugin-reanimated": "2.0.0",

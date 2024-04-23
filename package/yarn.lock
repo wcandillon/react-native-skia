@@ -2198,6 +2198,11 @@
   resolved "https://registry.yarnpkg.com/@webgpu/types/-/types-0.1.21.tgz#b181202daec30d66ccd67264de23814cfd176d3a"
   integrity sha512-pUrWq3V5PiSGFLeLxoGqReTZmiiXwY3jRkIG5sLLKjyqNxrwm/04b4nw7LSmGWJcKk59XOM/YRTUwOzo4MMlow==
 
+"@webgpu/types@^0.1.40":
+  version "0.1.40"
+  resolved "https://registry.yarnpkg.com/@webgpu/types/-/types-0.1.40.tgz#cf72d1df6f9f8adc5d39556041f20ff2e8a58885"
+  integrity sha512-/BBkHLS6/eQjyWhY2H7Dx5DHcVrS2ICj9owvSRdgtQT6KcafLZA86tPze0xAOsd4FbsYKCUBUQyNi87q7gV7kw==
+
 abort-controller@^3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/abort-controller/-/abort-controller-3.0.0.tgz#eaf54d53b62bae4138e809ca225c8439a6efb392"

@@ -88,6 +88,7 @@ target_include_directories(
         ../cpp/skia
 
         ../cpp/api
+        ../cpp/wgpu
         ../cpp/jsi
         ../cpp/rnskia
         ../cpp/rnskia/values
