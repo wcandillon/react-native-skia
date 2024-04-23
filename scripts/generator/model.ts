@@ -68,7 +68,17 @@ export const model: JSIObject[] = [
     ]
   },
   {
-    name: "RenderPipelineDescriptor"
+    name: "RenderPipelineDescriptor",
+    struct: true,
+    properties: [
+      {"name": "label", "type": "char", "optional": true},
+      {"name": "layout", "type": "pipeline layout", "optional": true},
+      {"name": "vertex", "type": "vertex state"},
+      {"name": "primitive", "type": "primitive state"},
+      {"name": "depth stencil", "type": "depth stencil state", "optional": true},
+      {"name": "multisample", "type": "multisample state"},
+      {"name": "fragment", "type": "fragment state", "optional": true}
+  ]
   },
   {
     name: "RenderPipeline"
