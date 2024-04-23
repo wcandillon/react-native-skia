@@ -23,21 +23,19 @@ public:
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(requestAdapter) {
-    wgpu::RequestAdapterOptions defaultOptions;
+    auto defaultOptions = std::make_shared<wgpu::RequestAdapterOptions>();
     auto options =
-        count > 0
-            ? JsiRequestAdapterOptions::fromValue(runtime, arguments[0]).get()
-            : &defaultOptions;
+        count > 0 ? JsiRequestAdapterOptions::fromValue(runtime, arguments[0])
+                  : defaultOptions;
     auto context = getContext();
-    auto instance = getObject();
+    auto object = getObject();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(
         runtime,
-        [context = std::move(context), instance](
+        [context = std::move(context), object = std::move(object),
+         options = std::move(options)](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          wgpu::RequestAdapterOptions adapterOpts;
-          // adapterOpts.compatibleSurface = surface;
-          auto ret = instance->requestAdapter(adapterOpts);
+          auto ret = object->requestAdapter(*options.get());
           promise->resolve(jsi::Object::createFromHostObject(
               runtime, std::make_shared<JsiAdapter>(std::move(context),
                                                     std::move(ret))));

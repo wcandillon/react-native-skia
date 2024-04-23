@@ -14,7 +14,7 @@ const generateArg = (index: number, arg: Arg) => {
   } else {
     const name = objectName(arg.type);
     const className = `Jsi${name}`;
-    unwrap = `${className}::fromValue(runtime, arguments[${index}]).get()`;
+    unwrap = `${className}::fromValue(runtime, arguments[${index}])`;
   }
   if (arg.optional) {
     let result = ''
@@ -22,7 +22,7 @@ const generateArg = (index: number, arg: Arg) => {
       result += `${arg.defaultValue}
       `;
     }
-    result += `auto ${name} = count > ${index} ? ${unwrap} : &default${_(name).upperFirst()};`;
+    result += `auto ${name} = count > ${index} ? ${unwrap} : default${_(name).upperFirst()};`;
     return result;
   }
   return `auto ${name} = ${unwrap};`;
@@ -53,18 +53,18 @@ const generatorMethod = (method: Method) => {
 
 const generatorAsyncMethod = (method: Method) => {
   const args = method.args;
+  const argList = args.map(arg => `*${arg.name}.get()`).join(", ");
+  const depList = `,${args.map(arg => `${arg.name} = std::move(${arg.name})`).join(", ")}`;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
     auto context = getContext();
-    auto instance = getObject();
+    auto object = getObject();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(
         runtime,
-        [context = std::move(context), instance](
+        [context = std::move(context), object = std::move(object) ${depList}](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          wgpu::RequestAdapterOptions adapterOpts;
-          // adapterOpts.compatibleSurface = surface;
-          auto ret = instance->requestAdapter(adapterOpts);
+          auto ret = object->${method.name}(${argList});
           promise->resolve(jsi::Object::createFromHostObject(
               runtime, std::make_shared<Jsi${method.returns}>(std::move(context),
                                                     std::move(ret))));

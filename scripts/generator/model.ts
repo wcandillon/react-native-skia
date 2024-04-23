@@ -34,7 +34,7 @@ export const model: JSIObject[] = [
       {
         name: "requestAdapter",
         args: [
-          { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: "wgpu::RequestAdapterOptions defaultOptions;" }
+          { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: "auto defaultOptions = std::make_shared<wgpu::RequestAdapterOptions>();" }
         ],
         returns: "Adapter",
         async: true
