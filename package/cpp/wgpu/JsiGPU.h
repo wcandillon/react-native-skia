@@ -36,9 +36,13 @@ public:
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
           auto ret = object->requestAdapter(*options.get());
-          promise->resolve(jsi::Object::createFromHostObject(
-              runtime, std::make_shared<JsiAdapter>(std::move(context),
-                                                    std::move(ret))));
+          if (ret == nullptr) {
+            promise->resolve(jsi::Value::null());
+          } else {
+            promise->resolve(jsi::Object::createFromHostObject(
+                runtime, std::make_shared<JsiAdapter>(std::move(context),
+                                                      std::move(ret))));
+          }
         });
   }
 

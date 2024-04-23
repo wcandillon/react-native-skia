@@ -65,9 +65,13 @@ const generatorAsyncMethod = (method: Method) => {
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
           auto ret = object->${method.name}(${argList});
-          promise->resolve(jsi::Object::createFromHostObject(
-              runtime, std::make_shared<Jsi${method.returns}>(std::move(context),
-                                                    std::move(ret))));
+          if (ret == nullptr) {
+            promise->resolve(jsi::Value::null());
+          } else {
+            promise->resolve(jsi::Object::createFromHostObject(
+                runtime, std::make_shared<Jsi${method.returns}>(std::move(context),
+                                                      std::move(ret))));
+          }
         });
   }
 `;

@@ -43,7 +43,23 @@ export const model: JSIObject[] = [
   },
   {
     name: "Adapter",
-    methods: []
+    methods: [
+      {
+        name: "requestDevice",
+        args: [
+          { name: "descriptor", type: "DeviceDescriptor", optional: true, defaultValue: "auto defaultDescriptor = std::make_shared<wgpu::DeviceDescriptor>();" }
+        ],
+        returns: "Device",
+        async: true
+      }
+    ]
+  },
+  {
+    name: "Device",
+  },
+  {
+    name: "DeviceDescriptor",
+    struct: true,
   },
   {
     name: "RequestAdapterOptions",
