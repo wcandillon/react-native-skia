@@ -20,7 +20,6 @@
             {"name": "proc name", "type": "char", "annotation": "const*"}
         ]
     },
-
     "request adapter options": {
         "category": "structure",
         "extensible": "in",
