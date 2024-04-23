@@ -59,9 +59,10 @@ public:
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<wgpu::Instance> fromValue(jsi::Runtime &runtime,
-                                                   const jsi::Value &obj) {
+                                                   const jsi::Value &raw) {
+    const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asObject(runtime).asHostObject<JsiGPU>(runtime)->getObject();
+      return obj.asHostObject<JsiGPU>(runtime)->getObject();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiGPU object, but got a " +
                                       obj.toString(runtime).utf8(runtime));

@@ -28,22 +28,20 @@ public:
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<wgpu::RequestAdapterOptions>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
+  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+    const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asObject(runtime)
-          .asHostObject<JsiRequestAdapterOptions>(runtime)
-          ->getObject();
+      return obj.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
     } else {
       wgpu::RequestAdapterOptions object;
-      const auto &o = obj.asObject(runtime);
-      if (o.hasProperty(runtime, "powerPreference")) {
-        auto powerPreference = o.getProperty(runtime, "powerPreference");
-        object.powerPreference = powerPreference;
+      if (obj.hasProperty(runtime, "powerPreference")) {
+        auto powerPreference = obj.getProperty(runtime, "powerPreference");
+        object.powerPreference = JsiGpuPowerPreference::fromValue(runtime, obj);
       }
-      if (o.hasProperty(runtime, "forceFallbackAdapter")) {
+      if (obj.hasProperty(runtime, "forceFallbackAdapter")) {
         auto forceFallbackAdapter =
-            o.getProperty(runtime, "forceFallbackAdapter");
-        object.forceFallbackAdapter = forceFallbackAdapter;
+            obj.getProperty(runtime, "forceFallbackAdapter");
+        object.forceFallbackAdapter = obj.getBool();
       }
     }
   }

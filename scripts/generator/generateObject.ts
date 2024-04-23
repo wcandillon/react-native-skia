@@ -1,8 +1,6 @@
 import _ from "lodash";
 import { Arg, JSIObject, Method, Property } from "./model";
-import { computeDependencies, isAtomicType, objectName } from './common';
-
-// Special builtin: char, uint64_t, check if uint64_t is big it on Web
+import { computeDependencies, isAtomicType, objectName, unWrapType } from './common';
 
 const generateArg = (index: number, arg: Arg) => {
   const name = _.camelCase(arg.name);
@@ -86,12 +84,11 @@ const generatorAsyncMethod = (method: Method) => {
 
 const unpackProperties = (name: string, properties: Property[]) => {
   return `wgpu::${name} object;
-  const auto &o = obj.asObject(runtime);
 ${properties.map(property => {
   const name = _.camelCase(property.name);
-  return `if(o.hasProperty(runtime, "${property.name}")) {
-    auto ${name} = o.getProperty(runtime, "${property.name}");
-  object.${name} = ${name};
+  return `if(obj.hasProperty(runtime, "${property.name}")) {
+    auto ${name} = obj.getProperty(runtime, "${property.name}");
+  object.${name} = ${unWrapType("obj", property.type)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
 `)}`;
@@ -137,9 +134,10 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<${objectName}> fromValue(jsi::Runtime &runtime,
-                                             const jsi::Value &obj) {
+                                             const jsi::Value &raw) {
+    const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asObject(runtime).asHostObject<${className}>(runtime)->getObject();
+      return obj.asHostObject<${className}>(runtime)->getObject();
     } else {
     ${object.properties ? unpackProperties(object.name, object.properties) : `throw jsi::JSError(
       runtime,

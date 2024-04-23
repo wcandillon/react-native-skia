@@ -27,11 +27,10 @@ public:
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<wgpu::DeviceDescriptor>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
+  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+    const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asObject(runtime)
-          .asHostObject<JsiDeviceDescriptor>(runtime)
-          ->getObject();
+      return obj.asHostObject<JsiDeviceDescriptor>(runtime)->getObject();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiDeviceDescriptor object, but got a " +
