@@ -43,4 +43,33 @@ export interface Obj {
   methods: Method[];
 }
 
+export interface Member {
+  name:        string;
+  type:        string;
+  annotation?: Annotation;
+  length?:     string;
+  default?:    number | string;
+  tags?:       MemberTag[];
+  optional?:   boolean;
+}
+
+export interface Struct {
+  category: 'structure';
+  members: Member[];
+}
+
+export interface Value {
+  name: string;
+  value: number;
+}
+
+export interface EnumType {
+  category: 'enum' | 'bitmask';
+  values: Value[];
+}
+
+export interface FunctionPointer {
+  category: 'function pointer';
+}
+
 export const model = dawn as Model;
