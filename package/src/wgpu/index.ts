@@ -1,1 +1,7 @@
-export const gpu = GPU as unknown as typeof navigator.gpu;
+import { JsiGPU } from "./JsiGPU";
+
+declare global {
+  var Instance: Instance;
+}
+
+export const gpu = new JsiGPU(global.Instance);

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-types */
 interface WGPU {
-  createInstance(descriptor: InstanceDescriptor): Instance;
-  getProcAddress(device: Device, procName: string): Proc;
+  createInstance(descriptor: InstanceDescriptor | undefined): Instance;
+  getProcAddress(device: Device | undefined, procName: string): Proc;
   getInstanceFeatures(features: InstanceFeatures): boolean;
 }
 
@@ -32,11 +32,11 @@ interface Adapter {
   hasFeature(feature: FeatureName): boolean;
   enumerateFeatures(features: FeatureName): number;
   requestDevice(
-    descriptor: DeviceDescriptor,
+    descriptor: DeviceDescriptor | undefined,
     callback: RequestDeviceCallback,
     userdata: bigint
   ): void;
-  createDevice(descriptor: DeviceDescriptor): Device;
+  createDevice(descriptor: DeviceDescriptor | undefined): Device;
 }
 interface AdapterProperties {
   vendorId: number;
@@ -315,8 +315,10 @@ interface CommandBufferDescriptor {
   label: string;
 }
 interface CommandEncoder {
-  finish(descriptor: CommandBufferDescriptor): CommandBuffer;
-  beginComputePass(descriptor: ComputePassDescriptor): ComputePassEncoder;
+  finish(descriptor: CommandBufferDescriptor | undefined): CommandBuffer;
+  beginComputePass(
+    descriptor: ComputePassDescriptor | undefined
+  ): ComputePassEncoder;
   beginRenderPass(descriptor: RenderPassDescriptor): RenderPassEncoder;
   copyBufferToBuffer(
     source: Buffer,
@@ -413,7 +415,7 @@ interface ComputePassEncoder {
   setPipeline(pipeline: ComputePipeline): void;
   setBindGroup(
     groupIndex: number,
-    group: BindGroup,
+    group: BindGroup | undefined,
     dynamicOffsetCount: number,
     dynamicOffsets: Uint32Array
   ): void;
@@ -489,7 +491,9 @@ interface Device {
   createBindGroupLayout(descriptor: BindGroupLayoutDescriptor): BindGroupLayout;
   createBuffer(descriptor: BufferDescriptor): Buffer;
   createErrorBuffer(descriptor: BufferDescriptor): Buffer;
-  createCommandEncoder(descriptor: CommandEncoderDescriptor): CommandEncoder;
+  createCommandEncoder(
+    descriptor: CommandEncoderDescriptor | undefined
+  ): CommandEncoder;
   createComputePipeline(descriptor: ComputePipelineDescriptor): ComputePipeline;
   createComputePipelineAsync(
     descriptor: ComputePipelineDescriptor,
@@ -511,7 +515,7 @@ interface Device {
     descriptor: RenderBundleEncoderDescriptor
   ): RenderBundleEncoder;
   createRenderPipeline(descriptor: RenderPipelineDescriptor): RenderPipeline;
-  createSampler(descriptor: SamplerDescriptor): Sampler;
+  createSampler(descriptor: SamplerDescriptor | undefined): Sampler;
   createShaderModule(descriptor: ShaderModuleDescriptor): ShaderModule;
   createErrorShaderModule(
     descriptor: ShaderModuleDescriptor,
@@ -547,7 +551,6 @@ enum DeviceLostReason {
   Undefined = 0,
   Destroyed = 1,
 }
-
 interface Limits {
   maxTextureDimension1D: number;
   maxTextureDimension2D: number;
@@ -650,7 +653,7 @@ interface ExternalTextureDescriptor {
 interface SharedTextureMemory {
   setLabel(label: string): void;
   getProperties(properties: SharedTextureMemoryProperties): void;
-  createTexture(descriptor: TextureDescriptor): Texture;
+  createTexture(descriptor: TextureDescriptor | undefined): Texture;
   beginAccess(
     texture: Texture,
     descriptor: SharedTextureMemoryBeginAccessDescriptor
@@ -866,12 +869,12 @@ interface Instance {
     timeoutNs: bigint
   ): WaitStatus;
   requestAdapter(
-    options: RequestAdapterOptions,
+    options: RequestAdapterOptions | undefined,
     callback: RequestAdapterCallback,
     userdata: bigint
   ): void;
   requestAdapterF(
-    options: RequestAdapterOptions,
+    options: RequestAdapterOptions | undefined,
     callbackInfo: RequestAdapterCallbackInfo
   ): Future;
   hasWgslLanguageFeature(feature: WgslFeatureName): boolean;
@@ -1062,7 +1065,7 @@ interface RenderBundleEncoder {
   setPipeline(pipeline: RenderPipeline): void;
   setBindGroup(
     groupIndex: number,
-    group: BindGroup,
+    group: BindGroup | undefined,
     dynamicOffsetCount: number,
     dynamicOffsets: Uint32Array
   ): void;
@@ -1086,7 +1089,7 @@ interface RenderBundleEncoder {
   pushDebugGroup(groupLabel: string): void;
   setVertexBuffer(
     slot: number,
-    buffer: Buffer,
+    buffer: Buffer | undefined,
     offset: bigint,
     size: bigint
   ): void;
@@ -1096,7 +1099,7 @@ interface RenderBundleEncoder {
     offset: bigint,
     size: bigint
   ): void;
-  finish(descriptor: RenderBundleDescriptor): RenderBundle;
+  finish(descriptor: RenderBundleDescriptor | undefined): RenderBundle;
   setLabel(label: string): void;
 }
 interface RenderBundleDescriptor {
@@ -1160,7 +1163,7 @@ interface RenderPassEncoder {
   setPipeline(pipeline: RenderPipeline): void;
   setBindGroup(
     groupIndex: number,
-    group: BindGroup,
+    group: BindGroup | undefined,
     dynamicOffsetCount: number,
     dynamicOffsets: Uint32Array
   ): void;
@@ -1196,7 +1199,7 @@ interface RenderPassEncoder {
   setScissorRect(x: number, y: number, width: number, height: number): void;
   setVertexBuffer(
     slot: number,
-    buffer: Buffer,
+    buffer: Buffer | undefined,
     offset: bigint,
     size: bigint
   ): void;
@@ -1479,7 +1482,7 @@ enum SType {
   SharedFenceMtlSharedEventExportInfo = 1213,
 }
 interface Texture {
-  createView(descriptor: TextureViewDescriptor): TextureView;
+  createView(descriptor: TextureViewDescriptor | undefined): TextureView;
   setLabel(label: string): void;
   getWidth(): number;
   getHeight(): number;

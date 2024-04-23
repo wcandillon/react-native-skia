@@ -4,7 +4,7 @@ import { objectName, typeName } from './common';
 
 const generateFn = (name: string, fn: Fn | Method) => {
   const args = fn.args ?? [];
-  return `${name}(${args.map(arg => `${_.camelCase(arg.name)}: ${typeName(arg.type, arg.annotation)}`).join(", ")}): ${fn.returns ? typeName(fn.returns) : "void"};`;
+  return `${name}(${args.map(arg => `${_.camelCase(arg.name)}: ${typeName(arg.type, arg.annotation)}${arg.optional ? " | undefined":""}`).join(", ")}): ${fn.returns ? typeName(fn.returns) : "void"};`;
 };
 
 const generateObject = (name: string, obj: Obj) => {

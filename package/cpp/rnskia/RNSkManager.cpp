@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiGPU.h"
+#include "JsiInstance.h"
 #include "JsiSkApi.h"
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
@@ -71,10 +71,10 @@ void RNSkManager::installBindings() {
   // Create the API objects and install it on the global object in the
   // provided runtime.
   auto instance = wgpuCreateInstance(nullptr);
-  auto gpu = std::make_shared<JsiGPU>(_platformContext, instance);
+  auto instance = std::make_shared<JsiInstance>(_platformContext, instance);
   _jsRuntime->global().setProperty(
-      *_jsRuntime, "GPU",
-      jsi::Object::createFromHostObject(*_jsRuntime, std::move(gpu)));
+      *_jsRuntime, "Instance",
+      jsi::Object::createFromHostObject(*_jsRuntime, std::move(instance)));
 
   auto skiaApi = std::make_shared<JsiSkApi>(*_jsRuntime, _platformContext);
   _jsRuntime->global().setProperty(

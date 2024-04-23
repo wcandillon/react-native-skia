@@ -1,5 +1,7 @@
 import _ from "lodash";
-import { Annotation, Member, Obj } from "./model";
+import { Annotation, Obj, Struct } from "./model";
+
+import dawn from "./dawn.json";
 
 const atomicMap: Record<string, string> = {
   "bool": "boolean",
@@ -15,6 +17,7 @@ const atomicMap: Record<string, string> = {
   "uint8_t": "number",
   "float": "number",
   "int": "number",
+  "char": "string",
 };
 
 const atomicMapPoints: Record<string, string> = {
@@ -37,10 +40,35 @@ export const typeName = (name: string, annotation?: Annotation) => {
 
 export const isAtomicType = (type: string) => atomicMap[type] !== undefined;
 
+const typeHasDep = (type: string) => {
+  if (!isAtomicType(type)) {
+    const def = dawn[type as keyof typeof dawn];
+    if (def.category === "object" || def.category === "structure") {
+      return true;
+    }
+    return false;
+  }
+  return false;
+};
 
-export const computeDependencies = (obj: Obj | Member) => {
+export const computeDependencies = (obj: Obj | Struct) => {
   const deps = new Set<string>();
-
-
-  return Array.from(deps).map(dep => `#include "Jsi${dep}.h"`).join("\n")
+  const member = "members" in obj ? obj.members : [];
+  const method = "methods" in obj ? obj.methods : [];
+  for (const m of member) {
+    if (typeHasDep(m.type)) {
+      deps.add(m.type);
+    }
+  }
+  for (const m of method) {
+    for (const arg of (m.args ?? [])) {
+      if (typeHasDep(arg.type)) {
+        deps.add(arg.type);
+      }
+    }
+    if (m.returns && typeHasDep(m.returns)) {
+      deps.add(m.returns);
+    }
+  }
+  return Array.from(deps).map(dep => `#include "Jsi${objectName(dep)}.h"`).join("\n")
 };
