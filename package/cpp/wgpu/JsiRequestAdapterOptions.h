@@ -36,12 +36,13 @@ public:
       wgpu::RequestAdapterOptions object;
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");
-        object.powerPreference = JsiGpuPowerPreference::fromValue(runtime, obj);
+        object.powerPreference =
+            JsiGpuPowerPreference::fromValue(runtime, powerPreference);
       }
       if (obj.hasProperty(runtime, "forceFallbackAdapter")) {
         auto forceFallbackAdapter =
             obj.getProperty(runtime, "forceFallbackAdapter");
-        object.forceFallbackAdapter = obj.getBool();
+        object.forceFallbackAdapter = forceFallbackAdapter.getBool();
       }
     }
   }
