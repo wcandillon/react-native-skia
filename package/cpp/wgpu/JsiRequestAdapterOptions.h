@@ -36,13 +36,15 @@ public:
     } else {
       wgpu::RequestAdapterOptions object;
       const auto &o = obj.asObject(runtime);
-
-      auto powerPreference = o.getProperty(runtime, "powerPreference");
-      object.powerPreference = powerPreference;
-
-      auto forceFallbackAdapter =
-          o.getProperty(runtime, "forceFallbackAdapter");
-      object.forceFallbackAdapter = forceFallbackAdapter;
+      if (o.hasProperty(runtime, "powerPreference")) {
+        auto powerPreference = o.getProperty(runtime, "powerPreference");
+        object.powerPreference = powerPreference;
+      }
+      if (o.hasProperty(runtime, "forceFallbackAdapter")) {
+        auto forceFallbackAdapter =
+            o.getProperty(runtime, "forceFallbackAdapter");
+        object.forceFallbackAdapter = forceFallbackAdapter;
+      }
     }
   }
 };

@@ -89,8 +89,10 @@ const unpackProperties = (name: string, properties: Property[]) => {
   const auto &o = obj.asObject(runtime);
 ${properties.map(property => {
   const name = _.camelCase(property.name);
-  return `auto ${name} = o.getProperty(runtime, "${property.name}");
-  object.${name} = ${name};`;
+  return `if(o.hasProperty(runtime, "${property.name}")) {
+    auto ${name} = o.getProperty(runtime, "${property.name}");
+  object.${name} = ${name};
+}${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
 `)}`;
 }

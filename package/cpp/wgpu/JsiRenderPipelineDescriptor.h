@@ -37,27 +37,42 @@ public:
     } else {
       wgpu::RenderPipelineDescriptor object;
       const auto &o = obj.asObject(runtime);
-
-      auto label = o.getProperty(runtime, "label");
-      object.label = label;
-
-      auto layout = o.getProperty(runtime, "layout");
-      object.layout = layout;
-
-      auto vertex = o.getProperty(runtime, "vertex");
-      object.vertex = vertex;
-
-      auto primitive = o.getProperty(runtime, "primitive");
-      object.primitive = primitive;
-
-      auto depthStencil = o.getProperty(runtime, "depth stencil");
-      object.depthStencil = depthStencil;
-
-      auto multisample = o.getProperty(runtime, "multisample");
-      object.multisample = multisample;
-
-      auto fragment = o.getProperty(runtime, "fragment");
-      object.fragment = fragment;
+      if (o.hasProperty(runtime, "label")) {
+        auto label = o.getProperty(runtime, "label");
+        object.label = label;
+      }
+      if (o.hasProperty(runtime, "layout")) {
+        auto layout = o.getProperty(runtime, "layout");
+        object.layout = layout;
+      }
+      if (o.hasProperty(runtime, "vertex")) {
+        auto vertex = o.getProperty(runtime, "vertex");
+        object.vertex = vertex;
+      } else {
+        throw jsi::JSError(runtime, "Missing mandatory prop vertex in vertex");
+      }
+      if (o.hasProperty(runtime, "primitive")) {
+        auto primitive = o.getProperty(runtime, "primitive");
+        object.primitive = primitive;
+      } else {
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop primitive in primitive");
+      }
+      if (o.hasProperty(runtime, "depth stencil")) {
+        auto depthStencil = o.getProperty(runtime, "depth stencil");
+        object.depthStencil = depthStencil;
+      }
+      if (o.hasProperty(runtime, "multisample")) {
+        auto multisample = o.getProperty(runtime, "multisample");
+        object.multisample = multisample;
+      } else {
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop multisample in multisample");
+      }
+      if (o.hasProperty(runtime, "fragment")) {
+        auto fragment = o.getProperty(runtime, "fragment");
+        object.fragment = fragment;
+      }
     }
   }
 };
