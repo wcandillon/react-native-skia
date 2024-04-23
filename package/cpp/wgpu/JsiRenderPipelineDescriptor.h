@@ -9,6 +9,13 @@
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
+#include "JsiDepthStencilState.h"
+#include "JsiFragmentState.h"
+#include "JsiMultisampleState.h"
+#include "JsiPipelineLayout.h"
+#include "JsiPrimitiveState.h"
+#include "JsiVertexState.h"
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;

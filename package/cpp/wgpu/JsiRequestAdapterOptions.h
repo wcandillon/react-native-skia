@@ -9,6 +9,8 @@
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
+#include "JsiGpuPowerPreference.h"
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
