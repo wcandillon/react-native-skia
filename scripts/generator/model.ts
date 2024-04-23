@@ -1,49 +1,29 @@
-import dawn from "./model-js.json";
-
-export enum Annotation {
-  Const = "const*",
-  ConstConst = "const*const*",
-  Empty = "*",
-}
-
-export enum MemberTag {
-  Dawn = "dawn",
-  Emscripten = "emscripten",
-  Upstream = "upstream",
-}
-
 export interface Arg {
-  name:        string;
-  type:        string;
-  annotation?: Annotation;
-  optional?:   boolean;
-  no_default?: boolean;
-  length?:     string;
-  default?:    number | string;
+  name: string;
+  type: string;
 }
 
 export interface Method {
-  async?: boolean;
   name: string;
-  returns?: string;
-  args?: Arg[]
-  tags?: MemberTag[];
+  async?: boolean;
+  args: Arg[];
+  returns: string;
 }
 
-export interface WGPUObject {
-  category: "object";
-  jsiName?: string;
+export interface JSIObject {
+  name: string;
+  host?: string;
   methods: Method[];
 }
 
-export interface WgpuFunction {
-  category: "function";
-
-}
-
-export interface WGPU {
-  [key: string]: WGPUObject | WgpuFunction
-}
-
-
-export const model = dawn as WGPU;
+export const model = [
+  {
+    name: "GPU",
+    host: "Instance",
+    methods: []
+  },
+  {
+    name: "Adapter",
+    methods: []
+  }
+];

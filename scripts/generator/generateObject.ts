@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Arg, MemberTag, Method, WGPUObject } from "./model";
+import { Arg, JSIObject, Method } from "./model";
 import { objectName } from './common';
 
 // Special builtin: char, uint64_t, check if uint64_t is big it on Web
@@ -34,7 +34,7 @@ export const wrapReturnValue = (returns: string | undefined) => {
 };
 
 const generatorMethod = (method: Method) => {
-  const args = method.args ?? [];
+  const args = method.args;
   const returns = method.returns;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
@@ -45,8 +45,8 @@ const generatorMethod = (method: Method) => {
 };
 
 const generatorAsyncMethod = (method: Method) => {
-  const a = method.args ?? [];
-  const args = a.slice(0, -1) ?? [];
+  const a = method.args;
+  const args = a.slice(0, -1);
   const cb = a[a.length - 1];
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
@@ -58,7 +58,7 @@ const generatorAsyncMethod = (method: Method) => {
           std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
             getObject()->${_.camelCase(method.name)}(${args.map(arg => arg.name).join(", ")}, [](${_.camelCase(cb.type)} result) -> {
               promise->resolve(jsi::Object::createFromHostObject(
-                runtime, std::make_shared<${objectName(cb.type)}>(std::move(context),
+                runtime, std::make_shared<TEST>(std::move(context),
                                                      std::move(result))));
               });
             });
@@ -67,10 +67,10 @@ const generatorAsyncMethod = (method: Method) => {
 `;
 };
 
-export const generateObject = (name: string, object: WGPUObject) => {
-  const className = object.jsiName ? object.jsiName : `JsiGPU${name}`;
-  const objectName = `wgpu::${name}`;
-  const methods = object.methods.filter(method => !(method.tags ?? []).includes(MemberTag.Emscripten));
+export const generateObject = (object: JSIObject) => {
+  const className = `Jsi${object.name}`;
+  const objectName = `wgpu::${object.host ? object.host : object.name}`;
+  const methods = object.methods;
   return `#pragma once
 
 #include <jsi/jsi.h>
@@ -93,7 +93,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
-  EXPORT_JSI_API_BRANDNAME(${className}, WGPU${name})
+  EXPORT_JSI_API_BRANDNAME(${className}, WGPU${object.name})
 
   JSI_EXPORT_FUNCTIONS(
     ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
