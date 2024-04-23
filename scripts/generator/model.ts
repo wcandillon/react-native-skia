@@ -117,6 +117,9 @@ export const model: JSIObject[] = [
     ]
   },
   {
+    name: "StencilFaceState"
+  },
+  {
     name: "RenderPipeline"
   },
   {

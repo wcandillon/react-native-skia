@@ -3,6 +3,9 @@ import { writeFileSync } from "fs";
 
 import { generateObject } from "./generateObject";
 import { model } from "./model";
+import { enums, generateEnums } from "./enums";
+
+//writeFileSync(`package/cpp/wgpu/JsiEnums.h`, generateEnums(enums));
 
 model.forEach((object) => {
   const result = generateObject(object);
