@@ -16,11 +16,18 @@ export interface JSIObject {
   methods: Method[];
 }
 
-export const model = [
+export const model: JSIObject[] = [
   {
     name: "GPU",
     host: "Instance",
-    methods: []
+    methods: [
+      {
+        name: "requestAdapter",
+        args: [],
+        returns: "Adapter",
+        async: true
+      }
+    ]
   },
   {
     name: "Adapter",

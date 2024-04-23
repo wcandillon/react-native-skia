@@ -36,7 +36,7 @@
     "workflow-copy-libs": "yarn ts-node ./scripts/workflow-copy-libs.ts",
     "bootstrap": "yarn && cd ./package && yarn && cd .. && cd ./example && yarn && cd .. && cd ./fabricexample && yarn && cd ..",
     "cpplint": "cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/ios --exclude=package/android/build --exclude=package/node_modules --recursive package",
-    "bindings": "yarn ts-node ./scripts/generator/webgpu-bindings.ts"
+    "bindings": "yarn ts-node ./scripts/generator/webgpu-bindings.ts && yarn clang-format"
   },
   "license": "MIT",
   "licenseFilename": "LICENSE.md",

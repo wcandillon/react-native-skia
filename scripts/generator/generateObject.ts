@@ -45,24 +45,23 @@ const generatorMethod = (method: Method) => {
 };
 
 const generatorAsyncMethod = (method: Method) => {
-  const a = method.args;
-  const args = a.slice(0, -1);
-  const cb = a[a.length - 1];
+  const args = method.args;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
-
+    auto context = getContext();
+    auto instance = getObject();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(
-      runtime,
-      [context = std::move(context)](
-          jsi::Runtime &runtime,
-          std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-            getObject()->${_.camelCase(method.name)}(${args.map(arg => arg.name).join(", ")}, [](${_.camelCase(cb.type)} result) -> {
-              promise->resolve(jsi::Object::createFromHostObject(
-                runtime, std::make_shared<TEST>(std::move(context),
-                                                     std::move(result))));
-              });
-            });
-      });
+        runtime,
+        [context = std::move(context), instance](
+            jsi::Runtime &runtime,
+            std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
+          wgpu::RequestAdapterOptions adapterOpts;
+          // adapterOpts.compatibleSurface = surface;
+          auto ret = instance->requestAdapter(adapterOpts);
+          promise->resolve(jsi::Object::createFromHostObject(
+              runtime, std::make_shared<JsiAdapter>(std::move(context),
+                                                    std::move(ret))));
+        });
   }
 `;
 };
