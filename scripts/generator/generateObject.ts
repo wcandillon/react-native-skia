@@ -12,9 +12,18 @@ const generateArg = (index: number, arg: Arg) => {
   } else if (arg.type === "uint32_t") {
     unwrap = `${name}.asNumber()`;
   } else {
-    const name = objectName(arg.name);
-    const className = `JsiWGPU${name}`;
-    unwrap = `${className}::fromValue(runtime, arguments[${index}])`;
+    const name = objectName(arg.type);
+    const className = `Jsi${name}`;
+    unwrap = `${className}::fromValue(runtime, arguments[${index}]).get()`;
+  }
+  if (arg.optional) {
+    let result = ''
+    if (arg.defaultValue) {
+      result += `${arg.defaultValue}
+      `;
+    }
+    result += `auto ${name} = count > ${index} ? ${unwrap} : &default${_(name).upperFirst()};`;
+    return result;
   }
   return `auto ${name} = ${unwrap};`;
 };
@@ -26,7 +35,7 @@ export const wrapReturnValue = (returns: string | undefined) => {
     return "jsi::Value(ret)";
   } else {
     const name = objectName(returns);
-    const className = `JsiWGPU${name}`;
+    const className = `Jsi${name}`;
     return `jsi::Object::createFromHostObject(runtime, std::make_shared<${className}>(getContext(), ret)`
   }
 };

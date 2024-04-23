@@ -2,6 +2,7 @@ export interface Arg {
   name: string;
   type: string;
   optional?: boolean;
+  defaultValue?: string;
 }
 
 export interface Method {
@@ -33,7 +34,7 @@ export const model: JSIObject[] = [
       {
         name: "requestAdapter",
         args: [
-          { name: "options", optional: true, type: "RequestAdapterOptions" }
+          { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: "wgpu::RequestAdapterOptions defaultOptions;" }
         ],
         returns: "Adapter",
         async: true
