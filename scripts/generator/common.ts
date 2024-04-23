@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Annotation, Obj } from "./model";
+import { Annotation, Member, Obj } from "./model";
 
 const atomicMap: Record<string, string> = {
   "bool": "boolean",
@@ -38,7 +38,7 @@ export const typeName = (name: string, annotation?: Annotation) => {
 export const isAtomicType = (type: string) => atomicMap[type] !== undefined;
 
 
-export const computeDependencies = (obj: Obj) => {
+export const computeDependencies = (obj: Obj | Member) => {
   const deps = new Set<string>();
 
 

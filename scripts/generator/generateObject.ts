@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Arg, Method, Obj } from "./model";
+import { Arg, Member, Method, Obj } from "./model";
 import { computeDependencies, isAtomicType, objectName } from './common';
 
 // Special builtin: char, uint64_t, check if uint64_t is big it on Web
@@ -47,10 +47,10 @@ const generatorMethod = (method: Method) => {
 `;
 };
 
-export const generateObject = (name: string, object: Obj) => {
+export const generateObject = (name: string, object: Obj | Member) => {
   const className = `Jsi${name}`;
   const objectName = `wgpu::${name}`;
-  const methods = object.methods ?? [];
+  const methods: Method[] = (object as any).methods ?? [];
   return `#pragma once
 
 #include "webgpu.hpp"
