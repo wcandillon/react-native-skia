@@ -22,7 +22,7 @@ export const unWrapType = (obj: string, type: string) => {
 export const computeDependencies = (obj: JSIObject) => {
   const deps = new Set<string>();
   const methods = obj.methods ?? [];
-  const members = obj.properties ?? [];
+  const properties = obj.properties ?? [];
   methods.forEach(method => {
     method.args.forEach(arg => {
       if (!isAtomicType(arg.type)) {
@@ -33,9 +33,9 @@ export const computeDependencies = (obj: JSIObject) => {
       deps.add(objectName(method.returns));
     }
   });
-  members.forEach(member => {
-    if (!isAtomicType(member.type)) {
-      deps.add(objectName(member.type));
+  properties.forEach(prop => {
+    if (!isAtomicType(prop.type)) {
+      deps.add(objectName(prop.type));
     }
   });
   return Array.from(deps).map(dep => `#include "Jsi${dep}.h"`).join("\n")

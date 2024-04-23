@@ -44,7 +44,7 @@ public:
       return obj.asHostObject<JsiDevice>(runtime)->getObject();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiDevice object, but got a " +
-                                      obj.toString(runtime).utf8(runtime));
+                                      raw.toString(runtime).utf8(runtime));
     }
   }
 };

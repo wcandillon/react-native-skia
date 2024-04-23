@@ -65,7 +65,7 @@ public:
       return obj.asHostObject<JsiGPU>(runtime)->getObject();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiGPU object, but got a " +
-                                      obj.toString(runtime).utf8(runtime));
+                                      raw.toString(runtime).utf8(runtime));
     }
   }
 };

@@ -17,6 +17,7 @@ export interface Property {
   name: string;
   type: string;
   optional?: boolean;
+  default?: string;
 }
 
 export interface JSIObject {
@@ -76,14 +77,44 @@ export const model: JSIObject[] = [
   {
     name: "RenderPipelineDescriptor",
     properties: [
-      {"name": "label", "type": "string", "optional": true},
-      {"name": "layout", "type": "PipelineLayout", "optional": true},
       {"name": "vertex", "type": "VertexState"},
       {"name": "primitive", "type": "PrimitiveState"},
-      {"name": "depth stencil", "type": "DepthStencilState", "optional": true},
+      {"name": "depthStencil", "type": "DepthStencilState", "optional": true},
       {"name": "multisample", "type": "MultisampleState"},
       {"name": "fragment", "type": "FragmentState", "optional": true}
-  ]
+    ]
+  },
+  {
+    name: "VertexState",
+    properties: [
+      {"name": "module", "type": "ShaderModule"},
+      {"name": "entryPoint", "type": "string" }
+    ]
+  },
+  {
+    name: "PrimitiveState",
+    properties: [
+      {"name": "topology", "type": "PrimitiveTopology", "optional": true},
+      {"name": "stripIndexFormat", "type": "IndexFormat", "optional": true},
+      {"name": "frontFace", "type": "FrontFace", "optional": true},
+      {"name": "cullMode", "type": "CullMode", "optional": true},
+      {"name": "unclippedDepth", "type": "bool", "optional": true}
+    ]
+  },
+  {
+    name: "DepthStencilState",
+    properties: [
+      {"name": "format", "type": "TextureFormat"},
+      {"name": "depthWriteEnabled", "type": "bool", "optional": true, "default": "false"},
+      {"name": "depthCompare", "type": "CompareFunction", "optional": true, "default": "undefined"},
+      {"name": "stencilFront", "type": "StencilFaceState", "optional": true},
+      {"name": "stencilBack", "type": "StencilFaceState", "optional": true},
+      {"name": "stencilReadMask", "type": "uint32_t", "optional": true, "default": "0xFFFFFFFF"},
+      {"name": "stencilWriteMask", "type": "uint32_t", "optional": true, "default": "0xFFFFFFFF"},
+      {"name": "depthBias", "type": "int32_t", "optional": true, "default": "0"},
+      {"name": "depthBiasSlopeScale", "type": "float", "optional": true, "default": "0.0f"},
+      {"name": "depthBiasClamp", "type": "float", "optional": true, "default": "0.0f" }
+    ]
   },
   {
     name: "RenderPipeline"

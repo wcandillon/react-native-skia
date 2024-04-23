@@ -141,7 +141,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
     } else {
     ${object.properties ? unpackProperties(object.name, object.properties) : `throw jsi::JSError(
       runtime,
-      "Expected a ${className} object, but got a " + obj.toString(runtime).utf8(runtime));`}
+      "Expected a ${className} object, but got a " + raw.toString(runtime).utf8(runtime));`}
     }
   }
 };

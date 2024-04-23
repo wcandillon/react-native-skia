@@ -60,7 +60,7 @@ public:
       return obj.asHostObject<JsiAdapter>(runtime)->getObject();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiAdapter object, but got a " +
-                                      obj.toString(runtime).utf8(runtime));
+                                      raw.toString(runtime).utf8(runtime));
     }
   }
 };

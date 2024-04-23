@@ -12,7 +12,6 @@
 #include "JsiDepthStencilState.h"
 #include "JsiFragmentState.h"
 #include "JsiMultisampleState.h"
-#include "JsiPipelineLayout.h"
 #include "JsiPrimitiveState.h"
 #include "JsiVertexState.h"
 
@@ -43,14 +42,6 @@ public:
           ->getObject();
     } else {
       wgpu::RenderPipelineDescriptor object;
-      if (obj.hasProperty(runtime, "label")) {
-        auto label = obj.getProperty(runtime, "label");
-        object.label = label.getString(runtime).utf8(runtime).c_str();
-      }
-      if (obj.hasProperty(runtime, "layout")) {
-        auto layout = obj.getProperty(runtime, "layout");
-        object.layout = JsiPipelineLayout::fromValue(runtime, layout);
-      }
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");
         object.vertex = JsiVertexState::fromValue(runtime, vertex);
@@ -64,8 +55,8 @@ public:
         throw jsi::JSError(runtime,
                            "Missing mandatory prop primitive in primitive");
       }
-      if (obj.hasProperty(runtime, "depth stencil")) {
-        auto depthStencil = obj.getProperty(runtime, "depth stencil");
+      if (obj.hasProperty(runtime, "depthStencil")) {
+        auto depthStencil = obj.getProperty(runtime, "depthStencil");
         object.depthStencil =
             JsiDepthStencilState::fromValue(runtime, depthStencil);
       }

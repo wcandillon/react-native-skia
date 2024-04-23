@@ -34,7 +34,7 @@ public:
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiRenderPipeline object, but got a " +
-                             obj.toString(runtime).utf8(runtime));
+                             raw.toString(runtime).utf8(runtime));
     }
   }
 };
