@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Annotation } from "./model";
+import { Annotation, Obj } from "./model";
 
 const atomicMap: Record<string, string> = {
   "bool": "boolean",
@@ -36,3 +36,11 @@ export const typeName = (name: string, annotation?: Annotation) => {
 };
 
 export const isAtomicType = (type: string) => atomicMap[type] !== undefined;
+
+
+export const computeDependencies = (obj: Obj) => {
+  const deps = new Set<string>();
+
+
+  return Array.from(deps).map(dep => `#include "Jsi${dep}.h"`).join("\n")
+};

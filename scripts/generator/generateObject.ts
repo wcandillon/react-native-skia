@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { Arg, JSIObject, Method } from "./model";
+import { Arg, Method, Obj } from "./model";
 import { computeDependencies, isAtomicType, objectName } from './common';
 
 // Special builtin: char, uint64_t, check if uint64_t is big it on Web
@@ -17,13 +17,7 @@ const generateArg = (index: number, arg: Arg) => {
     unwrap = `${className}::fromValue(runtime, arguments[${index}])`;
   }
   if (arg.optional) {
-    let result = ''
-    if (arg.defaultValue) {
-      result += `auto default${_.upperFirst(name)} = std::make_shared<wgpu::${arg.type}>();
-      `;
-    }
-    result += `auto ${name} = count > ${index} ? ${unwrap} : default${_(name).upperFirst()};`;
-    return result;
+    return `auto ${name} = count > ${index} ? ${unwrap} : default${_(name).upperFirst()};`;
   }
   return `auto ${name} = ${unwrap};`;
 };
@@ -43,7 +37,7 @@ export const wrapReturnValue = (returns: string | undefined) => {
 const argList = (args: Arg[]) => args.map(arg => `*${arg.name}.get()`).join(", ");
 
 const generatorMethod = (method: Method) => {
-  const args = method.args;
+  const args = (method.args ?? []);
   const returns = method.returns;
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
@@ -53,34 +47,9 @@ const generatorMethod = (method: Method) => {
 `;
 };
 
-const generatorAsyncMethod = (method: Method) => {
-  const args = method.args;
-  const depList = `,${args.map(arg => `${arg.name} = std::move(${arg.name})`).join(", ")}`;
-  return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
-    ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
-    auto context = getContext();
-    auto object = getObject();
-    return RNJsi::JsiPromises::createPromiseAsJSIValue(
-        runtime,
-        [context = std::move(context), object = std::move(object) ${depList}](
-            jsi::Runtime &runtime,
-            std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->${method.name}(${argList(args)});
-          if (ret == nullptr) {
-            promise->resolve(jsi::Value::null());
-          } else {
-            promise->resolve(jsi::Object::createFromHostObject(
-                runtime, std::make_shared<Jsi${method.returns}>(std::move(context),
-                                                      std::move(ret))));
-          }
-        });
-  }
-`;
-};
-
-export const generateObject = (object: JSIObject) => {
-  const className = `Jsi${object.name}`;
-  const objectName = `wgpu::${object.host ? object.host : object.name}`;
+export const generateObject = (name: string, object: Obj) => {
+  const className = `Jsi${name}`;
+  const objectName = `wgpu::${name}`;
   const methods = object.methods ?? [];
   return `#pragma once
 
@@ -105,10 +74,9 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
       : JsiSkWrappingSharedPtrHostObject<${objectName}>(
             context, std::make_shared<${objectName}>(std::move(m))) {}
 
-  ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
-  ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
+  ${methods.map(method => generatorMethod(method)).join("\n  ")}
 
-  EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})
+  EXPORT_JSI_API_TYPENAME(${className}, ${name})
 
   ${methods.length > 0 ? `JSI_EXPORT_FUNCTIONS(
     ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
