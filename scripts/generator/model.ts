@@ -2,7 +2,7 @@ export interface Arg {
   name: string;
   type: string;
   optional?: boolean;
-  defaultValue?: string;
+  defaultValue?: boolean;
 }
 
 export interface Method {
@@ -34,7 +34,7 @@ export const model: JSIObject[] = [
       {
         name: "requestAdapter",
         args: [
-          { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: "auto defaultOptions = std::make_shared<wgpu::RequestAdapterOptions>();" }
+          { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: true }
         ],
         returns: "Adapter",
         async: true
@@ -47,7 +47,7 @@ export const model: JSIObject[] = [
       {
         name: "requestDevice",
         args: [
-          { name: "descriptor", type: "DeviceDescriptor", optional: true, defaultValue: "auto defaultDescriptor = std::make_shared<wgpu::DeviceDescriptor>();" }
+          { name: "descriptor", type: "DeviceDescriptor", optional: true, defaultValue: true }
         ],
         returns: "Device",
         async: true
