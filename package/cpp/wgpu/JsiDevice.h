@@ -12,6 +12,8 @@
 #include "JsiPromises.h"
 #include "JsiRenderPipeline.h"
 #include "JsiRenderPipelineDescriptor.h"
+#include "JsiShaderModule.h"
+#include "JsiShaderModuleWGSLDescriptor.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
@@ -33,9 +35,22 @@ public:
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(createShaderModule) {
+    auto moduleDescriptor =
+        JsiShaderModuleWGSLDescriptor::fromValue(runtime, arguments[0]);
+    wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc = *moduleDescriptor.get();
+    wgpu::ShaderModuleDescriptor shaderDesc;
+          shaderDesc.nextInChain = &shaderCodeDesc.chain;
+
+    auto ret = getObject()->createShaderModule(shaderDesc);
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiShaderModule>(getContext(), ret));
+  }
+
   EXPORT_JSI_API_BRANDNAME(JsiDevice, Device)
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline))
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
+                       JSI_EXPORT_FUNC(JsiDevice, createShaderModule))
 
   /**
    * Returns the underlying object from a host object of this type

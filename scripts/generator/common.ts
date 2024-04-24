@@ -2,7 +2,7 @@ import _ from "lodash";
 import { JSIObject } from "./model";
 import { isEnum } from "./enums";
 
-export const objectName = (name: string) => _.upperFirst(_.camelCase(name));
+export const objectName = (name: string) => _.upperFirst(_.camelCase(name)).replace(/Wgsl/g, 'WGSL');
 
 export const isNumberType = (type: string) => type === "uint32_t" || type === "float" || type === "int32_t" || type === "size_t";
 

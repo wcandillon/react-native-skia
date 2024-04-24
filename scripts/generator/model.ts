@@ -72,6 +72,14 @@ export const model: JSIObject[] = [
           type: "RenderPipelineDescriptor",
         }],
         returns: "RenderPipeline",
+      },
+      {
+        name: "createShaderModule",
+        args: [{
+          name: "moduleDescriptor",
+          type: "ShaderModuleWGSLDescriptor",
+        }],
+        returns: "ShaderModule",
       }
     ]
   },
@@ -83,6 +91,12 @@ export const model: JSIObject[] = [
       {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
       //{"name": "multisample", "type": "MultisampleState"},
       {"name": "fragment", "type": "FragmentState", "optional": true, pointer: true}
+    ]
+  },
+  {
+    name: "ShaderModuleWGSLDescriptor",
+    properties: [
+      {"name": "code", "type": "string"}
     ]
   },
   {
