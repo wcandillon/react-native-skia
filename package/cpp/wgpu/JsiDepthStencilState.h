@@ -48,7 +48,8 @@ public:
       }
       if (obj.hasProperty(runtime, "depthWriteEnabled")) {
         auto depthWriteEnabled = obj.getProperty(runtime, "depthWriteEnabled");
-        object->depthWriteEnabled = depthWriteEnabled.getBool();
+        object->depthWriteEnabled =
+            static_cast<uint32_t>(depthWriteEnabled.getBool());
       }
       if (obj.hasProperty(runtime, "depthCompare")) {
         auto depthCompare = obj.getProperty(runtime, "depthCompare");

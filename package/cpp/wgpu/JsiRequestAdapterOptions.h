@@ -46,7 +46,8 @@ public:
       if (obj.hasProperty(runtime, "forceFallbackAdapter")) {
         auto forceFallbackAdapter =
             obj.getProperty(runtime, "forceFallbackAdapter");
-        object->forceFallbackAdapter = forceFallbackAdapter.getBool();
+        object->forceFallbackAdapter =
+            static_cast<uint32_t>(forceFallbackAdapter.getBool());
       }
       return object;
     }

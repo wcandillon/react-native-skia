@@ -18,40 +18,40 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiVertexState
-    : public JsiSkWrappingSharedPtrHostObject<wgpu::VertexState> {
+class JsiFragmentState
+    : public JsiSkWrappingSharedPtrHostObject<wgpu::FragmentState> {
 public:
-  JsiVertexState(std::shared_ptr<RNSkPlatformContext> context,
-                 wgpu::VertexState m)
-      : JsiSkWrappingSharedPtrHostObject<wgpu::VertexState>(
-            context, std::make_shared<wgpu::VertexState>(std::move(m))) {}
+  JsiFragmentState(std::shared_ptr<RNSkPlatformContext> context,
+                   wgpu::FragmentState m)
+      : JsiSkWrappingSharedPtrHostObject<wgpu::FragmentState>(
+            context, std::make_shared<wgpu::FragmentState>(std::move(m))) {}
 
-  EXPORT_JSI_API_BRANDNAME(JsiVertexState, VertexState)
+  EXPORT_JSI_API_BRANDNAME(JsiFragmentState, FragmentState)
 
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::VertexState> fromValue(jsi::Runtime &runtime,
-                                                      const jsi::Value &raw) {
+  static std::shared_ptr<wgpu::FragmentState> fromValue(jsi::Runtime &runtime,
+                                                        const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiVertexState>(runtime)->getObject();
+      return obj.asHostObject<JsiFragmentState>(runtime)->getObject();
     } else {
-      auto object = std::make_shared<wgpu::VertexState>();
+      auto object = std::make_shared<wgpu::FragmentState>();
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
         object->module = *JsiShaderModule::fromValue(runtime, module).get();
       } else {
         throw jsi::JSError(runtime,
-                           "Missing mandatory prop module in VertexState");
+                           "Missing mandatory prop module in FragmentState");
       }
       if (obj.hasProperty(runtime, "entryPoint")) {
         auto entryPoint = obj.getProperty(runtime, "entryPoint");
         object->entryPoint =
             entryPoint.getString(runtime).utf8(runtime).c_str();
       } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop entryPoint in VertexState");
+        throw jsi::JSError(
+            runtime, "Missing mandatory prop entryPoint in FragmentState");
       }
       return object;
     }

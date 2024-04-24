@@ -18,6 +18,7 @@ export interface Property {
   type: string;
   optional?: boolean;
   default?: string;
+  pointer?: boolean;
 }
 
 export interface JSIObject {
@@ -79,9 +80,19 @@ export const model: JSIObject[] = [
     properties: [
       {"name": "vertex", "type": "VertexState"},
       {"name": "primitive", "type": "PrimitiveState"},
-      {"name": "depthStencil", "type": "DepthStencilState", "optional": true},
-      {"name": "multisample", "type": "MultisampleState"},
-      {"name": "fragment", "type": "FragmentState", "optional": true}
+      {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
+      //{"name": "multisample", "type": "MultisampleState"},
+      {"name": "fragment", "type": "FragmentState", "optional": true, pointer: true}
+    ]
+  },
+  {
+    name: "ShaderModule",
+  },
+  {
+    name: "FragmentState",
+    properties: [
+      {"name": "module", "type": "ShaderModule"},
+      {"name": "entryPoint", "type": "string" }
     ]
   },
   {
@@ -98,7 +109,7 @@ export const model: JSIObject[] = [
       {"name": "stripIndexFormat", "type": "IndexFormat", "optional": true},
       {"name": "frontFace", "type": "FrontFace", "optional": true},
       {"name": "cullMode", "type": "CullMode", "optional": true},
-      {"name": "unclippedDepth", "type": "bool", "optional": true}
+      //{"name": "unclippedDepth", "type": "bool", "optional": true}
     ]
   },
   {

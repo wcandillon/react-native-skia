@@ -57,10 +57,6 @@ public:
         object->cullMode =
             getCullMode(cullMode.getString(runtime).utf8(runtime).c_str());
       }
-      if (obj.hasProperty(runtime, "unclippedDepth")) {
-        auto unclippedDepth = obj.getProperty(runtime, "unclippedDepth");
-        object->unclippedDepth = unclippedDepth.getBool();
-      }
       return object;
     }
   }

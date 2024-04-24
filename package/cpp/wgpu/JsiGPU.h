@@ -13,7 +13,6 @@
 #include "JsiPromises.h"
 #include "JsiRequestAdapterOptions.h"
 #include "JsiSkHostObjects.h"
-#include "JsiString.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

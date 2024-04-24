@@ -6,11 +6,11 @@ export const objectName = (name: string) => _.upperFirst(_.camelCase(name));
 
 export const isNumberType = (type: string) => type === "uint32_t" || type === "float" || type === "int32_t" || type === "size_t";
 
-export const isAtomicType = (type: string) => type === "bool" || isNumberType(type);
+export const isAtomicType = (type: string) => type === "bool" || isNumberType(type) || type === "string";
 
-export const unWrapType = (obj: string, type: string) => {
+export const unWrapType = (obj: string, type: string, pointer: boolean) => {
   if (type === "bool") {
-    return `${obj}.getBool()`;
+    return `static_cast<uint32_t>(${obj}.getBool())`;
   } else if (isNumberType(type)) {
     return `static_cast<${type}>(${obj}.getNumber())`;
   } else if (type === "string") {
@@ -20,7 +20,7 @@ export const unWrapType = (obj: string, type: string) => {
   } else {
     const name = objectName(type);
     const className = `Jsi${name}`;
-    return `*${className}::fromValue(runtime, ${obj}).get()`;
+    return `${pointer ? '' : '*'}${className}::fromValue(runtime, ${obj}).get()`;
   }
 };
 

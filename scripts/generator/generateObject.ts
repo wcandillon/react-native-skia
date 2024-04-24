@@ -91,7 +91,7 @@ ${properties.map(property => {
   const propName = _.camelCase(property.name);
   return `if(obj.hasProperty(runtime, "${property.name}")) {
     auto ${propName} = obj.getProperty(runtime, "${property.name}");
-  object->${propName} = ${unWrapType(propName, property.type)};
+  object->${propName} = ${unWrapType(propName, property.type, !!property.pointer)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
 `)}

@@ -11,7 +11,6 @@
 #include "JsiEnums.h"
 #include "JsiFragmentState.h"
 #include "JsiHostObject.h"
-#include "JsiMultisampleState.h"
 #include "JsiPrimitiveState.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
@@ -65,21 +64,11 @@ public:
       if (obj.hasProperty(runtime, "depthStencil")) {
         auto depthStencil = obj.getProperty(runtime, "depthStencil");
         object->depthStencil =
-            *JsiDepthStencilState::fromValue(runtime, depthStencil).get();
-      }
-      if (obj.hasProperty(runtime, "multisample")) {
-        auto multisample = obj.getProperty(runtime, "multisample");
-        object->multisample =
-            *JsiMultisampleState::fromValue(runtime, multisample).get();
-      } else {
-        throw jsi::JSError(
-            runtime,
-            "Missing mandatory prop multisample in RenderPipelineDescriptor");
+            JsiDepthStencilState::fromValue(runtime, depthStencil).get();
       }
       if (obj.hasProperty(runtime, "fragment")) {
         auto fragment = obj.getProperty(runtime, "fragment");
-        object->fragment =
-            *JsiFragmentState::fromValue(runtime, fragment).get();
+        object->fragment = JsiFragmentState::fromValue(runtime, fragment).get();
       }
       return object;
     }
