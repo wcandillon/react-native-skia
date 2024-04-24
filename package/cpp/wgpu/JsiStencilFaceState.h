@@ -1,9 +1,13 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
+#include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
@@ -32,9 +36,28 @@ public:
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject();
     } else {
-      throw jsi::JSError(runtime,
-                         "Expected a JsiStencilFaceState object, but got a " +
-                             raw.toString(runtime).utf8(runtime));
+      auto object = std::make_shared<wgpu::StencilFaceState>();
+      if (obj.hasProperty(runtime, "compare")) {
+        auto compare = obj.getProperty(runtime, "compare");
+        object->compare = getCompareFunction(
+            compare.getString(runtime).utf8(runtime).c_str());
+      }
+      if (obj.hasProperty(runtime, "failOp")) {
+        auto failOp = obj.getProperty(runtime, "failOp");
+        object->failOp = getStencilOperation(
+            failOp.getString(runtime).utf8(runtime).c_str());
+      }
+      if (obj.hasProperty(runtime, "depthFailOp")) {
+        auto depthFailOp = obj.getProperty(runtime, "depthFailOp");
+        object->depthFailOp = getStencilOperation(
+            depthFailOp.getString(runtime).utf8(runtime).c_str());
+      }
+      if (obj.hasProperty(runtime, "passOp")) {
+        auto passOp = obj.getProperty(runtime, "passOp");
+        object->passOp = getStencilOperation(
+            passOp.getString(runtime).utf8(runtime).c_str());
+      }
+      return object;
     }
   }
 };

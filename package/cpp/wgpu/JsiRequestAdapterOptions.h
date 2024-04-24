@@ -1,15 +1,17 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
+#include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
-
-#include "JsiGpuPowerPreference.h"
 
 namespace RNSkia {
 
@@ -35,17 +37,18 @@ public:
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
     } else {
-      wgpu::RequestAdapterOptions object;
+      auto object = std::make_shared<wgpu::RequestAdapterOptions>();
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");
-        object.powerPreference =
-            JsiGpuPowerPreference::fromValue(runtime, powerPreference);
+        object->powerPreference = getPowerPreference(
+            powerPreference.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "forceFallbackAdapter")) {
         auto forceFallbackAdapter =
             obj.getProperty(runtime, "forceFallbackAdapter");
-        object.forceFallbackAdapter = forceFallbackAdapter.getBool();
+        object->forceFallbackAdapter = forceFallbackAdapter.getBool();
       }
+      return object;
     }
   }
 };

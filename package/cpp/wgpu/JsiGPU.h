@@ -1,16 +1,20 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
+#include "JsiAdapter.h"
+#include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
-#include "JsiSkHostObjects.h"
-#include "RNSkPlatformContext.h"
-
-#include "JsiAdapter.h"
 #include "JsiRequestAdapterOptions.h"
+#include "JsiSkHostObjects.h"
+#include "JsiString.h"
+#include "RNSkPlatformContext.h"
 
 namespace RNSkia {
 

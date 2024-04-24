@@ -1,14 +1,17 @@
 import _ from "lodash";
 import { Arg, JSIObject, Method, Property } from "./model";
-import { computeDependencies, isAtomicType, objectName, unWrapType } from './common';
+import { computeDependencies, isAtomicType, isNumberType, objectName, unWrapType } from './common';
+import { isEnum } from "./enums";
 
 const generateArg = (index: number, arg: Arg) => {
   const name = _.camelCase(arg.name);
   let unwrap = '';
   if (arg.type === "bool") {
     unwrap = `${name}.asBool()`;
-  } else if (arg.type === "uint32_t") {
+  } else if (isNumberType(arg.type)) {
     unwrap = `${name}.asNumber()`;
+  } else if (isEnum(arg.type)) {
+    unwrap = `get${arg.type}(arguments[${index}].asString().utf8(runtime).c_str())`;
   } else {
     const name = objectName(arg.type);
     const className = `Jsi${name}`;
@@ -83,15 +86,16 @@ const generatorAsyncMethod = (method: Method) => {
 };
 
 const unpackProperties = (name: string, properties: Property[]) => {
-  return `wgpu::${name} object;
+  return `auto object = std::make_shared<wgpu::${name}>();
 ${properties.map(property => {
-  const name = _.camelCase(property.name);
+  const propName = _.camelCase(property.name);
   return `if(obj.hasProperty(runtime, "${property.name}")) {
-    auto ${name} = obj.getProperty(runtime, "${property.name}");
-  object.${name} = ${unWrapType(name, property.type)};
+    auto ${propName} = obj.getProperty(runtime, "${property.name}");
+  object->${propName} = ${unWrapType(propName, property.type)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
-`)}`;
+`)}
+return object;`;
 }
 
 export const generateObject = (object: JSIObject) => {
@@ -99,6 +103,9 @@ export const generateObject = (object: JSIObject) => {
   const objectName = `wgpu::${object.host ? object.host : object.name}`;
   const methods = object.methods ?? [];
   return `#pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
@@ -108,7 +115,7 @@ export const generateObject = (object: JSIObject) => {
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
-
+#include "JsiEnums.h"
 ${computeDependencies(object)}
 
 namespace RNSkia {

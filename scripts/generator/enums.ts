@@ -2,40 +2,62 @@ import _ from "lodash";
 
 export type Enum = { value: number, name: string }[];
 
-const replaceMap: Record<string, string> = {
-  "Packed4X8IntegerDotProduct": "Packed4x8IntegerDotProduct",
-  "Opengl": "OpenGL",
-  "Opengles": "OpenGLES",
-  "Webgpu": "WebGPU",
-  "DiscreteGpu": "DiscreteGPU",
-  "IntegratedGpu": "IntegratedGPU",
-  "Cpu": "CPU",
-  "TextureCompressionBc": "TextureCompressionBC",
-  "TextureCompressionEtc2": "TextureCompressionETC2",
-  "TextureCompressionAstc": "TextureCompressionASTC",
-  "Bgra8UnormStorage": "BGRA8UnormStorage",
-  "Ccw": "CCW",
-  "Cw": "CW",
-  "1D": "_1D",
-  "2D": "_2D",
-  "3D": "_3D",
-  "2DArray": "_2DArray",
+export const isEnum = (type: string) => enums[type] !== undefined;
+
+const convertString = (input: string) => {
+  const map: Record<string, string> = {
+    "1d": "_1D",
+    "2d": "_2D",
+    "3d": "_3D", 
+    "2d-array": "_2DArray",
+  }
+  if (map[input] !== undefined) {
+    return map[input];
+  }
+  // Convert kebab-case to CamelCase
+  let result = _.camelCase(input);
+
+  // Define special abbreviation and color formats to be fully capitalized
+  const specialAbbreviations = ['cpu', 'gpu', "ccw", "cw"];
+  const colorFormats = ['astc', 'eac', 'etc2', 'rgba', "bc", "bgra", "rg"];
+
+  // Split the string to handle individual words for special cases
+  let parts = result.split(/(?=[A-Z])/);
+
+  // Process each part for special cases
+  parts = parts.map(part => {
+      let lowerPart = part.toLowerCase();
+      if (specialAbbreviations.some(format => lowerPart.includes(format))) {
+          return lowerPart.toUpperCase();
+      } else if (colorFormats.some(format => lowerPart.startsWith(format))) {
+          return lowerPart.toUpperCase();
+      }
+      return part;
+  });
+
+  // Join all parts and capitalize the first character
+  result = parts.join('').replace(/(\d)X(\d)/g, '$1x$2');
+  result= result.charAt(0).toUpperCase() + result.slice(1);
+  // Handle edge case: Strings starting with a number
+  return result;
 }
+
 
 export const generateEnums = (enums: Record<string, Enum>) => {
   return `#pragma once
+  
+#include <string>
 
 #include "webgpu.hpp"
 
 namespace RNSkia {
   ${Object.keys(enums).map(name => {
-    const value = enums[name];
-    return `int get${name}(const char* value) {
+    return `wgpu::${name} get${name}(const char* value) {
       ${enums[name].map(e => {
-        const src = _.upperFirst(_.camelCase(e.name));
-        const m = replaceMap[src] ?? src;
+        const m = convertString(e.name);
         return `if (strcmp(value, "${e.name}") == 0) { return wgpu::${name}::${m}; }`;
       }).join("\n      ")}
+      throw std::invalid_argument("Invalid value " + std::string(value) + " for enum ${name}");
     }
 `;
   }).join(`
@@ -44,7 +66,7 @@ namespace RNSkia {
 `;
 };
 
-export const enums: Record<string, Enum> = {
+export const enums: Record<string, Enum> = {  
   "AddressMode": [
     {"value": 0, "name": "repeat"},
     {"value": 1, "name": "mirror-repeat"},
@@ -81,10 +103,10 @@ export const enums: Record<string, Enum> = {
     {"value": 0, "name": "opaque"},
     {"value": 1, "name": "premultiplied"}
   ],
-  "CanvasCompositingAlphaMode": [
-    {"value": 0, "name": "opaque"},
-    {"value": 1, "name": "premultiplied"}
-  ],
+  // "CanvasCompositingAlphaMode": [
+  //   {"value": 0, "name": "opaque"},
+  //   {"value": 1, "name": "premultiplied"}
+  // ],
   "CompareFunction": [
     {"value": 0, "name": "never"},
     {"value": 1, "name": "less"},
@@ -100,10 +122,10 @@ export const enums: Record<string, Enum> = {
     {"value": 1, "name": "warning"},
     {"value": 2, "name": "info"}
   ],
-  "ComputePassTimestampLocation": [
-    {"value": 0, "name": "beginning"},
-    {"value": 1, "name": "end"}
-  ],
+  // "ComputePassTimestampLocation": [
+  //   {"value": 0, "name": "beginning"},
+  //   {"value": 1, "name": "end"}
+  // ],
   "CullMode": [
     {"value": 0, "name": "none"},
     {"value": 1, "name": "front"},
@@ -162,10 +184,10 @@ export const enums: Record<string, Enum> = {
     {"value": 0, "name": "occlusion"},
     {"value": 1, "name": "timestamp"}
   ],
-  "RenderPassTimestampLocation": [
-    {"value": 0, "name": "beginning"},
-    {"value": 1, "name": "end"}
-  ],
+  // "RenderPassTimestampLocation": [
+  //   {"value": 0, "name": "beginning"},
+  //   {"value": 1, "name": "end"}
+  // ],
   "SamplerBindingType": [
     {"value": 0, "name": "filtering"},
     {"value": 1, "name": "non-filtering"},

@@ -1,19 +1,22 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
-#include "JsiHostObject.h"
-#include "JsiPromises.h"
-#include "JsiSkHostObjects.h"
-#include "RNSkPlatformContext.h"
-
 #include "JsiDepthStencilState.h"
+#include "JsiEnums.h"
 #include "JsiFragmentState.h"
+#include "JsiHostObject.h"
 #include "JsiMultisampleState.h"
 #include "JsiPrimitiveState.h"
+#include "JsiPromises.h"
+#include "JsiSkHostObjects.h"
 #include "JsiVertexState.h"
+#include "RNSkPlatformContext.h"
 
 namespace RNSkia {
 
@@ -41,37 +44,44 @@ public:
       return obj.asHostObject<JsiRenderPipelineDescriptor>(runtime)
           ->getObject();
     } else {
-      wgpu::RenderPipelineDescriptor object;
+      auto object = std::make_shared<wgpu::RenderPipelineDescriptor>();
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");
-        object.vertex = JsiVertexState::fromValue(runtime, vertex);
+        object->vertex = *JsiVertexState::fromValue(runtime, vertex).get();
       } else {
-        throw jsi::JSError(runtime, "Missing mandatory prop vertex in vertex");
+        throw jsi::JSError(
+            runtime,
+            "Missing mandatory prop vertex in RenderPipelineDescriptor");
       }
       if (obj.hasProperty(runtime, "primitive")) {
         auto primitive = obj.getProperty(runtime, "primitive");
-        object.primitive = JsiPrimitiveState::fromValue(runtime, primitive);
+        object->primitive =
+            *JsiPrimitiveState::fromValue(runtime, primitive).get();
       } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop primitive in primitive");
+        throw jsi::JSError(
+            runtime,
+            "Missing mandatory prop primitive in RenderPipelineDescriptor");
       }
       if (obj.hasProperty(runtime, "depthStencil")) {
         auto depthStencil = obj.getProperty(runtime, "depthStencil");
-        object.depthStencil =
-            JsiDepthStencilState::fromValue(runtime, depthStencil);
+        object->depthStencil =
+            *JsiDepthStencilState::fromValue(runtime, depthStencil).get();
       }
       if (obj.hasProperty(runtime, "multisample")) {
         auto multisample = obj.getProperty(runtime, "multisample");
-        object.multisample =
-            JsiMultisampleState::fromValue(runtime, multisample);
+        object->multisample =
+            *JsiMultisampleState::fromValue(runtime, multisample).get();
       } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop multisample in multisample");
+        throw jsi::JSError(
+            runtime,
+            "Missing mandatory prop multisample in RenderPipelineDescriptor");
       }
       if (obj.hasProperty(runtime, "fragment")) {
         auto fragment = obj.getProperty(runtime, "fragment");
-        object.fragment = JsiFragmentState::fromValue(runtime, fragment);
+        object->fragment =
+            *JsiFragmentState::fromValue(runtime, fragment).get();
       }
+      return object;
     }
   }
 };

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <string>
+
 #include "webgpu.hpp"
 
 namespace RNSkia {
-int getAddressMode(const char *value) {
+wgpu::AddressMode getAddressMode(const char *value) {
   if (strcmp(value, "repeat") == 0) {
     return wgpu::AddressMode::Repeat;
   }
@@ -13,9 +15,11 @@ int getAddressMode(const char *value) {
   if (strcmp(value, "clamp-to-edge") == 0) {
     return wgpu::AddressMode::ClampToEdge;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum AddressMode");
 }
 
-int getBlendFactor(const char *value) {
+wgpu::BlendFactor getBlendFactor(const char *value) {
   if (strcmp(value, "zero") == 0) {
     return wgpu::BlendFactor::Zero;
   }
@@ -55,9 +59,11 @@ int getBlendFactor(const char *value) {
   if (strcmp(value, "one-minus-constant") == 0) {
     return wgpu::BlendFactor::OneMinusConstant;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum BlendFactor");
 }
 
-int getBlendOperation(const char *value) {
+wgpu::BlendOperation getBlendOperation(const char *value) {
   if (strcmp(value, "add") == 0) {
     return wgpu::BlendOperation::Add;
   }
@@ -73,9 +79,11 @@ int getBlendOperation(const char *value) {
   if (strcmp(value, "max") == 0) {
     return wgpu::BlendOperation::Max;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum BlendOperation");
 }
 
-int getBufferBindingType(const char *value) {
+wgpu::BufferBindingType getBufferBindingType(const char *value) {
   if (strcmp(value, "uniform") == 0) {
     return wgpu::BufferBindingType::Uniform;
   }
@@ -85,27 +93,22 @@ int getBufferBindingType(const char *value) {
   if (strcmp(value, "read-only-storage") == 0) {
     return wgpu::BufferBindingType::ReadOnlyStorage;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum BufferBindingType");
 }
 
-int getAlphaMode(const char *value) {
+wgpu::AlphaMode getAlphaMode(const char *value) {
   if (strcmp(value, "opaque") == 0) {
     return wgpu::AlphaMode::Opaque;
   }
   if (strcmp(value, "premultiplied") == 0) {
     return wgpu::AlphaMode::Premultiplied;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum AlphaMode");
 }
 
-int getCanvasCompositingAlphaMode(const char *value) {
-  if (strcmp(value, "opaque") == 0) {
-    return wgpu::AlphaMode::Opaque;
-  }
-  if (strcmp(value, "premultiplied") == 0) {
-    return wgpu::AlphaMode::Premultiplied;
-  }
-}
-
-int getCompareFunction(const char *value) {
+wgpu::CompareFunction getCompareFunction(const char *value) {
   if (strcmp(value, "never") == 0) {
     return wgpu::CompareFunction::Never;
   }
@@ -130,9 +133,11 @@ int getCompareFunction(const char *value) {
   if (strcmp(value, "always") == 0) {
     return wgpu::CompareFunction::Always;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum CompareFunction");
 }
 
-int getCompilationMessageType(const char *value) {
+wgpu::CompilationMessageType getCompilationMessageType(const char *value) {
   if (strcmp(value, "error") == 0) {
     return wgpu::CompilationMessageType::Error;
   }
@@ -142,9 +147,11 @@ int getCompilationMessageType(const char *value) {
   if (strcmp(value, "info") == 0) {
     return wgpu::CompilationMessageType::Info;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum CompilationMessageType");
 }
 
-int getCullMode(const char *value) {
+wgpu::CullMode getCullMode(const char *value) {
   if (strcmp(value, "none") == 0) {
     return wgpu::CullMode::None;
   }
@@ -154,24 +161,30 @@ int getCullMode(const char *value) {
   if (strcmp(value, "back") == 0) {
     return wgpu::CullMode::Back;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum CullMode");
 }
 
-int getDeviceLostReason(const char *value) {
+wgpu::DeviceLostReason getDeviceLostReason(const char *value) {
   if (strcmp(value, "destroyed") == 0) {
     return wgpu::DeviceLostReason::Destroyed;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum DeviceLostReason");
 }
 
-int getErrorFilter(const char *value) {
+wgpu::ErrorFilter getErrorFilter(const char *value) {
   if (strcmp(value, "out-of-memory") == 0) {
     return wgpu::ErrorFilter::OutOfMemory;
   }
   if (strcmp(value, "validation") == 0) {
     return wgpu::ErrorFilter::Validation;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum ErrorFilter");
 }
 
-int getFeatureName(const char *value) {
+wgpu::FeatureName getFeatureName(const char *value) {
   if (strcmp(value, "depth-clip-control") == 0) {
     return wgpu::FeatureName::DepthClipControl;
   }
@@ -199,63 +212,77 @@ int getFeatureName(const char *value) {
   if (strcmp(value, "bgra8unorm-storage") == 0) {
     return wgpu::FeatureName::BGRA8UnormStorage;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum FeatureName");
 }
 
-int getFilterMode(const char *value) {
+wgpu::FilterMode getFilterMode(const char *value) {
   if (strcmp(value, "nearest") == 0) {
     return wgpu::FilterMode::Nearest;
   }
   if (strcmp(value, "linear") == 0) {
     return wgpu::FilterMode::Linear;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum FilterMode");
 }
 
-int getFrontFace(const char *value) {
+wgpu::FrontFace getFrontFace(const char *value) {
   if (strcmp(value, "ccw") == 0) {
     return wgpu::FrontFace::CCW;
   }
   if (strcmp(value, "cw") == 0) {
     return wgpu::FrontFace::CW;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum FrontFace");
 }
 
-int getIndexFormat(const char *value) {
+wgpu::IndexFormat getIndexFormat(const char *value) {
   if (strcmp(value, "uint16") == 0) {
     return wgpu::IndexFormat::Uint16;
   }
   if (strcmp(value, "uint32") == 0) {
     return wgpu::IndexFormat::Uint32;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum IndexFormat");
 }
 
-int getLoadOp(const char *value) {
+wgpu::LoadOp getLoadOp(const char *value) {
   if (strcmp(value, "load") == 0) {
     return wgpu::LoadOp::Load;
   }
   if (strcmp(value, "clear") == 0) {
     return wgpu::LoadOp::Clear;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum LoadOp");
 }
 
-int getMipmapFilterMode(const char *value) {
+wgpu::MipmapFilterMode getMipmapFilterMode(const char *value) {
   if (strcmp(value, "nearest") == 0) {
     return wgpu::MipmapFilterMode::Nearest;
   }
   if (strcmp(value, "linear") == 0) {
     return wgpu::MipmapFilterMode::Linear;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum MipmapFilterMode");
 }
 
-int getPowerPreference(const char *value) {
+wgpu::PowerPreference getPowerPreference(const char *value) {
   if (strcmp(value, "low-power") == 0) {
     return wgpu::PowerPreference::LowPower;
   }
   if (strcmp(value, "high-performance") == 0) {
     return wgpu::PowerPreference::HighPerformance;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum PowerPreference");
 }
 
-int getPrimitiveTopology(const char *value) {
+wgpu::PrimitiveTopology getPrimitiveTopology(const char *value) {
   if (strcmp(value, "point-list") == 0) {
     return wgpu::PrimitiveTopology::PointList;
   }
@@ -271,18 +298,22 @@ int getPrimitiveTopology(const char *value) {
   if (strcmp(value, "triangle-strip") == 0) {
     return wgpu::PrimitiveTopology::TriangleStrip;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum PrimitiveTopology");
 }
 
-int getQueryType(const char *value) {
+wgpu::QueryType getQueryType(const char *value) {
   if (strcmp(value, "occlusion") == 0) {
     return wgpu::QueryType::Occlusion;
   }
   if (strcmp(value, "timestamp") == 0) {
     return wgpu::QueryType::Timestamp;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum QueryType");
 }
 
-int getSamplerBindingType(const char *value) {
+wgpu::SamplerBindingType getSamplerBindingType(const char *value) {
   if (strcmp(value, "filtering") == 0) {
     return wgpu::SamplerBindingType::Filtering;
   }
@@ -292,9 +323,11 @@ int getSamplerBindingType(const char *value) {
   if (strcmp(value, "comparison") == 0) {
     return wgpu::SamplerBindingType::Comparison;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum SamplerBindingType");
 }
 
-int getStencilOperation(const char *value) {
+wgpu::StencilOperation getStencilOperation(const char *value) {
   if (strcmp(value, "keep") == 0) {
     return wgpu::StencilOperation::Keep;
   }
@@ -319,24 +352,30 @@ int getStencilOperation(const char *value) {
   if (strcmp(value, "decrement-wrap") == 0) {
     return wgpu::StencilOperation::DecrementWrap;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum StencilOperation");
 }
 
-int getStorageTextureAccess(const char *value) {
+wgpu::StorageTextureAccess getStorageTextureAccess(const char *value) {
   if (strcmp(value, "write-only") == 0) {
     return wgpu::StorageTextureAccess::WriteOnly;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum StorageTextureAccess");
 }
 
-int getStoreOp(const char *value) {
+wgpu::StoreOp getStoreOp(const char *value) {
   if (strcmp(value, "store") == 0) {
     return wgpu::StoreOp::Store;
   }
   if (strcmp(value, "discard") == 0) {
     return wgpu::StoreOp::Discard;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum StoreOp");
 }
 
-int getTextureAspect(const char *value) {
+wgpu::TextureAspect getTextureAspect(const char *value) {
   if (strcmp(value, "all") == 0) {
     return wgpu::TextureAspect::All;
   }
@@ -346,9 +385,11 @@ int getTextureAspect(const char *value) {
   if (strcmp(value, "depth-only") == 0) {
     return wgpu::TextureAspect::DepthOnly;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum TextureAspect");
 }
 
-int getTextureDimension(const char *value) {
+wgpu::TextureDimension getTextureDimension(const char *value) {
   if (strcmp(value, "1d") == 0) {
     return wgpu::TextureDimension::_1D;
   }
@@ -358,9 +399,11 @@ int getTextureDimension(const char *value) {
   if (strcmp(value, "3d") == 0) {
     return wgpu::TextureDimension::_3D;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum TextureDimension");
 }
 
-int getTextureFormat(const char *value) {
+wgpu::TextureFormat getTextureFormat(const char *value) {
   if (strcmp(value, "r8unorm") == 0) {
     return wgpu::TextureFormat::R8Unorm;
   }
@@ -499,153 +542,155 @@ int getTextureFormat(const char *value) {
   if (strcmp(value, "bc2-rgba-unorm-srgb") == 0) {
     return wgpu::TextureFormat::BC2RGBAUnormSrgb;
   }
-  // if (strcmp(value, "bc3-rgba-unorm") == 0) {
-  //   return wgpu::TextureFormat::Bc3RgbaUnorm;
-  // }
-  // if (strcmp(value, "bc3-rgba-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Bc3RgbaUnormSrgb;
-  // }
-  // if (strcmp(value, "bc4-r-unorm") == 0) {
-  //   return wgpu::TextureFormat::Bc4RUnorm;
-  // }
-  // if (strcmp(value, "bc4-r-snorm") == 0) {
-  //   return wgpu::TextureFormat::Bc4RSnorm;
-  // }
-  // if (strcmp(value, "bc5-rg-unorm") == 0) {
-  //   return wgpu::TextureFormat::Bc5RgUnorm;
-  // }
-  // if (strcmp(value, "bc5-rg-snorm") == 0) {
-  //   return wgpu::TextureFormat::Bc5RgSnorm;
-  // }
-  // if (strcmp(value, "bc6h-rgb-ufloat") == 0) {
-  //   return wgpu::TextureFormat::Bc6HRgbUfloat;
-  // }
-  // if (strcmp(value, "bc6h-rgb-float") == 0) {
-  //   return wgpu::TextureFormat::Bc6HRgbFloat;
-  // }
-  // if (strcmp(value, "bc7-rgba-unorm") == 0) {
-  //   return wgpu::TextureFormat::Bc7RgbaUnorm;
-  // }
-  // if (strcmp(value, "bc7-rgba-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Bc7RgbaUnormSrgb;
-  // }
-  // if (strcmp(value, "etc2-rgb8unorm") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgb8Unorm;
-  // }
-  // if (strcmp(value, "etc2-rgb8unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgb8UnormSrgb;
-  // }
-  // if (strcmp(value, "etc2-rgb8a1unorm") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgb8A1Unorm;
-  // }
-  // if (strcmp(value, "etc2-rgb8a1unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb;
-  // }
-  // if (strcmp(value, "etc2-rgba8unorm") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgba8Unorm;
-  // }
-  // if (strcmp(value, "etc2-rgba8unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Etc2Rgba8UnormSrgb;
-  // }
-  // if (strcmp(value, "eac-r11unorm") == 0) {
-  //   return wgpu::TextureFormat::EacR11Unorm;
-  // }
-  // if (strcmp(value, "eac-r11snorm") == 0) {
-  //   return wgpu::TextureFormat::EacR11Snorm;
-  // }
-  // if (strcmp(value, "eac-rg11unorm") == 0) {
-  //   return wgpu::TextureFormat::EacRg11Unorm;
-  // }
-  // if (strcmp(value, "eac-rg11snorm") == 0) {
-  //   return wgpu::TextureFormat::EacRg11Snorm;
-  // }
-  // if (strcmp(value, "astc-4x4-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc4x4Unorm;
-  // }
-  // if (strcmp(value, "astc-4x4-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc4x4UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-5x4-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc5x4Unorm;
-  // }
-  // if (strcmp(value, "astc-5x4-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc5x4UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-5x5-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc5x5Unorm;
-  // }
-  // if (strcmp(value, "astc-5x5-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc5x5UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-6x5-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc6x5Unorm;
-  // }
-  // if (strcmp(value, "astc-6x5-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc6x5UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-6x6-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc6x6Unorm;
-  // }
-  // if (strcmp(value, "astc-6x6-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc6x6UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-8x5-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc8x5Unorm;
-  // }
-  // if (strcmp(value, "astc-8x5-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc8x5UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-8x6-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc8x6Unorm;
-  // }
-  // if (strcmp(value, "astc-8x6-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc8x6UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-8x8-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc8x8Unorm;
-  // }
-  // if (strcmp(value, "astc-8x8-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc8x8UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-10x5-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc10x5Unorm;
-  // }
-  // if (strcmp(value, "astc-10x5-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc10x5UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-10x6-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc10x6Unorm;
-  // }
-  // if (strcmp(value, "astc-10x6-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc10x6UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-10x8-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc10x8Unorm;
-  // }
-  // if (strcmp(value, "astc-10x8-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc10x8UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-10x10-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc10x10Unorm;
-  // }
-  // if (strcmp(value, "astc-10x10-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc10x10UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-12x10-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc12x10Unorm;
-  // }
-  // if (strcmp(value, "astc-12x10-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc12x10UnormSrgb;
-  // }
-  // if (strcmp(value, "astc-12x12-unorm") == 0) {
-  //   return wgpu::TextureFormat::Astc12x12Unorm;
-  // }
-  // if (strcmp(value, "astc-12x12-unorm-srgb") == 0) {
-  //   return wgpu::TextureFormat::Astc12x12UnormSrgb;
-  // }
+  if (strcmp(value, "bc3-rgba-unorm") == 0) {
+    return wgpu::TextureFormat::BC3RGBAUnorm;
+  }
+  if (strcmp(value, "bc3-rgba-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::BC3RGBAUnormSrgb;
+  }
+  if (strcmp(value, "bc4-r-unorm") == 0) {
+    return wgpu::TextureFormat::BC4RUnorm;
+  }
+  if (strcmp(value, "bc4-r-snorm") == 0) {
+    return wgpu::TextureFormat::BC4RSnorm;
+  }
+  if (strcmp(value, "bc5-rg-unorm") == 0) {
+    return wgpu::TextureFormat::BC5RGUnorm;
+  }
+  if (strcmp(value, "bc5-rg-snorm") == 0) {
+    return wgpu::TextureFormat::BC5RGSnorm;
+  }
+  if (strcmp(value, "bc6h-rgb-ufloat") == 0) {
+    return wgpu::TextureFormat::BC6HRGBUfloat;
+  }
+  if (strcmp(value, "bc6h-rgb-float") == 0) {
+    return wgpu::TextureFormat::BC6HRGBFloat;
+  }
+  if (strcmp(value, "bc7-rgba-unorm") == 0) {
+    return wgpu::TextureFormat::BC7RGBAUnorm;
+  }
+  if (strcmp(value, "bc7-rgba-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::BC7RGBAUnormSrgb;
+  }
+  if (strcmp(value, "etc2-rgb8unorm") == 0) {
+    return wgpu::TextureFormat::ETC2RGB8Unorm;
+  }
+  if (strcmp(value, "etc2-rgb8unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ETC2RGB8UnormSrgb;
+  }
+  if (strcmp(value, "etc2-rgb8a1unorm") == 0) {
+    return wgpu::TextureFormat::ETC2RGB8A1Unorm;
+  }
+  if (strcmp(value, "etc2-rgb8a1unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ETC2RGB8A1UnormSrgb;
+  }
+  if (strcmp(value, "etc2-rgba8unorm") == 0) {
+    return wgpu::TextureFormat::ETC2RGBA8Unorm;
+  }
+  if (strcmp(value, "etc2-rgba8unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ETC2RGBA8UnormSrgb;
+  }
+  if (strcmp(value, "eac-r11unorm") == 0) {
+    return wgpu::TextureFormat::EACR11Unorm;
+  }
+  if (strcmp(value, "eac-r11snorm") == 0) {
+    return wgpu::TextureFormat::EACR11Snorm;
+  }
+  if (strcmp(value, "eac-rg11unorm") == 0) {
+    return wgpu::TextureFormat::EACRG11Unorm;
+  }
+  if (strcmp(value, "eac-rg11snorm") == 0) {
+    return wgpu::TextureFormat::EACRG11Snorm;
+  }
+  if (strcmp(value, "astc-4x4-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC4x4Unorm;
+  }
+  if (strcmp(value, "astc-4x4-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC4x4UnormSrgb;
+  }
+  if (strcmp(value, "astc-5x4-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC5x4Unorm;
+  }
+  if (strcmp(value, "astc-5x4-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC5x4UnormSrgb;
+  }
+  if (strcmp(value, "astc-5x5-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC5x5Unorm;
+  }
+  if (strcmp(value, "astc-5x5-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC5x5UnormSrgb;
+  }
+  if (strcmp(value, "astc-6x5-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC6x5Unorm;
+  }
+  if (strcmp(value, "astc-6x5-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC6x5UnormSrgb;
+  }
+  if (strcmp(value, "astc-6x6-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC6x6Unorm;
+  }
+  if (strcmp(value, "astc-6x6-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC6x6UnormSrgb;
+  }
+  if (strcmp(value, "astc-8x5-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC8x5Unorm;
+  }
+  if (strcmp(value, "astc-8x5-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC8x5UnormSrgb;
+  }
+  if (strcmp(value, "astc-8x6-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC8x6Unorm;
+  }
+  if (strcmp(value, "astc-8x6-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC8x6UnormSrgb;
+  }
+  if (strcmp(value, "astc-8x8-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC8x8Unorm;
+  }
+  if (strcmp(value, "astc-8x8-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC8x8UnormSrgb;
+  }
+  if (strcmp(value, "astc-10x5-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC10x5Unorm;
+  }
+  if (strcmp(value, "astc-10x5-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC10x5UnormSrgb;
+  }
+  if (strcmp(value, "astc-10x6-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC10x6Unorm;
+  }
+  if (strcmp(value, "astc-10x6-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC10x6UnormSrgb;
+  }
+  if (strcmp(value, "astc-10x8-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC10x8Unorm;
+  }
+  if (strcmp(value, "astc-10x8-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC10x8UnormSrgb;
+  }
+  if (strcmp(value, "astc-10x10-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC10x10Unorm;
+  }
+  if (strcmp(value, "astc-10x10-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC10x10UnormSrgb;
+  }
+  if (strcmp(value, "astc-12x10-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC12x10Unorm;
+  }
+  if (strcmp(value, "astc-12x10-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC12x10UnormSrgb;
+  }
+  if (strcmp(value, "astc-12x12-unorm") == 0) {
+    return wgpu::TextureFormat::ASTC12x12Unorm;
+  }
+  if (strcmp(value, "astc-12x12-unorm-srgb") == 0) {
+    return wgpu::TextureFormat::ASTC12x12UnormSrgb;
+  }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum TextureFormat");
 }
 
-int getTextureSampleType(const char *value) {
+wgpu::TextureSampleType getTextureSampleType(const char *value) {
   if (strcmp(value, "float") == 0) {
     return wgpu::TextureSampleType::Float;
   }
@@ -661,9 +706,11 @@ int getTextureSampleType(const char *value) {
   if (strcmp(value, "uint") == 0) {
     return wgpu::TextureSampleType::Uint;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum TextureSampleType");
 }
 
-int getTextureViewDimension(const char *value) {
+wgpu::TextureViewDimension getTextureViewDimension(const char *value) {
   if (strcmp(value, "1d") == 0) {
     return wgpu::TextureViewDimension::_1D;
   }
@@ -682,9 +729,11 @@ int getTextureViewDimension(const char *value) {
   if (strcmp(value, "3d") == 0) {
     return wgpu::TextureViewDimension::_3D;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum TextureViewDimension");
 }
 
-int getVertexFormat(const char *value) {
+wgpu::VertexFormat getVertexFormat(const char *value) {
   if (strcmp(value, "uint8x2") == 0) {
     return wgpu::VertexFormat::Uint8x2;
   }
@@ -775,15 +824,19 @@ int getVertexFormat(const char *value) {
   if (strcmp(value, "sint32x4") == 0) {
     return wgpu::VertexFormat::Sint32x4;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum VertexFormat");
 }
 
-int getVertexStepMode(const char *value) {
+wgpu::VertexStepMode getVertexStepMode(const char *value) {
   if (strcmp(value, "vertex") == 0) {
     return wgpu::VertexStepMode::Vertex;
   }
   if (strcmp(value, "instance") == 0) {
     return wgpu::VertexStepMode::Instance;
   }
+  throw std::invalid_argument("Invalid value " + std::string(value) +
+                              " for enum VertexStepMode");
 }
 
 } // namespace RNSkia

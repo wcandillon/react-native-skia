@@ -117,7 +117,13 @@ export const model: JSIObject[] = [
     ]
   },
   {
-    name: "StencilFaceState"
+    name: "StencilFaceState",
+    properties: [
+      {"name": "compare", "type": "CompareFunction", "optional": true},
+      {"name": "failOp", "type": "StencilOperation", "optional": true},
+      {"name": "depthFailOp", "type": "StencilOperation", "optional": true},
+      {"name": "passOp", "type": "StencilOperation", "optional": true}
+    ]
   },
   {
     name: "RenderPipeline"
@@ -129,7 +135,7 @@ export const model: JSIObject[] = [
     name: "RequestAdapterOptions",
     methods: [],
     properties: [
-      { name: "powerPreference", type: "GPUPowerPreference", optional: true },
+      { name: "powerPreference", type: "PowerPreference", optional: true },
       { name: "forceFallbackAdapter", type: "bool", optional: true }
     ]
   }

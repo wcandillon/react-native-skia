@@ -1,15 +1,19 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
+#include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
-#include "JsiSkHostObjects.h"
-#include "RNSkPlatformContext.h"
-
 #include "JsiShaderModule.h"
+#include "JsiSkHostObjects.h"
+#include "JsiString.h"
+#include "RNSkPlatformContext.h"
 
 namespace RNSkia {
 
@@ -34,20 +38,23 @@ public:
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiVertexState>(runtime)->getObject();
     } else {
-      wgpu::VertexState object;
+      auto object = std::make_shared<wgpu::VertexState>();
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
-        object.module = JsiShaderModule::fromValue(runtime, module);
+        object->module = *JsiShaderModule::fromValue(runtime, module).get();
       } else {
-        throw jsi::JSError(runtime, "Missing mandatory prop module in module");
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop module in VertexState");
       }
       if (obj.hasProperty(runtime, "entryPoint")) {
         auto entryPoint = obj.getProperty(runtime, "entryPoint");
-        object.entryPoint = entryPoint.getString(runtime).utf8(runtime).c_str();
+        object->entryPoint =
+            entryPoint.getString(runtime).utf8(runtime).c_str();
       } else {
         throw jsi::JSError(runtime,
-                           "Missing mandatory prop entryPoint in entryPoint");
+                           "Missing mandatory prop entryPoint in VertexState");
       }
+      return object;
     }
   }
 };

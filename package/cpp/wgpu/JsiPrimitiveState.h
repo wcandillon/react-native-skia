@@ -1,18 +1,17 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "webgpu.hpp"
 
 #include <jsi/jsi.h>
 
+#include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
-
-#include "JsiCullMode.h"
-#include "JsiFrontFace.h"
-#include "JsiIndexFormat.h"
-#include "JsiPrimitiveTopology.h"
 
 namespace RNSkia {
 
@@ -37,28 +36,32 @@ public:
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiPrimitiveState>(runtime)->getObject();
     } else {
-      wgpu::PrimitiveState object;
+      auto object = std::make_shared<wgpu::PrimitiveState>();
       if (obj.hasProperty(runtime, "topology")) {
         auto topology = obj.getProperty(runtime, "topology");
-        object.topology = JsiPrimitiveTopology::fromValue(runtime, topology);
+        object->topology = getPrimitiveTopology(
+            topology.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "stripIndexFormat")) {
         auto stripIndexFormat = obj.getProperty(runtime, "stripIndexFormat");
-        object.stripIndexFormat =
-            JsiIndexFormat::fromValue(runtime, stripIndexFormat);
+        object->stripIndexFormat = getIndexFormat(
+            stripIndexFormat.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "frontFace")) {
         auto frontFace = obj.getProperty(runtime, "frontFace");
-        object.frontFace = JsiFrontFace::fromValue(runtime, frontFace);
+        object->frontFace =
+            getFrontFace(frontFace.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "cullMode")) {
         auto cullMode = obj.getProperty(runtime, "cullMode");
-        object.cullMode = JsiCullMode::fromValue(runtime, cullMode);
+        object->cullMode =
+            getCullMode(cullMode.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "unclippedDepth")) {
         auto unclippedDepth = obj.getProperty(runtime, "unclippedDepth");
-        object.unclippedDepth = unclippedDepth.getBool();
+        object->unclippedDepth = unclippedDepth.getBool();
       }
+      return object;
     }
   }
 };
