@@ -224,11 +224,18 @@ public:
         });
   }
 
+  JSI_HOST_FUNCTION(getWGPUContext) {
+    int nativeId = arguments[0].asNumber();
+    auto info = getEnsuredViewInfo(nativeId);
+    return jsi::Value::null();
+  }
+
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(RNSkJsiViewApi, setJsiProperty),
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, callJsiMethod),
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, requestRedraw),
                        JSI_EXPORT_FUNC(RNSkJsiViewApi, makeImageSnapshotAsync),
-                       JSI_EXPORT_FUNC(RNSkJsiViewApi, makeImageSnapshot))
+                       JSI_EXPORT_FUNC(RNSkJsiViewApi, makeImageSnapshot),
+                       JSI_EXPORT_FUNC(RNSkJsiViewApi, getWGPUContext))
 
   /**
    * Constructor

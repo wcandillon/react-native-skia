@@ -40,6 +40,11 @@ export class SkiaDomView extends React.Component<SkiaDomViewProps> {
     return this._nativeId;
   }
 
+  getWGPUContext() {
+    assertSkiaViewApi();
+    return SkiaViewApi.getWGPUContext(this._nativeId);
+  }
+
   componentDidUpdate(prevProps: SkiaDomViewProps) {
     const { root, onTouch, onSize } = this.props;
     if (root !== prevProps.root) {

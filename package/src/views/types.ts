@@ -66,6 +66,7 @@ export interface ISkiaViewApi {
   requestRedraw: (nativeId: number) => void;
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
   makeImageSnapshotAsync: (nativeId: number, rect?: SkRect) => Promise<SkImage>;
+  getWGPUContext: () => GPUCanvasContext;
 }
 
 export interface SkiaBaseViewProps extends ViewProps {

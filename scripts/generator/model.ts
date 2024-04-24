@@ -51,6 +51,12 @@ export const model: JSIObject[] = [
     ]
   },
   {
+    name: "Context",
+    properties: [
+      { name: "gpu", type: "GPU" }
+    ]
+  },
+  {
     name: "Adapter",
     methods: [
       {
