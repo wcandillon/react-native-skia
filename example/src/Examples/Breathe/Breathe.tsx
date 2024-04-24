@@ -62,7 +62,9 @@ fn main() -> @location(0) vec4f {
       topology: "triangle-list",
     },
   });
-  console.log(pipeline);
+  const commandEncoder = device.createCommandEncoder();
+
+  console.log({ pipeline, commandEncoder });
 })();
 
 const c1 = "#61bea2";

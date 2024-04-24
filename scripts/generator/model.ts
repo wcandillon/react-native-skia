@@ -1,6 +1,7 @@
 export interface Arg {
   name: string;
   type: string;
+  baseType?: string;
   optional?: boolean;
   defaultValue?: boolean;
 }
@@ -78,10 +79,27 @@ export const model: JSIObject[] = [
         args: [{
           name: "moduleDescriptor",
           type: "ShaderModuleWGSLDescriptor",
+          baseType: "ShaderModuleDescriptor"
         }],
         returns: "ShaderModule",
+      },
+      {
+        name: "createCommandEncoder",
+        args: [{
+          name: "descriptor",
+          type: "CommandEncoderDescriptor",
+          optional: true,
+          defaultValue: true
+        }],
+        returns: "CommandEncoder",
       }
     ]
+  },
+  {
+    "name": "CommandEncoderDescriptor"
+  },
+  {
+    name: "CommandEncoder"
   },
   {
     name: "RenderPipelineDescriptor",

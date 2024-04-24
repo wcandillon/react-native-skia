@@ -7,6 +7,8 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiCommandEncoder.h"
+#include "JsiCommandEncoderDescriptor.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -30,6 +32,7 @@ public:
   JSI_HOST_FUNCTION(createRenderPipeline) {
     auto descriptor =
         JsiRenderPipelineDescriptor::fromValue(runtime, arguments[0]);
+
     auto ret = getObject()->createRenderPipeline(*descriptor.get());
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
@@ -38,19 +41,32 @@ public:
   JSI_HOST_FUNCTION(createShaderModule) {
     auto moduleDescriptor =
         JsiShaderModuleWGSLDescriptor::fromValue(runtime, arguments[0]);
-    wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc = *moduleDescriptor.get();
-    wgpu::ShaderModuleDescriptor shaderDesc;
-          shaderDesc.nextInChain = &shaderCodeDesc.chain;
 
-    auto ret = getObject()->createShaderModule(shaderDesc);
+    auto moduleDescriptorNext = *moduleDescriptor.get();
+    wgpu::ShaderModuleDescriptor baseModuleDescriptor;
+    baseModuleDescriptor.nextInChain = &moduleDescriptorNext.chain;
+    auto ret = getObject()->createShaderModule(baseModuleDescriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiShaderModule>(getContext(), ret));
+  }
+
+  JSI_HOST_FUNCTION(createCommandEncoder) {
+    auto defaultDescriptor = std::make_shared<wgpu::CommandEncoderDescriptor>();
+    auto descriptor =
+        count > 0
+            ? JsiCommandEncoderDescriptor::fromValue(runtime, arguments[0])
+            : defaultDescriptor;
+
+    auto ret = getObject()->createCommandEncoder(*descriptor.get());
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
 
   EXPORT_JSI_API_BRANDNAME(JsiDevice, Device)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
-                       JSI_EXPORT_FUNC(JsiDevice, createShaderModule))
+                       JSI_EXPORT_FUNC(JsiDevice, createShaderModule),
+                       JSI_EXPORT_FUNC(JsiDevice, createCommandEncoder))
 
   /**
    * Returns the underlying object from a host object of this type

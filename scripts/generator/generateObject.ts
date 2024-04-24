@@ -41,7 +41,14 @@ export const wrapReturnValue = (returns: string | undefined) => {
   }
 };
 
-const argList = (args: Arg[]) => args.map(arg => `*${arg.name}.get()`).join(", ");
+const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  `*${arg.name}.get()`).join(", ");
+
+const baseType = (arg: Arg) => {
+  return `
+auto ${arg.name}Next = *moduleDescriptor.get();
+wgpu::${arg.baseType} base${_.upperFirst(arg.name)};
+base${_.upperFirst(arg.name)}.nextInChain = &${arg.name}Next.chain;`
+};
 
 const generatorMethod = (method: Method) => {
   const args = method.args;
@@ -54,6 +61,9 @@ const generatorMethod = (method: Method) => {
   }
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
     ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
+    ${
+      args.filter(arg => arg.baseType).map(arg => baseType(arg))
+    }
     ${returns ? 'auto ret = ' : ''}getObject()->${_.camelCase(method.name)}(${argList(args)});
     return ${wrapReturnValue(returns)};
   }
