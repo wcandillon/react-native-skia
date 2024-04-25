@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "webgpu.h"
+
 #include "RNSkDispatchQueue.h"
 
 #pragma clang diagnostic push
@@ -173,7 +175,7 @@ public:
   float getPixelDensity() { return _pixelDensity; }
 
   virtual void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) = 0;
-  virtual std::shared_ptr<wgpu::SurfaceDescriptor> getSurfaceDescriptor(int nativeId) = 0;
+  virtual std::shared_ptr<WGPUSurfaceDescriptor> getSurfaceDescriptor(int nativeId) = 0;
 
   /**
    * Starts (if not started) a loop that will call back on display sync

@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 
+#include "webgpu.h"
+
 #include "JniPlatformContext.h"
 #include "RNSkPlatformContext.h"
 #include "SkiaOpenGLSurfaceFactory.h"
@@ -64,17 +66,29 @@ public:
 
   void stopDrawLoop() override { _jniPlatformContext->stopDrawLoop(); }
 
-  void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) override {
+void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) override {
+    WGPUSurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
+    androidSurfaceDesc.chain.sType = WGPUSType_SurfaceDescriptorFromAndroidNativeWindow;
+    androidSurfaceDesc.window = window;
 
+    WGPUSurfaceDescriptor surfaceDesc = {};
+    surfaceDesc.nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&androidSurfaceDesc);
+
+    _descriptors[nativeId] = std::make_shared<WGPUSurfaceDescriptor>(surfaceDesc);
   }
 
-  virtual std::shared_ptr<wgpu::SurfaceDescriptor> getSurfaceDescriptor(int nativeId) override {
+  virtual std::shared_ptr<WGPUSurfaceDescriptor> getSurfaceDescriptor(int nativeId) override {
+    auto it = _descriptors.find(nativeId);
+    if (it != _descriptors.end()) {
+      return it->second;
+    }
     return nullptr;
   }
 
 
 private:
   JniPlatformContext *_jniPlatformContext;
+  std::map<int, std::shared_ptr<WGPUSurfaceDescriptor>> _descriptors;
 };
 
 } // namespace RNSkia
