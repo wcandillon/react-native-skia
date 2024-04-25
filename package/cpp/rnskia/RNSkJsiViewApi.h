@@ -10,6 +10,7 @@
 
 #include "JsiHostObject.h"
 #include "JsiValueWrapper.h"
+#include "JsiWGPUContext.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkView.h"
 #include <jsi/jsi.h>
@@ -231,9 +232,22 @@ public:
     if (descriptor.get() == nullptr) {
       throw jsi::JSError(runtime, "No WGPU context available for view.");
       return jsi::Value::undefined();
-    }
+    } 
+    // wgpu::Surface surface = wgpuInstanceCreateSurface(instance, descriptor.get());
+    // wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::BGRA8Unorm;//surface.getPreferredFormat(adapter); // 	TextureFormat swapChainFormat =
+    //                                         // TextureFormat::BGRA8Unorm;
+    // wgpu::SwapChainDescriptor swapChainDesc;
+    // //swapChainDesc.width = width;
+    // //swapChainDesc.height = height;
+    // swapChainDesc.usage = wgpu::TextureUsage::RenderAttachment;
+    // swapChainDesc.format = swapChainFormat;
+    // swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
     
-    return jsi::Value::null();
+    // wgpu::SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
+    auto context = _platformContext;
+    return jsi::Object::createFromHostObject(
+                      runtime, std::make_shared<JsiWGPUContext>(std::move(context),
+                                                            std::move(descriptor)));
   }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(RNSkJsiViewApi, setJsiProperty),
