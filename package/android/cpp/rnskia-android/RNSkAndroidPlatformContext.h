@@ -64,6 +64,15 @@ public:
 
   void stopDrawLoop() override { _jniPlatformContext->stopDrawLoop(); }
 
+  void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) override {
+
+  }
+
+  virtual std::shared_ptr<wgpu::SurfaceDescriptor> getSurfaceDescriptor(int nativeId) override {
+    return nullptr;
+  }
+
+
 private:
   JniPlatformContext *_jniPlatformContext;
 };

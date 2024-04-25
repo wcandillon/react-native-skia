@@ -63,6 +63,9 @@ public:
     //   runOnRenderThread([&]() { this->notifyDrawLoop(false); });
     // });
     // runTriangleDemo(_window, width, height);
+    auto nativeId = getSkiaView()->getNativeId();
+    T::getPlatformContext()->registerSurfaceDescriptor(nativeId, _window, width, height);
+
     std::thread renderThread(runTriangleDemo, _window, width, height);
     renderThread.detach(); // Detach the thread to allow it to run independently
   }

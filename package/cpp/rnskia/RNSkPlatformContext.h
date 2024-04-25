@@ -26,6 +26,10 @@
 
 #include <ReactCommon/CallInvoker.h>
 
+namespace wgpu {
+  class SurfaceDescriptor;
+}
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -167,6 +171,9 @@ public:
    * @return Current scale factor for pixels
    */
   float getPixelDensity() { return _pixelDensity; }
+
+  virtual void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) = 0;
+  virtual std::shared_ptr<wgpu::SurfaceDescriptor> getSurfaceDescriptor(int nativeId) = 0;
 
   /**
    * Starts (if not started) a loop that will call back on display sync
