@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "webgpu.h"
+#include "webgpu.hpp"
 
 #include "RNSkDispatchQueue.h"
 

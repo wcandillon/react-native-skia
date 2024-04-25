@@ -5,8 +5,6 @@
 #include <memory>
 #include <string>
 
-#include "webgpu.h"
-
 #include "JniPlatformContext.h"
 #include "RNSkPlatformContext.h"
 #include "SkiaOpenGLSurfaceFactory.h"
@@ -84,7 +82,7 @@ void registerSurfaceDescriptor(int nativeId, void* window, int width, int height
     }
     return nullptr;
   }
-
+  // TODO: add a destroy method
 
 private:
   JniPlatformContext *_jniPlatformContext;

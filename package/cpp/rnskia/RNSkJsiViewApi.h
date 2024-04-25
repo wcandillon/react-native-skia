@@ -227,6 +227,12 @@ public:
   JSI_HOST_FUNCTION(getWGPUContext) {
     int nativeId = arguments[0].asNumber();
     auto info = getEnsuredViewInfo(nativeId);
+    auto descriptor = _platformContext->getSurfaceDescriptor(nativeId);
+    if (descriptor.get() == nullptr) {
+      throw jsi::JSError(runtime, "No WGPU context available for view.");
+      return jsi::Value::undefined();
+    }
+    
     return jsi::Value::null();
   }
 

@@ -58,8 +58,10 @@ const draw = async () => {
 export const Breathe = () => {
   const ref = useRef<SkiaDomView>(null);
   useEffect(() => {
-    const ctx = ref.current!.getWGPUContext();
-    draw();
+    setTimeout(() => {
+      const ctx = ref.current!.getWGPUContext();
+      draw();
+    }, 1000);
   }, []);
   return (
     <SkiaDomView style={{ flex: 1 }} ref={ref} />
