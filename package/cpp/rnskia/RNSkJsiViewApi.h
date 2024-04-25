@@ -229,25 +229,10 @@ public:
     int nativeId = arguments[0].asNumber();
     auto info = getEnsuredViewInfo(nativeId);
     auto descriptor = _platformContext->getSurfaceDescriptor(nativeId);
-    if (descriptor.get() == nullptr) {
-      throw jsi::JSError(runtime, "No WGPU context available for view.");
-      return jsi::Value::undefined();
-    } 
-    // wgpu::Surface surface = wgpuInstanceCreateSurface(instance, descriptor.get());
-    // wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::BGRA8Unorm;//surface.getPreferredFormat(adapter); // 	TextureFormat swapChainFormat =
-    //                                         // TextureFormat::BGRA8Unorm;
-    // wgpu::SwapChainDescriptor swapChainDesc;
-    // //swapChainDesc.width = width;
-    // //swapChainDesc.height = height;
-    // swapChainDesc.usage = wgpu::TextureUsage::RenderAttachment;
-    // swapChainDesc.format = swapChainFormat;
-    // swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
-    
-    // wgpu::SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
     auto context = _platformContext;
     return jsi::Object::createFromHostObject(
                       runtime, std::make_shared<JsiWGPUContext>(std::move(context),
-                                                            std::move(descriptor)));
+                                                            std::move(std::get<0>(descriptor)), std::get<1>(descriptor), std::get<2>(descriptor)));
   }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(RNSkJsiViewApi, setJsiProperty),

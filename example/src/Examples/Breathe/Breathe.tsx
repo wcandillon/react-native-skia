@@ -23,10 +23,14 @@ fn main() -> @location(0) vec4f {
   return vec4(1.0, 0.0, 0.0, 1.0);
 }`;
 
-const draw = async () => {
+const draw = async (ctx: GPUCanvasContext) => {
   const adapter = await gpu.requestAdapter();
   const device = await adapter!.requestDevice();
   const presentationFormat = gpu.getPreferredCanvasFormat();
+  ctx.configure({
+    device,
+    format:  "bgra8unorm"
+  });
   const pipeline = device.createRenderPipeline({
     layout: "auto",
     vertex: {
@@ -51,6 +55,24 @@ const draw = async () => {
     },
   });
   const commandEncoder = device.createCommandEncoder();
+  const textureView = ctx.getCurrentTexture().createView();
+  const renderPassDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: [
+      {
+        view: textureView,
+        clearValue: [0, 0, 0, 1],
+        loadOp: 'clear',
+        storeOp: 'store',
+      },
+    ],
+  };
+
+  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  passEncoder.setPipeline(pipeline);
+  passEncoder.draw(3);
+  passEncoder.end();
+
+  device.queue.submit([commandEncoder.finish()]);
   console.log({ pipeline, commandEncoder });
 };
 
@@ -60,7 +82,7 @@ export const Breathe = () => {
   useEffect(() => {
     setTimeout(() => {
       const ctx = ref.current!.getWGPUContext();
-      draw();
+      draw(ctx);
     }, 1000);
   }, []);
   return (

@@ -176,7 +176,7 @@ public:
   float getPixelDensity() { return _pixelDensity; }
 
   virtual void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) = 0;
-  virtual std::shared_ptr<WGPUSurfaceDescriptor> getSurfaceDescriptor(int nativeId) = 0;
+  virtual std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int> getSurfaceDescriptor(int nativeId) = 0;
 
   /**
    * Starts (if not started) a loop that will call back on display sync
