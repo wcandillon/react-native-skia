@@ -48,8 +48,7 @@ public:
                              ? static_cast<uint32_t>(arguments[3].getNumber())
                              : defaultFirstInstance;
 
-    getObject()->draw(*vertexCount.get(), *instanceCount.get(),
-                      *firstVertex.get(), *firstInstance.get());
+    getObject()->draw(vertexCount, instanceCount, firstVertex, firstInstance);
     return jsi::Value::undefined();
   }
 

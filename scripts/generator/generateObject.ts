@@ -62,7 +62,7 @@ export const wrapReturnValue = (returns: string | undefined) => {
   }
 };
 
-const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  `*${arg.name}.get()`).join(", ");
+const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  isAtomicType(arg.type) ? `${arg.name}` : `*${arg.name}.get()`).join(", ");
 
 const baseType = (arg: Arg) => {
   return `
