@@ -131,6 +131,19 @@ ${properties.map((property, index) => {
 return object;`;
 }
 
+const unpackArray = (name: string, size: number) => {
+  return `if (obj.isArray(runtime)) {
+auto jsiArray = obj.asArray(runtime);
+std::vector<double> array;
+for (int i = 0; i < jsiArray.size(runtime); i++) {
+  array.push_back(jsiArray.getValueAtIndex(runtime, i).asNumber());
+}
+auto data = array.data();
+auto object = std::make_shared<wgpu::${name}>(wgpu::${name}{${new Array(size).fill(0).map((_, i) => `data[${i}]`)}});
+return object;
+  }`;
+};
+
 export const generateObject = (object: JSIObject) => {
   const className = `Jsi${object.name}`;
   const objectName = `wgpu::${object.host ? object.host : object.name}`;
@@ -179,7 +192,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<${className}>(runtime)->getObject();
     } else {
-    ${object.properties ? unpackProperties(object.name, object.properties) : `throw jsi::JSError(
+    ${object.properties ? `${object.iterable ? unpackArray(object.name, parseInt(object.iterable, 10)) : ''}${unpackProperties(object.name, object.properties)}` : `throw jsi::JSError(
       runtime,
       "Expected a ${className} object, but got a " + raw.toString(runtime).utf8(runtime));`}
     }

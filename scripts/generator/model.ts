@@ -27,6 +27,7 @@ export interface JSIObject {
   host?: string;
   methods?: Method[];
   properties?: Property[]; 
+  iterable?: string;
 }
 
 export const model: JSIObject[] = [
@@ -140,6 +141,7 @@ export const model: JSIObject[] = [
   },
   {
     name: "Color",
+    iterable: '4',
     properties: [
       {"name": "r", "type": "double"},
       {"name": "g", "type": "double"},

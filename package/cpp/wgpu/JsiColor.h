@@ -34,6 +34,17 @@ public:
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiColor>(runtime)->getObject();
     } else {
+      if (obj.isArray(runtime)) {
+        auto jsiArray = obj.asArray(runtime);
+        std::vector<double> array;
+        for (int i = 0; i < jsiArray.size(runtime); i++) {
+          array.push_back(jsiArray.getValueAtIndex(runtime, i).asNumber());
+        }
+        auto data = array.data();
+        auto object = std::make_shared<wgpu::Color>(
+            wgpu::Color{data[0], data[1], data[2], data[3]});
+        return object;
+      }
       auto object = std::make_shared<wgpu::Color>();
       if (obj.hasProperty(runtime, "r")) {
         auto r = obj.getProperty(runtime, "r");
