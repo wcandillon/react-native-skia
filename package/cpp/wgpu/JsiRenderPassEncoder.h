@@ -34,15 +34,19 @@ public:
   }
 
   JSI_HOST_FUNCTION(draw) {
-    auto vertexCount = vertexCount.asNumber();
+    auto vertexCount = static_cast<uint32_t>(arguments[0].getNumber());
     uint32_t defaultInstanceCount = 1;
-    auto instanceCount =
-        count > 1 ? instanceCount.asNumber() : defaultInstanceCount;
+    auto instanceCount = count > 1
+                             ? static_cast<uint32_t>(arguments[1].getNumber())
+                             : defaultInstanceCount;
     uint32_t defaultFirstVertex = 0;
-    auto firstVertex = count > 2 ? firstVertex.asNumber() : defaultFirstVertex;
+    auto firstVertex = count > 2
+                           ? static_cast<uint32_t>(arguments[2].getNumber())
+                           : defaultFirstVertex;
     uint32_t defaultFirstInstance = 0;
-    auto firstInstance =
-        count > 3 ? firstInstance.asNumber() : defaultFirstInstance;
+    auto firstInstance = count > 3
+                             ? static_cast<uint32_t>(arguments[3].getNumber())
+                             : defaultFirstInstance;
 
     getObject()->draw(*vertexCount.get(), *instanceCount.get(),
                       *firstVertex.get(), *firstInstance.get());

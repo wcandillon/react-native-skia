@@ -9,7 +9,7 @@ const generateArg = (index: number, arg: Arg) => {
   if (arg.type === "bool") {
     unwrap = `${name}.asBool()`;
   } else if (isNumberType(arg.type)) {
-    unwrap = `${name}.asNumber()`;
+    unwrap = unWrapType(`arguments[${index}]`, arg.type, false);
   } else if (isEnum(arg.type)) {
     unwrap = `get${arg.type}(arguments[${index}].asString().utf8(runtime).c_str())`;
   } else {
