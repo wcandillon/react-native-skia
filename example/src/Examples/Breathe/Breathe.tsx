@@ -67,13 +67,16 @@ const draw = async (ctx: GPUCanvasContext) => {
     ],
   };
 
-  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  passEncoder.setPipeline(pipeline);
-  passEncoder.draw(3);
-  passEncoder.end();
+  console.log({ commandEncoder, renderPassDescriptor });
 
-  device.queue.submit([commandEncoder.finish()]);
-  console.log({ pipeline, commandEncoder });
+  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  console.log(passEncoder);
+  // passEncoder.setPipeline(pipeline);
+  // passEncoder.draw(3);
+  // passEncoder.end();
+
+  // device.queue.submit([commandEncoder.finish()]);
+  // console.log({ pipeline, commandEncoder });
 };
 
 

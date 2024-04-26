@@ -40,6 +40,7 @@ public:
       auto object = std::make_shared<wgpu::VertexState>();
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
+
         object->module = *JsiShaderModule::fromValue(runtime, module).get();
       } else {
         throw jsi::JSError(runtime,
@@ -47,6 +48,7 @@ public:
       }
       if (obj.hasProperty(runtime, "entryPoint")) {
         auto entryPoint = obj.getProperty(runtime, "entryPoint");
+
         object->entryPoint =
             entryPoint.getString(runtime).utf8(runtime).c_str();
       } else {

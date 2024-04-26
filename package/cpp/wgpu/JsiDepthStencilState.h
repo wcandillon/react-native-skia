@@ -40,6 +40,7 @@ public:
       auto object = std::make_shared<wgpu::DepthStencilState>();
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");
+
         object->format =
             getTextureFormat(format.getString(runtime).utf8(runtime).c_str());
       } else {
@@ -48,46 +49,55 @@ public:
       }
       if (obj.hasProperty(runtime, "depthWriteEnabled")) {
         auto depthWriteEnabled = obj.getProperty(runtime, "depthWriteEnabled");
+
         object->depthWriteEnabled =
             static_cast<uint32_t>(depthWriteEnabled.getBool());
       }
       if (obj.hasProperty(runtime, "depthCompare")) {
         auto depthCompare = obj.getProperty(runtime, "depthCompare");
+
         object->depthCompare = getCompareFunction(
             depthCompare.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "stencilFront")) {
         auto stencilFront = obj.getProperty(runtime, "stencilFront");
+
         object->stencilFront =
             *JsiStencilFaceState::fromValue(runtime, stencilFront).get();
       }
       if (obj.hasProperty(runtime, "stencilBack")) {
         auto stencilBack = obj.getProperty(runtime, "stencilBack");
+
         object->stencilBack =
             *JsiStencilFaceState::fromValue(runtime, stencilBack).get();
       }
       if (obj.hasProperty(runtime, "stencilReadMask")) {
         auto stencilReadMask = obj.getProperty(runtime, "stencilReadMask");
+
         object->stencilReadMask =
             static_cast<uint32_t>(stencilReadMask.getNumber());
       }
       if (obj.hasProperty(runtime, "stencilWriteMask")) {
         auto stencilWriteMask = obj.getProperty(runtime, "stencilWriteMask");
+
         object->stencilWriteMask =
             static_cast<uint32_t>(stencilWriteMask.getNumber());
       }
       if (obj.hasProperty(runtime, "depthBias")) {
         auto depthBias = obj.getProperty(runtime, "depthBias");
+
         object->depthBias = static_cast<int32_t>(depthBias.getNumber());
       }
       if (obj.hasProperty(runtime, "depthBiasSlopeScale")) {
         auto depthBiasSlopeScale =
             obj.getProperty(runtime, "depthBiasSlopeScale");
+
         object->depthBiasSlopeScale =
             static_cast<float>(depthBiasSlopeScale.getNumber());
       }
       if (obj.hasProperty(runtime, "depthBiasClamp")) {
         auto depthBiasClamp = obj.getProperty(runtime, "depthBiasClamp");
+
         object->depthBiasClamp = static_cast<float>(depthBiasClamp.getNumber());
       }
       return object;

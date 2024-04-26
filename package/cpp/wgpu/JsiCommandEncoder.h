@@ -10,6 +10,8 @@
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
+#include "JsiRenderPassDescriptor.h"
+#include "JsiRenderPassEncoder.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
 
@@ -25,7 +27,17 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::CommandEncoder>(
             context, std::make_shared<wgpu::CommandEncoder>(std::move(m))) {}
 
+  JSI_HOST_FUNCTION(beginRenderPass) {
+    auto descriptor = JsiRenderPassDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->beginRenderPass(*descriptor.get());
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), ret));
+  }
+
   EXPORT_JSI_API_BRANDNAME(JsiCommandEncoder, CommandEncoder)
+
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass))
 
   /**
    * Returns the underlying object from a host object of this type

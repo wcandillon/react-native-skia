@@ -231,8 +231,9 @@ public:
     auto descriptor = _platformContext->getSurfaceDescriptor(nativeId);
     auto context = _platformContext;
     return jsi::Object::createFromHostObject(
-                      runtime, std::make_shared<JsiWGPUContext>(std::move(context),
-                                                            std::move(std::get<0>(descriptor)), std::get<1>(descriptor), std::get<2>(descriptor)));
+        runtime, std::make_shared<JsiWGPUContext>(
+                     std::move(context), std::move(std::get<0>(descriptor)),
+                     std::get<1>(descriptor), std::get<2>(descriptor)));
   }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(RNSkJsiViewApi, setJsiProperty),

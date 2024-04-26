@@ -40,12 +40,14 @@ public:
       auto object = std::make_shared<wgpu::RequestAdapterOptions>();
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");
+
         object->powerPreference = getPowerPreference(
             powerPreference.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "forceFallbackAdapter")) {
         auto forceFallbackAdapter =
             obj.getProperty(runtime, "forceFallbackAdapter");
+
         object->forceFallbackAdapter =
             static_cast<uint32_t>(forceFallbackAdapter.getBool());
       }

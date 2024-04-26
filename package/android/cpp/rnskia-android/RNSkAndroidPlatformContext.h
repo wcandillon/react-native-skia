@@ -64,18 +64,23 @@ public:
 
   void stopDrawLoop() override { _jniPlatformContext->stopDrawLoop(); }
 
-void registerSurfaceDescriptor(int nativeId, void* window, int width, int height) override {
+  void registerSurfaceDescriptor(int nativeId, void *window, int width,
+                                 int height) override {
     WGPUSurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
-    androidSurfaceDesc.chain.sType = WGPUSType_SurfaceDescriptorFromAndroidNativeWindow;
+    androidSurfaceDesc.chain.sType =
+        WGPUSType_SurfaceDescriptorFromAndroidNativeWindow;
     androidSurfaceDesc.window = window;
 
     WGPUSurfaceDescriptor surfaceDesc = {};
-    surfaceDesc.nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&androidSurfaceDesc);
+    surfaceDesc.nextInChain =
+        reinterpret_cast<const WGPUChainedStruct *>(&androidSurfaceDesc);
 
-    _descriptors[nativeId] = std::make_tuple(std::make_shared<WGPUSurfaceDescriptor>(surfaceDesc), width, height);
+    _descriptors[nativeId] = std::make_tuple(
+        std::make_shared<WGPUSurfaceDescriptor>(surfaceDesc), width, height);
   }
 
-  virtual std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int> getSurfaceDescriptor(int nativeId) override {
+  virtual std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>
+  getSurfaceDescriptor(int nativeId) override {
     auto it = _descriptors.find(nativeId);
     if (it != _descriptors.end()) {
       return it->second;
@@ -86,7 +91,8 @@ void registerSurfaceDescriptor(int nativeId, void* window, int width, int height
 
 private:
   JniPlatformContext *_jniPlatformContext;
-  std::map<int, std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>> _descriptors;
+  std::map<int, std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>>
+      _descriptors;
 };
 
 } // namespace RNSkia

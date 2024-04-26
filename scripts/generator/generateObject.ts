@@ -29,6 +29,24 @@ const generateArg = (index: number, arg: Arg) => {
   return `auto ${name} = ${unwrap};`;
 };
 
+const unwrapArrayMember = (propName: string, arg: Property, index: number) => {
+  const type = arg.type.substring(0, arg.type.length - 2);
+  const name = `array${index}`;
+  const jsiName = `jsi${_.upperFirst(name)}`;
+  return `std::vector<wgpu::${type}> ${name};
+auto ${jsiName} = ${propName}.asObject(runtime).asArray(runtime);
+auto ${jsiName}Size = static_cast<int>(${jsiName}.size(runtime));
+for (int i = 0; i < ${jsiName}Size; i++) {
+  auto element = Jsi${type}::fromValue(
+    runtime,
+    ${jsiName}.getValueAtIndex(runtime, i).asObject(runtime)
+  );
+  ${name}.push_back(*element.get());
+}
+
+`;
+};
+
 export const wrapReturnValue = (returns: string | undefined) => {
   if (returns === undefined) {
     return "jsi::Value::undefined()";
@@ -60,7 +78,9 @@ const generatorMethod = (method: Method) => {
 `;
   }
   return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
-    ${args.map((arg, index) => generateArg(index, arg)).join("\n    ")}
+    ${args.map((arg, index) => {
+      return generateArg(index, arg);
+    }).join("\n    ")}
     ${
       args.filter(arg => arg.baseType).map(arg => baseType(arg))
     }
@@ -97,11 +117,14 @@ const generatorAsyncMethod = (method: Method) => {
 
 const unpackProperties = (name: string, properties: Property[]) => {
   return `auto object = std::make_shared<wgpu::${name}>();
-${properties.map(property => {
+${properties.map((property, index) => {
   const propName = _.camelCase(property.name);
+  const isArray = property.type.endsWith("[]");
   return `if(obj.hasProperty(runtime, "${property.name}")) {
     auto ${propName} = obj.getProperty(runtime, "${property.name}");
-  object->${propName} = ${unWrapType(propName, property.type, !!property.pointer)};
+  ${isArray ? unwrapArrayMember(propName, property, index) : ''}
+  ${isArray ? `object->${propName.substring(0, propName.length - 1)}Count = jsiArray${index}Size;` : ``}
+  object->${propName} = ${isArray ? `array${index}.data()` : unWrapType(propName, property.type, !!property.pointer)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
 `)}

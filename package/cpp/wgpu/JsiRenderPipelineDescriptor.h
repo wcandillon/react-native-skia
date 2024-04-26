@@ -46,6 +46,7 @@ public:
       auto object = std::make_shared<wgpu::RenderPipelineDescriptor>();
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");
+
         object->vertex = *JsiVertexState::fromValue(runtime, vertex).get();
       } else {
         throw jsi::JSError(
@@ -54,6 +55,7 @@ public:
       }
       if (obj.hasProperty(runtime, "primitive")) {
         auto primitive = obj.getProperty(runtime, "primitive");
+
         object->primitive =
             *JsiPrimitiveState::fromValue(runtime, primitive).get();
       } else {
@@ -63,11 +65,13 @@ public:
       }
       if (obj.hasProperty(runtime, "depthStencil")) {
         auto depthStencil = obj.getProperty(runtime, "depthStencil");
+
         object->depthStencil =
             JsiDepthStencilState::fromValue(runtime, depthStencil).get();
       }
       if (obj.hasProperty(runtime, "fragment")) {
         auto fragment = obj.getProperty(runtime, "fragment");
+
         object->fragment = JsiFragmentState::fromValue(runtime, fragment).get();
       }
       return object;

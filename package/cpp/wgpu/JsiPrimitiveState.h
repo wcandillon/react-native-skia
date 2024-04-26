@@ -39,21 +39,25 @@ public:
       auto object = std::make_shared<wgpu::PrimitiveState>();
       if (obj.hasProperty(runtime, "topology")) {
         auto topology = obj.getProperty(runtime, "topology");
+
         object->topology = getPrimitiveTopology(
             topology.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "stripIndexFormat")) {
         auto stripIndexFormat = obj.getProperty(runtime, "stripIndexFormat");
+
         object->stripIndexFormat = getIndexFormat(
             stripIndexFormat.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "frontFace")) {
         auto frontFace = obj.getProperty(runtime, "frontFace");
+
         object->frontFace =
             getFrontFace(frontFace.getString(runtime).utf8(runtime).c_str());
       }
       if (obj.hasProperty(runtime, "cullMode")) {
         auto cullMode = obj.getProperty(runtime, "cullMode");
+
         object->cullMode =
             getCullMode(cullMode.getString(runtime).utf8(runtime).c_str());
       }

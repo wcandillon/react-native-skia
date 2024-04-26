@@ -29,7 +29,7 @@ void runTriangleDemo(void *window, int width, int height) {
 
   RNSkia::RNSkLogger::logToConsole("Requesting adapter...");
   RequestAdapterOptions adapterOpts;
-  //adapterOpts.compatibleSurface = surface;
+  // adapterOpts.compatibleSurface = surface;
   Adapter adapter = instance.requestAdapter(adapterOpts);
   std::cout << "Got adapter: " << adapter << std::endl;
 

@@ -5,12 +5,14 @@ import { isEnum } from "./enums";
 export const objectName = (name: string) => _.upperFirst(_.camelCase(name)).replace(/Wgsl/g, 'WGSL');
 
 export const isNumberType = (type: string) => type === "uint32_t" || type === "float" || type === "int32_t" || type === "size_t";
-
-export const isAtomicType = (type: string) => type === "bool" || isNumberType(type) || type === "string";
+export const isDouble = (type: string) => type === "double";
+export const isAtomicType = (type: string) => type === "bool" || isDouble(type) || isNumberType(type) || type === "string";
 
 export const unWrapType = (obj: string, type: string, pointer: boolean) => {
   if (type === "bool") {
     return `static_cast<uint32_t>(${obj}.getBool())`;
+  } else if (isDouble(type)) {
+    return `${obj}.getNumber()`;
   } else if (isNumberType(type)) {
     return `static_cast<${type}>(${obj}.getNumber())`;
   } else if (type === "string") {

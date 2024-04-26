@@ -105,7 +105,10 @@ export const model: JSIObject[] = [
     "name": "CommandEncoderDescriptor"
   },
   {
-    name: "CommandEncoder"
+    name: "CommandEncoder",
+    methods: [
+      { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" }
+    ]
   },
   {
     name: "RenderPipelineDescriptor",
@@ -118,6 +121,33 @@ export const model: JSIObject[] = [
     ]
   },
   {
+    name: "RenderPassEncoder"
+  },
+  {
+    name: "RenderPassDescriptor",
+    properties: [
+      {"name": "colorAttachments", "type": "RenderPassColorAttachment[]"}
+    ]
+  },
+  {
+    name: "RenderPassColorAttachment",
+    properties: [
+      {"name": "view", "type": "TextureView"},
+      {"name": "clearValue", "type": "Color"},
+      {"name": "loadOp", "type": "LoadOp"},
+      {"name": "storeOp", "type": "StoreOp"}
+    ]
+  },
+  {
+    name: "Color",
+    properties: [
+      {"name": "r", "type": "double"},
+      {"name": "g", "type": "double"},
+      {"name": "b", "type": "double"},
+      {"name": "a", "type": "double"}
+    ]
+  },
+  {
     name: "ShaderModuleWGSLDescriptor",
     properties: [
       {"name": "code", "type": "string"}
@@ -125,6 +155,15 @@ export const model: JSIObject[] = [
   },
   {
     name: "ShaderModule",
+  },
+  {
+    name: "Texture",
+    methods: [
+      { name: "createView", args: [], returns: "TextureView"}
+    ]
+  },
+  {
+    name: "TextureView"
   },
   {
     name: "FragmentState",
