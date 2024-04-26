@@ -109,7 +109,8 @@ export const model: JSIObject[] = [
   {
     name: "CommandEncoder",
     methods: [
-      { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" }
+      { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" },
+      { name: "finish", args: [] }
     ]
   },
   {
@@ -131,7 +132,12 @@ export const model: JSIObject[] = [
         { name: "instanceCount", type: "uint32_t", optional: true, defaultAtomicValue: "1" },
         { name: "firstVertex", type: "uint32_t", optional: true, defaultAtomicValue: "0" },
         { name: "firstInstance", type: "uint32_t", optional: true, defaultAtomicValue: "0" },
-      ] }
+        ]
+      },
+      {
+        name: "end",
+        args: [],
+      }
     ]
   },
   {

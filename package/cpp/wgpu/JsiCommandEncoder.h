@@ -35,9 +35,16 @@ public:
         runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(finish) {
+
+    getObject()->finish();
+    return jsi::Value::undefined();
+  }
+
   EXPORT_JSI_API_BRANDNAME(JsiCommandEncoder, CommandEncoder)
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass))
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass),
+                       JSI_EXPORT_FUNC(JsiCommandEncoder, finish))
 
   /**
    * Returns the underlying object from a host object of this type

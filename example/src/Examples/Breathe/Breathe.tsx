@@ -73,7 +73,7 @@ const draw = async (ctx: GPUCanvasContext) => {
   console.log(passEncoder);
   passEncoder.setPipeline(pipeline);
   passEncoder.draw(3);
-  // passEncoder.end();
+  passEncoder.end();
 
   // device.queue.submit([commandEncoder.finish()]);
   // console.log({ pipeline, commandEncoder });

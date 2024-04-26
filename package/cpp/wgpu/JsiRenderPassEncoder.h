@@ -52,10 +52,17 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(end) {
+
+    getObject()->end();
+    return jsi::Value::undefined();
+  }
+
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassEncoder, RenderPassEncoder)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiRenderPassEncoder, setPipeline),
-                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, draw))
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, draw),
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, end))
 
   /**
    * Returns the underlying object from a host object of this type
