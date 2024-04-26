@@ -12,6 +12,7 @@
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
+#include "JsiQueue.h"
 #include "JsiRenderPipeline.h"
 #include "JsiRenderPipelineDescriptor.h"
 #include "JsiShaderModule.h"
@@ -28,6 +29,12 @@ public:
   JsiDevice(std::shared_ptr<RNSkPlatformContext> context, wgpu::Device m)
       : JsiSkWrappingSharedPtrHostObject<wgpu::Device>(
             context, std::make_shared<wgpu::Device>(std::move(m))) {}
+
+  JSI_PROPERTY_GET(queue) {
+    auto ret = getObject()->getQueue();
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiQueue>(getContext(), ret));
+  }
 
   JSI_HOST_FUNCTION(createRenderPipeline) {
     auto descriptor =
@@ -63,6 +70,8 @@ public:
   }
 
   EXPORT_JSI_API_BRANDNAME(JsiDevice, Device)
+
+  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
                        JSI_EXPORT_FUNC(JsiDevice, createShaderModule),

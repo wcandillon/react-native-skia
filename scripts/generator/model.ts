@@ -13,6 +13,7 @@ export interface Method {
   args: Arg[];
   returns?: string;
   implementation?: string;
+  member?: string
 }
 
 export interface Property {
@@ -75,6 +76,12 @@ export const model: JSIObject[] = [
     name: "Device",
     methods: [
       {
+        name: "getQueue",
+        args: [],
+        returns: "Queue",
+        member: "queue"
+      },
+      {
         name: "createRenderPipeline",
         args: [{
           name: "descriptor",
@@ -112,6 +119,21 @@ export const model: JSIObject[] = [
       { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" },
       { name: "finish", args: [] }
     ]
+  },
+  {
+    name: "Queue",
+    methods: [
+      {
+        name: "submit",
+        args: [{
+          name: "commandBuffer",
+          type: "CommandBuffer"
+        }]
+      }
+    ]
+  },
+  {
+    name: "CommandBuffer"
   },
   {
     name: "RenderPipelineDescriptor",

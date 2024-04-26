@@ -80,7 +80,8 @@ const generatorMethod = (method: Method) => {
   }
 `;
   }
-  return `JSI_HOST_FUNCTION(${_.camelCase(method.name)}) {
+  const decl = method.member ? `JSI_PROPERTY_GET(${_.camelCase(method.member)})` : `JSI_HOST_FUNCTION(${_.camelCase(method.name)})`;
+  return `${decl} {
     ${args.map((arg, index) => {
       return generateArg(index, arg);
     }).join("\n    ")}
@@ -151,6 +152,8 @@ export const generateObject = (object: JSIObject) => {
   const className = `Jsi${object.name}`;
   const objectName = `wgpu::${object.host ? object.host : object.name}`;
   const methods = object.methods ?? [];
+  const memberMethods = methods.filter(m => !!m.member);
+  const nonMemberMethods = methods.filter(m => !m.member)
   return `#pragma once
 #include <memory>
 #include <string>
@@ -181,9 +184,11 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
   EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})
+  
+  ${memberMethods.length > 0 ? `  JSI_EXPORT_PROPERTY_GETTERS(${memberMethods.map(m => `JSI_EXPORT_PROP_GET(${className}, ${m.member})`)})` : ""}
 
-  ${methods.length > 0 ? `JSI_EXPORT_FUNCTIONS(
-    ${methods.map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
+  ${nonMemberMethods.length > 0 ? `JSI_EXPORT_FUNCTIONS(
+    ${nonMemberMethods.filter(m => !m.member).map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
   )` : ''}
 
   /**
