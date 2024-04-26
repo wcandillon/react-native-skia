@@ -4,13 +4,14 @@ export interface Arg {
   baseType?: string;
   optional?: boolean;
   defaultValue?: boolean;
+  defaultAtomicValue?: string;
 }
 
 export interface Method {
   name: string;
   async?: boolean;
   args: Arg[];
-  returns: string;
+  returns?: string;
   implementation?: string;
 }
 
@@ -122,7 +123,16 @@ export const model: JSIObject[] = [
     ]
   },
   {
-    name: "RenderPassEncoder"
+    name: "RenderPassEncoder",
+    methods: [
+      { name: "setPipeline", args: [{ name: "pipeline", type: "RenderPipeline" }] },
+      { name: "draw", args: [
+        { name: "vertexCount", type: "uint32_t" },
+        { name: "instanceCount", type: "uint32_t", optional: true, defaultAtomicValue: "1" },
+        { name: "firstVertex", type: "uint32_t", optional: true, defaultAtomicValue: "0" },
+        { name: "firstInstance", type: "uint32_t", optional: true, defaultAtomicValue: "0" },
+      ] }
+    ]
   },
   {
     name: "RenderPassDescriptor",

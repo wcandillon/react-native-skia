@@ -22,6 +22,9 @@ const generateArg = (index: number, arg: Arg) => {
     if (arg.defaultValue) {
       result += `auto default${_.upperFirst(name)} = std::make_shared<wgpu::${arg.type}>();
       `;
+    } else if (arg.defaultAtomicValue) {
+      result += `${arg.type} default${_.upperFirst(name)} = ${arg.defaultAtomicValue};
+      `;
     }
     result += `auto ${name} = count > ${index} ? ${unwrap} : default${_(name).upperFirst()};`;
     return result;

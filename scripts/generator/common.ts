@@ -32,7 +32,7 @@ export const computeDependencies = (obj: JSIObject) => {
   const properties = obj.properties ?? [];
   methods.forEach(method => {
     method.args.forEach(arg => {
-      if (!isAtomicType(arg.type) && !isEnum(method.returns)) {
+      if (!isAtomicType(arg.type) && (method.returns === undefined || (method.returns && !isEnum(method.returns)))) {
         deps.add(objectName(arg.type));
       }
     });
