@@ -67,9 +67,9 @@ public:
     auto device = JsiDevice::fromValue(
         runtime,
         arguments[0].asObject(runtime));
-    auto pipeline2 = JsiRenderPipeline::fromValue(
-        runtime,
-        arguments[1].asObject(runtime));
+    // auto pipeline2 = JsiRenderPipeline::fromValue(
+    //     runtime,
+    //     arguments[1].asObject(runtime));
     auto commandEncoder = JsiCommandEncoder::fromValue(
         runtime,
         arguments[2].asObject(runtime));
@@ -190,37 +190,37 @@ fn fs_main() -> @location(0) vec4f {
     //  while (true) {
     // wgpuInstanceProcessEvents(instance);
 
-    wgpu::TextureView nextTexture = _swapChain->getCurrentTextureView();
-    if (!nextTexture) {
-      RNSkia::RNSkLogger::logToConsole(
-          "Cannot acquire next swap chain texture");
-      //return;
-    }
+    //wgpu::TextureView nextTexture = _swapChain->getCurrentTextureView();
+    // if (!nextTexture) {
+    //   RNSkia::RNSkLogger::logToConsole(
+    //       "Cannot acquire next swap chain texture");
+    //   //return;
+    // }
 
     // wgpu::CommandEncoderDescriptor commandEncoderDesc;
     // commandEncoderDesc.label = "Command Encoder";
     // wgpu::CommandEncoder encoder = device->createCommandEncoder(commandEncoderDesc);
 
-    wgpu::RenderPassDescriptor renderPassDesc;
+    // wgpu::RenderPassDescriptor renderPassDesc;
 
-    wgpu::RenderPassColorAttachment renderPassColorAttachment;
-    renderPassColorAttachment.view = nextTexture;
-    renderPassColorAttachment.resolveTarget = nullptr;
-    renderPassColorAttachment.loadOp = wgpu::LoadOp::Clear;
-    renderPassColorAttachment.storeOp = wgpu::StoreOp::Store;
-    renderPassColorAttachment.depthSlice = UINT32_MAX;
-    renderPassColorAttachment.clearValue = wgpu::Color{0.0, 1.0, 1.0, 1.0};
-    renderPassDesc.colorAttachmentCount = 1;
-    renderPassDesc.colorAttachments = &renderPassColorAttachment;
+    // wgpu::RenderPassColorAttachment renderPassColorAttachment;
+    // renderPassColorAttachment.view = nextTexture;
+    // renderPassColorAttachment.resolveTarget = nullptr;
+    // renderPassColorAttachment.loadOp = wgpu::LoadOp::Clear;
+    // renderPassColorAttachment.storeOp = wgpu::StoreOp::Store;
+    // renderPassColorAttachment.depthSlice = UINT32_MAX;
+    // renderPassColorAttachment.clearValue = wgpu::Color{0.0, 1.0, 1.0, 1.0};
+    // renderPassDesc.colorAttachmentCount = 1;
+    // renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-    renderPassDesc.depthStencilAttachment = nullptr;
+    // renderPassDesc.depthStencilAttachment = nullptr;
     // renderPassDesc.timestampWriteCount = 0;
-    renderPassDesc.timestampWrites = nullptr;
-    wgpu::RenderPassEncoder renderPass = commandEncoder->beginRenderPass(renderPassDesc);
+    // renderPassDesc.timestampWrites = nullptr;
+    //wgpu::RenderPassEncoder renderPass = commandEncoder->beginRenderPass(renderPassDesc);
 
     // In its overall outline, drawing a triangle is as simple as this:
     // Select which render pipeline to use
-    renderPass.setPipeline(pipeline);
+    // renderPass.setPipeline(pipeline);
     // // Draw 1 instance of a 3-vertices shape
     // renderPass.draw(3, 1, 0, 0);
 
@@ -249,7 +249,7 @@ fn fs_main() -> @location(0) vec4f {
     //adapter.release();
     //instance.release();
     return jsi::Object::createFromHostObject(
-        runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), renderPass));
+        runtime, std::make_shared<JsiRenderPipeline>(getContext(), pipeline));
   }
 
   EXPORT_JSI_API_TYPENAME(JsiWGPUContext, WGPUContext)

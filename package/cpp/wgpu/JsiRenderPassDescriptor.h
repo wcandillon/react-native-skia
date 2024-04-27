@@ -7,6 +7,7 @@
 
 #include <jsi/jsi.h>
 
+#include "RNSkLog.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -47,9 +48,19 @@ public:
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
               runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));
+          element->resolveTarget = nullptr;
+          element->loadOp = wgpu::LoadOp::Clear;
+          element->storeOp = wgpu::StoreOp::Store;
+          element->depthSlice = UINT32_MAX;
+          element->clearValue = wgpu::Color{0.0, 1.0, 1.0, 1.0};
           array0.push_back(*element.get());
         }
 
+
+        object->depthStencilAttachment = nullptr;
+        object->timestampWrites = nullptr;
+
+        RNSkLogger::logToConsole("colorAttachments size: %d", jsiArray0Size);
         object->colorAttachmentCount = jsiArray0Size;
         object->colorAttachments = array0.data();
       } else {

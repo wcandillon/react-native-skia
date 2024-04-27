@@ -34,7 +34,7 @@ const draw = async (ctx: GPUCanvasContext) => {
     format:  "bgra8unorm"
   });
 
-  const pipeline = device.createRenderPipeline({
+  const pipelineOld = device.createRenderPipeline({
     layout: "auto",
     vertex: {
       entryPoint: "main",
@@ -60,22 +60,22 @@ const draw = async (ctx: GPUCanvasContext) => {
 
   const commandEncoder = device.createCommandEncoder();
 
-  const passEncoder = ctx.runDemo(device, pipeline, commandEncoder);
-  // const textureView = ctx.getCurrentTexture().createView();
-  // const renderPassDescriptor: GPURenderPassDescriptor = {
-  //   colorAttachments: [
-  //     {
-  //       view: textureView,
-  //       clearValue: [0.3, 0.6, 1, 1],
-  //       loadOp: 'clear',
-  //       storeOp: 'store',
-  //     },
-  //   ],
-  // };
+  const pipeline = ctx.runDemo(device, null, commandEncoder);
+  const textureView = ctx.getCurrentTexture().createView();
+  const renderPassDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: [
+      {
+        view: textureView,
+        clearValue: [0.3, 0.6, 1, 1],
+        loadOp: 'clear',
+        storeOp: 'store',
+      },
+    ],
+  };
 
 
-  //const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  //passEncoder.setPipeline(pipeline);
+  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  passEncoder.setPipeline(pipeline);
   passEncoder.draw(3);
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
