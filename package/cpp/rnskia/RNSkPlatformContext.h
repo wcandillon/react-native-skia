@@ -177,7 +177,7 @@ public:
 
   virtual void registerSurfaceDescriptor(int nativeId, void *window, int width,
                                          int height) = 0;
-  virtual std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>
+  virtual std::tuple<std::shared_ptr<wgpu::Surface>, int, int>
   getSurfaceDescriptor(int nativeId) = 0;
 
   /**

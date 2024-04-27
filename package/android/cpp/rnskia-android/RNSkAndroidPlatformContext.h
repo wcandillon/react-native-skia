@@ -75,11 +75,15 @@ public:
     surfaceDesc.nextInChain =
         reinterpret_cast<const WGPUChainedStruct *>(&androidSurfaceDesc);
 
+    wgpu::Instance instance = wgpuCreateInstance(nullptr);
+    wgpu::Surface surface =
+        wgpuInstanceCreateSurface(instance, &surfaceDesc);
+
     _descriptors[nativeId] = std::make_tuple(
-        std::make_shared<WGPUSurfaceDescriptor>(surfaceDesc), width, height);
+        std::make_shared<wgpu::Surface>(surface), width, height);
   }
 
-  virtual std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>
+  virtual std::tuple<std::shared_ptr<wgpu::Surface>, int, int>
   getSurfaceDescriptor(int nativeId) override {
     auto it = _descriptors.find(nativeId);
     if (it != _descriptors.end()) {
@@ -91,7 +95,7 @@ public:
 
 private:
   JniPlatformContext *_jniPlatformContext;
-  std::map<int, std::tuple<std::shared_ptr<WGPUSurfaceDescriptor>, int, int>>
+  std::map<int, std::tuple<std::shared_ptr<wgpu::Surface>, int, int>>
       _descriptors;
 };
 

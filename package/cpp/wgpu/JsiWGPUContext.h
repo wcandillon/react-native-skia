@@ -9,13 +9,14 @@
 
 #include "JsiDevice.h"
 #include "JsiTexture.h"
+#include "RNSkLog.h"
 
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
 class JsiWGPUContext
-    : public JsiSkWrappingSharedPtrHostObject<WGPUSurfaceDescriptor> {
+    : public JsiSkWrappingSharedPtrHostObject<wgpu::Surface> {
 private:
   int _width;
   int _height;
@@ -23,9 +24,9 @@ private:
 
 public:
   JsiWGPUContext(std::shared_ptr<RNSkPlatformContext> context,
-                 std::shared_ptr<WGPUSurfaceDescriptor> m, int width,
+                 std::shared_ptr<wgpu::Surface> m, int width,
                  int height)
-      : JsiSkWrappingSharedPtrHostObject<WGPUSurfaceDescriptor>(context,
+      : JsiSkWrappingSharedPtrHostObject<wgpu::Surface>(context,
                                                                 std::move(m)),
         _width(width), _height(height) {}
 
@@ -33,18 +34,13 @@ public:
     auto device = JsiDevice::fromValue(
         runtime,
         arguments[0].asObject(runtime).getPropertyAsObject(runtime, "device"));
-    auto instance = device->getAdapter().getInstance();
-    wgpu::Surface surface =
-        wgpuInstanceCreateSurface(instance, getObject().get());
-    wgpu::TextureFormat swapChainFormat =
-        wgpu::TextureFormat::BGRA8Unorm; // surface.getPreferredFormat(adapter);
-                                         // // 	TextureFormat swapChainFormat =
-    //                                         // TextureFormat::BGRA8Unorm;
+    auto adapter = device->getAdapter();
+    wgpu::Surface surface = *getObject().get();
     wgpu::SwapChainDescriptor swapChainDesc;
     swapChainDesc.width = _width;
     swapChainDesc.height = _height;
     swapChainDesc.usage = wgpu::TextureUsage::RenderAttachment;
-    swapChainDesc.format = swapChainFormat;
+    swapChainDesc.format = surface.getPreferredFormat(adapter);
     swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
 
     _swapChain = std::make_shared<wgpu::SwapChain>(

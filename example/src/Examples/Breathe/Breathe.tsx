@@ -60,24 +60,20 @@ const draw = async (ctx: GPUCanvasContext) => {
     colorAttachments: [
       {
         view: textureView,
-        clearValue: [0, 0, 0, 1],
+        clearValue: [0.3, 0.6, 1, 1],
         loadOp: 'clear',
         storeOp: 'store',
       },
     ],
   };
 
-  console.log({ commandEncoder, renderPassDescriptor });
 
   const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  console.log(passEncoder);
   passEncoder.setPipeline(pipeline);
   passEncoder.draw(3);
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
   ctx.present();
-  //device.queue.submit(commandEncoder.finish());
-  // console.log({ pipeline, commandEncoder });
 };
 
 
