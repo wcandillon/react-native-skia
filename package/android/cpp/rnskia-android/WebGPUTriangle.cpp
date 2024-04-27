@@ -79,7 +79,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 
 @fragment
 fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.0, 0.4, 1.0, 1.0);
+    return vec4f(0.3, 0.6, 1.0, 1.0);
 }
 )";
 
@@ -174,8 +174,8 @@ fn fs_main() -> @location(0) vec4f {
   RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
   std::cout << "Render pipeline: " << pipeline << std::endl;
 
-  while (true) {
-    wgpuInstanceProcessEvents(instance);
+//  while (true) {
+    //wgpuInstanceProcessEvents(instance);
 
     TextureView nextTexture = swapChain.getCurrentTextureView();
     if (!nextTexture) {
@@ -196,7 +196,7 @@ fn fs_main() -> @location(0) vec4f {
     renderPassColorAttachment.loadOp = LoadOp::Clear;
     renderPassColorAttachment.storeOp = StoreOp::Store;
     renderPassColorAttachment.depthSlice = UINT32_MAX;
-    renderPassColorAttachment.clearValue = Color{0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.clearValue = Color{0.0, 1.0, 1.0, 1.0};
     renderPassDesc.colorAttachmentCount = 1;
     renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
@@ -226,7 +226,7 @@ fn fs_main() -> @location(0) vec4f {
     command.release();
 
     swapChain.present();
-  }
+ // }
 
   pipeline.release();
   shaderModule.release();

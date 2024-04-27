@@ -24,58 +24,57 @@ fn main() -> @location(0) vec4f {
 }`;
 
 const draw = async (ctx: GPUCanvasContext) => {
-  const adapter = await gpu.requestAdapter();
-  const device = await adapter!.requestDevice();
-  const presentationFormat = gpu.getPreferredCanvasFormat();
-  ctx.configure({
-    device,
-    format:  "bgra8unorm"
-  });
-  const pipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      entryPoint: "main",
-      module: device.createShaderModule({
-        code: triangleVertWGSL,
-      }),
-    },
-    fragment: {
-      entryPoint: "main",
-      module: device.createShaderModule({
-        code: redFragWGSL,
-      }),
-      targets: [
-        {
-          format: presentationFormat,
-        },
-      ],
-    },
-    primitive: {
-      topology: "triangle-list",
-    },
-  });
-  const commandEncoder = device.createCommandEncoder();
-  const textureView = ctx.getCurrentTexture().createView();
-  const renderPassDescriptor: GPURenderPassDescriptor = {
-    colorAttachments: [
-      {
-        view: textureView,
-        clearValue: [0.3, 0.6, 1, 1],
-        loadOp: 'clear',
-        storeOp: 'store',
-      },
-    ],
-  };
+  // const adapter = await gpu.requestAdapter();
+  // const device = await adapter!.requestDevice();
+  // const presentationFormat = gpu.getPreferredCanvasFormat();
+  // ctx.configure({
+  //   device,
+  //   format:  "bgra8unorm"
+  // });
+  // const pipeline = device.createRenderPipeline({
+  //   layout: "auto",
+  //   vertex: {
+  //     entryPoint: "main",
+  //     module: device.createShaderModule({
+  //       code: triangleVertWGSL,
+  //     }),
+  //   },
+  //   fragment: {
+  //     entryPoint: "main",
+  //     module: device.createShaderModule({
+  //       code: redFragWGSL,
+  //     }),
+  //     targets: [
+  //       {
+  //         format: presentationFormat,
+  //       },
+  //     ],
+  //   },
+  //   primitive: {
+  //     topology: "triangle-list",
+  //   },
+  // });
+  // const commandEncoder = device.createCommandEncoder();
+  // const textureView = ctx.getCurrentTexture().createView();
+  // const renderPassDescriptor: GPURenderPassDescriptor = {
+  //   colorAttachments: [
+  //     {
+  //       view: textureView,
+  //       clearValue: [0.3, 0.6, 1, 1],
+  //       loadOp: 'clear',
+  //       storeOp: 'store',
+  //     },
+  //   ],
+  // };
 
 
-  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  passEncoder.setPipeline(pipeline);
-  passEncoder.draw(3);
-  passEncoder.end();
-  device.queue.submit([commandEncoder.finish()]);
-  ctx.present();
+  // const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  // passEncoder.setPipeline(pipeline);
+  // passEncoder.draw(3);
+  // passEncoder.end();
+  // device.queue.submit([commandEncoder.finish()]);
+  // ctx.present();
 };
-
 
 export const Breathe = () => {
   const ref = useRef<SkiaDomView>(null);
