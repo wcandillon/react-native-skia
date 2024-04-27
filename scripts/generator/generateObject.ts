@@ -194,6 +194,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   ${memberMethods.length === 0 ? `EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})` : ""}
   
   ${memberMethods.length > 0 ? `  JSI_EXPORT_PROPERTY_GETTERS(${memberMethods.map(m => `JSI_EXPORT_PROP_GET(${className}, ${m.member})`)})` : ""}

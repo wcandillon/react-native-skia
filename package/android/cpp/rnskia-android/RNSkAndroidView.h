@@ -67,8 +67,8 @@ public:
     T::getPlatformContext()->registerSurfaceDescriptor(nativeId, _window, width,
                                                        height);
 
-    std::thread renderThread(runTriangleDemo, _window, width, height);
-    renderThread.detach(); // Detach the thread to allow it to run independently
+    //std::thread renderThread(runTriangleDemo, _window, width, height);
+    //renderThread.detach(); // Detach the thread to allow it to run independently
   }
 
   float getPixelDensity() override {

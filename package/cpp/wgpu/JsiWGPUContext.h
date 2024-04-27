@@ -61,9 +61,18 @@ public:
         runtime, std::make_shared<JsiTexture>(getContext(), texture));
   }
 
+  JSI_HOST_FUNCTION(present) {
+    if (!_swapChain) {
+      throw jsi::JSError(runtime, "WGPU Context is not configured");
+    }
+    _swapChain->present();
+    return jsi::Value::undefined();
+  }
+
   EXPORT_JSI_API_TYPENAME(JsiWGPUContext, WGPUContext)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiWGPUContext, configure),
-                       JSI_EXPORT_FUNC(JsiWGPUContext, getCurrentTexture))
+                       JSI_EXPORT_FUNC(JsiWGPUContext, getCurrentTexture),
+                       JSI_EXPORT_FUNC(JsiWGPUContext, present))
 };
 } // namespace RNSkia
