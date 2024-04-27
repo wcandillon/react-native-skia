@@ -31,6 +31,7 @@ public:
             context, std::make_shared<wgpu::Device>(std::move(m))) {}
 
   JSI_PROPERTY_GET(queue) {
+
     auto ret = getObject()->getQueue();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
@@ -68,8 +69,6 @@ public:
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
-
-  EXPORT_JSI_API_BRANDNAME(JsiDevice, Device)
 
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 

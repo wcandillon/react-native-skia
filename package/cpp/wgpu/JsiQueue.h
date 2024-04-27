@@ -25,9 +25,16 @@ public:
             context, std::make_shared<wgpu::Queue>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(submit) {
-    auto commandBuffer = JsiCommandBuffer::fromValue(runtime, arguments[0]);
+    std::vector<WGPUCommandBuffer> commandBuffers;
+    auto jsiArray = arguments[0].asObject(runtime).asArray(runtime);
+    auto jsiArraySize = static_cast<int>(jsiArray.size(runtime));
+    for (int i = 0; i < jsiArraySize; i++) {
+      auto val = jsiArray.getValueAtIndex(runtime, i);
+      commandBuffers.push_back(
+          *JsiCommandBuffer::fromValue(runtime, val).get());
+    }
 
-    getObject()->submit(*commandBuffer.get());
+    getObject()->submit(commandBuffers);
     return jsi::Value::undefined();
   }
 

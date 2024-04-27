@@ -7,6 +7,7 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiCommandBuffer.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -37,8 +38,9 @@ public:
 
   JSI_HOST_FUNCTION(finish) {
 
-    getObject()->finish();
-    return jsi::Value::undefined();
+    auto ret = getObject()->finish();
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }
 
   EXPORT_JSI_API_BRANDNAME(JsiCommandEncoder, CommandEncoder)

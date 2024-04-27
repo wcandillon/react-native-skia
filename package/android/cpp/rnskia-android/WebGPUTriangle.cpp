@@ -220,6 +220,8 @@ fn fs_main() -> @location(0) vec4f {
     cmdBufferDescriptor.label = "Command buffer";
     CommandBuffer command = encoder.finish(cmdBufferDescriptor);
     encoder.release();
+    std::vector<WGPUCommandBuffer> commands;
+    commands.push_back(command);
     queue.submit(command);
     command.release();
 

@@ -5,6 +5,7 @@ export interface Arg {
   optional?: boolean;
   defaultValue?: boolean;
   defaultAtomicValue?: string;
+  ctype?: boolean;
 }
 
 export interface Method {
@@ -117,7 +118,7 @@ export const model: JSIObject[] = [
     name: "CommandEncoder",
     methods: [
       { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" },
-      { name: "finish", args: [] }
+      { name: "finish", args: [], returns: "CommandBuffer" }
     ]
   },
   {
@@ -126,8 +127,9 @@ export const model: JSIObject[] = [
       {
         name: "submit",
         args: [{
-          name: "commandBuffer",
-          type: "CommandBuffer"
+          name: "commandBuffers",
+          type: "CommandBuffer[]",
+          ctype: true
         }]
       }
     ]

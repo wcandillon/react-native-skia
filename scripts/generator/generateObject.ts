@@ -4,7 +4,18 @@ import { computeDependencies, isAtomicType, isNumberType, objectName, unWrapType
 import { isEnum } from "./enums";
 
 const generateArg = (index: number, arg: Arg) => {
+  const isArray = arg.type.endsWith("[]");
   const name = _.camelCase(arg.name);
+  if (isArray) {
+    const baseType = arg.type.substring(0, arg.type.length - 2);
+    return `std::vector<${arg.ctype ? `WGPU${baseType}` : `wgpu::${baseType}`}> ${name};
+auto jsiArray = arguments[${index}].asObject(runtime).asArray(runtime);
+auto jsiArraySize = static_cast<int>(jsiArray.size(runtime));
+for (int i = 0; i < jsiArraySize; i++) {
+  auto val = jsiArray.getValueAtIndex(runtime, i);
+  ${name}.push_back(${unWrapType("val", baseType, false)});
+}`;
+  }
   let unwrap = '';
   if (arg.type === "bool") {
     unwrap = `${name}.asBool()`;
@@ -44,7 +55,7 @@ for (int i = 0; i < ${jsiName}Size; i++) {
     runtime,
     ${jsiName}.getValueAtIndex(runtime, i).asObject(runtime)
   );
-  ${name}.push_back(*element.get());
+  ${name}.push_back(*element.get()); 
 }
 
 `;
@@ -62,7 +73,7 @@ export const wrapReturnValue = (returns: string | undefined) => {
   }
 };
 
-const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  isAtomicType(arg.type) ? `${arg.name}` : `*${arg.name}.get()`).join(", ");
+const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  (isAtomicType(arg.type) || arg.type.endsWith("[]")) ? `${arg.name}` : `*${arg.name}.get()`).join(", ");
 
 const baseType = (arg: Arg) => {
   return `
@@ -183,7 +194,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
   ${methods.filter(method => !method.async).map(method => generatorMethod(method)).join("\n  ")}
   ${methods.filter(method => method.async).map(method => generatorAsyncMethod(method)).join("\n  ")}
 
-  EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})
+  ${memberMethods.length === 0 ? `EXPORT_JSI_API_BRANDNAME(${className}, ${object.name})` : ""}
   
   ${memberMethods.length > 0 ? `  JSI_EXPORT_PROPERTY_GETTERS(${memberMethods.map(m => `JSI_EXPORT_PROP_GET(${className}, ${m.member})`)})` : ""}
 
