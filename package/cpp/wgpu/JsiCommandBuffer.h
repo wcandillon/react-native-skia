@@ -25,6 +25,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::CommandBuffer>(
             context, std::make_shared<wgpu::CommandBuffer>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiCommandBuffer, CommandBuffer)
 
   /**

@@ -26,6 +26,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::FragmentState>(
             context, std::make_shared<wgpu::FragmentState>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiFragmentState, FragmentState)
 
   /**
@@ -38,6 +39,7 @@ public:
       return obj.asHostObject<JsiFragmentState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::FragmentState>();
+
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
 

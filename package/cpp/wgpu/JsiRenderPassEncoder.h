@@ -58,6 +58,7 @@ public:
     return jsi::Value::undefined();
   }
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassEncoder, RenderPassEncoder)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiRenderPassEncoder, setPipeline),

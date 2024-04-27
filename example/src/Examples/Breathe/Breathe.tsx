@@ -66,7 +66,7 @@ const draw = async (ctx: GPUCanvasContext) => {
     colorAttachments: [
       {
         view: textureView,
-        clearValue: [0.3, 0.6, 1, 1],
+        clearValue: [1.0, 0.0, 1, 1],
         loadOp: 'clear',
         storeOp: 'store',
       },

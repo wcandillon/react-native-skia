@@ -25,6 +25,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::ShaderModule>(
             context, std::make_shared<wgpu::ShaderModule>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiShaderModule, ShaderModule)
 
   /**

@@ -31,6 +31,7 @@ public:
         runtime, std::make_shared<JsiTextureView>(getContext(), ret));
   }
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiTexture, Texture)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiTexture, createView))

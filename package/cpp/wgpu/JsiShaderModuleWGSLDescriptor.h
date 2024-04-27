@@ -26,6 +26,7 @@ public:
             context,
             std::make_shared<wgpu::ShaderModuleWGSLDescriptor>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiShaderModuleWGSLDescriptor,
                            ShaderModuleWGSLDescriptor)
 
@@ -40,6 +41,7 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::ShaderModuleWGSLDescriptor>();
+
       if (obj.hasProperty(runtime, "code")) {
         auto code = obj.getProperty(runtime, "code");
 

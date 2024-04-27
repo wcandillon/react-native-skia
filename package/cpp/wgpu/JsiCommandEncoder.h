@@ -43,6 +43,7 @@ public:
         runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiCommandEncoder, CommandEncoder)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass),

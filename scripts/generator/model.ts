@@ -29,6 +29,7 @@ export interface JSIObject {
   name: string;
   host?: string;
   methods?: Method[];
+  defaultProperties?: string;
   properties?: Property[]; 
   iterable?: string;
 }
@@ -172,6 +173,8 @@ export const model: JSIObject[] = [
   },
   {
     name: "RenderPassColorAttachment",
+    defaultProperties: `object->resolveTarget = nullptr;
+object->depthSlice = UINT32_MAX;`,
     properties: [
       {"name": "view", "type": "TextureView"},
       {"name": "clearValue", "type": "Color"},

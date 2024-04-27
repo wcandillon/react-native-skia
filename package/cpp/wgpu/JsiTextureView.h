@@ -25,6 +25,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::TextureView>(
             context, std::make_shared<wgpu::TextureView>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiTextureView, TextureView)
 
   /**

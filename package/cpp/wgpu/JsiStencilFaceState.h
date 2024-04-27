@@ -25,6 +25,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::StencilFaceState>(
             context, std::make_shared<wgpu::StencilFaceState>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiStencilFaceState, StencilFaceState)
 
   /**
@@ -37,6 +38,7 @@ public:
       return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::StencilFaceState>();
+
       if (obj.hasProperty(runtime, "compare")) {
         auto compare = obj.getProperty(runtime, "compare");
 

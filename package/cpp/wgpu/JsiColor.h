@@ -23,6 +23,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::Color>(
             context, std::make_shared<wgpu::Color>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiColor, Color)
 
   /**
@@ -46,6 +47,7 @@ public:
         return object;
       }
       auto object = std::make_shared<wgpu::Color>();
+
       if (obj.hasProperty(runtime, "r")) {
         auto r = obj.getProperty(runtime, "r");
 

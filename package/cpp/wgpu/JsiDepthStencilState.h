@@ -26,6 +26,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::DepthStencilState>(
             context, std::make_shared<wgpu::DepthStencilState>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiDepthStencilState, DepthStencilState)
 
   /**
@@ -38,6 +39,7 @@ public:
       return obj.asHostObject<JsiDepthStencilState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::DepthStencilState>();
+
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");
 

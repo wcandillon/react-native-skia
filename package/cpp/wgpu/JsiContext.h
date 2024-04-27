@@ -24,6 +24,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::Context>(
             context, std::make_shared<wgpu::Context>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiContext, Context)
 
   /**
@@ -36,6 +37,7 @@ public:
       return obj.asHostObject<JsiContext>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::Context>();
+
       if (obj.hasProperty(runtime, "gpu")) {
         auto gpu = obj.getProperty(runtime, "gpu");
 

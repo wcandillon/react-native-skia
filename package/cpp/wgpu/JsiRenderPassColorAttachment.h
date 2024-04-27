@@ -28,6 +28,7 @@ public:
             context,
             std::make_shared<wgpu::RenderPassColorAttachment>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassColorAttachment,
                            RenderPassColorAttachment)
 
@@ -42,6 +43,8 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPassColorAttachment>();
+      object->resolveTarget = nullptr;
+      object->depthSlice = UINT32_MAX;
       if (obj.hasProperty(runtime, "view")) {
         auto view = obj.getProperty(runtime, "view");
 

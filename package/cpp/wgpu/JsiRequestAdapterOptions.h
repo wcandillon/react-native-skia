@@ -26,6 +26,7 @@ public:
             context,
             std::make_shared<wgpu::RequestAdapterOptions>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRequestAdapterOptions, RequestAdapterOptions)
 
   /**
@@ -38,6 +39,7 @@ public:
       return obj.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::RequestAdapterOptions>();
+
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");
 

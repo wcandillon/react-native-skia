@@ -26,6 +26,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::VertexState>(
             context, std::make_shared<wgpu::VertexState>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiVertexState, VertexState)
 
   /**
@@ -38,6 +39,7 @@ public:
       return obj.asHostObject<JsiVertexState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::VertexState>();
+
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
 

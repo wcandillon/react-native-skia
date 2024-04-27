@@ -25,6 +25,7 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::PrimitiveState>(
             context, std::make_shared<wgpu::PrimitiveState>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiPrimitiveState, PrimitiveState)
 
   /**
@@ -37,6 +38,7 @@ public:
       return obj.asHostObject<JsiPrimitiveState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::PrimitiveState>();
+
       if (obj.hasProperty(runtime, "topology")) {
         auto topology = obj.getProperty(runtime, "topology");
 

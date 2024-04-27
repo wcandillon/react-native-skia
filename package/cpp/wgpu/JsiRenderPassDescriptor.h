@@ -7,7 +7,6 @@
 
 #include <jsi/jsi.h>
 
-#include "RNSkLog.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -28,6 +27,7 @@ public:
             context,
             std::make_shared<wgpu::RenderPassDescriptor>(std::move(m))) {}
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassDescriptor, RenderPassDescriptor)
 
   /**
@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiRenderPassDescriptor>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPassDescriptor>();
+
       if (obj.hasProperty(runtime, "colorAttachments")) {
         auto colorAttachments = obj.getProperty(runtime, "colorAttachments");
         std::vector<wgpu::RenderPassColorAttachment> array0;
@@ -48,19 +49,9 @@ public:
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
               runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));
-          element->resolveTarget = nullptr;
-          element->loadOp = wgpu::LoadOp::Clear;
-          element->storeOp = wgpu::StoreOp::Store;
-          element->depthSlice = UINT32_MAX;
-          element->clearValue = wgpu::Color{0.0, 1.0, 1.0, 1.0};
           array0.push_back(*element.get());
         }
 
-
-        object->depthStencilAttachment = nullptr;
-        object->timestampWrites = nullptr;
-
-        RNSkLogger::logToConsole("colorAttachments size: %d", jsiArray0Size);
         object->colorAttachmentCount = jsiArray0Size;
         object->colorAttachments = array0.data();
       } else {

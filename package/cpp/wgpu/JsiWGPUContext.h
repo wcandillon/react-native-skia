@@ -64,15 +64,12 @@ public:
   }
 
   JSI_HOST_FUNCTION(runDemo) {
-    auto device = JsiDevice::fromValue(
-        runtime,
-        arguments[0].asObject(runtime));
+    auto device = JsiDevice::fromValue(runtime, arguments[0].asObject(runtime));
     // auto pipeline2 = JsiRenderPipeline::fromValue(
     //     runtime,
     //     arguments[1].asObject(runtime));
-    auto commandEncoder = JsiCommandEncoder::fromValue(
-        runtime,
-        arguments[2].asObject(runtime));
+    auto commandEncoder =
+        JsiCommandEncoder::fromValue(runtime, arguments[2].asObject(runtime));
     RNSkia::RNSkLogger::logToConsole("Creating shader module.");
     const char *shaderSource = R"(
 @vertex
@@ -157,13 +154,13 @@ fn fs_main() -> @location(0) vec4f {
     blendState.alpha.operation = wgpu::BlendOperation::Add;
 
     auto adapter = device->getAdapter();
-    wgpu::TextureFormat swapChainFormat =
-      _surface->getPreferredFormat(adapter); 
+    wgpu::TextureFormat swapChainFormat = _surface->getPreferredFormat(adapter);
     wgpu::ColorTargetState colorTarget;
     colorTarget.format = swapChainFormat;
     colorTarget.blend = &blendState;
-    colorTarget.writeMask = wgpu::ColorWriteMask::All; // We could write to only some
-                                                 // of the color channels.
+    colorTarget.writeMask =
+        wgpu::ColorWriteMask::All; // We could write to only some
+                                   // of the color channels.
 
     // We have only one target because our render pass has only one output color
     // attachment.
@@ -190,16 +187,17 @@ fn fs_main() -> @location(0) vec4f {
     //  while (true) {
     // wgpuInstanceProcessEvents(instance);
 
-    //wgpu::TextureView nextTexture = _swapChain->getCurrentTextureView();
-    // if (!nextTexture) {
-    //   RNSkia::RNSkLogger::logToConsole(
-    //       "Cannot acquire next swap chain texture");
-    //   //return;
-    // }
+    // wgpu::TextureView nextTexture = _swapChain->getCurrentTextureView();
+    //  if (!nextTexture) {
+    //    RNSkia::RNSkLogger::logToConsole(
+    //        "Cannot acquire next swap chain texture");
+    //    //return;
+    //  }
 
     // wgpu::CommandEncoderDescriptor commandEncoderDesc;
     // commandEncoderDesc.label = "Command Encoder";
-    // wgpu::CommandEncoder encoder = device->createCommandEncoder(commandEncoderDesc);
+    // wgpu::CommandEncoder encoder =
+    // device->createCommandEncoder(commandEncoderDesc);
 
     // wgpu::RenderPassDescriptor renderPassDesc;
 
@@ -216,7 +214,8 @@ fn fs_main() -> @location(0) vec4f {
     // renderPassDesc.depthStencilAttachment = nullptr;
     // renderPassDesc.timestampWriteCount = 0;
     // renderPassDesc.timestampWrites = nullptr;
-    //wgpu::RenderPassEncoder renderPass = commandEncoder->beginRenderPass(renderPassDesc);
+    // wgpu::RenderPassEncoder renderPass =
+    // commandEncoder->beginRenderPass(renderPassDesc);
 
     // In its overall outline, drawing a triangle is as simple as this:
     // Select which render pipeline to use
@@ -245,9 +244,9 @@ fn fs_main() -> @location(0) vec4f {
     // pipeline.release();
     // shaderModule.release();
     // _swapChain->release();
-    //device.release();
-    //adapter.release();
-    //instance.release();
+    // device.release();
+    // adapter.release();
+    // instance.release();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), pipeline));
   }

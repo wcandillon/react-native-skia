@@ -130,8 +130,9 @@ const generatorAsyncMethod = (method: Method) => {
 `;
 };
 
-const unpackProperties = (name: string, properties: Property[]) => {
+const unpackProperties = (name: string, properties: Property[], defaultProperties: string) => {
   return `auto object = std::make_shared<wgpu::${name}>();
+${defaultProperties}
 ${properties.map((property, index) => {
   const propName = _.camelCase(property.name);
   const isArray = property.type.endsWith("[]");
@@ -212,7 +213,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<${className}>(runtime)->getObject();
     } else {
-    ${object.properties ? `${object.iterable ? unpackArray(object.name, parseInt(object.iterable, 10)) : ''}${unpackProperties(object.name, object.properties)}` : `throw jsi::JSError(
+    ${object.properties ? `${object.iterable ? unpackArray(object.name, parseInt(object.iterable, 10)) : ''}${unpackProperties(object.name, object.properties, object.defaultProperties ?? "")}` : `throw jsi::JSError(
       runtime,
       "Expected a ${className} object, but got a " + raw.toString(runtime).utf8(runtime));`}
     }

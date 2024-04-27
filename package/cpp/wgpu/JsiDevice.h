@@ -70,6 +70,8 @@ public:
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
+
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),

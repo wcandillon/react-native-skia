@@ -49,6 +49,7 @@ public:
         });
   }
 
+  // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiAdapter, Adapter)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiAdapter, requestDevice))
