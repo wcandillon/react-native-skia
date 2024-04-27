@@ -74,6 +74,19 @@ public:
 
         object->fragment = JsiFragmentState::fromValue(runtime, fragment).get();
       }
+      // Depth and stencil tests are not used here
+      object->depthStencil = nullptr;
+
+      // Multi-sampling
+      // Samples per pixel
+      object->multisample.count = 1;
+      // Default value for the mask, meaning "all bits on"
+      object->multisample.mask = ~0u;
+      // Default value as well (irrelevant for count = 1 anyways)
+      object->multisample.alphaToCoverageEnabled = false;
+
+      // Pipeline layout
+      object->layout = nullptr;
       return object;
     }
   }

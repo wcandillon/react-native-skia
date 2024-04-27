@@ -67,6 +67,9 @@ public:
     auto device = JsiDevice::fromValue(
         runtime,
         arguments[0].asObject(runtime));
+    auto pipeline2 = JsiRenderPipeline::fromValue(
+        runtime,
+        arguments[1].asObject(runtime));
     RNSkia::RNSkLogger::logToConsole("Creating shader module.");
     const char *shaderSource = R"(
 @vertex

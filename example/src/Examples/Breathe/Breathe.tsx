@@ -3,6 +3,7 @@ import {
   gpu,
   SkiaDomView,
 } from "@shopify/react-native-skia";
+import { pipeline } from "stream";
 
 const triangleVertWGSL = `@vertex
 fn main(
@@ -33,30 +34,31 @@ const draw = async (ctx: GPUCanvasContext) => {
     format:  "bgra8unorm"
   });
 
-  ctx.runDemo(device);
-  // const pipeline = device.createRenderPipeline({
-  //   layout: "auto",
-  //   vertex: {
-  //     entryPoint: "main",
-  //     module: device.createShaderModule({
-  //       code: triangleVertWGSL,
-  //     }),
-  //   },
-  //   fragment: {
-  //     entryPoint: "main",
-  //     module: device.createShaderModule({
-  //       code: redFragWGSL,
-  //     }),
-  //     targets: [
-  //       {
-  //         format: presentationFormat,
-  //       },
-  //     ],
-  //   },
-  //   primitive: {
-  //     topology: "triangle-list",
-  //   },
-  // });
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      entryPoint: "main",
+      module: device.createShaderModule({
+        code: triangleVertWGSL,
+      }),
+    },
+    fragment: {
+      entryPoint: "main",
+      module: device.createShaderModule({
+        code: redFragWGSL,
+      }),
+      targets: [
+        {
+          format: presentationFormat,
+        },
+      ],
+    },
+    primitive: {
+      topology: "triangle-list",
+    },
+  });
+
+  ctx.runDemo(device, pipeline);
   // const commandEncoder = device.createCommandEncoder();
   // const textureView = ctx.getCurrentTexture().createView();
   // const renderPassDescriptor: GPURenderPassDescriptor = {
