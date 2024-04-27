@@ -70,6 +70,9 @@ public:
     auto pipeline2 = JsiRenderPipeline::fromValue(
         runtime,
         arguments[1].asObject(runtime));
+    auto commandEncoder = JsiCommandEncoder::fromValue(
+        runtime,
+        arguments[2].asObject(runtime));
     RNSkia::RNSkLogger::logToConsole("Creating shader module.");
     const char *shaderSource = R"(
 @vertex
@@ -194,9 +197,9 @@ fn fs_main() -> @location(0) vec4f {
       //return;
     }
 
-    wgpu::CommandEncoderDescriptor commandEncoderDesc;
-    commandEncoderDesc.label = "Command Encoder";
-    wgpu::CommandEncoder encoder = device->createCommandEncoder(commandEncoderDesc);
+    // wgpu::CommandEncoderDescriptor commandEncoderDesc;
+    // commandEncoderDesc.label = "Command Encoder";
+    // wgpu::CommandEncoder encoder = device->createCommandEncoder(commandEncoderDesc);
 
     wgpu::RenderPassDescriptor renderPassDesc;
 
@@ -213,7 +216,7 @@ fn fs_main() -> @location(0) vec4f {
     renderPassDesc.depthStencilAttachment = nullptr;
     // renderPassDesc.timestampWriteCount = 0;
     renderPassDesc.timestampWrites = nullptr;
-    wgpu::RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+    wgpu::RenderPassEncoder renderPass = commandEncoder->beginRenderPass(renderPassDesc);
 
     // In its overall outline, drawing a triangle is as simple as this:
     // Select which render pipeline to use
@@ -226,17 +229,17 @@ fn fs_main() -> @location(0) vec4f {
 
     nextTexture.release();
 
-    wgpu::CommandBufferDescriptor cmdBufferDescriptor;
-    cmdBufferDescriptor.label = "Command buffer";
-    wgpu::CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-    encoder.release();
-    std::vector<WGPUCommandBuffer> commands;
-    commands.push_back(command);
-    wgpu::Queue queue = device->getQueue();
-    queue.submit(command);
-    command.release();
+    // wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+    // cmdBufferDescriptor.label = "Command buffer";
+    // wgpu::CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+    // encoder.release();
+    // std::vector<WGPUCommandBuffer> commands;
+    // commands.push_back(command);
+    // wgpu::Queue queue = device->getQueue();
+    // queue.submit(command);
+    // command.release();
 
-    _swapChain->present();
+    //_swapChain->present();
     // }
 
     pipeline.release();
