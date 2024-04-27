@@ -76,8 +76,7 @@ public:
         reinterpret_cast<const WGPUChainedStruct *>(&androidSurfaceDesc);
 
     wgpu::Instance instance = wgpuCreateInstance(nullptr);
-    wgpu::Surface surface =
-        wgpuInstanceCreateSurface(instance, &surfaceDesc);
+    wgpu::Surface surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
 
     _descriptors[nativeId] = std::make_tuple(
         std::make_shared<wgpu::Surface>(surface), width, height);

@@ -24,13 +24,16 @@ fn main() -> @location(0) vec4f {
 }`;
 
 const draw = async (ctx: GPUCanvasContext) => {
-  // const adapter = await gpu.requestAdapter();
-  // const device = await adapter!.requestDevice();
-  // const presentationFormat = gpu.getPreferredCanvasFormat();
-  // ctx.configure({
-  //   device,
-  //   format:  "bgra8unorm"
-  // });
+  const adapter = await gpu.requestAdapter();
+  const device = await adapter!.requestDevice();
+  
+  const presentationFormat = gpu.getPreferredCanvasFormat();
+  ctx.configure({
+    device,
+    format:  "bgra8unorm"
+  });
+
+  ctx.runDemo(device);
   // const pipeline = device.createRenderPipeline({
   //   layout: "auto",
   //   vertex: {

@@ -174,59 +174,58 @@ fn fs_main() -> @location(0) vec4f {
   RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
   std::cout << "Render pipeline: " << pipeline << std::endl;
 
-//  while (true) {
-    //wgpuInstanceProcessEvents(instance);
+  //  while (true) {
+  // wgpuInstanceProcessEvents(instance);
 
-    TextureView nextTexture = swapChain.getCurrentTextureView();
-    if (!nextTexture) {
-      RNSkia::RNSkLogger::logToConsole(
-          "Cannot acquire next swap chain texture");
-      return;
-    }
+  TextureView nextTexture = swapChain.getCurrentTextureView();
+  if (!nextTexture) {
+    RNSkia::RNSkLogger::logToConsole("Cannot acquire next swap chain texture");
+    return;
+  }
 
-    CommandEncoderDescriptor commandEncoderDesc;
-    commandEncoderDesc.label = "Command Encoder";
-    CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
+  CommandEncoderDescriptor commandEncoderDesc;
+  commandEncoderDesc.label = "Command Encoder";
+  CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
 
-    RenderPassDescriptor renderPassDesc;
+  RenderPassDescriptor renderPassDesc;
 
-    RenderPassColorAttachment renderPassColorAttachment;
-    renderPassColorAttachment.view = nextTexture;
-    renderPassColorAttachment.resolveTarget = nullptr;
-    renderPassColorAttachment.loadOp = LoadOp::Clear;
-    renderPassColorAttachment.storeOp = StoreOp::Store;
-    renderPassColorAttachment.depthSlice = UINT32_MAX;
-    renderPassColorAttachment.clearValue = Color{0.0, 1.0, 1.0, 1.0};
-    renderPassDesc.colorAttachmentCount = 1;
-    renderPassDesc.colorAttachments = &renderPassColorAttachment;
+  RenderPassColorAttachment renderPassColorAttachment;
+  renderPassColorAttachment.view = nextTexture;
+  renderPassColorAttachment.resolveTarget = nullptr;
+  renderPassColorAttachment.loadOp = LoadOp::Clear;
+  renderPassColorAttachment.storeOp = StoreOp::Store;
+  renderPassColorAttachment.depthSlice = UINT32_MAX;
+  renderPassColorAttachment.clearValue = Color{0.0, 1.0, 1.0, 1.0};
+  renderPassDesc.colorAttachmentCount = 1;
+  renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-    renderPassDesc.depthStencilAttachment = nullptr;
-    // renderPassDesc.timestampWriteCount = 0;
-    renderPassDesc.timestampWrites = nullptr;
-    RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+  renderPassDesc.depthStencilAttachment = nullptr;
+  // renderPassDesc.timestampWriteCount = 0;
+  renderPassDesc.timestampWrites = nullptr;
+  RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-    // In its overall outline, drawing a triangle is as simple as this:
-    // Select which render pipeline to use
-    renderPass.setPipeline(pipeline);
-    // Draw 1 instance of a 3-vertices shape
-    renderPass.draw(3, 1, 0, 0);
+  // In its overall outline, drawing a triangle is as simple as this:
+  // Select which render pipeline to use
+  renderPass.setPipeline(pipeline);
+  // Draw 1 instance of a 3-vertices shape
+  renderPass.draw(3, 1, 0, 0);
 
-    renderPass.end();
-    renderPass.release();
+  renderPass.end();
+  renderPass.release();
 
-    nextTexture.release();
+  nextTexture.release();
 
-    CommandBufferDescriptor cmdBufferDescriptor;
-    cmdBufferDescriptor.label = "Command buffer";
-    CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-    encoder.release();
-    std::vector<WGPUCommandBuffer> commands;
-    commands.push_back(command);
-    queue.submit(command);
-    command.release();
+  CommandBufferDescriptor cmdBufferDescriptor;
+  cmdBufferDescriptor.label = "Command buffer";
+  CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+  encoder.release();
+  std::vector<WGPUCommandBuffer> commands;
+  commands.push_back(command);
+  queue.submit(command);
+  command.release();
 
-    swapChain.present();
- // }
+  swapChain.present();
+  // }
 
   pipeline.release();
   shaderModule.release();
