@@ -221,13 +221,13 @@ fn fs_main() -> @location(0) vec4f {
     // In its overall outline, drawing a triangle is as simple as this:
     // Select which render pipeline to use
     renderPass.setPipeline(pipeline);
-    // Draw 1 instance of a 3-vertices shape
-    renderPass.draw(3, 1, 0, 0);
+    // // Draw 1 instance of a 3-vertices shape
+    // renderPass.draw(3, 1, 0, 0);
 
-    renderPass.end();
-    renderPass.release();
+    // renderPass.end();
+    // renderPass.release();
 
-    nextTexture.release();
+    // nextTexture.release();
 
     // wgpu::CommandBufferDescriptor cmdBufferDescriptor;
     // cmdBufferDescriptor.label = "Command buffer";
@@ -242,13 +242,14 @@ fn fs_main() -> @location(0) vec4f {
     //_swapChain->present();
     // }
 
-    pipeline.release();
-    shaderModule.release();
-    _swapChain->release();
+    // pipeline.release();
+    // shaderModule.release();
+    // _swapChain->release();
     //device.release();
     //adapter.release();
     //instance.release();
-    return jsi::Value::undefined();
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), renderPass));
   }
 
   EXPORT_JSI_API_TYPENAME(JsiWGPUContext, WGPUContext)

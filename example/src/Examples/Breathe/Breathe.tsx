@@ -60,7 +60,7 @@ const draw = async (ctx: GPUCanvasContext) => {
 
   const commandEncoder = device.createCommandEncoder();
 
-  ctx.runDemo(device, pipeline, commandEncoder);
+  const passEncoder = ctx.runDemo(device, pipeline, commandEncoder);
   // const textureView = ctx.getCurrentTexture().createView();
   // const renderPassDescriptor: GPURenderPassDescriptor = {
   //   colorAttachments: [
@@ -74,10 +74,10 @@ const draw = async (ctx: GPUCanvasContext) => {
   // };
 
 
-  // const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  // passEncoder.setPipeline(pipeline);
-  // passEncoder.draw(3);
-  // passEncoder.end();
+  //const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  //passEncoder.setPipeline(pipeline);
+  passEncoder.draw(3);
+  passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
   ctx.present();
 };
