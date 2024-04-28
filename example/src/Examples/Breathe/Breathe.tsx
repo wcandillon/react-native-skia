@@ -27,10 +27,10 @@ const draw = async (ctx: GPUCanvasContext) => {
   const adapter = await gpu.requestAdapter();
   const device = await adapter!.requestDevice();
   
-  const presentationFormat = gpu.getPreferredCanvasFormat();
+  const format = gpu.getPreferredCanvasFormat();
   ctx.configure({
     device,
-    format:  "bgra8unorm"
+    format
   });
 
   const vertex: GPUVertexState = {
@@ -47,7 +47,7 @@ const draw = async (ctx: GPUCanvasContext) => {
     }),
     targets: [
       {
-        format: presentationFormat,
+        format,
       },
     ],
   };

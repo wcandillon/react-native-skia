@@ -51,7 +51,7 @@ export const model: JSIObject[] = [
         name: "getPreferredCanvasFormat",
         args: [],
         returns: "string",
-        implementation: `return jsi::String::createFromUtf8(runtime, "bgra8unorm");`
+        implementation: `return jsi::String::createFromUtf8(runtime, "rgba8unorm");`
       }
     ]
   },
@@ -227,6 +227,8 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
   },
   {
     name: "ColorTargetState",
+    defaultProperties: `object->writeMask = wgpu::ColorWriteMask::All;
+object->format = wgpu::TextureFormat::RGBA8Unorm;`,
     properties: [
       {"name": "format", "type": "TextureFormat"},
       {"name": "blend", "type": "BlendState", "optional": true, pointer: true},

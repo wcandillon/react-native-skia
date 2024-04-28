@@ -27,7 +27,7 @@ public:
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(getPreferredCanvasFormat) {
-    return jsi::String::createFromUtf8(runtime, "bgra8unorm");
+    return jsi::String::createFromUtf8(runtime, "rgba8unorm");
   }
 
   JSI_HOST_FUNCTION(requestAdapter) {
