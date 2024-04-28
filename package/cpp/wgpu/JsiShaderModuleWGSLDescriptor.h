@@ -41,7 +41,8 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::ShaderModuleWGSLDescriptor>();
-
+      object->chain.next = nullptr;
+      object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
       if (obj.hasProperty(runtime, "code")) {
         auto code = obj.getProperty(runtime, "code");
 

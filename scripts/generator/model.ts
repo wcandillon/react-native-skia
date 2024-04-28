@@ -194,6 +194,8 @@ object->depthSlice = UINT32_MAX;`,
   },
   {
     name: "ShaderModuleWGSLDescriptor",
+    defaultProperties: `object->chain.next = nullptr;
+object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     properties: [
       {"name": "code", "type": "string"}
     ]
