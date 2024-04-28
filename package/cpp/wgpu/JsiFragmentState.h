@@ -60,26 +60,20 @@ public:
             runtime, "Missing mandatory prop entryPoint in FragmentState");
       }
       if (obj.hasProperty(runtime, "targets")) {
-        // Configure blend state
+        auto targets = obj.getProperty(runtime, "targets");
+        auto jsiArray2 = targets.asObject(runtime).asArray(runtime);
+        auto jsiArray2Size = static_cast<int>(jsiArray2.size(runtime));
+        std::vector<wgpu::ColorTargetState> array2;
+        array2.reserve(jsiArray2Size);
+        for (int i = 0; i < jsiArray2Size; i++) {
+          auto element = JsiColorTargetState::fromValue(
+              runtime, jsiArray2.getValueAtIndex(runtime, i).asObject(runtime));
+          array2.push_back(*element.get());
+        }
 
+        object->targetCount = jsiArray2Size;
+        object->targets = array2.data();
       }
-              wgpu::BlendState blendState;
-        // Usual alpha blending for the color:
-        blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
-        blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
-        blendState.color.operation = wgpu::BlendOperation::Add;
-        // We leave the target alpha untouched:
-        blendState.alpha.srcFactor = wgpu::BlendFactor::Zero;
-        blendState.alpha.dstFactor = wgpu::BlendFactor::One;
-        blendState.alpha.operation = wgpu::BlendOperation::Add;
-        wgpu::ColorTargetState colorTarget;
-        colorTarget.format = wgpu::TextureFormat::BGRA8Unorm;
-        colorTarget.blend = &blendState;
-        colorTarget.writeMask = wgpu::ColorWriteMask::All; // We could write to only some of the color channels.
-        // We have only one target because our render pass has only one output color
-        // attachment.
-        object->targetCount = 1;
-        object->targets = &colorTarget;
       return object;
     }
   }

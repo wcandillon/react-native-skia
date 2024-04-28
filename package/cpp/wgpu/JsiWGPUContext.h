@@ -65,8 +65,8 @@ public:
 
   JSI_HOST_FUNCTION(runDemo) {
     auto device = JsiDevice::fromValue(runtime, arguments[0].asObject(runtime));
-    auto pipeline2 =
-        JsiRenderPipeline::fromValue(runtime, arguments[1].asObject(runtime));
+    // auto pipeline2 =
+    //     JsiRenderPipeline::fromValue(runtime, arguments[1].asObject(runtime));
     auto commandEncoder =
         JsiCommandEncoder::fromValue(runtime, arguments[2].asObject(runtime));
     auto vertexState =

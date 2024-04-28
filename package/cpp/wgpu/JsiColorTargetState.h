@@ -40,8 +40,10 @@ public:
       return obj.asHostObject<JsiColorTargetState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::ColorTargetState>();
+
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");
+
         object->format =
             getTextureFormat(format.getString(runtime).utf8(runtime).c_str());
       } else {
@@ -50,10 +52,12 @@ public:
       }
       if (obj.hasProperty(runtime, "blend")) {
         auto blend = obj.getProperty(runtime, "blend");
+
         object->blend = JsiBlendState::fromValue(runtime, blend).get();
       }
       if (obj.hasProperty(runtime, "writeMask")) {
         auto writeMask = obj.getProperty(runtime, "writeMask");
+
         object->writeMask = static_cast<uint32_t>(writeMask.getNumber());
       }
       return object;
