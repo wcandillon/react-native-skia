@@ -39,6 +39,7 @@ public:
       return obj.asHostObject<JsiPrimitiveState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::PrimitiveState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "topology")) {
         auto topology = obj.getProperty(runtime, "topology");

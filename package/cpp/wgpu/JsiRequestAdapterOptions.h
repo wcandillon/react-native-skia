@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::RequestAdapterOptions>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");

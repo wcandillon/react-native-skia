@@ -47,6 +47,7 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPipelineDescriptor>();
+      object->setDefault();
       object->multisample.count = 1;
       object->multisample.mask = ~0u;
       object->multisample.alphaToCoverageEnabled = false;

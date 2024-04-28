@@ -133,6 +133,7 @@ const generatorAsyncMethod = (method: Method) => {
 
 const unpackProperties = (name: string, properties: Property[], defaultProperties: string) => {
   return `auto object = std::make_shared<wgpu::${name}>();
+object->setDefault();
 ${defaultProperties}
 ${properties.map((property, index) => {
   const propName = _.camelCase(property.name);

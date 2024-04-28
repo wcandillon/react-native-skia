@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiVertexState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::VertexState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");

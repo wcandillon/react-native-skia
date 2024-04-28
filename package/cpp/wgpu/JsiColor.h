@@ -48,6 +48,7 @@ public:
         return object;
       }
       auto object = std::make_shared<wgpu::Color>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "r")) {
         auto r = obj.getProperty(runtime, "r");

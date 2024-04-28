@@ -41,6 +41,7 @@ public:
       return obj.asHostObject<JsiRenderPassDescriptor>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPassDescriptor>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "colorAttachments")) {
         auto colorAttachments = obj.getProperty(runtime, "colorAttachments");

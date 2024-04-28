@@ -39,6 +39,7 @@ public:
       return obj.asHostObject<JsiBlendComponent>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::BlendComponent>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "operation")) {
         auto operation = obj.getProperty(runtime, "operation");

@@ -39,6 +39,7 @@ public:
       return obj.asHostObject<JsiMultisampleState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::MultisampleState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "count")) {
         auto count = obj.getProperty(runtime, "count");

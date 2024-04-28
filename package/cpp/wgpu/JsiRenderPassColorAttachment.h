@@ -44,6 +44,7 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPassColorAttachment>();
+      object->setDefault();
       object->resolveTarget = nullptr;
       object->depthSlice = UINT32_MAX;
       if (obj.hasProperty(runtime, "view")) {

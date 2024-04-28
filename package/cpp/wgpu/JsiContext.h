@@ -38,6 +38,7 @@ public:
       return obj.asHostObject<JsiContext>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::Context>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "gpu")) {
         auto gpu = obj.getProperty(runtime, "gpu");

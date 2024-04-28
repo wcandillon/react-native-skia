@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiBlendState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::BlendState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "color")) {
         auto color = obj.getProperty(runtime, "color");

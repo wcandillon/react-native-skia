@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiColorTargetState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::ColorTargetState>();
+      object->setDefault();
       object->writeMask = wgpu::ColorWriteMask::All;
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");

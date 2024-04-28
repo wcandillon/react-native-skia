@@ -39,6 +39,7 @@ public:
       return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::StencilFaceState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "compare")) {
         auto compare = obj.getProperty(runtime, "compare");

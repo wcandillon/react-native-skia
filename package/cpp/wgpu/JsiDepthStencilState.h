@@ -40,6 +40,7 @@ public:
       return obj.asHostObject<JsiDepthStencilState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::DepthStencilState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");

@@ -41,6 +41,7 @@ public:
       return obj.asHostObject<JsiFragmentState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::FragmentState>();
+      object->setDefault();
 
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
