@@ -71,26 +71,8 @@ public:
         JsiCommandEncoder::fromValue(runtime, arguments[2].asObject(runtime));
     auto vertexState =
         JsiVertexState::fromValue(runtime, arguments[3].asObject(runtime));
-
-    //  Use the extension mechanism to load a WGSL shader source code
-    wgpu::ShaderModuleWGSLDescriptor fragShaderCodeDesc;
-    // Set the chained struct's header
-    fragShaderCodeDesc.chain.next = nullptr;
-    fragShaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
-    fragShaderCodeDesc.code = R"(
-@fragment
-fn main() -> @location(0) vec4f {
-  return vec4(1.0, 0.0, 0.0, 1.0);
-}
-)";
-    // Connect the chain
-    wgpu::ShaderModuleDescriptor fragShaderDesc;
-    fragShaderDesc.nextInChain = &fragShaderCodeDesc.chain;
-    wgpu::FragmentState fragState;
-    fragState.module = device->createShaderModule(fragShaderDesc);
-    fragState.entryPoint = "main";
-    fragState.constantCount = 0;
-    fragState.constants = nullptr;
+    auto fragState =
+        JsiFragmentState::fromValue(runtime, arguments[4].asObject(runtime));
 
     wgpu::RenderPipelineDescriptor pipelineDesc;
 
@@ -114,7 +96,7 @@ fn main() -> @location(0) vec4f {
     pipelineDesc.primitive.cullMode = wgpu::CullMode::None;
 
     // Fragment shader
-    pipelineDesc.fragment = &fragState;
+    pipelineDesc.fragment = fragState.get();
 
     // Configure blend state
     wgpu::BlendState blendState;
@@ -139,8 +121,8 @@ fn main() -> @location(0) vec4f {
     // We have only one target because our render pass has only one output color
     // attachment.
 
-    fragState.targetCount = 1;
-    fragState.targets = &colorTarget;
+    fragState->targetCount = 1;
+    fragState->targets = &colorTarget;
 
     // Depth and stencil tests are not used here
     pipelineDesc.depthStencil = nullptr;
