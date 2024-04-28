@@ -65,59 +65,70 @@ public:
 
   JSI_HOST_FUNCTION(runDemo) {
     auto device = JsiDevice::fromValue(runtime, arguments[0].asObject(runtime));
-    // auto pipeline2 = JsiRenderPipeline::fromValue(
-    //     runtime,
-    //     arguments[1].asObject(runtime));
+    auto pipeline2 = JsiRenderPipeline::fromValue(
+        runtime,
+        arguments[1].asObject(runtime));
     auto commandEncoder =
         JsiCommandEncoder::fromValue(runtime, arguments[2].asObject(runtime));
     RNSkia::RNSkLogger::logToConsole("Creating shader module.");
-    const char *shaderSource = R"(
-@vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2f(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2f(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2f(0.5, -0.5);
-	} else {
-		p = vec2f(0.0, 0.5);
-	}
-	return vec4f(p, 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.3, 0.6, 1.0, 1.0);
-}
-)";
-
-    wgpu::ShaderModuleDescriptor shaderDesc;
+    wgpu::ShaderModuleWGSLDescriptor vertexCodeDesc;
+    wgpu::ShaderModuleDescriptor vertexShaderDesc;
     // shaderDesc.hintCount = 0;
     // shaderDesc.hints = nullptr;
     //  Use the extension mechanism to load a WGSL shader source code
-    wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
     // Set the chained struct's header
-    shaderCodeDesc.chain.next = nullptr;
-    shaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
-    // Connect the chain
-    shaderDesc.nextInChain = &shaderCodeDesc.chain;
-
+    vertexCodeDesc.chain.next = nullptr;
+    vertexCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
     // Setup the actual payload of the shader code descriptor
-    shaderCodeDesc.code = shaderSource;
-    wgpu::ShaderModule shaderModule = device->createShaderModule(shaderDesc);
-    RNSkia::RNSkLogger::logToConsole("Creating rendering pipeline.");
+    vertexCodeDesc.code = R"(@vertex
+fn main(
+  @builtin(vertex_index) VertexIndex : u32
+) -> @builtin(position) vec4f {
+  var pos = array<vec2f, 3>(
+    vec2(0.0, 0.5),
+    vec2(-0.5, -0.5),
+    vec2(0.5, -0.5)
+  );
+
+  return vec4f(pos[VertexIndex], 0.0, 1.0);
+}
+)";
+    // Connect the chain
+    vertexShaderDesc.nextInChain = &vertexCodeDesc.chain;
+    wgpu::VertexState vertexState;
+    vertexState.module = device->createShaderModule(vertexShaderDesc);
+    vertexState.entryPoint = "main";
+    vertexState.bufferCount = 0;
+    vertexState.buffers = nullptr;
+    vertexState.constantCount = 0;
+    vertexState.constants = nullptr;
+
+    wgpu::ShaderModuleDescriptor fragShaderDesc;
+    //  Use the extension mechanism to load a WGSL shader source code
+    wgpu::ShaderModuleWGSLDescriptor fragShaderCodeDesc;
+    // Set the chained struct's header
+    fragShaderCodeDesc.chain.next = nullptr;
+    fragShaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+    fragShaderCodeDesc.code = R"(
+@fragment
+fn main() -> @location(0) vec4f {
+  return vec4(1.0, 0.0, 0.0, 1.0);
+}
+)";
+    // Connect the chain
+    fragShaderDesc.nextInChain = &fragShaderCodeDesc.chain;
+    wgpu::FragmentState fragState;
+    fragState.module = device->createShaderModule(fragShaderDesc);
+    fragState.entryPoint = "main";
+    fragState.constantCount = 0;
+    fragState.constants = nullptr;
+
     wgpu::RenderPipelineDescriptor pipelineDesc;
 
     // Vertex fetch
     // (We don't use any input buffer so far)
-    pipelineDesc.vertex.bufferCount = 0;
-    pipelineDesc.vertex.buffers = nullptr;
 
-    // Vertex shader
-    pipelineDesc.vertex.module = shaderModule;
-    pipelineDesc.vertex.entryPoint = "vs_main";
-    pipelineDesc.vertex.constantCount = 0;
-    pipelineDesc.vertex.constants = nullptr;
+    pipelineDesc.vertex = vertexState;
 
     // Primitive assembly and rasterization
     // Each sequence of 3 vertices is considered as a triangle
@@ -135,12 +146,7 @@ fn fs_main() -> @location(0) vec4f {
     pipelineDesc.primitive.cullMode = wgpu::CullMode::None;
 
     // Fragment shader
-    wgpu::FragmentState fragmentState;
-    pipelineDesc.fragment = &fragmentState;
-    fragmentState.module = shaderModule;
-    fragmentState.entryPoint = "fs_main";
-    fragmentState.constantCount = 0;
-    fragmentState.constants = nullptr;
+    pipelineDesc.fragment = &fragState;
 
     // Configure blend state
     wgpu::BlendState blendState;
@@ -164,8 +170,9 @@ fn fs_main() -> @location(0) vec4f {
 
     // We have only one target because our render pass has only one output color
     // attachment.
-    fragmentState.targetCount = 1;
-    fragmentState.targets = &colorTarget;
+    
+    fragState.targetCount = 1;
+    fragState.targets = &colorTarget;
 
     // Depth and stencil tests are not used here
     pipelineDesc.depthStencil = nullptr;

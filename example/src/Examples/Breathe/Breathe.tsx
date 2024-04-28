@@ -3,7 +3,6 @@ import {
   gpu,
   SkiaDomView,
 } from "@shopify/react-native-skia";
-import { pipeline } from "stream";
 
 const triangleVertWGSL = `@vertex
 fn main(
@@ -60,7 +59,7 @@ const draw = async (ctx: GPUCanvasContext) => {
 
   const commandEncoder = device.createCommandEncoder();
 
-  const pipeline = ctx.runDemo(device, null, commandEncoder);
+  const pipeline = ctx.runDemo(device, pipelineOld, commandEncoder);
   const textureView = ctx.getCurrentTexture().createView();
   const renderPassDescriptor: GPURenderPassDescriptor = {
     colorAttachments: [
