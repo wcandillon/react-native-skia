@@ -227,8 +227,7 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
   },
   {
     name: "ColorTargetState",
-    defaultProperties: `object->writeMask = wgpu::ColorWriteMask::All;
-object->format = wgpu::TextureFormat::RGBA8Unorm;`,
+    defaultProperties: `object->writeMask = wgpu::ColorWriteMask::All;`,
     properties: [
       {"name": "format", "type": "TextureFormat"},
       {"name": "blend", "type": "BlendState", "optional": true, pointer: true},
