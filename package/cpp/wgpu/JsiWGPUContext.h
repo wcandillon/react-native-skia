@@ -114,9 +114,7 @@ public:
     wgpu::ColorTargetState colorTarget;
     colorTarget.format = swapChainFormat;
     colorTarget.blend = &blendState;
-    colorTarget.writeMask =
-        wgpu::ColorWriteMask::All; // We could write to only some
-                                   // of the color channels.
+    colorTarget.writeMask = wgpu::ColorWriteMask::All; // We could write to only some of the color channels.
 
     // We have only one target because our render pass has only one output color
     // attachment.
