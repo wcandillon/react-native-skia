@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "JsiTextureView.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

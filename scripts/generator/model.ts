@@ -140,11 +140,15 @@ export const model: JSIObject[] = [
   },
   {
     name: "RenderPipelineDescriptor",
+    defaultProperties: `object->multisample.count = 1;
+object->multisample.mask = ~0u;
+object->multisample.alphaToCoverageEnabled = false;
+`,
     properties: [
       {"name": "vertex", "type": "VertexState"},
       {"name": "primitive", "type": "PrimitiveState"},
       {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
-      //{"name": "multisample", "type": "MultisampleState"},
+      {"name": "multisample", "type": "MultisampleState",  "optional": true },
       {"name": "fragment", "type": "FragmentState", "optional": true, pointer: true}
     ]
   },
@@ -216,7 +220,32 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     name: "FragmentState",
     properties: [
       {"name": "module", "type": "ShaderModule"},
-      {"name": "entryPoint", "type": "string" }
+      {"name": "entryPoint", "type": "string" },
+      // is (ColorTargetState | null)[]
+      {"name": "targets", "type": "ColorTargetState[]", "optional": true}
+    ]
+  },
+  {
+    name: "ColorTargetState",
+    properties: [
+      {"name": "format", "type": "TextureFormat"},
+      {"name": "blend", "type": "BlendState", "optional": true, pointer: true},
+      {"name": "writeMask", "type": "uint32_t", "optional": true}
+    ]
+  },
+  {
+    name: "BlendState",
+    properties: [
+      {"name": "color", "type": "BlendComponent"},
+      {"name": "alpha", "type": "BlendComponent"}
+    ]
+  },
+  {
+    name: "BlendComponent",
+    properties: [
+      {"name": "operation", "type": "BlendOperation", "optional": true},
+      {"name": "srcFactor", "type": "BlendFactor", "optional": true},
+      {"name": "dstFactor", "type": "BlendFactor", "optional": true}
     ]
   },
   {
@@ -272,6 +301,14 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     properties: [
       { name: "powerPreference", type: "PowerPreference", optional: true },
       { name: "forceFallbackAdapter", type: "bool", optional: true }
+    ]
+  },
+  {
+    name: "MultisampleState",
+    properties: [
+      { name: "count", type: "uint32_t", optional: true },
+      { name: "mask", type: "uint32_t", optional: true },
+      { name: "alphaToCoverageEnabled", type: "bool", optional: true }
     ]
   }
 ];

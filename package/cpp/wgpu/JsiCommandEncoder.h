@@ -14,6 +14,7 @@
 #include "JsiRenderPassDescriptor.h"
 #include "JsiRenderPassEncoder.h"
 #include "JsiSkHostObjects.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

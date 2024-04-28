@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "JsiStencilFaceState.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

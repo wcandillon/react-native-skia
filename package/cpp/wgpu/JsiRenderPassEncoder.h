@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiRenderPipeline.h"
 #include "JsiSkHostObjects.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

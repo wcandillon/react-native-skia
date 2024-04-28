@@ -18,6 +18,7 @@
 #include "JsiShaderModule.h"
 #include "JsiShaderModuleWGSLDescriptor.h"
 #include "JsiSkHostObjects.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {

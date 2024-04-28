@@ -47,9 +47,10 @@ const unwrapArrayMember = (propName: string, arg: Property, index: number) => {
   const type = arg.type.substring(0, arg.type.length - 2);
   const name = `array${index}`;
   const jsiName = `jsi${_.upperFirst(name)}`;
-  return `std::vector<wgpu::${type}> ${name};
-auto ${jsiName} = ${propName}.asObject(runtime).asArray(runtime);
+  return `auto ${jsiName} = ${propName}.asObject(runtime).asArray(runtime);
 auto ${jsiName}Size = static_cast<int>(${jsiName}.size(runtime));
+std::vector<wgpu::${type}> ${name};
+${name}.reserve(${jsiName}Size);
 for (int i = 0; i < ${jsiName}Size; i++) {
   auto element = Jsi${type}::fromValue(
     runtime,
@@ -175,6 +176,7 @@ export const generateObject = (object: JSIObject) => {
 
 #include <jsi/jsi.h>
 
+#include "RNSkLog.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"

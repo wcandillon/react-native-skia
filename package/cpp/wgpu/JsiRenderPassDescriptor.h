@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiRenderPassColorAttachment.h"
 #include "JsiSkHostObjects.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {
@@ -43,9 +44,10 @@ public:
 
       if (obj.hasProperty(runtime, "colorAttachments")) {
         auto colorAttachments = obj.getProperty(runtime, "colorAttachments");
-        std::vector<wgpu::RenderPassColorAttachment> array0;
         auto jsiArray0 = colorAttachments.asObject(runtime).asArray(runtime);
         auto jsiArray0Size = static_cast<int>(jsiArray0.size(runtime));
+        std::vector<wgpu::RenderPassColorAttachment> array0;
+        array0.reserve(jsiArray0Size);
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
               runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));

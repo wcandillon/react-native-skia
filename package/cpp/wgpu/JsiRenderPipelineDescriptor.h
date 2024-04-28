@@ -11,10 +11,12 @@
 #include "JsiEnums.h"
 #include "JsiFragmentState.h"
 #include "JsiHostObject.h"
+#include "JsiMultisampleState.h"
 #include "JsiPrimitiveState.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "JsiVertexState.h"
+#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {
@@ -45,6 +47,9 @@ public:
           ->getObject();
     } else {
       auto object = std::make_shared<wgpu::RenderPipelineDescriptor>();
+      object->multisample.count = 1;
+      object->multisample.mask = ~0u;
+      object->multisample.alphaToCoverageEnabled = false;
 
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");
@@ -70,6 +75,12 @@ public:
 
         object->depthStencil =
             JsiDepthStencilState::fromValue(runtime, depthStencil).get();
+      }
+      if (obj.hasProperty(runtime, "multisample")) {
+        auto multisample = obj.getProperty(runtime, "multisample");
+
+        object->multisample =
+            *JsiMultisampleState::fromValue(runtime, multisample).get();
       }
       if (obj.hasProperty(runtime, "fragment")) {
         auto fragment = obj.getProperty(runtime, "fragment");
