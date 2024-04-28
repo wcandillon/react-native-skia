@@ -20,7 +20,7 @@ fn main(
 
 const redFragWGSL = `@fragment
 fn main() -> @location(0) vec4f {
-  return vec4(1.0, 0.0, 0.0, 1.0);
+  return vec4(0.3, 0.6, 1.0, 1.0);
 }`;
 
 const draw = async (ctx: GPUCanvasContext) => {
@@ -33,25 +33,29 @@ const draw = async (ctx: GPUCanvasContext) => {
     format:  "bgra8unorm"
   });
 
+  const vertex: GPUVertexState = {
+    entryPoint: "main",
+    module: device.createShaderModule({
+      code: triangleVertWGSL,
+    }),
+  };
+
+  const fragment: GPUFragmentState = {
+    entryPoint: "main",
+    module: device.createShaderModule({
+      code: redFragWGSL,
+    }),
+    targets: [
+      {
+        format: presentationFormat,
+      },
+    ],
+  };
+
   const pipelineOld = device.createRenderPipeline({
     layout: "auto",
-    vertex: {
-      entryPoint: "main",
-      module: device.createShaderModule({
-        code: triangleVertWGSL,
-      }),
-    },
-    fragment: {
-      entryPoint: "main",
-      module: device.createShaderModule({
-        code: redFragWGSL,
-      }),
-      targets: [
-        {
-          format: presentationFormat,
-        },
-      ],
-    },
+    vertex,
+    fragment,
     primitive: {
       topology: "triangle-list",
     },
@@ -59,7 +63,7 @@ const draw = async (ctx: GPUCanvasContext) => {
 
   const commandEncoder = device.createCommandEncoder();
 
-  const pipeline = ctx.runDemo(device, pipelineOld, commandEncoder);
+  const pipeline = ctx.runDemo(device, pipelineOld, commandEncoder, vertex, fragment);
   const textureView = ctx.getCurrentTexture().createView();
   const renderPassDescriptor: GPURenderPassDescriptor = {
     colorAttachments: [
