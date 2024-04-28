@@ -69,9 +69,8 @@ public:
         JsiRenderPipeline::fromValue(runtime, arguments[1].asObject(runtime));
     auto commandEncoder =
         JsiCommandEncoder::fromValue(runtime, arguments[2].asObject(runtime));
-     auto vertexState= JsiVertexState::fromValue(
-         runtime,
-         arguments[3].asObject(runtime));
+    auto vertexState =
+        JsiVertexState::fromValue(runtime, arguments[3].asObject(runtime));
 
     //  Use the extension mechanism to load a WGSL shader source code
     wgpu::ShaderModuleWGSLDescriptor fragShaderCodeDesc;

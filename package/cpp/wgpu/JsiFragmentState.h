@@ -52,7 +52,7 @@ public:
         auto entryPoint = obj.getProperty(runtime, "entryPoint");
 
         object->entryPoint =
-            entryPoint.getString(runtime).utf8(runtime).c_str();
+            strdup(entryPoint.getString(runtime).utf8(runtime).c_str());
       } else {
         throw jsi::JSError(
             runtime, "Missing mandatory prop entryPoint in FragmentState");

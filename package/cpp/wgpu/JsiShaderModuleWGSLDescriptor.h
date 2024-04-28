@@ -46,7 +46,7 @@ public:
       if (obj.hasProperty(runtime, "code")) {
         auto code = obj.getProperty(runtime, "code");
 
-        object->code = code.getString(runtime).utf8(runtime).c_str();
+        object->code = strdup(code.getString(runtime).utf8(runtime).c_str());
       } else {
         throw jsi::JSError(
             runtime,

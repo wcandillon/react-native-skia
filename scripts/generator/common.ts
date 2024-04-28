@@ -16,7 +16,7 @@ export const unWrapType = (obj: string, type: string, pointer: boolean) => {
   } else if (isNumberType(type)) {
     return `static_cast<${type}>(${obj}.getNumber())`;
   } else if (type === "string") {
-    return `${obj}.getString(runtime).utf8(runtime).c_str()`;
+    return `strdup(${obj}.getString(runtime).utf8(runtime).c_str())`;
   } else if (isEnum(type)) {
     return `get${type}(${obj}.getString(runtime).utf8(runtime).c_str())`;
   } else {

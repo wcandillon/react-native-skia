@@ -7,7 +7,6 @@
 
 #include <jsi/jsi.h>
 
-#include "RNSkLog.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -40,6 +39,7 @@ public:
       return obj.asHostObject<JsiVertexState>(runtime)->getObject();
     } else {
       auto object = std::make_shared<wgpu::VertexState>();
+
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
 
@@ -50,8 +50,9 @@ public:
       }
       if (obj.hasProperty(runtime, "entryPoint")) {
         auto entryPoint = obj.getProperty(runtime, "entryPoint");
-        //object->entryPoint = utf8String.c_str();
-        object->entryPoint = strdup(entryPoint.getString(runtime).utf8(runtime).c_str());
+
+        object->entryPoint =
+            strdup(entryPoint.getString(runtime).utf8(runtime).c_str());
       } else {
         throw jsi::JSError(runtime,
                            "Missing mandatory prop entryPoint in VertexState");
