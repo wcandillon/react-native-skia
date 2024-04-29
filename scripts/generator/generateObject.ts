@@ -49,14 +49,14 @@ const unwrapArrayMember = (propName: string, arg: Property, index: number) => {
   const jsiName = `jsi${_.upperFirst(name)}`;
   return `auto ${jsiName} = ${propName}.asObject(runtime).asArray(runtime);
 auto ${jsiName}Size = static_cast<int>(${jsiName}.size(runtime));
-std::vector<wgpu::${type}> ${name};
-${name}.reserve(${jsiName}Size);
+auto ${name} = new std::vector<wgpu::${type}>();
+${name}->reserve(${jsiName}Size);
 for (int i = 0; i < ${jsiName}Size; i++) {
   auto element = Jsi${type}::fromValue(
     runtime,
     ${jsiName}.getValueAtIndex(runtime, i).asObject(runtime)
   );
-  ${name}.push_back(*element.get()); 
+  ${name}->push_back(*element.get()); 
 }
 
 `;
@@ -142,7 +142,7 @@ ${properties.map((property, index) => {
     auto ${propName} = obj.getProperty(runtime, "${property.name}");
   ${isArray ? unwrapArrayMember(propName, property, index) : ''}
   ${isArray ? `object->${propName.substring(0, propName.length - 1)}Count = jsiArray${index}Size;` : ``}
-  object->${propName} = ${isArray ? `array${index}.data()` : unWrapType(propName, property.type, !!property.pointer)};
+  object->${propName} = ${isArray ? `array${index}->data()` : unWrapType(propName, property.type, !!property.pointer)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`
 `)}

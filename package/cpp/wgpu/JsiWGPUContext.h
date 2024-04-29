@@ -99,11 +99,11 @@ public:
     // Fragment shader
     pipelineDesc.fragment = fragState.get();
 
-    wgpu::ColorTargetState colorTarget;
-    colorTarget.format = fragState->targets[0].format;
-    colorTarget.writeMask = fragState->targets[0].writeMask;
-    fragState->targetCount = 1;
-    fragState->targets = &colorTarget;
+    //    wgpu::ColorTargetState colorTarget;
+    //    colorTarget.format = fragState->targets[0].format;
+    //    colorTarget.writeMask = fragState->targets[0].writeMask;
+    //    fragState->targetCount = 1;
+    //    fragState->targets = &colorTarget;
 
     // Depth and stencil tests are not used here
     pipelineDesc.depthStencil = nullptr;

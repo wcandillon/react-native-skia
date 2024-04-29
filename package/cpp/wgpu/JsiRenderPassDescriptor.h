@@ -47,16 +47,16 @@ public:
         auto colorAttachments = obj.getProperty(runtime, "colorAttachments");
         auto jsiArray0 = colorAttachments.asObject(runtime).asArray(runtime);
         auto jsiArray0Size = static_cast<int>(jsiArray0.size(runtime));
-        std::vector<wgpu::RenderPassColorAttachment> array0;
-        array0.reserve(jsiArray0Size);
+        auto array0 = new std::vector<wgpu::RenderPassColorAttachment>();
+        array0->reserve(jsiArray0Size);
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
               runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));
-          array0.push_back(*element.get());
+          array0->push_back(*element.get());
         }
 
         object->colorAttachmentCount = jsiArray0Size;
-        object->colorAttachments = array0.data();
+        object->colorAttachments = array0->data();
       } else {
         throw jsi::JSError(
             runtime,

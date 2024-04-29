@@ -64,16 +64,16 @@ public:
         auto targets = obj.getProperty(runtime, "targets");
         auto jsiArray2 = targets.asObject(runtime).asArray(runtime);
         auto jsiArray2Size = static_cast<int>(jsiArray2.size(runtime));
-        std::vector<wgpu::ColorTargetState> array2;
-        array2.reserve(jsiArray2Size);
+        auto array2 = new std::vector<wgpu::ColorTargetState>();
+        array2->reserve(jsiArray2Size);
         for (int i = 0; i < jsiArray2Size; i++) {
           auto element = JsiColorTargetState::fromValue(
               runtime, jsiArray2.getValueAtIndex(runtime, i).asObject(runtime));
-          array2.push_back(*element.get());
+          array2->push_back(*element.get());
         }
 
         object->targetCount = jsiArray2Size;
-        object->targets = array2.data();
+        object->targets = array2->data();
       }
       return object;
     }
