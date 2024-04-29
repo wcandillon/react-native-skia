@@ -109,6 +109,63 @@ export const model: JSIObject[] = [
           defaultValue: true
         }],
         returns: "CommandEncoder",
+      },
+      {
+        name: "createBuffer",
+        args: [{
+          name: "descritor",
+          type: "BufferDescriptor"
+        }],
+        returns: "Buffer"
+      },
+      {
+        name: "createTexture",
+        args: [
+          {
+            name: "descriptor",
+            type: "TextureDescriptor"
+          }
+        ],
+        returns: "Texture"
+      }
+    ]
+  },
+  {
+    name: "TextureDescriptor",
+    properties: [
+      { name: "size", type: "Extent3D" },
+      { name: "format", type: "TextureFormat" },
+      { name: "usage", type: "uint32_t" } // TextureUsage
+    ]
+  },
+  {
+    "name": "BufferDescriptor",
+    properties: [
+      { name: "size", type: "uint64_t" },
+      {"name": "usage", "type": "uint32_t"}, //BufferUsage
+      {"name": "mappedAtCreation", "type": "bool", "default": "false"}
+    ]
+  },
+  {
+    name: "Buffer",
+    methods: [
+      { name: "unmap", args: [] },
+      { 
+        name: "getMappedRange",
+        args: [
+          { name: "offset", "type": "size_t", "defaultAtomicValue": "0" },
+          {"name": "size", "type": "size_t", "defaultAtomicValue": "SIZE_MAX"}
+        ],
+        implementation: `
+        size_t offset = static_cast<size_t>(arguments[0].getNumber());
+        size_t size = static_cast<size_t>(arguments[1].getNumber());
+        auto data = getObject()->getMappedRange(offset, size);
+        auto arrayBufferCtor =
+            runtime.global().getPropertyAsFunction(runtime, "ArrayBuffer");
+        auto o = arrayBufferCtor.callAsConstructor(runtime, static_cast<double>(size)).getObject(runtime);
+        auto buf = o.getArrayBuffer(runtime);
+        memcpy(buf.data(runtime), data, size);
+        return o;`
       }
     ]
   },
@@ -184,6 +241,15 @@ object->depthSlice = UINT32_MAX;`,
       {"name": "clearValue", "type": "Color"},
       {"name": "loadOp", "type": "LoadOp"},
       {"name": "storeOp", "type": "StoreOp"}
+    ]
+  },
+  {
+    name: "Extent3D",
+   // iterable: '2',
+    properties: [
+      {"name": "width", "type": "uint32_t"},
+      {"name": "height", "type": "uint32_t"},
+      // {"name": "depth", "type": "uint32_t"},
     ]
   },
   {

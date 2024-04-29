@@ -3,6 +3,7 @@ import {
   gpu,
   SkiaDomView,
 } from "@shopify/react-native-skia";
+import { demo1 } from "./demo1/main";
 
 const triangleVertWGSL = `@vertex
 fn main(
@@ -24,63 +25,7 @@ fn main() -> @location(0) vec4f {
 }`;
 
 const draw = async (ctx: GPUCanvasContext) => {
-  const adapter = await gpu.requestAdapter();
-  const device = await adapter!.requestDevice();
-  
-  const format = gpu.getPreferredCanvasFormat();
-  ctx.configure({
-    device,
-    format
-  });
-
-  const vertex: GPUVertexState = {
-    entryPoint: "main",
-    module: device.createShaderModule({
-      code: triangleVertWGSL,
-    }),
-  };
-
-  const fragment: GPUFragmentState = {
-    entryPoint: "main",
-    module: device.createShaderModule({
-      code: redFragWGSL,
-    }),
-    targets: [
-      {
-        format,
-      },
-    ],
-  };
-
-  const pipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex,
-    fragment,
-    primitive: {
-      topology: "triangle-list",
-    },
-  });
-
-  const commandEncoder = device.createCommandEncoder();
-
-  const textureView = ctx.getCurrentTexture().createView();
-  const renderPassDescriptor: GPURenderPassDescriptor = {
-    colorAttachments: [
-      {
-        view: textureView,
-        clearValue: [1.0, 0.0, 1, 1],
-        loadOp: 'clear',
-        storeOp: 'store',
-      },
-    ],
-  };
-
-
-  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  passEncoder.setPipeline(pipeline);
-  passEncoder.draw(3);
-  passEncoder.end();
-  device.queue.submit([commandEncoder.finish()]);
+  await demo1(ctx);
   ctx.present();
 };
 

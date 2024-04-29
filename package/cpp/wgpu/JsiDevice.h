@@ -7,6 +7,8 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiBuffer.h"
+#include "JsiBufferDescriptor.h"
 #include "JsiCommandEncoder.h"
 #include "JsiCommandEncoderDescriptor.h"
 #include "JsiEnums.h"
@@ -18,6 +20,8 @@
 #include "JsiShaderModule.h"
 #include "JsiShaderModuleWGSLDescriptor.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTexture.h"
+#include "JsiTextureDescriptor.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
@@ -71,13 +75,31 @@ public:
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(createBuffer) {
+    auto descritor = JsiBufferDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->createBuffer(*descritor);
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiBuffer>(getContext(), ret));
+  }
+
+  JSI_HOST_FUNCTION(createTexture) {
+    auto descriptor = JsiTextureDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->createTexture(*descriptor);
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiTexture>(getContext(), ret));
+  }
+
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
 
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
                        JSI_EXPORT_FUNC(JsiDevice, createShaderModule),
-                       JSI_EXPORT_FUNC(JsiDevice, createCommandEncoder))
+                       JSI_EXPORT_FUNC(JsiDevice, createCommandEncoder),
+                       JSI_EXPORT_FUNC(JsiDevice, createBuffer),
+                       JSI_EXPORT_FUNC(JsiDevice, createTexture))
 
   /**
    * Returns the underlying object from a host object of this type
