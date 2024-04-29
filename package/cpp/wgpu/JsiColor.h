@@ -30,11 +30,10 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Color> fromValue(jsi::Runtime &runtime,
-                                                const jsi::Value &raw) {
+  static wgpu::Color *fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiColor>(runtime)->getObject();
+      return obj.asHostObject<JsiColor>(runtime)->getObject().get();
     } else {
       if (obj.isArray(runtime)) {
         auto jsiArray = obj.asArray(runtime);
@@ -43,11 +42,11 @@ public:
           array.push_back(jsiArray.getValueAtIndex(runtime, i).asNumber());
         }
         auto data = array.data();
-        auto object = std::make_shared<wgpu::Color>(
-            wgpu::Color{data[0], data[1], data[2], data[3]});
+        auto object =
+            new wgpu::Color(wgpu::Color{data[0], data[1], data[2], data[3]});
         return object;
       }
-      auto object = std::make_shared<wgpu::Color>();
+      auto object = new wgpu::Color();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "r")) {

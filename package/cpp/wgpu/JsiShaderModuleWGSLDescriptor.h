@@ -34,14 +34,15 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::ShaderModuleWGSLDescriptor>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::ShaderModuleWGSLDescriptor *fromValue(jsi::Runtime &runtime,
+                                                     const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiShaderModuleWGSLDescriptor>(runtime)
-          ->getObject();
+          ->getObject()
+          .get();
     } else {
-      auto object = std::make_shared<wgpu::ShaderModuleWGSLDescriptor>();
+      auto object = new wgpu::ShaderModuleWGSLDescriptor();
       object->setDefault();
       object->chain.next = nullptr;
       object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;

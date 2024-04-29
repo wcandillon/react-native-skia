@@ -34,19 +34,19 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::FragmentState> fromValue(jsi::Runtime &runtime,
-                                                        const jsi::Value &raw) {
+  static wgpu::FragmentState *fromValue(jsi::Runtime &runtime,
+                                        const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiFragmentState>(runtime)->getObject();
+      return obj.asHostObject<JsiFragmentState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::FragmentState>();
+      auto object = new wgpu::FragmentState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
 
-        object->module = *JsiShaderModule::fromValue(runtime, module).get();
+        object->module = *JsiShaderModule::fromValue(runtime, module);
       } else {
         throw jsi::JSError(runtime,
                            "Missing mandatory prop module in FragmentState");
@@ -69,7 +69,7 @@ public:
         for (int i = 0; i < jsiArray2Size; i++) {
           auto element = JsiColorTargetState::fromValue(
               runtime, jsiArray2.getValueAtIndex(runtime, i).asObject(runtime));
-          array2->push_back(*element.get());
+          array2->push_back(*element);
         }
 
         object->targetCount = jsiArray2Size;

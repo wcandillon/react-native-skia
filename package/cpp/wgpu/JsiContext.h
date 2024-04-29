@@ -31,19 +31,19 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Context> fromValue(jsi::Runtime &runtime,
-                                                  const jsi::Value &raw) {
+  static wgpu::Context *fromValue(jsi::Runtime &runtime,
+                                  const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiContext>(runtime)->getObject();
+      return obj.asHostObject<JsiContext>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::Context>();
+      auto object = new wgpu::Context();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "gpu")) {
         auto gpu = obj.getProperty(runtime, "gpu");
 
-        object->gpu = *JsiGpu::fromValue(runtime, gpu).get();
+        object->gpu = *JsiGpu::fromValue(runtime, gpu);
       } else {
         throw jsi::JSError(runtime, "Missing mandatory prop gpu in Context");
       }

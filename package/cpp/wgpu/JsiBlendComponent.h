@@ -32,13 +32,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::BlendComponent>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::BlendComponent *fromValue(jsi::Runtime &runtime,
+                                         const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiBlendComponent>(runtime)->getObject();
+      return obj.asHostObject<JsiBlendComponent>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::BlendComponent>();
+      auto object = new wgpu::BlendComponent();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "operation")) {

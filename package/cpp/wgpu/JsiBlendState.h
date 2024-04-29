@@ -33,19 +33,19 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::BlendState> fromValue(jsi::Runtime &runtime,
-                                                     const jsi::Value &raw) {
+  static wgpu::BlendState *fromValue(jsi::Runtime &runtime,
+                                     const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiBlendState>(runtime)->getObject();
+      return obj.asHostObject<JsiBlendState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::BlendState>();
+      auto object = new wgpu::BlendState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "color")) {
         auto color = obj.getProperty(runtime, "color");
 
-        object->color = *JsiBlendComponent::fromValue(runtime, color).get();
+        object->color = *JsiBlendComponent::fromValue(runtime, color);
       } else {
         throw jsi::JSError(runtime,
                            "Missing mandatory prop color in BlendState");
@@ -53,7 +53,7 @@ public:
       if (obj.hasProperty(runtime, "alpha")) {
         auto alpha = obj.getProperty(runtime, "alpha");
 
-        object->alpha = *JsiBlendComponent::fromValue(runtime, alpha).get();
+        object->alpha = *JsiBlendComponent::fromValue(runtime, alpha);
       } else {
         throw jsi::JSError(runtime,
                            "Missing mandatory prop alpha in BlendState");

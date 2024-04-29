@@ -36,21 +36,22 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RenderPassColorAttachment>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RenderPassColorAttachment *fromValue(jsi::Runtime &runtime,
+                                                    const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiRenderPassColorAttachment>(runtime)
-          ->getObject();
+          ->getObject()
+          .get();
     } else {
-      auto object = std::make_shared<wgpu::RenderPassColorAttachment>();
+      auto object = new wgpu::RenderPassColorAttachment();
       object->setDefault();
       object->resolveTarget = nullptr;
       object->depthSlice = UINT32_MAX;
       if (obj.hasProperty(runtime, "view")) {
         auto view = obj.getProperty(runtime, "view");
 
-        object->view = *JsiTextureView::fromValue(runtime, view).get();
+        object->view = *JsiTextureView::fromValue(runtime, view);
       } else {
         throw jsi::JSError(
             runtime,
@@ -59,7 +60,7 @@ public:
       if (obj.hasProperty(runtime, "clearValue")) {
         auto clearValue = obj.getProperty(runtime, "clearValue");
 
-        object->clearValue = *JsiColor::fromValue(runtime, clearValue).get();
+        object->clearValue = *JsiColor::fromValue(runtime, clearValue);
       } else {
         throw jsi::JSError(
             runtime,

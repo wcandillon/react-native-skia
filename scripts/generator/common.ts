@@ -23,7 +23,7 @@ export const unWrapType = (obj: string, type: string, pointer: boolean) => {
   } else {
     const name = objectName(type);
     const className = `Jsi${name}`;
-    return `${pointer ? '' : '*'}${className}::fromValue(runtime, ${obj}).get()`;
+    return `${pointer ? '' : '*'}${className}::fromValue(runtime, ${obj})`;
   }
 };
 

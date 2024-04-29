@@ -33,13 +33,15 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RequestAdapterOptions>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RequestAdapterOptions *fromValue(jsi::Runtime &runtime,
+                                                const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiRequestAdapterOptions>(runtime)->getObject();
+      return obj.asHostObject<JsiRequestAdapterOptions>(runtime)
+          ->getObject()
+          .get();
     } else {
-      auto object = std::make_shared<wgpu::RequestAdapterOptions>();
+      auto object = new wgpu::RequestAdapterOptions();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "powerPreference")) {

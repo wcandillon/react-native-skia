@@ -32,13 +32,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::MultisampleState>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::MultisampleState *fromValue(jsi::Runtime &runtime,
+                                           const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiMultisampleState>(runtime)->getObject();
+      return obj.asHostObject<JsiMultisampleState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::MultisampleState>();
+      auto object = new wgpu::MultisampleState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "count")) {

@@ -32,11 +32,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::CommandBuffer> fromValue(jsi::Runtime &runtime,
-                                                        const jsi::Value &raw) {
+  static wgpu::CommandBuffer *fromValue(jsi::Runtime &runtime,
+                                        const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiCommandBuffer>(runtime)->getObject();
+      return obj.asHostObject<JsiCommandBuffer>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiCommandBuffer object, but got a " +

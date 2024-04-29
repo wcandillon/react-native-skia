@@ -33,13 +33,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::DepthStencilState>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::DepthStencilState *fromValue(jsi::Runtime &runtime,
+                                            const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiDepthStencilState>(runtime)->getObject();
+      return obj.asHostObject<JsiDepthStencilState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::DepthStencilState>();
+      auto object = new wgpu::DepthStencilState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "format")) {
@@ -67,13 +67,13 @@ public:
         auto stencilFront = obj.getProperty(runtime, "stencilFront");
 
         object->stencilFront =
-            *JsiStencilFaceState::fromValue(runtime, stencilFront).get();
+            *JsiStencilFaceState::fromValue(runtime, stencilFront);
       }
       if (obj.hasProperty(runtime, "stencilBack")) {
         auto stencilBack = obj.getProperty(runtime, "stencilBack");
 
         object->stencilBack =
-            *JsiStencilFaceState::fromValue(runtime, stencilBack).get();
+            *JsiStencilFaceState::fromValue(runtime, stencilBack);
       }
       if (obj.hasProperty(runtime, "stencilReadMask")) {
         auto stencilReadMask = obj.getProperty(runtime, "stencilReadMask");

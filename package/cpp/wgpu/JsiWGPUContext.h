@@ -79,7 +79,7 @@ public:
 
     // Vertex fetch
     // (We don't use any input buffer so far)
-    pipelineDesc.vertex = *vertexState.get();
+    pipelineDesc.vertex = *vertexState;
 
     // Primitive assembly and rasterization
     // Each sequence of 3 vertices is considered as a triangle
@@ -97,7 +97,7 @@ public:
     pipelineDesc.primitive.cullMode = wgpu::CullMode::None;
 
     // Fragment shader
-    pipelineDesc.fragment = fragState.get();
+    pipelineDesc.fragment = fragState;
 
     //    wgpu::ColorTargetState colorTarget;
     //    colorTarget.format = fragState->targets[0].format;

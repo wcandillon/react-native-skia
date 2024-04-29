@@ -33,19 +33,19 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::VertexState> fromValue(jsi::Runtime &runtime,
-                                                      const jsi::Value &raw) {
+  static wgpu::VertexState *fromValue(jsi::Runtime &runtime,
+                                      const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiVertexState>(runtime)->getObject();
+      return obj.asHostObject<JsiVertexState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::VertexState>();
+      auto object = new wgpu::VertexState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "module")) {
         auto module = obj.getProperty(runtime, "module");
 
-        object->module = *JsiShaderModule::fromValue(runtime, module).get();
+        object->module = *JsiShaderModule::fromValue(runtime, module);
       } else {
         throw jsi::JSError(runtime,
                            "Missing mandatory prop module in VertexState");

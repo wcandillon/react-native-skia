@@ -52,18 +52,17 @@ const draw = async (ctx: GPUCanvasContext) => {
     ],
   };
 
-  // const pipelineOld = device.createRenderPipeline({
-  //   layout: "auto",
-  //   vertex,
-  //   fragment,
-  //   primitive: {
-  //     topology: "triangle-list",
-  //   },
-  // });
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex,
+    fragment,
+    primitive: {
+      topology: "triangle-list",
+    },
+  });
 
   const commandEncoder = device.createCommandEncoder();
 
-  const pipeline = ctx.runDemo(device, null, commandEncoder, vertex, fragment);
   const textureView = ctx.getCurrentTexture().createView();
   const renderPassDescriptor: GPURenderPassDescriptor = {
     colorAttachments: [

@@ -32,11 +32,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RenderPipeline>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RenderPipeline *fromValue(jsi::Runtime &runtime,
+                                         const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiRenderPipeline>(runtime)->getObject();
+      return obj.asHostObject<JsiRenderPipeline>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiRenderPipeline object, but got a " +

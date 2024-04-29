@@ -32,13 +32,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::StencilFaceState>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::StencilFaceState *fromValue(jsi::Runtime &runtime,
+                                           const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject();
+      return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::StencilFaceState>();
+      auto object = new wgpu::StencilFaceState();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "compare")) {

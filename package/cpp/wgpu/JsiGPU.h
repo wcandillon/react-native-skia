@@ -31,7 +31,7 @@ public:
   }
 
   JSI_HOST_FUNCTION(requestAdapter) {
-    auto defaultOptions = std::make_shared<wgpu::RequestAdapterOptions>();
+    auto defaultOptions = new wgpu::RequestAdapterOptions();
     auto options =
         count > 0 ? JsiRequestAdapterOptions::fromValue(runtime, arguments[0])
                   : defaultOptions;
@@ -43,7 +43,7 @@ public:
          options = std::move(options)](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->requestAdapter(*options.get());
+          auto ret = object->requestAdapter(*options);
           if (ret == nullptr) {
             promise->resolve(jsi::Value::null());
           } else {
@@ -63,11 +63,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Instance> fromValue(jsi::Runtime &runtime,
-                                                   const jsi::Value &raw) {
+  static wgpu::Instance *fromValue(jsi::Runtime &runtime,
+                                   const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiGPU>(runtime)->getObject();
+      return obj.asHostObject<JsiGPU>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiGPU object, but got a " +
                                       raw.toString(runtime).utf8(runtime));

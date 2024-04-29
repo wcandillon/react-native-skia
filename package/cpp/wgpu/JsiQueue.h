@@ -31,8 +31,7 @@ public:
     auto jsiArraySize = static_cast<int>(jsiArray.size(runtime));
     for (int i = 0; i < jsiArraySize; i++) {
       auto val = jsiArray.getValueAtIndex(runtime, i);
-      commandBuffers.push_back(
-          *JsiCommandBuffer::fromValue(runtime, val).get());
+      commandBuffers.push_back(*JsiCommandBuffer::fromValue(runtime, val));
     }
 
     getObject()->submit(commandBuffers);
@@ -47,11 +46,10 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Queue> fromValue(jsi::Runtime &runtime,
-                                                const jsi::Value &raw) {
+  static wgpu::Queue *fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiQueue>(runtime)->getObject();
+      return obj.asHostObject<JsiQueue>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiQueue object, but got a " +
                                       raw.toString(runtime).utf8(runtime));

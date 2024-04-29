@@ -33,13 +33,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::ColorTargetState>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::ColorTargetState *fromValue(jsi::Runtime &runtime,
+                                           const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiColorTargetState>(runtime)->getObject();
+      return obj.asHostObject<JsiColorTargetState>(runtime)->getObject().get();
     } else {
-      auto object = std::make_shared<wgpu::ColorTargetState>();
+      auto object = new wgpu::ColorTargetState();
       object->setDefault();
       object->writeMask = wgpu::ColorWriteMask::All;
       if (obj.hasProperty(runtime, "format")) {
@@ -54,7 +54,7 @@ public:
       if (obj.hasProperty(runtime, "blend")) {
         auto blend = obj.getProperty(runtime, "blend");
 
-        object->blend = JsiBlendState::fromValue(runtime, blend).get();
+        object->blend = JsiBlendState::fromValue(runtime, blend);
       }
       if (obj.hasProperty(runtime, "writeMask")) {
         auto writeMask = obj.getProperty(runtime, "writeMask");

@@ -30,7 +30,7 @@ public:
   JSI_HOST_FUNCTION(setPipeline) {
     auto pipeline = JsiRenderPipeline::fromValue(runtime, arguments[0]);
 
-    getObject()->setPipeline(*pipeline.get());
+    getObject()->setPipeline(*pipeline);
     return jsi::Value::undefined();
   }
 
@@ -69,11 +69,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RenderPassEncoder>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RenderPassEncoder *fromValue(jsi::Runtime &runtime,
+                                            const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiRenderPassEncoder>(runtime)->getObject();
+      return obj.asHostObject<JsiRenderPassEncoder>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiRenderPassEncoder object, but got a " +

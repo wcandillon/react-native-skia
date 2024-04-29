@@ -32,11 +32,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::ShaderModule> fromValue(jsi::Runtime &runtime,
-                                                       const jsi::Value &raw) {
+  static wgpu::ShaderModule *fromValue(jsi::Runtime &runtime,
+                                       const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiShaderModule>(runtime)->getObject();
+      return obj.asHostObject<JsiShaderModule>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiShaderModule object, but got a " +

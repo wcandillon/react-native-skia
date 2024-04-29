@@ -32,7 +32,7 @@ public:
   JSI_HOST_FUNCTION(beginRenderPass) {
     auto descriptor = JsiRenderPassDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->beginRenderPass(*descriptor.get());
+    auto ret = getObject()->beginRenderPass(*descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), ret));
   }
@@ -53,11 +53,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::CommandEncoder>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::CommandEncoder *fromValue(jsi::Runtime &runtime,
+                                         const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiCommandEncoder>(runtime)->getObject();
+      return obj.asHostObject<JsiCommandEncoder>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime,
                          "Expected a JsiCommandEncoder object, but got a " +

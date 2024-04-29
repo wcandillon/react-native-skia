@@ -40,11 +40,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Texture> fromValue(jsi::Runtime &runtime,
-                                                  const jsi::Value &raw) {
+  static wgpu::Texture *fromValue(jsi::Runtime &runtime,
+                                  const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiTexture>(runtime)->getObject();
+      return obj.asHostObject<JsiTexture>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiTexture object, but got a " +
                                       raw.toString(runtime).utf8(runtime));

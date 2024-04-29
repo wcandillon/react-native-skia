@@ -34,13 +34,15 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RenderPassDescriptor>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RenderPassDescriptor *fromValue(jsi::Runtime &runtime,
+                                               const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiRenderPassDescriptor>(runtime)->getObject();
+      return obj.asHostObject<JsiRenderPassDescriptor>(runtime)
+          ->getObject()
+          .get();
     } else {
-      auto object = std::make_shared<wgpu::RenderPassDescriptor>();
+      auto object = new wgpu::RenderPassDescriptor();
       object->setDefault();
 
       if (obj.hasProperty(runtime, "colorAttachments")) {
@@ -52,7 +54,7 @@ public:
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
               runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));
-          array0->push_back(*element.get());
+          array0->push_back(*element);
         }
 
         object->colorAttachmentCount = jsiArray0Size;

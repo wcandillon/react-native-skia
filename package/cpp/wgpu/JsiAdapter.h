@@ -27,7 +27,7 @@ public:
             context, std::make_shared<wgpu::Adapter>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(requestDevice) {
-    auto defaultDescriptor = std::make_shared<wgpu::DeviceDescriptor>();
+    auto defaultDescriptor = new wgpu::DeviceDescriptor();
     auto descriptor =
         count > 0 ? JsiDeviceDescriptor::fromValue(runtime, arguments[0])
                   : defaultDescriptor;
@@ -39,7 +39,7 @@ public:
          descriptor = std::move(descriptor)](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->requestDevice(*descriptor.get());
+          auto ret = object->requestDevice(*descriptor);
           if (ret == nullptr) {
             promise->resolve(jsi::Value::null());
           } else {
@@ -58,11 +58,11 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Adapter> fromValue(jsi::Runtime &runtime,
-                                                  const jsi::Value &raw) {
+  static wgpu::Adapter *fromValue(jsi::Runtime &runtime,
+                                  const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiAdapter>(runtime)->getObject();
+      return obj.asHostObject<JsiAdapter>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiAdapter object, but got a " +
                                       raw.toString(runtime).utf8(runtime));

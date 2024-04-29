@@ -42,7 +42,7 @@ public:
     auto descriptor =
         JsiRenderPipelineDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->createRenderPipeline(*descriptor.get());
+    auto ret = getObject()->createRenderPipeline(*descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
   }
@@ -51,7 +51,7 @@ public:
     auto moduleDescriptor =
         JsiShaderModuleWGSLDescriptor::fromValue(runtime, arguments[0]);
 
-    auto moduleDescriptorNext = *moduleDescriptor.get();
+    auto moduleDescriptorNext = *moduleDescriptor;
     wgpu::ShaderModuleDescriptor baseModuleDescriptor;
     baseModuleDescriptor.nextInChain = &moduleDescriptorNext.chain;
     auto ret = getObject()->createShaderModule(baseModuleDescriptor);
@@ -60,13 +60,13 @@ public:
   }
 
   JSI_HOST_FUNCTION(createCommandEncoder) {
-    auto defaultDescriptor = std::make_shared<wgpu::CommandEncoderDescriptor>();
+    auto defaultDescriptor = new wgpu::CommandEncoderDescriptor();
     auto descriptor =
         count > 0
             ? JsiCommandEncoderDescriptor::fromValue(runtime, arguments[0])
             : defaultDescriptor;
 
-    auto ret = getObject()->createCommandEncoder(*descriptor.get());
+    auto ret = getObject()->createCommandEncoder(*descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
@@ -82,11 +82,10 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::Device> fromValue(jsi::Runtime &runtime,
-                                                 const jsi::Value &raw) {
+  static wgpu::Device *fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
-      return obj.asHostObject<JsiDevice>(runtime)->getObject();
+      return obj.asHostObject<JsiDevice>(runtime)->getObject().get();
     } else {
       throw jsi::JSError(runtime, "Expected a JsiDevice object, but got a " +
                                       raw.toString(runtime).utf8(runtime));

@@ -34,12 +34,13 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::CommandEncoderDescriptor>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::CommandEncoderDescriptor *fromValue(jsi::Runtime &runtime,
+                                                   const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiCommandEncoderDescriptor>(runtime)
-          ->getObject();
+          ->getObject()
+          .get();
     } else {
       throw jsi::JSError(
           runtime, "Expected a JsiCommandEncoderDescriptor object, but got a " +

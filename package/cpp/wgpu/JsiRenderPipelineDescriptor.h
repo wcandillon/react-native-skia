@@ -39,14 +39,15 @@ public:
   /**
    * Returns the underlying object from a host object of this type
    */
-  static std::shared_ptr<wgpu::RenderPipelineDescriptor>
-  fromValue(jsi::Runtime &runtime, const jsi::Value &raw) {
+  static wgpu::RenderPipelineDescriptor *fromValue(jsi::Runtime &runtime,
+                                                   const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
     if (obj.isHostObject(runtime)) {
       return obj.asHostObject<JsiRenderPipelineDescriptor>(runtime)
-          ->getObject();
+          ->getObject()
+          .get();
     } else {
-      auto object = std::make_shared<wgpu::RenderPipelineDescriptor>();
+      auto object = new wgpu::RenderPipelineDescriptor();
       object->setDefault();
       object->multisample.count = 1;
       object->multisample.mask = ~0u;
@@ -55,7 +56,7 @@ public:
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");
 
-        object->vertex = *JsiVertexState::fromValue(runtime, vertex).get();
+        object->vertex = *JsiVertexState::fromValue(runtime, vertex);
       } else {
         throw jsi::JSError(
             runtime,
@@ -64,8 +65,7 @@ public:
       if (obj.hasProperty(runtime, "primitive")) {
         auto primitive = obj.getProperty(runtime, "primitive");
 
-        object->primitive =
-            *JsiPrimitiveState::fromValue(runtime, primitive).get();
+        object->primitive = *JsiPrimitiveState::fromValue(runtime, primitive);
       } else {
         throw jsi::JSError(
             runtime,
@@ -75,18 +75,18 @@ public:
         auto depthStencil = obj.getProperty(runtime, "depthStencil");
 
         object->depthStencil =
-            JsiDepthStencilState::fromValue(runtime, depthStencil).get();
+            JsiDepthStencilState::fromValue(runtime, depthStencil);
       }
       if (obj.hasProperty(runtime, "multisample")) {
         auto multisample = obj.getProperty(runtime, "multisample");
 
         object->multisample =
-            *JsiMultisampleState::fromValue(runtime, multisample).get();
+            *JsiMultisampleState::fromValue(runtime, multisample);
       }
       if (obj.hasProperty(runtime, "fragment")) {
         auto fragment = obj.getProperty(runtime, "fragment");
 
-        object->fragment = JsiFragmentState::fromValue(runtime, fragment).get();
+        object->fragment = JsiFragmentState::fromValue(runtime, fragment);
       }
       return object;
     }
