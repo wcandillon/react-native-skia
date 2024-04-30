@@ -391,7 +391,24 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     name: "VertexState",
     properties: [
       {"name": "module", "type": "ShaderModule"},
-      {"name": "entryPoint", "type": "string" }
+      {"name": "entryPoint", "type": "string" },
+      {"name": "buffers", "type": "VertexBufferLayout[]", "optional": true }
+    ]
+  },
+  {
+    name: "VertexBufferLayout",
+    properties: [
+      { name: "arrayStride", type: "uint64_t" },
+      { name: "stepMode", type: "VertexStepMode", optional: true },
+      { name: "attributes", type: "VertexAttribute[]"}
+    ]
+  },
+  {
+    name: "VertexAttribute",
+    properties: [
+      {"name": "shaderLocation", "type": "uint32_t"},
+      {"name": "format", "type": "VertexFormat"},
+      {"name": "offset", "type": "uint32_t"}
     ]
   },
   {
