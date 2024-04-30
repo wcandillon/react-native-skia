@@ -7,6 +7,8 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiBindGroup.h"
+#include "JsiBuffer.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -59,12 +61,29 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(setBindGroup) {
+    auto index = static_cast<uint32_t>(arguments[0].getNumber());
+    auto bindGroup = JsiBindGroup::fromValue(runtime, arguments[1]);
+    // auto dynamicOffsetCount = static_cast<size_t>(arguments[2].getNumber());
+    getObject()->setBindGroup(index, *bindGroup, 0, nullptr);
+    return jsi::Value::undefined();
+  }
+
+  JSI_HOST_FUNCTION(setVertexBuffer) {
+    auto slot = static_cast<uint32_t>(arguments[0].getNumber());
+    auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
+    getObject()->setVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+    return jsi::Value::undefined();
+  }
+
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassEncoder, RenderPassEncoder)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiRenderPassEncoder, setPipeline),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, draw),
-                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, end))
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, end),
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, setBindGroup),
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, setVertexBuffer))
 
   /**
    * Returns the underlying object from a host object of this type

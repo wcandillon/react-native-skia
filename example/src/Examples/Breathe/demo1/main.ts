@@ -124,8 +124,6 @@ const uniformBuffer = device.createBuffer({
   mappedAtCreation: false
 });
 
-console.log(pipeline.getBindGroupLayout(0))
-
 const uniformBindGroup = device.createBindGroup({
   layout: pipeline.getBindGroupLayout(0),
   entries: [
@@ -159,8 +157,6 @@ const renderPassDescriptor: GPURenderPassDescriptor = {
   },
 };
 
-console.log(renderPassDescriptor)
-
 const aspect = width / height;
 const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0);
 const modelViewProjectionMatrix = mat4.create();
@@ -177,7 +173,6 @@ function getTransformationMatrix() {
   );
 
    mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
-
    return modelViewProjectionMatrix as Float32Array;
 }
 
@@ -203,8 +198,11 @@ function frame() {
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
 
-  requestAnimationFrame(frame);
+  
+  console.log("RENDER");
+  context.present();
+  //requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+frame();
 
 };

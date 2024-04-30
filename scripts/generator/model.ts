@@ -268,6 +268,33 @@ object->multisample.alphaToCoverageEnabled = false;
       {
         name: "end",
         args: [],
+      },
+      {
+        name: "setBindGroup",
+        args: [
+          { name: "index", type: "uint32_t" },
+          { name: "bindGroup", type: "BindGroup" },
+          { name: "dynamicOffsetCount", "type": "size_t", "defaultAtomicValue": "0"},
+        //  { name: "dynamicOffsets", "type": "uint32_t*", "defaultAtomicValue": "nullptr"}
+        ],
+        implementation: `auto index = static_cast<uint32_t>(arguments[0].getNumber());
+        auto bindGroup = JsiBindGroup::fromValue(runtime, arguments[1]);
+        //auto dynamicOffsetCount = static_cast<size_t>(arguments[2].getNumber());
+        getObject()->setBindGroup(index, *bindGroup, 0, nullptr);
+        return jsi::Value::undefined();`
+      },
+      {
+        name: "setVertexBuffer",
+        args: [
+          { name: "slot", type: "uint32_t" },
+          { name: "buffer", type: "Buffer" },
+          {name: "offset", "type": "uint64_t", "defaultAtomicValue": "0"},
+          {name: "size", "type": "uint64_t", "defaultAtomicValue": "0xFFFFFFFFFFFFFFFF"}
+        ],
+        implementation: `auto slot = static_cast<uint32_t>(arguments[0].getNumber());
+        auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
+        getObject()->setVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+        return jsi::Value::undefined();`
       }
     ]
   },
