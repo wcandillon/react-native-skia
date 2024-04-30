@@ -53,7 +53,7 @@ public:
         array0->reserve(jsiArray0Size);
         for (int i = 0; i < jsiArray0Size; i++) {
           auto element = JsiRenderPassColorAttachment::fromValue(
-              runtime, jsiArray0.getValueAtIndex(runtime, i).asObject(runtime));
+              runtime, jsiArray0.getValueAtIndex(runtime, i));
           array0->push_back(*element);
         }
 

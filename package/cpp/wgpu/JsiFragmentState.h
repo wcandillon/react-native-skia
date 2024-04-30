@@ -68,7 +68,7 @@ public:
         array2->reserve(jsiArray2Size);
         for (int i = 0; i < jsiArray2Size; i++) {
           auto element = JsiColorTargetState::fromValue(
-              runtime, jsiArray2.getValueAtIndex(runtime, i).asObject(runtime));
+              runtime, jsiArray2.getValueAtIndex(runtime, i));
           array2->push_back(*element);
         }
 

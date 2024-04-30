@@ -7,6 +7,8 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiBindGroup.h"
+#include "JsiBindGroupDescriptor.h"
 #include "JsiBuffer.h"
 #include "JsiBufferDescriptor.h"
 #include "JsiCommandEncoder.h"
@@ -40,6 +42,14 @@ public:
     auto ret = getObject()->getQueue();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
+  }
+
+  JSI_HOST_FUNCTION(createBindGroup) {
+    auto descriptor = JsiBindGroupDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->createBindGroup(*descriptor);
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiBindGroup>(getContext(), ret));
   }
 
   JSI_HOST_FUNCTION(createRenderPipeline) {
@@ -95,7 +105,8 @@ public:
 
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createBindGroup),
+                       JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
                        JSI_EXPORT_FUNC(JsiDevice, createShaderModule),
                        JSI_EXPORT_FUNC(JsiDevice, createCommandEncoder),
                        JSI_EXPORT_FUNC(JsiDevice, createBuffer),

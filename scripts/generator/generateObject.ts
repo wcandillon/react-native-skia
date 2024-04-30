@@ -3,6 +3,13 @@ import { Arg, JSIObject, Method, Property } from "./model";
 import { computeDependencies, isAtomicType, isNumberType, objectName, unWrapType } from './common';
 import { isEnum } from "./enums";
 
+const makeSingular = (name: string) => {
+  if (name === "entries") {
+    return "entry";
+  }
+  return name.substring(0, name.length - 1);
+};
+
 const generateArg = (index: number, arg: Arg) => {
   const isArray = arg.type.endsWith("[]");
   const name = _.camelCase(arg.name);
@@ -54,7 +61,7 @@ ${name}->reserve(${jsiName}Size);
 for (int i = 0; i < ${jsiName}Size; i++) {
   auto element = Jsi${type}::fromValue(
     runtime,
-    ${jsiName}.getValueAtIndex(runtime, i).asObject(runtime)
+    ${jsiName}.getValueAtIndex(runtime, i)
   );
   ${name}->push_back(*element); 
 }
@@ -141,7 +148,7 @@ ${properties.map((property, index) => {
   return `if(obj.hasProperty(runtime, "${property.name}")) {
     auto ${propName} = obj.getProperty(runtime, "${property.name}");
   ${isArray ? unwrapArrayMember(propName, property, index) : ''}
-  ${isArray ? `object->${propName.substring(0, propName.length - 1)}Count = jsiArray${index}Size;` : ``}
+  ${isArray ? `object->${makeSingular(propName)}Count = jsiArray${index}Size;` : ``}
   object->${propName} = ${isArray ? `array${index}->data()` : unWrapType(propName, property.type, !!property.pointer)};
 }${property.optional ? `` : ` else { throw jsi::JSError(runtime, "Missing mandatory prop ${property.name} in ${name}"); }`}`;
 }).join(`

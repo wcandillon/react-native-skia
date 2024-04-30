@@ -38,10 +38,21 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(writeBuffer) {
+
+    auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
+    auto offset = static_cast<uint64_t>(arguments[1].getNumber());
+    auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
+    auto size = static_cast<uint64_t>(arguments[3].getNumber());
+    getObject()->writeBuffer(*buffer, offset, data.data(runtime), size);
+    return jsi::Value::undefined();
+  }
+
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiQueue, Queue)
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiQueue, submit))
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiQueue, submit),
+                       JSI_EXPORT_FUNC(JsiQueue, writeBuffer))
 
   /**
    * Returns the underlying object from a host object of this type

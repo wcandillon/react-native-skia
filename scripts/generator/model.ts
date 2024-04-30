@@ -84,6 +84,14 @@ export const model: JSIObject[] = [
         member: "queue"
       },
       {
+        name: "createBindGroup",
+        args: [{
+          name: "descriptor",
+          type: "BindGroupDescriptor"
+        }],
+        returns: "BindGroup"
+      },
+      {
         name: "createRenderPipeline",
         args: [{
           name: "descriptor",
@@ -129,6 +137,26 @@ export const model: JSIObject[] = [
         returns: "Texture"
       }
     ]
+  },
+  {
+    name: "BindGroupDescriptor",
+    properties: [
+      { name: "layout", type: "BindGroupLayout" },
+      { name: "entries", type: "BindGroupEntry[]"}
+    ]
+  },
+  {
+    name: "BindGroupLayout",
+  },
+  {
+    name: "BindGroupEntry",
+    properties: [
+      { name: "binding", type: "uint32_t" },
+      { name: "buffer", type: "Buffer" }
+    ]
+  },
+  {
+    name: "BindGroup"
   },
   {
     name: "TextureDescriptor",
@@ -189,6 +217,23 @@ export const model: JSIObject[] = [
           type: "CommandBuffer[]",
           ctype: true
         }]
+      },
+      {
+        name: "writeBuffer",
+        args: [
+          // {"name": "buffer", "type": "Buffer"},
+          // {"name": "offset", "type": "double"},
+          // {"name": "data", "type": "double[]"},
+          // {"name": "size", "type": "double"}
+        ],
+        implementation: `
+        auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
+        auto offset = static_cast<uint64_t>(arguments[1].getNumber());
+        auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
+        auto size = static_cast<uint64_t>(arguments[3].getNumber());
+        getObject()->writeBuffer(*buffer, offset, data.data(runtime), size);
+        return jsi::Value::undefined();
+        `,
       }
     ]
   },
@@ -357,7 +402,17 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     ]
   },
   {
-    name: "RenderPipeline"
+    name: "RenderPipeline",
+    methods: [{
+      name: "getBindGroupLayout",
+      returns: "BindGroupLayout",
+      args: [
+        {
+          name: "index",
+          type: "uint32_t"
+        }
+      ]
+    }]
   },
   {
     name: "DeviceDescriptor",

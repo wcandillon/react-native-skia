@@ -7,6 +7,7 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiBindGroupLayout.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -26,8 +27,18 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::RenderPipeline>(
             context, std::make_shared<wgpu::RenderPipeline>(std::move(m))) {}
 
+  JSI_HOST_FUNCTION(getBindGroupLayout) {
+    auto index = static_cast<uint32_t>(arguments[0].getNumber());
+
+    auto ret = getObject()->getBindGroupLayout(index);
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiBindGroupLayout>(getContext(), ret));
+  }
+
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPipeline, RenderPipeline)
+
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiRenderPipeline, getBindGroupLayout))
 
   /**
    * Returns the underlying object from a host object of this type
