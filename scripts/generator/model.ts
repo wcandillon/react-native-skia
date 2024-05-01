@@ -116,7 +116,7 @@ export const model: JSIObject[] = [
                 jsi::Runtime &runtime,
                 std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
                 wgpu::Device device = nullptr;
-                adapter->RequestDevice(
+                object->RequestDevice(
                     nullptr,
                     [](WGPURequestDeviceStatus, WGPUDevice cDevice, const char *message,
                       void *userdata) {
@@ -242,6 +242,31 @@ export const model: JSIObject[] = [
     name: "Buffer",
     methods: [
       { name: "unmap", args: [] },
+      {
+        name: "mapAsync",
+        args: [
+          {
+            name: "mode",
+            type: "uint32_t",
+          }
+        ],
+        implementation: `auto mode = static_cast<wgpu::MapMode>(arguments[0].getNumber());
+        auto offset = static_cast<uint32_t>(arguments[1].getNumber());
+        auto size = static_cast<uint32_t>(arguments[2].getNumber());
+        auto object = getObject();
+        return RNJsi::JsiPromises::createPromiseAsJSIValue(
+            runtime,
+            [object = std::move(object), mode, offset, size](jsi::Runtime &runtime,
+                std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+              object->MapAsync(
+                  mode, offset, size,
+                  [](WGPUBufferMapAsyncStatus status, void *userdata) {
+                    auto promise = static_cast<RNJsi::JsiPromises::Promise*>(userdata);
+                    promise->resolve(jsi::Value::undefined());
+                  },
+                  promise.get());
+            });`
+      },
       { 
         name: "getMappedRange",
         args: [

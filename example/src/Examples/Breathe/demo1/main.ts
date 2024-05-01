@@ -12,11 +12,24 @@ import {basicVertWGSL, vertexPositionColorWGSL} from './shaders';
 import { gpu } from '@shopify/react-native-skia';
 import { Dimensions } from 'react-native';
 
-const GPUTextureUsage = {
-  RENDER_ATTACHMENT: 0x00000010,
-}
-
 const {width, height} = Dimensions.get("window");
+
+async function readGPUBuffer(device: GPUDevice, buffer: GPUBuffer, byteLength: number) {
+  const readBuffer = device.createBuffer({
+    size: byteLength,
+    usage: 9//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  });
+
+  const commandEncoder = device.createCommandEncoder();
+  commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, byteLength);
+  const gpuCommands = commandEncoder.finish();
+  device.queue.submit([gpuCommands]);
+
+  await readBuffer.mapAsync(1, 0, cubeVertexArray.byteLength);//GPUMapMode.READ
+  const copyArrayBuffer = readBuffer.getMappedRange();
+  console.log(new Float32Array(copyArrayBuffer)); // For float buffers, adjust as needed
+  readBuffer.unmap();
+}
 
 export const demo1 = async (context: GPUCanvasContext) => {
   const adapter = await gpu.requestAdapter();
@@ -27,7 +40,7 @@ context.configure({
   format: presentationFormat,
   alphaMode: 'premultiplied',
 });
-
+console.log(cubeVertexArray.byteLength);
 // Create a vertex buffer from the cube data.
 const verticesBuffer = device.createBuffer({
   size: cubeVertexArray.byteLength,
@@ -181,7 +194,8 @@ function frame() {
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
 
-  
+  readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
+
   console.log("RENDER");
   context.present();
  // requestAnimationFrame(frame);

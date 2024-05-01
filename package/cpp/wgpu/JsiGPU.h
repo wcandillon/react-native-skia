@@ -26,10 +26,6 @@ public:
       : JsiSkWrappingSharedPtrHostObject<wgpu::Instance>(
             context, std::make_shared<wgpu::Instance>(std::move(m))) {}
 
-  JSI_HOST_FUNCTION(getPreferredCanvasFormat) {
-    return jsi::String::createFromUtf8(runtime, "rgba8unorm");
-  }
-
   JSI_HOST_FUNCTION(requestAdapter) {
     auto defaultOptions = new wgpu::RequestAdapterOptions();
     auto options =
@@ -46,8 +42,8 @@ public:
           wgpu::Adapter adapter = nullptr;
           object->RequestAdapter(
               nullptr,
-              [](WGPURequestAdapterStatus, WGPUAdapter cAdapter, const char *message,
-                void *userdata) {
+              [](WGPURequestAdapterStatus, WGPUAdapter cAdapter,
+                 const char *message, void *userdata) {
                 if (message != nullptr) {
                   fprintf(stderr, "%s", message);
                   return;
@@ -64,6 +60,10 @@ public:
                                                       std::move(adapter))));
           }
         });
+  }
+
+  JSI_HOST_FUNCTION(getPreferredCanvasFormat) {
+    return jsi::String::createFromUtf8(runtime, "rgba8unorm");
   }
 
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead

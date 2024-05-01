@@ -30,6 +30,26 @@ public:
     return jsi::Value::undefined();
   }
 
+  JSI_HOST_FUNCTION(mapAsync) {
+    auto mode = static_cast<wgpu::MapMode>(arguments[0].getNumber());
+    auto offset = static_cast<uint32_t>(arguments[1].getNumber());
+    auto size = static_cast<uint32_t>(arguments[2].getNumber());
+    auto object = getObject();
+    return RNJsi::JsiPromises::createPromiseAsJSIValue(
+        runtime, [object = std::move(object), mode, offset,
+                  size](jsi::Runtime &runtime,
+                        std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+          object->MapAsync(
+              mode, offset, size,
+              [](WGPUBufferMapAsyncStatus status, void *userdata) {
+                auto promise =
+                    static_cast<RNJsi::JsiPromises::Promise *>(userdata);
+                promise->resolve(jsi::Value::undefined());
+              },
+              promise.get());
+        });
+  }
+
   JSI_HOST_FUNCTION(getMappedRange) {
 
     size_t offset = static_cast<size_t>(arguments[0].getNumber());
@@ -49,6 +69,7 @@ public:
   EXPORT_JSI_API_BRANDNAME(JsiBuffer, Buffer)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiBuffer, unmap),
+                       JSI_EXPORT_FUNC(JsiBuffer, mapAsync),
                        JSI_EXPORT_FUNC(JsiBuffer, getMappedRange))
 
   /**

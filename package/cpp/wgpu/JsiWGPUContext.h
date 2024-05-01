@@ -38,7 +38,8 @@ public:
     swapChainDesc.width = _width;
     swapChainDesc.height = _height;
     swapChainDesc.usage = wgpu::TextureUsage::RenderAttachment;
-    swapChainDesc.format = wgpu::TextureFormat::RGBA8Unorm; //surface.GetPreferredFormat(adapter);
+    swapChainDesc.format =
+        wgpu::TextureFormat::RGBA8Unorm; // surface.GetPreferredFormat(adapter);
     swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
     _surface = std::make_shared<wgpu::Surface>(surface);
     _swapChain = std::make_shared<wgpu::SwapChain>(
