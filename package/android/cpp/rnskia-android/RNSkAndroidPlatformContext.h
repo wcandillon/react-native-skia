@@ -66,17 +66,15 @@ public:
 
   void registerSurfaceDescriptor(int nativeId, void *window, int width,
                                  int height) override {
-    WGPUSurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
-    androidSurfaceDesc.chain.sType =
-        WGPUSType_SurfaceDescriptorFromAndroidNativeWindow;
+
+    wgpu::SurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
     androidSurfaceDesc.window = window;
 
-    WGPUSurfaceDescriptor surfaceDesc = {};
-    surfaceDesc.nextInChain =
-        reinterpret_cast<const WGPUChainedStruct *>(&androidSurfaceDesc);
+    wgpu::SurfaceDescriptor surfaceDesc = {};
+    surfaceDesc.nextInChain = &androidSurfaceDesc;
 
-    wgpu::Instance instance = wgpuCreateInstance(nullptr);
-    wgpu::Surface surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+    auto instance = wgpu::CreateInstance(nullptr);
+    auto surface = instance.CreateSurface(&surfaceDesc);
 
     _descriptors[nativeId] = std::make_tuple(
         std::make_shared<wgpu::Surface>(surface), width, height);

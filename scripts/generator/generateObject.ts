@@ -81,13 +81,13 @@ export const wrapReturnValue = (returns: string | undefined) => {
   }
 };
 
-const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  (isAtomicType(arg.type) || arg.type.endsWith("[]")) ? `${arg.name}` : `*${arg.name}`).join(", ");
+const argList = (args: Arg[]) => args.map(arg => arg.baseType ? `base${_.upperFirst(arg.name)}`:  (isAtomicType(arg.type) || arg.type.endsWith("[]") || arg.type.endsWith("Descriptor")) ? `${arg.name}` : `*${arg.name}`).join(", ");
 
 const baseType = (arg: Arg) => {
   return `
 auto ${arg.name}Next = *moduleDescriptor;
-wgpu::${arg.baseType} base${_.upperFirst(arg.name)};
-base${_.upperFirst(arg.name)}.nextInChain = &${arg.name}Next.chain;`
+auto base${_.upperFirst(arg.name)} = new wgpu::${arg.baseType}();
+base${_.upperFirst(arg.name)}->nextInChain = &${arg.name}Next;`
 };
 
 const generatorMethod = (method: Method) => {
@@ -107,7 +107,7 @@ const generatorMethod = (method: Method) => {
     ${
       args.filter(arg => arg.baseType).map(arg => baseType(arg))
     }
-    ${returns ? 'auto ret = ' : ''}getObject()->${_.camelCase(method.name)}(${argList(args)});
+    ${returns ? 'auto ret = ' : ''}getObject()->${_.upperFirst(_.camelCase(method.name))}(${argList(args)});
     return ${wrapReturnValue(returns)};
   }
 `;
@@ -125,7 +125,7 @@ const generatorAsyncMethod = (method: Method) => {
         [context = std::move(context), object = std::move(object) ${depList}](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->${method.name}(${argList(args)});
+          auto ret = object->${_.upperFirst(method.name)}(${argList(args)});
           if (ret == nullptr) {
             promise->resolve(jsi::Value::null());
           } else {
@@ -140,7 +140,6 @@ const generatorAsyncMethod = (method: Method) => {
 
 const unpackProperties = (name: string, properties: Property[], defaultProperties: string) => {
   return `auto object = new wgpu::${name}();
-object->setDefault();
 ${defaultProperties}
 ${properties.map((property, index) => {
   const propName = _.camelCase(property.name);
@@ -180,7 +179,7 @@ export const generateObject = (object: JSIObject) => {
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 

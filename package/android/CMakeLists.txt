@@ -91,6 +91,7 @@ target_include_directories(
         ../cpp/wgpu
         ../cpp/jsi
         ../cpp/rnskia
+        ../cpp/rnskia/dawn
         ../cpp/rnskia/values
         ../cpp/rnskia/dom
         ../cpp/rnskia/dom/base

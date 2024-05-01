@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -32,14 +32,14 @@ public:
   JSI_HOST_FUNCTION(beginRenderPass) {
     auto descriptor = JsiRenderPassDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->beginRenderPass(*descriptor);
+    auto ret = getObject()->BeginRenderPass(descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), ret));
   }
 
   JSI_HOST_FUNCTION(finish) {
 
-    auto ret = getObject()->finish();
+    auto ret = getObject()->Finish();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }

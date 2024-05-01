@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -43,13 +43,25 @@ public:
          options = std::move(options)](
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          auto ret = object->requestAdapter(*options);
-          if (ret == nullptr) {
+          wgpu::Adapter adapter = nullptr;
+          object->RequestAdapter(
+              nullptr,
+              [](WGPURequestAdapterStatus, WGPUAdapter cAdapter, const char *message,
+                void *userdata) {
+                if (message != nullptr) {
+                  fprintf(stderr, "%s", message);
+                  return;
+                }
+                *static_cast<wgpu::Adapter *>(userdata) =
+                    wgpu::Adapter::Acquire(cAdapter);
+              },
+              &adapter);
+          if (adapter == nullptr) {
             promise->resolve(jsi::Value::null());
           } else {
             promise->resolve(jsi::Object::createFromHostObject(
                 runtime, std::make_shared<JsiAdapter>(std::move(context),
-                                                      std::move(ret))));
+                                                      std::move(adapter))));
           }
         });
   }

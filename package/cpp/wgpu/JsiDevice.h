@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -39,7 +39,7 @@ public:
 
   JSI_PROPERTY_GET(queue) {
 
-    auto ret = getObject()->getQueue();
+    auto ret = getObject()->GetQueue();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
   }
@@ -47,7 +47,7 @@ public:
   JSI_HOST_FUNCTION(createBindGroup) {
     auto descriptor = JsiBindGroupDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->createBindGroup(*descriptor);
+    auto ret = getObject()->CreateBindGroup(descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiBindGroup>(getContext(), ret));
   }
@@ -56,7 +56,7 @@ public:
     auto descriptor =
         JsiRenderPipelineDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->createRenderPipeline(*descriptor);
+    auto ret = getObject()->CreateRenderPipeline(descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
   }
@@ -66,9 +66,9 @@ public:
         JsiShaderModuleWGSLDescriptor::fromValue(runtime, arguments[0]);
 
     auto moduleDescriptorNext = *moduleDescriptor;
-    wgpu::ShaderModuleDescriptor baseModuleDescriptor;
-    baseModuleDescriptor.nextInChain = &moduleDescriptorNext.chain;
-    auto ret = getObject()->createShaderModule(baseModuleDescriptor);
+    auto baseModuleDescriptor = new wgpu::ShaderModuleDescriptor();
+    baseModuleDescriptor->nextInChain = &moduleDescriptorNext;
+    auto ret = getObject()->CreateShaderModule(baseModuleDescriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiShaderModule>(getContext(), ret));
   }
@@ -80,7 +80,7 @@ public:
             ? JsiCommandEncoderDescriptor::fromValue(runtime, arguments[0])
             : defaultDescriptor;
 
-    auto ret = getObject()->createCommandEncoder(*descriptor);
+    auto ret = getObject()->CreateCommandEncoder(descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
@@ -88,7 +88,7 @@ public:
   JSI_HOST_FUNCTION(createBuffer) {
     auto descritor = JsiBufferDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->createBuffer(*descritor);
+    auto ret = getObject()->CreateBuffer(descritor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiBuffer>(getContext(), ret));
   }
@@ -96,7 +96,7 @@ public:
   JSI_HOST_FUNCTION(createTexture) {
     auto descriptor = JsiTextureDescriptor::fromValue(runtime, arguments[0]);
 
-    auto ret = getObject()->createTexture(*descriptor);
+    auto ret = getObject()->CreateTexture(descriptor);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiTexture>(getContext(), ret));
   }

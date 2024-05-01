@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -26,7 +26,7 @@ public:
             context, std::make_shared<wgpu::Queue>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(submit) {
-    std::vector<WGPUCommandBuffer> commandBuffers;
+    std::vector<wgpu::CommandBuffer> commandBuffers;
     auto jsiArray = arguments[0].asObject(runtime).asArray(runtime);
     auto jsiArraySize = static_cast<int>(jsiArray.size(runtime));
     for (int i = 0; i < jsiArraySize; i++) {
@@ -34,7 +34,7 @@ public:
       commandBuffers.push_back(*JsiCommandBuffer::fromValue(runtime, val));
     }
 
-    getObject()->submit(commandBuffers);
+    getObject()->Submit(commandBuffers.size(), commandBuffers.data());
     return jsi::Value::undefined();
   }
 
@@ -44,7 +44,7 @@ public:
     auto offset = static_cast<uint64_t>(arguments[1].getNumber());
     auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
     auto size = static_cast<uint64_t>(arguments[3].getNumber());
-    getObject()->writeBuffer(*buffer, offset, data.data(runtime), size);
+    getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
     return jsi::Value::undefined();
   }
 

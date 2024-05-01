@@ -5,62 +5,82 @@
 #include <fbjni/fbjni.h>
 #include <jni.h>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 using namespace wgpu;
 
 void runTriangleDemo(void *window, int width, int height) {
   RNSkia::RNSkLogger::logToConsole("width: %d, height: %d", width, height);
-  Instance instance = wgpuCreateInstance(nullptr);
+  auto instance = CreateInstance(nullptr);
   if (!instance) {
     RNSkia::RNSkLogger::logToConsole("Failed to create WebGPU instance");
     return;
   }
-  WGPUSurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
-  androidSurfaceDesc.chain.sType =
-      WGPUSType_SurfaceDescriptorFromAndroidNativeWindow;
+  SurfaceDescriptorFromAndroidNativeWindow androidSurfaceDesc = {};
   androidSurfaceDesc.window = window;
 
   // Set up the generic surface descriptor to use the platform-specific one
-  WGPUSurfaceDescriptor surfaceDesc = {};
+  SurfaceDescriptor surfaceDesc = {};
   surfaceDesc.nextInChain =
-      reinterpret_cast<const WGPUChainedStruct *>(&androidSurfaceDesc);
-  Surface surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+      reinterpret_cast<const ChainedStruct *>(&androidSurfaceDesc);
+  Surface surface = instance.CreateSurface(&surfaceDesc);
 
   RNSkia::RNSkLogger::logToConsole("Requesting adapter...");
   RequestAdapterOptions adapterOpts;
-  // adapterOpts.compatibleSurface = surface;
-  Adapter adapter = instance.requestAdapter(adapterOpts);
-  std::cout << "Got adapter: " << adapter << std::endl;
 
-  std::cout << "Requesting device..." << std::endl;
+  wgpu::Adapter adapter = nullptr;
+  instance.RequestAdapter(
+      nullptr,
+      [](WGPURequestAdapterStatus, WGPUAdapter cAdapter, const char *message,
+         void *userdata) {
+        if (message != nullptr) {
+          fprintf(stderr, "%s", message);
+          return;
+        }
+        *static_cast<wgpu::Adapter *>(userdata) =
+            wgpu::Adapter::Acquire(cAdapter);
+      },
+      &adapter);
+
+  wgpu::Device device = nullptr;
+  adapter.RequestDevice(
+      nullptr,
+      [](WGPURequestDeviceStatus, WGPUDevice cDevice, const char *message,
+         void *userdata) {
+        if (message != nullptr) {
+          fprintf(stderr, "%s", message);
+          return;
+        }
+        *static_cast<wgpu::Device *>(userdata) = wgpu::Device::Acquire(cDevice);
+      },
+      &device);
+
   DeviceDescriptor deviceDesc;
   deviceDesc.label = "My Device";
   // deviceDesc.requiredFeaturesCount = 0;
   deviceDesc.requiredLimits = nullptr;
   deviceDesc.defaultQueue.label = "The default queue";
-  Device device = adapter.requestDevice(deviceDesc);
-  RNSkia::RNSkLogger::logToConsole("GOT DEVICE");
 
   // Add an error callback for more debug info
-  auto h = device.setUncapturedErrorCallback(
-      [](ErrorType type, char const *message) {
-        RNSkia::RNSkLogger::logToConsole("error: %s", message);
-      });
-
-  Queue queue = device.getQueue();
+  //          auto h = device.SetUncapturedErrorCallback(
+  //              [=](ErrorType type, char const *message, void *userData) {
+  //                RNSkia::RNSkLogger::logToConsole("error: %s", message);
+  //                RNSkia::RNSkLogger::logToConsole("GOT DEVICE");
+  //              },
+  //              nullptr);
+  Queue queue = device.GetQueue();
 
   RNSkia::RNSkLogger::logToConsole("Creating swap chain...");
-  TextureFormat swapChainFormat =
-      surface.getPreferredFormat(adapter); // 	TextureFormat swapChainFormat =
-                                           // TextureFormat::BGRA8Unorm;
+  //  TextureFormat swapChainFormat = surface.GetPreferredFormat(
+  //    adapter); // 	TextureFormat swapChainFormat =
+  // TextureFormat::BGRA8Unorm;
   SwapChainDescriptor swapChainDesc;
   swapChainDesc.width = width;
   swapChainDesc.height = height;
   swapChainDesc.usage = TextureUsage::RenderAttachment;
-  swapChainDesc.format = swapChainFormat;
+  swapChainDesc.format = TextureFormat::RGBA8Unorm;
   swapChainDesc.presentMode = PresentMode::Fifo;
-  SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
+  SwapChain swapChain = device.CreateSwapChain(surface, &swapChainDesc);
 
   RNSkia::RNSkLogger::logToConsole("Creating shader module.");
   const char *shaderSource = R"(
@@ -89,15 +109,13 @@ fn fs_main() -> @location(0) vec4f {
   //  Use the extension mechanism to load a WGSL shader source code
   ShaderModuleWGSLDescriptor shaderCodeDesc;
   // Set the chained struct's header
-  shaderCodeDesc.chain.next = nullptr;
-  shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
   // Connect the chain
-  shaderDesc.nextInChain = &shaderCodeDesc.chain;
+  shaderDesc.nextInChain = &shaderCodeDesc;
 
   // Setup the actual payload of the shader code descriptor
   shaderCodeDesc.code = shaderSource;
 
-  ShaderModule shaderModule = device.createShaderModule(shaderDesc);
+  auto shaderModule = device.CreateShaderModule(&shaderDesc);
   RNSkia::RNSkLogger::logToConsole("Creating rendering pipeline.");
   RenderPipelineDescriptor pipelineDesc;
 
@@ -115,8 +133,9 @@ fn fs_main() -> @location(0) vec4f {
   // Primitive assembly and rasterization
   // Each sequence of 3 vertices is considered as a triangle
   pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
-  // We'll see later how to specify the order in which vertices should be
-  // connected. When not specified, vertices are considered sequentially.
+  // We'll see later how to specify the order in which vertices should
+  // be connected. When not specified, vertices are considered
+  // sequentially.
   pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
   // The face orientation is defined by assuming that when looking
   // from the front of the face, its corner vertices are enumerated
@@ -147,13 +166,13 @@ fn fs_main() -> @location(0) vec4f {
   blendState.alpha.operation = BlendOperation::Add;
 
   ColorTargetState colorTarget;
-  colorTarget.format = swapChainFormat;
+  colorTarget.format = TextureFormat::RGBA8Unorm;
   colorTarget.blend = &blendState;
-  colorTarget.writeMask =
-      ColorWriteMask::All; // We could write to only some of the color channels.
+  colorTarget.writeMask = ColorWriteMask::All; // We could write to only some
+                                               // of the color channels.
 
-  // We have only one target because our render pass has only one output color
-  // attachment.
+  // We have only one target because our render pass has only one output
+  // color attachment.
   fragmentState.targetCount = 1;
   fragmentState.targets = &colorTarget;
 
@@ -171,21 +190,20 @@ fn fs_main() -> @location(0) vec4f {
   // Pipeline layout
   pipelineDesc.layout = nullptr;
 
-  RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
-  std::cout << "Render pipeline: " << pipeline << std::endl;
+  RenderPipeline pipeline = device.CreateRenderPipeline(&pipelineDesc);
 
   //  while (true) {
   // wgpuInstanceProcessEvents(instance);
 
-  TextureView nextTexture = swapChain.getCurrentTextureView();
+  TextureView nextTexture = swapChain.GetCurrentTextureView();
   if (!nextTexture) {
     RNSkia::RNSkLogger::logToConsole("Cannot acquire next swap chain texture");
-    return;
+    // return;
   }
 
   CommandEncoderDescriptor commandEncoderDesc;
   commandEncoderDesc.label = "Command Encoder";
-  CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
+  CommandEncoder encoder = device.CreateCommandEncoder(&commandEncoderDesc);
 
   RenderPassDescriptor renderPassDesc;
 
@@ -202,37 +220,25 @@ fn fs_main() -> @location(0) vec4f {
   renderPassDesc.depthStencilAttachment = nullptr;
   // renderPassDesc.timestampWriteCount = 0;
   renderPassDesc.timestampWrites = nullptr;
-  RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+  RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
   // In its overall outline, drawing a triangle is as simple as this:
   // Select which render pipeline to use
-  renderPass.setPipeline(pipeline);
+  renderPass.SetPipeline(pipeline);
   // Draw 1 instance of a 3-vertices shape
-  renderPass.draw(3, 1, 0, 0);
+  renderPass.Draw(3, 1, 0, 0);
 
-  renderPass.end();
-  renderPass.release();
-
-  nextTexture.release();
+  renderPass.End();
 
   CommandBufferDescriptor cmdBufferDescriptor;
   cmdBufferDescriptor.label = "Command buffer";
-  CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-  encoder.release();
-  std::vector<WGPUCommandBuffer> commands;
+  CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
+  std::vector<CommandBuffer> commands;
   commands.push_back(command);
-  queue.submit(command);
-  command.release();
+  queue.Submit(commands.size(), commands.data());
 
-  swapChain.present();
-  // }
+  swapChain.Present();
 
-  pipeline.release();
-  shaderModule.release();
-  swapChain.release();
-  device.release();
-  adapter.release();
-  instance.release();
   // surface.release();
   // glfwDestroyWindow(window);
   // glfwTerminate();

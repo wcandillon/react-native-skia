@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -43,9 +43,8 @@ public:
           .get();
     } else {
       auto object = new wgpu::ShaderModuleWGSLDescriptor();
-      object->setDefault();
-      object->chain.next = nullptr;
-      object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+
+      object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;
       if (obj.hasProperty(runtime, "code")) {
         auto code = obj.getProperty(runtime, "code");
 

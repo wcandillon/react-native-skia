@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -40,7 +40,6 @@ public:
       return obj.asHostObject<JsiBindGroupEntry>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::BindGroupEntry();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "binding")) {
         auto binding = obj.getProperty(runtime, "binding");

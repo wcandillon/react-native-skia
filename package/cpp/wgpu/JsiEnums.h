@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 namespace RNSkia {
 wgpu::AddressMode getAddressMode(const char *value) {
@@ -391,13 +391,13 @@ wgpu::TextureAspect getTextureAspect(const char *value) {
 
 wgpu::TextureDimension getTextureDimension(const char *value) {
   if (strcmp(value, "1d") == 0) {
-    return wgpu::TextureDimension::_1D;
+    return wgpu::TextureDimension::e1D;
   }
   if (strcmp(value, "2d") == 0) {
-    return wgpu::TextureDimension::_2D;
+    return wgpu::TextureDimension::e2D;
   }
   if (strcmp(value, "3d") == 0) {
-    return wgpu::TextureDimension::_3D;
+    return wgpu::TextureDimension::e3D;
   }
   throw std::invalid_argument("Invalid value " + std::string(value) +
                               " for enum TextureDimension");
@@ -712,13 +712,13 @@ wgpu::TextureSampleType getTextureSampleType(const char *value) {
 
 wgpu::TextureViewDimension getTextureViewDimension(const char *value) {
   if (strcmp(value, "1d") == 0) {
-    return wgpu::TextureViewDimension::_1D;
+    return wgpu::TextureViewDimension::e1D;
   }
   if (strcmp(value, "2d") == 0) {
-    return wgpu::TextureViewDimension::_2D;
+    return wgpu::TextureViewDimension::e2D;
   }
   if (strcmp(value, "2d-array") == 0) {
-    return wgpu::TextureViewDimension::_2DArray;
+    return wgpu::TextureViewDimension::e2DArray;
   }
   if (strcmp(value, "cube") == 0) {
     return wgpu::TextureViewDimension::Cube;
@@ -727,7 +727,7 @@ wgpu::TextureViewDimension getTextureViewDimension(const char *value) {
     return wgpu::TextureViewDimension::CubeArray;
   }
   if (strcmp(value, "3d") == 0) {
-    return wgpu::TextureViewDimension::_3D;
+    return wgpu::TextureViewDimension::e3D;
   }
   throw std::invalid_argument("Invalid value " + std::string(value) +
                               " for enum TextureViewDimension");

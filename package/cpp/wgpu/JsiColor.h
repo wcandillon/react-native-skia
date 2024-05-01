@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -47,7 +47,6 @@ public:
         return object;
       }
       auto object = new wgpu::Color();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "r")) {
         auto r = obj.getProperty(runtime, "r");

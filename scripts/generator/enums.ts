@@ -6,10 +6,10 @@ export const isEnum = (type: string) => enums[type] !== undefined;
 
 const convertString = (input: string) => {
   const map: Record<string, string> = {
-    "1d": "_1D",
-    "2d": "_2D",
-    "3d": "_3D", 
-    "2d-array": "_2DArray",
+    "1d": "e1D",
+    "2d": "e2D",
+    "3d": "e3D", 
+    "2d-array": "e2DArray",
   }
   if (map[input] !== undefined) {
     return map[input];
@@ -48,7 +48,7 @@ export const generateEnums = (enums: Record<string, Enum>) => {
   
 #include <string>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 namespace RNSkia {
   ${Object.keys(enums).map(name => {

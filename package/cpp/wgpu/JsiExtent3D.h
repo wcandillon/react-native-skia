@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -37,7 +37,6 @@ public:
       return obj.asHostObject<JsiExtent3D>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::Extent3D();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "width")) {
         auto width = obj.getProperty(runtime, "width");

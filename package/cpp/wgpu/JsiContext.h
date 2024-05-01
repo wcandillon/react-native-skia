@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -38,7 +38,6 @@ public:
       return obj.asHostObject<JsiContext>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::Context();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "gpu")) {
         auto gpu = obj.getProperty(runtime, "gpu");

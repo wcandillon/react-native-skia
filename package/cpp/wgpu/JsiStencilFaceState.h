@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -39,7 +39,6 @@ public:
       return obj.asHostObject<JsiStencilFaceState>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::StencilFaceState();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "compare")) {
         auto compare = obj.getProperty(runtime, "compare");

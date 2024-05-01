@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -48,10 +48,6 @@ public:
           .get();
     } else {
       auto object = new wgpu::RenderPipelineDescriptor();
-      object->setDefault();
-      object->multisample.count = 1;
-      object->multisample.mask = ~0u;
-      object->multisample.alphaToCoverageEnabled = false;
 
       if (obj.hasProperty(runtime, "vertex")) {
         auto vertex = obj.getProperty(runtime, "vertex");

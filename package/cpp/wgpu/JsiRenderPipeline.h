@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -30,7 +30,7 @@ public:
   JSI_HOST_FUNCTION(getBindGroupLayout) {
     auto index = static_cast<uint32_t>(arguments[0].getNumber());
 
-    auto ret = getObject()->getBindGroupLayout(index);
+    auto ret = getObject()->GetBindGroupLayout(index);
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiBindGroupLayout>(getContext(), ret));
   }

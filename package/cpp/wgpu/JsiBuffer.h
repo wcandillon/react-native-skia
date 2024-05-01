@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -26,7 +26,7 @@ public:
 
   JSI_HOST_FUNCTION(unmap) {
 
-    getObject()->unmap();
+    getObject()->Unmap();
     return jsi::Value::undefined();
   }
 
@@ -34,7 +34,7 @@ public:
 
     size_t offset = static_cast<size_t>(arguments[0].getNumber());
     size_t size = static_cast<size_t>(arguments[1].getNumber());
-    auto data = getObject()->getMappedRange(offset, size);
+    auto data = getObject()->GetMappedRange(offset, size);
     auto arrayBufferCtor =
         runtime.global().getPropertyAsFunction(runtime, "ArrayBuffer");
     auto o =

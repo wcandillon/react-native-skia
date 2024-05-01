@@ -141,7 +141,7 @@ const renderPassDescriptor: GPURenderPassDescriptor = {
     {
       view: context
            .getCurrentTexture()
-           .createView(), // Assigned later
+           .createView(),
 
       clearValue: [0.5, 0.5, 0.5, 1.0],
       loadOp: 'clear',

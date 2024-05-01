@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -27,7 +27,7 @@ public:
 
   JSI_HOST_FUNCTION(createView) {
 
-    auto ret = getObject()->createView();
+    auto ret = getObject()->CreateView();
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiTextureView>(getContext(), ret));
   }

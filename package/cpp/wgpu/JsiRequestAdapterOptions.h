@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -42,7 +42,6 @@ public:
           .get();
     } else {
       auto object = new wgpu::RequestAdapterOptions();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "powerPreference")) {
         auto powerPreference = obj.getProperty(runtime, "powerPreference");

@@ -9,8 +9,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "webgpu.h"
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include "RNSkDispatchQueue.h"
 

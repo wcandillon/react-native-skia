@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -40,8 +40,7 @@ public:
       return obj.asHostObject<JsiColorTargetState>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::ColorTargetState();
-      object->setDefault();
-      object->writeMask = wgpu::ColorWriteMask::All;
+
       if (obj.hasProperty(runtime, "format")) {
         auto format = obj.getProperty(runtime, "format");
 
@@ -59,7 +58,8 @@ public:
       if (obj.hasProperty(runtime, "writeMask")) {
         auto writeMask = obj.getProperty(runtime, "writeMask");
 
-        object->writeMask = static_cast<uint32_t>(writeMask.getNumber());
+        object->writeMask =
+            static_cast<wgpu::ColorWriteMask>(writeMask.getNumber());
       }
       return object;
     }

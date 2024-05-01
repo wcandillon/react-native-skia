@@ -45,7 +45,39 @@ export const model: JSIObject[] = [
           { name: "options", optional: true, type: "RequestAdapterOptions", defaultValue: true }
         ],
         returns: "Adapter",
-        async: true
+        implementation: ` auto defaultOptions = new wgpu::RequestAdapterOptions();
+        auto options =
+            count > 0 ? JsiRequestAdapterOptions::fromValue(runtime, arguments[0])
+                      : defaultOptions;
+        auto context = getContext();
+        auto object = getObject();
+        return RNJsi::JsiPromises::createPromiseAsJSIValue(
+            runtime,
+            [context = std::move(context), object = std::move(object),
+             options = std::move(options)](
+                jsi::Runtime &runtime,
+                std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
+              wgpu::Adapter adapter = nullptr;
+              object->RequestAdapter(
+                  nullptr,
+                  [](WGPURequestAdapterStatus, WGPUAdapter cAdapter, const char *message,
+                    void *userdata) {
+                    if (message != nullptr) {
+                      fprintf(stderr, "%s", message);
+                      return;
+                    }
+                    *static_cast<wgpu::Adapter *>(userdata) =
+                        wgpu::Adapter::Acquire(cAdapter);
+                  },
+                  &adapter);
+              if (adapter == nullptr) {
+                promise->resolve(jsi::Value::null());
+              } else {
+                promise->resolve(jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiAdapter>(std::move(context),
+                                                          std::move(adapter))));
+              }
+            });`
       },
       {
         name: "getPreferredCanvasFormat",
@@ -70,7 +102,39 @@ export const model: JSIObject[] = [
           { name: "descriptor", type: "DeviceDescriptor", optional: true, defaultValue: true }
         ],
         returns: "Device",
-        async: true
+       // async: true,
+        implementation: `    auto defaultDescriptor = new wgpu::DeviceDescriptor();
+        auto descriptor =
+            count > 0 ? JsiDeviceDescriptor::fromValue(runtime, arguments[0])
+                      : defaultDescriptor;
+        auto context = getContext();
+        auto object = getObject();
+        return RNJsi::JsiPromises::createPromiseAsJSIValue(
+            runtime,
+            [context = std::move(context), object = std::move(object),
+             descriptor = std::move(descriptor)](
+                jsi::Runtime &runtime,
+                std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
+                wgpu::Device device = nullptr;
+                adapter->RequestDevice(
+                    nullptr,
+                    [](WGPURequestDeviceStatus, WGPUDevice cDevice, const char *message,
+                      void *userdata) {
+                      if (message != nullptr) {
+                        fprintf(stderr, "%s", message);
+                        return;
+                      }
+                      *static_cast<wgpu::Device *>(userdata) = wgpu::Device::Acquire(cDevice);
+                    },
+                    &device);
+              if (device == nullptr) {
+                promise->resolve(jsi::Value::null());
+              } else {
+                promise->resolve(jsi::Object::createFromHostObject(
+                    runtime, std::make_shared<JsiDevice>(std::move(context),
+                                                         std::move(device))));
+              }
+            });`
       }
     ]
   },
@@ -163,14 +227,14 @@ export const model: JSIObject[] = [
     properties: [
       { name: "size", type: "Extent3D" },
       { name: "format", type: "TextureFormat" },
-      { name: "usage", type: "uint32_t" } // TextureUsage
+      { name: "usage", type: "TextureUsage" }
     ]
   },
   {
     "name": "BufferDescriptor",
     properties: [
       { name: "size", type: "uint64_t" },
-      {"name": "usage", "type": "uint32_t"}, //BufferUsage
+      {"name": "usage", "type": "BufferUsage"},
       {"name": "mappedAtCreation", "type": "bool", "default": "false"}
     ]
   },
@@ -187,7 +251,7 @@ export const model: JSIObject[] = [
         implementation: `
         size_t offset = static_cast<size_t>(arguments[0].getNumber());
         size_t size = static_cast<size_t>(arguments[1].getNumber());
-        auto data = getObject()->getMappedRange(offset, size);
+        auto data = getObject()->GetMappedRange(offset, size);
         auto arrayBufferCtor =
             runtime.global().getPropertyAsFunction(runtime, "ArrayBuffer");
         auto o = arrayBufferCtor.callAsConstructor(runtime, static_cast<double>(size)).getObject(runtime);
@@ -216,7 +280,17 @@ export const model: JSIObject[] = [
           name: "commandBuffers",
           type: "CommandBuffer[]",
           ctype: true
-        }]
+        }],
+        implementation: `std::vector<wgpu::CommandBuffer> commandBuffers;
+        auto jsiArray = arguments[0].asObject(runtime).asArray(runtime);
+        auto jsiArraySize = static_cast<int>(jsiArray.size(runtime));
+        for (int i = 0; i < jsiArraySize; i++) {
+          auto val = jsiArray.getValueAtIndex(runtime, i);
+          commandBuffers.push_back(*JsiCommandBuffer::fromValue(runtime, val));
+        }
+    
+        getObject()->Submit(commandBuffers.size(), commandBuffers.data());
+        return jsi::Value::undefined();`
       },
       {
         name: "writeBuffer",
@@ -231,7 +305,7 @@ export const model: JSIObject[] = [
         auto offset = static_cast<uint64_t>(arguments[1].getNumber());
         auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
         auto size = static_cast<uint64_t>(arguments[3].getNumber());
-        getObject()->writeBuffer(*buffer, offset, data.data(runtime), size);
+        getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
         return jsi::Value::undefined();
         `,
       }
@@ -242,10 +316,10 @@ export const model: JSIObject[] = [
   },
   {
     name: "RenderPipelineDescriptor",
-    defaultProperties: `object->multisample.count = 1;
-object->multisample.mask = ~0u;
-object->multisample.alphaToCoverageEnabled = false;
-`,
+//     defaultProperties: `object->multisample.count = 1;
+// object->multisample.mask = ~0u;
+// object->multisample.alphaToCoverageEnabled = false;
+// `,
     properties: [
       {"name": "vertex", "type": "VertexState"},
       {"name": "primitive", "type": "PrimitiveState"},
@@ -280,7 +354,7 @@ object->multisample.alphaToCoverageEnabled = false;
         implementation: `auto index = static_cast<uint32_t>(arguments[0].getNumber());
         auto bindGroup = JsiBindGroup::fromValue(runtime, arguments[1]);
         //auto dynamicOffsetCount = static_cast<size_t>(arguments[2].getNumber());
-        getObject()->setBindGroup(index, *bindGroup, 0, nullptr);
+        getObject()->SetBindGroup(index, *bindGroup, 0, nullptr);
         return jsi::Value::undefined();`
       },
       {
@@ -293,7 +367,7 @@ object->multisample.alphaToCoverageEnabled = false;
         ],
         implementation: `auto slot = static_cast<uint32_t>(arguments[0].getNumber());
         auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
-        getObject()->setVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+        getObject()->SetVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
         return jsi::Value::undefined();`
       }
     ]
@@ -301,13 +375,23 @@ object->multisample.alphaToCoverageEnabled = false;
   {
     name: "RenderPassDescriptor",
     properties: [
-      {"name": "colorAttachments", "type": "RenderPassColorAttachment[]"}
+      {"name": "colorAttachments", "type": "RenderPassColorAttachment[]"},
+      {"name": "depthStencilAttachment", "type": "RenderPassDepthStencilAttachment", "optional": true, pointer: true}
+    ]
+  },
+  {
+    name: "RenderPassDepthStencilAttachment",
+    properties: [
+      {"name": "view", "type": "TextureView"},
+      {"name": "depthClearValue", "type": "uint32_t"},
+      {"name": "depthLoadOp", "type": "LoadOp"},
+      {"name": "depthStoreOp", "type": "StoreOp"}
     ]
   },
   {
     name: "RenderPassColorAttachment",
-    defaultProperties: `object->resolveTarget = nullptr;
-object->depthSlice = UINT32_MAX;`,
+//    defaultProperties: `object->resolveTarget = nullptr;
+//object->depthSlice = UINT32_MAX;`,
     properties: [
       {"name": "view", "type": "TextureView"},
       {"name": "clearValue", "type": "Color"},
@@ -336,8 +420,8 @@ object->depthSlice = UINT32_MAX;`,
   },
   {
     name: "ShaderModuleWGSLDescriptor",
-    defaultProperties: `object->chain.next = nullptr;
-object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
+    defaultProperties: `
+object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     properties: [
       {"name": "code", "type": "string"}
     ]
@@ -365,11 +449,11 @@ object->chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
   },
   {
     name: "ColorTargetState",
-    defaultProperties: `object->writeMask = wgpu::ColorWriteMask::All;`,
+   // defaultProperties: `object->writeMask = wgpu::ColorWriteMask::All;`,
     properties: [
       {"name": "format", "type": "TextureFormat"},
       {"name": "blend", "type": "BlendState", "optional": true, pointer: true},
-      {"name": "writeMask", "type": "uint32_t", "optional": true}
+      {"name": "writeMask", "type": "ColorWriteMask", "optional": true}
     ]
   },
   {

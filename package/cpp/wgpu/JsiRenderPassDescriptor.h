@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -11,6 +11,7 @@
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiRenderPassColorAttachment.h"
+#include "JsiRenderPassDepthStencilAttachment.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
@@ -43,7 +44,6 @@ public:
           .get();
     } else {
       auto object = new wgpu::RenderPassDescriptor();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "colorAttachments")) {
         auto colorAttachments = obj.getProperty(runtime, "colorAttachments");
@@ -63,6 +63,14 @@ public:
         throw jsi::JSError(
             runtime,
             "Missing mandatory prop colorAttachments in RenderPassDescriptor");
+      }
+      if (obj.hasProperty(runtime, "depthStencilAttachment")) {
+        auto depthStencilAttachment =
+            obj.getProperty(runtime, "depthStencilAttachment");
+
+        object->depthStencilAttachment =
+            JsiRenderPassDepthStencilAttachment::fromValue(
+                runtime, depthStencilAttachment);
       }
       return object;
     }

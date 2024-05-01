@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -32,7 +32,7 @@ public:
   JSI_HOST_FUNCTION(setPipeline) {
     auto pipeline = JsiRenderPipeline::fromValue(runtime, arguments[0]);
 
-    getObject()->setPipeline(*pipeline);
+    getObject()->SetPipeline(*pipeline);
     return jsi::Value::undefined();
   }
 
@@ -51,13 +51,13 @@ public:
                              ? static_cast<uint32_t>(arguments[3].getNumber())
                              : defaultFirstInstance;
 
-    getObject()->draw(vertexCount, instanceCount, firstVertex, firstInstance);
+    getObject()->Draw(vertexCount, instanceCount, firstVertex, firstInstance);
     return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(end) {
 
-    getObject()->end();
+    getObject()->End();
     return jsi::Value::undefined();
   }
 
@@ -65,14 +65,14 @@ public:
     auto index = static_cast<uint32_t>(arguments[0].getNumber());
     auto bindGroup = JsiBindGroup::fromValue(runtime, arguments[1]);
     // auto dynamicOffsetCount = static_cast<size_t>(arguments[2].getNumber());
-    getObject()->setBindGroup(index, *bindGroup, 0, nullptr);
+    getObject()->SetBindGroup(index, *bindGroup, 0, nullptr);
     return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(setVertexBuffer) {
     auto slot = static_cast<uint32_t>(arguments[0].getNumber());
     auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
-    getObject()->setVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+    getObject()->SetVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
     return jsi::Value::undefined();
   }
 

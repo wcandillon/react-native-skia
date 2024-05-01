@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -45,9 +45,7 @@ public:
           .get();
     } else {
       auto object = new wgpu::RenderPassColorAttachment();
-      object->setDefault();
-      object->resolveTarget = nullptr;
-      object->depthSlice = UINT32_MAX;
+
       if (obj.hasProperty(runtime, "view")) {
         auto view = obj.getProperty(runtime, "view");
 

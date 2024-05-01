@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -43,7 +43,6 @@ public:
           .get();
     } else {
       auto object = new wgpu::VertexBufferLayout();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "arrayStride")) {
         auto arrayStride = obj.getProperty(runtime, "arrayStride");

@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -44,7 +44,6 @@ public:
           .get();
     } else {
       auto object = new wgpu::BindGroupDescriptor();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "layout")) {
         auto layout = obj.getProperty(runtime, "layout");

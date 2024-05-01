@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "webgpu.hpp"
+#include "dawn/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 
@@ -39,7 +39,6 @@ public:
       return obj.asHostObject<JsiVertexAttribute>(runtime)->getObject().get();
     } else {
       auto object = new wgpu::VertexAttribute();
-      object->setDefault();
 
       if (obj.hasProperty(runtime, "shaderLocation")) {
         auto shaderLocation = obj.getProperty(runtime, "shaderLocation");

@@ -2,9 +2,10 @@ import _ from "lodash";
 import { JSIObject } from "./model";
 import { isEnum } from "./enums";
 
-export const objectName = (name: string) => _.upperFirst(_.camelCase(name)).replace(/Wgsl/g, 'WGSL');
+const enums = ["BufferUsage", "TextureUsage", "ColorWriteMask"];
 
-export const isNumberType = (type: string) => type === "uint64_t" || type === "uint32_t" || type === "float" || type === "int32_t" || type === "size_t";
+export const objectName = (name: string) => _.upperFirst(_.camelCase(name)).replace(/Wgsl/g, 'WGSL');
+export const isNumberType = (type: string) => type === "uint64_t" || type === "uint32_t" || type === "float" || type === "int32_t" || type === "size_t" || enums.indexOf(type) > -1;
 export const isDouble = (type: string) => type === "double";
 export const isAtomicType = (type: string) => type === "bool" || isDouble(type) || isNumberType(type) || type === "string";
 
@@ -14,6 +15,9 @@ export const unWrapType = (obj: string, type: string, pointer: boolean) => {
   } else if (isDouble(type)) {
     return `${obj}.getNumber()`;
   } else if (isNumberType(type)) {
+    if (enums.indexOf(type) > -1) {
+      return `static_cast<wgpu::${type}>(${obj}.getNumber())`;
+    }
     return `static_cast<${type}>(${obj}.getNumber())`;
   } else if (type === "string") {
     // TODO: the copy needs to be freed
