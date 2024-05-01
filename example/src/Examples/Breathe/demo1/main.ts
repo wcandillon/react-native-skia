@@ -15,26 +15,28 @@ import { Dimensions } from 'react-native';
 const {width, height} = Dimensions.get("window");
 
 async function readGPUBuffer(device: GPUDevice, buffer: GPUBuffer, byteLength: number) {
-  const readBuffer = device.createBuffer({
-    size: byteLength,
-    usage: 9,//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    mappedAtCreation: false
-  });
-  if (!readBuffer) {
-    console.error("Failed to create vertex buffer");
-  }
+  // const readBuffer = device.createBuffer({
+  //   size: byteLength,
+  //   usage: 9,//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  //   mappedAtCreation: false
+  // });
+  // if (!readBuffer) {
+  //   console.error("Failed to create vertex buffer");
+  // }
 
-  const commandEncoder = device.createCommandEncoder();
-  commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, byteLength);
-  const gpuCommands = commandEncoder.finish();
-  device.queue.submit([gpuCommands]);
-  console.log("Start reading buffer");
-  await readBuffer.mapAsync(1, 0, cubeVertexArray.byteLength);//GPUMapMode.READ
-  console.log("End reading buffer");
+  // const commandEncoder = device.createCommandEncoder();
+  // commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, byteLength);
+  // const gpuCommands = commandEncoder.finish();
+  // device.queue.submit([gpuCommands]);
+  // console.log("Start reading buffer");
+  //const b = buffer.getMappedRange(0, byteLength);
+ // console.log(new Float32Array(b));
+  // //await readBuffer.mapAsync(1, 0, cubeVertexArray.byteLength);//GPUMapMode.READ
+  // console.log("End reading buffer");
 
-  const copyArrayBuffer = readBuffer.getMappedRange();
-  console.log(new Float32Array(copyArrayBuffer)); // For float buffers, adjust as needed
-  readBuffer.unmap();
+  // //const copyArrayBuffer = readBuffer.getMappedRange();
+  // console.log(new Float32Array(copyArrayBuffer)); // For float buffers, adjust as needed
+  //buffer.unmap();
 }
 
 export const demo1 = async (context: GPUCanvasContext) => {
@@ -57,15 +59,13 @@ const verticesBuffer = device.createBuffer({
 if (!verticesBuffer) {
   console.error("Failed to create vertex buffer");
 }
-
 const mappedRange = verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength);
+
 const result = new Float32Array(mappedRange);
 result.set(cubeVertexArray);
-console.log(result);
-
 
 verticesBuffer.unmap();
-
+await readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
 const pipeline = device.createRenderPipeline({
   layout: 'auto',
   vertex: {
