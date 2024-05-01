@@ -179,7 +179,7 @@ export const generateObject = (object: JSIObject) => {
 #include <string>
 #include <utility>
 
-#include "dawn/webgpu_cpp.h"
+#include "webgpu/webgpu_cpp.h"
 
 #include <jsi/jsi.h>
 

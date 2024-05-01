@@ -48,6 +48,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/SkiaOpenGLSurfaceFactory.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/GrAHardwareBufferUtils.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/WebGPUTriangle.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/dawn/webgpu_cpp.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiHostObject.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiValue.cpp"
@@ -91,6 +92,7 @@ target_include_directories(
         ../cpp/wgpu
         ../cpp/jsi
         ../cpp/rnskia
+        ../cpp/rnskia/webgpu
         ../cpp/rnskia/dawn
         ../cpp/rnskia/values
         ../cpp/rnskia/dom
