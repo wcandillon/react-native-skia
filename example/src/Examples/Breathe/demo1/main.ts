@@ -12,21 +12,6 @@ import {basicVertWGSL, vertexPositionColorWGSL} from './shaders';
 import { gpu } from '@shopify/react-native-skia';
 import { Dimensions } from 'react-native';
 
-const GPUBufferUsage = {
-  None: 0x00000000,
-  MapRead: 0x00000001,
-  MapWrite: 0x00000002,
-  CopyStr: 0x00000004,
-  COPY_DST: 0x00000008,
-  Index: 0x00000010,
-	VERTEX: 0x00000020,
-	UNIFORM: 0x00000040,
-	Storage: 0x00000080,
-	Indirect: 0x00000100,
-	QueryResolve: 0x00000200,
-	Force32: 0x7FFFFFFF
-};
-
 const GPUTextureUsage = {
   RENDER_ATTACHMENT: 0x00000010,
 }
@@ -46,7 +31,7 @@ context.configure({
 // Create a vertex buffer from the cube data.
 const verticesBuffer = device.createBuffer({
   size: cubeVertexArray.byteLength,
-  usage: GPUBufferUsage.VERTEX,
+  usage: 32,//GPUBufferUsage.VERTEX,
   mappedAtCreation: true,
 });
 
@@ -113,14 +98,14 @@ const pipeline = device.createRenderPipeline({
 const depthTexture = device.createTexture({
   size: { width, height },
   format: 'depth24plus',
-  usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  usage: 16,//GPUTextureUsage.RENDER_ATTACHMENT,
 });
 
 
 const uniformBufferSize = 4 * 16; // 4x4 matrix
 const uniformBuffer = device.createBuffer({
   size: uniformBufferSize,
-  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  usage: 72,// GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   mappedAtCreation: false
 });
 
@@ -139,9 +124,7 @@ const uniformBindGroup = device.createBindGroup({
 const renderPassDescriptor: GPURenderPassDescriptor = {
   colorAttachments: [
     {
-      view: context
-           .getCurrentTexture()
-           .createView(),
+      view: undefined,
 
       clearValue: [0.5, 0.5, 0.5, 1.0],
       loadOp: 'clear',
@@ -185,9 +168,9 @@ function frame() {
     transformationMatrix.byteOffset,
     transformationMatrix.byteLength
   );
-  // renderPassDescriptor.colorAttachments[0].view = context
-  //   .getCurrentTexture()
-  //   .createView();
+  renderPassDescriptor.colorAttachments[0].view = context
+    .getCurrentTexture()
+    .createView();
 
   const commandEncoder = device.createCommandEncoder();
   const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
@@ -201,7 +184,7 @@ function frame() {
   
   console.log("RENDER");
   context.present();
-  //requestAnimationFrame(frame);
+ // requestAnimationFrame(frame);
 }
 frame();
 

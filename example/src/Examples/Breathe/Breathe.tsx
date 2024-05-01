@@ -3,10 +3,10 @@ import {
   gpu,
   SkiaDomView,
 } from "@shopify/react-native-skia";
-import { demo2 } from "./demo2";
+import { demo1 } from "./demo1/main";
 
 const draw = async (ctx: GPUCanvasContext) => {
-  await demo2(ctx);
+  await demo1(ctx);
   ctx.present();
 };
 
