@@ -59,17 +59,9 @@ if (!verticesBuffer) {
 }
 
 const mappedRange = verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength);
-new Float32Array(mappedRange).set(cubeVertexArray);
-const arrayBuffer = verticesBuffer.getMappedRange();
-
-const floatArray = new Float32Array(arrayBuffer);
-console.log({floatArray});  // This will log the current state of the buffer to the console
-
-floatArray.set(cubeVertexArray);
-
-// Reading the contents back for verification
-console.log({floatArray});  // This will log the current state of the buffer to the console
-console.log("===");
+const result = new Float32Array(mappedRange);
+result.set(cubeVertexArray);
+console.log(result);
 
 
 verticesBuffer.unmap();
@@ -228,7 +220,7 @@ function frame() {
   //readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
 
   console.log("RENDER");
-  context.present();
+  //context.present();
  // requestAnimationFrame(frame);
 }
 frame();
