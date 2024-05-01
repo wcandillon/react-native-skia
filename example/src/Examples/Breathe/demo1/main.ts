@@ -17,15 +17,21 @@ const {width, height} = Dimensions.get("window");
 async function readGPUBuffer(device: GPUDevice, buffer: GPUBuffer, byteLength: number) {
   const readBuffer = device.createBuffer({
     size: byteLength,
-    usage: 9//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    usage: 9,//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    mappedAtCreation: false
   });
+  if (!readBuffer) {
+    console.error("Failed to create vertex buffer");
+  }
 
   const commandEncoder = device.createCommandEncoder();
   commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, byteLength);
   const gpuCommands = commandEncoder.finish();
   device.queue.submit([gpuCommands]);
-
+  console.log("Start reading buffer");
   await readBuffer.mapAsync(1, 0, cubeVertexArray.byteLength);//GPUMapMode.READ
+  console.log("End reading buffer");
+
   const copyArrayBuffer = readBuffer.getMappedRange();
   console.log(new Float32Array(copyArrayBuffer)); // For float buffers, adjust as needed
   readBuffer.unmap();
@@ -40,7 +46,7 @@ context.configure({
   format: presentationFormat,
   alphaMode: 'premultiplied',
 });
-console.log(cubeVertexArray.byteLength);
+
 // Create a vertex buffer from the cube data.
 const verticesBuffer = device.createBuffer({
   size: cubeVertexArray.byteLength,
@@ -48,8 +54,24 @@ const verticesBuffer = device.createBuffer({
   mappedAtCreation: true,
 });
 
+if (!verticesBuffer) {
+  console.error("Failed to create vertex buffer");
+}
+
 const mappedRange = verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength);
 new Float32Array(mappedRange).set(cubeVertexArray);
+const arrayBuffer = verticesBuffer.getMappedRange();
+
+const floatArray = new Float32Array(arrayBuffer);
+console.log({floatArray});  // This will log the current state of the buffer to the console
+
+floatArray.set(cubeVertexArray);
+
+// Reading the contents back for verification
+console.log({floatArray});  // This will log the current state of the buffer to the console
+console.log("===");
+
+
 verticesBuffer.unmap();
 
 const pipeline = device.createRenderPipeline({
@@ -122,6 +144,11 @@ const uniformBuffer = device.createBuffer({
   mappedAtCreation: false
 });
 
+if (!uniformBuffer) {
+  console.error("Failed to create uniform buffer");
+
+}
+
 const uniformBindGroup = device.createBindGroup({
   layout: pipeline.getBindGroupLayout(0),
   entries: [
@@ -131,6 +158,10 @@ const uniformBindGroup = device.createBindGroup({
     },
   ],
 });
+
+if (!uniformBindGroup) {
+  console.error("Failed to create uniform bind group");
+}
 
 
 
@@ -194,7 +225,7 @@ function frame() {
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
 
-  readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
+  //readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
 
   console.log("RENDER");
   context.present();

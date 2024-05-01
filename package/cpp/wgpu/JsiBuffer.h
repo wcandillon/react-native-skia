@@ -44,6 +44,9 @@ public:
               [](WGPUBufferMapAsyncStatus status, void *userdata) {
                 auto promise =
                     static_cast<RNJsi::JsiPromises::Promise *>(userdata);
+                RNSkLogger::logToConsole(
+                    "Buffer::MapAsync callback status: " +
+                    std::to_string(static_cast<int>(status)));
                 promise->resolve(jsi::Value::undefined());
               },
               promise.get());

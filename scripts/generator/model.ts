@@ -293,7 +293,17 @@ export const model: JSIObject[] = [
     name: "CommandEncoder",
     methods: [
       { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" },
-      { name: "finish", args: [], returns: "CommandBuffer" }
+      { name: "finish", args: [], returns: "CommandBuffer" },
+      {
+        name: "copyBufferToBuffer",
+        args: [
+          { name: "source", type: "Buffer" },
+          { name: "sourceOffset", type: "uint32_t" },
+          { name: "destination", type: "Buffer" },
+          { name: "destinationOffset", type: "uint32_t" },
+          { name: "size", type: "uint32_t" }
+        ],
+      }
     ]
   },
   {

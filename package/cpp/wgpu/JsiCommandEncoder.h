@@ -7,6 +7,7 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiBuffer.h"
 #include "JsiCommandBuffer.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
@@ -44,11 +45,24 @@ public:
         runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(copyBufferToBuffer) {
+    auto source = JsiBuffer::fromValue(runtime, arguments[0]);
+    auto sourceOffset = static_cast<uint32_t>(arguments[1].getNumber());
+    auto destination = JsiBuffer::fromValue(runtime, arguments[2]);
+    auto destinationOffset = static_cast<uint32_t>(arguments[3].getNumber());
+    auto size = static_cast<uint32_t>(arguments[4].getNumber());
+
+    getObject()->CopyBufferToBuffer(*source, sourceOffset, *destination,
+                                    destinationOffset, size);
+    return jsi::Value::undefined();
+  }
+
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiCommandEncoder, CommandEncoder)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass),
-                       JSI_EXPORT_FUNC(JsiCommandEncoder, finish))
+                       JSI_EXPORT_FUNC(JsiCommandEncoder, finish),
+                       JSI_EXPORT_FUNC(JsiCommandEncoder, copyBufferToBuffer))
 
   /**
    * Returns the underlying object from a host object of this type
