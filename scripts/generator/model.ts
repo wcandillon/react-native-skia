@@ -285,7 +285,10 @@ export const model: JSIObject[] = [
         implementation: `
         size_t offset = static_cast<size_t>(arguments[0].getNumber());
         size_t size = static_cast<size_t>(arguments[1].getNumber());
-        void * data = getObject()->GetMappedRange(offset, size);
+        auto usage = getObject()->GetUsage();
+        void *data =  (usage & wgpu::BufferUsage::MapWrite)
+              ? getObject()->GetMappedRange(offset, size)
+              : const_cast<void*>(getObject()->GetConstMappedRange(offset, size));
         if (data == nullptr) {
           throw jsi::JSError(runtime, "Buffer::GetMappedRange failed");
         }
