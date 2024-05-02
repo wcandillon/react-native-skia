@@ -24,6 +24,7 @@
 #include "JsiSkHostObjects.h"
 #include "JsiTexture.h"
 #include "JsiTextureDescriptor.h"
+#include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 

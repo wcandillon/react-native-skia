@@ -188,6 +188,7 @@ export const generateObject = (object: JSIObject) => {
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "RNSkPlatformContext.h"
+#include "MutableJSIBuffer.h"
 #include "JsiEnums.h"
 ${computeDependencies(object)}
 

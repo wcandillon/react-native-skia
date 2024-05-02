@@ -13,6 +13,7 @@
 #include "JsiShaderModule.h"
 #include "JsiSkHostObjects.h"
 #include "JsiVertexBufferLayout.h"
+#include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 

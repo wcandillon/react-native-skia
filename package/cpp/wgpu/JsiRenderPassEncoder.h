@@ -14,6 +14,7 @@
 #include "JsiPromises.h"
 #include "JsiRenderPipeline.h"
 #include "JsiSkHostObjects.h"
+#include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 

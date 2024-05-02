@@ -292,17 +292,9 @@ export const model: JSIObject[] = [
         if (data == nullptr) {
           throw jsi::JSError(runtime, "Buffer::GetMappedRange failed");
         }
-        auto arrayBufferCtor =
-            runtime.global().getPropertyAsFunction(runtime, "ArrayBuffer");
-        auto o =
-            arrayBufferCtor.callAsConstructor(runtime, static_cast<double>(size))
-                .getObject(runtime);
-        if (!o.isArrayBuffer(runtime)) {
-          throw jsi::JSError(runtime, "ArrayBuffer constructor failed");
-        }
-        auto buf = o.getArrayBuffer(runtime);
-        memcpy(buf.data(runtime), data, size);
-        return o;`
+        auto buf = std::make_shared<MutableJSIBuffer>(data, size);
+        auto val = jsi::ArrayBuffer(runtime, buf);
+        return val;`
       }
     ]
   },

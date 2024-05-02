@@ -11,27 +11,13 @@
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
-
-struct GPUBuffer : jsi::MutableBuffer {
-  GPUBuffer(void* data, size_t size) : _data(data), _size(size) {}
-
-  size_t size() const override {
-    return _size;
-  }
-
-  uint8_t *data() override {
-    return reinterpret_cast<uint8_t *>(_data);
-  }
-
-  void* _data;
-  size_t _size;
-};
 
 class JsiBuffer : public JsiSkWrappingSharedPtrHostObject<wgpu::Buffer> {
 public:
@@ -75,16 +61,18 @@ public:
   }
 
   JSI_HOST_FUNCTION(getMappedRange) {
+
     size_t offset = static_cast<size_t>(arguments[0].getNumber());
     size_t size = static_cast<size_t>(arguments[1].getNumber());
     auto usage = getObject()->GetUsage();
-    void *data =  (usage & wgpu::BufferUsage::MapWrite)
-          ? getObject()->GetMappedRange(offset, size)
-          : const_cast<void*>(getObject()->GetConstMappedRange(offset, size));
+    void *data = (usage & wgpu::BufferUsage::MapWrite)
+                     ? getObject()->GetMappedRange(offset, size)
+                     : const_cast<void *>(
+                           getObject()->GetConstMappedRange(offset, size));
     if (data == nullptr) {
       throw jsi::JSError(runtime, "Buffer::GetMappedRange failed");
     }
-    auto buf = std::make_shared<GPUBuffer>(data, size);
+    auto buf = std::make_shared<MutableJSIBuffer>(data, size);
     auto val = jsi::ArrayBuffer(runtime, buf);
     return val;
   }

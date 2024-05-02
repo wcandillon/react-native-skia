@@ -16,6 +16,7 @@
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "JsiVertexState.h"
+#include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
 
