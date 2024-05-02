@@ -4,6 +4,8 @@ import {
   SkiaDomView,
 } from "@shopify/react-native-skia";
 import { demo3 } from "./demo3";
+import { demo2 } from "./demo2";
+import { demo1 } from "./demo1/main";
 
 const draw = async (context: GPUCanvasContext) => {
   const adapter = await gpu.requestAdapter();
@@ -14,7 +16,7 @@ const draw = async (context: GPUCanvasContext) => {
     format: presentationFormat,
     alphaMode: 'premultiplied',
   });
-  await demo3(context);
+  await demo1(device, context);
   context.present();
 };
 

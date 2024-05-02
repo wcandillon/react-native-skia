@@ -15,7 +15,7 @@ export const demo3 = async(context: GPUCanvasContext) => {
 
 
    // Copy data to the GPU buffer
-   await device.queue.writeBuffer(gpuBuffer, 0, data.buffer, 0, data.byteLength);
+  device.queue.writeBuffer(gpuBuffer, 0, data.buffer, 0, data.byteLength);
 
   await gpuBuffer.mapAsync(1, 0, data.byteLength); // GPUMapMode.READ
   console.log("mapAsync done");

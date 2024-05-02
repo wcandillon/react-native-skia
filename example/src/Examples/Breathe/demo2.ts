@@ -20,15 +20,9 @@ fn main() -> @location(0) vec4f {
 }`;
 
 
-export const demo2 = async(context: GPUCanvasContext) => {
-  const adapter = await gpu.requestAdapter();
-  const device = await adapter!.requestDevice();
+export const demo2 = async(device, context: GPUCanvasContext) => {
   const presentationFormat = 'rgba8unorm';
-  context.configure({
-    device,
-    format: presentationFormat,
-    alphaMode: 'premultiplied',
-  });
+  
   
   const pipeline = device.createRenderPipeline({
     layout: 'auto',
