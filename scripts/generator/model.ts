@@ -360,6 +360,35 @@ export const model: JSIObject[] = [
         getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
         return jsi::Value::undefined();
         `,
+      },
+      {
+        name: "onSubmittedWorkDone",
+        args: [],
+        implementation: `
+        auto object = getObject();
+        auto instance = getContext()->getInstance();
+        return RNJsi::JsiPromises::createPromiseAsJSIValue(
+            runtime, [object = std::move(object),
+                      instance = std::move(instance)](
+                         jsi::Runtime &runtime,
+                         std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+              RNSkLogger::logToConsole("onSubmittedWorkDone start");
+              auto callback = [](WGPUQueueWorkDoneStatus status, void *userdata) {
+                RNSkLogger::logToConsole("Buffer::onSubmittedWorkDone callback status: " +
+                                         std::to_string(static_cast<int>(status)));
+                auto promise = static_cast<RNJsi::JsiPromises::Promise *>(userdata);
+                promise->resolve(jsi::Value::undefined());
+              RNSkLogger::logToConsole("onSubmittedWorkDone end");
+              };
+              wgpu::QueueWorkDoneCallbackInfo callbackInfo = {
+                  nullptr, wgpu::CallbackMode::WaitAnyOnly, callback,
+                  promise.get()};
+              wgpu::Future future =
+                  object->OnSubmittedWorkDone(callbackInfo);
+              wgpu::FutureWaitInfo waitInfo = {future};
+              instance.WaitAny(1, &waitInfo, UINT64_MAX);
+            });
+        `
       }
     ]
   },
