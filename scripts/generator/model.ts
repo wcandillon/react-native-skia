@@ -286,15 +286,18 @@ export const model: JSIObject[] = [
         size_t offset = static_cast<size_t>(arguments[0].getNumber());
         size_t size = static_cast<size_t>(arguments[1].getNumber());
         auto usage = getObject()->GetUsage();
-        void *data =  (usage & wgpu::BufferUsage::MapWrite)
-              ? getObject()->GetMappedRange(offset, size)
-              : const_cast<void*>(getObject()->GetConstMappedRange(offset, size));
+        void *data = (usage & wgpu::BufferUsage::MapWrite)
+                         ? getObject()->GetMappedRange(offset, size)
+                         : const_cast<void *>(
+                               getObject()->GetConstMappedRange(offset, size));
         if (data == nullptr) {
           throw jsi::JSError(runtime, "Buffer::GetMappedRange failed");
         }
         auto buf = std::make_shared<MutableJSIBuffer>(data, size);
         auto val = jsi::ArrayBuffer(runtime, buf);
-        return val;`
+        auto d = val.data(runtime);
+        return val;
+        `
       }
     ]
   },
@@ -351,7 +354,7 @@ export const model: JSIObject[] = [
         auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
         auto offset = static_cast<uint64_t>(arguments[1].getNumber());
         auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-        auto size = static_cast<uint64_t>(arguments[3].getNumber());
+        auto size = static_cast<uint64_t>(arguments[4].getNumber());
         getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
         return jsi::Value::undefined();
         `,

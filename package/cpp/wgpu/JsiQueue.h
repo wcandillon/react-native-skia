@@ -44,7 +44,7 @@ public:
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
     auto offset = static_cast<uint64_t>(arguments[1].getNumber());
     auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-    auto size = static_cast<uint64_t>(arguments[3].getNumber());
+    auto size = static_cast<uint64_t>(arguments[4].getNumber());
     getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
     return jsi::Value::undefined();
   }

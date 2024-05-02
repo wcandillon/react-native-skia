@@ -74,6 +74,7 @@ public:
     }
     auto buf = std::make_shared<MutableJSIBuffer>(data, size);
     auto val = jsi::ArrayBuffer(runtime, buf);
+    auto d = val.data(runtime);
     return val;
   }
 
