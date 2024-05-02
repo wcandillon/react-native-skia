@@ -43,19 +43,28 @@ public:
 
 JSI_HOST_FUNCTION(onSubmittedWorkDone) {
   bool done = false;
-  getObject()->OnSubmittedWorkDone(
-      [](WGPUQueueWorkDoneStatus status, void *userdata) {
-        RNSkia::RNSkLogger::logToConsole("Queue work done");
-        auto done = static_cast<bool *>(userdata);
-        *done = true;
-      },
-      &done);
-  RNSkia::RNSkLogger::logToConsole("Preprocess events");
-  // while(!done) {
-  //   getContext()->getInstance().ProcessEvents();
-  // }
-  RNSkia::RNSkLogger::logToConsole("Postprocess events");
-    return jsi::Value::undefined();
+  // Define the callback function
+  auto callback = [](WGPUQueueWorkDoneStatus status, void *userdata) {
+    RNSkia::RNSkLogger::logToConsole("Status: %d", status);
+    auto done = static_cast<bool *>(userdata);
+    *done = true;
+  };
+  // Create QueueWorkDoneCallbackInfo struct
+  wgpu::QueueWorkDoneCallbackInfo callbackInfo = {
+    nullptr,                       // userdata is not used in the callback
+    wgpu::CallbackMode::WaitAnyOnly, // Callback mode
+    callback,                      // Callback function
+    &done                          // Userdata (pointer to 'done' variable)
+  };
+
+  // Call OnSubmittedWorkDone with the proper argument
+  wgpu::Future future = getObject()->OnSubmittedWorkDone(callbackInfo);
+  // Setup wait information and wait
+  wgpu::FutureWaitInfo waitInfo = {future};
+  RNSkia::RNSkLogger::logToConsole("before WaitAny");
+  getContext()->getInstance().WaitAny(1, &waitInfo, UINT64_MAX);
+  RNSkia::RNSkLogger::logToConsole("after WaitAny");
+  return jsi::Value::undefined();
 }
 
   JSI_HOST_FUNCTION(writeBuffer) {

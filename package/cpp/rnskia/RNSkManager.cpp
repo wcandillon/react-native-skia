@@ -70,8 +70,7 @@ void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
 void RNSkManager::installBindings() {
   // Create the API objects and install it on the global object in the
   // provided runtime.
-  auto instance = wgpuCreateInstance(nullptr);
-  auto gpu = std::make_shared<JsiGPU>(_platformContext, instance);
+  auto gpu = std::make_shared<JsiGPU>(_platformContext, _platformContext->getInstance());
   _jsRuntime->global().setProperty(
       *_jsRuntime, "GPU",
       jsi::Object::createFromHostObject(*_jsRuntime, std::move(gpu)));

@@ -27,6 +27,10 @@ public:
       : RNSkPlatformContext(runtime, jsCallInvoker,
                             jniPlatformContext->getPixelDensity()),
         _jniPlatformContext(jniPlatformContext) {
+    wgpu::InstanceDescriptor instanceDesc;
+    instanceDesc.features.timedWaitAnyEnable = true;
+    instanceDesc.features.timedWaitAnyMaxCount = 64;
+    _instance = wgpu::CreateInstance(&instanceDesc);
     // Hook onto the notify draw loop callback in the platform context
     jniPlatformContext->setOnNotifyDrawLoop(
         [this]() { notifyDrawLoop(false); });
@@ -72,8 +76,6 @@ public:
 
     wgpu::SurfaceDescriptor surfaceDesc = {};
     surfaceDesc.nextInChain = &androidSurfaceDesc;
-
-    _instance = wgpu::CreateInstance(nullptr);
     auto surface = _instance.CreateSurface(&surfaceDesc);
 
     _descriptors[nativeId] = std::make_tuple(
@@ -96,7 +98,7 @@ private:
   JniPlatformContext *_jniPlatformContext;
   std::map<int, std::tuple<std::shared_ptr<wgpu::Surface>, int, int>>
       _descriptors;
-  wgpu::Instance _instance;
+  wgpu::Instance _instance = nullptr;
 };
 
 } // namespace RNSkia

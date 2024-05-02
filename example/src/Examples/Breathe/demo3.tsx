@@ -1,4 +1,5 @@
 import { gpu } from "@shopify/react-native-skia";
+import { runOnUI } from "@shopify/react-native-skia/src/external/reanimated/moduleWrapper";
 
 
 const check = () => {
@@ -23,6 +24,7 @@ export const demo3 = async(context: GPUCanvasContext) => {
    device.queue.writeBuffer(gpuBuffer, 0, data.buffer, 0, data.byteLength);
    console.log("DONE0");
    device.queue.onSubmittedWorkDone();
+
    check();
    // Read data back from the GPU buffer
    console.log("DONE1");
