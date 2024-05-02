@@ -2,6 +2,9 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <unistd.h> 
+#include <mutex>
+#include <condition_variable>
 
 #include "dawn/webgpu_cpp.h"
 
@@ -38,6 +41,23 @@ public:
     return jsi::Value::undefined();
   }
 
+JSI_HOST_FUNCTION(onSubmittedWorkDone) {
+  bool done = false;
+  getObject()->OnSubmittedWorkDone(
+      [](WGPUQueueWorkDoneStatus status, void *userdata) {
+        RNSkia::RNSkLogger::logToConsole("Queue work done");
+        auto done = static_cast<bool *>(userdata);
+        *done = true;
+      },
+      &done);
+  RNSkia::RNSkLogger::logToConsole("Preprocess events");
+  // while(!done) {
+  //   getContext()->getInstance().ProcessEvents();
+  // }
+  RNSkia::RNSkLogger::logToConsole("Postprocess events");
+    return jsi::Value::undefined();
+}
+
   JSI_HOST_FUNCTION(writeBuffer) {
 
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
@@ -52,7 +72,8 @@ public:
   EXPORT_JSI_API_BRANDNAME(JsiQueue, Queue)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiQueue, submit),
-                       JSI_EXPORT_FUNC(JsiQueue, writeBuffer))
+                       JSI_EXPORT_FUNC(JsiQueue, writeBuffer),
+                       JSI_EXPORT_FUNC(JsiQueue, onSubmittedWorkDone))
 
   /**
    * Returns the underlying object from a host object of this type

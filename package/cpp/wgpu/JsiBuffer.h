@@ -39,6 +39,7 @@ public:
         runtime, [object = std::move(object), mode, offset,
                   size](jsi::Runtime &runtime,
                         std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+          RNSkLogger::logToConsole("Buffer::MapAsync start");
           object->MapAsync(
               mode, offset, size,
               [](WGPUBufferMapAsyncStatus status, void *userdata) {

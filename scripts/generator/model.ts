@@ -255,13 +255,19 @@ export const model: JSIObject[] = [
         auto size = static_cast<uint32_t>(arguments[2].getNumber());
         auto object = getObject();
         return RNJsi::JsiPromises::createPromiseAsJSIValue(
-            runtime,
-            [object = std::move(object), mode, offset, size](jsi::Runtime &runtime,
-                std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+            runtime, [object = std::move(object), mode, offset,
+                      size](jsi::Runtime &runtime,
+                            std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+                              RNSkLogger::logToConsole(
+                        "Buffer::MapAsync start" );
               object->MapAsync(
                   mode, offset, size,
                   [](WGPUBufferMapAsyncStatus status, void *userdata) {
-                    auto promise = static_cast<RNJsi::JsiPromises::Promise*>(userdata);
+                    auto promise =
+                        static_cast<RNJsi::JsiPromises::Promise *>(userdata);
+                    RNSkLogger::logToConsole(
+                        "Buffer::MapAsync callback status: " +
+                        std::to_string(static_cast<int>(status)));
                     promise->resolve(jsi::Value::undefined());
                   },
                   promise.get());

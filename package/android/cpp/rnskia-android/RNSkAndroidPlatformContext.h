@@ -73,12 +73,14 @@ public:
     wgpu::SurfaceDescriptor surfaceDesc = {};
     surfaceDesc.nextInChain = &androidSurfaceDesc;
 
-    auto instance = wgpu::CreateInstance(nullptr);
-    auto surface = instance.CreateSurface(&surfaceDesc);
+    _instance = wgpu::CreateInstance(nullptr);
+    auto surface = _instance.CreateSurface(&surfaceDesc);
 
     _descriptors[nativeId] = std::make_tuple(
         std::make_shared<wgpu::Surface>(surface), width, height);
   }
+
+  wgpu::Instance getInstance() { return _instance; }
 
   virtual std::tuple<std::shared_ptr<wgpu::Surface>, int, int>
   getSurfaceDescriptor(int nativeId) override {
@@ -94,6 +96,7 @@ private:
   JniPlatformContext *_jniPlatformContext;
   std::map<int, std::tuple<std::shared_ptr<wgpu::Surface>, int, int>>
       _descriptors;
+  wgpu::Instance _instance;
 };
 
 } // namespace RNSkia

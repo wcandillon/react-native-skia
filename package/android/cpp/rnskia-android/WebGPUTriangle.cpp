@@ -236,7 +236,19 @@ fn fs_main() -> @location(0) vec4f {
   std::vector<CommandBuffer> commands;
   commands.push_back(command);
   queue.Submit(commands.size(), commands.data());
-
+  bool done = false;
+  queue.OnSubmittedWorkDone(
+      [](WGPUQueueWorkDoneStatus status, void *userdata) {
+        RNSkia::RNSkLogger::logToConsole("Queue work done");
+        auto done = static_cast<bool *>(userdata);
+        *done = true;
+      },
+      &done);
+  RNSkia::RNSkLogger::logToConsole("Preprocess events");
+  while(!done) {
+    instance.ProcessEvents();
+  }
+  RNSkia::RNSkLogger::logToConsole("Present");
   swapChain.Present();
 
   // surface.release();
