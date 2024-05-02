@@ -67,7 +67,7 @@ public:
     T::getPlatformContext()->registerSurfaceDescriptor(nativeId, _window, width,
                                                        height);
 
-    //runTriangleDemo(_window, width, height);
+    // runTriangleDemo(_window, width, height);
   }
 
   float getPixelDensity() override {

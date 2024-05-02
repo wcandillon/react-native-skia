@@ -245,7 +245,7 @@ fn fs_main() -> @location(0) vec4f {
       },
       &done);
   RNSkia::RNSkLogger::logToConsole("Preprocess events");
-  while(!done) {
+  while (!done) {
     instance.ProcessEvents();
   }
   RNSkia::RNSkLogger::logToConsole("Present");

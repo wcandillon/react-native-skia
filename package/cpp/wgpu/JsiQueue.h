@@ -2,9 +2,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <unistd.h> 
-#include <mutex>
-#include <condition_variable>
 
 #include "dawn/webgpu_cpp.h"
 
@@ -41,32 +38,6 @@ public:
     return jsi::Value::undefined();
   }
 
-JSI_HOST_FUNCTION(onSubmittedWorkDone) {
-  bool done = false;
-  // Define the callback function
-  auto callback = [](WGPUQueueWorkDoneStatus status, void *userdata) {
-    RNSkia::RNSkLogger::logToConsole("Status: %d", status);
-    auto done = static_cast<bool *>(userdata);
-    *done = true;
-  };
-  // Create QueueWorkDoneCallbackInfo struct
-  wgpu::QueueWorkDoneCallbackInfo callbackInfo = {
-    nullptr,                       // userdata is not used in the callback
-    wgpu::CallbackMode::WaitAnyOnly, // Callback mode
-    callback,                      // Callback function
-    &done                          // Userdata (pointer to 'done' variable)
-  };
-
-  // Call OnSubmittedWorkDone with the proper argument
-  wgpu::Future future = getObject()->OnSubmittedWorkDone(callbackInfo);
-  // Setup wait information and wait
-  wgpu::FutureWaitInfo waitInfo = {future};
-  RNSkia::RNSkLogger::logToConsole("before WaitAny");
-  getContext()->getInstance().WaitAny(1, &waitInfo, UINT64_MAX);
-  RNSkia::RNSkLogger::logToConsole("after WaitAny");
-  return jsi::Value::undefined();
-}
-
   JSI_HOST_FUNCTION(writeBuffer) {
 
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
@@ -81,8 +52,7 @@ JSI_HOST_FUNCTION(onSubmittedWorkDone) {
   EXPORT_JSI_API_BRANDNAME(JsiQueue, Queue)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiQueue, submit),
-                       JSI_EXPORT_FUNC(JsiQueue, writeBuffer),
-                       JSI_EXPORT_FUNC(JsiQueue, onSubmittedWorkDone))
+                       JSI_EXPORT_FUNC(JsiQueue, writeBuffer))
 
   /**
    * Returns the underlying object from a host object of this type

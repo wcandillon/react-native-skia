@@ -35,22 +35,27 @@ public:
     auto offset = static_cast<uint32_t>(arguments[1].getNumber());
     auto size = static_cast<uint32_t>(arguments[2].getNumber());
     auto object = getObject();
+    auto instance = getContext()->getInstance();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(
-        runtime, [object = std::move(object), mode, offset,
-                  size](jsi::Runtime &runtime,
-                        std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+        runtime, [object = std::move(object), mode, offset, size,
+                  instance = std::move(instance)](
+                     jsi::Runtime &runtime,
+                     std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
           RNSkLogger::logToConsole("Buffer::MapAsync start");
-          object->MapAsync(
-              mode, offset, size,
-              [](WGPUBufferMapAsyncStatus status, void *userdata) {
-                auto promise =
-                    static_cast<RNJsi::JsiPromises::Promise *>(userdata);
-                RNSkLogger::logToConsole(
-                    "Buffer::MapAsync callback status: " +
-                    std::to_string(static_cast<int>(status)));
-                promise->resolve(jsi::Value::undefined());
-              },
-              promise.get());
+          auto callback = [](WGPUBufferMapAsyncStatus status, void *userdata) {
+            RNSkLogger::logToConsole("Buffer::MapAsync callback status: " +
+                                     std::to_string(static_cast<int>(status)));
+            auto promise = static_cast<RNJsi::JsiPromises::Promise *>(userdata);
+            promise->resolve(jsi::Value::undefined());
+          };
+          wgpu::BufferMapCallbackInfo callbackInfo = {
+              nullptr, wgpu::CallbackMode::WaitAnyOnly, callback,
+              promise.get()};
+          wgpu::Future future =
+              object->MapAsync(mode, offset, size, callbackInfo);
+          wgpu::FutureWaitInfo waitInfo = {future};
+          RNSkia::RNSkLogger::logToConsole("before WaitAny");
+          instance.WaitAny(1, &waitInfo, UINT64_MAX);
         });
   }
 
@@ -58,12 +63,18 @@ public:
 
     size_t offset = static_cast<size_t>(arguments[0].getNumber());
     size_t size = static_cast<size_t>(arguments[1].getNumber());
-    auto data = getObject()->GetMappedRange(offset, size);
+    void *data = getObject()->GetMappedRange(offset, size);
+    if (data == nullptr) {
+      throw jsi::JSError(runtime, "Buffer::GetMappedRange failed");
+    }
     auto arrayBufferCtor =
         runtime.global().getPropertyAsFunction(runtime, "ArrayBuffer");
     auto o =
         arrayBufferCtor.callAsConstructor(runtime, static_cast<double>(size))
             .getObject(runtime);
+    if (!o.isArrayBuffer(runtime)) {
+      throw jsi::JSError(runtime, "ArrayBuffer constructor failed");
+    }
     auto buf = o.getArrayBuffer(runtime);
     memcpy(buf.data(runtime), data, size);
     return o;
