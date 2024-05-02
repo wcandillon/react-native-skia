@@ -16,7 +16,7 @@ export const demo3 = async(device: GPUDevice, context: GPUCanvasContext) => {
   await gpuBuffer.mapAsync(1, 0, data.byteLength); // GPUMapMode.READ
   console.log("mapAsync done");
   const arrayBuffer = gpuBuffer.getMappedRange(0,  data.byteLength);
-  const readData = new Uint32Array(arrayBuffer);
+  const readData = new Float32Array(arrayBuffer);
 
   //  // Output the read data
   console.log('Data read from the buffer:', readData);

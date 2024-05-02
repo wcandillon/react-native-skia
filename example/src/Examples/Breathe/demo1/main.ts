@@ -13,32 +13,7 @@ import { Dimensions } from 'react-native';
 
 const {width, height} = Dimensions.get("window");
 
-async function readGPUBuffer(device: GPUDevice, buffer: GPUBuffer, byteLength: number) {
-  const readBuffer = device.createBuffer({
-    size: byteLength,
-    usage: 9,//GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    mappedAtCreation: false
-  });
-  if (!readBuffer) {
-    console.error("Failed to create vertex buffer");
-  }
-
-  const commandEncoder = device.createCommandEncoder();
-  commandEncoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, byteLength);
-  const gpuCommands = commandEncoder.finish();
-  device.queue.submit([gpuCommands]);
-  console.log("Start reading buffer");
-  await readBuffer.mapAsync(1, 0, cubeVertexArray.byteLength);
-
-  const b = readBuffer.getMappedRange(0, byteLength);//GPUMapMode.READ
-  console.log(new Float32Array(b));
-  console.log("End reading buffer");
-
-  readBuffer.unmap();
-}
-
 export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
-
 
 // Create a vertex buffer from the cube data.
 const verticesBuffer = device.createBuffer({
@@ -47,16 +22,9 @@ const verticesBuffer = device.createBuffer({
   mappedAtCreation: true,
 });
 
-if (!verticesBuffer) {
-  console.error("Failed to create vertex buffer");
-}
-const mappedRange = verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength);
-
-const result = new Float32Array(mappedRange);
-result.set(cubeVertexArray);
-
+new Float32Array(verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength)).set(cubeVertexArray);
 verticesBuffer.unmap();
-await readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
+
 const pipeline = device.createRenderPipeline({
   layout: 'auto',
   vertex: {
@@ -119,39 +87,28 @@ const depthTexture = device.createTexture({
   usage: 16,//GPUTextureUsage.RENDER_ATTACHMENT,
 });
 
-
 const uniformBufferSize = 4 * 16; // 4x4 matrix
 const uniformBuffer = device.createBuffer({
   size: uniformBufferSize,
-  usage: 72,// GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  mappedAtCreation: false
+  usage: 72,//GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  mappedAtCreation: false,
 });
-
-if (!uniformBuffer) {
-  console.error("Failed to create uniform buffer");
-
-}
 
 const uniformBindGroup = device.createBindGroup({
   layout: pipeline.getBindGroupLayout(0),
   entries: [
     {
       binding: 0,
+
       buffer: uniformBuffer,
     },
   ],
 });
 
-if (!uniformBindGroup) {
-  console.error("Failed to create uniform bind group");
-}
-
-
-
 const renderPassDescriptor: GPURenderPassDescriptor = {
   colorAttachments: [
     {
-      view: undefined,
+      view: undefined, // Assigned later
 
       clearValue: [0.5, 0.5, 0.5, 1.0],
       loadOp: 'clear',
@@ -182,12 +139,18 @@ function getTransformationMatrix() {
     viewMatrix
   );
 
-   mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
-   return modelViewProjectionMatrix as Float32Array;
+  mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
+
+  return modelViewProjectionMatrix as Float32Array;
 }
 
 function frame() {
   const transformationMatrix = getTransformationMatrix();
+  console.log({
+    b: transformationMatrix.buffer,
+    o: transformationMatrix.byteOffset,
+    l: transformationMatrix.byteLength,
+  })
   device.queue.writeBuffer(
     uniformBuffer,
     0,
@@ -207,13 +170,8 @@ function frame() {
   passEncoder.draw(cubeVertexCount);
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
-
-  //readGPUBuffer(device, verticesBuffer, cubeVertexArray.byteLength);
-
-  console.log("RENDER");
-  //context.present();
- // requestAnimationFrame(frame);
+  console.log("frame");
+  requestAnimationFrame(frame);
 }
-frame();
-
+requestAnimationFrame(frame);
 };
