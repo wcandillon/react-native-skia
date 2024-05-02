@@ -2,7 +2,6 @@ import { gpu } from "@shopify/react-native-skia";
 
 
 const check = () => {
-  //console.log("check");
   requestAnimationFrame(check);
 }
 
