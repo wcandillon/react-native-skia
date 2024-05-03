@@ -35,6 +35,9 @@ public:
     auto descriptor = JsiRenderPassDescriptor::fromValue(runtime, arguments[0]);
 
     auto ret = getObject()->BeginRenderPass(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "beginRenderPass returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPassEncoder>(getContext(), ret));
   }
@@ -42,6 +45,9 @@ public:
   JSI_HOST_FUNCTION(finish) {
 
     auto ret = getObject()->Finish();
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "finish returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }
@@ -55,6 +61,7 @@ public:
 
     getObject()->CopyBufferToBuffer(*source, sourceOffset, *destination,
                                     destinationOffset, size);
+
     return jsi::Value::undefined();
   }
 

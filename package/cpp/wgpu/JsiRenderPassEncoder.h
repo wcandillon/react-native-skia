@@ -34,6 +34,7 @@ public:
     auto pipeline = JsiRenderPipeline::fromValue(runtime, arguments[0]);
 
     getObject()->SetPipeline(*pipeline);
+
     return jsi::Value::undefined();
   }
 
@@ -53,12 +54,29 @@ public:
                              : defaultFirstInstance;
 
     getObject()->Draw(vertexCount, instanceCount, firstVertex, firstInstance);
+
     return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(end) {
 
     getObject()->End();
+
+    return jsi::Value::undefined();
+  }
+
+  JSI_HOST_FUNCTION(pushDebugGroup) {
+    auto label = strdup(arguments[0].asString(runtime).utf8(runtime).c_str());
+
+    getObject()->PushDebugGroup(label);
+
+    return jsi::Value::undefined();
+  }
+
+  JSI_HOST_FUNCTION(popDebugGroup) {
+
+    getObject()->PopDebugGroup();
+
     return jsi::Value::undefined();
   }
 
@@ -73,7 +91,12 @@ public:
   JSI_HOST_FUNCTION(setVertexBuffer) {
     auto slot = static_cast<uint32_t>(arguments[0].getNumber());
     auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
-    getObject()->SetVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+    auto offset = static_cast<uint32_t>(arguments[2].getNumber());
+    auto size = static_cast<uint32_t>(arguments[3].getNumber());
+    RNSkLogger::logToConsole(
+        "RenderPassEncoder::setVertexBuffer(%d, %p, %d, %d)", slot,
+        buffer != nullptr, offset, size);
+    getObject()->SetVertexBuffer(slot, *buffer);
     return jsi::Value::undefined();
   }
 
@@ -83,6 +106,8 @@ public:
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiRenderPassEncoder, setPipeline),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, draw),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, end),
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, pushDebugGroup),
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, popDebugGroup),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, setBindGroup),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, setVertexBuffer))
 

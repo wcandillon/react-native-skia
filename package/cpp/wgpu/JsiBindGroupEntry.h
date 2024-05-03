@@ -58,6 +58,22 @@ public:
         throw jsi::JSError(runtime,
                            "Missing mandatory prop buffer in BindGroupEntry");
       }
+      if (obj.hasProperty(runtime, "size")) {
+        auto size = obj.getProperty(runtime, "size");
+
+        object->size = static_cast<uint32_t>(size.getNumber());
+      } else {
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop size in BindGroupEntry");
+      }
+      if (obj.hasProperty(runtime, "offset")) {
+        auto offset = obj.getProperty(runtime, "offset");
+
+        object->offset = static_cast<uint32_t>(offset.getNumber());
+      } else {
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop offset in BindGroupEntry");
+      }
       return object;
     }
   }

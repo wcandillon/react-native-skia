@@ -28,6 +28,7 @@ public:
   JSI_HOST_FUNCTION(unmap) {
 
     getObject()->Unmap();
+
     return jsi::Value::undefined();
   }
 

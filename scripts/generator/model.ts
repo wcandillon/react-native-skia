@@ -21,7 +21,6 @@ export interface Property {
   name: string;
   type: string;
   optional?: boolean;
-  default?: string;
   pointer?: boolean;
 }
 
@@ -29,8 +28,8 @@ export interface JSIObject {
   name: string;
   host?: string;
   methods?: Method[];
-  defaultProperties?: string;
   properties?: Property[]; 
+  defaultProperties?: string;
   iterable?: string;
 }
 
@@ -216,7 +215,9 @@ export const model: JSIObject[] = [
     name: "BindGroupEntry",
     properties: [
       { name: "binding", type: "uint32_t" },
-      { name: "buffer", type: "Buffer" }
+      { name: "buffer", type: "Buffer" },
+      { name: "size", type: "uint32_t" },
+      { name: "offset", type: "uint32_t" }
     ]
   },
   {
@@ -235,7 +236,7 @@ export const model: JSIObject[] = [
     properties: [
       { name: "size", type: "uint64_t" },
       {"name": "usage", "type": "BufferUsage"},
-      {"name": "mappedAtCreation", "type": "bool", "default": "false"}
+      {"name": "mappedAtCreation", "type": "bool"}
     ]
   },
   {
@@ -372,7 +373,7 @@ export const model: JSIObject[] = [
                          std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
               RNSkLogger::logToConsole("onSubmittedWorkDone start");
               auto callback = [](WGPUQueueWorkDoneStatus status, void *userdata) {
-                RNSkLogger::logToConsole("Buffer::onSubmittedWorkDone callback status: " +
+                RNSkLogger::logToConsole("onSubmittedWorkDone callback status: " +
                                          std::to_string(static_cast<int>(status)));
                 auto promise = static_cast<RNJsi::JsiPromises::Promise *>(userdata);
                 promise->resolve(jsi::Value::undefined());
@@ -423,6 +424,11 @@ export const model: JSIObject[] = [
         args: [],
       },
       {
+        name: "pushDebugGroup",
+        args: [{ name: "label", type: "string" }]
+      },
+      { name: "popDebugGroup", args: [] },
+      {
         name: "setBindGroup",
         args: [
           { name: "index", type: "uint32_t" },
@@ -441,12 +447,15 @@ export const model: JSIObject[] = [
         args: [
           { name: "slot", type: "uint32_t" },
           { name: "buffer", type: "Buffer" },
-          {name: "offset", "type": "uint64_t", "defaultAtomicValue": "0"},
-          {name: "size", "type": "uint64_t", "defaultAtomicValue": "0xFFFFFFFFFFFFFFFF"}
+          {name: "offset", "type": "uint64_t"},
+          {name: "size", "type": "uint64_t"}
         ],
         implementation: `auto slot = static_cast<uint32_t>(arguments[0].getNumber());
         auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
-        getObject()->SetVertexBuffer(slot, *buffer, 0, 0xFFFFFFFFFFFFFFFF);
+        auto offset = static_cast<uint32_t>(arguments[2].getNumber());
+        auto size = static_cast<uint32_t>(arguments[3].getNumber());
+        RNSkLogger::logToConsole("RenderPassEncoder::setVertexBuffer(%d, %p, %d, %d)", slot, buffer != nullptr, offset, size);
+        getObject()->SetVertexBuffer(slot, *buffer);
         return jsi::Value::undefined();`
       }
     ]
@@ -588,15 +597,15 @@ object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     name: "DepthStencilState",
     properties: [
       {"name": "format", "type": "TextureFormat"},
-      {"name": "depthWriteEnabled", "type": "bool", "optional": true, "default": "false"},
-      {"name": "depthCompare", "type": "CompareFunction", "optional": true, "default": "undefined"},
+      {"name": "depthWriteEnabled", "type": "bool", "optional": true,},
+      {"name": "depthCompare", "type": "CompareFunction", "optional": true },
       {"name": "stencilFront", "type": "StencilFaceState", "optional": true},
       {"name": "stencilBack", "type": "StencilFaceState", "optional": true},
-      {"name": "stencilReadMask", "type": "uint32_t", "optional": true, "default": "0xFFFFFFFF"},
-      {"name": "stencilWriteMask", "type": "uint32_t", "optional": true, "default": "0xFFFFFFFF"},
-      {"name": "depthBias", "type": "int32_t", "optional": true, "default": "0"},
-      {"name": "depthBiasSlopeScale", "type": "float", "optional": true, "default": "0.0f"},
-      {"name": "depthBiasClamp", "type": "float", "optional": true, "default": "0.0f" }
+      {"name": "stencilReadMask", "type": "uint32_t", "optional": true },
+      {"name": "stencilWriteMask", "type": "uint32_t", "optional": true},
+      {"name": "depthBias", "type": "int32_t", "optional": true, },
+      {"name": "depthBiasSlopeScale", "type": "float", "optional": true, },
+      {"name": "depthBiasClamp", "type": "float", "optional": true }
     ]
   },
   {

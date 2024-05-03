@@ -41,6 +41,9 @@ public:
   JSI_PROPERTY_GET(queue) {
 
     auto ret = getObject()->GetQueue();
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "getQueue returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
   }
@@ -49,6 +52,9 @@ public:
     auto descriptor = JsiBindGroupDescriptor::fromValue(runtime, arguments[0]);
 
     auto ret = getObject()->CreateBindGroup(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createBindGroup returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiBindGroup>(getContext(), ret));
   }
@@ -58,6 +64,9 @@ public:
         JsiRenderPipelineDescriptor::fromValue(runtime, arguments[0]);
 
     auto ret = getObject()->CreateRenderPipeline(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createRenderPipeline returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
   }
@@ -70,6 +79,9 @@ public:
     auto baseModuleDescriptor = new wgpu::ShaderModuleDescriptor();
     baseModuleDescriptor->nextInChain = &moduleDescriptorNext;
     auto ret = getObject()->CreateShaderModule(baseModuleDescriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createShaderModule returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiShaderModule>(getContext(), ret));
   }
@@ -82,6 +94,9 @@ public:
             : defaultDescriptor;
 
     auto ret = getObject()->CreateCommandEncoder(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createCommandEncoder returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiCommandEncoder>(getContext(), ret));
   }
@@ -90,6 +105,9 @@ public:
     auto descritor = JsiBufferDescriptor::fromValue(runtime, arguments[0]);
 
     auto ret = getObject()->CreateBuffer(descritor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createBuffer returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiBuffer>(getContext(), ret));
   }
@@ -98,6 +116,9 @@ public:
     auto descriptor = JsiTextureDescriptor::fromValue(runtime, arguments[0]);
 
     auto ret = getObject()->CreateTexture(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createTexture returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiTexture>(getContext(), ret));
   }

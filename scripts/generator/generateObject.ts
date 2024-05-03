@@ -26,10 +26,12 @@ for (int i = 0; i < jsiArraySize; i++) {
   let unwrap = '';
   if (arg.type === "bool") {
     unwrap = `${name}.asBool()`;
+  } else if (arg.type === "string") {
+    unwrap = `strdup(arguments[${index}].asString(runtime).utf8(runtime).c_str())`;
   } else if (isNumberType(arg.type)) {
     unwrap = unWrapType(`arguments[${index}]`, arg.type, false);
   } else if (isEnum(arg.type)) {
-    unwrap = `get${arg.type}(arguments[${index}].asString().utf8(runtime).c_str())`;
+    unwrap = `get${arg.type}(arguments[${index}].asString(runtime).utf8(runtime).c_str())`;
   } else {
     const name = objectName(arg.type);
     const className = `Jsi${name}`;
@@ -108,6 +110,9 @@ const generatorMethod = (method: Method) => {
       args.filter(arg => arg.baseType).map(arg => baseType(arg))
     }
     ${returns ? 'auto ret = ' : ''}getObject()->${_.upperFirst(_.camelCase(method.name))}(${argList(args)});
+    ${returns ? `if (ret == nullptr) {
+      throw jsi::JSError(runtime, "${method.name} returned null");
+    }` : ""}
     return ${wrapReturnValue(returns)};
   }
 `;

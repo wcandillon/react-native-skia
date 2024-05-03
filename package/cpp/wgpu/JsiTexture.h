@@ -29,6 +29,9 @@ public:
   JSI_HOST_FUNCTION(createView) {
 
     auto ret = getObject()->CreateView();
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createView returned null");
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiTextureView>(getContext(), ret));
   }

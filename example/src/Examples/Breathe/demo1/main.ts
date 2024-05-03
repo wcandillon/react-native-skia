@@ -24,7 +24,6 @@ const verticesBuffer = device.createBuffer({
 
 new Float32Array(verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength)).set(cubeVertexArray);
 verticesBuffer.unmap();
-
 const pipeline = device.createRenderPipeline({
   layout: 'auto',
   vertex: {
@@ -93,14 +92,14 @@ const uniformBuffer = device.createBuffer({
   usage: 72,//GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   mappedAtCreation: false,
 });
-
 const uniformBindGroup = device.createBindGroup({
   layout: pipeline.getBindGroupLayout(0),
   entries: [
     {
       binding: 0,
-
       buffer: uniformBuffer,
+      offset: 0,
+      size: uniformBufferSize,
     },
   ],
 });
@@ -144,34 +143,33 @@ function getTransformationMatrix() {
   return modelViewProjectionMatrix as Float32Array;
 }
 
-function frame() {
+async function frame() {
   const transformationMatrix = getTransformationMatrix();
-  console.log({
-    b: transformationMatrix.buffer,
-    o: transformationMatrix.byteOffset,
-    l: transformationMatrix.byteLength,
-  })
   device.queue.writeBuffer(
     uniformBuffer,
     0,
     transformationMatrix.buffer,
-    transformationMatrix.byteOffset,
+    0,
     transformationMatrix.byteLength
   );
+
   renderPassDescriptor.colorAttachments[0].view = context
     .getCurrentTexture()
     .createView();
 
   const commandEncoder = device.createCommandEncoder();
   const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  //passEncoder.pushDebugGroup("mygroupmarker"); 
   passEncoder.setPipeline(pipeline);
   passEncoder.setBindGroup(0, uniformBindGroup);
-  passEncoder.setVertexBuffer(0, verticesBuffer);
+  passEncoder.setVertexBuffer(0, verticesBuffer, 0, cubeVertexArray.byteLength);
   passEncoder.draw(cubeVertexCount);
+  //passEncoder.popDebugGroup();
   passEncoder.end();
   device.queue.submit([commandEncoder.finish()]);
-  console.log("frame");
-  requestAnimationFrame(frame);
+  await device.queue.onSubmittedWorkDone();
+  console.log("DONE!");
+  //requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 };
