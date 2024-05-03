@@ -1,175 +1,157 @@
-import { mat4, vec3 } from 'wgpu-matrix';
+import { Dimensions } from "react-native";
+import { mat4, vec3 } from "wgpu-matrix";
 
-import {
-  cubeVertexArray,
-  cubeVertexSize,
-  cubeUVOffset,
-  cubePositionOffset,
-  cubeVertexCount,
-} from './cube';
+export const basicVertWGSL = `struct Uniforms {
+  modelViewProjectionMatrix : mat4x4f,
+}
+@binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
-import {basicVertWGSL, vertexPositionColorWGSL} from './shaders';
-import { Dimensions } from 'react-native';
+struct VertexOutput {
+  @builtin(position) Position : vec4f,
+  @location(0) fragUV : vec2f,
+  @location(1) fragPosition: vec4f,
+}
 
-const {width, height} = Dimensions.get("window");
+@vertex
+fn main(
+  @location(0) position : vec4f,
+  @location(1) uv : vec2f
+) -> VertexOutput {
+  var output : VertexOutput;
+  output.Position = uniforms.modelViewProjectionMatrix * position;
+  output.fragUV = uv;
+  output.fragPosition = 0.5 * (position + vec4(1.0, 1.0, 1.0, 1.0));
+  return output;
+}`;
+
+const triangleVertWGSL = `struct Uniforms {
+  modelViewProjectionMatrix : mat4x4f,
+}
+@binding(0) @group(0) var<uniform> uniforms : Uniforms;
+
+@vertex
+fn main(
+  @builtin(vertex_index) VertexIndex : u32
+) -> @builtin(position) vec4f {
+  var pos = array<vec2f, 3>(
+    vec2(0.0, 0.5),
+    vec2(-0.5, -0.5),
+    vec2(0.5, -0.5)
+  );
+
+  var p = vec4f(pos[VertexIndex], 0.0, 1.0);
+  return uniforms.modelViewProjectionMatrix * p;
+}
+`;
+
+const redFragWGSL = `@fragment
+fn main() -> @location(0) vec4f {
+  return vec4(1.0, 0.0, 1.0, 1.0);
+}`;
+
+const { width, height } = Dimensions.get("window");
 
 export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
+  const presentationFormat = "rgba8unorm";
 
-// Create a vertex buffer from the cube data.
-const verticesBuffer = device.createBuffer({
-  size: cubeVertexArray.byteLength,
-  usage: 32,//GPUBufferUsage.VERTEX,
-  mappedAtCreation: true,
-});
-
-new Float32Array(verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength)).set(cubeVertexArray);
-verticesBuffer.unmap();
-const pipeline = device.createRenderPipeline({
-  layout: 'auto',
-  vertex: {
-    module: device.createShaderModule({
-      code: basicVertWGSL,
-    }),
-    entryPoint: "main",
-    buffers: [
-      {
-        arrayStride: cubeVertexSize,
-        attributes: [
-          {
-            // position
-            shaderLocation: 0,
-            offset: cubePositionOffset,
-            format: 'float32x4',
-          },
-          {
-            // uv
-            shaderLocation: 1,
-            offset: cubeUVOffset,
-            format: 'float32x2',
-          },
-        ],
-      },
-    ],
-  },
-  fragment: {
-    module: device.createShaderModule({
-      code: vertexPositionColorWGSL,
-    }),
-    entryPoint: "main",
-    targets: [
-      {
-        format: 'rgba8unorm',
-      },
-    ],
-  },
-  primitive: {
-    topology: 'triangle-list',
-
-    // Backface culling since the cube is solid piece of geometry.
-    // Faces pointing away from the camera will be occluded by faces
-    // pointing toward the camera.
-    cullMode: 'back',
-  },
-
-  // Enable depth testing so that the fragment closest to the camera
-  // is rendered in front.
-  depthStencil: {
-    depthWriteEnabled: true,
-    depthCompare: 'less',
-    format: 'depth24plus',
-  },
-});
-
-const depthTexture = device.createTexture({
-  size: { width, height },
-  format: 'depth24plus',
-  usage: 16,//GPUTextureUsage.RENDER_ATTACHMENT,
-});
-
-const uniformBufferSize = 4 * 16; // 4x4 matrix
-const uniformBuffer = device.createBuffer({
-  size: uniformBufferSize,
-  usage: 72,//GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  mappedAtCreation: false,
-});
-const uniformBindGroup = device.createBindGroup({
-  layout: pipeline.getBindGroupLayout(0),
-  entries: [
-    {
-      binding: 0,
-      buffer: uniformBuffer,
-      offset: 0,
-      size: uniformBufferSize,
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: device.createShaderModule({
+        code: triangleVertWGSL,
+      }),
+      entryPoint: "main",
     },
-  ],
-});
-
-const renderPassDescriptor: GPURenderPassDescriptor = {
-  colorAttachments: [
-    {
-      view: undefined, // Assigned later
-
-      clearValue: [0.5, 0.5, 0.5, 1.0],
-      loadOp: 'clear',
-      storeOp: 'store',
+    fragment: {
+      module: device.createShaderModule({
+        code: redFragWGSL,
+      }),
+      entryPoint: "main",
+      targets: [
+        {
+          format: presentationFormat,
+        },
+      ],
     },
-  ],
-  depthStencilAttachment: {
-    view: depthTexture.createView(),
+    primitive: {
+      topology: "triangle-list",
+    },
+  });
 
-    depthClearValue: 1.0,
-    depthLoadOp: 'clear',
-    depthStoreOp: 'store',
-  },
-};
-
-const aspect = width / height;
-const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0);
-const modelViewProjectionMatrix = mat4.create();
-
-function getTransformationMatrix() {
-  const viewMatrix = mat4.identity();
-  mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix);
-  const now = Date.now() / 1000;
-  mat4.rotate(
-    viewMatrix,
-    vec3.fromValues(Math.sin(now), Math.cos(now), 0),
+  const aspect = width / height;
+  const projectionMatrix = mat4.perspective(
+    (2 * Math.PI) / 5,
+    aspect,
     1,
-    viewMatrix
+    100.0
   );
+  const modelViewProjectionMatrix = mat4.create();
 
-  mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
+  function getTransformationMatrix() {
+    const viewMatrix = mat4.identity();
+    mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix);
+    const now = Date.now() / 1000;
+    mat4.rotate(
+      viewMatrix,
+      vec3.fromValues(Math.sin(now), Math.cos(now), 0),
+      1,
+      viewMatrix
+    );
 
-  return modelViewProjectionMatrix as Float32Array;
-}
+    mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
 
-async function frame() {
-  const transformationMatrix = getTransformationMatrix();
-  device.queue.writeBuffer(
-    uniformBuffer,
-    0,
-    transformationMatrix.buffer,
-    0,
-    transformationMatrix.byteLength
-  );
+    return modelViewProjectionMatrix as Float32Array;
+  }
+  const uniformBufferSize = 4 * 16; // 4x4 matrix
+  const uniformBuffer = device.createBuffer({
+    size: uniformBufferSize,
+    usage: 72, //GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    mappedAtCreation: false,
+  });
 
-  renderPassDescriptor.colorAttachments[0].view = context
-    .getCurrentTexture()
-    .createView();
+  function frame() {
+    const transformationMatrix = getTransformationMatrix();
+    const uniformBindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          buffer: uniformBuffer,
+          offset: 0,
+          size: uniformBufferSize,
+        },
+      ],
+    });
+    device.queue.writeBuffer(
+      uniformBuffer,
+      0,
+      transformationMatrix.buffer,
+      0,
+      transformationMatrix.byteLength
+    );
+    const commandEncoder = device.createCommandEncoder();
+    const textureView = context.getCurrentTexture().createView();
 
-  const commandEncoder = device.createCommandEncoder();
-  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-  //passEncoder.pushDebugGroup("mygroupmarker"); 
-  passEncoder.setPipeline(pipeline);
-  passEncoder.setBindGroup(0, uniformBindGroup);
-  passEncoder.setVertexBuffer(0, verticesBuffer, 0, cubeVertexArray.byteLength);
-  passEncoder.draw(cubeVertexCount);
-  //passEncoder.popDebugGroup();
-  passEncoder.end();
-  device.queue.submit([commandEncoder.finish()]);
-  await device.queue.onSubmittedWorkDone();
-  console.log("DONE!");
-  //requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+    const renderPassDescriptor: GPURenderPassDescriptor = {
+      colorAttachments: [
+        {
+          view: textureView,
+          clearValue: [0.3, 0.6, 1.0, 1],
+          loadOp: "clear",
+          storeOp: "store",
+        },
+      ],
+    };
+
+    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+    passEncoder.setPipeline(pipeline);
+    passEncoder.setBindGroup(0, uniformBindGroup);
+    passEncoder.draw(3);
+    passEncoder.end();
+
+    device.queue.submit([commandEncoder.finish()]);
+    console.log("RENDER");
+    requestAnimationFrame(frame);
+  }
+  frame();
 };
