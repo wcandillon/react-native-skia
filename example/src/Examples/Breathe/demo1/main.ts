@@ -109,19 +109,21 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
     mappedAtCreation: false,
   });
 
+  const uniformBindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        buffer: uniformBuffer,
+        offset: 0,
+        size: uniformBufferSize,
+      },
+    ],
+  });
+
   function frame() {
     const transformationMatrix = getTransformationMatrix();
-    const uniformBindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        {
-          binding: 0,
-          buffer: uniformBuffer,
-          offset: 0,
-          size: uniformBufferSize,
-        },
-      ],
-    });
+
     device.queue.writeBuffer(
       uniformBuffer,
       0,
@@ -150,7 +152,7 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
     passEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
-    console.log("RENDER");
+    context.present();
     requestAnimationFrame(frame);
   }
   frame();
