@@ -41,6 +41,7 @@ public:
     swapChainDesc.format =
         wgpu::TextureFormat::RGBA8Unorm; // surface.GetPreferredFormat(adapter);
     swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
+   // swapChainDesc.compositingAlphaMode = wgpu::CompositingAlphaMode::PreMultiplied;
     _surface = std::make_shared<wgpu::Surface>(surface);
     _swapChain = std::make_shared<wgpu::SwapChain>(
         device->CreateSwapChain(surface, &swapChainDesc));

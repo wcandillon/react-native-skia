@@ -62,8 +62,14 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
         },
       ],
     },
+    // depthStencil: {
+    //   depthWriteEnabled: true,
+    //   depthCompare: "less",
+    //   format: "depth24plus",
+    // },
     primitive: {
       topology: "triangle-list",
+      cullMode: "back",
     },
   });
 
@@ -101,6 +107,13 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
         storeOp: "store",
       },
     ],
+    // depthStencilAttachment: {
+    //   view: depthTexture.createView(),
+
+    //   depthClearValue: 1.0,
+    //   depthLoadOp: 'clear',
+    //   depthStoreOp: 'store',
+    // },
   };
 
   const aspect = width / height;
@@ -128,7 +141,7 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
     return modelViewProjectionMatrix as Float32Array;
   }
 
-  async function frame() {
+  function frame() {
     const transformationMatrix = getTransformationMatrix();
     device.queue.writeBuffer(
       uniformBuffer,
@@ -157,7 +170,7 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
     //passEncoder.popDebugGroup();
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
-    await device.queue.onSubmittedWorkDone();
+    //await device.queue.onSubmittedWorkDone();
     context.present();
     console.log("DONE!");
     requestAnimationFrame(frame);

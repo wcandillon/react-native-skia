@@ -27,4 +27,5 @@ fn main(
   output.fragUV = uv;
   output.fragPosition = 0.5 * (position + vec4(1.0, 1.0, 1.0, 1.0));
   return output;
-}`;
+}
+`;

@@ -68,10 +68,12 @@ public:
       if (obj.hasProperty(runtime, "depthStencilAttachment")) {
         auto depthStencilAttachment =
             obj.getProperty(runtime, "depthStencilAttachment");
-
-        object->depthStencilAttachment =
-            JsiRenderPassDepthStencilAttachment::fromValue(
+        RNSkLogger::logToConsole("depthStencilAttachment");
+        auto att =  JsiRenderPassDepthStencilAttachment::fromValue(
                 runtime, depthStencilAttachment);
+        
+        RNSkLogger::logToConsole("depthStencilAttachment: %d", att->view != nullptr);        
+        object->depthStencilAttachment = att;
       }
       return object;
     }
