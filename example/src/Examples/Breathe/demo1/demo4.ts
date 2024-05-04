@@ -188,11 +188,6 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
 
   async function frame() {
     updateTransformationMatrix();
-    console.log({modelViewProjectionMatrix1, modelViewProjectionMatrix2});
-    console.log({ byteOffset: modelViewProjectionMatrix1.byteOffset });
-    console.log({ byteOffset2: modelViewProjectionMatrix2.byteOffset });
-    console.log({ length: modelViewProjectionMatrix1.byteLength });
-    console.log({ length2: modelViewProjectionMatrix2.byteLength });
     device.queue.writeBuffer(
       uniformBuffer,
       0,

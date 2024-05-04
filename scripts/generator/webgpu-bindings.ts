@@ -4,8 +4,10 @@ import { writeFileSync } from "fs";
 import { generateObject } from "./generateObject";
 import { model } from "./model";
 import { enums, generateEnums } from "./enums";
+import { generateConstants } from "./constants";
 
 writeFileSync(`package/cpp/wgpu/JsiEnums.h`, generateEnums(enums));
+writeFileSync(`package/cpp/wgpu/JsiConstants.h`, generateConstants());
 
 model.forEach((object) => {
   const result = generateObject(object);

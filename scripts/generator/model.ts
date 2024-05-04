@@ -284,8 +284,8 @@ export const model: JSIObject[] = [
           {"name": "size", "type": "size_t", "defaultAtomicValue": "SIZE_MAX"}
         ],
         implementation: `
-        size_t offset = static_cast<size_t>(arguments[0].getNumber());
-        size_t size = static_cast<size_t>(arguments[1].getNumber());
+        size_t offset = count > 0 ? static_cast<size_t>(arguments[0].getNumber()) : 0;
+        size_t size = count > 1 ? static_cast<size_t>(arguments[1].getNumber()) : getObject()->GetSize();
         auto usage = getObject()->GetUsage();
         void *data = (usage & wgpu::BufferUsage::MapWrite)
                          ? getObject()->GetMappedRange(offset, size)

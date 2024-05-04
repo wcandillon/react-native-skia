@@ -40,10 +40,10 @@ public:
   }
 
   JSI_HOST_FUNCTION(writeBuffer) {
+
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
     auto offset = static_cast<uint64_t>(arguments[1].getNumber());
     auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-    auto offset2 = static_cast<uint64_t>(arguments[3].getNumber());
     auto size = static_cast<uint64_t>(arguments[4].getNumber());
     getObject()->WriteBuffer(*buffer, offset, data.data(runtime), size);
     return jsi::Value::undefined();
@@ -59,9 +59,8 @@ public:
                      std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
           RNSkLogger::logToConsole("onSubmittedWorkDone start");
           auto callback = [](WGPUQueueWorkDoneStatus status, void *userdata) {
-            RNSkLogger::logToConsole(
-                "Buffer::onSubmittedWorkDone callback status: " +
-                std::to_string(static_cast<int>(status)));
+            RNSkLogger::logToConsole("onSubmittedWorkDone callback status: " +
+                                     std::to_string(static_cast<int>(status)));
             auto promise = static_cast<RNJsi::JsiPromises::Promise *>(userdata);
             promise->resolve(jsi::Value::undefined());
             RNSkLogger::logToConsole("onSubmittedWorkDone end");

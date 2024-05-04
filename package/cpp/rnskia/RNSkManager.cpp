@@ -5,6 +5,7 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiConstants.h"
 #include "JsiGPU.h"
 #include "JsiSkApi.h"
 #include "RNSkJsiViewApi.h"
@@ -72,6 +73,9 @@ void RNSkManager::installBindings() {
   // provided runtime.
   auto gpu = std::make_shared<JsiGPU>(_platformContext,
                                       _platformContext->getInstance());
+
+  installConstants(*_jsRuntime);
+
   _jsRuntime->global().setProperty(
       *_jsRuntime, "GPU",
       jsi::Object::createFromHostObject(*_jsRuntime, std::move(gpu)));

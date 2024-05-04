@@ -5,6 +5,7 @@ import { demo3 } from "./demo3";
 import { demo2 } from "./demo2";
 import { demo1 } from "./demo1/main";
 import { demo4 } from "./demo1/demo4";
+import { demo5 } from "./demo1/demo5";
 
 const draw = async (context: GPUCanvasContext) => {
   const adapter = await gpu.requestAdapter();
@@ -15,7 +16,7 @@ const draw = async (context: GPUCanvasContext) => {
     format: presentationFormat,
     alphaMode: "premultiplied",
   });
-  await demo4(device, context);
+  await demo5(device, context);
   //context.present();
 };
 
