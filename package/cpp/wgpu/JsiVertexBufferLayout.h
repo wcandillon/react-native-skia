@@ -11,6 +11,7 @@
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "JsiVertexAttribute.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"

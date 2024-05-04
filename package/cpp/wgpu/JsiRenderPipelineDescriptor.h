@@ -15,6 +15,7 @@
 #include "JsiPrimitiveState.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "JsiVertexState.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"

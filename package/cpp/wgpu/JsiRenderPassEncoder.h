@@ -14,6 +14,7 @@
 #include "JsiPromises.h"
 #include "JsiRenderPipeline.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
@@ -102,23 +103,6 @@ public:
     return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(dispatchWorkgroups) {
-    auto workgroupCountX = static_cast<uint32_t>(arguments[0].getNumber());
-    uint32_t defaultWorkgroupCountY = 1;
-    auto workgroupCountY = count > 1
-                               ? static_cast<uint32_t>(arguments[1].getNumber())
-                               : defaultWorkgroupCountY;
-    uint32_t defaultWorkgroupCountZ = 1;
-    auto workgroupCountZ = count > 2
-                               ? static_cast<uint32_t>(arguments[2].getNumber())
-                               : defaultWorkgroupCountZ;
-
-    getObject()->DispatchWorkgroups(workgroupCountX, workgroupCountY,
-                                    workgroupCountZ);
-
-    return jsi::Value::undefined();
-  }
-
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiRenderPassEncoder, RenderPassEncoder)
 
@@ -128,9 +112,7 @@ public:
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, pushDebugGroup),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, popDebugGroup),
                        JSI_EXPORT_FUNC(JsiRenderPassEncoder, setBindGroup),
-                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, setVertexBuffer),
-                       JSI_EXPORT_FUNC(JsiRenderPassEncoder,
-                                       dispatchWorkgroups))
+                       JSI_EXPORT_FUNC(JsiRenderPassEncoder, setVertexBuffer))
 
   /**
    * Returns the underlying object from a host object of this type

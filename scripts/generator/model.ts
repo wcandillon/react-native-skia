@@ -220,49 +220,61 @@ export const model: JSIObject[] = [
       { name: "size", type: "uint32_t" },
       { name: "offset", type: "uint32_t" }
     ],
-    fromValueImpl: `static wgpu::BindGroupEntry *fromValue(jsi::Runtime &runtime,
-      const jsi::Value &raw) {
-const auto &obj = raw.asObject(runtime);
-if (obj.isHostObject(runtime)) {
-return obj.asHostObject<JsiBindGroupEntry>(runtime)->getObject().get();
-} else {
-auto object = new wgpu::BindGroupEntry();
-
-if (obj.hasProperty(runtime, "binding")) {
-auto binding = obj.getProperty(runtime, "binding");
-
-object->binding = static_cast<uint32_t>(binding.getNumber());
-} else {
-throw jsi::JSError(runtime,
-"Missing mandatory prop binding in BindGroupEntry");
-}
-if (obj.hasProperty(runtime, "resource") && obj.getProperty(runtime, "resource").isObject()) {
-auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
-if (resource.hasProperty(runtime, "buffer")) {
-auto buffer = resource.getProperty(runtime, "buffer");
-
-object->buffer = *JsiBuffer::fromValue(runtime, buffer);
-} else {
-throw jsi::JSError(runtime,
-"Missing mandatory prop buffer in BindGroupEntry");
-}
-if (resource.hasProperty(runtime, "size")) {
-auto size = resource.getProperty(runtime, "size");
-
-object->size = static_cast<uint32_t>(size.getNumber());
-} else {
-  object->size = object->buffer.GetSize();
-}
-if (resource.hasProperty(runtime, "offset")) {
-auto offset = resource.getProperty(runtime, "offset");
-
-object->offset = static_cast<uint32_t>(offset.getNumber());
-} else {
-  object->offset = 0;
-}
-}
-return object;
-}}`
+    fromValueImpl: `
+    static wgpu::BindGroupEntry *fromValue(jsi::Runtime &runtime,
+                                           const jsi::Value &raw) {
+      const auto &obj = raw.asObject(runtime);
+      if (obj.isHostObject(runtime)) {
+        return obj.asHostObject<JsiBindGroupEntry>(runtime)->getObject().get();
+      } else {
+        auto object = new wgpu::BindGroupEntry();
+  
+        if (obj.hasProperty(runtime, "binding")) {
+          auto binding = obj.getProperty(runtime, "binding");
+  
+          object->binding = static_cast<uint32_t>(binding.getNumber());
+        } else {
+          throw jsi::JSError(runtime,
+                             "Missing mandatory prop binding in BindGroupEntry");
+        }
+  
+        if (obj.hasProperty(runtime, "resource") &&
+            obj.getProperty(runtime, "resource").isObject()) {
+          auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
+          if (resource.isHostObject(runtime)) {
+            object->textureView = *JsiTextureView::fromValue(
+              runtime, obj.getProperty(runtime, "resource"));
+          } else {
+          if (resource.hasProperty(runtime, "buffer")) {
+            auto buffer = resource.getProperty(runtime, "buffer");
+  
+            object->buffer = *JsiBuffer::fromValue(runtime, buffer);
+          } else {
+            throw jsi::JSError(runtime,
+                               "Missing mandatory prop buffer in BindGroupEntry");
+          }
+          if (resource.hasProperty(runtime, "size")) {
+            auto size = resource.getProperty(runtime, "size");
+  
+            object->size = static_cast<uint32_t>(size.getNumber());
+          } else {
+            object->size = object->buffer.GetSize();
+          }
+          if (resource.hasProperty(runtime, "offset")) {
+            auto offset = resource.getProperty(runtime, "offset");
+  
+            object->offset = static_cast<uint32_t>(offset.getNumber());
+          } else {
+            object->offset = 0;
+          }
+          }
+        } else {
+          throw jsi::JSError(runtime,
+                             "Missing mandatory prop binding in BindGroupEntry");
+        }
+        return object;
+      }
+    }`
   },
   {
     name: "BindGroup"
@@ -505,14 +517,6 @@ return object;
         getObject()->SetVertexBuffer(slot, *buffer, offset, size);
         return jsi::Value::undefined();`
       },
-      {
-        name: "dispatchWorkgroups",
-        args: [
-          {"name": "workgroupCountX", "type": "uint32_t"},
-          {"name": "workgroupCountY", "type": "uint32_t", "defaultAtomicValue": "1", optional: true},
-          {"name": "workgroupCountZ", "type": "uint32_t", "defaultAtomicValue": "1", optional: true}
-        ]
-      }
     ]
   },
   {

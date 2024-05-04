@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiShaderModule.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "JsiVertexBufferLayout.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"

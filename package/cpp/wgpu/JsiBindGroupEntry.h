@@ -12,6 +12,7 @@
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
@@ -47,31 +48,40 @@ public:
         throw jsi::JSError(runtime,
                            "Missing mandatory prop binding in BindGroupEntry");
       }
+
       if (obj.hasProperty(runtime, "resource") &&
           obj.getProperty(runtime, "resource").isObject()) {
         auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
-        if (resource.hasProperty(runtime, "buffer")) {
-          auto buffer = resource.getProperty(runtime, "buffer");
-
-          object->buffer = *JsiBuffer::fromValue(runtime, buffer);
+        if (resource.isHostObject(runtime)) {
+          object->textureView = *JsiTextureView::fromValue(
+              runtime, obj.getProperty(runtime, "resource"));
         } else {
-          throw jsi::JSError(runtime,
-                             "Missing mandatory prop buffer in BindGroupEntry");
-        }
-        if (resource.hasProperty(runtime, "size")) {
-          auto size = resource.getProperty(runtime, "size");
+          if (resource.hasProperty(runtime, "buffer")) {
+            auto buffer = resource.getProperty(runtime, "buffer");
 
-          object->size = static_cast<uint32_t>(size.getNumber());
-        } else {
-          object->size = object->buffer.GetSize();
-        }
-        if (resource.hasProperty(runtime, "offset")) {
-          auto offset = resource.getProperty(runtime, "offset");
+            object->buffer = *JsiBuffer::fromValue(runtime, buffer);
+          } else {
+            throw jsi::JSError(
+                runtime, "Missing mandatory prop buffer in BindGroupEntry");
+          }
+          if (resource.hasProperty(runtime, "size")) {
+            auto size = resource.getProperty(runtime, "size");
 
-          object->offset = static_cast<uint32_t>(offset.getNumber());
-        } else {
-          object->offset = 0;
+            object->size = static_cast<uint32_t>(size.getNumber());
+          } else {
+            object->size = object->buffer.GetSize();
+          }
+          if (resource.hasProperty(runtime, "offset")) {
+            auto offset = resource.getProperty(runtime, "offset");
+
+            object->offset = static_cast<uint32_t>(offset.getNumber());
+          } else {
+            object->offset = 0;
+          }
         }
+      } else {
+        throw jsi::JSError(runtime,
+                           "Missing mandatory prop binding in BindGroupEntry");
       }
       return object;
     }

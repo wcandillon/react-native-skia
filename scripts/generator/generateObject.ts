@@ -192,6 +192,7 @@ export const generateObject = (object: JSIObject) => {
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureView.h"
 #include "RNSkPlatformContext.h"
 #include "MutableJSIBuffer.h"
 #include "JsiEnums.h"
