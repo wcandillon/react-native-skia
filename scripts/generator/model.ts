@@ -21,6 +21,7 @@ export interface Property {
   name: string;
   type: string;
   optional?: boolean;
+  defaultAtomicValue?: string;
   pointer?: boolean;
 }
 
@@ -139,6 +140,19 @@ export const model: JSIObject[] = [
     ]
   },
   {
+    name: "SamplerDescriptor",
+    properties: [
+      { name: "addressModeU", type: "AddressMode", "optional": true, "defaultAtomicValue": "clamp-to-edge" },
+      { name: "addressModeV", type: "AddressMode", "optional": true, "defaultAtomicValue": "clamp-to-edge"  },
+      { name: "addressModeW", type: "AddressMode", "optional": true, "defaultAtomicValue": "clamp-to-edge"  },
+      { name: "magFilter", type: "FilterMode", "optional": true, "defaultAtomicValue": "nearest" },
+      { name: "minFilter", type: "FilterMode", "optional": true, "defaultAtomicValue": "nearest" },
+      { name: "mipmapFilter", type: "MipmapFilterMode", "optional": true, "defaultAtomicValue": "nearest" },
+      { name: "lodMinClamp", type: "float", "optional": true, "defaultAtomicValue": "0.0f"  },
+      { name: "lodMaxClamp", type: "float", "optional": true, "defaultAtomicValue": "32.0f" }
+    ]
+  },
+  {
     name: "Device",
     methods: [
       {
@@ -146,6 +160,12 @@ export const model: JSIObject[] = [
         args: [],
         returns: "Queue",
         member: "queue"
+      },
+      {
+        name: "createSampler",
+        args: [
+          { name: "descriptor", type: "SamplerDescriptor" }
+        ],
       },
       {
         name: "createBindGroup",
@@ -162,6 +182,14 @@ export const model: JSIObject[] = [
           type: "RenderPipelineDescriptor",
         }],
         returns: "RenderPipeline",
+      },
+      {
+        name: "createComputePipeline",
+        args: [{
+          name: "descriptor",
+          type: "ComputePipelineDescriptor",
+        }],
+        returns: "ComputePipeline",
       },
       {
         name: "createShaderModule",
@@ -362,10 +390,21 @@ export const model: JSIObject[] = [
     "name": "CommandEncoderDescriptor"
   },
   {
+    "name": "ComputePassDescriptor"
+  },
+  {
+    name: "ComputePassEncoder",
+  },
+  {
     name: "CommandEncoder",
     methods: [
       { name: "beginRenderPass", args: [{ name: "descriptor", type: "RenderPassDescriptor" }], returns: "RenderPassEncoder" },
       { name: "finish", args: [], returns: "CommandBuffer" },
+      {
+        name: "beginComputePass",
+        args: [{ name: "descriptor", type: "ComputePassDescriptor" }],
+        returns: "ComputePassEncoder"
+      },
       {
         name: "copyBufferToBuffer",
         args: [
@@ -463,6 +502,20 @@ export const model: JSIObject[] = [
       {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
       {"name": "multisample", "type": "MultisampleState",  "optional": true },
       {"name": "fragment", "type": "FragmentState", "optional": true, pointer: true}
+    ]
+  },
+  {
+    name: "ComputePipelineDescriptor",
+    properties: [
+      {"name": "layout", "type": "PipelineLayout", "optional": true},
+      {"name": "compute", "type": "ProgrammableStageDescriptor"}
+    ]
+  },
+  {
+    name: "ProgrammableStageDescriptor",
+    properties: [
+      {name: "module", type: "ShaderModule" },
+      { name: "entryPoint", type: "string" }
     ]
   },
   {
@@ -707,5 +760,11 @@ object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
       { name: "mask", type: "uint32_t", optional: true },
       { name: "alphaToCoverageEnabled", type: "bool", optional: true }
     ]
+  },
+  {
+    name: "ComputePipeline"
+  },
+  {
+    name: "PipelineLayout"
   }
 ];

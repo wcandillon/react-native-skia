@@ -13,12 +13,15 @@
 #include "JsiBufferDescriptor.h"
 #include "JsiCommandEncoder.h"
 #include "JsiCommandEncoderDescriptor.h"
+#include "JsiComputePipeline.h"
+#include "JsiComputePipelineDescriptor.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiQueue.h"
 #include "JsiRenderPipeline.h"
 #include "JsiRenderPipelineDescriptor.h"
+#include "JsiSamplerDescriptor.h"
 #include "JsiShaderModule.h"
 #include "JsiShaderModuleWGSLDescriptor.h"
 #include "JsiSkHostObjects.h"
@@ -49,6 +52,14 @@ public:
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(createSampler) {
+    auto descriptor = JsiSamplerDescriptor::fromValue(runtime, arguments[0]);
+
+    getObject()->CreateSampler(descriptor);
+
+    return jsi::Value::undefined();
+  }
+
   JSI_HOST_FUNCTION(createBindGroup) {
     auto descriptor = JsiBindGroupDescriptor::fromValue(runtime, arguments[0]);
 
@@ -70,6 +81,18 @@ public:
     }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiRenderPipeline>(getContext(), ret));
+  }
+
+  JSI_HOST_FUNCTION(createComputePipeline) {
+    auto descriptor =
+        JsiComputePipelineDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->CreateComputePipeline(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createComputePipeline returned null");
+    }
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiComputePipeline>(getContext(), ret));
   }
 
   JSI_HOST_FUNCTION(createShaderModule) {
@@ -128,8 +151,10 @@ public:
 
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createBindGroup),
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createSampler),
+                       JSI_EXPORT_FUNC(JsiDevice, createBindGroup),
                        JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
+                       JSI_EXPORT_FUNC(JsiDevice, createComputePipeline),
                        JSI_EXPORT_FUNC(JsiDevice, createShaderModule),
                        JSI_EXPORT_FUNC(JsiDevice, createCommandEncoder),
                        JSI_EXPORT_FUNC(JsiDevice, createBuffer),

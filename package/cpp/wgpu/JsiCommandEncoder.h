@@ -9,6 +9,8 @@
 
 #include "JsiBuffer.h"
 #include "JsiCommandBuffer.h"
+#include "JsiComputePassDescriptor.h"
+#include "JsiComputePassEncoder.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
@@ -53,6 +55,18 @@ public:
         runtime, std::make_shared<JsiCommandBuffer>(getContext(), ret));
   }
 
+  JSI_HOST_FUNCTION(beginComputePass) {
+    auto descriptor =
+        JsiComputePassDescriptor::fromValue(runtime, arguments[0]);
+
+    auto ret = getObject()->BeginComputePass(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "beginComputePass returned null");
+    }
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiComputePassEncoder>(getContext(), ret));
+  }
+
   JSI_HOST_FUNCTION(copyBufferToBuffer) {
     auto source = JsiBuffer::fromValue(runtime, arguments[0]);
     auto sourceOffset = static_cast<uint32_t>(arguments[1].getNumber());
@@ -71,6 +85,7 @@ public:
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiCommandEncoder, beginRenderPass),
                        JSI_EXPORT_FUNC(JsiCommandEncoder, finish),
+                       JSI_EXPORT_FUNC(JsiCommandEncoder, beginComputePass),
                        JSI_EXPORT_FUNC(JsiCommandEncoder, copyBufferToBuffer))
 
   /**
