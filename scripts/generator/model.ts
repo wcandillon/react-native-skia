@@ -251,16 +251,14 @@ auto size = resource.getProperty(runtime, "size");
 
 object->size = static_cast<uint32_t>(size.getNumber());
 } else {
-throw jsi::JSError(runtime,
-"Missing mandatory prop size in BindGroupEntry");
+  object->size = object->buffer.GetSize();
 }
 if (resource.hasProperty(runtime, "offset")) {
 auto offset = resource.getProperty(runtime, "offset");
 
 object->offset = static_cast<uint32_t>(offset.getNumber());
 } else {
-throw jsi::JSError(runtime,
-"Missing mandatory prop offset in BindGroupEntry");
+  object->offset = 0;
 }
 }
 return object;
@@ -282,7 +280,7 @@ return object;
     properties: [
       { name: "size", type: "uint64_t" },
       {"name": "usage", "type": "BufferUsage"},
-      {"name": "mappedAtCreation", "type": "bool"}
+      {"name": "mappedAtCreation", "type": "bool", optional: true },
     ]
   },
   {

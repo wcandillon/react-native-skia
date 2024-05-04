@@ -62,10 +62,6 @@ public:
 
         object->mappedAtCreation =
             static_cast<uint32_t>(mappedAtCreation.getBool());
-      } else {
-        throw jsi::JSError(
-            runtime,
-            "Missing mandatory prop mappedAtCreation in BufferDescriptor");
       }
       return object;
     }

@@ -8,7 +8,7 @@ import {
   cubePositionOffset,
   cubeVertexCount,
 } from "./cube";
-import { basicVertWGSL, instancedVertWGSL, vertexPositionColorWGSL } from "./shaders";
+import { instancedVertWGSL, vertexPositionColorWGSL } from "./shaders";
 
 const { width, height } = Dimensions.get("window");
 
@@ -72,18 +72,18 @@ const pipeline = device.createRenderPipeline({
 
   // Enable depth testing so that the fragment closest to the camera
   // is rendered in front.
-  depthStencil: {
-    depthWriteEnabled: true,
-    depthCompare: 'less',
-    format: 'depth24plus',
-  },
+  // depthStencil: {
+  //   depthWriteEnabled: true,
+  //   depthCompare: 'less',
+  //   format: 'depth24plus',
+  // },
 });
 
-const depthTexture = device.createTexture({
-  size: { width, height },
-  format: 'depth24plus',
-  usage: GPUTextureUsage.RENDER_ATTACHMENT,
-});
+// const depthTexture = device.createTexture({
+//   size: { width, height },
+//   format: 'depth24plus',
+//   usage: GPUTextureUsage.RENDER_ATTACHMENT,
+// });
 
 const xCount = 4;
 const yCount = 4;
