@@ -111,7 +111,7 @@ const uniformBindGroup = device.createBindGroup({
   ],
 });
 
-const aspect = width / height;
+const aspect = (width / height);
 const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0);
 
 type Mat4 = mat4.default;

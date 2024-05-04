@@ -504,6 +504,14 @@ return object;
             buffer != nullptr, offset, size);
         getObject()->SetVertexBuffer(slot, *buffer, offset, size);
         return jsi::Value::undefined();`
+      },
+      {
+        name: "dispatchWorkgroups",
+        args: [
+          {"name": "workgroupCountX", "type": "uint32_t"},
+          {"name": "workgroupCountY", "type": "uint32_t", "defaultAtomicValue": "1", optional: true},
+          {"name": "workgroupCountZ", "type": "uint32_t", "defaultAtomicValue": "1", optional: true}
+        ]
       }
     ]
   },
