@@ -31,9 +31,6 @@ public:
   // TODO: this fix, use JSI_EXPORT_PROPERTY_GETTERS instead
   EXPORT_JSI_API_BRANDNAME(JsiBindGroupEntry, BindGroupEntry)
 
-  /**
-   * Returns the underlying object from a host object of this type
-   */
   static wgpu::BindGroupEntry *fromValue(jsi::Runtime &runtime,
                                          const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
@@ -50,29 +47,33 @@ public:
         throw jsi::JSError(runtime,
                            "Missing mandatory prop binding in BindGroupEntry");
       }
-      if (obj.hasProperty(runtime, "buffer")) {
-        auto buffer = obj.getProperty(runtime, "buffer");
+      if (obj.hasProperty(runtime, "resource") &&
+          obj.getProperty(runtime, "resource").isObject()) {
+        auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
+        if (resource.hasProperty(runtime, "buffer")) {
+          auto buffer = resource.getProperty(runtime, "buffer");
 
-        object->buffer = *JsiBuffer::fromValue(runtime, buffer);
-      } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop buffer in BindGroupEntry");
-      }
-      if (obj.hasProperty(runtime, "size")) {
-        auto size = obj.getProperty(runtime, "size");
+          object->buffer = *JsiBuffer::fromValue(runtime, buffer);
+        } else {
+          throw jsi::JSError(runtime,
+                             "Missing mandatory prop buffer in BindGroupEntry");
+        }
+        if (resource.hasProperty(runtime, "size")) {
+          auto size = resource.getProperty(runtime, "size");
 
-        object->size = static_cast<uint32_t>(size.getNumber());
-      } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop size in BindGroupEntry");
-      }
-      if (obj.hasProperty(runtime, "offset")) {
-        auto offset = obj.getProperty(runtime, "offset");
+          object->size = static_cast<uint32_t>(size.getNumber());
+        } else {
+          throw jsi::JSError(runtime,
+                             "Missing mandatory prop size in BindGroupEntry");
+        }
+        if (resource.hasProperty(runtime, "offset")) {
+          auto offset = resource.getProperty(runtime, "offset");
 
-        object->offset = static_cast<uint32_t>(offset.getNumber());
-      } else {
-        throw jsi::JSError(runtime,
-                           "Missing mandatory prop offset in BindGroupEntry");
+          object->offset = static_cast<uint32_t>(offset.getNumber());
+        } else {
+          throw jsi::JSError(runtime,
+                             "Missing mandatory prop offset in BindGroupEntry");
+        }
       }
       return object;
     }

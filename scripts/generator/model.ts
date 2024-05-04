@@ -30,6 +30,7 @@ export interface JSIObject {
   methods?: Method[];
   properties?: Property[]; 
   defaultProperties?: string;
+  fromValueImpl?: string;
   iterable?: string;
 }
 
@@ -218,7 +219,52 @@ export const model: JSIObject[] = [
       { name: "buffer", type: "Buffer" },
       { name: "size", type: "uint32_t" },
       { name: "offset", type: "uint32_t" }
-    ]
+    ],
+    fromValueImpl: `static wgpu::BindGroupEntry *fromValue(jsi::Runtime &runtime,
+      const jsi::Value &raw) {
+const auto &obj = raw.asObject(runtime);
+if (obj.isHostObject(runtime)) {
+return obj.asHostObject<JsiBindGroupEntry>(runtime)->getObject().get();
+} else {
+auto object = new wgpu::BindGroupEntry();
+
+if (obj.hasProperty(runtime, "binding")) {
+auto binding = obj.getProperty(runtime, "binding");
+
+object->binding = static_cast<uint32_t>(binding.getNumber());
+} else {
+throw jsi::JSError(runtime,
+"Missing mandatory prop binding in BindGroupEntry");
+}
+if (obj.hasProperty(runtime, "resource") && obj.getProperty(runtime, "resource").isObject()) {
+auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
+if (resource.hasProperty(runtime, "buffer")) {
+auto buffer = resource.getProperty(runtime, "buffer");
+
+object->buffer = *JsiBuffer::fromValue(runtime, buffer);
+} else {
+throw jsi::JSError(runtime,
+"Missing mandatory prop buffer in BindGroupEntry");
+}
+if (resource.hasProperty(runtime, "size")) {
+auto size = resource.getProperty(runtime, "size");
+
+object->size = static_cast<uint32_t>(size.getNumber());
+} else {
+throw jsi::JSError(runtime,
+"Missing mandatory prop size in BindGroupEntry");
+}
+if (resource.hasProperty(runtime, "offset")) {
+auto offset = resource.getProperty(runtime, "offset");
+
+object->offset = static_cast<uint32_t>(offset.getNumber());
+} else {
+throw jsi::JSError(runtime,
+"Missing mandatory prop offset in BindGroupEntry");
+}
+}
+return object;
+}}`
   },
   {
     name: "BindGroup"

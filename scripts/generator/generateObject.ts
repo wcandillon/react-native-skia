@@ -219,6 +219,7 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
     ${nonMemberMethods.filter(m => !m.member).map(method => `JSI_EXPORT_FUNC(${className}, ${_.camelCase(method.name)})`).join(",\n    ")}
   )` : ''}
 
+  ${object.fromValueImpl ? object.fromValueImpl : `
   /**
    * Returns the underlying object from a host object of this type
    */
@@ -233,6 +234,8 @@ ${className}(std::shared_ptr<RNSkPlatformContext> context, ${objectName} m)
       "Expected a ${className} object, but got a " + raw.toString(runtime).utf8(runtime));`}
     }
   }
+  `}
+
 };
 } // namespace RNSkia
 `;
