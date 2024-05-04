@@ -16,7 +16,7 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
   // Create a vertex buffer from the cube data.
   const verticesBuffer = device.createBuffer({
     size: cubeVertexArray.byteLength,
-    usage: 32, //GPUBufferUsage.VERTEX,
+    usage: GPUBufferUsage.VERTEX,
     mappedAtCreation: true,
   });
 
@@ -76,13 +76,13 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
   const depthTexture = device.createTexture({
     size: { width, height },
     format: "depth24plus",
-    usage: 16, //GPUTextureUsage.RENDER_ATTACHMENT,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
 
   const uniformBufferSize = 4 * 16; // 4x4 matrix
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
-    usage: 72, //GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     mappedAtCreation: false,
   });
   const uniformBindGroup = device.createBindGroup({

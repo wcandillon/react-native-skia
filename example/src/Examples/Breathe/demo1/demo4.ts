@@ -89,11 +89,9 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
   const matrixSize = 4 * 16; // 4x4 matrix
   const offset = 256; // uniformBindGroup offset must be 256-byte aligned
   const uniformBufferSize = offset + matrixSize;
-
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
-    usage: 72, //GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    mappedAtCreation: false,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
   const uniformBindGroup1 = device.createBindGroup({
@@ -101,9 +99,11 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
     entries: [
       {
         binding: 0,
-        buffer: uniformBuffer,
-        offset: 0,
-        size: matrixSize,
+        resource: {
+          buffer: uniformBuffer,
+          offset: offset,
+          size: matrixSize,
+        }
       },
     ],
   });
@@ -113,9 +113,11 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
     entries: [
       {
         binding: 0,
-        buffer: uniformBuffer,
-        offset: offset,
-        size: matrixSize,
+        resource: {
+          buffer: uniformBuffer,
+          offset: offset,
+          size: matrixSize,
+        }
       },
     ],
   });
@@ -225,7 +227,7 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
 
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
-    await device.queue.onSubmittedWorkDone();
+    //await device.queue.onSubmittedWorkDone();
     context.present();
     requestAnimationFrame(frame);
   }

@@ -16,7 +16,7 @@ const draw = async (context: GPUCanvasContext) => {
     format: presentationFormat,
     alphaMode: "premultiplied",
   });
-  await demo5(device, context);
+  await demo4(device, context);
   //context.present();
 };
 

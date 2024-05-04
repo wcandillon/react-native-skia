@@ -58,7 +58,7 @@ void installConstants (jsi::Runtime &runtime) {
   ${Object.keys(constants).map((key) => {
     return `
 jsi::Object ${key}(runtime);
-${Object.keys(constants[key]).map((constant) => `GPUBufferUsage.setProperty(runtime, "${constant}", jsi::Value(static_cast<double>(wgpu::${mapKey(key)}::${_.upperFirst(_.camelCase(constant))})));`).join('\n')}
+${Object.keys(constants[key]).map((constant) => `${key}.setProperty(runtime, "${constant}", jsi::Value(${constants[key][constant]}));`).join('\n')}
 runtime.global().setProperty(runtime, "${key}", ${key});`;
   }).join('\n')}
 }
