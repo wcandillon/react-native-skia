@@ -153,6 +153,63 @@ export const model: JSIObject[] = [
     ]
   },
   {
+    name: "ImageCopyTexture",
+    properties: [
+      { name: "texture", type: "Texture" },
+      { name: "mipLevel", type: "uint32_t", optional: true, defaultAtomicValue: "0" },
+      { name: "origin", type: "Extent3D" },
+      { name: "aspect", type: "TextureAspect", optional: true, defaultAtomicValue: "wgpu:TextureAspect::All" }
+    ],
+    fromValueImpl: ` static wgpu::ImageCopyTexture *fromValue(jsi::Runtime &runtime,
+      const jsi::Value &raw) {
+const auto &obj = raw.asObject(runtime);
+if (obj.isHostObject(runtime)) {
+return obj.asHostObject<JsiImageCopyTexture>(runtime)->getObject().get();
+} else {
+auto object = new wgpu::ImageCopyTexture();
+
+if (obj.hasProperty(runtime, "texture")) {
+auto texture = obj.getProperty(runtime, "texture");
+
+object->texture = *JsiTexture::fromValue(runtime, texture);
+} else {
+throw jsi::JSError(
+runtime, "Missing mandatory prop texture in ImageCopyTexture");
+}
+if (obj.hasProperty(runtime, "mipLevel")) {
+auto mipLevel = obj.getProperty(runtime, "mipLevel");
+
+object->mipLevel = static_cast<uint32_t>(mipLevel.getNumber());
+}
+if (obj.hasProperty(runtime, "origin")) {
+auto origin = obj.getProperty(runtime, "origin").asObject(runtime);
+auto x = origin.hasProperty(runtime, "x") ? origin.getProperty(runtime, "x").getNumber() : 0;
+auto y = origin.hasProperty(runtime, "y") ? origin.getProperty(runtime, "y").getNumber() : 0;
+auto z = origin.hasProperty(runtime, "z") ? origin.getProperty(runtime, "z").getNumber() : 0;
+object->origin = { static_cast<uint32_t>(x), static_cast<uint32_t>(y), static_cast<uint32_t>(z) };
+} else {
+throw jsi::JSError(runtime,
+"Missing mandatory prop origin in ImageCopyTexture");
+}
+if (obj.hasProperty(runtime, "aspect")) {
+auto aspect = obj.getProperty(runtime, "aspect");
+
+object->aspect =
+getTextureAspect(aspect.getString(runtime).utf8(runtime).c_str());
+}
+return object;
+}
+}`
+  },
+  {
+    name: "TextureDataLayout",
+    properties: [
+      {"name": "offset", "type": "uint64_t", "defaultAtomicValue": "0", optional: true },
+      {"name": "bytes per row", "type": "uint32_t", optional: true, "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"},
+      {"name": "rows per image", "type": "uint32_t", optional: true,  "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"}
+    ]
+  },
+  {
     name: "Device",
     methods: [
       {
@@ -436,6 +493,43 @@ export const model: JSIObject[] = [
         }
     
         getObject()->Submit(commandBuffers.size(), commandBuffers.data());
+        return jsi::Value::undefined();`
+      },
+
+      {
+        name: "writeTexture",
+        args: [
+          {
+            name: "destination",
+            type: "ImageCopyTexture"
+          },
+          // {
+          //   name: "data",
+          //   type: "ArrayBuffer"
+          // },
+          {
+            name: "dataLayout",
+            type: "TextureDataLayout"
+          },
+          {
+            name: "size",
+            type: "Extent3D"
+          }
+        ],
+        implementation: `    auto destination = JsiImageCopyTexture::fromValue(runtime, arguments[0]);
+        if (!arguments[1].isObject()) {
+          throw jsi::JSError(runtime, "writeTexture: data must be an ArrayBuffer");
+        }
+        if (!arguments[1].getObject(runtime).isArrayBuffer(runtime)) {
+          throw jsi::JSError(runtime, "Expected an ArrayBuffer");
+        }
+        auto data = arguments[1].getObject(runtime).getArrayBuffer(runtime);
+        auto dataLayout = JsiTextureDataLayout::fromValue(runtime, arguments[2]);
+        auto size = JsiExtent3D::fromValue(runtime, arguments[3]);
+    
+        getObject()->WriteTexture(destination, data.data(runtime),
+                                  data.size(runtime), dataLayout, size);
+    
         return jsi::Value::undefined();`
       },
       {

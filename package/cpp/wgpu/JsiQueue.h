@@ -9,9 +9,12 @@
 
 #include "JsiCommandBuffer.h"
 #include "JsiEnums.h"
+#include "JsiExtent3D.h"
 #include "JsiHostObject.h"
+#include "JsiImageCopyTexture.h"
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
+#include "JsiTextureDataLayout.h"
 #include "JsiTextureView.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
@@ -37,6 +40,24 @@ public:
     }
 
     getObject()->Submit(commandBuffers.size(), commandBuffers.data());
+    return jsi::Value::undefined();
+  }
+
+  JSI_HOST_FUNCTION(writeTexture) {
+    auto destination = JsiImageCopyTexture::fromValue(runtime, arguments[0]);
+    if (!arguments[1].isObject()) {
+      throw jsi::JSError(runtime, "writeTexture: data must be an ArrayBuffer");
+    }
+    if (!arguments[1].getObject(runtime).isArrayBuffer(runtime)) {
+      throw jsi::JSError(runtime, "Expected an ArrayBuffer");
+    }
+    auto data = arguments[1].getObject(runtime).getArrayBuffer(runtime);
+    auto dataLayout = JsiTextureDataLayout::fromValue(runtime, arguments[2]);
+    auto size = JsiExtent3D::fromValue(runtime, arguments[3]);
+
+    getObject()->WriteTexture(destination, data.data(runtime),
+                              data.size(runtime), dataLayout, size);
+
     return jsi::Value::undefined();
   }
 
@@ -81,6 +102,7 @@ public:
   EXPORT_JSI_API_BRANDNAME(JsiQueue, Queue)
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiQueue, submit),
+                       JSI_EXPORT_FUNC(JsiQueue, writeTexture),
                        JSI_EXPORT_FUNC(JsiQueue, writeBuffer),
                        JSI_EXPORT_FUNC(JsiQueue, onSubmittedWorkDone))
 
