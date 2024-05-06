@@ -81,7 +81,13 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
         },
       ],
     };
-  
+    const sampler = device.createSampler({
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+    });
     const commandEncoder = device.createCommandEncoder();
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     passEncoder.setPipeline(pipeline);
@@ -91,6 +97,10 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
         {
           binding: 0,
           resource: textureView,
+        },
+        {
+          binding: 1,
+          resource: sampler,
         },
       ],
     }));

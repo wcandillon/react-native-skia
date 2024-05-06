@@ -21,6 +21,7 @@
 #include "JsiQueue.h"
 #include "JsiRenderPipeline.h"
 #include "JsiRenderPipelineDescriptor.h"
+#include "JsiSampler.h"
 #include "JsiSamplerDescriptor.h"
 #include "JsiShaderModule.h"
 #include "JsiShaderModuleWGSLDescriptor.h"
@@ -55,9 +56,12 @@ public:
   JSI_HOST_FUNCTION(createSampler) {
     auto descriptor = JsiSamplerDescriptor::fromValue(runtime, arguments[0]);
 
-    getObject()->CreateSampler(descriptor);
-
-    return jsi::Value::undefined();
+    auto ret = getObject()->CreateSampler(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createSampler returned null");
+    }
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiSampler>(getContext(), ret));
   }
 
   JSI_HOST_FUNCTION(createBindGroup) {

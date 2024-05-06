@@ -223,6 +223,7 @@ return object;
         args: [
           { name: "descriptor", type: "SamplerDescriptor" }
         ],
+        returns: "Sampler"
       },
       {
         name: "createBindGroup",
@@ -303,7 +304,9 @@ return object;
       { name: "binding", type: "uint32_t" },
       { name: "buffer", type: "Buffer" },
       { name: "size", type: "uint32_t" },
-      { name: "offset", type: "uint32_t" }
+      { name: "offset", type: "uint32_t" },
+      { name: "sampler", type: "Sampler" }, // dummy
+      
     ],
     fromValueImpl: `
     static wgpu::BindGroupEntry *fromValue(jsi::Runtime &runtime,
@@ -327,8 +330,13 @@ return object;
             obj.getProperty(runtime, "resource").isObject()) {
           auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
           if (resource.isHostObject(runtime)) {
-            object->textureView = *JsiTextureView::fromValue(
-              runtime, obj.getProperty(runtime, "resource"));
+            if (auto textureView = reinterpret_cast<JsiTextureView*>(resource.asHostObject(runtime).get())) {
+              object->textureView = *JsiTextureView::fromValue(runtime, obj.getProperty(runtime, "resource"));
+            } else if (auto sampler = reinterpret_cast<JsiSampler*>(resource.asHostObject(runtime).get())) {
+              object->sampler = *JsiSampler::fromValue(runtime, obj.getProperty(runtime, "resource"));
+            } else {
+              throw jsi::JSError(runtime, "Missing mandatory prop textureView or sampler in BindGroupEntry");
+            }
           } else {
           if (resource.hasProperty(runtime, "buffer")) {
             auto buffer = resource.getProperty(runtime, "buffer");
@@ -860,5 +868,8 @@ object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
   },
   {
     name: "PipelineLayout"
+  },
+  {
+    name: "Sampler"
   }
 ];

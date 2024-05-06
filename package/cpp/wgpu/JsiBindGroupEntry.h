@@ -11,6 +11,7 @@
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
+#include "JsiSampler.h"
 #include "JsiSkHostObjects.h"
 #include "JsiTextureView.h"
 #include "MutableJSIBuffer.h"
@@ -53,8 +54,18 @@ public:
           obj.getProperty(runtime, "resource").isObject()) {
         auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
         if (resource.isHostObject(runtime)) {
-          object->textureView = *JsiTextureView::fromValue(
-              runtime, obj.getProperty(runtime, "resource"));
+          if (auto textureView = reinterpret_cast<JsiTextureView *>(
+                  resource.asHostObject(runtime).get())) {
+            object->textureView = *JsiTextureView::fromValue(
+                runtime, obj.getProperty(runtime, "resource"));
+          } else if (auto sampler = reinterpret_cast<JsiSampler *>(
+                         resource.asHostObject(runtime).get())) {
+            object->sampler = *JsiSampler::fromValue(
+                runtime, obj.getProperty(runtime, "resource"));
+          } else {
+            throw jsi::JSError(runtime, "Missing mandatory prop textureView or "
+                                        "sampler in BindGroupEntry");
+          }
         } else {
           if (resource.hasProperty(runtime, "buffer")) {
             auto buffer = resource.getProperty(runtime, "buffer");
