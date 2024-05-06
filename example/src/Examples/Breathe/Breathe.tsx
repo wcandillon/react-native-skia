@@ -7,6 +7,7 @@ import { demo1 } from "./demo1/main";
 import { demo4 } from "./demo1/demo4";
 import { demo5 } from "./demo1/demo5";
 import { Bitmap, demo7 } from "./demo1/demo7";
+import { demo6 } from "./demo6/main";
 //import { demo6 } from "./demo6/main";
 
 const draw = async (context: GPUCanvasContext, image: Bitmap) => {
@@ -19,7 +20,7 @@ const draw = async (context: GPUCanvasContext, image: Bitmap) => {
     alphaMode: "premultiplied",
   });
   //await demo5(device, context, image);
-  await demo7(device, context, image);
+  await demo6(device, context, image);
   //context.present();
 };
 

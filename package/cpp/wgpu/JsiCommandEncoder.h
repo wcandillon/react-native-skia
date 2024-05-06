@@ -56,8 +56,11 @@ public:
   }
 
   JSI_HOST_FUNCTION(beginComputePass) {
+
+    auto defaultDescriptor = new wgpu::ComputePassDescriptor();
     auto descriptor =
-        JsiComputePassDescriptor::fromValue(runtime, arguments[0]);
+        count > 0 ? JsiComputePassDescriptor::fromValue(runtime, arguments[0])
+                  : defaultDescriptor;
 
     auto ret = getObject()->BeginComputePass(descriptor);
     if (ret == nullptr) {

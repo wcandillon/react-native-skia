@@ -219,6 +219,12 @@ return object;
         member: "queue"
       },
       {
+        name: "createPipelineLayout",
+        args: [
+          { name: "descriptor", type: "PipelineLayoutDescriptor" }
+        ],
+      },
+      {
         name: "createSampler",
         args: [
           { name: "descriptor", type: "SamplerDescriptor" }
@@ -459,6 +465,40 @@ return object;
   },
   {
     name: "ComputePassEncoder",
+    methods: [
+      {
+        name: "setPipeline",
+        args: [
+          { name: "pipeline", type: "ComputePipeline" }
+        ]
+      },
+      {
+        name: "setBindGroup",
+        args: [
+          { name: "index", type: "uint32_t" },
+          { name: "bindGroup", type: "BindGroup" },
+          { name: "dynamicOffsetCount", "type": "size_t", "defaultAtomicValue": "0"},
+        //  { name: "dynamicOffsets", "type": "uint32_t*", "defaultAtomicValue": "nullptr"}
+        ],
+        implementation: `auto index = static_cast<uint32_t>(arguments[0].getNumber());
+        auto bindGroup = JsiBindGroup::fromValue(runtime, arguments[1]);
+        //auto dynamicOffsetCount = static_cast<size_t>(arguments[2].getNumber());
+        getObject()->SetBindGroup(index, *bindGroup, 0, nullptr);
+        return jsi::Value::undefined();`
+      },
+      {
+        name: "dispatchWorkgroups",
+        args: [
+          { name: "x", type: "uint32_t" },
+          { name: "y", type: "uint32_t", optional: true, defaultAtomicValue: "1" },
+          { name: "z", type: "uint32_t", optional: true, defaultAtomicValue: "1" }
+        ],
+      },
+      {
+        name: "end",
+        args: []
+      }
+    ]
   },
   {
     name: "CommandEncoder",
@@ -467,8 +507,20 @@ return object;
       { name: "finish", args: [], returns: "CommandBuffer" },
       {
         name: "beginComputePass",
-        args: [{ name: "descriptor", type: "ComputePassDescriptor" }],
-        returns: "ComputePassEncoder"
+        args: [{ name: "descriptor", type: "ComputePassDescriptor", optional: true }],
+        returns: "ComputePassEncoder",
+        implementation: `
+        auto defaultDescriptor = new wgpu::ComputePassDescriptor();
+        auto descriptor =
+            count > 0 ? JsiComputePassDescriptor::fromValue(runtime, arguments[0])
+                      : defaultDescriptor;
+    
+        auto ret = getObject()->BeginComputePass(descriptor);
+        if (ret == nullptr) {
+          throw jsi::JSError(runtime, "beginComputePass returned null");
+        }
+        return jsi::Object::createFromHostObject(
+            runtime, std::make_shared<JsiComputePassEncoder>(getContext(), ret));`
       },
       {
         name: "copyBufferToBuffer",
@@ -551,8 +603,8 @@ return object;
         auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
         auto offset = static_cast<uint64_t>(arguments[1].getNumber());
         auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-        auto offset2 = static_cast<uint64_t>(arguments[3].getNumber());
-        auto size = static_cast<uint64_t>(arguments[4].getNumber());
+        auto offset2 = count > 3 ? static_cast<uint64_t>(arguments[3].getNumber()) : 0;
+        auto size = count > 4 ?  static_cast<uint64_t>(arguments[4].getNumber()) : buffer->GetSize();
         getObject()->WriteBuffer(*buffer, offset, data.data(runtime) + offset2, size);
         return jsi::Value::undefined();
         `,
@@ -610,7 +662,35 @@ return object;
     properties: [
       {"name": "layout", "type": "PipelineLayout", "optional": true},
       {"name": "compute", "type": "ProgrammableStageDescriptor"}
-    ]
+    ],
+    fromValueImpl: `static wgpu::ComputePipelineDescriptor *fromValue(jsi::Runtime &runtime,
+      const jsi::Value &raw) {
+const auto &obj = raw.asObject(runtime);
+if (obj.isHostObject(runtime)) {
+return obj.asHostObject<JsiComputePipelineDescriptor>(runtime)
+->getObject()
+.get();
+} else {
+auto object = new wgpu::ComputePipelineDescriptor();
+
+// if (obj.hasProperty(runtime, "layout")) {
+//   auto layout = obj.getProperty(runtime, "layout");
+
+//   object->layout = *JsiPipelineLayout::fromValue(runtime, layout);
+// }
+if (obj.hasProperty(runtime, "compute")) {
+auto compute = obj.getProperty(runtime, "compute");
+
+object->compute =
+*JsiProgrammableStageDescriptor::fromValue(runtime, compute);
+} else {
+throw jsi::JSError(
+runtime,
+"Missing mandatory prop compute in ComputePipelineDescriptor");
+}
+return object;
+}
+}`
   },
   {
     name: "ProgrammableStageDescriptor",
@@ -863,10 +943,19 @@ object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
     ]
   },
   {
-    name: "ComputePipeline"
+    name: "ComputePipeline",
+    methods: [
+      { name: "getBindGroupLayout", args: [{ name: "index", type: "uint32_t" }], returns: "BindGroupLayout" }
+    ]
   },
   {
-    name: "PipelineLayout"
+    name: "PipelineLayout",
+  },
+  {
+    name: "PipelineLayoutDescriptor",
+    properties: [
+      { name: "bindGroupLayouts", type: "BindGroupLayout[]"}
+    ]
   },
   {
     name: "Sampler"

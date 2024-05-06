@@ -35,9 +35,6 @@ public:
   EXPORT_JSI_API_BRANDNAME(JsiComputePipelineDescriptor,
                            ComputePipelineDescriptor)
 
-  /**
-   * Returns the underlying object from a host object of this type
-   */
   static wgpu::ComputePipelineDescriptor *fromValue(jsi::Runtime &runtime,
                                                     const jsi::Value &raw) {
     const auto &obj = raw.asObject(runtime);
@@ -48,11 +45,11 @@ public:
     } else {
       auto object = new wgpu::ComputePipelineDescriptor();
 
-      if (obj.hasProperty(runtime, "layout")) {
-        auto layout = obj.getProperty(runtime, "layout");
+      // if (obj.hasProperty(runtime, "layout")) {
+      //   auto layout = obj.getProperty(runtime, "layout");
 
-        object->layout = *JsiPipelineLayout::fromValue(runtime, layout);
-      }
+      //   object->layout = *JsiPipelineLayout::fromValue(runtime, layout);
+      // }
       if (obj.hasProperty(runtime, "compute")) {
         auto compute = obj.getProperty(runtime, "compute");
 

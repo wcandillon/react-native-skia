@@ -17,6 +17,7 @@
 #include "JsiComputePipelineDescriptor.h"
 #include "JsiEnums.h"
 #include "JsiHostObject.h"
+#include "JsiPipelineLayoutDescriptor.h"
 #include "JsiPromises.h"
 #include "JsiQueue.h"
 #include "JsiRenderPipeline.h"
@@ -51,6 +52,15 @@ public:
     }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiQueue>(getContext(), ret));
+  }
+
+  JSI_HOST_FUNCTION(createPipelineLayout) {
+    auto descriptor =
+        JsiPipelineLayoutDescriptor::fromValue(runtime, arguments[0]);
+
+    getObject()->CreatePipelineLayout(descriptor);
+
+    return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(createSampler) {
@@ -155,7 +165,8 @@ public:
 
   JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiDevice, queue))
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createSampler),
+  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiDevice, createPipelineLayout),
+                       JSI_EXPORT_FUNC(JsiDevice, createSampler),
                        JSI_EXPORT_FUNC(JsiDevice, createBindGroup),
                        JSI_EXPORT_FUNC(JsiDevice, createRenderPipeline),
                        JSI_EXPORT_FUNC(JsiDevice, createComputePipeline),

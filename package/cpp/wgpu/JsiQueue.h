@@ -66,8 +66,10 @@ public:
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
     auto offset = static_cast<uint64_t>(arguments[1].getNumber());
     auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-    auto offset2 = static_cast<uint64_t>(arguments[3].getNumber());
-    auto size = static_cast<uint64_t>(arguments[4].getNumber());
+    auto offset2 =
+        count > 3 ? static_cast<uint64_t>(arguments[3].getNumber()) : 0;
+    auto size = count > 4 ? static_cast<uint64_t>(arguments[4].getNumber())
+                          : buffer->GetSize();
     getObject()->WriteBuffer(*buffer, offset, data.data(runtime) + offset2,
                              size);
     return jsi::Value::undefined();
