@@ -4,7 +4,7 @@ const { width, height } = Dimensions.get("window");
 
 export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textureData: Uint8Array) => {
 
-  const presentationFormat = 'bgra8unorm';
+  const presentationFormat = 'rgba8unorm';
 
   const pixels = new Uint8Array(256 * 256 * 4);
   pixels.fill(255);
