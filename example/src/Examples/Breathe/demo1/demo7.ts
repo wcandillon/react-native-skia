@@ -44,15 +44,14 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
       @builtin(vertex_index) vertexIndex : u32
     ) -> OurVertexShaderOutput {
       let pos = array(
-        // 1st triangle
-        vec2f( 0.0,  0.0),  // center
-        vec2f( 1.0,  0.0),  // right, center
-        vec2f( 0.0,  1.0),  // center, top
-
-        // 2st triangle
-        vec2f( 0.0,  1.0),  // center, top
-        vec2f( 1.0,  0.0),  // right, center
-        vec2f( 1.0,  1.0),  // right, top
+        vec2f(-1.0, -1.0),  // bottom left
+        vec2f( 1.0, -1.0),  // bottom right
+        vec2f(-1.0,  1.0),  // top left
+    
+        // 2nd triangle
+        vec2f(-1.0,  1.0),  // top left
+        vec2f( 1.0, -1.0),  // bottom right
+        vec2f( 1.0,  1.0)   // top right
       );
 
       var vsOutput: OurVertexShaderOutput;
@@ -66,7 +65,10 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
     @group(0) @binding(1) var ourTexture: texture_2d<f32>;
 
     @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
-      return textureSample(ourTexture, ourSampler, fsInput.texcoord);// vec4(1.0, 0.0, 0.0, 1.0);
+      // Assuming fsInput.texcoord ranges from 0 to 1
+      //vec2f texCoord = 1.0 + fsInput.texcoord / 2.0;
+      return textureSample(ourTexture, ourSampler, (fsInput.texcoord / 2.0)+0.5);
+
     }
   `,
   });
