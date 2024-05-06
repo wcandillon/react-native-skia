@@ -54,7 +54,7 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
     @group(0) @binding(1) var ourTexture: texture_2d<f32>;
 
     @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
-      return textureSample(ourTexture, ourSampler, fsInput.texcoord);
+      return textureSample(ourTexture, ourSampler, fsInput.texcoord);// vec4(1.0, 0.0, 0.0, 1.0);
     }
   `,
   });

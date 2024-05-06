@@ -54,34 +54,6 @@ public:
     auto data = arguments[1].getObject(runtime).getArrayBuffer(runtime);
     auto dataLayout = JsiTextureDataLayout::fromValue(runtime, arguments[2]);
     auto size = JsiExtent3D::fromValue(runtime, arguments[3]);
-  
-       // Log destination details
-    RNSkLogger::logToConsole("writeTexture: Destination texture mip level: " + std::to_string(destination->mipLevel));
-    RNSkLogger::logToConsole("writeTexture: Destination texture aspect: " + std::to_string(static_cast<int>(destination->aspect)));
-
-    // Log data layout details
-    RNSkLogger::logToConsole("writeTexture: Data layout offset: " + std::to_string(dataLayout->offset));
-    RNSkLogger::logToConsole("writeTexture: Data layout bytes per row: " + std::to_string(dataLayout->bytesPerRow));
-    RNSkLogger::logToConsole("writeTexture: Data layout rows per image: " + std::to_string(dataLayout->rowsPerImage));
-
-    // Log size details
-    RNSkLogger::logToConsole("writeTexture: Size width: " + std::to_string(size->width));
-    RNSkLogger::logToConsole("writeTexture: Size height: " + std::to_string(size->height));
-
-    // Log the size of the data
-    RNSkLogger::logToConsole("writeTexture: Data size: " + std::to_string(data.size(runtime)));
-
-    // Log the first few bytes of the data
-    dataLayout->offset = 0;
-    dataLayout->bytesPerRow = 1024;
-    dataLayout->rowsPerImage = 256;
-    constexpr int maxBytesToLog = 256;
-    std::string dataPreview = "writeTexture: Data content: ";
-    auto dataSize = data.size(runtime);
-    for (int i = 0; i < maxBytesToLog; ++i) {
-        dataPreview += std::to_string(static_cast<unsigned int>(data.data(runtime)[i])) + " ";
-    }
-    RNSkLogger::logToConsole(dataPreview);
 
     getObject()->WriteTexture(destination, data.data(runtime),
                               data.size(runtime), dataLayout, size);

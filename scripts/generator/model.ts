@@ -205,8 +205,8 @@ return object;
     name: "TextureDataLayout",
     properties: [
       {"name": "offset", "type": "uint64_t", "defaultAtomicValue": "0", optional: true },
-      {"name": "bytes per row", "type": "uint32_t", optional: true, "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"},
-      {"name": "rows per image", "type": "uint32_t", optional: true,  "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"}
+      {"name": "bytesPerRow", "type": "uint32_t", optional: true, "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"},
+      {"name": "rowsPerImage", "type": "uint32_t", optional: true,  "defaultAtomicValue": "WGPU_COPY_STRIDE_UNDEFINED"}
     ]
   },
   {
@@ -535,8 +535,7 @@ return object;
         auto dataLayout = JsiTextureDataLayout::fromValue(runtime, arguments[2]);
         auto size = JsiExtent3D::fromValue(runtime, arguments[3]);
     
-        getObject()->WriteTexture(destination, data.data(runtime),
-                                  data.size(runtime), dataLayout, size);
+        getObject()->WriteTexture(destination, data.data(runtime), data.size(runtime), dataLayout, size);
     
         return jsi::Value::undefined();`
       },

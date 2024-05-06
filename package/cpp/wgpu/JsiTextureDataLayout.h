@@ -47,13 +47,13 @@ public:
 
         object->offset = static_cast<uint64_t>(offset.getNumber());
       }
-      if (obj.hasProperty(runtime, "bytes per row")) {
-        auto bytesPerRow = obj.getProperty(runtime, "bytes per row");
+      if (obj.hasProperty(runtime, "bytesPerRow")) {
+        auto bytesPerRow = obj.getProperty(runtime, "bytesPerRow");
 
         object->bytesPerRow = static_cast<uint32_t>(bytesPerRow.getNumber());
       }
-      if (obj.hasProperty(runtime, "rows per image")) {
-        auto rowsPerImage = obj.getProperty(runtime, "rows per image");
+      if (obj.hasProperty(runtime, "rowsPerImage")) {
+        auto rowsPerImage = obj.getProperty(runtime, "rowsPerImage");
 
         object->rowsPerImage = static_cast<uint32_t>(rowsPerImage.getNumber());
       }
