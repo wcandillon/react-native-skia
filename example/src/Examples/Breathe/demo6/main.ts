@@ -9,30 +9,34 @@ import { particleWGSL } from "./particle";
 
 const { width, height } = Dimensions.get("window");
 const canvas = { width, height };
-const numParticles = 50000;
-const particlePositionOffset = 0;
-const particleColorOffset = 4 * 4;
-const particleInstanceByteSize =
-  3 * 4 + // position
-  1 * 4 + // lifetime
-  4 * 4 + // color
-  3 * 4 + // velocity
-  1 * 4 + // padding
-  0;
 const presentationFormat = "rgba8unorm";
 
 export const demo6 = (
   device: GPUDevice,
   context: GPUCanvasContext,
-  bitmap: Bitmap
+  imageBitmap: Bitmap
 ) => {
+  
+
+  const numParticles = 50000;
+  const particlePositionOffset = 0;
+  const particleColorOffset = 4 * 4;
+  const particleInstanceByteSize =
+    3 * 4 + // position
+    1 * 4 + // lifetime
+    4 * 4 + // color
+    3 * 4 + // velocity
+    1 * 4 + // padding
+    0;
+
+  
   const particlesBuffer = device.createBuffer({
     size: numParticles * particleInstanceByteSize,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE,
   });
-
+  
   const renderPipeline = device.createRenderPipeline({
-    layout: "auto",
+    layout: 'auto',
     vertex: {
       module: device.createShaderModule({
         code: particleWGSL,
@@ -42,32 +46,32 @@ export const demo6 = (
         {
           // instanced particles buffer
           arrayStride: particleInstanceByteSize,
-          stepMode: "instance",
+          stepMode: 'instance',
           attributes: [
             {
               // position
               shaderLocation: 0,
               offset: particlePositionOffset,
-              format: "float32x3",
+              format: 'float32x3',
             },
             {
               // color
               shaderLocation: 1,
               offset: particleColorOffset,
-              format: "float32x4",
+              format: 'float32x4',
             },
           ],
         },
         {
           // quad vertex buffer
           arrayStride: 2 * 4, // vec2f
-          stepMode: "vertex",
+          stepMode: 'vertex',
           attributes: [
             {
               // vertex positions
               shaderLocation: 2,
               offset: 0,
-              format: "float32x2",
+              format: 'float32x2',
             },
           ],
         },
@@ -83,36 +87,36 @@ export const demo6 = (
           format: presentationFormat,
           blend: {
             color: {
-              srcFactor: "src-alpha",
-              dstFactor: "one",
-              operation: "add",
+              srcFactor: 'src-alpha',
+              dstFactor: 'one',
+              operation: 'add',
             },
             alpha: {
-              srcFactor: "zero",
-              dstFactor: "one",
-              operation: "add",
+              srcFactor: 'zero',
+              dstFactor: 'one',
+              operation: 'add',
             },
           },
         },
       ],
     },
     primitive: {
-      topology: "triangle-list",
+      topology: 'triangle-list',
     },
-
+  
     // depthStencil: {
     //   depthWriteEnabled: false,
     //   depthCompare: 'less',
     //   format: 'depth24plus',
     // },
   });
-
+  
   // const depthTexture = device.createTexture({
-  //   size: [canvas.width, canvas.height],
+  //   size: { width: canvas.width, height: canvas.height },
   //   format: 'depth24plus',
   //   usage: GPUTextureUsage.RENDER_ATTACHMENT,
   // });
-
+  
   const uniformBufferSize =
     4 * 4 * 4 + // modelViewProjectionMatrix : mat4x4f
     3 * 4 + // right : vec3f
@@ -124,7 +128,7 @@ export const demo6 = (
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-
+  
   const uniformBindGroup = device.createBindGroup({
     layout: renderPipeline.getBindGroupLayout(0),
     entries: [
@@ -136,25 +140,25 @@ export const demo6 = (
       },
     ],
   });
-
+  
   const renderPassDescriptor: GPURenderPassDescriptor = {
     colorAttachments: [
       {
         view: undefined, // Assigned later
         clearValue: [0, 0, 0, 1],
-        loadOp: "clear",
-        storeOp: "store",
+        loadOp: 'clear',
+        storeOp: 'store',
       },
     ],
     // depthStencilAttachment: {
     //   view: depthTexture.createView(),
-
+  
     //   depthClearValue: 1.0,
     //   depthLoadOp: 'clear',
     //   depthStoreOp: 'store',
     // },
   };
-
+  
   //////////////////////////////////////////////////////////////////////////////
   // Quad vertex buffer
   //////////////////////////////////////////////////////////////////////////////
@@ -165,46 +169,50 @@ export const demo6 = (
   });
   // prettier-ignore
   const vertexData = [
-  -1.0, -1.0, +1.0, -1.0, -1.0, +1.0, -1.0, +1.0, +1.0, -1.0, +1.0, +1.0,
-];
+    -1.0, -1.0, +1.0, -1.0, -1.0, +1.0, -1.0, +1.0, +1.0, -1.0, +1.0, +1.0,
+  ];
   new Float32Array(quadVertexBuffer.getMappedRange()).set(vertexData);
   quadVertexBuffer.unmap();
-
+  
   //////////////////////////////////////////////////////////////////////////////
   // Texture
   //////////////////////////////////////////////////////////////////////////////
-  //let texture: GPUTexture;
+  let texture: GPUTexture;
   let textureWidth = 1;
   let textureHeight = 1;
   let numMipLevels = 1;
-
-  // Calculate number of mip levels required to generate the probability map
-  while (textureWidth < bitmap.width || textureHeight < bitmap.height) {
-    textureWidth *= 2;
-    textureHeight *= 2;
-    numMipLevels++;
+  {
+    // Calculate number of mip levels required to generate the probability map
+    while (
+      textureWidth < imageBitmap.width ||
+      textureHeight < imageBitmap.height
+    ) {
+      textureWidth *= 2;
+      textureHeight *= 2;
+      numMipLevels++;
+    }
+    texture = device.createTexture({
+      size: { width: imageBitmap.width, height: imageBitmap.height },
+      mipLevelCount: numMipLevels,
+      format: 'rgba8unorm',
+      usage:
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.STORAGE_BINDING |
+        GPUTextureUsage.COPY_DST |
+        GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    device.queue.writeTexture(
+      { texture: texture, mipLevel: 0, origin: { x: 0, y: 0, z: 0 } },
+      imageBitmap.data.buffer,
+      {
+        offset: 0,
+        bytesPerRow: 4 * imageBitmap.width,
+        rowsPerImage: imageBitmap.height,
+      },
+      { width: imageBitmap.width, height: imageBitmap.height }
+    );
   }
-  const texture = device.createTexture({
-    size: { width: bitmap.width, height: bitmap.height },
-    mipLevelCount: numMipLevels,
-    format: "rgba8unorm",
-    usage:
-      GPUTextureUsage.TEXTURE_BINDING |
-      GPUTextureUsage.STORAGE_BINDING |
-      GPUTextureUsage.COPY_DST |
-      GPUTextureUsage.RENDER_ATTACHMENT,
-  });
-  device.queue.writeTexture(
-    { texture: texture, mipLevel: 0, origin: { x: 0, y: 0, z: 0 } },
-    bitmap.data.buffer,
-    {
-      offset: 0,
-      bytesPerRow: 4 * bitmap.width,
-      rowsPerImage: bitmap.height,
-    },
-    { width: bitmap.width, height: bitmap.height }
-  );
-
+  
   //////////////////////////////////////////////////////////////////////////////
   // Probability map generation
   // The 0'th mip level of texture holds the color data and spawn-probability in
@@ -213,19 +221,20 @@ export const demo6 = (
   //////////////////////////////////////////////////////////////////////////////
   {
     const probabilityMapImportLevelPipeline = device.createComputePipeline({
-      layout: "auto",
+      layout: 'auto',
       compute: {
         module: device.createShaderModule({ code: probabilityMapWGSL }),
-        entryPoint: "import_level",
+        entryPoint: 'import_level',
       },
     });
     const probabilityMapExportLevelPipeline = device.createComputePipeline({
-      layout: "auto",
+      layout: 'auto',
       compute: {
         module: device.createShaderModule({ code: probabilityMapWGSL }),
-        entryPoint: "export_level",
+        entryPoint: 'export_level',
       },
     });
+  
     const probabilityMapUBOBufferSize =
       1 * 4 + // stride
       3 * 4 + // padding
@@ -252,15 +261,9 @@ export const demo6 = (
       const levelWidth = textureWidth >> level;
       const levelHeight = textureHeight >> level;
       const pipeline =
-        level === 0
+        level == 0
           ? probabilityMapImportLevelPipeline.getBindGroupLayout(0)
           : probabilityMapExportLevelPipeline.getBindGroupLayout(0);
-      const texOut = texture.createView({
-        format: "rgba8unorm",
-        dimension: "2d",
-        baseMipLevel: level,
-        mipLevelCount: 1,
-      });
       const probabilityMapBindGroup = device.createBindGroup({
         layout: pipeline,
         entries: [
@@ -282,11 +285,16 @@ export const demo6 = (
           {
             // tex_in / tex_out
             binding: 3,
-            resource: texOut,
+            resource: texture.createView({
+              format: 'rgba8unorm',
+              dimension: '2d',
+              baseMipLevel: level,
+              mipLevelCount: 1,
+            }),
           },
         ],
       });
-      if (level === 0) {
+      if (level == 0) {
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(probabilityMapImportLevelPipeline);
         passEncoder.setBindGroup(0, probabilityMapBindGroup);
@@ -302,15 +310,15 @@ export const demo6 = (
     }
     device.queue.submit([commandEncoder.finish()]);
   }
-
-  // //////////////////////////////////////////////////////////////////////////////
-  // // Simulation compute pipeline
-  // //////////////////////////////////////////////////////////////////////////////
+  
+  //////////////////////////////////////////////////////////////////////////////
+  // Simulation compute pipeline
+  //////////////////////////////////////////////////////////////////////////////
   const simulationParams = {
     simulate: true,
     deltaTime: 0.04,
   };
-
+  
   const simulationUBOBufferSize =
     1 * 4 + // deltaTime
     3 * 4 + // padding
@@ -321,13 +329,14 @@ export const demo6 = (
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
+  
   const computePipeline = device.createComputePipeline({
-    layout: "auto",
+    layout: 'auto',
     compute: {
       module: device.createShaderModule({
         code: particleWGSL,
       }),
-      entryPoint: "simulate",
+      entryPoint: 'simulate',
     },
   });
   const computeBindGroup = device.createBindGroup({
@@ -353,12 +362,12 @@ export const demo6 = (
       },
     ],
   });
-
+  
   const aspect = canvas.width / canvas.height;
   const projection = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0);
   const view = mat4.create();
   const mvp = mat4.create();
-
+  
   function frame() {
     device.queue.writeBuffer(
       simulationUBOBuffer,
@@ -374,36 +383,36 @@ export const demo6 = (
         1 + Math.random(), // seed.zw
       ]).buffer
     );
-
+  
     mat4.identity(view);
     mat4.translate(view, vec3.fromValues(0, 0, -3), view);
     mat4.rotateX(view, Math.PI * -0.2, view);
     mat4.multiply(projection, view, mvp);
-
+  
     // prettier-ignore
     device.queue.writeBuffer(
-    uniformBuffer,
-    0,
-    new Float32Array([
-      // modelViewProjectionMatrix
-      mvp[0], mvp[1], mvp[2], mvp[3],
-      mvp[4], mvp[5], mvp[6], mvp[7],
-      mvp[8], mvp[9], mvp[10], mvp[11],
-      mvp[12], mvp[13], mvp[14], mvp[15],
-
-      view[0], view[4], view[8], // right
-
-      0, // padding
-
-      view[1], view[5], view[9], // up
-
-      0, // padding
-    ]).buffer
-  );
+      uniformBuffer,
+      0,
+      new Float32Array([
+        // modelViewProjectionMatrix
+        mvp[0], mvp[1], mvp[2], mvp[3],
+        mvp[4], mvp[5], mvp[6], mvp[7],
+        mvp[8], mvp[9], mvp[10], mvp[11],
+        mvp[12], mvp[13], mvp[14], mvp[15],
+  
+        view[0], view[4], view[8], // right
+  
+        0, // padding
+  
+        view[1], view[5], view[9], // up
+  
+        0, // padding
+      ]).buffer
+    );
     const swapChainTexture = context.getCurrentTexture();
     // prettier-ignore
     renderPassDescriptor.colorAttachments[0].view = swapChainTexture.createView();
-
+  
     const commandEncoder = device.createCommandEncoder();
     {
       const passEncoder = commandEncoder.beginComputePass();
@@ -421,10 +430,11 @@ export const demo6 = (
       passEncoder.draw(6, numParticles, 0, 0);
       passEncoder.end();
     }
-
+  
     device.queue.submit([commandEncoder.finish()]);
     context.present();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+  
 };
