@@ -205,7 +205,6 @@ export const demo6 = (
     { width: bitmap.width, height: bitmap.height }
   );
 
-  console.log("Step 0");
   //////////////////////////////////////////////////////////////////////////////
   // Probability map generation
   // The 0'th mip level of texture holds the color data and spawn-probability in
@@ -235,23 +234,19 @@ export const demo6 = (
       size: probabilityMapUBOBufferSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    console.log("probabilityMapUBOBuffer created");
     const buffer_a = device.createBuffer({
       size: textureWidth * textureHeight * 4,
       usage: GPUBufferUsage.STORAGE,
     });
-    console.log("buffer_a created");
     const buffer_b = device.createBuffer({
       size: textureWidth * textureHeight * 4,
       usage: GPUBufferUsage.STORAGE,
     });
-    console.log("buffer_b created");
     device.queue.writeBuffer(
       probabilityMapUBOBuffer,
       0,
       new Int32Array([textureWidth]).buffer
     );
-    console.log("writeBuffer done");
     const commandEncoder = device.createCommandEncoder();
     for (let level = 0; level < numMipLevels; level++) {
       const levelWidth = textureWidth >> level;
@@ -266,7 +261,6 @@ export const demo6 = (
         baseMipLevel: level,
         mipLevelCount: 1,
       });
-      console.log("Step 2.5");
       const probabilityMapBindGroup = device.createBindGroup({
         layout: pipeline,
         entries: [
@@ -292,7 +286,6 @@ export const demo6 = (
           },
         ],
       });
-      console.log("Step 3");
       if (level === 0) {
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(probabilityMapImportLevelPipeline);

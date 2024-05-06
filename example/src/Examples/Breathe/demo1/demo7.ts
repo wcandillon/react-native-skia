@@ -30,6 +30,7 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
   context.configure({
     device,
     format: presentationFormat,
+    alphaMode: 'premultiplied',
   });
 
   const module = device.createShaderModule({
