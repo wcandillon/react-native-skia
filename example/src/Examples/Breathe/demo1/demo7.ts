@@ -2,18 +2,14 @@ import { Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
 
-export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textureData: Uint8Array) => {
+export class Bitmap {
+  constructor(public data: Uint8Array, public width: number, public height: number) {}
+}
+
+export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: Bitmap) => {
 
   const presentationFormat = 'rgba8unorm';
 
-  const pixels = new Uint8Array(256 * 256 * 4);
-  pixels.fill(255);
-  let i = 0;
-  for (let x = 0; x < 256 * 4; x++) {
-    for (let y = 0; y < 256 * 4; y++) {
-      pixels[i++] = (x * y) % 255;
-    }
-  }
 
   context.configure({
     device,
@@ -81,7 +77,7 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
   const texture = device.createTexture({
     label: url,
     format: 'rgba8unorm',
-    size: { width: 256, height: 256 },
+    size: { width: img.width, height: img.height },
     usage:
       GPUTextureUsage.TEXTURE_BINDING |
       GPUTextureUsage.COPY_DST |
@@ -89,13 +85,13 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
   });
   device.queue.writeTexture(
     { texture: texture, mipLevel: 0, origin: { x: 0, y: 0, z: 0 } },
-    pixels.buffer,
+    img.data.buffer,
     {
       offset: 0,
-      bytesPerRow: 4 * 256,
-      rowsPerImage: 256,
+      bytesPerRow: 4 * img.width,
+      rowsPerImage: img.height,
     },
-    { width: 256, height: 256 }
+    { width: img.width, height: img.height }
   );
 
     const sampler = device.createSampler({

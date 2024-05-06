@@ -6,10 +6,10 @@ import { demo2 } from "./demo2";
 import { demo1 } from "./demo1/main";
 import { demo4 } from "./demo1/demo4";
 import { demo5 } from "./demo1/demo5";
-import { demo7 } from "./demo1/demo7";
+import { Bitmap, demo7 } from "./demo1/demo7";
 //import { demo6 } from "./demo6/main";
 
-const draw = async (context: GPUCanvasContext, image: Uint8Array) => {
+const draw = async (context: GPUCanvasContext, image: Bitmap) => {
   const adapter = await gpu.requestAdapter();
   const device = await adapter!.requestDevice();
   const presentationFormat = "rgba8unorm";
@@ -28,7 +28,7 @@ const usePixels = (mod: number) => {
   if (!image) {
     return null;
   }
-  return image.readPixels() as Uint8Array;
+  return new Bitmap(image.readPixels() as Uint8Array, image.width(), image.height());
 };
 
 export const Breathe = () => {
