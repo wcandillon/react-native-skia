@@ -156,6 +156,7 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
 
     const commandBuffer = encoder.finish();
     device.queue.submit([commandBuffer]);
+    context.present();
   }
 
   render();
