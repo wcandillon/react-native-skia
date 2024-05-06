@@ -98,12 +98,10 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
     { width: 256, height: 256 }
   );
 
-  const bindGroups: GPUBindGroup[] = [];
-  for (let i = 0; i < 8; ++i) {
     const sampler = device.createSampler({
-      addressModeU: i & 1 ? 'repeat' : 'clamp-to-edge',
-      addressModeV: i & 2 ? 'repeat' : 'clamp-to-edge',
-      magFilter: i & 4 ? 'linear' : 'nearest',
+      addressModeU: 0 & 1 ? 'repeat' : 'clamp-to-edge',
+      addressModeV: 0 & 2 ? 'repeat' : 'clamp-to-edge',
+      magFilter: 0 & 4 ? 'linear' : 'nearest',
     });
 
     const bindGroup = device.createBindGroup({
@@ -113,8 +111,7 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
         { binding: 1, resource: texture.createView() },
       ],
     });
-    bindGroups.push(bindGroup);
-  }
+
 
   const renderPassDescriptor: GPURenderPassDescriptor = {
     label: 'our basic canvas renderPass',
@@ -128,18 +125,8 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, textur
     ],
   };
 
-  const settings = {
-    addressModeU: 'repeat',
-    addressModeV: 'repeat',
-    magFilter: 'linear',
-  };
 
   function render() {
-    const ndx =
-      (settings.addressModeU === 'repeat' ? 1 : 0) +
-      (settings.addressModeV === 'repeat' ? 2 : 0) +
-      (settings.magFilter === 'linear' ? 4 : 0);
-    const bindGroup = bindGroups[ndx];
 
     // Get the current texture from the canvas context and
     // set it as the texture to render to.

@@ -57,6 +57,7 @@ public:
 
         object->entryPoint =
             strdup(entryPoint.getString(runtime).utf8(runtime).c_str());
+        RNSkLogger::logToConsole("entryPoint: %s", object->entryPoint);
       } else {
         throw jsi::JSError(
             runtime, "Missing mandatory prop entryPoint in FragmentState");
