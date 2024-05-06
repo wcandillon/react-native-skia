@@ -3,7 +3,23 @@ import { Dimensions } from "react-native";
 const { width, height } = Dimensions.get("window");
 
 export class Bitmap {
-  constructor(public data: Uint8Array, public width: number, public height: number) {}
+  constructor(public data: Uint8Array, public width: number, public height: number) {
+    this.flipYAxis();
+  }
+  flipYAxis(): void {
+    const rowLength = this.width * 4; // 4 bytes per pixel (RGBA8)
+    const tempRow = new Uint8Array(rowLength);
+    
+    for (let y = 0; y < this.height / 2; y++) {
+      const topRowIndex = y * rowLength;
+      const bottomRowIndex = (this.height - y - 1) * rowLength;
+
+      // Swap rows
+      tempRow.set(this.data.subarray(topRowIndex, topRowIndex + rowLength));
+      this.data.copyWithin(topRowIndex, bottomRowIndex, bottomRowIndex + rowLength);
+      this.data.set(tempRow, bottomRowIndex);
+    }
+  }
 }
 
 export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: Bitmap) => {
