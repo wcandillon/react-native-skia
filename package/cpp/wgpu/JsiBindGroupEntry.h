@@ -54,12 +54,12 @@ public:
           obj.getProperty(runtime, "resource").isObject()) {
         auto resource = obj.getProperty(runtime, "resource").asObject(runtime);
         if (resource.isHostObject(runtime)) {
-          if (auto textureView = reinterpret_cast<JsiTextureView *>(
-                  resource.asHostObject(runtime).get())) {
+          if (auto textureView = dynamic_pointer_cast<JsiTextureView>(
+                  resource.asHostObject(runtime))) {
             object->textureView = *JsiTextureView::fromValue(
                 runtime, obj.getProperty(runtime, "resource"));
-          } else if (auto sampler = reinterpret_cast<JsiSampler *>(
-                         resource.asHostObject(runtime).get())) {
+          } else if (auto sampler = dynamic_pointer_cast<JsiSampler>(
+                         resource.asHostObject(runtime))) {
             object->sampler = *JsiSampler::fromValue(
                 runtime, obj.getProperty(runtime, "resource"));
           } else {
