@@ -73,11 +73,11 @@ export const demo1 = async (device: GPUDevice, context: GPUCanvasContext) => {
     },
   });
 
-  const depthTexture = device.createTexture({
-    size: { width, height },
-    format: "depth24plus",
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-  });
+  // const depthTexture = device.createTexture({
+  //   size: { width, height },
+  //   format: "depth24plus",
+  //   usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  // });
 
   const uniformBufferSize = 4 * 16; // 4x4 matrix
   const uniformBuffer = device.createBuffer({

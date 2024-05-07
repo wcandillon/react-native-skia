@@ -433,7 +433,7 @@ export const demo6 = (
   
     device.queue.submit([commandEncoder.finish()]);
     context.present();
-    requestAnimationFrame(frame);
+   // requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   
