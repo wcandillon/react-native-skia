@@ -74,11 +74,6 @@ export const model: JSIObject[] = [
               if (adapter == nullptr) {
                 promise->resolve(jsi::Value::null());
               } else {
-                device.SetUncapturedErrorCallback(
-                  [](WGPUErrorType type, const char *message, void *userdata) {
-                    RNSkLogger::logToConsole("Error: %s", message);
-                  },
-                  nullptr);
                 promise->resolve(jsi::Object::createFromHostObject(
                     runtime, std::make_shared<JsiAdapter>(std::move(context),
                                                           std::move(adapter))));
@@ -136,6 +131,11 @@ export const model: JSIObject[] = [
               if (device == nullptr) {
                 promise->resolve(jsi::Value::null());
               } else {
+                device.SetUncapturedErrorCallback(
+                  [](WGPUErrorType type, const char *message, void *userdata) {
+                    RNSkLogger::logToConsole("Error: %s", message);
+                  },
+                nullptr);
                 promise->resolve(jsi::Object::createFromHostObject(
                     runtime, std::make_shared<JsiDevice>(std::move(context),
                                                          std::move(device))));

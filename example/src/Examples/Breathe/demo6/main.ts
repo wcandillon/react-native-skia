@@ -264,6 +264,7 @@ export const demo6 = (
         level == 0
           ? probabilityMapImportLevelPipeline.getBindGroupLayout(0)
           : probabilityMapExportLevelPipeline.getBindGroupLayout(0);
+      console.log({ level });
       const probabilityMapBindGroup = device.createBindGroup({
         layout: pipeline,
         entries: [
