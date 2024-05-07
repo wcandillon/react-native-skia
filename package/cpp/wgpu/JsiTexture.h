@@ -12,6 +12,7 @@
 #include "JsiPromises.h"
 #include "JsiSkHostObjects.h"
 #include "JsiTextureView.h"
+#include "JsiTextureViewDescriptor.h"
 #include "MutableJSIBuffer.h"
 #include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
@@ -27,8 +28,12 @@ public:
             context, std::make_shared<wgpu::Texture>(std::move(m))) {}
 
   JSI_HOST_FUNCTION(createView) {
+    auto defaultDescriptor = nullptr;
+    auto descriptor =
+        count > 0 ? JsiTextureViewDescriptor::fromValue(runtime, arguments[0])
+                  : defaultDescriptor;
 
-    auto ret = getObject()->CreateView();
+    auto ret = getObject()->CreateView(descriptor);
     if (ret == nullptr) {
       throw jsi::JSError(runtime, "createView returned null");
     }

@@ -45,11 +45,11 @@ public:
     } else {
       auto object = new wgpu::ComputePipelineDescriptor();
 
-      if (obj.hasProperty(runtime, "layout")) {
-        auto layout = obj.getProperty(runtime, "layout");
+      // if (obj.hasProperty(runtime, "layout")) {
+      //   auto layout = obj.getProperty(runtime, "layout");
 
-        object->layout = nullptr;// *JsiPipelineLayout::fromValue(runtime, layout);
-      }
+      //   object->layout = *JsiPipelineLayout::fromValue(runtime, layout);
+      // }
       if (obj.hasProperty(runtime, "compute")) {
         auto compute = obj.getProperty(runtime, "compute");
 

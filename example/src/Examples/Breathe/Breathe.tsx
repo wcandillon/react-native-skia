@@ -20,7 +20,7 @@ const draw = async (context: GPUCanvasContext, image: Bitmap) => {
     alphaMode: "premultiplied",
   });
   //await demo5(device, context, image);
-  await demo6(device, context, image);
+  await demo5(device, context, image);
   //context.present();
 };
 

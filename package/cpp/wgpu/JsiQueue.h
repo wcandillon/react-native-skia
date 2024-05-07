@@ -62,7 +62,6 @@ public:
   }
 
   JSI_HOST_FUNCTION(writeBuffer) {
-
     auto buffer = JsiBuffer::fromValue(runtime, arguments[0]);
     auto offset = static_cast<uint64_t>(arguments[1].getNumber());
     auto data = arguments[2].getObject(runtime).getArrayBuffer(runtime);

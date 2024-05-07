@@ -745,9 +745,7 @@ return object;
         auto buffer = JsiBuffer::fromValue(runtime, arguments[1]);
         auto offset = count > 2 ? static_cast<uint64_t>(arguments[2].getNumber()) : 0;
         auto size = count > 3 ? static_cast<uint64_t>(arguments[3].getNumber()) : buffer->GetSize();
-        RNSkLogger::logToConsole(
-            "RenderPassEncoder::setVertexBuffer(%d, %p, %d, %d)", slot,
-            buffer != nullptr, offset, size);
+
         getObject()->SetVertexBuffer(slot, *buffer, offset, size);
         return jsi::Value::undefined();`
       },
@@ -813,7 +811,29 @@ object->sType = wgpu::SType::ShaderModuleWGSLDescriptor;`,
   {
     name: "Texture",
     methods: [
-      { name: "createView", args: [], returns: "TextureView"}
+      { name: "createView", args: [
+        {  name: "descriptor", type: "TextureViewDescriptor", optional: true }
+      ], returns: "TextureView",
+    implementation: `    auto defaultDescriptor = nullptr;
+    auto descriptor =
+        count > 0 ? JsiTextureViewDescriptor::fromValue(runtime, arguments[0])
+                  : defaultDescriptor;
+
+    auto ret = getObject()->CreateView(descriptor);
+    if (ret == nullptr) {
+      throw jsi::JSError(runtime, "createView returned null");
+    }
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiTextureView>(getContext(), ret));`}
+    ]
+  },
+  {
+    name: "TextureViewDescriptor",
+    properties: [
+      {"name": "format", "type": "TextureFormat" , "optional": true},
+      {"name": "dimension", "type": "TextureViewDimension", "optional": true},
+      {"name": "baseMipLevel", "type": "uint32_t", "optional": true},
+      {"name": "mipLevelCount", "type": "uint32_t", "optional": true}
     ]
   },
   {

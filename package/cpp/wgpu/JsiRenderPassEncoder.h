@@ -96,9 +96,7 @@ public:
         count > 2 ? static_cast<uint64_t>(arguments[2].getNumber()) : 0;
     auto size = count > 3 ? static_cast<uint64_t>(arguments[3].getNumber())
                           : buffer->GetSize();
-    RNSkLogger::logToConsole(
-        "RenderPassEncoder::setVertexBuffer(%d, %p, %d, %d)", slot,
-        buffer != nullptr, offset, size);
+
     getObject()->SetVertexBuffer(slot, *buffer, offset, size);
     return jsi::Value::undefined();
   }
