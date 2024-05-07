@@ -68,6 +68,16 @@ public:
         throw jsi::JSError(runtime,
                            "Missing mandatory prop usage in TextureDescriptor");
       }
+      if (obj.hasProperty(runtime, "mipLevelCount")) {
+        auto mipLevelCount = obj.getProperty(runtime, "mipLevelCount");
+
+        object->mipLevelCount =
+            static_cast<uint32_t>(mipLevelCount.getNumber());
+      } else {
+        throw jsi::JSError(
+            runtime,
+            "Missing mandatory prop mipLevelCount in TextureDescriptor");
+      }
       return object;
     }
   }
