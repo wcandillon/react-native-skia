@@ -3,38 +3,48 @@ import { Dimensions } from "react-native";
 const { width, height } = Dimensions.get("window");
 
 export class Bitmap {
-  constructor(public data: Uint8Array, public width: number, public height: number) {
+  constructor(
+    public data: Uint8Array,
+    public width: number,
+    public height: number
+  ) {
     this.flipYAxis();
   }
   flipYAxis(): void {
     const rowLength = this.width * 4; // 4 bytes per pixel (RGBA8)
     const tempRow = new Uint8Array(rowLength);
-    
+
     for (let y = 0; y < this.height / 2; y++) {
       const topRowIndex = y * rowLength;
       const bottomRowIndex = (this.height - y - 1) * rowLength;
 
       // Swap rows
       tempRow.set(this.data.subarray(topRowIndex, topRowIndex + rowLength));
-      this.data.copyWithin(topRowIndex, bottomRowIndex, bottomRowIndex + rowLength);
+      this.data.copyWithin(
+        topRowIndex,
+        bottomRowIndex,
+        bottomRowIndex + rowLength
+      );
       this.data.set(tempRow, bottomRowIndex);
     }
   }
 }
 
-export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: Bitmap) => {
-
-  const presentationFormat = 'rgba8unorm';
-
+export const demo7 = async (
+  device: GPUDevice,
+  context: GPUCanvasContext,
+  img: Bitmap
+) => {
+  const presentationFormat = "rgba8unorm";
 
   context.configure({
     device,
     format: presentationFormat,
-    alphaMode: 'premultiplied',
+    alphaMode: "premultiplied",
   });
 
   const module = device.createShaderModule({
-    label: 'our hardcoded textured quad shaders',
+    label: "our hardcoded textured quad shaders",
     code: `
     struct OurVertexShaderOutput {
       @builtin(position) position: vec4f,
@@ -75,16 +85,16 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
   });
 
   const pipeline = device.createRenderPipeline({
-    label: 'hardcoded textured quad pipeline',
-    layout: 'auto',
+    label: "hardcoded textured quad pipeline",
+    layout: "auto",
     vertex: {
       module,
-      entryPoint: "vs"
+      entryPoint: "vs",
     },
     fragment: {
       module,
       targets: [{ format: presentationFormat }],
-      entryPoint: "fs"
+      entryPoint: "fs",
     },
     primitive: {
       topology: "triangle-list",
@@ -92,10 +102,10 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
   });
 
   const url =
-    'https://webgpufundamentals.org/webgpu/resources/images/f-texture.png';
+    "https://webgpufundamentals.org/webgpu/resources/images/f-texture.png";
   const texture = device.createTexture({
     label: url,
-    format: 'rgba8unorm',
+    format: "rgba8unorm",
     size: { width: img.width, height: img.height },
     usage:
       GPUTextureUsage.TEXTURE_BINDING |
@@ -113,36 +123,33 @@ export const demo7 = async (device: GPUDevice, context: GPUCanvasContext, img: B
     { width: img.width, height: img.height }
   );
 
-    const sampler = device.createSampler({
-      addressModeU: 0 & 1 ? 'repeat' : 'clamp-to-edge',
-      addressModeV: 0 & 2 ? 'repeat' : 'clamp-to-edge',
-      magFilter: 0 & 4 ? 'linear' : 'nearest',
-    });
+  const sampler = device.createSampler({
+    addressModeU: 0 & 1 ? "repeat" : "clamp-to-edge",
+    addressModeV: 0 & 2 ? "repeat" : "clamp-to-edge",
+    magFilter: 0 & 4 ? "linear" : "nearest",
+  });
 
-    const bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: texture.createView() },
-      ],
-    });
-
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: sampler },
+      { binding: 1, resource: texture.createView() },
+    ],
+  });
 
   const renderPassDescriptor: GPURenderPassDescriptor = {
-    label: 'our basic canvas renderPass',
+    label: "our basic canvas renderPass",
     colorAttachments: [
       {
         // view: <- to be filled out when we render
         clearValue: [0.3, 0.3, 0.3, 1],
-        loadOp: 'clear',
-        storeOp: 'store',
+        loadOp: "clear",
+        storeOp: "store",
       },
     ],
   };
 
-
   function render() {
-
     // Get the current texture from the canvas context and
     // set it as the texture to render to.
     renderPassDescriptor.colorAttachments[0].view = context

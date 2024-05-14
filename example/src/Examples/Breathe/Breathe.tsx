@@ -29,11 +29,15 @@ const usePixels = (mod: number) => {
   if (!image) {
     return null;
   }
-  return new Bitmap(image.readPixels() as Uint8Array, image.width(), image.height());
+  return new Bitmap(
+    image.readPixels() as Uint8Array,
+    image.width(),
+    image.height()
+  );
 };
 
 export const Breathe = () => {
-  const image = usePixels(require("./demo6/webgpu.png"));
+  const image = usePixels(require("./demo6/react.png"));
   const ref = useRef<SkiaDomView>(null);
   useEffect(() => {
     setTimeout(() => {
