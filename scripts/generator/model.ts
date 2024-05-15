@@ -389,7 +389,7 @@ return object;
       { name: "size", type: "Extent3D" },
       { name: "format", type: "TextureFormat" },
       { name: "usage", type: "TextureUsage" },
-      { name: "mipLevelCount", type: "uint32_t" }
+      { name: "mipLevelCount", type: "uint32_t", optional: true }
     ]
   },
   {

@@ -11,19 +11,21 @@ import {
 import { basicVertWGSL, vertexPositionColorWGSL } from "./shaders";
 
 const { width, height } = Dimensions.get("window");
+const presentationFormat = "rgba8unorm";
+const aspect = width / height;
 
 export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
   // Create a vertex buffer from the cube data.
+
+  // Create a vertex buffer from the cube data.
   const verticesBuffer = device.createBuffer({
     size: cubeVertexArray.byteLength,
-    usage: 32, //GPUBufferUsage.VERTEX,
+    usage: GPUBufferUsage.VERTEX,
     mappedAtCreation: true,
   });
-
-  new Float32Array(
-    verticesBuffer.getMappedRange(0, cubeVertexArray.byteLength)
-  ).set(cubeVertexArray);
+  new Float32Array(verticesBuffer.getMappedRange()).set(cubeVertexArray);
   verticesBuffer.unmap();
+
   const pipeline = device.createRenderPipeline({
     layout: "auto",
     vertex: {
@@ -58,7 +60,7 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
       entryPoint: "main",
       targets: [
         {
-          format: "rgba8unorm",
+          format: presentationFormat,
         },
       ],
     },
@@ -86,38 +88,20 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
   //   usage: GPUTextureUsage.RENDER_ATTACHMENT,
   // });
 
-  const matrixSize = 4 * 16; // 4x4 matrix
-  const offset = 256; // uniformBindGroup offset must be 256-byte aligned
-  const uniformBufferSize = offset + matrixSize;
+  const uniformBufferSize = 4 * 16; // 4x4 matrix
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  const uniformBindGroup1 = device.createBindGroup({
+  const uniformBindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
       {
         binding: 0,
         resource: {
           buffer: uniformBuffer,
-          offset: offset,
-          size: matrixSize,
-        }
-      },
-    ],
-  });
-
-  const uniformBindGroup2 = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [
-      {
-        binding: 0,
-        resource: {
-          buffer: uniformBuffer,
-          offset: offset,
-          size: matrixSize,
-        }
+        },
       },
     ],
   });
@@ -141,71 +125,39 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
     // },
   };
 
-  const aspect = width / height;
   const projectionMatrix = mat4.perspective(
     (2 * Math.PI) / 5,
     aspect,
     1,
     100.0
   );
+  const modelViewProjectionMatrix = mat4.create();
 
-  const modelMatrix1 = mat4.translation(vec3.create(-2, 0, 0));
-  const modelMatrix2 = mat4.translation(vec3.create(2, 0, 0));
-  const modelViewProjectionMatrix1 = mat4.create() as Float32Array;
-  const modelViewProjectionMatrix2 = mat4.create() as Float32Array;
-  const viewMatrix = mat4.translation(vec3.fromValues(0, 0, -7));
-
-  const tmpMat41 = mat4.create();
-  const tmpMat42 = mat4.create();
-
-  function updateTransformationMatrix() {
+  function getTransformationMatrix() {
+    const viewMatrix = mat4.identity();
+    mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix);
     const now = Date.now() / 1000;
-
     mat4.rotate(
-      modelMatrix1,
+      viewMatrix,
       vec3.fromValues(Math.sin(now), Math.cos(now), 0),
       1,
-      tmpMat41
-    );
-    mat4.rotate(
-      modelMatrix2,
-      vec3.fromValues(Math.cos(now), Math.sin(now), 0),
-      1,
-      tmpMat42
+      viewMatrix
     );
 
-    mat4.multiply(viewMatrix, tmpMat41, modelViewProjectionMatrix1);
-    mat4.multiply(
-      projectionMatrix,
-      modelViewProjectionMatrix1,
-      modelViewProjectionMatrix1
-    );
-    mat4.multiply(viewMatrix, tmpMat42, modelViewProjectionMatrix2);
-    mat4.multiply(
-      projectionMatrix,
-      modelViewProjectionMatrix2,
-      modelViewProjectionMatrix2
-    );
+    mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
+
+    return modelViewProjectionMatrix as Float32Array;
   }
 
-  async function frame() {
-    updateTransformationMatrix();
+  function frame() {
+    const transformationMatrix = getTransformationMatrix();
     device.queue.writeBuffer(
       uniformBuffer,
       0,
-      modelViewProjectionMatrix1.buffer,
-      modelViewProjectionMatrix1.byteOffset,
-      modelViewProjectionMatrix1.byteLength
+      transformationMatrix.buffer,
+      transformationMatrix.byteOffset,
+      transformationMatrix.byteLength
     );
-    device.queue.writeBuffer(
-      uniformBuffer,
-      offset,
-      modelViewProjectionMatrix2.buffer,
-      modelViewProjectionMatrix2.byteOffset,
-      modelViewProjectionMatrix2.byteLength
-    );
-
-
     renderPassDescriptor.colorAttachments[0].view = context
       .getCurrentTexture()
       .createView();
@@ -213,21 +165,11 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
     const commandEncoder = device.createCommandEncoder();
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     passEncoder.setPipeline(pipeline);
-    passEncoder.setVertexBuffer(0, verticesBuffer,
-      0,
-      cubeVertexArray.byteLength);
-
-    // Bind the bind group (with the transformation matrix) for
-    // each cube, and draw.
-    passEncoder.setBindGroup(0, uniformBindGroup1);
+    passEncoder.setBindGroup(0, uniformBindGroup);
+    passEncoder.setVertexBuffer(0, verticesBuffer);
     passEncoder.draw(cubeVertexCount);
-
-    passEncoder.setBindGroup(0, uniformBindGroup2);
-    passEncoder.draw(cubeVertexCount);
-
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
-    //await device.queue.onSubmittedWorkDone();
     context.present();
     requestAnimationFrame(frame);
   }

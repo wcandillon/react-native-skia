@@ -73,10 +73,6 @@ public:
 
         object->mipLevelCount =
             static_cast<uint32_t>(mipLevelCount.getNumber());
-      } else {
-        throw jsi::JSError(
-            runtime,
-            "Missing mandatory prop mipLevelCount in TextureDescriptor");
       }
       return object;
     }

@@ -9,7 +9,6 @@
 
 namespace RNSkia {
 
-
 void runTriangleDemo(void *surface, int width, int height);
 
 } // namespace RNSkia

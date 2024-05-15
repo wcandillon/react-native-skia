@@ -43,7 +43,7 @@ const draw = async (
     alphaMode: "premultiplied",
   });
   //await demo5(device, context, image);
-  await demo6(device, context, image, rotateX, rotateY);
+  await demo4(device, context, image, rotateX, rotateY);
   //context.present();
 };
 

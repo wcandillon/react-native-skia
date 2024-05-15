@@ -9,7 +9,6 @@
 #include "WebGPUTriangle.h"
 #include <android/native_window.h>
 
-
 namespace RNSkia {
 
 class RNSkBaseAndroidView {
@@ -67,8 +66,9 @@ public:
     auto nativeId = getSkiaView()->getNativeId();
     T::getPlatformContext()->registerSurfaceDescriptor(nativeId, _window, width,
                                                        height);
-    //RNSkLogger::logToConsole("Surface size changed: %d, %d", isVulkanSupported());
-    // runTriangleDemo(_window, width, height);
+    // RNSkLogger::logToConsole("Surface size changed: %d, %d",
+    // isVulkanSupported());
+    //  runTriangleDemo(_window, width, height);
   }
 
   float getPixelDensity() override {
