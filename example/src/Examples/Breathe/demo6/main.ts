@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable camelcase */
 import { mat4, vec3 } from "wgpu-matrix";
 import { Dimensions } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 
 import type { Bitmap } from "../demo1/demo7";
 
@@ -14,9 +16,11 @@ const presentationFormat = "rgba8unorm";
 export const demo6 = (
   device: GPUDevice,
   context: GPUCanvasContext,
-  imageBitmap: Bitmap
+  imageBitmap: Bitmap,
+  rotateX: SharedValue<number>,
+  rotateY: SharedValue<number>
 ) => {
-  const numParticles = 50000;
+  const numParticles = 10000;
   const particlePositionOffset = 0;
   const particleColorOffset = 4 * 4;
   const particleInstanceByteSize =
@@ -388,7 +392,8 @@ export const demo6 = (
 
     mat4.identity(view);
     mat4.translate(view, vec3.fromValues(0, 0, -3), view);
-    mat4.rotateX(view, Math.PI, view);
+    mat4.rotateX(view, Math.PI + rotateX.value, view);
+    mat4.rotateY(view, rotateY.value, view);
     mat4.multiply(projection, view, mvp);
 
     // prettier-ignore
@@ -412,8 +417,9 @@ export const demo6 = (
     ]).buffer
   );
     const swapChainTexture = context.getCurrentTexture();
-    // prettier-ignore
-    renderPassDescriptor.colorAttachments[0].view = swapChainTexture.createView();
+    // @ts-expect-error
+    renderPassDescriptor.colorAttachments[0].view =
+      swapChainTexture.createView();
 
     const commandEncoder = device.createCommandEncoder();
     {
@@ -434,6 +440,7 @@ export const demo6 = (
     }
 
     device.queue.submit([commandEncoder.finish()]);
+    // @ts-expect-error
     context.present();
     requestAnimationFrame(frame);
   }

@@ -9,6 +9,8 @@
 
 using namespace wgpu;
 
+namespace RNSkia {
+
 void runTriangleDemo(void *window, int width, int height) {
   RNSkia::RNSkLogger::logToConsole("width: %d, height: %d", width, height);
   auto instance = CreateInstance(nullptr);
@@ -255,3 +257,5 @@ fn fs_main() -> @location(0) vec4f {
   // glfwDestroyWindow(window);
   // glfwTerminate();
 }
+
+} // namespace RNSkia

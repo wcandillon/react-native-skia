@@ -19,24 +19,22 @@ fn main() -> @location(0) vec4f {
   return vec4(0.3, 0.6, 1.0, 1.0);
 }`;
 
+export const demo2 = async (device, context: GPUCanvasContext) => {
+  const presentationFormat = "rgba8unorm";
 
-export const demo2 = async(device, context: GPUCanvasContext) => {
-  const presentationFormat = 'rgba8unorm';
-  
-  
   const pipeline = device.createRenderPipeline({
-    layout: 'auto',
+    layout: "auto",
     vertex: {
       module: device.createShaderModule({
         code: triangleVertWGSL,
       }),
-      entryPoint: 'main',
+      entryPoint: "main",
     },
     fragment: {
       module: device.createShaderModule({
         code: redFragWGSL,
       }),
-      entryPoint: 'main',
+      entryPoint: "main",
       targets: [
         {
           format: presentationFormat,
@@ -44,28 +42,28 @@ export const demo2 = async(device, context: GPUCanvasContext) => {
       ],
     },
     primitive: {
-      topology: 'triangle-list',
+      topology: "triangle-list",
     },
   });
-  
-    const commandEncoder = device.createCommandEncoder();
-    const textureView = context.getCurrentTexture().createView();
-  
-    const renderPassDescriptor: GPURenderPassDescriptor = {
-      colorAttachments: [
-        {
-          view: textureView,
-          clearValue: [1.0, 0.0, 1.0, 1],
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-    };
-  
-    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-    passEncoder.setPipeline(pipeline);
-    passEncoder.draw(3);
-    passEncoder.end();
-  
-    device.queue.submit([commandEncoder.finish()]);
+
+  const commandEncoder = device.createCommandEncoder();
+  const textureView = context.getCurrentTexture().createView();
+
+  const renderPassDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: [
+      {
+        view: textureView,
+        clearValue: [1.0, 0.0, 1.0, 1],
+        loadOp: "clear",
+        storeOp: "store",
+      },
+    ],
   };
+
+  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+  passEncoder.setPipeline(pipeline);
+  passEncoder.draw(3);
+  passEncoder.end();
+
+  device.queue.submit([commandEncoder.finish()]);
+};
