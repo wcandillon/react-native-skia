@@ -658,7 +658,7 @@ return object;
     properties: [
       {"name": "vertex", "type": "VertexState"},
       {"name": "primitive", "type": "PrimitiveState"},
-      {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
+     // {"name": "depthStencil", "type": "DepthStencilState", "optional": true, pointer: true},
       {"name": "multisample", "type": "MultisampleState",  "optional": true },
       {"name": "fragment", "type": "FragmentState", "optional": true, pointer: true}
     ]
@@ -761,7 +761,7 @@ return object;
     name: "RenderPassDescriptor",
     properties: [
       {"name": "colorAttachments", "type": "RenderPassColorAttachment[]"},
-      {"name": "depthStencilAttachment", "type": "RenderPassDepthStencilAttachment", "optional": true, pointer: true}
+     // {"name": "depthStencilAttachment", "type": "RenderPassDepthStencilAttachment", "optional": true, pointer: true}
     ]
   },
   {

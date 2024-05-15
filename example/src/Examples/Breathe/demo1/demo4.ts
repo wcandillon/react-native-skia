@@ -75,18 +75,18 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
 
     // Enable depth testing so that the fragment closest to the camera
     // is rendered in front.
-    // depthStencil: {
-    //   depthWriteEnabled: true,
-    //   depthCompare: "less",
-    //   format: "depth24plus",
-    // },
+    depthStencil: {
+      depthWriteEnabled: true,
+      depthCompare: "less",
+      format: "depth24plus",
+    },
   });
 
-  // const depthTexture = device.createTexture({
-  //   size: { width, height },
-  //   format: "depth24plus",
-  //   usage: GPUTextureUsage.RENDER_ATTACHMENT,
-  // });
+  const depthTexture = device.createTexture({
+    size: { width, height },
+    format: "depth24plus",
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  });
 
   const uniformBufferSize = 4 * 16; // 4x4 matrix
   const uniformBuffer = device.createBuffer({
@@ -116,13 +116,13 @@ export const demo4 = async (device: GPUDevice, context: GPUCanvasContext) => {
         storeOp: "store",
       },
     ],
-    // depthStencilAttachment: {
-    //   view: depthTexture.createView(),
+    depthStencilAttachment: {
+      view: depthTexture.createView(),
 
-    //   depthClearValue: 1.0,
-    //   depthLoadOp: "clear",
-    //   depthStoreOp: "store",
-    // },
+      depthClearValue: 1.0,
+      depthLoadOp: "clear",
+      depthStoreOp: "store",
+    },
   };
 
   const projectionMatrix = mat4.perspective(

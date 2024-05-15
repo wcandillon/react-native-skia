@@ -7,7 +7,6 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiDepthStencilState.h"
 #include "JsiEnums.h"
 #include "JsiFragmentState.h"
 #include "JsiHostObject.h"
@@ -68,12 +67,6 @@ public:
         throw jsi::JSError(
             runtime,
             "Missing mandatory prop primitive in RenderPipelineDescriptor");
-      }
-      if (obj.hasProperty(runtime, "depthStencil")) {
-        auto depthStencil = obj.getProperty(runtime, "depthStencil");
-
-        object->depthStencil =
-            JsiDepthStencilState::fromValue(runtime, depthStencil);
       }
       if (obj.hasProperty(runtime, "multisample")) {
         auto multisample = obj.getProperty(runtime, "multisample");

@@ -11,7 +11,6 @@
 #include "JsiHostObject.h"
 #include "JsiPromises.h"
 #include "JsiRenderPassColorAttachment.h"
-#include "JsiRenderPassDepthStencilAttachment.h"
 #include "JsiSkHostObjects.h"
 #include "JsiTextureView.h"
 #include "MutableJSIBuffer.h"
@@ -65,14 +64,6 @@ public:
         throw jsi::JSError(
             runtime,
             "Missing mandatory prop colorAttachments in RenderPassDescriptor");
-      }
-      if (obj.hasProperty(runtime, "depthStencilAttachment")) {
-        auto depthStencilAttachment =
-            obj.getProperty(runtime, "depthStencilAttachment");
-
-        object->depthStencilAttachment =
-            JsiRenderPassDepthStencilAttachment::fromValue(
-                runtime, depthStencilAttachment);
       }
       return object;
     }
