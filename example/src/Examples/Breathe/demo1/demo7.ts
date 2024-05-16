@@ -37,134 +37,160 @@ export const demo7 = async (
 ) => {
   const presentationFormat = "rgba8unorm";
 
-  const dispatchCount = [4, 3, 2];
-  const workgroupSize = [2, 3, 4];
+  // First Matrix
 
-  // multiply all elements of an array
-  const arrayProd = (arr) => arr.reduce((a, b) => a * b);
-
-  const numThreadsPerWorkgroup = arrayProd(workgroupSize);
-
-  const code = /* wgsl */ `
-  // NOTE!: vec3u is padded to by 4 bytes
-  @group(0) @binding(0) var<storage, read_write> workgroupResult: array<vec3u>;
-  @group(0) @binding(1) var<storage, read_write> localResult: array<vec3u>;
-  @group(0) @binding(2) var<storage, read_write> globalResult: array<vec3u>;
-
-  @compute @workgroup_size(${workgroupSize}) fn computeSomething(
-      @builtin(workgroup_id) workgroup_id : vec3<u32>,
-      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
-      @builtin(local_invocation_index) local_invocation_index: u32,
-      @builtin(num_workgroups) num_workgroups: vec3<u32>
-  ) {
-    // workgroup_index is similar to local_invocation_index except for
-    // workgroups, not threads inside a workgroup.
-    // It is not a builtin so we compute it ourselves.
-
-    let workgroup_index =  
-       workgroup_id.x +
-       workgroup_id.y * num_workgroups.x +
-       workgroup_id.z * num_workgroups.x * num_workgroups.y;
-
-    // global_invocation_index is like local_invocation_index
-    // except linear across all invocations across all dispatched
-    // workgroups. It is not a builtin so we compute it ourselves.
-
-    let global_invocation_index =
-       workgroup_index * ${numThreadsPerWorkgroup} +
-       local_invocation_index;
-
-    // now we can write each of these builtins to our buffers.
-    workgroupResult[global_invocation_index] = workgroup_id;
-    localResult[global_invocation_index] = local_invocation_id;
-    globalResult[global_invocation_index] = global_invocation_id;
+  const rows1 = 128;
+  const columns1 = 128;
+  const firstMatrix = new Float32Array(rows1 * columns1 + 2);
+  firstMatrix[0] = rows1;
+  firstMatrix[1] = columns1;
+  for (let i = 2; i < firstMatrix.length; i++) {
+    firstMatrix[i] = Math.random();
   }
-  `;
 
-  const module = device.createShaderModule({ code });
+  const gpuBufferFirstMatrix = device.createBuffer({
+    mappedAtCreation: true,
+    size: firstMatrix.byteLength,
+    usage: GPUBufferUsage.STORAGE,
+  });
+  const arrayBufferFirstMatrix = gpuBufferFirstMatrix.getMappedRange();
+  new Float32Array(arrayBufferFirstMatrix).set(firstMatrix);
+  gpuBufferFirstMatrix.unmap();
 
-  const pipeline = device.createComputePipeline({
-    label: "compute pipeline",
+  // Second Matrix
+
+  const rows2 = 128;
+  const columns2 = 128;
+  const secondMatrix = new Float32Array(rows2 * columns2 + 2);
+  secondMatrix[0] = rows2;
+  secondMatrix[1] = columns2;
+  for (let i = 2; i < secondMatrix.length; i++) {
+    secondMatrix[i] = Math.random();
+  }
+
+  const gpuBufferSecondMatrix = device.createBuffer({
+    mappedAtCreation: true,
+    size: secondMatrix.byteLength,
+    usage: GPUBufferUsage.STORAGE,
+  });
+  const arrayBufferSecondMatrix = gpuBufferSecondMatrix.getMappedRange();
+  new Float32Array(arrayBufferSecondMatrix).set(secondMatrix);
+  gpuBufferSecondMatrix.unmap();
+
+  // Result Matrix
+
+  const resultMatrixBufferSize =
+    Float32Array.BYTES_PER_ELEMENT * (2 + firstMatrix[0] * secondMatrix[1]);
+  const resultMatrixBuffer = device.createBuffer({
+    size: resultMatrixBufferSize,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+
+  // Compute shader code
+
+  const shaderModule = device.createShaderModule({
+    code: `
+      struct Matrix {
+        size : vec2<f32>,
+        numbers: array<f32>,
+      }
+
+      @group(0) @binding(0) var<storage, read> firstMatrix : Matrix;
+      @group(0) @binding(1) var<storage, read> secondMatrix : Matrix;
+      @group(0) @binding(2) var<storage, read_write> resultMatrix : Matrix;
+
+      @compute @workgroup_size(8, 8)
+      fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
+        // Guard against out-of-bounds work group sizes
+        if (global_id.x >= u32(firstMatrix.size.x) || global_id.y >= u32(secondMatrix.size.y)) {
+          return;
+        }
+
+        resultMatrix.size = vec2(firstMatrix.size.x, secondMatrix.size.y);
+
+        let resultCell = vec2(global_id.x, global_id.y);
+        var result = 0.0;
+        for (var i = 0u; i < u32(firstMatrix.size.y); i = i + 1u) {
+          let a = i + resultCell.x * u32(firstMatrix.size.y);
+          let b = resultCell.y + i * u32(secondMatrix.size.y);
+          result = result + firstMatrix.numbers[a] * secondMatrix.numbers[b];
+        }
+
+        let index = resultCell.y + resultCell.x * u32(secondMatrix.size.y);
+        resultMatrix.numbers[index] = result;
+      }
+    `,
+  });
+
+  // Pipeline setup
+
+  const computePipeline = device.createComputePipeline({
     layout: "auto",
     compute: {
-      module,
-      entryPoint: "computeSomething",
+      module: shaderModule,
+      entryPoint: "main",
     },
   });
 
-  const numWorkgroups = arrayProd(dispatchCount);
-  const numResults = numWorkgroups * numThreadsPerWorkgroup;
-  const size = numResults * 4 * 4; // vec3f * u32
-
-  let usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC;
-  const workgroupBuffer = device.createBuffer({ size, usage });
-  const localBuffer = device.createBuffer({ size, usage });
-  const globalBuffer = device.createBuffer({ size, usage });
-
-  usage = GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST;
-  const workgroupReadBuffer = device.createBuffer({ size, usage });
-  const localReadBuffer = device.createBuffer({ size, usage });
-  const globalReadBuffer = device.createBuffer({ size, usage });
+  // Bind group
 
   const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
+    layout: computePipeline.getBindGroupLayout(0 /* index */),
     entries: [
-      { binding: 0, resource: { buffer: workgroupBuffer } },
-      { binding: 1, resource: { buffer: localBuffer } },
-      { binding: 2, resource: { buffer: globalBuffer } },
+      {
+        binding: 0,
+        resource: {
+          buffer: gpuBufferFirstMatrix,
+        },
+      },
+      {
+        binding: 1,
+        resource: {
+          buffer: gpuBufferSecondMatrix,
+        },
+      },
+      {
+        binding: 2,
+        resource: {
+          buffer: resultMatrixBuffer,
+        },
+      },
     ],
   });
 
-  // Encode commands to do the computation
-  const encoder = device.createCommandEncoder();
-  const pass = encoder.beginComputePass();
+  // Commands submission
 
-  pass.setPipeline(pipeline);
-  pass.setBindGroup(0, bindGroup);
-  pass.dispatchWorkgroups(...dispatchCount);
-  pass.end();
+  const commandEncoder = device.createCommandEncoder();
 
-  encoder.copyBufferToBuffer(workgroupBuffer, 0, workgroupReadBuffer, 0, size);
-  encoder.copyBufferToBuffer(localBuffer, 0, localReadBuffer, 0, size);
-  encoder.copyBufferToBuffer(globalBuffer, 0, globalReadBuffer, 0, size);
+  const passEncoder = commandEncoder.beginComputePass();
+  passEncoder.setPipeline(computePipeline);
+  passEncoder.setBindGroup(0, bindGroup);
+  const workgroupCountX = Math.ceil(rows1 / 8);
+  const workgroupCountY = Math.ceil(columns2 / 8);
+  passEncoder.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+  passEncoder.end();
 
-  // Finish encoding and submit the commands
-  const commandBuffer = encoder.finish();
-  device.queue.submit([commandBuffer]);
+  // Get a GPU buffer for reading in an unmapped state.
+  const gpuReadBuffer = device.createBuffer({
+    size: resultMatrixBufferSize,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
 
-  // Read the results
-  await Promise.all([
-    workgroupReadBuffer.mapAsync(GPUMapMode.READ),
-    localReadBuffer.mapAsync(GPUMapMode.READ),
-    globalReadBuffer.mapAsync(GPUMapMode.READ),
-  ]);
+  // Encode commands for copying buffer to buffer.
+  commandEncoder.copyBufferToBuffer(
+    resultMatrixBuffer /* source buffer */,
+    0 /* source offset */,
+    gpuReadBuffer /* destination buffer */,
+    0 /* destination offset */,
+    resultMatrixBufferSize /* size */
+  );
 
-  const workgroup = new Uint32Array(workgroupReadBuffer.getMappedRange());
-  const local = new Uint32Array(localReadBuffer.getMappedRange());
-  const global = new Uint32Array(globalReadBuffer.getMappedRange());
+  // Submit GPU commands.
+  const gpuCommands = commandEncoder.finish();
+  device.queue.submit([gpuCommands]);
 
-  const get3 = (arr, i) => {
-    const off = i * 4;
-    return `${arr[off]}, ${arr[off + 1]}, ${arr[off + 2]}`;
-  };
-
-  for (let i = 0; i < numResults; ++i) {
-    if (i % numThreadsPerWorkgroup === 0) {
-      console.log(`\
----------------------------------------
-global                 local     global   dispatch: ${
-        i / numThreadsPerWorkgroup
-      }
-invoc.    workgroup    invoc.    invoc.
-index     id           id        id
----------------------------------------`);
-    }
-    console.log(
-      `${i.toString().padStart(3)}:      ${get3(workgroup, i)}      ${get3(
-        local,
-        i
-      )}   ${get3(global, i)}`
-    );
-  }
+  // Read buffer.
+  await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  const arrayBuffer = gpuReadBuffer.getMappedRange();
+  console.log(new Float32Array(arrayBuffer));
 };
