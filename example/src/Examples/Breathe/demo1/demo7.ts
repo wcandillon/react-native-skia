@@ -37,136 +37,134 @@ export const demo7 = async (
 ) => {
   const presentationFormat = "rgba8unorm";
 
-  context.configure({
-    device,
-    format: presentationFormat,
-    alphaMode: "premultiplied",
-  });
+  const dispatchCount = [4, 3, 2];
+  const workgroupSize = [2, 3, 4];
 
-  const module = device.createShaderModule({
-    label: "our hardcoded textured quad shaders",
-    code: `
-    struct OurVertexShaderOutput {
-      @builtin(position) position: vec4f,
-      @location(0) texcoord: vec2f,
-    };
+  // multiply all elements of an array
+  const arrayProd = (arr) => arr.reduce((a, b) => a * b);
 
-    @vertex fn vs(
-      @builtin(vertex_index) vertexIndex : u32
-    ) -> OurVertexShaderOutput {
-      let pos = array(
-        vec2f(-1.0, -1.0),  // bottom left
-        vec2f( 1.0, -1.0),  // bottom right
-        vec2f(-1.0,  1.0),  // top left
-    
-        // 2nd triangle
-        vec2f(-1.0,  1.0),  // top left
-        vec2f( 1.0, -1.0),  // bottom right
-        vec2f( 1.0,  1.0)   // top right
-      );
+  const numThreadsPerWorkgroup = arrayProd(workgroupSize);
 
-      var vsOutput: OurVertexShaderOutput;
-      let xy = pos[vertexIndex];
-      vsOutput.position = vec4f(xy, 0.0, 1.0);
-      vsOutput.texcoord = xy;
-      return vsOutput;
-    }
+  const code = /* wgsl */ `
+  // NOTE!: vec3u is padded to by 4 bytes
+  @group(0) @binding(0) var<storage, read_write> workgroupResult: array<vec3u>;
+  @group(0) @binding(1) var<storage, read_write> localResult: array<vec3u>;
+  @group(0) @binding(2) var<storage, read_write> globalResult: array<vec3u>;
 
-    @group(0) @binding(0) var ourSampler: sampler;
-    @group(0) @binding(1) var ourTexture: texture_2d<f32>;
+  @compute @workgroup_size(${workgroupSize}) fn computeSomething(
+      @builtin(workgroup_id) workgroup_id : vec3<u32>,
+      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
+      @builtin(local_invocation_index) local_invocation_index: u32,
+      @builtin(num_workgroups) num_workgroups: vec3<u32>
+  ) {
+    // workgroup_index is similar to local_invocation_index except for
+    // workgroups, not threads inside a workgroup.
+    // It is not a builtin so we compute it ourselves.
 
-    @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
-      // Assuming fsInput.texcoord ranges from 0 to 1
-      //vec2f texCoord = 1.0 + fsInput.texcoord / 2.0;
-      return textureSample(ourTexture, ourSampler, (fsInput.texcoord / 2.0)+0.5);
+    let workgroup_index =  
+       workgroup_id.x +
+       workgroup_id.y * num_workgroups.x +
+       workgroup_id.z * num_workgroups.x * num_workgroups.y;
 
-    }
-  `,
-  });
+    // global_invocation_index is like local_invocation_index
+    // except linear across all invocations across all dispatched
+    // workgroups. It is not a builtin so we compute it ourselves.
 
-  const pipeline = device.createRenderPipeline({
-    label: "hardcoded textured quad pipeline",
+    let global_invocation_index =
+       workgroup_index * ${numThreadsPerWorkgroup} +
+       local_invocation_index;
+
+    // now we can write each of these builtins to our buffers.
+    workgroupResult[global_invocation_index] = workgroup_id;
+    localResult[global_invocation_index] = local_invocation_id;
+    globalResult[global_invocation_index] = global_invocation_id;
+  }
+  `;
+
+  const module = device.createShaderModule({ code });
+
+  const pipeline = device.createComputePipeline({
+    label: "compute pipeline",
     layout: "auto",
-    vertex: {
+    compute: {
       module,
-      entryPoint: "vs",
-    },
-    fragment: {
-      module,
-      targets: [{ format: presentationFormat }],
-      entryPoint: "fs",
-    },
-    primitive: {
-      topology: "triangle-list",
+      entryPoint: "computeSomething",
     },
   });
 
-  const url =
-    "https://webgpufundamentals.org/webgpu/resources/images/f-texture.png";
-  const texture = device.createTexture({
-    label: url,
-    format: "rgba8unorm",
-    size: { width: img.width, height: img.height },
-    usage:
-      GPUTextureUsage.TEXTURE_BINDING |
-      GPUTextureUsage.COPY_DST |
-      GPUTextureUsage.RENDER_ATTACHMENT,
-  });
-  device.queue.writeTexture(
-    { texture: texture, mipLevel: 0, origin: { x: 0, y: 0, z: 0 } },
-    img.data.buffer,
-    {
-      offset: 0,
-      bytesPerRow: 4 * img.width,
-      rowsPerImage: img.height,
-    },
-    { width: img.width, height: img.height }
-  );
+  const numWorkgroups = arrayProd(dispatchCount);
+  const numResults = numWorkgroups * numThreadsPerWorkgroup;
+  const size = numResults * 4 * 4; // vec3f * u32
 
-  const sampler = device.createSampler({
-    addressModeU: 0 & 1 ? "repeat" : "clamp-to-edge",
-    addressModeV: 0 & 2 ? "repeat" : "clamp-to-edge",
-    magFilter: 0 & 4 ? "linear" : "nearest",
-  });
+  let usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC;
+  const workgroupBuffer = device.createBuffer({ size, usage });
+  const localBuffer = device.createBuffer({ size, usage });
+  const globalBuffer = device.createBuffer({ size, usage });
+
+  usage = GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST;
+  const workgroupReadBuffer = device.createBuffer({ size, usage });
+  const localReadBuffer = device.createBuffer({ size, usage });
+  const globalReadBuffer = device.createBuffer({ size, usage });
 
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: sampler },
-      { binding: 1, resource: texture.createView() },
+      { binding: 0, resource: { buffer: workgroupBuffer } },
+      { binding: 1, resource: { buffer: localBuffer } },
+      { binding: 2, resource: { buffer: globalBuffer } },
     ],
   });
 
-  const renderPassDescriptor: GPURenderPassDescriptor = {
-    label: "our basic canvas renderPass",
-    colorAttachments: [
-      {
-        // view: <- to be filled out when we render
-        clearValue: [0.3, 0.3, 0.3, 1],
-        loadOp: "clear",
-        storeOp: "store",
-      },
-    ],
+  // Encode commands to do the computation
+  const encoder = device.createCommandEncoder();
+  const pass = encoder.beginComputePass();
+
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup);
+  pass.dispatchWorkgroups(...dispatchCount);
+  pass.end();
+
+  encoder.copyBufferToBuffer(workgroupBuffer, 0, workgroupReadBuffer, 0, size);
+  encoder.copyBufferToBuffer(localBuffer, 0, localReadBuffer, 0, size);
+  encoder.copyBufferToBuffer(globalBuffer, 0, globalReadBuffer, 0, size);
+
+  // Finish encoding and submit the commands
+  const commandBuffer = encoder.finish();
+  device.queue.submit([commandBuffer]);
+
+  // Read the results
+  await Promise.all([
+    workgroupReadBuffer.mapAsync(GPUMapMode.READ),
+    localReadBuffer.mapAsync(GPUMapMode.READ),
+    globalReadBuffer.mapAsync(GPUMapMode.READ),
+  ]);
+
+  const workgroup = new Uint32Array(workgroupReadBuffer.getMappedRange());
+  const local = new Uint32Array(localReadBuffer.getMappedRange());
+  const global = new Uint32Array(globalReadBuffer.getMappedRange());
+
+  const get3 = (arr, i) => {
+    const off = i * 4;
+    return `${arr[off]}, ${arr[off + 1]}, ${arr[off + 2]}`;
   };
 
-  function render() {
-    // Get the current texture from the canvas context and
-    // set it as the texture to render to.
-    renderPassDescriptor.colorAttachments[0].view = context
-      .getCurrentTexture()
-      .createView();
-
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass(renderPassDescriptor);
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.draw(6); // call our vertex shader 6 times
-    pass.end();
-
-    const commandBuffer = encoder.finish();
-    device.queue.submit([commandBuffer]);
-    context.present();
+  for (let i = 0; i < numResults; ++i) {
+    if (i % numThreadsPerWorkgroup === 0) {
+      console.log(`\
+---------------------------------------
+global                 local     global   dispatch: ${
+        i / numThreadsPerWorkgroup
+      }
+invoc.    workgroup    invoc.    invoc.
+index     id           id        id
+---------------------------------------`);
+    }
+    console.log(
+      `${i.toString().padStart(3)}:      ${get3(workgroup, i)}      ${get3(
+        local,
+        i
+      )}   ${get3(global, i)}`
+    );
   }
-
-  render();
 };

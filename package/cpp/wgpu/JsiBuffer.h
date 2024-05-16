@@ -34,10 +34,13 @@ public:
   }
 
   JSI_HOST_FUNCTION(mapAsync) {
-    auto mode = static_cast<wgpu::MapMode>(arguments[0].getNumber());
-    auto offset = static_cast<uint32_t>(arguments[1].getNumber());
-    auto size = static_cast<uint32_t>(arguments[2].getNumber());
+
     auto object = getObject();
+    auto mode = static_cast<wgpu::MapMode>(arguments[0].getNumber());
+    auto offset =
+        count > 1 ? static_cast<uint32_t>(arguments[1].getNumber()) : 0;
+    auto size = count > 2 ? static_cast<uint32_t>(arguments[2].getNumber())
+                          : getObject()->GetSize();
     auto instance = getContext()->getInstance();
     return RNJsi::JsiPromises::createPromiseAsJSIValue(
         runtime, [object = std::move(object), mode, offset, size,
