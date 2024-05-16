@@ -39,8 +39,8 @@ export const demo7 = async (
 
   // First Matrix
 
-  const rows1 = 128;
-  const columns1 = 128;
+  const rows1 = 512;
+  const columns1 = 512;
   const firstMatrix = new Float32Array(rows1 * columns1 + 2);
   firstMatrix[0] = rows1;
   firstMatrix[1] = columns1;
@@ -59,11 +59,9 @@ export const demo7 = async (
 
   // Second Matrix
 
-  const rows2 = 128;
-  const columns2 = 128;
-  const secondMatrix = new Float32Array(rows2 * columns2 + 2);
-  secondMatrix[0] = rows2;
-  secondMatrix[1] = columns2;
+  const secondMatrix = new Float32Array(rows1 * columns1 + 2);
+  secondMatrix[0] = rows1;
+  secondMatrix[1] = columns1;
   for (let i = 2; i < secondMatrix.length; i++) {
     secondMatrix[i] = Math.random();
   }
