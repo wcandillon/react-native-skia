@@ -1,11 +1,9 @@
 import { executeCmd, executeCmdSync } from "./utils";
 import { exit } from "process";
 import { commonArgs, configurations, PlatformName } from "./skia-configuration";
-import { cpus } from "os";
 import { existsSync, mkdirSync } from "fs";
 
 const typedKeys = <T extends object>(obj: T) => Object.keys(obj) as (keyof T)[];
-const cores = Math.max(1, cpus().length - 2);
 
 /**
  * This build script builds the Skia Binaries from the Skia repositories
@@ -127,7 +125,7 @@ const buildPlatform = (
   // We need to include the path to our custom python2 -> python3 mapping script
   // to make sure we can run all scripts that uses #!/usr/bin/env python as shebang
   // https://groups.google.com/g/skia-discuss/c/BYyB-TwA8ow
-  const command = `PATH=${process.cwd()}/../bin:$PATH ninja -j ${cores} -C ${getOutDir(
+  const command = `PATH=${process.cwd()}/../bin:$PATH ninja -C ${getOutDir(
     platform,
     targetName
   )}`;
