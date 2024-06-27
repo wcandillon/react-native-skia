@@ -97,12 +97,18 @@ export default function App() {
   return (
     <WithSkiaWeb
       // import() uses the default export of MySkiaComponent.tsx
-      getComponent={() => import("./MySkiaComponent")}
+      getComponent={() => import("@/components/MySkiaComponent")}
       fallback={<Text>Loading Skia...</Text>}
     />
   );
 }
 ```
+:::info
+
+When using expo router in dev mode you CANNOT load components that are inside the app directory, as they will get evaluated by the router before CanvasKit has loaded.
+Make syure the component to load lies outside the 'app' directory (or whatever has been configured as the router folder).
+
+:::
 
 ### Using Deferred Component Registration
 

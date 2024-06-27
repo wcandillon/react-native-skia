@@ -108,7 +108,7 @@
     "react-native-reanimated": "3.6.2",
     "ts-jest": "29.1.1",
     "typescript": "5.1.6",
-    "ws": "8.11.0"
+    "ws": "8.17.1"
   },
   "dependencies": {
     "canvaskit-wasm": "0.39.1",

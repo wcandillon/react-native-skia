@@ -42,6 +42,7 @@ import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkImageFilter } from "./JsiSkImageFilter";
 import { JsiSkPoint } from "./JsiSkPoint";
 import { JsiSkRSXform } from "./JsiSkRSXform";
+import type { JsiSkSVG } from "./JsiSkSVG";
 
 export class JsiSkCanvas
   extends HostObject<Canvas, "Canvas">
@@ -302,8 +303,11 @@ export class JsiSkCanvas
     );
   }
 
-  drawSvg(_svgDom: SkSVG, _width?: number, _height?: number) {
-    throw new Error("drawSvg is not implemented on React Native Web");
+  drawSvg(svg: SkSVG, _width?: number, _height?: number) {
+    const image = this.CanvasKit.MakeImageFromCanvasImageSource(
+      (svg as JsiSkSVG).ref
+    );
+    this.ref.drawImage(image, 0, 0);
   }
 
   save() {

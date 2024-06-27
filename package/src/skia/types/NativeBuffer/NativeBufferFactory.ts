@@ -25,7 +25,7 @@ export const isNativeBufferWeb = (
   buffer instanceof HTMLCanvasElement ||
   buffer instanceof ImageBitmap ||
   buffer instanceof OffscreenCanvas ||
-  buffer instanceof VideoFrame ||
+  (typeof VideoFrame !== "undefined" && buffer instanceof VideoFrame) ||
   buffer instanceof HTMLImageElement ||
   buffer instanceof SVGImageElement ||
   buffer instanceof CanvasKitWebGLBuffer;

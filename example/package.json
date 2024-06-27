@@ -62,6 +62,7 @@
     "jest-transform-stub": "2.0.0",
     "metro-react-native-babel-preset": "0.73.9",
     "prettier": "2.4.1",
+    "raw-loader": "^4.0.2",
     "react-test-renderer": "18.2.0",
     "typescript": "5.1.6",
     "url-loader": "4.1.1",

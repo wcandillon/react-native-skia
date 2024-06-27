@@ -29,7 +29,7 @@ const svgLoaderConfiguration = {
   test: /\.(svg)$/,
   use: [
     {
-      loader: "@svgr/webpack",
+      loader: "raw-loader",
     },
   ],
 };
