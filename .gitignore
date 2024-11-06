@@ -52,6 +52,7 @@ local.properties
 # Externals
 packages/skia/libs
 packages/skia/cpp/skia/
+packages/skia/cpp/dawn/
 
 # BUCK
 buck-out/

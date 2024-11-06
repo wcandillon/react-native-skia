@@ -35,7 +35,8 @@ const c1 = "#61bea2";
 const c2 = "#529ca0";
 const root = Skia.Paint();
 root.setBlendMode(BlendMode.Screen);
-root.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Solid, 10, true));
+// TODO: fix mask filter for graphite
+//root.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Solid, 10, true));
 const p1 = root.copy();
 p1.setColor(Skia.Color(c1));
 const p2 = root.copy();

@@ -1935,7 +1935,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 1c08607305558666fd16678b85ef135e455d5c96
   React-microtasksnativemodule: 87b8de96f937faefece8afd2cb3a518321b2ef99
   react-native-safe-area-context: ab8f4a3d8180913bd78ae75dd599c94cce3d5e9a
-  react-native-skia: 89e0ec26e70ca4f34a7a1f7425bc955baf77c566
+  react-native-skia: bea74293d8c947e276bf36cd6083d3c6e6f50df6
   react-native-slider: 97ce0bd921f40de79cead9754546d5e4e7ba44f8
   react-native-wgpu: 8d0437a304318e0e3d6ccbfed2a39880f8eae4dd
   React-nativeconfig: 57781b79e11d5af7573e6f77cbf1143b71802a6d

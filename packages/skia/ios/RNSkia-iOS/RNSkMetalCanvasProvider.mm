@@ -1,5 +1,6 @@
 #import "RNSkMetalCanvasProvider.h"
-#include "MetalContext.h"
+
+#import "DawnContext.h"
 #import "RNSkLog.h"
 
 #pragma clang diagnostic push
@@ -15,6 +16,7 @@
 
 #pragma clang diagnostic pop
 
+// TODO: to delete, the canvas provider is now non-platform specific
 RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(
     std::function<void()> requestRedraw,
     std::shared_ptr<RNSkia::RNSkPlatformContext> context)
@@ -70,8 +72,10 @@ bool RNSkMetalCanvasProvider::renderToCanvas(
     if (currentDrawable == nullptr) {
       return false;
     }
-    auto ctx = MetalContext::getInstance().MakeWindow(_layer, _width, _height);
+    auto ctx = RNSkia::DawnContext::getInstance().MakeWindow(
+        (__bridge void *)_layer, _width, _height);
     auto skSurface = ctx->getSurface();
+
     SkCanvas *canvas = skSurface->getCanvas();
     cb(canvas);
 

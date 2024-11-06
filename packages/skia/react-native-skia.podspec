@@ -23,7 +23,8 @@ Pod::Spec.new do |s|
 
   s.requires_arc = true
   s.pod_target_xcconfig = {
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SK_METAL=1 SK_GANESH=1',
+# TODO: remove SK_GANESH=1 SK_METAL=1
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SK_METAL=1 SK_GANESH=1 SK_GRAPHITE=1',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'DEFINES_MODULE' => 'YES',
     "HEADER_SEARCH_PATHS" => '"$(PODS_TARGET_SRCROOT)/cpp/"/**'
@@ -38,6 +39,9 @@ Pod::Spec.new do |s|
     'libs/ios/libskparagraph.xcframework',
     'libs/ios/libskunicode_core.xcframework',
     'libs/ios/libskunicode_libgrapheme.xcframework',
+    'libs/ios/libdawn_native_static.xcframework',
+    'libs/ios/libdawn_platform_static.xcframework',
+    'libs/ios/libdawn_proc_static.xcframework',
   ]
 
   # All iOS cpp/h files

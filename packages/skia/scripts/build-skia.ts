@@ -140,13 +140,15 @@ const buildXCFrameworks = () => {
 };
 
 (async () => {
-  // Test for existence of Android SDK
-  if (!process.env.ANDROID_NDK) {
-    console.log("ANDROID_NDK not set.");
-    exit(1);
-  } else {
-    console.log("☑ ANDROID_NDK");
-  }
+  ["ANDROID_NDK", "ANDROID_HOME"].forEach((name) => {
+    // Test for existence of Android SDK
+    if (!process.env[name]) {
+      console.log(`${name} not set.`);
+      exit(1);
+    } else {
+      console.log(`✅ ${name}`);
+    }
+  });
 
   // Run glient sync
   console.log("Running gclient sync...");

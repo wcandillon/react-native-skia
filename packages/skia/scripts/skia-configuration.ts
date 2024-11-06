@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import path from "path";
 
 import { $ } from "./utils";
@@ -7,7 +8,7 @@ export const ProjectRoot = path.join(__dirname, "../../..");
 export const PackageRoot = path.join(__dirname, "..");
 export const OutFolder = path.join(SkiaSrc, "out");
 
-const NdkDir: string = process.env.ANDROID_NDK ?? "";
+const NdkDir = process.env.ANDROID_NDK ?? "";
 
 export const BUILD_WITH_PARAGRAPH = true;
 const NoParagraphArgs = [
@@ -49,6 +50,12 @@ const ParagraphOutputsAndroid = BUILD_WITH_PARAGRAPH
   ? ["libskparagraph.a", "libskunicode_core.a", "libskunicode_icu.a"]
   : [];
 
+const DawnOutput = [
+  "libdawn_native_static.a",
+  "libdawn_platform_static.a",
+  "libdawn_proc_static.a",
+];
+
 export const commonArgs = [
   ["skia_use_piex", true],
   ["skia_use_sfntly", false],
@@ -65,7 +72,10 @@ export const commonArgs = [
   ["skia_enable_flutter_defines", true],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
-  // ["skia_enable_graphite", true],
+  // Graphite
+  // TODO: disable ganesh
+  ["skia_enable_graphite", true],
+  ["skia_use_dawn", true],
 ];
 
 export type PlatformName = "ios" | "android";
@@ -85,6 +95,9 @@ export type Platform = {
   outputNames: string[];
   options?: Arg[];
 };
+
+const androidMinSDK = 26;
+const iosMinTarget = '"15.1"';
 
 export const configurations = {
   android: {
@@ -107,6 +120,7 @@ export const configurations = {
       },
     },
     args: [
+      ["ndk_api", androidMinSDK],
       ["ndk", `"${NdkDir}"`],
       ["skia_use_system_freetype2", false],
       ["skia_use_gl", true],
@@ -126,6 +140,7 @@ export const configurations = {
       "libskottie.a",
       "libsksg.a",
       ...ParagraphOutputsAndroid,
+      ...DawnOutput,
     ],
   },
   ios: {
@@ -133,7 +148,7 @@ export const configurations = {
       "arm64-iphoneos": {
         cpu: "arm64",
         args: [
-          ["ios_min_target", '"13.0"'],
+          ["ios_min_target", iosMinTarget],
           ["extra_cflags", '["-target", "arm64-apple-ios"]'],
           ["extra_asmflags", '["-target", "arm64-apple-ios"]'],
           ["extra_ldflags", '["-target", "arm64-apple-ios"]'],
@@ -142,7 +157,7 @@ export const configurations = {
       "arm64-iphonesimulator": {
         cpu: "arm64",
         args: [
-          ["ios_min_target", '"13.0"'],
+          ["ios_min_target", iosMinTarget],
           ["extra_cflags", '["-target", "arm64-apple-ios-simulator"]'],
           ["extra_asmflags", '["-target", "arm64-apple-ios-simulator"]'],
           ["extra_ldflags", '["-target", "arm64-apple-ios-simulator"]'],
@@ -152,7 +167,7 @@ export const configurations = {
       x64: {
         cpu: "x64",
         args: [
-          ["ios_min_target", '"13.0"'],
+          ["ios_min_target", iosMinTarget],
           ["extra_cflags", '["-target", "arm64-apple-ios-simulator"]'],
           ["extra_asmflags", '["-target", "arm64-apple-ios-simulator"]'],
           ["extra_ldflags", '["-target", "arm64-apple-ios-simulator"]'],
@@ -173,6 +188,7 @@ export const configurations = {
       "libskottie.a",
       "libsksg.a",
       ...ParagraphIOS,
+      ...DawnOutput,
     ],
   },
 };
@@ -186,11 +202,19 @@ export const copyHeaders = () => {
   process.chdir(PackageRoot);
   [
     "rm -rf ./cpp/skia",
+    "rm -rf ./cpp/dawn",
 
-    "mkdir -p ./cpp/skia",
+    "mkdir -p ./cpp/dawn/include",
     "mkdir -p ./cpp/skia/include",
     "mkdir -p ./cpp/skia/modules",
     "mkdir -p ./cpp/skia/src",
+
+    "mkdir -p ./cpp/skia/src/gpu/graphite",
+    "cp -a ../../externals/skia/src/gpu/graphite/ContextOptionsPriv.h ./cpp/skia/src/gpu/graphite/.",
+
+    "cp -a ../../externals/skia/out/android/arm/gen/third_party/externals/dawn/include/. ./cpp/dawn/include",
+    "cp -a ../../externals/skia/third_party/externals/dawn/include/. ./cpp/dawn/include",
+    "cp -a ../../externals/skia/third_party/externals/dawn/include/. ./cpp/dawn/include",
 
     "cp -a ../../externals/skia/include/. ./cpp/skia/include",
     ...copyModule("svg"),
@@ -203,6 +227,7 @@ export const copyHeaders = () => {
     "cp -a ../../externals/skia/src/core/SkChecksum.h ./cpp/skia/src/core/.",
     "cp -a ../../externals/skia/src/core/SkTHash.h ./cpp/skia/src/core/.",
 
+    // TODO: remove ganesh
     "mkdir -p ./cpp/skia/src/gpu/ganesh/gl",
     "cp -a ../../externals/skia/src/gpu/ganesh/gl/GrGLDefines.h ./cpp/skia/src/gpu/ganesh/gl/.",
 
@@ -216,6 +241,14 @@ export const copyHeaders = () => {
 
     "mkdir -p ./cpp/skia/modules/skunicode/include/",
     "cp -a ../../externals/skia/modules/skunicode/include/SkUnicode.h ./cpp/skia/modules/skunicode/include/.",
+
+    // Remove duplicated WebGPU headers
+    "sed -i '' 's/#include \"dawn\\/webgpu.h\"/#include \"webgpu\\/webgpu.h\"/' ./cpp/dawn/include/dawn/dawn_proc_table.h",
+    "cp ./cpp/dawn/include/dawn/webgpu.h ./cpp/dawn/include/webgpu/webgpu.h",
+    "cp ./cpp/dawn/include/dawn/webgpu_cpp.h ./cpp/dawn/include/webgpu/webgpu_cpp.h",
+    "rm -rf ./cpp/dawn/include/dawn/webgpu.h",
+    "rm -rf ./cpp/dawn/include/dawn/webgpu_cpp.h",
+    "rm -rf ./cpp/dawn/include/dawn/wire",
 
     // Remove migrated headers
     //grep -R "Delete this after migrating clients" cpp

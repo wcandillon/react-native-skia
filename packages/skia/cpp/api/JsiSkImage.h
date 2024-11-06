@@ -21,6 +21,7 @@
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/encode/SkWebpEncoder.h"
+#include "include/gpu/graphite/Context.h"
 
 #pragma clang diagnostic pop
 
@@ -181,7 +182,13 @@ public:
   }
 
   JSI_HOST_FUNCTION(makeNonTextureImage) {
-    auto image = getObject()->makeNonTextureImage();
+    //	  auto image = getObject();
+    //	  image->context
+    //    auto image = getObject()->makeNonTextureImage();
+    sk_sp<SkImage> image = nullptr;
+    if (image == nullptr) {
+      return jsi::Value::null();
+    }
     return jsi::Object::createFromHostObject(
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }

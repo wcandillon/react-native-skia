@@ -321,6 +321,7 @@ if (ENABLE_PREFAB) {
         into "${project.buildDir}/headers/rnskia/react-native-skia"
         includeEmptyDirs = false
         include "**/*.h"
+    
         eachFile {
             String path = it.path
 
@@ -330,10 +331,14 @@ if (ENABLE_PREFAB) {
             } else if (path.contains("skia/include") || path.contains("skia/modules") || path.contains("skia/src")) {
                 // Skip flattening Skia dir
                 path = path.substring("skia/".length())
+            } else if (path.startsWith("dawn/include/")) {
+                // Flatten dawn/include/dawn and dawn/include/webgpu
+                path = path.substring("dawn/include/".length())
             } else {
                 // flatten anything else
                 path = path.substring(path.lastIndexOf("/") + 1)
             }
+
             it.path = path
         }
     }

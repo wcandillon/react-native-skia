@@ -7,12 +7,14 @@
 
 #include "JsiSkHostObjects.h"
 
+#include "DawnContext.h"
 #include "JsiSkSurface.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkSurface.h"
+#include "include/gpu/graphite/Surface.h"
 
 #pragma clang diagnostic pop
 

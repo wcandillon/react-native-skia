@@ -5,15 +5,18 @@
 #include <android/hardware_buffer_jni.h>
 #endif
 
+#include "RNSkLog.h"
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
+#include "include/core/SkColorSpace.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkSize.h"
 
 #pragma clang diagnostic pop
 
-#include "OpenGLContext.h"
+#include "DawnContext.h"
 #include "RNSkAndroidVideo.h"
 
 namespace RNSkia {
@@ -52,7 +55,7 @@ sk_sp<SkImage> RNSkAndroidVideo::nextImage(double *timeStamp) {
   // Convert jobject to AHardwareBuffer
   AHardwareBuffer *buffer =
       AHardwareBuffer_fromHardwareBuffer(env, jHardwareBuffer);
-  return OpenGLContext::getInstance().MakeImageFromBuffer(buffer);
+  return DawnContext::getInstance().MakeImageFromBuffer(buffer);
 #else
   return nullptr;
 #endif

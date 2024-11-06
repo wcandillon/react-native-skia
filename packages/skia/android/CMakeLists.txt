@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 3.4.1)
 
 set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 17)
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_GANESH -DSK_BUILD_FOR_ANDROID -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
+# TODO: remove SK_GANESH=1 SK_METAL=1
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSK_GL -DSK_GANESH -DSK_GRAPHITE -DSK_BUILD_FOR_ANDROID -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 
 set (PACKAGE_NAME "rnskia")
 set (SKIA_LIB "skia")
@@ -12,6 +13,9 @@ set (SKIA_SKSHAPER_LIB "skshaper")
 set (SKIA_SKPARAGRAPH_LIB "skparagraph")
 set (SKIA_SKUNICODE_CORE_LIB "skunicode_core")
 set (SKIA_SKUNICODE_ICU_LIB "skunicode_icu")
+set (DAWN_NATIVE_LIB "libdawn_native_static")
+set (DAWN_PLATFORM_LIB "libdawn_platform_static")
+set (DAWN_PROC_LIB "libdawn_proc_static")
 
 # Clear some variables
 unset(LIBRN_DIR CACHE)
@@ -46,9 +50,6 @@ add_library(
 
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/SkiaOpenGLSurfaceFactory.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/GrAHardwareBufferUtils.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/AHardwareBufferUtils.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkAndroidVideo.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiHostObject.cpp"
@@ -88,6 +89,7 @@ target_include_directories(
         # so "include/core/SkRef.h" instead of "SkRef.h", as otherwise
         # the prefab cannot be shipped.
         ../cpp/skia
+        ../cpp/dawn/include
 
         ../cpp/api
         ../cpp/jsi
@@ -123,6 +125,14 @@ set_property(TARGET skunicode_core PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}
 add_library(skunicode_icu STATIC IMPORTED)
 set_property(TARGET skunicode_icu PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskunicode_icu.a")
 
+add_library(libdawn_native_static STATIC IMPORTED)
+set_property(TARGET libdawn_native_static PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libdawn_native_static.a")
+
+add_library(libdawn_platform_static STATIC IMPORTED)
+set_property(TARGET libdawn_platform_static PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libdawn_platform_static.a")
+
+add_library(libdawn_proc_static STATIC IMPORTED)
+set_property(TARGET libdawn_proc_static PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libdawn_proc_static.a")
 
 find_library(
         LOG_LIB
@@ -252,9 +262,10 @@ if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
         ${SKIA_SKUNICODE_CORE_LIB}
         ${SKIA_SKUNICODE_ICU_LIB}
         ${SKIA_LIB}
+        ${DAWN_NATIVE_LIB}
+        ${DAWN_PLATFORM_LIB}
+        ${DAWN_PROC_LIB}
         -ljnigraphics
-        -lGLESv2
-        -lEGL
         -landroid
     )
 else()
@@ -273,9 +284,10 @@ else()
         ${SKIA_SKUNICODE_CORE_LIB}
         ${SKIA_SKUNICODE_ICU_LIB}
         ${SKIA_LIB}
+        ${DAWN_NATIVE_LIB}
+        ${DAWN_PLATFORM_LIB}
+        ${DAWN_PROC_LIB}
         -ljnigraphics
-        -lGLESv2
-        -lEGL
         -landroid
     )
 endif()

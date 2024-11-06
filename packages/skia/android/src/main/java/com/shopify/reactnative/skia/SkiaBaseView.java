@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.TextureView;
 
 import com.facebook.react.views.view.ReactViewGroup;
@@ -54,13 +55,13 @@ public abstract class SkiaBaseView extends ReactViewGroup implements TextureView
     }
 
     @Override
-    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+    public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
         Log.i(tag, "onSurfaceTextureAvailable " + width + "/" + height);
-        surfaceAvailable(surface, width, height);
+        surfaceAvailable(new Surface(surfaceTexture), width, height);
     }
 
     @Override
-    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
         if (isDropped) {
             return;
         }
@@ -69,7 +70,7 @@ public abstract class SkiaBaseView extends ReactViewGroup implements TextureView
     }
 
     @Override
-    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
         Log.i(tag, "onSurfaceTextureDestroyed");
         // https://developer.android.com/reference/android/view/TextureView.SurfaceTextureListener#onSurfaceTextureDestroyed(android.graphics.SurfaceTexture)
         surfaceDestroyed();
@@ -90,7 +91,7 @@ public abstract class SkiaBaseView extends ReactViewGroup implements TextureView
 //        long frameDuration = (timestamp - _prevTimestamp)/1000000;
 //        Log.i(tag, "onSurfaceTextureUpdated "+frameDuration+"ms");
 //        _prevTimestamp = timestamp;
-    }
+     }
 
     protected abstract void surfaceAvailable(Object surface, int width, int height);
 

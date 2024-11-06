@@ -13,6 +13,7 @@
 
 #pragma clang diagnostic pop
 
+// TODO: to delete, the canvas provider is now non-platform specific
 class RNSkMetalCanvasProvider : public RNSkia::RNSkCanvasProvider {
 public:
   RNSkMetalCanvasProvider(std::function<void()> requestRedraw,
