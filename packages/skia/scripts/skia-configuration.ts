@@ -3,10 +3,13 @@ import path from "path";
 
 import { $ } from "./utils";
 
+const DEBUG = false;
+const GRAPHITE = true;
+
 export const SkiaSrc = path.join(__dirname, "../../../externals/skia");
 export const ProjectRoot = path.join(__dirname, "../../..");
 export const PackageRoot = path.join(__dirname, "..");
-export const OutFolder = path.join(SkiaSrc, "out");
+export const OutFolder = path.join(SkiaSrc, DEBUG ? "debug" : "out");
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
 
@@ -65,17 +68,15 @@ export const commonArgs = [
   ["skia_use_system_libwebp", false],
   ["skia_use_system_zlib", false],
   ["skia_enable_tools", false],
-  ["is_official_build", true],
+  ["is_official_build", !DEBUG],
   ["skia_enable_skottie", true],
-  ["is_debug", false],
+  ["is_debug", DEBUG],
   ["skia_enable_pdf", false],
-  ["skia_enable_flutter_defines", true],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
-  // Graphite
-  // TODO: disable ganesh
-  ["skia_enable_graphite", true],
-  ["skia_use_dawn", true],
+  ["skia_enable_ganesh", !GRAPHITE],
+  ["skia_enable_graphite", GRAPHITE],
+  ["skia_use_dawn", GRAPHITE],
 ];
 
 export type PlatformName = "ios" | "android";
@@ -123,7 +124,7 @@ export const configurations = {
       ["ndk_api", androidMinSDK],
       ["ndk", `"${NdkDir}"`],
       ["skia_use_system_freetype2", false],
-      ["skia_use_gl", true],
+      ["skia_use_gl", !GRAPHITE],
       ["cc", '"clang"'],
       ["cxx", '"clang++"'],
       [
@@ -209,8 +210,14 @@ export const copyHeaders = () => {
     "mkdir -p ./cpp/skia/modules",
     "mkdir -p ./cpp/skia/src",
 
+    // "mkdir -p ./cpp/skia/src/image",
+    // "cp -a ../../externals/skia/src/image/SkSurface_Base.h ./cpp/skia/src/image/.",
+
     "mkdir -p ./cpp/skia/src/gpu/graphite",
+    // "cp -a ../../externals/skia/src/gpu/SkBackingFit.h ./cpp/skia/src/gpu/.",
     "cp -a ../../externals/skia/src/gpu/graphite/ContextOptionsPriv.h ./cpp/skia/src/gpu/graphite/.",
+    "cp -a ../../externals/skia/src/gpu/graphite/ResourceTypes.h ./cpp/skia/src/gpu/graphite/.",
+    "cp -a ../../externals/skia/src/gpu/graphite/TextureProxyView.h ./cpp/skia/src/gpu/graphite/.",
 
     "cp -a ../../externals/skia/out/android/arm/gen/third_party/externals/dawn/include/. ./cpp/dawn/include",
     "cp -a ../../externals/skia/third_party/externals/dawn/include/. ./cpp/dawn/include",

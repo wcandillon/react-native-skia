@@ -10,6 +10,7 @@
 #include "JsiSkShader.h"
 #include "third_party/base64.h"
 
+#include "DawnContext.h"
 #include "RNSkTypedArray.h"
 
 #pragma clang diagnostic push
@@ -83,10 +84,7 @@ public:
     auto quality = (count >= 2 && arguments[1].isNumber())
                        ? arguments[1].asNumber()
                        : 100.0;
-    auto image = getObject();
-    if (image->isTextureBacked()) {
-      image = image->makeNonTextureImage();
-    }
+    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
     sk_sp<SkData> data;
 
     if (format == SkEncodedImageFormat::kJPEG) {
@@ -153,8 +151,9 @@ public:
     SkImageInfo info =
         (count > 2 && !arguments[2].isUndefined())
             ? *JsiSkImageInfo::fromValue(runtime, arguments[2])
-            : SkImageInfo::MakeN32(getObject()->width(), getObject()->height(),
-                                   getObject()->imageInfo().alphaType());
+            : SkImageInfo::Make(getObject()->width(), getObject()->height(),
+                                getObject()->imageInfo().colorType(),
+                                getObject()->imageInfo().alphaType());
     size_t bytesPerRow = 0;
     if (count > 4 && !arguments[4].isUndefined()) {
       bytesPerRow = static_cast<size_t>(arguments[4].asNumber());
@@ -182,15 +181,10 @@ public:
   }
 
   JSI_HOST_FUNCTION(makeNonTextureImage) {
-    //	  auto image = getObject();
-    //	  image->context
-    //    auto image = getObject()->makeNonTextureImage();
-    sk_sp<SkImage> image = nullptr;
-    if (image == nullptr) {
-      return jsi::Value::null();
-    }
+    auto image = getObject();
+    auto rasterImage = DawnContext::getInstance().MakeRasterImage(image);
     return jsi::Object::createFromHostObject(
-        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
+        runtime, std::make_shared<JsiSkImage>(getContext(), rasterImage));
   }
 
   EXPORT_JSI_API_TYPENAME(JsiSkImage, Image)

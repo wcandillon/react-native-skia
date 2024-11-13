@@ -108,7 +108,8 @@ public:
     } else {
       image = _surface->makeImageSnapshot();
     }
-    return image->makeNonTextureImage();
+	DawnContext::getInstance().submitRecording(_surface->recorder()->snap().get());
+	return DawnContext::getInstance().MakeRasterImage(image);
   }
 
   /**

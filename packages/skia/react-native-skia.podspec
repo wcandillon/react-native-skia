@@ -23,8 +23,7 @@ Pod::Spec.new do |s|
 
   s.requires_arc = true
   s.pod_target_xcconfig = {
-# TODO: remove SK_GANESH=1 SK_METAL=1
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SK_METAL=1 SK_GANESH=1 SK_GRAPHITE=1',
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SK_GRAPHITE=1',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'DEFINES_MODULE' => 'YES',
     "HEADER_SEARCH_PATHS" => '"$(PODS_TARGET_SRCROOT)/cpp/"/**'

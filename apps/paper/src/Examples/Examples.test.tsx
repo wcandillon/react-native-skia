@@ -16,6 +16,7 @@ import { Matrix } from "./Matrix";
 import { Hue } from "./Hue";
 import { Glassmorphism } from "./Glassmorphism";
 import { Filters } from "./Filters";
+import { Boxes } from "./Boxes";
 
 it("should render the Breathe example correctly", () => {
   render(<Breathe />);
@@ -23,6 +24,10 @@ it("should render the Breathe example correctly", () => {
 
 it("should render the Gooey example correctly", () => {
   render(<Gooey />);
+});
+
+it("should render the Boxes example correctly", () => {
+  render(<Boxes />);
 });
 
 it("should render the Aurora example correctly", () => {

@@ -9,10 +9,10 @@
 #include <memory>
 #include <string>
 
+#include "DawnContext.h"
 #include "JniPlatformContext.h"
 #include "RNSkAndroidVideo.h"
 #include "RNSkPlatformContext.h"
-#include "DawnContext.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"

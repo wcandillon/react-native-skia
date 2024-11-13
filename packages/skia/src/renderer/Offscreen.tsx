@@ -34,7 +34,10 @@ export const drawAsImage = (element: ReactElement, size: SkSize) => {
 
 export const drawAsImageFromPicture = (picture: SkPicture, size: SkSize) => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
+  const surface = Skia.Surface.MakeOffscreen(size.width, size.height);
+  if (surface === null) {
+    throw new Error("Could not create offscreen surface");
+  }
   const canvas = surface.getCanvas();
   canvas.drawPicture(picture);
   surface.flush();

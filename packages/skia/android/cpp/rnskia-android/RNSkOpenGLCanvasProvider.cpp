@@ -49,10 +49,10 @@ bool RNSkOpenGLCanvasProvider::renderToCanvas(
     auto surface = _surfaceHolder->getSurface();
     if (surface) {
       // Draw into canvas using callback
-    cb(surface->getCanvas());
+      cb(surface->getCanvas());
 
       // Swap buffers and show on screen
-   _surfaceHolder->present();
+      _surfaceHolder->present();
 
       return true;
     } else {
@@ -64,14 +64,13 @@ bool RNSkOpenGLCanvasProvider::renderToCanvas(
   return false;
 }
 
-void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurface,
-                                                int width, int height) {
+void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurface, int width,
+                                                int height) {
   // Create renderer!
   JNIEnv *env = facebook::jni::Environment::current();
-
+  // TODO: fix size
   auto window = ANativeWindow_fromSurface(env, jSurface);
-  _surfaceHolder =
-      DawnContext::getInstance().MakeWindow(window, width, height);
+  _surfaceHolder = DawnContext::getInstance().MakeWindow(window, width, height);
 
   // Post redraw request to ensure we paint in the next draw cycle.
   _requestRedraw();

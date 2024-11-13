@@ -19,7 +19,7 @@ class JsiNativeBufferFactory : public JsiSkHostObject {
 public:
   JSI_HOST_FUNCTION(MakeFromImage) {
     auto image = JsiSkImage::fromValue(runtime, arguments[0]);
-    image->makeNonTextureImage();
+	DawnContext::getInstance().MakeRasterImage(image);
     uint64_t pointer = getContext()->makeNativeBuffer(image);
     return jsi::BigInt::fromUint64(runtime, pointer);
   }

@@ -82,7 +82,7 @@ export const checkImage = (
       if (diffPixelsCount > maxPixelDiff && !shouldFail) {
         console.log(`${p} didn't match`);
         fs.writeFileSync(`${p}.test.png`, PNG.sync.write(toTest));
-        fs.writeFileSync(`${p}-diff-test.png`, PNG.sync.write(diffImage));
+        //fs.writeFileSync(`${p}-diff-test.png`, PNG.sync.write(diffImage));
       }
       if (shouldFail) {
         expect(diffPixelsCount).not.toBeLessThanOrEqual(maxPixelDiff);
