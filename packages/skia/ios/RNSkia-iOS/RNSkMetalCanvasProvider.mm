@@ -36,19 +36,23 @@ RNSkMetalCanvasProvider::~RNSkMetalCanvasProvider() {}
 /**
  Returns the scaled width of the view
  */
-float RNSkMetalCanvasProvider::getScaledWidth() { return _width; };
+float RNSkMetalCanvasProvider::getScaledWidth() {
+  return _ctx ? _ctx->getWidth() : -1;
+};
 
 /**
  Returns the scaled height of the view
  */
-float RNSkMetalCanvasProvider::getScaledHeight() { return _height; };
+float RNSkMetalCanvasProvider::getScaledHeight() {
+  return _ctx ? _ctx->getHeight() : -1;
+};
 
 /**
  Render to a canvas
  */
 bool RNSkMetalCanvasProvider::renderToCanvas(
     const std::function<void(SkCanvas *)> &cb) {
-  if (_width <= 0 || _height <= 0) {
+  if (!_ctx) {
     return false;
   }
 
@@ -72,33 +76,23 @@ bool RNSkMetalCanvasProvider::renderToCanvas(
   // rendering and not wait until later - we've seen some example of memory
   // usage growing very fast in the simulator without this.
   @autoreleasepool {
-    id<CAMetalDrawable> currentDrawable = [_layer nextDrawable];
-    if (currentDrawable == nullptr) {
-      return false;
-    }
-#if defined(SK_GRAPHITE)
-    auto ctx = RNSkia::DawnContext::getInstance().MakeWindow(
-        (__bridge void *)_layer, _width, _height);
-#else
-    auto ctx = MetalContext::getInstance().MakeWindow(_layer, _width, _height);
-#endif
-    auto skSurface = ctx->getSurface();
-    SkCanvas *canvas = skSurface->getCanvas();
+    auto surface = _ctx->getSurface();
+    auto canvas = surface->getCanvas();
     cb(canvas);
-
-    if (auto dContext = GrAsDirectContext(skSurface->recordingContext())) {
-      dContext->flushAndSubmit();
-    }
-
-    ctx->present();
+    _ctx->present();
   }
   return true;
 };
 
 void RNSkMetalCanvasProvider::setSize(int width, int height) {
   _layer.frame = CGRectMake(0, 0, width, height);
-  _width = width * _context->getPixelDensity();
-  _height = height * _context->getPixelDensity();
+  auto w = width * _context->getPixelDensity();
+  auto h = height * _context->getPixelDensity();
+#if defined(SK_GRAPHITE)
+  _ctx = RNSkia::DawnContext::getInstance().MakeWindow((__bridge void *)_layer, w, h);
+#else
+  _ctx = MetalContext::getInstance().MakeWindow(_layer, w, h);
+#endif
   _requestRedraw();
 }
 

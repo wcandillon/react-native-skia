@@ -90,7 +90,8 @@ createDawnBackendContext(dawn::native::Instance *instance) {
     features.push_back(wgpu::FeatureName::SharedTextureMemoryIOSurface);
   }
 #else
-  if (adapter.HasFeature(wgpu::FeatureName::SharedTextureMemoryAHardwareBuffer)) {
+  if (adapter.HasFeature(
+          wgpu::FeatureName::SharedTextureMemoryAHardwareBuffer)) {
     features.push_back(wgpu::FeatureName::SharedTextureMemoryAHardwareBuffer);
   }
 #endif
