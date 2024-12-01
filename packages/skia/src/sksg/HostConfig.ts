@@ -7,7 +7,7 @@ import type { NodeType } from "../dom/types";
 import { TestNode } from "./Node";
 import type { Container, Node } from "./Node";
 
-const DEBUG = true;
+const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
   if (DEBUG) {
     console.log(...args);
@@ -48,9 +48,9 @@ export const sksgHostConfig: SkiaHostConfig = {
    * This function is used by the reconciler in order to calculate current time for prioritising work.
    */
   now: Date.now,
-  supportsMutation: true,
+  supportsMutation: false,
   isPrimaryRenderer: false,
-  supportsPersistence: false,
+  supportsPersistence: true,
   supportsHydration: false,
   //supportsMicrotask: true,
 
