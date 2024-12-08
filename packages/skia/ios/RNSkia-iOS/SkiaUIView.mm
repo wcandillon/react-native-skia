@@ -62,18 +62,7 @@
 #pragma mark Lifecycle
 
 - (void)willMoveToSuperview:(UIView *)newWindow {
-  if (newWindow == NULL) {
-    // Remove implementation view when the parent view is not set
-    if (_impl != nullptr) {
-      [_impl->getLayer() removeFromSuperlayer];
-
-      if (_nativeId != 0 && _manager != nullptr) {
-        _manager->setSkiaView(_nativeId, nullptr);
-      }
-
-      _impl = nullptr;
-    }
-  } else {
+  if (newWindow != nullptr) {
     // Create implementation view when the parent view is set
     if (_impl == nullptr && _manager != nullptr) {
       _impl = _factory(_manager->getPlatformContext());
@@ -88,6 +77,21 @@
       _impl->getDrawView()->setShowDebugOverlays(_debugMode);
     }
   }
+}
+
+- (void)removeFromSuperview {
+  // Cleanup when removed from view hierarchy
+  if (_impl != nullptr) {
+    [_impl->getLayer() removeFromSuperlayer];
+
+    if (_nativeId != 0 && _manager != nullptr) {
+      _manager->setSkiaView(_nativeId, nullptr);
+    }
+
+    _impl = nullptr;
+  }
+
+  [super removeFromSuperview];
 }
 
 - (void)dealloc {
@@ -119,8 +123,6 @@
   if (_manager != nullptr && _nativeId != 0) {
     _manager->unregisterSkiaView(_nativeId);
   }
-
-  assert(_impl == nullptr);
 }
 
 #pragma Render
@@ -152,7 +154,7 @@
 }
 
 - (void)setOpaque:(bool)opaque {
-    _opaque = opaque;
+  _opaque = opaque;
 }
 
 - (void)setNativeId:(size_t)nativeId {

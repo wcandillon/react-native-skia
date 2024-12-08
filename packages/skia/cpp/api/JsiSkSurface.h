@@ -6,6 +6,7 @@
 #include <jsi/jsi.h>
 
 #include "JsiSkHostObjects.h"
+#include "JsiTextureInfo.h"
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
@@ -78,11 +79,17 @@ public:
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }
 
+  JSI_HOST_FUNCTION(getNativeTextureUnstable) {
+    auto texInfo = getContext()->getTexture(getObject());
+    return JsiTextureInfo::toValue(runtime, texInfo);
+  }
+
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSurface, width),
                        JSI_EXPORT_FUNC(JsiSkSurface, height),
                        JSI_EXPORT_FUNC(JsiSkSurface, getCanvas),
                        JSI_EXPORT_FUNC(JsiSkSurface, makeImageSnapshot),
                        JSI_EXPORT_FUNC(JsiSkSurface, flush),
+                       JSI_EXPORT_FUNC(JsiSkSurface, getNativeTextureUnstable),
                        JSI_EXPORT_FUNC(JsiSkSurface, dispose))
 };
 

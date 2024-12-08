@@ -12,6 +12,9 @@ import {
   toMatrix3,
   Matrix4,
   mapPoint3d,
+  invert4,
+  scale,
+  rotateZ,
 } from "../../../skia/types";
 
 const ckPerspective = (d: number) => [
@@ -271,5 +274,95 @@ describe("Matrix4", () => {
     const expectedResult = [200, 0, 300] as const;
     const result = mapPoint3d(translationMatrix, point);
     expect(result).toEqual(expectedResult);
+  });
+
+  const almostEqual = (
+    a: number[] | Matrix4 | readonly [number, number, number],
+    b: number[] | Matrix4 | readonly [number, number, number],
+    epsilon = 1e-10
+  ) => {
+    expect(a.length).toBe(b.length);
+    a.forEach((val, idx) => {
+      expect(Math.abs(val - b[idx])).toBeLessThan(epsilon);
+    });
+  };
+
+  const matrixEqual = (a: number[] | Matrix4, b: number[] | Matrix4) => {
+    expect(a.length).toBe(b.length);
+    a.forEach((val, idx) => {
+      // Object.is will distinguish -0 from 0, so we use === instead
+      const equal = val === b[idx] || (val === 0 && b[idx] === 0);
+      expect(equal).toBe(true);
+    });
+  };
+
+  it("should return the identity matrix when inverting the identity matrix", () => {
+    const identityMatrix = Matrix4();
+    const result = invert4(identityMatrix);
+    matrixEqual(result, identityMatrix);
+  });
+
+  it("should correctly invert a translation matrix", () => {
+    const translationMatrix = translate(100, -50, 25);
+    const inverse = invert4(translationMatrix);
+    // Inverse of translation(x,y,z) should be translation(-x,-y,-z)
+    const expectedInverse = translate(-100, 50, -25);
+    matrixEqual(inverse, expectedInverse);
+  });
+
+  it("should correctly invert a scale matrix", () => {
+    const scaleMatrix = scale(2, 4, 8);
+    const inverse = invert4(scaleMatrix);
+    // Inverse of scale(x,y,z) should be scale(1/x,1/y,1/z)
+    const expectedInverse = scale(1 / 2, 1 / 4, 1 / 8);
+    matrixEqual(inverse, expectedInverse);
+  });
+
+  it("should return identity matrix for non-invertible matrix", () => {
+    // A matrix of all zeros is not invertible
+    const nonInvertibleMatrix = [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ] as Matrix4;
+    const result = invert4(nonInvertibleMatrix);
+    matrixEqual(result, Matrix4());
+  });
+
+  it("multiplying a matrix by its inverse should give the identity matrix", () => {
+    // Create a complex transformation matrix
+    const complexMatrix = processTransform3d([
+      { scale: 2 },
+      { rotateZ: Math.PI / 4 },
+      { translate: [100, 100, 50] as const },
+    ]);
+
+    const inverse = invert4(complexMatrix);
+    const result = multiply4(complexMatrix, inverse);
+
+    // Due to floating point arithmetic, we use almostEqual instead of exact equality
+    almostEqual(result, Matrix4());
+  });
+
+  it("should correctly transform points when using inverse matrix", () => {
+    const transformMatrix = translate(100, 100, 100);
+    const inverse = invert4(transformMatrix);
+
+    const point = [200, 0, 300] as const;
+    const transformedPoint = mapPoint3d(inverse, point);
+    const expectedPoint = [100, -100, 200] as const;
+
+    // Using almostEqual for floating point comparison
+    almostEqual(transformedPoint, expectedPoint);
+  });
+
+  it("should maintain inverse relationship for rotations", () => {
+    const rotationMatrix = rotateZ(Math.PI / 3); // 60 degrees rotation
+    const inverse = invert4(rotationMatrix);
+    const point = [100, 100, 0] as const;
+
+    // Transform point forward then backward should give original point
+    const transformed = mapPoint3d(rotationMatrix, point);
+    const backTransformed = mapPoint3d(inverse, transformed);
+
+    almostEqual(backTransformed, point);
   });
 });

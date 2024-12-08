@@ -170,4 +170,9 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     }
     return new JsiSkImage(this.CanvasKit, img);
   }
+
+  getNativeTextureUnstable(): unknown {
+    console.warn("getBackendTexture is not implemented on Web");
+    return null;
+  }
 }

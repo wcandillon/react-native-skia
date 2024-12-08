@@ -50,6 +50,30 @@ export interface ImageFactory {
   MakeImageFromNativeBuffer: (nativeBuffer: NativeBuffer) => SkImage;
 
   /**
+   *
+   * Return an Image backed by a given native texture.
+   *
+   * The native texture must be a valid owning reference.
+   *
+   * This API might be used to integrate with other libraries using gpu textures,
+   * or to transfer images between different threads.
+   *
+   * @param texture A native texture handle
+   * @param width The width of the texture
+   * @param height The height of the texture
+   * @param mipmapped Whether the texture is mipmapped
+   * @throws Throws an error if the Image could not be created, for example when the given native texture is invalid.
+   *
+   * @returns Returns a valid SkImage, if the texture is invalid, an error is thrown.
+   */
+  MakeImageFromNativeTextureUnstable: (
+    texture: unknown,
+    width: number,
+    height: number,
+    mipmapped?: boolean
+  ) => SkImage;
+
+  /**
    * Returns an image that will be a screenshot of the view represented by
    * the view tag
    * @param viewTag - The tag of the view to make an image from.

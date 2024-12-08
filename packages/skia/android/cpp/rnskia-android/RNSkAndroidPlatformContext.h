@@ -1,6 +1,5 @@
 #pragma once
 
-// TODO: Add android flags
 #if __ANDROID_API__ >= 26
 #include <android/hardware_buffer.h>
 #endif
@@ -20,7 +19,6 @@
 #include "MainThreadDispatcher.h"
 #include "RNSkAndroidVideo.h"
 #include "RNSkPlatformContext.h"
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -29,14 +27,13 @@
 #pragma clang diagnostic pop
 
 namespace RNSkia {
-namespace jsi = facebook::jsi;
 
 class RNSkAndroidPlatformContext : public RNSkPlatformContext {
 public:
   RNSkAndroidPlatformContext(
-      JniPlatformContext *jniPlatformContext, jsi::Runtime *runtime,
+      JniPlatformContext *jniPlatformContext,
       std::shared_ptr<facebook::react::CallInvoker> jsCallInvoker)
-      : RNSkPlatformContext(runtime, jsCallInvoker,
+      : RNSkPlatformContext(jsCallInvoker,
                             jniPlatformContext->getPixelDensity()),
         _jniPlatformContext(jniPlatformContext) {}
 
@@ -76,6 +73,31 @@ public:
 #else
     return OpenGLContext::getInstance().MakeImageFromBuffer(buffer);
 #endif
+  }
+
+  sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &texInfo,
+                                            int width, int height,
+                                            bool mipMapped) override {
+    GrGLTextureInfo textureInfo;
+    textureInfo.fTarget = (GrGLenum)texInfo.glTarget;
+    textureInfo.fID = (GrGLuint)texInfo.glID;
+    textureInfo.fFormat = (GrGLenum)texInfo.glFormat;
+    textureInfo.fProtected =
+        texInfo.glProtected ? skgpu::Protected::kYes : skgpu::Protected::kNo;
+
+    OpenGLContext::getInstance().makeCurrent();
+    if (glIsTexture(textureInfo.fID) == GL_FALSE) {
+      throw new std::runtime_error("Invalid textureInfo");
+    }
+
+    GrBackendTexture backendTexture = GrBackendTextures::MakeGL(
+        width, height,
+        mipMapped ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo,
+        textureInfo);
+    return SkImages::BorrowTextureFrom(
+        OpenGLContext::getInstance().getDirectContext(), backendTexture,
+        kTopLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType,
+        nullptr);
   }
 
   std::shared_ptr<RNSkVideo> createVideo(const std::string &url) override {
@@ -147,6 +169,40 @@ public:
 #else
     return 0;
 #endif
+  }
+
+  const TextureInfo getTexture(sk_sp<SkImage> image) override {
+    GrBackendTexture texture;
+    if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
+      throw std::runtime_error("Couldn't get backend texture from image.");
+    }
+    return getTextureInfo(texture);
+  }
+
+  const TextureInfo getTexture(sk_sp<SkSurface> surface) override {
+    GrBackendTexture texture = SkSurfaces::GetBackendTexture(
+        surface.get(), SkSurface::BackendHandleAccess::kFlushRead);
+    return getTextureInfo(texture);
+  }
+
+  static const TextureInfo getTextureInfo(const GrBackendTexture &texture) {
+    if (!texture.isValid()) {
+      throw std::runtime_error("invalid backend texture");
+    }
+    GrGLTextureInfo textureInfo;
+    if (!GrBackendTextures::GetGLTextureInfo(texture, &textureInfo)) {
+      throw std::runtime_error("couldn't get OpenGL texture");
+    }
+
+    OpenGLContext::getInstance().makeCurrent();
+    glFlush();
+
+    TextureInfo texInfo;
+    texInfo.glProtected = textureInfo.isProtected();
+    texInfo.glID = textureInfo.fID;
+    texInfo.glFormat = textureInfo.fFormat;
+    texInfo.glTarget = textureInfo.fTarget;
+    return texInfo;
   }
 
 #if !defined(SK_GRAPHITE)

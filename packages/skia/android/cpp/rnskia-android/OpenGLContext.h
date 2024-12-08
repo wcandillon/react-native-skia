@@ -28,15 +28,21 @@ public:
 
   gl::Display *getDisplay() { return _glDisplay.get(); }
   gl::Context *getContext() { return _glContext.get(); }
+  gl::Surface *getSurface() { return _glSurface.get(); };
+  EGLConfig getConfig() { return _glConfig; }
 
 private:
   std::unique_ptr<gl::Display> _glDisplay;
   std::unique_ptr<gl::Context> _glContext;
+  std::unique_ptr<gl::Surface> _glSurface;
+  EGLConfig _glConfig;
 
   OpenGLSharedContext() {
     _glDisplay = std::make_unique<gl::Display>();
-    auto glConfig = _glDisplay->chooseConfig();
-    _glContext = _glDisplay->makeContext(glConfig, nullptr);
+    _glConfig = _glDisplay->chooseConfig();
+    _glContext = _glDisplay->makeContext(_glConfig, nullptr);
+    _glSurface = _glDisplay->makePixelBufferSurface(_glConfig, 1, 1);
+    _glContext->makeCurrent(_glSurface.get());
   }
 };
 
@@ -156,11 +162,13 @@ public:
   std::unique_ptr<WindowContext> MakeWindow(ANativeWindow *window, int width,
                                             int height) {
     auto display = OpenGLSharedContext::getInstance().getDisplay();
-    return std::make_unique<OpenGLWindowContext>(_directContext.get(), display,
-                                                 _glContext.get(), window);
+    return std::make_unique<OpenGLWindowContext>(
+        _directContext.get(), display, _glContext.get(), window,
+        OpenGLSharedContext::getInstance().getConfig());
   }
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }
+  void makeCurrent() { _glContext->makeCurrent(_glSurface.get()); }
 
 private:
   std::unique_ptr<gl::Context> _glContext;
@@ -170,7 +178,7 @@ private:
   OpenGLContext() {
     auto display = OpenGLSharedContext::getInstance().getDisplay();
     auto sharedContext = OpenGLSharedContext::getInstance().getContext();
-    auto glConfig = display->chooseConfig();
+    auto glConfig = OpenGLSharedContext::getInstance().getConfig();
     _glContext = display->makeContext(glConfig, sharedContext);
     _glSurface = display->makePixelBufferSurface(glConfig, 1, 1);
     _glContext->makeCurrent(_glSurface.get());

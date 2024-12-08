@@ -34,11 +34,11 @@ namespace RNSkia {
 class OpenGLWindowContext : public WindowContext {
 public:
   OpenGLWindowContext(GrDirectContext *directContext, gl::Display *display,
-                      gl::Context *glContext, ANativeWindow *window)
+                      gl::Context *glContext, ANativeWindow *window,
+                      EGLConfig config)
       : _directContext(directContext), _display(display), _glContext(glContext),
         _window(window) {
     ANativeWindow_acquire(_window);
-    auto config = display->chooseConfig();
     _glSurface = display->makeWindowSurface(config, _window);
   }
 

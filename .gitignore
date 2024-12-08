@@ -50,15 +50,12 @@ local.properties
 .settings/
 
 # Externals
+packages/skia/lib
 packages/skia/libs
-packages/skia/cpp/skia/
-packages/skia/cpp/dawn/
+packages/skia/cpp/skia
+packages/skia/cpp/dawn
 
 # BUCK
 buck-out/
 \.buckd/
 *.keystore
-
-# Build
-dist
-package/lib

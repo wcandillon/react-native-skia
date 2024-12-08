@@ -370,3 +370,104 @@ export const convertToAffineMatrix = (m4: Matrix4) => {
   // Returning the 6-element affine transformation matrix
   return [a, b, c, d, tx, ty];
 };
+
+/**
+ * Calculates the determinant of a 3x3 matrix
+ * @worklet
+ */
+const det3x3 = (
+  a00: number,
+  a01: number,
+  a02: number,
+  a10: number,
+  a11: number,
+  a12: number,
+  a20: number,
+  a21: number,
+  a22: number
+): number => {
+  "worklet";
+  return (
+    a00 * (a11 * a22 - a12 * a21) +
+    a01 * (a12 * a20 - a10 * a22) +
+    a02 * (a10 * a21 - a11 * a20)
+  );
+};
+
+/**
+ * Inverts a 4x4 matrix
+ * @worklet
+ * @returns The inverted matrix, or the identity matrix if the input is not invertible
+ */
+export const invert4 = (m: Matrix4): Matrix4 => {
+  "worklet";
+
+  const a00 = m[0],
+    a01 = m[1],
+    a02 = m[2],
+    a03 = m[3];
+  const a10 = m[4],
+    a11 = m[5],
+    a12 = m[6],
+    a13 = m[7];
+  const a20 = m[8],
+    a21 = m[9],
+    a22 = m[10],
+    a23 = m[11];
+  const a30 = m[12],
+    a31 = m[13],
+    a32 = m[14],
+    a33 = m[15];
+
+  // Calculate cofactors
+  const b00 = det3x3(a11, a12, a13, a21, a22, a23, a31, a32, a33);
+  const b01 = -det3x3(a10, a12, a13, a20, a22, a23, a30, a32, a33);
+  const b02 = det3x3(a10, a11, a13, a20, a21, a23, a30, a31, a33);
+  const b03 = -det3x3(a10, a11, a12, a20, a21, a22, a30, a31, a32);
+
+  const b10 = -det3x3(a01, a02, a03, a21, a22, a23, a31, a32, a33);
+  const b11 = det3x3(a00, a02, a03, a20, a22, a23, a30, a32, a33);
+  const b12 = -det3x3(a00, a01, a03, a20, a21, a23, a30, a31, a33);
+  const b13 = det3x3(a00, a01, a02, a20, a21, a22, a30, a31, a32);
+
+  const b20 = det3x3(a01, a02, a03, a11, a12, a13, a31, a32, a33);
+  const b21 = -det3x3(a00, a02, a03, a10, a12, a13, a30, a32, a33);
+  const b22 = det3x3(a00, a01, a03, a10, a11, a13, a30, a31, a33);
+  const b23 = -det3x3(a00, a01, a02, a10, a11, a12, a30, a31, a32);
+
+  const b30 = -det3x3(a01, a02, a03, a11, a12, a13, a21, a22, a23);
+  const b31 = det3x3(a00, a02, a03, a10, a12, a13, a20, a22, a23);
+  const b32 = -det3x3(a00, a01, a03, a10, a11, a13, a20, a21, a23);
+  const b33 = det3x3(a00, a01, a02, a10, a11, a12, a20, a21, a22);
+
+  // Calculate determinant
+  const det = a00 * b00 + a01 * b01 + a02 * b02 + a03 * b03;
+
+  // Check if matrix is invertible
+  if (Math.abs(det) < 1e-8) {
+    // Return identity matrix if not invertible
+    return Matrix4();
+  }
+
+  const invDet = 1.0 / det;
+
+  // Calculate inverse matrix
+  return [
+    b00 * invDet,
+    b10 * invDet,
+    b20 * invDet,
+    b30 * invDet,
+    b01 * invDet,
+    b11 * invDet,
+    b21 * invDet,
+    b31 * invDet,
+    b02 * invDet,
+    b12 * invDet,
+    b22 * invDet,
+    b32 * invDet,
+    b03 * invDet,
+    b13 * invDet,
+    b23 * invDet,
+    b33 * invDet,
+  ] as Matrix4;
+};

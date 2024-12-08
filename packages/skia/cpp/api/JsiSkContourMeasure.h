@@ -26,11 +26,7 @@ public:
   JsiSkContourMeasure(std::shared_ptr<RNSkPlatformContext> context,
                       const sk_sp<SkContourMeasure> contourMeasure)
       : JsiSkWrappingSkPtrHostObject(std::move(context),
-                                     std::move(contourMeasure)) {
-    if (contourMeasure == nullptr) {
-      throw jsi::JSError(*context->getJsRuntime(), "Contour measure is null");
-    }
-  }
+                                     std::move(contourMeasure)) {}
 
   JSI_HOST_FUNCTION(getPosTan) {
     auto dist = arguments[0].asNumber();

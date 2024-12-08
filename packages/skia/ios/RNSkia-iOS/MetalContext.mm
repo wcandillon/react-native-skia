@@ -1,5 +1,7 @@
 #include "MetalContext.h"
 
+#include "RNSkLog.h"
+
 #import <MetalKit/MetalKit.h>
 
 #pragma clang diagnostic push
@@ -16,18 +18,17 @@
 #pragma clang diagnostic pop
 
 MetalContext::MetalContext() {
-  _device = MTLCreateSystemDefaultDevice();
-  _context.commandQueue =
-      id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
-
+  auto device = MetalSharedContext::getInstance().getDevice();
+  _commandQueue =
+      id<MTLCommandQueue>(CFRetain((GrMTLHandle)[device newCommandQueue]));
   GrMtlBackendContext backendContext = {};
-  backendContext.fDevice.reset((__bridge void *)_device);
-  backendContext.fQueue.reset((__bridge void *)_context.commandQueue);
+  backendContext.fDevice.reset((__bridge void *)device);
+  backendContext.fQueue.reset((__bridge void *)_commandQueue);
   GrContextOptions grContextOptions; // set different options here.
 
   // Create the Skia Direct Context
-  _context.skContext = GrDirectContexts::MakeMetal(backendContext);
-  if (_context.skContext == nullptr) {
+  _directContext = GrDirectContexts::MakeMetal(backendContext);
+  if (_directContext == nullptr) {
     RNSkia::RNSkLogger::logToConsole("Couldn't create a Skia Metal Context");
   }
 }

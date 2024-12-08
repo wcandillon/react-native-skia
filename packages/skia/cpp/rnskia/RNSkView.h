@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "JsiValueWrapper.h"
 #include "RNSkPlatformContext.h"
+#include "ViewProperty.h"
 
 #include "JsiSkImage.h"
 #include "JsiSkPoint.h"
@@ -143,14 +143,8 @@ public:
    */
   virtual ~RNSkView() {}
 
-  /**
-   Sets custom properties. Custom properties are properties that are set
-   directly from Javascript without having to go through the async bridge.
-   */
   virtual void setJsiProperties(
-      std::unordered_map<std::string, RNJsi::JsiValueWrapper> &props) {
-    // Nothing here...
-  }
+      std::unordered_map<std::string, RNJsi::ViewProperty> &props) = 0;
 
   void requestRedraw() {
     if (!_redrawRequested) {

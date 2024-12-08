@@ -78,10 +78,24 @@ public:
         });
   }
 
+  JSI_HOST_FUNCTION(MakeImageFromNativeTextureUnstable) {
+    auto texInfo = JsiTextureInfo::fromValue(runtime, arguments[0]);
+    auto image = getContext()->makeImageFromNativeTexture(
+        texInfo, arguments[1].asNumber(), arguments[2].asNumber(),
+        count > 3 && arguments[3].asBool());
+    if (image == nullptr) {
+      throw std::runtime_error("Failed to convert native texture to SkImage!");
+    }
+    return jsi::Object::createFromHostObject(
+        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
+  }
+
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImageFromEncoded),
                        JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImageFromViewTag),
                        JSI_EXPORT_FUNC(JsiSkImageFactory,
                                        MakeImageFromNativeBuffer),
+                       JSI_EXPORT_FUNC(JsiSkImageFactory,
+                                       MakeImageFromNativeTextureUnstable),
                        JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImage))
 
   explicit JsiSkImageFactory(std::shared_ptr<RNSkPlatformContext> context)

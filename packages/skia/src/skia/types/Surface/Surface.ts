@@ -14,6 +14,18 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
   */
   getCanvas(): SkCanvas;
 
+  /**
+   * Returns the backend texture of the surface.
+   * The returned object can be used to create a Skia Image object.
+   * The returned object is backend specific and should be used with caution.
+   * It is the caller's responsibility to ensure that the texture is not used after the surface is deleted
+   * or draw operations are performed on the surface.
+   * The returned object may be null if the surface does not have a backend texture.
+   *
+   * @return backend texture of the surface or null
+   */
+  getNativeTextureUnstable(): unknown;
+
   /** Returns Image capturing Surface contents. Subsequent drawing to
      Surface contents are not captured.
 

@@ -49,6 +49,17 @@ export interface SkImage extends SkJSIInstance<"Image"> {
   getImageInfo(): ImageInfo;
 
   /**
+   * Returns the backend texture of the image.
+   * The returned object can be used to create a Skia Image object.
+   * The returned object is backend specific and should be used with caution.
+   * It is the caller's responsibility to ensure that the texture is not used after the image is deleted.
+   * The returned object may be null if the image does not have a backend texture.
+   *
+   * @return backend texture of the image or null
+   */
+  getNativeTextureUnstable(): unknown;
+
+  /**
    * Returns this image as a shader with the specified tiling. It will use cubic sampling.
    * @param tx - tile mode in the x direction.
    * @param ty - tile mode in the y direction.

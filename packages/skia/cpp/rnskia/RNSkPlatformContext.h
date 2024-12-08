@@ -23,25 +23,28 @@
 
 #pragma clang diagnostic pop
 
-#include <jsi/jsi.h>
-
 #include <ReactCommon/CallInvoker.h>
 
 namespace RNSkia {
 
-namespace jsi = facebook::jsi;
 namespace react = facebook::react;
+
+struct TextureInfo {
+  const void *mtlTexture = nullptr;
+  unsigned int glTarget = 0;
+  unsigned int glID = 0;
+  unsigned int glFormat = 0;
+  bool glProtected = false;
+};
 
 class RNSkPlatformContext {
 public:
   /**
    * Constructor
    */
-  RNSkPlatformContext(jsi::Runtime *runtime,
-                      std::shared_ptr<react::CallInvoker> callInvoker,
+  RNSkPlatformContext(std::shared_ptr<react::CallInvoker> callInvoker,
                       float pixelDensity)
-      : _pixelDensity(pixelDensity), _jsRuntime(runtime),
-        _callInvoker(callInvoker) {}
+      : _pixelDensity(pixelDensity), _callInvoker(callInvoker) {}
 
   virtual ~RNSkPlatformContext() = default;
 
@@ -64,11 +67,6 @@ public:
    * @param tag React view tag
    */
   virtual sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) = 0;
-
-  /**
-   Returns the javascript runtime
-   */
-  jsi::Runtime *getJsRuntime() { return _jsRuntime; }
 
   /**
    * Returns an SkStream wrapping the require uri provided.
@@ -107,6 +105,10 @@ public:
    */
   virtual sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) = 0;
 
+  virtual sk_sp<SkImage>
+  makeImageFromNativeTexture(const TextureInfo &textureInfo, int width,
+                             int height, bool mipMapped) = 0;
+
 #if !defined(SK_GRAPHITE)
   virtual GrDirectContext *getDirectContext() = 0;
 #endif
@@ -114,6 +116,10 @@ public:
   virtual void releaseNativeBuffer(uint64_t pointer) = 0;
 
   virtual uint64_t makeNativeBuffer(sk_sp<SkImage> image) = 0;
+
+  virtual const TextureInfo getTexture(sk_sp<SkSurface> image) = 0;
+
+  virtual const TextureInfo getTexture(sk_sp<SkImage> image) = 0;
 
   virtual std::shared_ptr<RNSkVideo> createVideo(const std::string &url) = 0;
 
@@ -154,7 +160,6 @@ public:
 
 private:
   float _pixelDensity;
-  jsi::Runtime *_jsRuntime;
   std::shared_ptr<react::CallInvoker> _callInvoker;
 };
 } // namespace RNSkia

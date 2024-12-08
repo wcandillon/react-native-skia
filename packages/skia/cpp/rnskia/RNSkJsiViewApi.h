@@ -9,9 +9,9 @@
 #include <vector>
 
 #include "JsiHostObject.h"
-#include "JsiValueWrapper.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkView.h"
+#include "ViewProperty.h"
 #include <jsi/jsi.h>
 
 namespace RNSkia {
@@ -20,7 +20,7 @@ namespace jsi = facebook::jsi;
 using RNSkViewInfo = struct RNSkViewInfo {
   RNSkViewInfo() { view = nullptr; }
   std::shared_ptr<RNSkView> view;
-  std::unordered_map<std::string, RNJsi::JsiValueWrapper> props;
+  std::unordered_map<std::string, RNJsi::ViewProperty> props;
 };
 
 class RNSkJsiViewApi : public RNJsi::JsiHostObject,
@@ -57,7 +57,7 @@ public:
     auto info = getEnsuredViewInfo(nativeId);
 
     info->props.insert_or_assign(arguments[1].asString(runtime).utf8(runtime),
-                                 RNJsi::JsiValueWrapper(runtime, arguments[2]));
+                                 RNJsi::ViewProperty(runtime, arguments[2]));
 
     // Now let's see if we have a view that we can update
     if (info->view != nullptr) {

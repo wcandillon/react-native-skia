@@ -8,7 +8,7 @@ slug: /getting-started/installation
 React Native Skia brings the [Skia Graphics Library](https://skia.org/) to React Native.
 Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox, Firefox OS, and many other products.
 
-**Version compatibility:**  
+**Version compatibility:**
 `react-native@>=0.71` and `react@>=18` are required. <br />
 In addition you should make sure you're on at least `iOS 13` and `Android API level 21` or above. <br />
 To use React Native Skia with the new architecture, `react-native@>=0.72` is required. <br />
@@ -84,8 +84,7 @@ To run the example project on iOS, you will need to run `pod install`, and on An
 
 ## Debugging
 
-As the library uses JSI for synchronous native methods access, remote debugging is no longer possible. You can use [Flipper](https://fbflipper.com) for debugging your JS code, however, connecting the debugger to the JS context.
-There is also an [React Native VSCode extension](https://marketplace.visualstudio.com/items?itemName=msjsdiag.vscode-react-native#debugging-react-native-applications) that can provide a great debugging experience when using React Native Skia.
+We recommend using React Native DevTools to debug your JS code — see the [React Native docs](https://reactnative.dev/docs/debugging). Alternatively, you can debug both JS and platform code in VS Code and via native IDEs. If using VS Code, we recommend [Expo Tools](https://github.com/expo/vscode-expo), [Radon IDE](https://ide.swmansion.com/), or Microsoft's [React Native Tools](https://marketplace.visualstudio.com/items?itemName=msjsdiag.vscode-react-native#debugging-react-native-applications).
 
 ## Testing with Jest
 

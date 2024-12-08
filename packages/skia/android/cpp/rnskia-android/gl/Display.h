@@ -43,6 +43,8 @@ public:
 
     EGLint att[] = {EGL_RENDERABLE_TYPE,
                     EGL_OPENGL_ES2_BIT,
+                    EGL_SURFACE_TYPE,
+                    EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
                     EGL_ALPHA_SIZE,
                     8,
                     EGL_BLUE_SIZE,

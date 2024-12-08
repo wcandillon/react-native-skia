@@ -4,6 +4,8 @@
 
 #include "JsiSkData.h"
 #include "JsiSkHostObjects.h"
+#include "JsiSkMatrix.h"
+#include "JsiSkRect.h"
 #include "JsiSkShader.h"
 
 #pragma clang diagnostic push
