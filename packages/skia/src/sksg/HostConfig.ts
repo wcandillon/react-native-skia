@@ -2,10 +2,16 @@
 import type { HostConfig } from "react-reconciler";
 import { DefaultEventPriority } from "react-reconciler/constants";
 
-import type { CircleProps } from "../dom/types";
+import type { CircleProps, GroupProps } from "../dom/types";
 import { NodeType } from "../dom/types";
 
-import { CircleNode, FillNode, type Container, type Node } from "./Node";
+import {
+  CircleNode,
+  FillNode,
+  GroupNode,
+  type Container,
+  type Node,
+} from "./Node";
 
 const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
@@ -96,9 +102,15 @@ export const sksgHostConfig: SkiaHostConfig = {
         return new CircleNode(props as CircleProps);
       case NodeType.Fill:
         return new FillNode(props as CircleProps);
+      case NodeType.Group:
+        return new GroupNode(props as GroupProps);
       default:
         throw new Error(`Unknown type: ${type}`);
     }
+  },
+
+  appendInitialChild(parentInstance: Instance, child: Instance | TextInstance) {
+    parentInstance.children.push(child);
   },
 
   finalizeInitialChildren(

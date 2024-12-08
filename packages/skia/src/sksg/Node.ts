@@ -2,6 +2,7 @@ import { enumKey, processCircle, processTransformProps2 } from "../dom/nodes";
 import type {
   CircleProps,
   DrawingNodeProps,
+  GroupProps,
   PaintProps,
   TransformProps,
 } from "../dom/types";
@@ -19,6 +20,7 @@ import {
 export interface Node<Props> {
   draw: (ctx: DrawingContext) => void;
   clone(): Node<Props>;
+  children: Node<unknown>[];
 }
 
 export class DrawingContext {
@@ -173,6 +175,31 @@ export class CircleNode implements Node<CircleProps> {
 
   clone() {
     return new CircleNode(this.props);
+  }
+}
+
+export class GroupNode implements Node<GroupProps> {
+  constructor(private props: GroupProps) {}
+
+  children: Node<unknown>[] = [];
+
+  draw(ctx: DrawingContext) {
+    const { canvas } = ctx;
+    const shouldRestoreMatrix = ctx.processMatrix(this.props);
+    const shouldRestorePaint = ctx.processPaint(this.props);
+    this.children.forEach((child) => {
+      child.draw(ctx);
+    });
+    if (shouldRestoreMatrix) {
+      canvas.restore();
+    }
+    if (shouldRestorePaint) {
+      ctx.restore();
+    }
+  }
+
+  clone() {
+    return new GroupNode(this.props);
   }
 }
 
