@@ -2,10 +2,10 @@
 import type { HostConfig } from "react-reconciler";
 import { DefaultEventPriority } from "react-reconciler/constants";
 
-import type { NodeType } from "../dom/types";
+import type { CircleProps } from "../dom/types";
+import { NodeType } from "../dom/types";
 
-import { TestNode } from "./Node";
-import type { Container, Node } from "./Node";
+import { CircleNode, type Container, type Node } from "./Node";
 
 const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
@@ -85,14 +85,18 @@ export const sksgHostConfig: SkiaHostConfig = {
 
   createInstance(
     type,
-    _pristineProps,
+    props,
     _container,
     _hostContext,
     _internalInstanceHandle
   ) {
     debug("createInstance", type);
-
-    return new TestNode({ r: 10 });
+    switch (type) {
+      case NodeType.Circle:
+        return new CircleNode(props as CircleProps);
+      default:
+        throw new Error(`Unknown type: ${type}`);
+    }
   },
 
   finalizeInitialChildren(

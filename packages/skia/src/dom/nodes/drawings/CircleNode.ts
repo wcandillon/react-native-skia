@@ -11,7 +11,7 @@ export class CircleNode extends JsiDrawingNode<CircleProps, SkPoint> {
   }
 
   protected deriveProps() {
-    return processCircle(this.Skia, this.props).c;
+    return processCircle(this.props).c;
   }
 
   draw({ canvas, paint }: DrawingContext) {
