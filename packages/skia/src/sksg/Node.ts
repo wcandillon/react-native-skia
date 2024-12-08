@@ -1,5 +1,10 @@
 import { enumKey, processCircle, processTransformProps2 } from "../dom/nodes";
-import type { CircleProps, PaintProps, TransformProps } from "../dom/types";
+import type {
+  CircleProps,
+  DrawingNodeProps,
+  PaintProps,
+  TransformProps,
+} from "../dom/types";
 import {
   BlendMode,
   PaintStyle,
@@ -114,6 +119,29 @@ export class DrawingContext {
       return true;
     }
     return false;
+  }
+}
+
+export class FillNode implements Node<DrawingNodeProps> {
+  children: Node<unknown>[] = [];
+
+  constructor(private props: DrawingNodeProps) {}
+
+  clone() {
+    return new FillNode(this.props);
+  }
+
+  draw(ctx: DrawingContext) {
+    const { canvas } = ctx;
+    const shouldRestoreMatrix = ctx.processMatrix(this.props);
+    const shouldRestorePaint = ctx.processPaint(this.props);
+    canvas.drawPaint(ctx.paint);
+    if (shouldRestoreMatrix) {
+      canvas.restore();
+    }
+    if (shouldRestorePaint) {
+      ctx.restore();
+    }
   }
 }
 

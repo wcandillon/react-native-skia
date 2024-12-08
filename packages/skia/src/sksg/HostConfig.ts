@@ -5,7 +5,7 @@ import { DefaultEventPriority } from "react-reconciler/constants";
 import type { CircleProps } from "../dom/types";
 import { NodeType } from "../dom/types";
 
-import { CircleNode, type Container, type Node } from "./Node";
+import { CircleNode, FillNode, type Container, type Node } from "./Node";
 
 const DEBUG = false;
 export const debug = (...args: Parameters<typeof console.log>) => {
@@ -94,6 +94,8 @@ export const sksgHostConfig: SkiaHostConfig = {
     switch (type) {
       case NodeType.Circle:
         return new CircleNode(props as CircleProps);
+      case NodeType.Fill:
+        return new FillNode(props as CircleProps);
       default:
         throw new Error(`Unknown type: ${type}`);
     }
