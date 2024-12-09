@@ -3,8 +3,8 @@ import type { OpaqueRoot } from "react-reconciler";
 import ReactReconciler from "react-reconciler";
 
 import { debug, sksgHostConfig } from "./HostConfig";
-import type { DrawingContext } from "./Node";
-import { Container } from "./Node";
+import { Container } from "./Container";
+import type { DrawingContext } from "./DrawingContext";
 
 const skiaReconciler = ReactReconciler(sksgHostConfig);
 

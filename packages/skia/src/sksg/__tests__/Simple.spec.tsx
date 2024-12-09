@@ -3,8 +3,8 @@ import React from "react";
 import { importSkia } from "../../renderer/__tests__/setup";
 import { SkiaRoot } from "../Reconciler";
 import { checkImage } from "../../__tests__/setup";
-import { DrawingContext } from "../Node";
 import { mix, polar2Canvas } from "../../renderer";
+import { DrawingContext } from "../DrawingContext";
 
 interface RingProps {
   index: number;
