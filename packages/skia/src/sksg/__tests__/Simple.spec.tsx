@@ -76,13 +76,13 @@ describe("Simple", () => {
     const root = new SkiaRoot();
     const width = 768;
     const height = 768;
-    const centerX = width / 2;
-    const centerY = height / 2;
+    const center = { x: width / 2, y: height / 2 };
     const progress = 0.5;
+    const transform = (() => [{ rotate: mix(progress, -Math.PI, 0) }])();
     root.render(
       <>
         <skFill color="rgb(36,43,56)" />
-        <skGroup blendMode="screen">
+        <skGroup blendMode="screen" origin={center} transform={transform}>
           <skBlurMaskFilter style="solid" blur={40} respectCTM={true} />
           {new Array(6).fill(0).map((_, index) => {
             return (
@@ -90,7 +90,7 @@ describe("Simple", () => {
                 key={index}
                 index={index}
                 progress={progress}
-                center={{ x: centerX, y: centerY }}
+                center={center}
                 width={width}
                 height={height}
               />
@@ -107,5 +107,43 @@ describe("Simple", () => {
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
     checkImage(image, "snapshots/sksg/breathe.png");
+  });
+
+  it("simple demo (2)", () => {
+    const { Skia } = importSkia();
+    const root = new SkiaRoot();
+    const width = 768;
+    const height = 768;
+    const center = { x: width / 2, y: height / 2 };
+    const progress = 0;
+    const transform = (() => [{ rotate: mix(progress, -Math.PI, 0) }])();
+    root.render(
+      <>
+        <skFill color="rgb(36,43,56)" />
+        <skGroup blendMode="screen" origin={center} transform={transform}>
+          <skBlurMaskFilter style="solid" blur={40} respectCTM={true} />
+          {new Array(6).fill(0).map((_, index) => {
+            return (
+              <Ring
+                key={index}
+                index={index}
+                progress={progress}
+                center={center}
+                width={width}
+                height={height}
+              />
+            );
+          })}
+        </skGroup>
+      </>
+    );
+    const surface = Skia.Surface.Make(width, height)!;
+    expect(surface).toBeDefined();
+    const canvas = surface.getCanvas();
+    root.draw(new DrawingContext(Skia, canvas));
+    surface.flush();
+    const image = surface.makeImageSnapshot();
+    expect(image).toBeDefined();
+    checkImage(image, "snapshots/sksg/breathe-0.png");
   });
 });
