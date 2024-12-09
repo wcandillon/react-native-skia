@@ -82,7 +82,8 @@ describe("Simple", () => {
     root.render(
       <>
         <skFill color="rgb(36,43,56)" />
-        <skGroup>
+        <skGroup blendMode="screen">
+          <skBlurMaskFilter style="solid" blur={40} respectCTM={true} />
           {new Array(6).fill(0).map((_, index) => {
             return (
               <Ring

@@ -11,6 +11,7 @@ import type {
 type Composer<T> = (outer: T, inner: T) => T;
 
 export const composeDeclarations = <T>(filters: T[], composer: Composer<T>) => {
+  "worklet";
   if (filters.length <= 1) {
     return filters[0];
   }

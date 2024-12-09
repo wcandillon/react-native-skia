@@ -2,13 +2,18 @@
 import type { HostConfig } from "react-reconciler";
 import { DefaultEventPriority } from "react-reconciler/constants";
 
-import type { CircleProps, GroupProps } from "../dom/types";
+import type {
+  BlurMaskFilterProps,
+  CircleProps,
+  GroupProps,
+} from "../dom/types";
 import { NodeType } from "../dom/types";
 
 import {
   CircleNode,
   FillNode,
   GroupNode,
+  BlurMaskFilterNode,
   type Container,
   type Node,
 } from "./Node";
@@ -104,6 +109,8 @@ export const sksgHostConfig: SkiaHostConfig = {
         return new FillNode(props as CircleProps);
       case NodeType.Group:
         return new GroupNode(props as GroupProps);
+      case NodeType.BlurMaskFilter:
+        return new BlurMaskFilterNode(props as BlurMaskFilterProps);
       default:
         throw new Error(`Unknown type: ${type}`);
     }

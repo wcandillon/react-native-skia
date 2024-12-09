@@ -1,5 +1,7 @@
 import { enumKey, processCircle, processTransformProps2 } from "../dom/nodes";
+import { DeclarationContext } from "../dom/types";
 import type {
+  BlurMaskFilterProps,
   CircleProps,
   DrawingNodeProps,
   GroupProps,
@@ -8,6 +10,7 @@ import type {
 } from "../dom/types";
 import {
   BlendMode,
+  BlurStyle,
   PaintStyle,
   StrokeCap,
   StrokeJoin,
@@ -25,16 +28,20 @@ export interface Node<Props> {
 
 export class DrawingContext {
   private paints: SkPaint[];
+  public declCtx: DeclarationContext;
 
   constructor(public Skia: Skia, public canvas: SkCanvas) {
     this.paints = [Skia.Paint()];
+    this.declCtx = new DeclarationContext(this.Skia);
   }
 
   save() {
+    this.declCtx.save();
     this.paints.push(this.paint.copy());
   }
 
   restore() {
+    this.declCtx.restore();
     this.paints.pop();
   }
 
@@ -110,6 +117,26 @@ export class DrawingContext {
     if (dither !== undefined) {
       paint.setDither(dither);
     }
+    const colorFilter = this.declCtx.colorFilters.popAllAsOne();
+    const imageFilter = this.declCtx.imageFilters.popAllAsOne();
+    const shader = this.declCtx.shaders.pop();
+    const maskFilter = this.declCtx.maskFilters.pop();
+    const pathEffect = this.declCtx.pathEffects.popAllAsOne();
+    if (colorFilter) {
+      paint.setColorFilter(colorFilter);
+    }
+    if (imageFilter) {
+      paint.setImageFilter(imageFilter);
+    }
+    if (shader) {
+      paint.setShader(shader);
+    }
+    if (maskFilter) {
+      paint.setMaskFilter(maskFilter);
+    }
+    if (pathEffect) {
+      paint.setPathEffect(pathEffect);
+    }
     return shouldRestore;
   }
 
@@ -121,6 +148,23 @@ export class DrawingContext {
       return true;
     }
     return false;
+  }
+}
+
+export class BlurMaskFilterNode implements Node<BlurMaskFilterProps> {
+  children: Node<unknown>[] = [];
+  constructor(private props: BlurMaskFilterProps) {}
+  clone() {
+    return new BlurMaskFilterNode(this.props);
+  }
+  draw(ctx: DrawingContext) {
+    const { style, blur, respectCTM } = this.props;
+    const mf = ctx.Skia.MaskFilter.MakeBlur(
+      BlurStyle[enumKey(style)],
+      blur,
+      respectCTM
+    );
+    ctx.declCtx.maskFilters.push(mf);
   }
 }
 
