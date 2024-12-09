@@ -70,7 +70,7 @@ export class DeclarationContext {
   readonly imageFilters: Declaration<SkImageFilter>;
   readonly colorFilters: Declaration<SkColorFilter>;
 
-  constructor(private Skia: Skia) {
+  constructor(public Skia: Skia) {
     const peComp = this.Skia.PathEffect.MakeCompose.bind(this.Skia.PathEffect);
     const ifComp = this.Skia.ImageFilter.MakeCompose.bind(
       this.Skia.ImageFilter

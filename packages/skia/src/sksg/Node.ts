@@ -20,11 +20,38 @@ import {
   type Vector,
 } from "../skia/types";
 
+enum NodeType {
+  Drawing,
+  Declaration,
+}
+
 export interface Node<Props> {
-  draw: (ctx: DrawingContext) => void;
+  type: NodeType;
   clone(): Node<Props>;
   children: Node<unknown>[];
 }
+
+export interface DrawingNode<Props> extends Node<Props> {
+  type: NodeType.Drawing;
+  draw(ctx: DrawingContext): void;
+}
+
+export interface DeclarationNode<Props> extends Node<Props> {
+  type: NodeType.Declaration;
+  declare(ctx: DeclarationContext): void;
+}
+
+const isDrawingNode = (node: Node<unknown>): node is DrawingNode<unknown> => {
+  "worklet";
+  return node.type === NodeType.Drawing;
+};
+
+const isDeclarationNode = (
+  node: Node<unknown>
+): node is DeclarationNode<unknown> => {
+  "worklet";
+  return node.type === NodeType.Declaration;
+};
 
 export class DrawingContext {
   private paints: SkPaint[];
@@ -36,12 +63,10 @@ export class DrawingContext {
   }
 
   save() {
-    this.declCtx.save();
     this.paints.push(this.paint.copy());
   }
 
   restore() {
-    this.declCtx.restore();
     this.paints.pop();
   }
 
@@ -151,24 +176,28 @@ export class DrawingContext {
   }
 }
 
-export class BlurMaskFilterNode implements Node<BlurMaskFilterProps> {
+export class BlurMaskFilterNode
+  implements DeclarationNode<BlurMaskFilterProps>
+{
+  type = NodeType.Declaration as const;
   children: Node<unknown>[] = [];
   constructor(private props: BlurMaskFilterProps) {}
   clone() {
     return new BlurMaskFilterNode(this.props);
   }
-  draw(ctx: DrawingContext) {
+  declare(ctx: DeclarationContext) {
     const { style, blur, respectCTM } = this.props;
     const mf = ctx.Skia.MaskFilter.MakeBlur(
       BlurStyle[enumKey(style)],
       blur,
       respectCTM
     );
-    ctx.declCtx.maskFilters.push(mf);
+    ctx.maskFilters.push(mf);
   }
 }
 
-export class FillNode implements Node<DrawingNodeProps> {
+export class FillNode implements DrawingNode<DrawingNodeProps> {
+  type = NodeType.Drawing as const;
   children: Node<unknown>[] = [];
 
   constructor(private props: DrawingNodeProps) {}
@@ -191,7 +220,8 @@ export class FillNode implements Node<DrawingNodeProps> {
   }
 }
 
-export class CircleNode implements Node<CircleProps> {
+export class CircleNode implements DrawingNode<CircleProps> {
+  type = NodeType.Drawing as const;
   private c: Vector;
 
   constructor(private props: CircleProps) {
@@ -222,7 +252,8 @@ export class CircleNode implements Node<CircleProps> {
   }
 }
 
-export class GroupNode implements Node<GroupProps> {
+export class GroupNode implements DrawingNode<GroupProps> {
+  type = NodeType.Drawing as const;
   constructor(private props: GroupProps) {}
 
   children: Node<unknown>[] = [];
@@ -230,9 +261,18 @@ export class GroupNode implements Node<GroupProps> {
   draw(ctx: DrawingContext) {
     const { canvas } = ctx;
     const shouldRestoreMatrix = ctx.processMatrix(this.props);
+    ctx.declCtx.save();
+    this.children.forEach((child) => {
+      if (isDeclarationNode(child)) {
+        child.declare(ctx.declCtx);
+      }
+    });
+    ctx.declCtx.restore();
     const shouldRestorePaint = ctx.processPaint(this.props);
     this.children.forEach((child) => {
-      child.draw(ctx);
+      if (isDrawingNode(child)) {
+        child.draw(ctx);
+      }
     });
     if (shouldRestoreMatrix) {
       canvas.restore();
@@ -262,7 +302,9 @@ export class Container {
 
   render(ctx: DrawingContext) {
     this.root.forEach((node) => {
-      node.draw(ctx);
+      if (isDrawingNode(node)) {
+        node.draw(ctx);
+      }
     });
   }
 }
