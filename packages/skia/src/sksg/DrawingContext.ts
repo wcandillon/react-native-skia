@@ -11,6 +11,44 @@ import {
   type SkPaint,
 } from "../skia/types";
 
+import { isDeclarationNode, type Node } from "./Node";
+
+interface ContextProcessingResult {
+  shouldRestoreMatrix: boolean;
+  shouldRestorePaint: boolean;
+}
+
+export const preProcessContext = (
+  ctx: DrawingContext,
+  props: PaintProps & TransformProps,
+  children: Node<unknown>[]
+) => {
+  "worklet";
+  const shouldRestoreMatrix = ctx.processMatrix(props);
+  ctx.declCtx.save();
+  children.forEach((child) => {
+    if (isDeclarationNode(child)) {
+      child.declare(ctx.declCtx);
+    }
+  });
+  ctx.declCtx.restore();
+  const shouldRestorePaint = ctx.processPaint(props);
+  return { shouldRestoreMatrix, shouldRestorePaint };
+};
+
+export const postProcessContext = (
+  ctx: DrawingContext,
+  { shouldRestoreMatrix, shouldRestorePaint }: ContextProcessingResult
+) => {
+  "worklet";
+  if (shouldRestoreMatrix) {
+    ctx.canvas.restore();
+  }
+  if (shouldRestorePaint) {
+    ctx.restore();
+  }
+};
+
 export class DrawingContext {
   private paints: SkPaint[];
   public declCtx: DeclarationContext;
