@@ -15,16 +15,6 @@ import { useDerivedValue } from "react-native-reanimated";
 
 import { useLoop } from "../../components/Animations";
 
-class Test {
-  __workletClass = true;
-
-  test: number;
-
-  constructor() {
-    this.test = 1;
-  }
-}
-
 const c1 = "#61bea2";
 const c2 = "#529ca0";
 
@@ -43,8 +33,6 @@ const Ring = ({ index, progress }: RingProps) => {
 
   const theta = (index * (2 * Math.PI)) / 6;
   const transform = useDerivedValue(() => {
-    const test = new Test();
-    console.log(test.test);
     const { x, y } = polar2Canvas(
       { theta, radius: progress.value * R },
       { x: 0, y: 0 }
