@@ -1,5 +1,5 @@
 import { processCircle } from "../dom/nodes";
-import type { CircleProps, GroupProps } from "../dom/types";
+import type { CircleProps, DrawingNodeProps, GroupProps } from "../dom/types";
 import type { Vector } from "../skia/types";
 
 import type { DrawingContext } from "./DrawingContext";
@@ -18,6 +18,7 @@ export class CircleNode implements DrawingNode<CircleProps> {
 
   draw(ctx: DrawingContext) {
     const { canvas } = ctx;
+    // TODO: refactor to use group mixin
     const shouldRestoreMatrix = ctx.processMatrix(this.props);
     const shouldRestorePaint = ctx.processPaint(this.props);
     canvas.drawCircle(this.c.x, this.c.y, this.props.r, ctx.paint);
@@ -35,6 +36,30 @@ export class CircleNode implements DrawingNode<CircleProps> {
 
   clone() {
     return new CircleNode(this.props);
+  }
+}
+
+export class FillNode implements DrawingNode<DrawingNodeProps> {
+  type = NodeType.Drawing as const;
+  children: Node<unknown>[] = [];
+
+  constructor(private props: DrawingNodeProps) {}
+
+  clone() {
+    return new FillNode(this.props);
+  }
+
+  draw(ctx: DrawingContext) {
+    const { canvas } = ctx;
+    const shouldRestoreMatrix = ctx.processMatrix(this.props);
+    const shouldRestorePaint = ctx.processPaint(this.props);
+    canvas.drawPaint(ctx.paint);
+    if (shouldRestoreMatrix) {
+      canvas.restore();
+    }
+    if (shouldRestorePaint) {
+      ctx.restore();
+    }
   }
 }
 

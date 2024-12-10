@@ -1,4 +1,4 @@
-import type { DeclarationContext, DrawingNodeProps } from "../dom/types";
+import type { DeclarationContext } from "../dom/types";
 
 import type { DrawingContext } from "./DrawingContext";
 
@@ -34,27 +34,3 @@ export const isDeclarationNode = (
   "worklet";
   return node.type === NodeType.Declaration;
 };
-
-export class FillNode implements DrawingNode<DrawingNodeProps> {
-  type = NodeType.Drawing as const;
-  children: Node<unknown>[] = [];
-
-  constructor(private props: DrawingNodeProps) {}
-
-  clone() {
-    return new FillNode(this.props);
-  }
-
-  draw(ctx: DrawingContext) {
-    const { canvas } = ctx;
-    const shouldRestoreMatrix = ctx.processMatrix(this.props);
-    const shouldRestorePaint = ctx.processPaint(this.props);
-    canvas.drawPaint(ctx.paint);
-    if (shouldRestoreMatrix) {
-      canvas.restore();
-    }
-    if (shouldRestorePaint) {
-      ctx.restore();
-    }
-  }
-}

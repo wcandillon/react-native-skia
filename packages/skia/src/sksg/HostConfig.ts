@@ -9,9 +9,9 @@ import type {
 } from "../dom/types";
 import { NodeType } from "../dom/types";
 
-import { FillNode, type Node } from "./Node";
+import type { Node } from "./Node";
 import type { Container } from "./Container";
-import { CircleNode, GroupNode } from "./DrawingNodes";
+import { CircleNode, FillNode, GroupNode } from "./DrawingNodes";
 import { BlurMaskFilterNode } from "./DeclarationNodes";
 
 const DEBUG = false;
