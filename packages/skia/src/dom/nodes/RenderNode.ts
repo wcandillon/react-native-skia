@@ -3,7 +3,6 @@ import {
   type RenderNode,
   type GroupProps,
   type NodeType,
-  type Node,
   type DrawingContext,
   preProcessContext,
   postProcessContext,
@@ -11,7 +10,7 @@ import {
 
 import { isPathDef, processPath, processTransformProps2 } from "./datatypes";
 import type { NodeContext } from "./Node";
-import { JsiNode, JsiDeclarationNode } from "./Node";
+import { JsiNode } from "./Node";
 
 export abstract class JsiRenderNode<P extends GroupProps>
   extends JsiNode<P>
@@ -19,20 +18,6 @@ export abstract class JsiRenderNode<P extends GroupProps>
 {
   constructor(ctx: NodeContext, type: NodeType, props: P) {
     super(ctx, type, props);
-  }
-
-  addChild(child: Node<unknown>) {
-    if (child instanceof JsiDeclarationNode) {
-      child.setInvalidate(() => {});
-    }
-    super.addChild(child);
-  }
-
-  insertChildBefore(child: Node<unknown>, before: Node<unknown>) {
-    if (child instanceof JsiDeclarationNode) {
-      child.setInvalidate(() => {});
-    }
-    super.insertChildBefore(child, before);
   }
 
   private computeClip() {

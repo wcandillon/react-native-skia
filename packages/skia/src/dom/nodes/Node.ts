@@ -65,8 +65,6 @@ export abstract class JsiDeclarationNode<P>
   extends JsiNode<P>
   implements DeclarationNode<P>
 {
-  private invalidate: Invalidate = () => {};
-
   constructor(ctx: NodeContext, type: NodeType, props: P) {
     super(ctx, type, props);
   }
@@ -86,7 +84,6 @@ export abstract class JsiDeclarationNode<P>
       throw new Error(`Cannot add child of type ${child.type} to ${this.type}`);
     }
     super.addChild(child);
-    this.invalidate();
   }
 
   insertChildBefore(child: Node<unknown>, before: Node<unknown>): void {
@@ -94,28 +91,5 @@ export abstract class JsiDeclarationNode<P>
       throw new Error(`Cannot add child of type ${child.type} to ${this.type}`);
     }
     super.insertChildBefore(child, before);
-    this.invalidate();
-  }
-
-  dispose() {
-    this.invalidate();
-    super.dispose();
-  }
-
-  setInvalidate(invalidate: Invalidate) {
-    this.invalidate = invalidate;
-  }
-
-  setProps(props: P) {
-    super.setProps(props);
-    this.invalidate();
-  }
-
-  setProp<K extends keyof P>(name: K, v: P[K]) {
-    const hasChanged = super.setProp(name, v);
-    if (hasChanged) {
-      this.invalidate();
-    }
-    return hasChanged;
   }
 }
