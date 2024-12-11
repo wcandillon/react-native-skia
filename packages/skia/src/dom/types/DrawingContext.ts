@@ -20,7 +20,7 @@ import type { Node } from "./Node";
 export interface DrawingContext {
   canvas: SkCanvas;
   paint: SkPaint;
-  saveAndConcat(node: Node<PaintProps>, cache?: SkPaint): boolean;
+  saveAndConcat(node: Node<PaintProps>): boolean;
   restore(): void;
   declarationCtx: DeclarationContext;
 }
@@ -49,11 +49,7 @@ export class JsiDrawingContext implements DrawingContext {
     this.paints.pop();
   }
 
-  saveAndConcat(node: Node<PaintProps>, cache?: SkPaint) {
-    if (cache) {
-      this.paints.push(cache);
-      return true;
-    }
+  saveAndConcat(node: Node<PaintProps>) {
     const paint = new ConcatablePaint(this.Skia, this.declarationCtx, node);
     if (!paint.isPristine()) {
       this.save();

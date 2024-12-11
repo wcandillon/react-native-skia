@@ -64,10 +64,6 @@ describe("DrawingContext", () => {
     ctx.saveAndConcat(group);
     expect(ctx.paint).not.toBe(cachedPaint);
     ctx.restore();
-
-    ctx.saveAndConcat(group, cachedPaint);
-    expect(ctx.paint).toBe(cachedPaint);
-    ctx.restore();
   });
 
   it("should keep a paint stable if the parent doesn't change", () => {
@@ -88,12 +84,12 @@ describe("DrawingContext", () => {
     const p1 = ctx.paint;
     ctx.restore();
 
-    ctx.saveAndConcat(child, p1);
+    ctx.saveAndConcat(child);
     const p2 = ctx.paint;
     ctx.restore();
 
     ctx.restore();
 
-    expect(p1).toBe(p2);
+    expect(p1).not.toBe(p2);
   });
 });
