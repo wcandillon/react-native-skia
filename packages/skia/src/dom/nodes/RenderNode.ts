@@ -11,7 +11,6 @@ import { isPathDef, processPath, processTransformProps2 } from "./datatypes";
 import type { NodeContext } from "./Node";
 import { JsiNode, JsiDeclarationNode } from "./Node";
 
-
 export abstract class JsiRenderNode<P extends GroupProps>
   extends JsiNode<P>
   implements RenderNode<P>
@@ -39,7 +38,7 @@ export abstract class JsiRenderNode<P extends GroupProps>
     if (clip) {
       if (isPathDef(clip)) {
         return processPath(this.Skia, clip);
-      } else(isRRect(clip) || isRect(clip)) {
+      } else if (isRRect(clip) || isRect(clip)) {
         return clip;
       }
     }
