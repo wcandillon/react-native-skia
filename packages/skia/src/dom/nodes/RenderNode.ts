@@ -1,10 +1,12 @@
 import { ClipOp, isRect, isRRect } from "../../skia/types";
-import type {
-  RenderNode,
-  GroupProps,
-  NodeType,
-  Node,
-  DrawingContext,
+import {
+  type RenderNode,
+  type GroupProps,
+  type NodeType,
+  type Node,
+  type DrawingContext,
+  preProcessContext,
+  postProcessContext,
 } from "../types";
 
 import { isPathDef, processPath, processTransformProps2 } from "./datatypes";
@@ -49,7 +51,7 @@ export abstract class JsiRenderNode<P extends GroupProps>
     const { invertClip, layer, matrix, transform } = this.props;
     const { canvas } = ctx;
 
-    const shouldRestore = ctx.saveAndConcat(this);
+    const result = preProcessContext(ctx, this.props, this.children());
 
     const hasTransform = matrix !== undefined || transform !== undefined;
     const clip = this.computeClip();
@@ -87,9 +89,7 @@ export abstract class JsiRenderNode<P extends GroupProps>
     if (shouldSave) {
       canvas.restore();
     }
-    if (shouldRestore) {
-      ctx.restore();
-    }
+    postProcessContext(ctx, result);
   }
 
   abstract renderNode(ctx: DrawingContext): void;
