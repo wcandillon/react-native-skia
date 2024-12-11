@@ -113,9 +113,9 @@ export function bindReanimatedProps(
     const mapperId = Rea.startMapper(() => {
       "worklet";
       if (node) {
-        for (const propName in reanimatedProps) {
-          node.setProp(propName, reanimatedProps[propName].value);
-        }
+        //for (const propName in reanimatedProps) {
+        // node.setProp(propName, reanimatedProps[propName].value);
+        // }
       }
       // On React Native we use the SkiaViewApi to redraw because it can
       // run on the worklet thread (container.redraw can't)
