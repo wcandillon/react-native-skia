@@ -54,7 +54,9 @@ const useOption = <T>(value: Animated<T>) => {
   const defaultValue = Rea.useSharedValue(
     Rea.isSharedValue(value) ? value.value : value
   );
-  return Rea.isSharedValue(value) ? value : defaultValue;
+  return Rea.isSharedValue(value)
+    ? (value as SharedValue<T>)
+    : (defaultValue as SharedValue<T>);
 };
 
 const disposeVideo = (video: Video | null) => {
