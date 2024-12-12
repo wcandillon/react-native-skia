@@ -81,6 +81,11 @@ export class SkiaJSDomView extends React.Component<SkiaJSDomViewProps> {
     return SkiaViewApi.makeImageSnapshot(this._nativeId, rect);
   }
 
+  public makeImageSnapshotAsync(rect?: SkRect) {
+    assertSkiaViewApi();
+    return SkiaViewApi.makeImageSnapshotAsync(this._nativeId, rect);
+  }
+
   /**
    * Sends a redraw request to the native SkiaView.
    */
