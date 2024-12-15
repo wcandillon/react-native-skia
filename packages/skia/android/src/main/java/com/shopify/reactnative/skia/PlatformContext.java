@@ -2,8 +2,6 @@ package com.shopify.reactnative.skia;
 
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
-import android.view.Choreographer;
 
 import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
@@ -26,6 +24,8 @@ public class PlatformContext {
     private final ReactContext mContext;
 
     private final String TAG = "PlatformContext";
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public PlatformContext(ReactContext reactContext) {
         mContext = reactContext;
@@ -103,6 +103,16 @@ public class PlatformContext {
     protected void finalize() throws Throwable {
         mHybridData.resetNative();
         super.finalize();
+    }
+
+    @DoNotStrip
+    public void raise(final String message) {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                mContext.handleException(new Exception(message));
+            }
+        });
     }
 
     // Private c++ native methods

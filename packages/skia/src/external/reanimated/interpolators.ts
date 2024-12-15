@@ -12,7 +12,7 @@ import { isOnMainThread } from "../../renderer/Offscreen";
 
 import Rea from "./ReanimatedProxy";
 
-export const notifyChange = (value: SharedValue<unknown>) => {
+export const notifyChange = <T>(value: SharedValue<T>) => {
   "worklet";
   if (isOnMainThread()) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

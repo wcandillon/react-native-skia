@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fbjni/fbjni.h>
+#include <jsi/jsi.h>
 
 #include <exception>
 #include <functional>

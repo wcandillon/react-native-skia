@@ -7,13 +7,13 @@ import { Platform } from "../../Platform";
 import Rea from "./ReanimatedProxy";
 import { useVideoLoading } from "./useVideoLoading";
 
-type Animated<T> = SharedValue<T> | T;
+type MaybeAnimated<T> = SharedValue<T> | T;
 
 interface PlaybackOptions {
-  looping: Animated<boolean>;
-  paused: Animated<boolean>;
-  seek: Animated<number | null>;
-  volume: Animated<number>;
+  looping: MaybeAnimated<boolean>;
+  paused: MaybeAnimated<boolean>;
+  seek: MaybeAnimated<number | null>;
+  volume: MaybeAnimated<number>;
 }
 
 const copyFrameOnAndroid = (currentFrame: SharedValue<SkImage | null>) => {
@@ -48,13 +48,15 @@ const defaultOptions = {
   volume: 0,
 };
 
-const useOption = <T>(value: Animated<T>) => {
+const useOption = <T>(value: MaybeAnimated<T>) => {
   "worklet";
   // TODO: only create defaultValue is needed (via makeMutable)
   const defaultValue = Rea.useSharedValue(
     Rea.isSharedValue(value) ? value.value : value
   );
-  return Rea.isSharedValue(value) ? value : defaultValue;
+  return Rea.isSharedValue(value)
+    ? (value as SharedValue<T>)
+    : (defaultValue as SharedValue<T>);
 };
 
 const disposeVideo = (video: Video | null) => {

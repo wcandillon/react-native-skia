@@ -3,6 +3,7 @@
 #include <jsi/jsi.h>
 #include <memory>
 #include <string>
+#include <variant>
 
 #include "JsiDomRenderNode.h"
 #include "JsiSkPicture.h"

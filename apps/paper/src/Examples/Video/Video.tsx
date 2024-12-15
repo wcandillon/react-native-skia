@@ -20,7 +20,7 @@ const videoURL =
 
 export const Video = () => {
   const paused = useSharedValue(false);
-  const seek = useSharedValue(0);
+  const seek = useSharedValue<number | null>(0);
   const { width, height } = useWindowDimensions();
   const fontSize = 20;
   const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), fontSize);
