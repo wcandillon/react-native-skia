@@ -377,7 +377,7 @@ public:
 
   JSI_HOST_FUNCTION(drawSvg) {
     auto svgdom = JsiSkSVG::fromValue(runtime, arguments[0]);
-    if (count == 3) {
+    if (count == 3 && arguments[1].isNumber() && arguments[2].isNumber()) {
       // read size
       auto w = arguments[1].asNumber();
       auto h = arguments[2].asNumber();
