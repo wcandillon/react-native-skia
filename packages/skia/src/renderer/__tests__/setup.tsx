@@ -302,6 +302,11 @@ const serializeSkOjects = (obj: any): any => {
         ty: obj.ty,
       };
     }
+  } else if (obj instanceof Float32Array) {
+    return {
+      __typename__: "Float32Array",
+      value: Array.from(obj),
+    };
   }
   return obj;
 };

@@ -42,8 +42,9 @@ const parseProp = (value: any, assets: Assets): any => {
       const paint = Skia.Paint();
       paint.setColor(Float32Array.of(...value.color));
       return paint;
-    }
-    if (value.__typename__ === "Point") {
+    } else if (value.__typename__ === "Float32Array") {
+      return Float32Array.of(...value.value);
+    } else if (value.__typename__ === "Point") {
       return Skia.Point(value.x, value.y);
     } else if (value.__typename__ === "Rect") {
       return Skia.XYWHRect(value.x, value.y, value.width, value.height);

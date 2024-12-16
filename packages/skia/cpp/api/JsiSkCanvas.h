@@ -503,7 +503,7 @@ public:
     auto paint = JsiSkPaint::fromValue(runtime, arguments[3]);
     auto blendMode = count > 5 && !arguments[4].isUndefined()
                          ? static_cast<SkBlendMode>(arguments[4].asNumber())
-                         : SkBlendMode::kSrcOver;
+                         : SkBlendMode::kDstOver;
 
     std::vector<SkRSXform> xforms;
     int xformsSize = static_cast<int>(transforms.size(runtime));
@@ -522,8 +522,33 @@ public:
           runtime, rects.getValueAtIndex(runtime, i).asObject(runtime));
       skRects.push_back(*rect.get());
     }
-    SkSamplingOptions sampling;
-    _canvas->drawAtlas(atlas.get(), xforms.data(), skRects.data(), nullptr,
+
+    std::vector<SkColor> colors;
+    if (count > 5 && !arguments[5].isUndefined()) {
+        auto colorsArray = arguments[5].asObject(runtime).asArray(runtime);
+        int colorsSize = static_cast<int>(colorsArray.size(runtime));
+        colors.reserve(colorsSize);
+        for (int i = 0; i < colorsSize; i++) {
+            // Convert from [r,g,b,a] in [0,1] to SkColor
+            auto val = colorsArray.getValueAtIndex(runtime, i).asObject(runtime);
+            float r = val.getProperty(runtime, "0").asNumber();
+            float g = val.getProperty(runtime, "1").asNumber();
+            float b = val.getProperty(runtime, "2").asNumber();
+            float a = val.getProperty(runtime, "3").asNumber();
+
+            // Convert to 8-bit color channels and pack into SkColor
+            uint8_t r8 = static_cast<uint8_t>(r * 255);
+            uint8_t g8 = static_cast<uint8_t>(g * 255);
+            uint8_t b8 = static_cast<uint8_t>(b * 255);
+            uint8_t a8 = static_cast<uint8_t>(a * 255);
+            
+            SkColor color = SkColorSetARGB(a8, r8, g8, b8);
+            colors.push_back(color);
+        }
+    }
+
+    SkSamplingOptions sampling(SkFilterMode::kLinear, SkMipmapMode::kNone);
+    _canvas->drawAtlas(atlas.get(), xforms.data(), skRects.data(), colors.data(),
                        skRects.size(), blendMode, sampling, nullptr,
                        paint.get());
 
