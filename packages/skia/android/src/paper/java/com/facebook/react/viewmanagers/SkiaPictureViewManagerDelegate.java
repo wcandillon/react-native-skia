@@ -21,9 +21,6 @@ public class SkiaPictureViewManagerDelegate<T extends View, U extends BaseViewMa
   @Override
   public void setProperty(T view, String propName, @Nullable Object value) {
     switch (propName) {
-      case "mode":
-        mViewManager.setMode(view, value == null ? null : (String) value);
-        break;
       case "opaque":
         mViewManager.setOpaque(view, value != null && (boolean) value);
       case "debug":

@@ -32,8 +32,6 @@ public class SkiaPictureView extends SkiaBaseView {
 
     protected native void setBgColor(int color);
 
-    protected native void setMode(String mode);
-
     protected native void setDebugMode(boolean show);
 
     protected native void registerView(int nativeId);

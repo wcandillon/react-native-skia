@@ -16,11 +16,6 @@ public abstract class SkiaBaseViewManager<T extends SkiaBaseView> extends ReactV
         ((SkiaBaseView)view).registerView(nativeIdResolved);
     }
 
-    @ReactProp(name = "mode")
-    public void setMode(T view, String mode) {
-        ((SkiaBaseView)view).setMode(mode);
-    }
-
     @ReactProp(name = "debug")
     public void setDebug(T view, boolean show) {
         ((SkiaBaseView)view).setDebugMode(show);
