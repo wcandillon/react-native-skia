@@ -11,6 +11,7 @@ import type {
 type Composer<T> = (outer: T, inner: T) => T;
 
 export const composeDeclarations = <T>(filters: T[], composer: Composer<T>) => {
+  "worklet";
   if (filters.length <= 1) {
     return filters[0];
   }
@@ -69,7 +70,7 @@ export class DeclarationContext {
   readonly imageFilters: Declaration<SkImageFilter>;
   readonly colorFilters: Declaration<SkColorFilter>;
 
-  constructor(private Skia: Skia) {
+  constructor(public Skia: Skia) {
     const peComp = this.Skia.PathEffect.MakeCompose.bind(this.Skia.PathEffect);
     const ifComp = this.Skia.ImageFilter.MakeCompose.bind(
       this.Skia.ImageFilter

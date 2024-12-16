@@ -42,6 +42,7 @@
     "release": "semantic-release",
     "build": "bob build && merge-dirs lib/typescript/src lib/commonjs && merge-dirs lib/typescript/src lib/module",
     "clean-skia": "yarn rimraf ./libs && yarn rimraf ../../externals/skia/out",
+    "codegen": "ts-node ./scripts/codegen/sksg.ts",
     "build-skia": "ts-node ./scripts/build-skia.ts",
     "copy-skia-headers": "ts-node ./scripts/copy-skia-headers.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
@@ -114,6 +115,7 @@
     "semantic-release": "^24.1.0",
     "semantic-release-yarn": "^3.0.2",
     "ts-jest": "29.1.1",
+    "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.2.2",
     "ws": "8.18.0"
