@@ -115,7 +115,7 @@ public:
   createCtor(std::shared_ptr<RNSkPlatformContext> context) {
     return JSI_HOST_FUNCTION_LAMBDA {
       // Set up the rect
-      auto rect = JsiSkRect::fromValue(runtime, arguments[0]).get();
+      auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
       auto rx = arguments[1].asNumber();
       auto ry = arguments[2].asNumber();
       auto rrect = SkRRect::MakeRectXY(*rect, rx, ry);
