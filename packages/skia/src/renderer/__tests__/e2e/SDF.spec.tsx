@@ -23,10 +23,14 @@ vec4 main(vec2 xy) {
   return mix(c1, c2, saturate(d));
 }
 `)!;
-    const c1 = Skia.Color("#61dafb");
-    const c2 = Skia.Color("#fb61da");
-    const c3 = Skia.Color("#61fbcf");
-    const c4 = Skia.Color("#dafb61");
+    const makeColor = (c: string) => {
+      const cl = Skia.Color(c);
+      return [cl[0], cl[1], cl[2], cl[3]];
+    };
+    const c1 = makeColor("#61dafb");
+    const c2 = makeColor("#fb61da");
+    const c3 = makeColor("#61fbcf");
+    const c4 = makeColor("#dafb61");
     expect(source).toBeDefined();
     const img = await surface.draw(
       <Fill>
@@ -61,8 +65,13 @@ vec4 main(vec2 xy) {
   return c1;
 }
 `)!;
-    const c1 = Skia.Color("#61dafb");
-    const c2 = Skia.Color("#fb61da");
+
+    const makeColor = (c: string) => {
+      const cl = Skia.Color(c);
+      return [cl[0], cl[1], cl[2], cl[3]];
+    };
+    const c1 = makeColor("#61dafb");
+    const c2 = makeColor("#fb61da");
     expect(source).toBeDefined();
     const img = await surface.draw(
       <Fill>
@@ -92,8 +101,13 @@ vec4 main(vec2 xy) {
   return c1;
 }
 `)!;
-    const c1 = Skia.Color("#61dafb");
-    const c2 = Skia.Color("#fb61da");
+
+    const makeColor = (c: string) => {
+      const cl = Skia.Color(c);
+      return [cl[0], cl[1], cl[2], cl[3]];
+    };
+    const c1 = makeColor("#61dafb");
+    const c2 = makeColor("#fb61da");
     expect(source).toBeDefined();
     const img = await surface.draw(
       <Fill>
@@ -131,8 +145,12 @@ vec4 main(vec2 xy) {
   return c1;
 }
 `)!;
-    const c1 = Skia.Color("#61dafb");
-    const c2 = Skia.Color("#fb61da");
+    const makeColor = (c: string) => {
+      const cl = Skia.Color(c);
+      return [cl[0], cl[1], cl[2], cl[3]];
+    };
+    const c1 = makeColor("#61dafb");
+    const c2 = makeColor("#fb61da");
     expect(source).toBeDefined();
     const { width, height } = surface;
     const img = await surface.draw(
