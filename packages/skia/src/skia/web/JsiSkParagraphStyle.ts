@@ -19,9 +19,7 @@ export class JsiSkParagraphStyle {
     ps.replaceTabCharacters =
       value.replaceTabCharacters ?? ps.replaceTabCharacters;
     ps.textAlign =
-      value.textAlign !== undefined
-        ? { value: value.textAlign }
-        : undefined ?? ps.textAlign;
+      value.textAlign !== undefined ? { value: value.textAlign } : ps.textAlign;
     ps.textDirection =
       value.textDirection !== undefined
         ? { value: value.textDirection === TextDirection.LTR ? 1 : 0 }

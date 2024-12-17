@@ -20,5 +20,10 @@ export type InputRRect = SkRRect | NonUniformRRect;
 // We have an issue to check property existence on JSI backed instances
 export const isRRect = (def: unknown): def is SkRRect => {
   "worklet";
-  return typeof def === "object" && def !== null && "rect" in def;
+  return (
+    typeof def === "object" &&
+    def !== null &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    typeof (def as any).rect === "object"
+  );
 };
