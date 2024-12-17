@@ -59,8 +59,6 @@ export abstract class JsiNode<P> implements Node<P> {
   }
 }
 
-export type Invalidate = () => void;
-
 export abstract class JsiDeclarationNode<P>
   extends JsiNode<P>
   implements DeclarationNode<P>
