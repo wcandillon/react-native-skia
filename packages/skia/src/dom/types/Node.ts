@@ -16,13 +16,9 @@ export interface Node<P> {
   insertChildBefore(child: Node<unknown>, before: Node<unknown>): void;
 }
 
-export type Invalidate = () => void;
-
 export interface DeclarationNode<P> extends Node<P> {
   //declarationType: DeclarationType;
   decorate(ctx: DeclarationContext): void;
-
-  setInvalidate(invalidate: Invalidate): void;
 }
 
 export interface RenderNode<P extends GroupProps> extends Node<P> {

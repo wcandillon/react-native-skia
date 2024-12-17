@@ -5,8 +5,8 @@ import {
   getSkDOM,
 } from "../../renderer/__tests__/setup";
 import { setupSkia } from "../../skia/__tests__/setup";
-import type { Node, PaintProps } from "../types";
-import { JsiDrawingContext } from "../types";
+//import type { Node, PaintProps } from "../types";
+import { JsiDrawingContext, preProcessContext } from "../types";
 
 describe("DrawingContext", () => {
   it("should create contextes properly", () => {
@@ -18,8 +18,12 @@ describe("DrawingContext", () => {
     const rootPaint = ctx.paint;
     expect(rootPaint).toBeDefined();
 
-    const shouldRestore = ctx.saveAndConcat(group);
-    expect(shouldRestore).toBe(true);
+    const { shouldRestorePaint } = preProcessContext(
+      ctx,
+      group.getProps(),
+      group.children()
+    );
+    expect(shouldRestorePaint).toBe(true);
     expect(ctx.paint).not.toBe(rootPaint);
     expect(ctx.paint.getColor()).toEqual(Skia.Color("red"));
     ctx.restore();
@@ -37,13 +41,22 @@ describe("DrawingContext", () => {
     const rootPaint = ctx.paint;
     expect(rootPaint).toBeDefined();
 
-    let shouldRestore = ctx.saveAndConcat(group);
-    expect(shouldRestore).toBe(false);
+    const { shouldRestorePaint } = preProcessContext(
+      ctx,
+      group.getProps(),
+      group.children()
+    );
+    expect(shouldRestorePaint).toBe(false);
     expect(ctx.paint).toBe(rootPaint);
     expect(ctx.paint.getColor()).toEqual(Skia.Color("black"));
 
-    shouldRestore = ctx.saveAndConcat(group.children()[0] as Node<PaintProps>);
-    expect(shouldRestore).toBe(true);
+    const r = preProcessContext(
+      ctx,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      group.children()[0].getProps() as any,
+      group.children()[0].children()
+    );
+    expect(r.shouldRestorePaint).toBe(true);
     expect(ctx.paint).not.toBe(rootPaint);
     expect(ctx.paint.getColor()).toEqual(Skia.Color("red"));
   });
@@ -57,43 +70,12 @@ describe("DrawingContext", () => {
     const rootPaint = ctx.paint;
     expect(rootPaint).toBeDefined();
 
-    ctx.saveAndConcat(group);
+    preProcessContext(ctx, group.getProps(), group.children());
     const cachedPaint = ctx.paint;
     ctx.restore();
 
-    ctx.saveAndConcat(group);
+    preProcessContext(ctx, group.getProps(), group.children());
     expect(ctx.paint).not.toBe(cachedPaint);
     ctx.restore();
-
-    ctx.saveAndConcat(group, cachedPaint);
-    expect(ctx.paint).toBe(cachedPaint);
-    ctx.restore();
-  });
-
-  it("should keep a paint stable if the parent doesn't change", () => {
-    const { canvas } = setupSkia(width, height);
-    const { Skia } = importSkia();
-    const Sk = getSkDOM();
-    const root = Sk.Group({});
-    const child = Sk.Group({ color: "red" });
-    root.addChild(child);
-
-    const ctx = new JsiDrawingContext(Skia, canvas);
-    const rootPaint = ctx.paint;
-    expect(rootPaint).toBeDefined();
-
-    ctx.saveAndConcat(root);
-
-    ctx.saveAndConcat(child);
-    const p1 = ctx.paint;
-    ctx.restore();
-
-    ctx.saveAndConcat(child, p1);
-    const p2 = ctx.paint;
-    ctx.restore();
-
-    ctx.restore();
-
-    expect(p1).toBe(p2);
   });
 });
