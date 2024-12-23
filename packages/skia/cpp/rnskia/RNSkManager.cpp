@@ -21,7 +21,8 @@ RNSkManager::RNSkManager(
     std::shared_ptr<RNSkPlatformContext> platformContext)
     : _jsRuntime(jsRuntime), _jsCallInvoker(jsCallInvoker),
       _platformContext(platformContext),
-      _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
+      _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)),
+      _surfaceRegistry(std::make_shared<JsiSurfaceRegistry>(platformContext)) {
 
   // Register main runtime
   BaseRuntimeAwareCache::setMainJsRuntime(_jsRuntime);
@@ -77,6 +78,10 @@ void RNSkManager::installBindings() {
   _jsRuntime->global().setProperty(
       *_jsRuntime, "SkiaViewApi",
       jsi::Object::createFromHostObject(*_jsRuntime, _viewApi));
+
+  _jsRuntime->global().setProperty(
+      *_jsRuntime, "SkiaSurfaceRegistry",
+      jsi::Object::createFromHostObject(*_jsRuntime, _surfaceRegistry));
 
   auto skiaDomApi = std::make_shared<JsiDomApi>(_platformContext);
   _jsRuntime->global().setProperty(

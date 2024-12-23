@@ -38,13 +38,13 @@ export const Canvas2 = forwardRef(
     // Component methods
     useImperativeHandle(ref, () => ({
       makeImageSnapshot: (rect?: SkRect) => {
-        return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+        //return SkiaViewApi.makeImageSnapshot(nativeId, rect);
       },
       makeImageSnapshotAsync: (rect?: SkRect) => {
-        return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+        //return SkiaViewApi.makeImageSnapshot(nativeId, rect);
       },
       redraw: () => {
-        SkiaViewApi.requestRedraw(nativeId);
+       //SkiaViewApi.requestRedraw(nativeId);
       },
       getNativeId: () => {
         return nativeId;

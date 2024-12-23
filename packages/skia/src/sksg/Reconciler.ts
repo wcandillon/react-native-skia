@@ -38,6 +38,7 @@ export class SkiaSGRoot {
     skiaReconciler.updateContainer(element as any, this.root, null, () => {
       debug("updateContainer");
     });
+    this.draw();
   }
 
   // TODO: rename to Draw on nativeView

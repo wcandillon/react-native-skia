@@ -68,7 +68,7 @@ export const Breathe = () => {
 
   return (
     <View style={{ flex: 1 }}>
-      <Canvas2 style={styles.container} opaque>
+      <Canvas2 style={styles.container}>
         <Fill color="rgb(36,43,56)" />
         <Group origin={center} transform={transform} blendMode="screen">
           <BlurMask style="solid" blur={40} />

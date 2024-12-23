@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "RNSkPlatformContext.h"
+#include "JsiSurfaceRegistry.h"
 
 namespace facebook {
 namespace react {
@@ -77,6 +78,7 @@ private:
   std::shared_ptr<RNSkPlatformContext> _platformContext;
   std::shared_ptr<facebook::react::CallInvoker> _jsCallInvoker;
   std::shared_ptr<RNSkJsiViewApi> _viewApi;
+  std::shared_ptr<JsiSurfaceRegistry> _surfaceRegistry;
   std::atomic<bool> _isInvalidated = {false};
 };
 
