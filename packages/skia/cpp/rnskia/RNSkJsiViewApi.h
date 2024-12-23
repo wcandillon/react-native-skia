@@ -246,9 +246,6 @@ public:
    */
   void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (_viewInfos.find(nativeId) == _viewInfos.end()) {
-      return;
-    }
     auto info = getEnsuredViewInfo(nativeId);
     if (view != nullptr) {
       info->view = view;
