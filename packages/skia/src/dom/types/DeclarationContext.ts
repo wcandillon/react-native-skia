@@ -24,92 +24,78 @@ export const composeDeclarations = <T>(filters: T[], composer: Composer<T>) => {
   });
 };
 
-class Declaration<T> {
-  private decls: T[] = [];
-  private indexes = [0];
-  private composer?: Composer<T>;
+const createDeclaration = <T>(composer?: Composer<T>) => {
+  const state = {
+    decls: [] as T[],
+    indexes: [0],
+  };
 
-  constructor(composer?: Composer<T>) {
-    this.composer = composer;
-  }
+  const getIndex = () => state.indexes[state.indexes.length - 1];
 
-  private get index() {
-    return this.indexes[this.indexes.length - 1];
-  }
+  return {
+    save: () => {
+      state.indexes.push(state.decls.length);
+    },
+    restore: () => {
+      state.indexes.pop();
+    },
+    pop: () => state.decls.pop(),
+    push: (decl: T) => {
+      state.decls.push(decl);
+    },
+    popAll: () => {
+      return state.decls.splice(getIndex(), state.decls.length - getIndex());
+    },
+    popAllAsOne: () => {
+      if (state.decls.length === 0) {
+        return undefined;
+      }
+      if (!composer) {
+        throw new Error("No composer for this type of declaration");
+      }
+      const decls = state.decls.splice(
+        getIndex(),
+        state.decls.length - getIndex()
+      );
+      return composeDeclarations(decls, composer);
+    },
+  };
+};
 
-  save() {
-    this.indexes.push(this.decls.length);
-  }
+export const createDeclarationContext = (Skia: Skia) => {
+  const peComp = Skia.PathEffect.MakeCompose.bind(Skia.PathEffect);
+  const ifComp = Skia.ImageFilter.MakeCompose.bind(Skia.ImageFilter);
+  const cfComp = Skia.ColorFilter.MakeCompose.bind(Skia.ColorFilter);
 
-  restore() {
-    this.indexes.pop();
-  }
+  const context = {
+    Skia,
+    paints: createDeclaration<SkPaint>(),
+    maskFilters: createDeclaration<SkMaskFilter>(),
+    shaders: createDeclaration<SkShader>(),
+    pathEffects: createDeclaration<SkPathEffect>(peComp),
+    imageFilters: createDeclaration<SkImageFilter>(ifComp),
+    colorFilters: createDeclaration<SkColorFilter>(cfComp),
+  };
 
-  pop() {
-    return this.decls.pop();
-  }
+  return {
+    ...context,
+    save: () => {
+      context.paints.save();
+      context.maskFilters.save();
+      context.shaders.save();
+      context.pathEffects.save();
+      context.imageFilters.save();
+      context.colorFilters.save();
+    },
+    restore: () => {
+      context.paints.restore();
+      context.maskFilters.restore();
+      context.shaders.restore();
+      context.pathEffects.restore();
+      context.imageFilters.restore();
+      context.colorFilters.restore();
+    },
+  };
+};
 
-  push(decl: T) {
-    this.decls.push(decl);
-  }
-
-  popAll() {
-    return this.decls.splice(this.index, this.decls.length - this.index);
-  }
-
-  popAllAsOne() {
-    if (this.decls.length === 0) {
-      return undefined;
-    }
-    if (!this.composer) {
-      throw new Error("No composer for this type of declaration");
-    }
-    const decls = this.popAll();
-    return composeDeclarations(decls, this.composer!);
-  }
-}
-
-export class DeclarationContext {
-  public Skia: Skia;
-  readonly paints: Declaration<SkPaint>;
-  readonly maskFilters: Declaration<SkMaskFilter>;
-  readonly shaders: Declaration<SkShader>;
-  readonly pathEffects: Declaration<SkPathEffect>;
-  readonly imageFilters: Declaration<SkImageFilter>;
-  readonly colorFilters: Declaration<SkColorFilter>;
-
-  constructor(Skia: Skia) {
-    this.Skia = Skia;
-    const peComp = this.Skia.PathEffect.MakeCompose.bind(this.Skia.PathEffect);
-    const ifComp = this.Skia.ImageFilter.MakeCompose.bind(
-      this.Skia.ImageFilter
-    );
-    const cfComp = this.Skia.ColorFilter.MakeCompose.bind(
-      this.Skia.ColorFilter
-    );
-    this.paints = new Declaration<SkPaint>();
-    this.maskFilters = new Declaration<SkMaskFilter>();
-    this.shaders = new Declaration<SkShader>();
-    this.pathEffects = new Declaration<SkPathEffect>(peComp);
-    this.imageFilters = new Declaration<SkImageFilter>(ifComp);
-    this.colorFilters = new Declaration<SkColorFilter>(cfComp);
-  }
-
-  save() {
-    this.paints.save();
-    this.maskFilters.save();
-    this.shaders.save();
-    this.pathEffects.save();
-    this.imageFilters.save();
-    this.colorFilters.save();
-  }
-
-  restore() {
-    this.paints.restore();
-    this.maskFilters.restore();
-    this.shaders.restore();
-    this.pathEffects.restore();
-    this.imageFilters.restore();
-    this.colorFilters.restore();
-  }
-}
+export type DeclarationContext = ReturnType<typeof createDeclarationContext>;

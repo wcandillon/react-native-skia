@@ -7,7 +7,7 @@ import {
   HAS_REANIMATED_3,
 } from "../external/reanimated/renderHelpers";
 
-import { DrawingContext } from "./DrawingContext";
+import { createDrawingContext } from "./DrawingContext";
 import type { Node } from "./nodes";
 import { draw, isSharedValue } from "./nodes";
 
@@ -17,7 +17,7 @@ const drawOnscreen = (Skia: Skia, nativeId: number, root: Node[]) => {
   const canvas = rec.beginRecording();
   // TODO: This is only support from 3.15 and above (check the exact version)
   // This could be polyfilled in C++ if needed (or in JS via functions only?)
-  const ctx = new DrawingContext(Skia, canvas);
+  const ctx = createDrawingContext(Skia, canvas);
   root.forEach((node) => {
     draw(ctx, node);
   });
@@ -94,7 +94,7 @@ export class Container {
   }
 
   drawOnCanvas(canvas: SkCanvas) {
-    const ctx = new DrawingContext(this.Skia, canvas);
+    const ctx = createDrawingContext(this.Skia, canvas);
     this.root.forEach((node) => {
       draw(ctx, node);
     });
