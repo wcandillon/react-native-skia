@@ -1,7 +1,7 @@
-import { makeMutable, type SharedValue } from "react-native-reanimated";
+import { type SharedValue } from "react-native-reanimated";
 
 import Rea from "../external/reanimated/ReanimatedProxy";
-import type { Skia, SkCanvas, SkPicture } from "../skia/types";
+import type { Skia, SkCanvas } from "../skia/types";
 import {
   HAS_REANIMATED,
   HAS_REANIMATED_3,
@@ -11,20 +11,19 @@ import { createDrawingContext } from "./DrawingContext";
 import type { Node } from "./nodes";
 import { draw, isSharedValue } from "./nodes";
 
-const cachedPicture: SharedValue<null | SkPicture> =
-  makeMutable<null | SkPicture>(null);
+const d = global.SkiaDomApi.draw;
 
 const drawOnscreen = (Skia: Skia, nativeId: number, root: Node[]) => {
   "worklet";
   const start = performance.now();
-
-  const rec = Skia.PictureRecorder();
-  const canvas = rec.beginRecording();
-  const ctx = createDrawingContext(Skia, canvas);
-  root.forEach((node) => {
-    draw(ctx, node);
-  });
-  const pic = rec.finishRecordingAsPicture();
+  const pic = d();
+  // const rec = Skia.PictureRecorder();
+  // const canvas = rec.beginRecording();
+  // const ctx = createDrawingContext(Skia, canvas);
+  // root.forEach((node) => {
+  //   draw(ctx, node);
+  // });
+  // const pic = rec.finishRecordingAsPicture();
   const end = performance.now();
   console.log(`Picture creation took ${end - start}ms`);
   SkiaViewApi.setJsiProperty(nativeId, "picture", pic);

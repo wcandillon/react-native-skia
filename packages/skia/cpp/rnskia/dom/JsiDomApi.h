@@ -47,6 +47,8 @@
 #include "nodes/JsiLayerNode.h"
 #include "nodes/JsiParagraphNode.h"
 
+#include "JsiDraw.h"
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -159,6 +161,8 @@ public:
 
     // Paragraph node
     installFunction("ParagraphNode", JsiParagraphNode::createCtor(context));
+
+    installFunction("draw", JsiDraw::createCtor(context));
   }
 };
 
