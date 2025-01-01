@@ -1,32 +1,24 @@
-import React, {
-  useEffect,
-  useCallback,
-  useMemo,
+import {
   forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
   useRef,
 } from "react";
-import type {
-  RefObject,
-  ReactNode,
-  MutableRefObject,
-  ForwardedRef,
-  FunctionComponent,
-} from "react";
-import type { LayoutChangeEvent } from "react-native";
+import type { LayoutChangeEvent, ViewProps } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 
-import { SkiaDomView } from "../views";
+import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
+import SkiaPictureViewNativeComponent from "../specs/SkiaPictureViewNativeComponent";
+import type { SkRect, SkSize } from "../skia/types";
+import { SkiaSGRoot } from "../sksg/Reconciler";
+import { Skia } from "../skia";
 import type { SkiaBaseViewProps } from "../views";
 
-import { SkiaRoot } from "./Reconciler";
+const NativeSkiaPictureView = SkiaPictureViewNativeComponent;
 
-export const useCanvasRef = () => useRef<SkiaDomView>(null);
-
-export interface CanvasProps extends SkiaBaseViewProps {
-  ref?: RefObject<SkiaDomView>;
-  children: ReactNode;
-  mode?: "default" | "continuous";
-}
-
+// TODO: no need to go through the JS thread for this
 const useOnSizeEvent = (
   resultValue: SkiaBaseViewProps["onSize"],
   onLayout?: (event: LayoutChangeEvent) => void
@@ -46,39 +38,40 @@ const useOnSizeEvent = (
   );
 };
 
-export const Canvas = forwardRef<SkiaDomView, CanvasProps>(
+export interface CanvasProps extends ViewProps {
+  debug?: boolean;
+  opaque?: boolean;
+  onSize?: SharedValue<SkSize>;
+  mode?: "continuous" | "default";
+}
+
+export const Canvas = forwardRef(
   (
     {
-      children,
-      style,
+      mode,
       debug,
-      mode = "default",
-      onSize: _onSize,
+      opaque,
+      children,
+      onSize,
       onLayout: _onLayout,
-      ...props
-    },
-    forwardedRef
+      ...viewProps
+    }: CanvasProps,
+    ref
   ) => {
-    const onLayout = useOnSizeEvent(_onSize, _onLayout);
-    const innerRef = useCanvasRef();
-    const ref = useCombinedRefs(forwardedRef, innerRef);
-    const redraw = useCallback(() => {
-      innerRef.current?.redraw();
-    }, [innerRef]);
-    const getNativeId = useCallback(() => {
-      const id = innerRef.current?.nativeId ?? -1;
-      return id;
-    }, [innerRef]);
+    const rafId = useRef<number | null>(null);
+    const onLayout = useOnSizeEvent(onSize, _onLayout);
+    // Native ID
+    const nativeId = useMemo(() => {
+      return SkiaViewNativeId.current++;
+    }, []);
 
-    const root = useMemo(
-      () => new SkiaRoot(redraw, getNativeId),
-      [redraw, getNativeId]
-    );
+    // Root
+    const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
 
-    // Render effect
+    // Render effects
     useEffect(() => {
       root.render(children);
-    }, [children, root, redraw]);
+    }, [children, root]);
 
     useEffect(() => {
       return () => {
@@ -86,41 +79,50 @@ export const Canvas = forwardRef<SkiaDomView, CanvasProps>(
       };
     }, [root]);
 
+    const requestRedraw = useCallback(() => {
+      rafId.current = requestAnimationFrame(() => {
+        root.render(children);
+        if (mode === "continuous") {
+          requestRedraw();
+        }
+      });
+    }, [children, mode, root]);
+
+    useEffect(() => {
+      if (mode === "continuous") {
+        requestRedraw();
+      }
+      return () => {
+        if (rafId.current !== null) {
+          cancelAnimationFrame(rafId.current);
+        }
+      };
+    }, [mode, requestRedraw]);
+
+    // Component methods
+    useImperativeHandle(ref, () => ({
+      makeImageSnapshot: (rect?: SkRect) => {
+        return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+      },
+      makeImageSnapshotAsync: (rect?: SkRect) => {
+        return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
+      },
+      redraw: () => {
+        SkiaViewApi.requestRedraw(nativeId);
+      },
+      getNativeId: () => {
+        return nativeId;
+      },
+    }));
     return (
-      <SkiaDomView
-        ref={ref}
-        style={style}
-        root={root.dom}
-        onLayout={onLayout}
+      <NativeSkiaPictureView
+        collapsable={false}
+        nativeID={`${nativeId}`}
         debug={debug}
-        mode={mode}
-        {...props}
+        opaque={opaque}
+        onLayout={onLayout}
+        {...viewProps}
       />
     );
   }
-) as FunctionComponent<CanvasProps & React.RefAttributes<SkiaDomView>>;
-
-/**
- * Combines a list of refs into a single ref. This can be used to provide
- * both a forwarded ref and an internal ref keeping the same functionality
- * on both of the refs.
- * @param refs Array of refs to combine
- * @returns A single ref that can be used in a ref prop.
- */
-const useCombinedRefs = <T,>(
-  ...refs: Array<MutableRefObject<T> | ForwardedRef<T>>
-) => {
-  const targetRef = React.useRef<T>(null);
-  React.useEffect(() => {
-    refs.forEach((ref) => {
-      if (ref) {
-        if (typeof ref === "function") {
-          ref(targetRef.current);
-        } else {
-          ref.current = targetRef.current;
-        }
-      }
-    });
-  }, [refs]);
-  return targetRef;
-};
+);

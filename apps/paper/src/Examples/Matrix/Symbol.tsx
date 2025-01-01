@@ -4,8 +4,8 @@ import { interpolateColors, vec, Glyphs } from "@shopify/react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
-export const COLS = 8;
-export const ROWS = 15;
+export const COLS = 16;
+export const ROWS = 32;
 const pos = vec(0, 0);
 
 interface SymbolProps {
@@ -38,7 +38,7 @@ export const Symbol = ({
   }, [timestamp]);
 
   const opacity = useDerivedValue(() => {
-    const idx = Math.round(timestamp.value / 100);
+    const idx = Math.round(timestamp.value / 16);
     return stream[(stream.length - j + idx) % stream.length];
   }, [timestamp]);
 
