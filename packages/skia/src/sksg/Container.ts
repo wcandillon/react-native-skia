@@ -9,7 +9,17 @@ import {
 
 import { createDrawingContext } from "./DrawingContext";
 import type { Node } from "./nodes";
-import { draw, isSharedValue } from "./nodes";
+import { draw, isSharedValue, materialize } from "./nodes";
+
+function mat(root: Node[]): Node[] {
+  "worklet";
+  return root.map((node) => ({
+    type: node.type,
+    isDeclaration: node.isDeclaration,
+    props: materialize(node.props),
+    children: mat(node.children),
+  }));
+}
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
@@ -18,7 +28,8 @@ const jsiDraw: (root: Node[]) => SkPicture = global.SkiaDomApi.draw;
 const drawOnscreen = (_Skia: Skia, nativeId: number, root: Node[]) => {
   "worklet";
   const start = performance.now();
-  const pic = jsiDraw(root);
+  const t = mat(root);
+  const pic = jsiDraw(t);
   // const rec = Skia.PictureRecorder();
   // const canvas = rec.beginRecording();
   // const ctx = createDrawingContext(Skia, canvas);
