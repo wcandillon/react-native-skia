@@ -51,7 +51,7 @@ sk_sp<SkSurface> MetalWindowContext::getSurface() {
 }
 
 void MetalWindowContext::present() {
-          auto start = std::chrono::high_resolution_clock::now();
+  auto start = std::chrono::high_resolution_clock::now();
   if (auto dContext = GrAsDirectContext(_skSurface->recordingContext())) {
     dContext->flushAndSubmit();
   }
@@ -60,8 +60,10 @@ void MetalWindowContext::present() {
   [commandBuffer presentDrawable:_currentDrawable];
   [commandBuffer commit];
 
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        RNSkia::RNSkLogger::logToConsole("present(): " + std::to_string(duration.count()) + " microseconds");
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  RNSkia::RNSkLogger::logToConsole(
+      "present(): " + std::to_string(duration.count()) + " microseconds");
   _skSurface = nullptr;
 }

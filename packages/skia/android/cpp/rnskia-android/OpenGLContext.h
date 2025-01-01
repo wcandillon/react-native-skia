@@ -122,8 +122,8 @@ public:
       format = GrBackendFormats::MakeGL(GR_GL_RGBA16F, GR_GL_TEXTURE_EXTERNAL);
       break;
     case AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM:
-        GrBackendFormats::MakeGL(GR_GL_RGB565, GR_GL_TEXTURE_EXTERNAL);
-        break;
+      GrBackendFormats::MakeGL(GR_GL_RGB565, GR_GL_TEXTURE_EXTERNAL);
+      break;
     case AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM:
       format = GrBackendFormats::MakeGL(GR_GL_RGB10_A2, GR_GL_TEXTURE_EXTERNAL);
       break;
@@ -146,8 +146,8 @@ public:
     auto height = static_cast<int>(description.height);
     auto backendTex = MakeGLBackendTexture(
         _directContext.get(), const_cast<AHardwareBuffer *>(hardwareBuffer),
-        width, height, &deleteImageProc,
-        &updateImageProc, &deleteImageCtx, false, format, false);
+        width, height, &deleteImageProc, &updateImageProc, &deleteImageCtx,
+        false, format, false);
     if (!backendTex.isValid()) {
       RNSkLogger::logToConsole(
           "Failed to convert HardwareBuffer to OpenGL Texture!");

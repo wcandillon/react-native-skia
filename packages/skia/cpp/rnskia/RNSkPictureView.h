@@ -1,12 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <chrono>
 
 #include <jsi/jsi.h>
 
@@ -66,8 +66,11 @@ private:
         auto start = std::chrono::high_resolution_clock::now();
         canvas->drawPicture(_picture);
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        RNSkLogger::logToConsole("drawPicture(): " + std::to_string(duration.count()) + " microseconds");
+        auto duration =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        RNSkLogger::logToConsole(
+            "drawPicture(): " + std::to_string(duration.count()) +
+            " microseconds");
       }
       canvas->restore();
     });

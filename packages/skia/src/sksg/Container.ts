@@ -11,12 +11,14 @@ import { createDrawingContext } from "./DrawingContext";
 import type { Node } from "./nodes";
 import { draw, isSharedValue } from "./nodes";
 
-const d = global.SkiaDomApi.draw;
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error
+const jsiDraw: (root: Node[]) => SkPicture = global.SkiaDomApi.draw;
 
-const drawOnscreen = (Skia: Skia, nativeId: number, root: Node[]) => {
+const drawOnscreen = (_Skia: Skia, nativeId: number, root: Node[]) => {
   "worklet";
   const start = performance.now();
-  const pic = d();
+  const pic = jsiDraw(root);
   // const rec = Skia.PictureRecorder();
   // const canvas = rec.beginRecording();
   // const ctx = createDrawingContext(Skia, canvas);

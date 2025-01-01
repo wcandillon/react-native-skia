@@ -47,14 +47,12 @@ static __weak SkiaManager *sharedInstance = nil;
   return self;
 }
 
-- (void)dealloc
-{
+- (void)dealloc {
   sharedInstance = nil;
 }
 
 #ifdef RCT_NEW_ARCH_ENABLED
-+ (std::shared_ptr<RNSkia::RNSkManager>)latestActiveSkManager
-{
++ (std::shared_ptr<RNSkia::RNSkManager>)latestActiveSkManager {
   if (sharedInstance != nil) {
     return [sharedInstance skManager];
   }

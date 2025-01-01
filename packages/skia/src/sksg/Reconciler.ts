@@ -54,7 +54,7 @@ export class SkiaSGRoot {
     const recorder = this.Skia.PictureRecorder();
     const canvas = recorder.beginRecording();
     this.drawOnCanvas(canvas);
-    this.cachedPicture = recorder.finishRecordingAsPicture();
+    recorder.finishRecordingAsPicture();
   }
 
   unmount() {
