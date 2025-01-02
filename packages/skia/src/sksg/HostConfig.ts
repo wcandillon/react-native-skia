@@ -62,7 +62,7 @@ const isDeclaration = (type: NodeType) => {
 
 type Instance = Node;
 
-type Props = Record<string, unknown>;
+type Props = object;
 type TextInstance = Node;
 type SuspenseInstance = Instance;
 type HydratableInstance = Instance;
@@ -129,17 +129,20 @@ export const sksgHostConfig: SkiaHostConfig = {
 
   createInstance(
     type,
-    props,
+    allProps,
     container,
     _hostContext,
     _internalInstanceHandle
   ) {
     debug("createInstance", type);
-    container.registerValues(props);
+    const [props, animatedProps] = container.registerValues(
+      allProps as Record<string, unknown>
+    );
     const instance = {
       type,
       isDeclaration: isDeclaration(type),
       props,
+      animatedProps,
       children: [],
     };
     return instance;
@@ -197,17 +200,18 @@ export const sksgHostConfig: SkiaHostConfig = {
     _instance: Instance,
     _type: string,
     oldProps: Props,
-    newProps: Props,
+    allProps: Props,
     container: Container,
     _hostContext: HostContext
   ) {
     debug("prepareUpdate");
-    const propsAreEqual = shallowEq(oldProps, newProps);
+    console.log("prepareUpdate()");
+    const propsAreEqual = shallowEq(oldProps, allProps);
     if (propsAreEqual) {
       return null;
     }
     container.unregisterValues(oldProps);
-    container.registerValues(newProps);
+    container.registerValues(allProps as Record<string, unknown>);
     return container;
   },
 

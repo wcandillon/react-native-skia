@@ -82,7 +82,8 @@ function processDeclarations(ctx: DeclarationContext, node: Node<any>) {
   const processChildren = () =>
     node.children.forEach((child) => processDeclarations(ctx, child));
   const { type } = node;
-  const props = materialize(node.props);
+  materialize(node);
+  const { props } = node;
   switch (type) {
     // Mask Filter
     case NodeType.BlurMaskFilter: {
@@ -317,9 +318,9 @@ export function draw(ctx: DrawingContext, node: Node<any>) {
     }
     return;
   }
-  const { type, props: rawProps, children } = node;
   // Regular nodes
-  const props = materialize(rawProps);
+  materialize(node);
+  const { type, props, children } = node;
   const { shouldRestoreMatrix, shouldRestorePaint, extraPaints } =
     preProcessContext(ctx, props, node);
   const paints = [ctx.getPaint(), ...extraPaints];

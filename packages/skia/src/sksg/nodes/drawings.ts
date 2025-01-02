@@ -86,7 +86,7 @@ export const drawBox = (
   const shadows = children
     .map((node) => {
       if (node.type === NodeType.BoxShadow) {
-        return materialize(node.props);
+        return materialize(node).props;
       }
       return null;
     })

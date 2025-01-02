@@ -78,20 +78,28 @@ export class Container {
     return this.nativeId;
   }
 
-  unregisterValues(values: object) {
-    Object.values(values)
+  unregisterValues(props: object) {
+    Object.values(props)
       .filter(isSharedValue)
       .forEach((value) => {
         this.values.delete(value);
       });
   }
 
-  registerValues(values: object) {
-    Object.values(values)
-      .filter(isSharedValue)
-      .forEach((value) => {
+  registerValues(props: Record<string, unknown>) {
+    const animatedProps: Record<string, SharedValue<unknown>> = {};
+    const keys = Object.keys(props);
+    let hasAnimatedValues = false;
+    keys.forEach((key) => {
+      const value = props[key];
+      if (isSharedValue(value)) {
+        hasAnimatedValues = true;
         this.values.add(value);
-      });
+        animatedProps[key] = value;
+        props[key] = value.value;
+      }
+    });
+    return [props, hasAnimatedValues ? animatedProps : undefined] as const;
   }
 
   drawOnCanvas(canvas: SkCanvas) {

@@ -1,6 +1,6 @@
 import type { SharedValue } from "react-native-reanimated";
 
-import { mapKeys } from "../../renderer/typeddash";
+import type { Node } from "./Node";
 
 export const isSharedValue = <T = unknown>(
   value: unknown
@@ -10,14 +10,16 @@ export const isSharedValue = <T = unknown>(
   return (value as Record<string, unknown>)?._isReanimatedSharedValue === true;
 };
 
-export const materialize = <T extends object>(props: T) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const materialize = (node: Node<any>) => {
   "worklet";
-  const result: T = Object.assign({}, props);
-  mapKeys(result).forEach((key) => {
-    const value = result[key];
-    if (isSharedValue(value)) {
-      result[key] = value.value as never;
+  if (node.animatedProps) {
+    const keys = Object.keys(node.animatedProps);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const value = node.animatedProps[key]!;
+      node.props[key] = value.value;
     }
-  });
-  return result;
+  }
+  return node;
 };
