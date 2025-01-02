@@ -15,13 +15,14 @@ const drawOnscreen = (Skia: Skia, nativeId: number, root: Node[]) => {
   "worklet";
   const rec = Skia.PictureRecorder();
   const canvas = rec.beginRecording();
-  // TODO: This is only support from 3.15 and above (check the exact version)
-  // This could be polyfilled in C++ if needed (or in JS via functions only?)
+  const start = performance.now();
   const ctx = createDrawingContext(Skia, canvas);
   root.forEach((node) => {
     draw(ctx, node);
   });
   const picture = rec.finishRecordingAsPicture();
+  const end = performance.now();
+  console.log("Recording time", end - start);
   SkiaViewApi.setJsiProperty(nativeId, "picture", picture);
 };
 

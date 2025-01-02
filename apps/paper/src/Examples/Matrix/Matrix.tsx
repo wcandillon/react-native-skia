@@ -1,6 +1,7 @@
 import {
   BlurMask,
   Canvas,
+  Canvas2,
   Fill,
   Group,
   useClock,
@@ -31,6 +32,8 @@ const streams = cols.map(() =>
     .flat()
 );
 
+const symbols = "abcdefghijklmnopqrstuvwxyz".split("");
+
 export const Matrix = () => {
   const clock = useClock();
   const { width, height } = useWindowDimensions();
@@ -39,9 +42,8 @@ export const Matrix = () => {
   if (font === null) {
     return null;
   }
-  const symbols = font.getGlyphIDs("abcdefghijklmnopqrstuvwxyz");
   return (
-    <Canvas style={{ flex: 1 }} opaque>
+    <Canvas2 style={{ flex: 1 }} opaque>
       <Fill color="black" />
       <Group>
         <BlurMask blur={8} style="solid" />
@@ -60,6 +62,6 @@ export const Matrix = () => {
           ))
         )}
       </Group>
-    </Canvas>
+    </Canvas2>
   );
 };

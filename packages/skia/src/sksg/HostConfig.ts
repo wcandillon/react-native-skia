@@ -62,7 +62,7 @@ const isDeclaration = (type: NodeType) => {
 
 type Instance = Node;
 
-type Props = object;
+type Props = Record<string, unknown>;
 type TextInstance = Node;
 type SuspenseInstance = Instance;
 type HydratableInstance = Instance;
