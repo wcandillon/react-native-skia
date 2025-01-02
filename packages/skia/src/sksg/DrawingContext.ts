@@ -24,6 +24,8 @@ import type {
 
 import type { DeclarationContext } from "./DeclarationContext";
 
+const paintPool: SkPaint[] = [];
+
 const computeClip = (
   Skia: Skia,
   clip: ClipDef | undefined
@@ -116,7 +118,13 @@ export const createDrawingContext = (Skia: Skia, canvas: SkCanvas) => {
       pathEffect !== undefined
     ) {
       if (!shouldRestore) {
-        state.paints.push(getPaint().copy());
+        const i = state.paints.length - 1;
+        if (i > paintPool.length - 1) {
+          paintPool.push(Skia.Paint());
+        }
+        const paint = paintPool[i];
+        paint.assign(getPaint());
+        state.paints.push(paint);
         shouldRestore = true;
       }
     }

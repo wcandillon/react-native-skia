@@ -81,6 +81,11 @@ protected:
    */
   virtual void releaseResources() = 0;
 
+    /**
+     * Wrapped object
+     */
+    T _object;
+
 private:
   void safeDispose() {
     if (!_isDisposed) {
@@ -89,10 +94,6 @@ private:
     }
   }
 
-  /**
-   * Wrapped object
-   */
-  T _object;
 
   /**
    Resource disposed flag

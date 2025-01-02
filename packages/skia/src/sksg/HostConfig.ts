@@ -205,7 +205,6 @@ export const sksgHostConfig: SkiaHostConfig = {
     _hostContext: HostContext
   ) {
     debug("prepareUpdate");
-    console.log("prepareUpdate()");
     const propsAreEqual = shallowEq(oldProps, allProps);
     if (propsAreEqual) {
       return null;
