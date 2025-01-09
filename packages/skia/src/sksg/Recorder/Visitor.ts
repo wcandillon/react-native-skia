@@ -196,6 +196,9 @@ const pushPaints = (recorder: Recorder, paints: Node<any>[]) => {
 };
 
 const visitNode = (recorder: Recorder, node: Node<any>) => {
+  if (node.type === NodeType.Group) {
+    recorder.saveGroup();
+  }
   const { props } = node;
   const {
     colorFilters,
@@ -314,6 +317,9 @@ const visitNode = (recorder: Recorder, node: Node<any>) => {
   }
   if (shouldRestore) {
     recorder.restoreCTM();
+  }
+  if (node.type === NodeType.Group) {
+    recorder.restoreGroup();
   }
 };
 

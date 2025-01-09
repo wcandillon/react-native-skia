@@ -42,7 +42,7 @@ export abstract class Container {
       this.recording.paintPool,
       canvas
     );
-    //console.log(this._recording);
+    console.log(this.recording);
     replay(ctx, this.recording.commands);
   }
 
