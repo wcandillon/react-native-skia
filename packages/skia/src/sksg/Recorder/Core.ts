@@ -1,5 +1,3 @@
-import type { SharedValue } from "react-native-reanimated";
-
 import type {
   BlurMaskFilterProps,
   CircleProps,
@@ -113,18 +111,6 @@ export enum CommandType {
 export type Command<T extends CommandType = CommandType> = {
   type: T;
   [key: string]: unknown;
-};
-
-export const materializeProps = (command: {
-  props: Record<string, unknown>;
-  animatedProps?: Record<string, SharedValue<unknown>>;
-}) => {
-  "worklet";
-  if (command.animatedProps) {
-    for (const key in command.animatedProps) {
-      command.props[key] = command.animatedProps[key].value;
-    }
-  }
 };
 
 export const isCommand = <T extends CommandType>(

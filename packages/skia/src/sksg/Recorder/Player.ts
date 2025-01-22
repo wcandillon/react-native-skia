@@ -44,7 +44,6 @@ import {
   isCommand,
   isDrawCommand,
   isGroup,
-  materializeProps,
   type Command,
 } from "./Core";
 import type { DrawingContext } from "./DrawingContext";
@@ -55,8 +54,6 @@ function play(ctx: DrawingContext, command: Command) {
     command.children.forEach((child) => play(ctx, child));
     return;
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  materializeProps(command as any);
   if (isCommand(command, CommandType.SaveBackdropFilter)) {
     ctx.saveBackdropFilter();
   } else if (isCommand(command, CommandType.SaveLayer)) {

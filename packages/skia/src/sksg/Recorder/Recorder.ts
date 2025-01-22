@@ -35,59 +35,53 @@ import type { SkPaint } from "../../skia/types";
 import { CommandType } from "./Core";
 import type { Command } from "./Core";
 
+type Variables = Map<SharedValue<unknown>, Prop[]>;
+
 export interface Recording {
   commands: Command[];
+  variables: Variables;
   paintPool: SkPaint[];
 }
 
-interface AnimationValues {
-  animationValues: Set<SharedValue<unknown>>;
+interface Prop {
+  props: Record<string, unknown>;
+  name: string;
 }
 
 export class Recorder {
   commands: Command[] = [];
   cursors: Command[][] = [];
-  animationValues: Set<SharedValue<unknown>> = new Set();
+  variables: Variables = new Map();
 
   constructor() {
     this.cursors.push(this.commands);
   }
 
-  getRecording(): Recording & AnimationValues {
+  getRecording(): Recording {
     return {
       commands: this.commands,
+      variables: this.variables,
       paintPool: [],
-      animationValues: this.animationValues,
     };
   }
 
   private processProps(props: Record<string, unknown>) {
-    const animatedProps: Record<string, SharedValue<unknown>> = {};
-    let hasAnimatedProps = false;
-
     for (const key in props) {
       const prop = props[key];
       if (isSharedValue(prop)) {
-        this.animationValues.add(prop);
-        animatedProps[key] = prop;
-        hasAnimatedProps = true;
+        if (!this.variables.has(prop)) {
+          this.variables.set(prop, []);
+        }
+        const entry = this.variables.get(prop)!;
+        entry.push({ props, name: key });
+        props[key] = prop.value;
       }
     }
-
-    return {
-      props,
-      animatedProps: hasAnimatedProps ? animatedProps : undefined,
-    };
   }
 
   private add(command: Command) {
     if (command.props) {
-      const { animatedProps } = this.processProps(
-        command.props as Record<string, unknown>
-      );
-      if (animatedProps) {
-        command.animatedProps = animatedProps;
-      }
+      this.processProps(command.props as Record<string, unknown>);
     }
     this.cursors[this.cursors.length - 1].push(command);
   }
@@ -204,12 +198,7 @@ export class Recorder {
     shadows.forEach((shadow) => {
       if (shadow.props) {
         if (shadow.props) {
-          const { animatedProps } = this.processProps(
-            shadow.props as unknown as Record<string, unknown>
-          );
-          if (animatedProps) {
-            shadow.animatedProps = animatedProps;
-          }
+          this.processProps(shadow.props as unknown as Record<string, unknown>);
         }
       }
     });

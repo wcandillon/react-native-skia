@@ -82,13 +82,10 @@ class ReanimatedContainer extends Container {
     const recorder = new Recorder();
     visit(recorder, this.root);
     const record = recorder.getRecording();
-    const { animationValues } = record;
-    this.recording = {
-      commands: record.commands,
-      paintPool: record.paintPool,
-    };
+    const animationValues = Array.from(record.variables.keys());
+    this.recording = record;
     const { nativeId, Skia, recording } = this;
-    if (animationValues.size > 0) {
+    if (animationValues.length > 0) {
       this.mapperId = Rea.startMapper(() => {
         "worklet";
         drawOnscreen(Skia, nativeId, recording!);

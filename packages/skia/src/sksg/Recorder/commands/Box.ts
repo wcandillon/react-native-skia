@@ -2,7 +2,7 @@ import { deflate, inflate, processColor } from "../../../dom/nodes";
 import type { BoxProps, BoxShadowProps } from "../../../dom/types";
 import { BlurStyle, ClipOp, isRRect } from "../../../skia/types";
 import type { Command } from "../Core";
-import { CommandType, materializeProps } from "../Core";
+import { CommandType } from "../Core";
 import type { DrawingContext } from "../DrawingContext";
 
 interface BoxCommand extends Command<CommandType.DrawBox> {
@@ -17,10 +17,6 @@ export const isBoxCommand = (command: Command): command is BoxCommand => {
 
 export const drawBox = (ctx: DrawingContext, command: BoxCommand) => {
   "worklet";
-  command.shadows.forEach((shadow) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    materializeProps(shadow as any);
-  });
   const shadows = command.shadows.map((shadow) => shadow.props);
   const { paint, Skia, canvas } = ctx;
   const { box: defaultBox } = command.props;
