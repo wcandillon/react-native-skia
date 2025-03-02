@@ -1,6 +1,5 @@
 import type { FC } from "react";
 import React, {
-  forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -26,7 +25,7 @@ interface CanvasRef extends FC<CanvasProps> {
 
 export const useCanvasRef = () => useRef<CanvasRef>(null);
 
-const NativeSkiaPictureView = SkiaPictureViewNativeComponent;
+//const NativeSkiaPictureView = SkiaPictureViewNativeComponent;
 
 // TODO: no need to go through the JS thread for this
 const useOnSizeEvent = (
@@ -52,87 +51,65 @@ export interface CanvasProps extends ViewProps {
   debug?: boolean;
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
-  mode?: "continuous" | "default";
+  ref?: React.Ref<CanvasRef>;
 }
 
-export const Canvas = forwardRef(
-  (
-    {
-      mode,
-      debug,
-      opaque,
-      children,
-      onSize,
-      onLayout: _onLayout,
-      ...viewProps
-    }: CanvasProps,
-    ref
-  ) => {
-    const rafId = useRef<number | null>(null);
-    const onLayout = useOnSizeEvent(onSize, _onLayout);
-    // Native ID
-    const nativeId = useMemo(() => {
-      return SkiaViewNativeId.current++;
-    }, []);
+export const Canvas = ({
+  debug,
+  opaque,
+  children,
+  onSize,
+  onLayout: _onLayout,
+  ref,
+  ...viewProps
+}: CanvasProps) => {
+  const onLayout = useOnSizeEvent(onSize, _onLayout);
+  // Native ID
+  const nativeId = useMemo(() => {
+    return SkiaViewNativeId.current++;
+  }, []);
 
-    // Root
-    const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
+  // Root
+  const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
 
-    // Render effects
-    useEffect(() => {
-      root.render(children);
-    }, [children, root]);
+  // Render effects
+  useEffect(() => {
+    root.render(children);
+  }, [children, root]);
 
-    useEffect(() => {
-      return () => {
-        root.unmount();
-      };
-    }, [root]);
+  useEffect(() => {
+    return () => {
+      root.unmount();
+    };
+  }, [root]);
 
-    const requestRedraw = useCallback(() => {
-      rafId.current = requestAnimationFrame(() => {
-        root.render(children);
-        if (mode === "continuous") {
-          requestRedraw();
-        }
-      });
-    }, [children, mode, root]);
-
-    useEffect(() => {
-      if (mode === "continuous") {
-        console.warn("The `mode` property in `Canvas` is deprecated.");
-        requestRedraw();
-      }
-      return () => {
-        if (rafId.current !== null) {
-          cancelAnimationFrame(rafId.current);
-        }
-      };
-    }, [mode, requestRedraw]);
-    // Component methods
-    useImperativeHandle(ref, () => ({
-      makeImageSnapshot: (rect?: SkRect) => {
-        return SkiaViewApi.makeImageSnapshot(nativeId, rect);
-      },
-      makeImageSnapshotAsync: (rect?: SkRect) => {
-        return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
-      },
-      redraw: () => {
-        SkiaViewApi.requestRedraw(nativeId);
-      },
-      getNativeId: () => {
-        return nativeId;
-      },
-    }));
-    return (
-      <NativeSkiaPictureView
-        collapsable={false}
-        nativeID={`${nativeId}`}
-        debug={debug}
-        opaque={opaque}
-        onLayout={onLayout}
-        {...viewProps}
-      />
-    );
-  }
-);
+  // Component methods
+  useImperativeHandle(
+    ref,
+    () =>
+      ({
+        makeImageSnapshot: (rect?: SkRect) => {
+          return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+        },
+        makeImageSnapshotAsync: (rect?: SkRect) => {
+          return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
+        },
+        redraw: () => {
+          SkiaViewApi.requestRedraw(nativeId);
+        },
+        getNativeId: () => {
+          return nativeId;
+        },
+      } as CanvasRef)
+  );
+  return (
+    <SkiaPictureViewNativeComponent
+      collapsable={false}
+      nativeID={`${nativeId}`}
+      debug={debug}
+      opaque={opaque}
+      onLayout={onLayout}
+      {...viewProps}
+    />
+  );
+};

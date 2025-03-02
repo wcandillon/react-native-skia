@@ -19,7 +19,7 @@ import React from "react";
 	// Alternatively you can do const {Skia} = require("@shopify/react-native-skia")
 	const { Skia: _ } = getSkiaExports();
 	const surface = makeOffscreenSurface(width, height);
-	const image = drawOffscreen(
+	const image = await drawOffscreen(
 		surface,
 		<Group blendMode="multiply">
 			<Circle cx={r} cy={r} r={r} color="cyan" />

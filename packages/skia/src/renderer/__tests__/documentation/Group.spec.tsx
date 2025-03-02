@@ -51,12 +51,12 @@ const TestRasterization = () => {
 };
 
 describe("Group", () => {
-  it("Should use a rectangle as a clip", () => {
+  it("Should use a rectangle as a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
     const { rect } = importSkia();
     expect(image).toBeTruthy();
     const rct = rect(padding, padding, size - padding * 2, size - padding * 2);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="lightblue" />
         <Group clip={rct}>
@@ -73,7 +73,7 @@ describe("Group", () => {
     );
     processResult(surface, docPath("group/clip-rect.png"));
   });
-  it("Should use a rounded rectangle as a clip", () => {
+  it("Should use a rounded rectangle as a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
     const { rect, rrect } = importSkia();
     expect(image).toBeTruthy();
@@ -82,7 +82,7 @@ describe("Group", () => {
       r,
       r
     );
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group clip={rct}>
         <Image
           image={image}
@@ -96,7 +96,7 @@ describe("Group", () => {
     );
     processResult(surface, docPath("group/clip-rrect.png"));
   });
-  it("Should use a path as a clip", () => {
+  it("Should use a path as a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
     const { processTransform2d, Skia } = importSkia();
     expect(image).toBeTruthy();
@@ -105,7 +105,7 @@ describe("Group", () => {
     )!;
     expect(star).toBeTruthy();
     star.transform(processTransform2d([{ scale: 3 }]));
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group clip={star}>
         <Image
           image={image}
@@ -119,7 +119,7 @@ describe("Group", () => {
     );
     processResult(surface, docPath("group/clip-path.png"));
   });
-  it("Should invert a clip", () => {
+  it("Should invert a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
     const { processTransform2d, Skia } = importSkia();
     expect(image).toBeTruthy();
@@ -128,7 +128,7 @@ describe("Group", () => {
     )!;
     expect(star).toBeTruthy();
     star.transform(processTransform2d([{ scale: 3 }]));
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group clip={star} invertClip>
         <Image
           image={image}
@@ -142,7 +142,7 @@ describe("Group", () => {
     );
     processResult(surface, docPath("group/invert-clip.png"));
   });
-  it("Should scale an SVG Path properly", () => {
+  it("Should scale an SVG Path properly", async () => {
     const { rect, Skia } = importSkia();
     const svgPath =
       // eslint-disable-next-line max-len
@@ -151,7 +151,7 @@ describe("Group", () => {
     expect(path).toBeTruthy();
     const src = path.computeTightBounds();
     const strokeWidth = 30 * PIXEL_RATIO;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <FitBox src={src} dst={rect(0, 0, width, height)}>
         <Path
           path={path}
@@ -164,8 +164,8 @@ describe("Group", () => {
     );
     processResult(surface, docPath("group/scale-path.png"));
   });
-  it("Should use saveLayer() properly", () => {
-    const surface = drawOnNode(<TestRasterization />);
+  it("Should use saveLayer() properly", async () => {
+    const surface = await drawOnNode(<TestRasterization />);
     processResult(surface, docPath("group/rasterize.png"));
   });
 });

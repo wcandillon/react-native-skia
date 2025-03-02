@@ -37,7 +37,7 @@ Shaders can be nested with one another.
 | Name     | Type                                                                                                    |  Description                  |
 |:---------|:--------------------------------------------------------------------------------------------------------|:------------------------------|
 | source   | `RuntimeEffect`                                                                                         | Compiled shaders              |
-| uniforms | <code>{ [name: string]: number &#124; Vector &#124; Vector[] &#124; number[] &#124; number[][] }</code> | uniform values                |
+| uniforms | `{ [name: string]: number &#124; Vector &#124; Vector[] &#124; number[] &#124; number[][] }` | uniform values                |
 | children | `Shader`                                                                                                | Shaders to be used as uniform |
 
 ### Simple Shader

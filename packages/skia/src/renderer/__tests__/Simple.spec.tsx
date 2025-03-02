@@ -12,8 +12,8 @@ describe("Renderer", () => {
   it("Loads renderer without Skia", () => {
     expect(SkiaRenderer).toBeDefined();
   });
-  it("Light blue rectangle", () => {
-    const surface = drawOnNode(
+  it("Light blue rectangle", async () => {
+    const surface = await drawOnNode(
       <Rect
         x={(width - size) / 2}
         y={(width - size) / 2}
@@ -24,10 +24,10 @@ describe("Renderer", () => {
     );
     processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
-  it("Scaled light blue rectangle", () => {
+  it("Scaled light blue rectangle", async () => {
     const scale = 2;
     const scaled = size / scale;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group transform={[{ scale }]} origin={center}>
         <Rect
           x={(width - scaled) / 2}
@@ -40,7 +40,7 @@ describe("Renderer", () => {
     );
     processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
-  it("Points", () => {
+  it("Points", async () => {
     const { vec } = importSkia();
     const c = { x: width / 2, y: size / 2 + 16 };
     const S = 25;
@@ -69,7 +69,7 @@ describe("Renderer", () => {
     ];
 
     const cubics = [...c1, ...c2, ...c3, ...c4];
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group color="#61DAFB" style="stroke" strokeWidth={3}>
         <Points mode="polygon" points={cubics} />
         <Line p1={c} p2={vec(size, 0)} />

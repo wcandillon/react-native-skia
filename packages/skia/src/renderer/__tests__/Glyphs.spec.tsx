@@ -25,7 +25,7 @@ describe("Glyphs", () => {
     font = Skia.Font(tf!, 64);
     expect(font !== null).toBe(true);
   });
-  it("Should draw glyphs in lightblue", () => {
+  it("Should draw glyphs in lightblue", async () => {
     const { Skia } = importSkia();
     const ids = font.getGlyphIDs("ab");
     const glyphs = [
@@ -38,7 +38,7 @@ describe("Glyphs", () => {
         ),
       },
     ];
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Glyphs x={0} y={0} font={font} glyphs={glyphs} color="lightblue" />
     );
     processResult(surface, "snapshots/glyphs/simple.png");

@@ -9,9 +9,9 @@ import { Circle, FitBox, Rect, Image, Group, fitbox } from "../components";
 import { drawOnNode, width, height, importSkia } from "./setup";
 
 describe("FitBox", () => {
-  it("Should scale the rectangle in half", () => {
+  it("Should scale the rectangle in half", async () => {
     const { Skia } = importSkia();
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <FitBox
         src={Skia.XYWHRect(0, 0, width, height)}
         dst={Skia.XYWHRect(width / 4, height / 4, width / 2, height / 2)}
@@ -21,9 +21,9 @@ describe("FitBox", () => {
     );
     processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
-  it("Should take the bottom right quarter of the circle and scale to the full canvas", () => {
+  it("Should take the bottom right quarter of the circle and scale to the full canvas", async () => {
     const { Skia } = importSkia();
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <FitBox
         src={Skia.XYWHRect(width / 2, height / 2, width / 2, height / 2)}
         dst={Skia.XYWHRect(0, 0, width, height)}
@@ -38,7 +38,7 @@ describe("FitBox", () => {
     );
     processResult(surface, "snapshots/drawings/lightblue-quarter-circle.png");
   });
-  it("Should scale the image (1)", () => {
+  it("Should scale the image (1)", async () => {
     const { Skia, rect } = importSkia();
     const image = Skia.Image.MakeImageFromEncoded(
       Skia.Data.fromBytes(
@@ -47,7 +47,7 @@ describe("FitBox", () => {
         )
       )
     )!;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group
         transform={fitbox(
           "cover",
@@ -66,7 +66,7 @@ describe("FitBox", () => {
     );
     processResult(surface, "snapshots/drawings/scaled-image.png");
   });
-  it("Should scale the image (2)", () => {
+  it("Should scale the image (2)", async () => {
     const { Skia, rect } = importSkia();
     const image = Skia.Image.MakeImageFromEncoded(
       Skia.Data.fromBytes(
@@ -76,7 +76,7 @@ describe("FitBox", () => {
       )
     )!;
     const screen = rect(256, 128, 256, 512);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group>
         <Image
           image={image}
@@ -95,7 +95,7 @@ describe("FitBox", () => {
     );
     processResult(surface, "snapshots/drawings/scaled-image2.png");
   });
-  it("Should rotate and scale the image", () => {
+  it("Should rotate and scale the image", async () => {
     const { Skia, rect } = importSkia();
     const image = Skia.Image.MakeImageFromEncoded(
       Skia.Data.fromBytes(
@@ -107,7 +107,7 @@ describe("FitBox", () => {
     const screen = rect(256, 128, 256, 512);
     const imageRect = rect(0, 0, image.width(), image.height());
     const transform = fitbox("contain", imageRect, screen, 270);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Group>
         <Image
           image={image}

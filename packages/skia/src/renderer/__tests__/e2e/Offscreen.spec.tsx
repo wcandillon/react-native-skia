@@ -100,7 +100,7 @@ describe("Offscreen Drawings", () => {
     const { width, height } = surface;
     const { drawAsImage } = importSkia();
     const r = width / 2;
-    const image = drawAsImage(
+    const image = await drawAsImage(
       <Circle r={r} cx={r} cy={r} color="lightblue" />,
       { width, height }
     );

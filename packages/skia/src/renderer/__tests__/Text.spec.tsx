@@ -16,9 +16,9 @@ import {
 } from "./setup";
 
 describe("Test different text examples", () => {
-  it("Should draw Hello World", () => {
+  it("Should draw Hello World", async () => {
     const font = loadFont("skia/__tests__/assets/Roboto-Medium.ttf");
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="white" />
         <Text x={0} y={fontSize} font={font} text="Hello World" />
@@ -27,13 +27,13 @@ describe("Test different text examples", () => {
     processResult(surface, docPath("text/hello-world.png"));
   });
 
-  it("Should draw Hello World vertically", () => {
+  it("Should draw Hello World vertically", async () => {
     const font = loadFont("skia/__tests__/assets/Roboto-Medium.ttf");
     const { Skia } = importSkia();
     const glyphs = font
       .getGlyphIDs("Hello World!")
       .map((id, i) => ({ id, pos: Skia.Point(0, (i + 1) * fontSize) }));
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="white" />
         <Glyphs font={font} glyphs={glyphs} />
@@ -42,13 +42,13 @@ describe("Test different text examples", () => {
     processResult(surface, docPath("text/hello-world-vertical.png"));
   });
 
-  it("Should render the text around a circle", () => {
+  it("Should render the text around a circle", async () => {
     const font = loadFont("skia/__tests__/assets/Roboto-Medium.ttf");
     const { Skia } = importSkia();
     const path = Skia.Path.Make();
     const r = width / 2;
     path.addCircle(r, r, r / 2);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="white" />
         <Group transform={[{ rotate: Math.PI }]} origin={Skia.Point(r, r)}>
@@ -59,11 +59,11 @@ describe("Test different text examples", () => {
     processResult(surface, docPath("text/text-path.png"));
   });
 
-  it("Should render a text blob", () => {
+  it("Should render a text blob", async () => {
     const font = loadFont("skia/__tests__/assets/Roboto-Medium.ttf");
     const { Skia } = importSkia();
     const blob = Skia.TextBlob.MakeFromText("Hello World!", font);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="white" />
         <TextBlob blob={blob} y={fontSize} x={0} />
@@ -72,7 +72,7 @@ describe("Test different text examples", () => {
     processResult(surface, docPath("text/text-blob.png"));
   });
 
-  it("Should render text with Emojis", () => {
+  it("Should render text with Emojis", async () => {
     const { Skia } = importSkia();
     const data = Skia.Data.fromBytes(
       fs.readFileSync(
@@ -85,7 +85,7 @@ describe("Test different text examples", () => {
     const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
     expect(tf).toBeTruthy();
     const emojiFont = Skia.Font(tf, fontSize);
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Fill color="white" />
         <Text text="🙋🌎" font={emojiFont} y={fontSize} x={0} />
@@ -94,7 +94,7 @@ describe("Test different text examples", () => {
     processResult(surface, docPath("text/text-emoji.png"));
   });
 
-  it("Should calculate chinese text width correctly", () => {
+  it("Should calculate chinese text width correctly", async () => {
     const { Skia } = importSkia();
     const data = Skia.Data.fromBytes(
       fs.readFileSync(
@@ -109,7 +109,7 @@ describe("Test different text examples", () => {
     const font = Skia.Font(tf, fontSize);
     const text = "欢迎";
     const padding = 16;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <>
         <Text
           text={text}

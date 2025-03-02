@@ -39,29 +39,28 @@ describe("Data Loading", () => {
     expect(SkiaRenderer).toBeDefined();
   });
   it("Should accept null as an argument", async () => {
-    const { surface, draw } = mountCanvas(<CheckData />);
-    draw();
+    const { surface, draw } = await mountCanvas(<CheckData />);
+    await draw();
     processResult(surface, "snapshots/font/green.png");
-    await wait(42);
-    draw();
+    await draw();
     processResult(surface, "snapshots/font/green.png");
   });
 
   it("Should load a font file", async () => {
-    const { surface, draw } = mountCanvas(<CheckFont />);
-    draw();
+    const { surface, draw } = await mountCanvas(<CheckFont />);
+    await draw();
     processResult(surface, "snapshots/font/red.png");
     await wait(1500);
-    draw();
+    await draw();
     processResult(surface, "snapshots/font/green.png");
   });
 
   it("Should load an image", async () => {
-    const { surface, draw } = mountCanvas(<CheckImage />);
-    draw();
+    const { surface, draw } = await mountCanvas(<CheckImage />);
+    await draw();
     processResult(surface, "snapshots/font/red.png");
     await wait(1500);
-    draw();
+    await draw();
     processResult(surface, "snapshots/font/green.png");
   });
 });

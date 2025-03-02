@@ -14,19 +14,19 @@ export const isOnMainThread = () => {
   );
 };
 
-export const drawAsPicture = (element: ReactElement, bounds?: SkRect) => {
+export const drawAsPicture = async (element: ReactElement, bounds?: SkRect) => {
   const recorder = Skia.PictureRecorder();
   const canvas = recorder.beginRecording(bounds);
   const root = new SkiaSGRoot(Skia);
-  root.render(element);
+  await root.render(element);
   root.drawOnCanvas(canvas);
   const picture = recorder.finishRecordingAsPicture();
   root.unmount();
   return picture;
 };
 
-export const drawAsImage = (element: ReactElement, size: SkSize) => {
-  return drawAsImageFromPicture(drawAsPicture(element), size);
+export const drawAsImage = async (element: ReactElement, size: SkSize) => {
+  return drawAsImageFromPicture(await drawAsPicture(element), size);
 };
 
 export const drawAsImageFromPicture = (picture: SkPicture, size: SkSize) => {

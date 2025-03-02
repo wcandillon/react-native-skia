@@ -35,8 +35,8 @@ describe("Getting Started / Hello World", () => {
       docPath("getting-started/hello-world/blend-modes.png")
     );
   });
-  it("Hello world with the declarative API", () => {
-    const surface = drawOnNode(
+  it("Hello world with the declarative API", async () => {
+    const surface = await drawOnNode(
       <Group blendMode="multiply">
         <Circle cx={r} cy={r} r={r} color="cyan" />
         <Circle cx={size - r} cy={r} r={r} color="magenta" />

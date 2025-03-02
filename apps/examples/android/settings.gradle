@@ -1,0 +1,40 @@
+pluginManagement { 
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    includeBuild("../../../node_modules/@react-native/gradle-plugin") 
+}
+
+plugins { id("com.facebook.react.settings") }
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        // Handle local Maven repositories for monorepo
+        maven {
+            url = uri("$rootDir/../../../node_modules/react-native/android")
+        }
+        maven {
+            url = uri("$rootDir/../../../packages/skia/android")
+        }
+    }
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> 
+    ex.autolinkLibrariesFromCommand() 
+}
+
+rootProject.name = 'examples'
+include ':app'
+includeBuild('../../../node_modules/@react-native/gradle-plugin')
+
+// We don't need to include skia here as it's already included through workspace dependency
+// and this causes duplicate classes
+
+// Include Reanimated
+include ':react-native-reanimated'
+project(':react-native-reanimated').projectDir = new File(rootProject.projectDir, '../../../node_modules/react-native-reanimated/android')

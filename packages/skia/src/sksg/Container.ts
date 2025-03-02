@@ -40,11 +40,19 @@ const nativeDrawOnscreen = (nativeId: number, recorder: JsiRecorder) => {
 };
 
 export abstract class Container {
-  public root: Node[] = [];
+  private _root: Node[] = [];
   protected recording: Recording | null = null;
   protected unmounted = false;
 
   constructor(protected Skia: Skia, protected nativeId: number) {}
+
+  get root() {
+    return this._root;
+  }
+
+  set root(value: Node[]) {
+    this._root = value;
+  }
 
   unmount() {
     this.unmounted = true;

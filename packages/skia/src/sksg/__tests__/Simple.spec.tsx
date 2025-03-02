@@ -39,10 +39,10 @@ const Ring = ({ index, progress, width, center }: RingProps) => {
 };
 
 describe("Simple", () => {
-  it("should have a simple render (1)", () => {
+  it("should have a simple render (1)", async () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
-    root.render(<skCircle r={128} color="cyan" />);
+    await root.render(<skCircle r={128} color="cyan" />);
     const surface = Skia.Surface.Make(768, 768)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
@@ -52,10 +52,10 @@ describe("Simple", () => {
     expect(image).toBeDefined();
     checkImage(image, "snapshots/sksg/simple.png");
   });
-  it("should have a simple render (2)", () => {
+  it("should have a simple render (2)", async () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
-    root.render(
+    await root.render(
       <>
         <skFill color="magenta" />
         <skCircle r={128} cx={768 / 2} cy={768 / 2} color="cyan" />
@@ -70,7 +70,7 @@ describe("Simple", () => {
     expect(image).toBeDefined();
     checkImage(image, "snapshots/sksg/simple2.png");
   });
-  it("simple demo", () => {
+  it("simple demo", async () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
     const width = 768;
@@ -78,7 +78,7 @@ describe("Simple", () => {
     const center = { x: width / 2, y: height / 2 };
     const progress = 0.5;
     const transform = (() => [{ rotate: mix(progress, -Math.PI, 0) }])();
-    root.render(
+    await root.render(
       <>
         <skFill color="rgb(36,43,56)" />
         <skGroup blendMode="screen" origin={center} transform={transform}>
@@ -108,7 +108,7 @@ describe("Simple", () => {
     checkImage(image, "snapshots/sksg/breathe.png");
   });
 
-  it("simple demo (2)", () => {
+  it("simple demo (2)", async () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
     const width = 768;
@@ -116,7 +116,7 @@ describe("Simple", () => {
     const center = { x: width / 2, y: height / 2 };
     const progress = 0;
     const transform = (() => [{ rotate: mix(progress, -Math.PI, 0) }])();
-    root.render(
+    await root.render(
       <>
         <skFill color="rgb(36,43,56)" />
         <skGroup blendMode="screen" origin={center} transform={transform}>

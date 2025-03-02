@@ -7,7 +7,7 @@
 	},
 	"dependencies": {
 		"@shopify/react-native-skia": "workspace:*",
-		"react": "^18.0.0",
+		"react": "19.0.0",
 		"typescript": "^5.2.2"
 	},
 	"devDependencies": {

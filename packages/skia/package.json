@@ -76,9 +76,9 @@
   "licenseFilename": "LICENSE.md",
   "readmeFilename": "README.md",
   "peerDependencies": {
-    "react": ">=18.0",
-    "react-native": ">=0.64",
-    "react-native-reanimated": ">=2.0.0"
+    "react": ">=19.0",
+    "react-native": ">=0.78",
+    "react-native-reanimated": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "react-native": {
@@ -108,10 +108,10 @@
     "pixelmatch": "5.3.0",
     "pngjs": "6.0.0",
     "prettier": "2.8.7",
-    "react": "18.3.1",
-    "react-native": "0.75.2",
+    "react": "19.0.0",
+    "react-native": "0.78.0",
     "react-native-builder-bob": "0.18.2",
-    "react-native-reanimated": "^3.16.5",
+    "react-native-reanimated": "^3.17.1",
     "rimraf": "3.0.2",
     "semantic-release": "^24.1.0",
     "semantic-release-yarn": "^3.0.2",
@@ -122,7 +122,7 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.39.1",
-    "react-reconciler": "0.27.0"
+    "react-reconciler": "0.31.0"
   },
   "eslintIgnore": [
     "node_modules/",

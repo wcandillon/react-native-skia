@@ -168,7 +168,7 @@ describe("Atlas", () => {
       width: size.width + strokeWidth,
       height: size.height + strokeWidth,
     };
-    const texture = drawAsImage(
+    const texture = await drawAsImage(
       <Group>
         <Rect
           rect={rect(strokeWidth / 2, strokeWidth / 2, size.width, size.height)}
@@ -211,7 +211,7 @@ describe("Atlas", () => {
       width: size.width + strokeWidth,
       height: size.height + strokeWidth,
     };
-    const texture = drawAsImage(
+    const texture = await drawAsImage(
       <Group>
         <Rect
           rect={rect(strokeWidth / 2, strokeWidth / 2, size.width, size.height)}
@@ -283,7 +283,7 @@ describe("Atlas", () => {
       width: size.width + strokeWidth,
       height: size.height + strokeWidth,
     };
-    const texture = drawAsImage(
+    const texture = await drawAsImage(
       <Group>
         <Rect
           rect={rect(strokeWidth / 2, strokeWidth / 2, size.width, size.height)}

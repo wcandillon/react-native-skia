@@ -12,10 +12,10 @@ import {
 import { height, drawOnNode, width, loadImage, importSkia } from "../setup";
 
 describe("Test blend modes", () => {
-  it("Should nicely blend the product color to the image", () => {
+  it("Should nicely blend the product color to the image", async () => {
     const image = loadImage("skia/__tests__/assets/product.png");
     const rect = { x: 0, y: 0, width, height };
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Mask mask={<Image image={image} rect={rect} />}>
         <Image image={image} rect={rect}>
           <BlendColor color="lightgreen" mode="hue" />
@@ -24,12 +24,12 @@ describe("Test blend modes", () => {
     );
     processResult(surface, "snapshots/demos/product.png");
   });
-  it("Should nicely blend the product color to the image using a runtime effect", () => {
+  it("Should nicely blend the product color to the image using a runtime effect", async () => {
     const { Skia } = importSkia();
     const image = loadImage("skia/__tests__/assets/product.png");
     const rect = { x: 0, y: 0, width, height };
     const source = Skia.RuntimeEffect.Make(blender)!;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Rect rect={rect}>
         <Shader
           source={source}

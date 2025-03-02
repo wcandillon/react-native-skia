@@ -9,7 +9,7 @@ import { Fill, ImageShader, Shader } from "../components";
 import { drawOnNode, width, height, importSkia } from "./setup";
 
 describe("Test Image Component", () => {
-  it("Should display the image with a filter", () => {
+  it("Should display the image with a filter", async () => {
     const { Skia } = importSkia();
     const image = Skia.Image.MakeImageFromEncoded(
       Skia.Data.fromBytes(
@@ -26,7 +26,7 @@ half4 main(float2 xy) {
   xy.x += sin(xy.y / r) * 4;
   return image.eval(xy).rbga;
 }`)!;
-    const surface = drawOnNode(
+    const surface = await drawOnNode(
       <Fill>
         <Shader source={filter} uniforms={{ r: 50 }}>
           <ImageShader
