@@ -78,7 +78,7 @@
   "peerDependencies": {
     "react": ">=18.0",
     "react-native": ">=0.64",
-    "react-native-reanimated": ">=2.0.0"
+    "react-native-reanimated": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "react-native": {
@@ -111,7 +111,7 @@
     "react": "18.3.1",
     "react-native": "0.75.2",
     "react-native-builder-bob": "0.18.2",
-    "react-native-reanimated": "^3.16.5",
+    "react-native-reanimated": "^3.17.1",
     "rimraf": "3.0.2",
     "semantic-release": "^24.1.0",
     "semantic-release-yarn": "^3.0.2",
