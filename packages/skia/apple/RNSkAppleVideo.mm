@@ -8,24 +8,24 @@
 
 #pragma clang diagnostic pop
 
-#include "RNSkiOSVideo.h"
+#include "RNSkAppleVideo.h"
 #include <AVFoundation/AVFoundation.h>
 #include <CoreVideo/CoreVideo.h>
 
 namespace RNSkia {
 
-RNSkiOSVideo::RNSkiOSVideo(std::string url, RNSkPlatformContext *context)
+RNSkAppleVideo::RNSkAppleVideo(std::string url, RNSkPlatformContext *context)
     : _url(std::move(url)), _context(context) {
   setupPlayer();
 }
 
-RNSkiOSVideo::~RNSkiOSVideo() {
+RNSkAppleVideo::~RNSkAppleVideo() {
   if (_player) {
     [_player pause];
   }
 }
 
-void RNSkiOSVideo::setupPlayer() {
+void RNSkAppleVideo::setupPlayer() {
   NSURL *videoURL = [NSURL URLWithString:@(_url.c_str())];
   AVPlayerItem *playerItem = [AVPlayerItem playerItemWithURL:videoURL];
   _player = [AVPlayer playerWithPlayerItem:playerItem];
@@ -53,7 +53,7 @@ void RNSkiOSVideo::setupPlayer() {
   play();
 }
 
-sk_sp<SkImage> RNSkiOSVideo::nextImage(double *timeStamp) {
+sk_sp<SkImage> RNSkAppleVideo::nextImage(double *timeStamp) {
   CMTime currentTime = [_player currentTime];
   CVPixelBufferRef pixelBuffer =
       [_videoOutput copyPixelBufferForItemTime:currentTime
@@ -73,14 +73,14 @@ sk_sp<SkImage> RNSkiOSVideo::nextImage(double *timeStamp) {
   return skImage;
 }
 
-NSDictionary *RNSkiOSVideo::getOutputSettings() {
+NSDictionary *RNSkAppleVideo::getOutputSettings() {
   return @{
     (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
     (id)kCVPixelBufferMetalCompatibilityKey : @YES
   };
 }
 
-float RNSkiOSVideo::getRotationInDegrees() {
+float RNSkAppleVideo::getRotationInDegrees() {
   CGFloat rotationAngle = 0.0;
   auto transform = _preferredTransform;
   // Determine the rotation angle in radians
@@ -97,7 +97,7 @@ float RNSkiOSVideo::getRotationInDegrees() {
   return rotationAngle;
 }
 
-void RNSkiOSVideo::seek(double timeInMilliseconds) {
+void RNSkAppleVideo::seek(double timeInMilliseconds) {
   CMTime seekTime =
       CMTimeMakeWithSeconds(timeInMilliseconds / 1000.0, NSEC_PER_SEC);
   [_player seekToTime:seekTime
@@ -110,28 +110,28 @@ void RNSkiOSVideo::seek(double timeInMilliseconds) {
       }];
 }
 
-void RNSkiOSVideo::play() {
+void RNSkAppleVideo::play() {
   if (_player) {
     [_player play];
     _isPlaying = true;
   }
 }
 
-void RNSkiOSVideo::pause() {
+void RNSkAppleVideo::pause() {
   if (_player) {
     [_player pause];
     _isPlaying = false;
   }
 }
 
-double RNSkiOSVideo::duration() { return _duration; }
+double RNSkAppleVideo::duration() { return _duration; }
 
-double RNSkiOSVideo::framerate() { return _framerate; }
+double RNSkAppleVideo::framerate() { return _framerate; }
 
-SkISize RNSkiOSVideo::getSize() {
+SkISize RNSkAppleVideo::getSize() {
   return SkISize::Make(_videoWidth, _videoHeight);
 }
 
-void RNSkiOSVideo::setVolume(float volume) { _player.volume = volume; }
+void RNSkAppleVideo::setVolume(float volume) { _player.volume = volume; }
 
 } // namespace RNSkia

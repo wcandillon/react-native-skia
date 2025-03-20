@@ -14,10 +14,6 @@
 #import <include/gpu/ganesh/mtl/GrMtlDirectContext.h>
 #import <include/gpu/ganesh/mtl/SkSurfaceMetal.h>
 
-// namespace RNSkia {
-// class RNSkiOSPlatformContext;
-// }
-
 class MetalSharedContext {
 public:
   static MetalSharedContext &getInstance() {
@@ -126,7 +122,6 @@ public:
   GrDirectContext *getDirectContext() { return _directContext.get(); }
 
 private:
-  // friend class RNSkia::RNSkiOSPlatformContext;
   id<MTLCommandQueue> _commandQueue = nullptr;
   sk_sp<GrDirectContext> _directContext = nullptr;
 

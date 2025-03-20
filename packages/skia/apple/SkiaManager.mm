@@ -6,7 +6,7 @@
 #import <React/RCTBridge.h>
 #import <React/RCTUIManager.h>
 
-#import "RNSkiOSPlatformContext.h"
+#import "RNSkApplePlatformContext.h"
 
 static __weak SkiaManager *sharedInstance = nil;
 
@@ -41,7 +41,7 @@ static __weak SkiaManager *sharedInstance = nil;
       // Create the RNSkiaManager (cross platform)
       _skManager = std::make_shared<RNSkia::RNSkManager>(
           jsRuntime, jsInvoker,
-          std::make_shared<RNSkia::RNSkiOSPlatformContext>(bridge, jsInvoker));
+          std::make_shared<RNSkia::RNSkApplePlatformContext>(bridge, jsInvoker));
     }
   }
   return self;

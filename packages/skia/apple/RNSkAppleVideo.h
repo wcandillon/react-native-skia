@@ -18,7 +18,7 @@
 
 namespace RNSkia {
 
-class RNSkiOSVideo : public RNSkVideo {
+class RNSkAppleVideo : public RNSkVideo {
 private:
   std::string _url;
   AVPlayer *_player = nullptr;
@@ -35,8 +35,8 @@ private:
   NSDictionary *getOutputSettings();
 
 public:
-  RNSkiOSVideo(std::string url, RNSkPlatformContext *context);
-  ~RNSkiOSVideo();
+  RNSkAppleVideo(std::string url, RNSkPlatformContext *context);
+  ~RNSkAppleVideo();
   sk_sp<SkImage> nextImage(double *timeStamp = nullptr) override;
   double duration() override;
   double framerate() override;

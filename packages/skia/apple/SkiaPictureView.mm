@@ -1,7 +1,7 @@
 #ifdef RCT_NEW_ARCH_ENABLED
 #import "SkiaPictureView.h"
 
-#import "RNSkIOSView.h"
+#import "RNSkAppleView.h"
 #import "RNSkPictureView.h"
 #import "RNSkPlatformContext.h"
 
@@ -28,7 +28,7 @@ using namespace facebook::react;
     auto skManager = [SkiaManager latestActiveSkManager].get();
     [self initCommon:skManager
              factory:[](std::shared_ptr<RNSkia::RNSkPlatformContext> context) {
-               return std::make_shared<RNSkiOSView<RNSkia::RNSkPictureView>>(
+               return std::make_shared<RNSkAppleView<RNSkia::RNSkPictureView>>(
                    context);
              }];
     static const auto defaultProps =

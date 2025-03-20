@@ -9,9 +9,9 @@
 #import "RNSkManager.h"
 
 @implementation SkiaUIView {
-  std::shared_ptr<RNSkBaseiOSView> _impl;
+  std::shared_ptr<RNSkBaseAppleView> _impl;
   RNSkia::RNSkManager *_manager;
-  std::function<std::shared_ptr<RNSkBaseiOSView>(
+  std::function<std::shared_ptr<RNSkBaseAppleView>(
       std::shared_ptr<RNSkia::RNSkPlatformContext>)>
       _factory;
   bool _debugMode;
@@ -23,7 +23,7 @@
 
 - (instancetype)initWithManager:(RNSkia::RNSkManager *)manager
                         factory:
-                            (std::function<std::shared_ptr<RNSkBaseiOSView>(
+                            (std::function<std::shared_ptr<RNSkBaseAppleView>(
                                  std::shared_ptr<RNSkia::RNSkPlatformContext>)>)
                                 factory {
   self = [super init];
@@ -40,7 +40,7 @@
 }
 
 - (void)initCommon:(RNSkia::RNSkManager *)manager
-           factory:(std::function<std::shared_ptr<RNSkBaseiOSView>(
+           factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory {
   _manager = manager;
   _nativeId = 0;
@@ -161,7 +161,7 @@
 
 #pragma mark External API
 
-- (std::shared_ptr<RNSkBaseiOSView>)impl {
+- (std::shared_ptr<RNSkBaseAppleView>)impl {
   return _impl;
 }
 

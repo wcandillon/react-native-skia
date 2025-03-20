@@ -47,6 +47,7 @@ export const Demo = () => {
         // you can use image in an <Image> component
         // Or save to file using encodeToBytes -> Uint8Array
         const bytes = image.encodeToBytes();
+        console.log({ bytes });
       }
     }, 1000)
   });
@@ -63,60 +64,3 @@ export const Demo = () => {
 The Canvas component supports the same properties as a View component including its [accessibility properties](https://reactnative.dev/docs/accessibility#accessible).
 You can make elements inside the canvas accessible as well by overlayings views on top of your canvas.
 This is the same recipe used for [applying gestures on specific canvas elements](https://shopify.github.io/react-native-skia/docs/animations/gestures/#element-tracking).
-
-<!-- 
-## Offscreen rendering
-
-It is also possible directly possible to get an image directly from a drawing using `drawAsImage`.
-
-```tsx twoslash
-import {drawAsImage, Circle, Canvas, Image} from "@shopify/react-native-skia";
-
-const width = 256;
-const height = 256;
-const r = width / 2;
-const image = drawAsImage(
-  <Circle r={r} cx={r} cy={r} color="lightblue" />,
-  width,
-  height
-);
-
-// Now we can draw the image in a regular canvas or save it to file
-export const Demo = () => {
-  return (
-    <Canvas style={{ width, height }}>
-      <Image image={image} x={0} y={0} width={width} height={height} />
-    </Canvas>
-  );
-};
-```
-
-The offscreen drawing can also be done directly with the canvas API.
-
-```tsx twoslash
-import {Skia, Circle, Canvas, Image} from "@shopify/react-native-skia";
-
-const width = 256;
-const height = 256;
-const r = width / 2;
-const image = Skia.Surface.drawAsImage(
-  (canvas) => {
-    const paint = Skia.Paint();
-    paint.setColor(Skia.Color("lightblue"));
-    canvas.drawCircle(r, r, r, paint);
-  },
-  width,
-  height
-);
-
-// Now we can draw the image in a regular canvas or save it to file
-export const Demo = () => {
-  return (
-    <Canvas style={{ width, height }}>
-      <Image image={image} x={0} y={0} width={width} height={height} />
-    </Canvas>
-  );
-};
-``` -->
-
-

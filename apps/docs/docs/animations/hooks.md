@@ -157,7 +157,7 @@ import {useSharedValue} from "react-native-reanimated";
 const xforms = 100;
 const pos = useSharedValue({ x: 0, y: 0 });
 // Important to not forget the worklet directive
-const transforms = useRSXformBuffer(xforms, (val, i) => {
+const transforms = useRSXformBuffer(xforms, (val, _i) => {
   "worklet";
   const r = Math.atan2(pos.value.y, pos.value.x);
   val.set(Math.cos(r), Math.sin(r), 0, 0);

@@ -7,7 +7,7 @@
 #import <UIKit/UIKit.h>
 
 #import "RNSkManager.h"
-#import "RNSkiOSView.h"
+#import "RNSkAppleView.h"
 #import "SkiaManager.h"
 
 #if RCT_NEW_ARCH_ENABLED
@@ -23,12 +23,12 @@
 
 - (instancetype)
     initWithManager:(RNSkia::RNSkManager *)manager
-            factory:(std::function<std::shared_ptr<RNSkBaseiOSView>(
+            factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
                          std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory;
 - (void)initCommon:(RNSkia::RNSkManager *)manager
-           factory:(std::function<std::shared_ptr<RNSkBaseiOSView>(
+           factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory;
-- (std::shared_ptr<RNSkBaseiOSView>)impl;
+- (std::shared_ptr<RNSkBaseAppleView>)impl;
 
 - (void)setDebugMode:(bool)debugMode;
 - (void)setOpaque:(bool)opaque;

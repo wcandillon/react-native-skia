@@ -1,4 +1,4 @@
-#import "RNSkiOSPlatformContext.h"
+#import "RNSkApplePlatformContext.h"
 
 #import <CoreMedia/CMSampleBuffer.h>
 #include <Metal/Metal.h>
@@ -11,7 +11,7 @@
 #else
 #include "MetalContext.h"
 #endif
-#include "RNSkiOSVideo.h"
+#include "RNSkAppleVideo.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -26,7 +26,7 @@
 
 namespace RNSkia {
 
-void RNSkiOSPlatformContext::performStreamOperation(
+void RNSkApplePlatformContext::performStreamOperation(
     const std::string &sourceUri,
     const std::function<void(std::unique_ptr<SkStreamAsset>)> &op) {
 
@@ -64,14 +64,14 @@ void RNSkiOSPlatformContext::performStreamOperation(
   std::thread(loader).detach();
 }
 
-void RNSkiOSPlatformContext::releaseNativeBuffer(uint64_t pointer) {
+void RNSkApplePlatformContext::releaseNativeBuffer(uint64_t pointer) {
   CVPixelBufferRef pixelBuffer = reinterpret_cast<CVPixelBufferRef>(pointer);
   if (pixelBuffer) {
     CFRelease(pixelBuffer);
   }
 }
 
-uint64_t RNSkiOSPlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
+uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
   // 0. If Image is not in BGRA, convert to BGRA as only BGRA is supported.
   if (image->colorType() != kBGRA_8888_SkColorType) {
 #if defined(SK_GRAPHITE)
@@ -156,7 +156,7 @@ uint64_t RNSkiOSPlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
   return reinterpret_cast<uint64_t>(pixelBuffer);
 }
 
-const TextureInfo RNSkiOSPlatformContext::getTexture(sk_sp<SkImage> image) {
+const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
   GrBackendTexture texture;
   TextureInfo result;
   if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
@@ -173,7 +173,7 @@ const TextureInfo RNSkiOSPlatformContext::getTexture(sk_sp<SkImage> image) {
   return result;
 }
 
-const TextureInfo RNSkiOSPlatformContext::getTexture(sk_sp<SkSurface> surface) {
+const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
   GrBackendTexture texture = SkSurfaces::GetBackendTexture(
       surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
   TextureInfo result;
@@ -189,12 +189,12 @@ const TextureInfo RNSkiOSPlatformContext::getTexture(sk_sp<SkSurface> surface) {
 }
 
 std::shared_ptr<RNSkVideo>
-RNSkiOSPlatformContext::createVideo(const std::string &url) {
-  return std::make_shared<RNSkiOSVideo>(url, this);
+RNSkApplePlatformContext::createVideo(const std::string &url) {
+  return std::make_shared<RNSkAppleVideo>(url, this);
 }
 
 std::shared_ptr<WindowContext>
-RNSkiOSPlatformContext::makeContextFromNativeSurface(void *surface, int width,
+RNSkApplePlatformContext::makeContextFromNativeSurface(void *surface, int width,
                                                      int height) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeWindow(surface, width, height);
@@ -204,11 +204,11 @@ RNSkiOSPlatformContext::makeContextFromNativeSurface(void *surface, int width,
 #endif
 }
 
-void RNSkiOSPlatformContext::raiseError(const std::exception &err) {
+void RNSkApplePlatformContext::raiseError(const std::exception &err) {
   RCTFatal(RCTErrorWithMessage([NSString stringWithUTF8String:err.what()]));
 }
 
-sk_sp<SkSurface> RNSkiOSPlatformContext::makeOffscreenSurface(int width,
+sk_sp<SkSurface> RNSkApplePlatformContext::makeOffscreenSurface(int width,
                                                               int height) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeOffscreen(width, height);
@@ -217,7 +217,7 @@ sk_sp<SkSurface> RNSkiOSPlatformContext::makeOffscreenSurface(int width,
 #endif
 }
 
-sk_sp<SkImage> RNSkiOSPlatformContext::makeImageFromNativeBuffer(void *buffer) {
+sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeImageFromBuffer(buffer);
 #else
@@ -225,7 +225,7 @@ sk_sp<SkImage> RNSkiOSPlatformContext::makeImageFromNativeBuffer(void *buffer) {
 #endif
 }
 
-sk_sp<SkImage> RNSkiOSPlatformContext::makeImageFromNativeTexture(
+sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
     const TextureInfo &texInfo, int width, int height, bool mipMapped) {
   id<MTLTexture> mtlTexture = (__bridge id<MTLTexture>)(texInfo.mtlTexture);
 
@@ -246,7 +246,7 @@ sk_sp<SkImage> RNSkiOSPlatformContext::makeImageFromNativeTexture(
                                      kPremul_SkAlphaType, nullptr);
 }
 
-SkColorType RNSkiOSPlatformContext::mtlPixelFormatToSkColorType(
+SkColorType RNSkApplePlatformContext::mtlPixelFormatToSkColorType(
     MTLPixelFormat pixelFormat) {
   switch (pixelFormat) {
   case MTLPixelFormatRGBA8Unorm:
@@ -279,23 +279,23 @@ SkColorType RNSkiOSPlatformContext::mtlPixelFormatToSkColorType(
 }
 
 #if !defined(SK_GRAPHITE)
-GrDirectContext *RNSkiOSPlatformContext::getDirectContext() {
+GrDirectContext *RNSkApplePlatformContext::getDirectContext() {
   return MetalContext::getInstance().getDirectContext();
 }
 #endif
 
-sk_sp<SkFontMgr> RNSkiOSPlatformContext::createFontMgr() {
+sk_sp<SkFontMgr> RNSkApplePlatformContext::createFontMgr() {
   return SkFontMgr_New_CoreText(nullptr);
 }
 
-void RNSkiOSPlatformContext::runOnMainThread(std::function<void()> func) {
+void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();
   });
 }
 
 sk_sp<SkImage>
-RNSkiOSPlatformContext::takeScreenshotFromViewTag(size_t viewTag) {
+RNSkApplePlatformContext::takeScreenshotFromViewTag(size_t viewTag) {
   return [_screenshotService
       screenshotOfViewWithTag:[NSNumber numberWithLong:viewTag]];
 }

@@ -111,4 +111,5 @@ bird.decodeNextFrame();
 const currentFrame = bird.currentFrameDuration();
 // fetch the total number of frames
 const frameCount = bird.getFrameCount();
+console.log({ frameCount, currentFrame, image });
 ```

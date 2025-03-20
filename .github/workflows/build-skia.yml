@@ -29,6 +29,7 @@ jobs:
         env:
           ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
           GIT_SYNC_DEPS_SKIP_EMSDK: 'true'
+          ZERO_AR_DATE: 1
         run: yarn build-skia
 
       - name: Upload artifacts - Android arm

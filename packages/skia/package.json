@@ -5,7 +5,7 @@
     "provenance": true
   },
   "bin": {
-    "setup-skia-web": "./scripts/setup-canvaskit.js"
+    "setup-skia-web": "scripts/setup-canvaskit.js"
   },
   "title": "React Native Skia",
   "version": "0.0.0",
@@ -91,6 +91,7 @@
   "devDependencies": {
     "@babel/plugin-proposal-nullish-coalescing-operator": "7.18.6",
     "@semantic-release/commit-analyzer": "^13.0.0",
+    "@semantic-release/exec": "^7.0.3",
     "@semantic-release/github": "^10.3.3",
     "@semantic-release/release-notes-generator": "^14.0.1",
     "@types/jest": "29.5.6",

@@ -1,8 +1,7 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require("prism-react-renderer/themes/github");
-const darkCodeTheme = require("prism-react-renderer/themes/dracula");
+import { themes } from "prism-react-renderer";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -57,12 +56,12 @@ const config = {
         },
       }),
     ],
-    [
-      "docusaurus-preset-shiki-twoslash",
-      {
-        themes: ["min-light", "nord"],
-      },
-    ],
+    // [
+    //   "docusaurus-preset-shiki-twoslash",
+    //   {
+    //     themes: ["min-light", "nord"],
+    //   },
+    // ],
   ],
 
   themeConfig:
@@ -141,8 +140,9 @@ const config = {
         copyright: `Copyright © ${new Date().getFullYear()} Shopify, Inc. Built with Docusaurus.`,
       },
       prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
+        //theme: themes.jettwaveLight,
+        theme: themes.oneLight,
+        darkTheme: themes.vsDark,
       },
     }),
 };

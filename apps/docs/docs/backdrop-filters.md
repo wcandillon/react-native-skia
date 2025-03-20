@@ -31,7 +31,7 @@ const BLACK_AND_WHITE = [
   0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0,
 ];
 
-const Filter = () => {
+export const Filter = () => {
   const image = useImage(require("./assets/oslo.jpg"));
 
   return (
@@ -67,7 +67,7 @@ import {
   useImage,
 } from "@shopify/react-native-skia";
 
-const Filter = () => {
+export const Filter = () => {
   const image = useImage(require("./assets/oslo.jpg"));
 
   return (

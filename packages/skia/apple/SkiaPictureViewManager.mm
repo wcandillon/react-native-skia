@@ -2,7 +2,7 @@
 #include "SkiaPictureViewManager.h"
 #include <React/RCTBridge+Private.h>
 
-#include "RNSkIOSView.h"
+#include "RNSkAppleView.h"
 #include "RNSkPictureView.h"
 #include "RNSkPlatformContext.h"
 
@@ -43,7 +43,7 @@ RCT_CUSTOM_VIEW_PROPERTY(opaque, BOOL, SkiaUIView) {
   return [[SkiaUIView alloc]
       initWithManager:skManager.get()
               factory:[](std::shared_ptr<RNSkia::RNSkPlatformContext> context) {
-                return std::make_shared<RNSkiOSView<RNSkia::RNSkPictureView>>(
+                return std::make_shared<RNSkAppleView<RNSkia::RNSkPictureView>>(
                     context);
               }];
 }

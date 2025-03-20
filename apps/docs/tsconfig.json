@@ -2,6 +2,7 @@
   // This file is not used in compilation. It is here just for a nice editor experience.
   "extends": "@tsconfig/docusaurus/tsconfig.json",
   "compilerOptions": {
+    "module": "Node16",
     "baseUrl": ".",
     "strict": true,
     "noUnusedLocals": true /* Report errors on unused locals. */,
@@ -18,6 +19,6 @@
     "strictPropertyInitialization": true, /* Enable strict checking of property initialization in classes. */
     "noImplicitThis": true, /* Raise error on 'this' expressions with an implied 'any' type. */
     "alwaysStrict": true, /* Parse in strict mode and emit "use strict" for each source file. */
-    "lib": ["ES2023"]
+    "lib": ["ES2023"],
   }
 }

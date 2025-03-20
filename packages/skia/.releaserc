@@ -12,11 +12,23 @@
     [
       "semantic-release-yarn",
       {
-        "npmPublish": true
+        "npmPublish": false,
+        "tarballDir": "dist"
       }
     ],
     [
-      "@semantic-release/github"
+      "@semantic-release/exec",
+      {
+        "publishCmd": "mkdir -p /tmp/npm-publish && cp dist/*.tgz /tmp/npm-publish/ && cd /tmp/npm-publish && npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN && npm publish *.tgz --provenance --access public --tag ${nextRelease.channel || 'latest'}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {"path": "dist/*.tgz", "label": "Package tarball"}
+        ]
+      }
     ]
   ]
 }
