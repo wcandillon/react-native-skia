@@ -20,6 +20,7 @@
 }
 
 - (sk_sp<SkImage>)screenshotOfViewWithTag:(NSNumber *)viewTag {
+#if !TARGET_OS_OSX
   // Find view corresponding to the tag
   auto view = [_uiManager viewForReactTag:viewTag];
   if (view == NULL) {
@@ -80,6 +81,9 @@
 
   // ... and then create the SkImage itself!
   return SkImages::RasterFromData(info, skData, bytesPerRow);
+#else
+  return nullptr;
+#endif // !TARGET_OS_OSX
 }
 
 @end

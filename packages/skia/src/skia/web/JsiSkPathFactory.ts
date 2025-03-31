@@ -3,7 +3,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 import type { PathCommand, PathOp, SkFont, SkPath } from "../types";
 import type { PathFactory } from "../types/Path/PathFactory";
 
-import { Host, getEnum, NotImplementedOnRNWeb } from "./Host";
+import { Host, getEnum, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkPath } from "./JsiSkPath";
 
 export class JsiSkPathFactory extends Host implements PathFactory {
@@ -43,12 +43,7 @@ export class JsiSkPathFactory extends Host implements PathFactory {
     return new JsiSkPath(this.CanvasKit, path);
   }
 
-  MakeFromText(
-    _text: string,
-    _x: number,
-    _y: number,
-    _font: SkFont
-  ): SkPath | null {
-    throw new NotImplementedOnRNWeb();
+  MakeFromText(_text: string, _x: number, _y: number, _font: SkFont) {
+    return throwNotImplementedOnRNWeb<SkPath>();
   }
 }

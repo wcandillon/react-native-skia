@@ -1,8 +1,10 @@
 import type { CanvasKit } from "canvaskit-wasm";
 
 import type {
+  JsiRecorder,
   SkContourMeasureIter,
   Skia,
+  SkiaContext,
   SkPath,
   SkRect,
   SkRuntimeEffect,
@@ -43,12 +45,13 @@ import { JsiSkAnimatedImageFactory } from "./JsiSkAnimatedImageFactory";
 import { JsiSkParagraphBuilderFactory } from "./JsiSkParagraphBuilderFactory";
 import { JsiSkNativeBufferFactory } from "./JsiSkNativeBufferFactory";
 import { createVideo } from "./JsiVideo";
+import { throwNotImplementedOnRNWeb } from "./Host";
 
 export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   Point: (x: number, y: number) =>
     new JsiSkPoint(CanvasKit, Float32Array.of(x, y)),
-  RuntimeShaderBuilder: (_: SkRuntimeEffect): SkRuntimeShaderBuilder => {
-    throw new Error("Not implemented on React Native Web");
+  RuntimeShaderBuilder: (_: SkRuntimeEffect) => {
+    return throwNotImplementedOnRNWeb<SkRuntimeShaderBuilder>();
   },
   RRectXY: (rect: SkRect, rx: number, ry: number) =>
     new JsiSkRRect(CanvasKit, rect, rx, ry),
@@ -130,9 +133,9 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   NativeBuffer: new JsiSkNativeBufferFactory(CanvasKit),
   Video: createVideo.bind(null, CanvasKit),
   Context: (_surface: bigint, _width: number, _height: number) => {
-    throw new Error("Not implemented on React Native Web");
+    return throwNotImplementedOnRNWeb<SkiaContext>();
   },
   Recorder: () => {
-    throw new Error("Not implemented on React Native Web");
+    return throwNotImplementedOnRNWeb<JsiRecorder>();
   },
 });

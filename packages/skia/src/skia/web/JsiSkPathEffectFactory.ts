@@ -8,7 +8,7 @@ import type {
   SkPathEffect,
 } from "../types";
 
-import { getEnum, Host, NotImplementedOnRNWeb } from "./Host";
+import { getEnum, Host, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkPathEffect } from "./JsiSkPathEffect";
@@ -40,12 +40,12 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }
 
-  MakeCompose(_outer: SkPathEffect, _inner: SkPathEffect): SkPathEffect {
-    throw new NotImplementedOnRNWeb();
+  MakeCompose(_outer: SkPathEffect, _inner: SkPathEffect) {
+    return throwNotImplementedOnRNWeb<SkPathEffect>();
   }
 
-  MakeSum(_outer: SkPathEffect, _inner: SkPathEffect): SkPathEffect {
-    throw new NotImplementedOnRNWeb();
+  MakeSum(_outer: SkPathEffect, _inner: SkPathEffect) {
+    return throwNotImplementedOnRNWeb<SkPathEffect>();
   }
 
   MakeLine2D(width: number, matrix: SkMatrix) {

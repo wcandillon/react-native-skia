@@ -15,7 +15,11 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
   _layer.framebufferOnly = NO;
   _layer.device = device;
   _layer.opaque = false;
+#if !TARGET_OS_OSX
   _layer.contentsScale = [UIScreen mainScreen].scale;
+#else
+  _layer.contentsScale = [NSScreen mainScreen].backingScaleFactor;
+#endif // !TARGET_OS_OSX
   _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
   _layer.contentsGravity = kCAGravityBottomLeft;
   _layer.drawableSize = CGSizeMake(width, height);

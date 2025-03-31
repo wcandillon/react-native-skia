@@ -3,7 +3,7 @@ import type { CanvasKit, TypefaceFontProvider } from "canvaskit-wasm";
 import type { SkTypefaceFontProvider } from "../types/Paragraph/TypefaceFontProvider";
 import type { FontStyle, SkTypeface } from "../types";
 
-import { HostObject, NotImplementedOnRNWeb } from "./Host";
+import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
 
 export class JsiSkTypefaceFontProvider
   extends HostObject<TypefaceFontProvider, "FontMgr">
@@ -15,8 +15,8 @@ export class JsiSkTypefaceFontProvider
     super(CanvasKit, ref, "FontMgr");
   }
 
-  matchFamilyStyle(_name: string, _style: FontStyle): SkTypeface {
-    throw new NotImplementedOnRNWeb();
+  matchFamilyStyle(_name: string, _style: FontStyle) {
+    return throwNotImplementedOnRNWeb<SkTypeface>();
   }
   countFamilies() {
     return this.ref.countFamilies();

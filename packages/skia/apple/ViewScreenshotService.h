@@ -1,7 +1,11 @@
 #pragma once
 
 #import <CoreFoundation/CoreFoundation.h>
+#if !TARGET_OS_OSX
 #import <UIKit/UIKit.h>
+#else
+#import <Appkit/Appkit.h>
+#endif // !TARGET_OS_OSX
 
 #import <React/RCTUIManager.h>
 

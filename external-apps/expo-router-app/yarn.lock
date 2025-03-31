@@ -2549,7 +2549,7 @@ __metadata:
 
 "@shopify/react-native-skia@file:../../packages/skia::locator=expo-router-app%40workspace%3A.":
   version: 0.0.0
-  resolution: "@shopify/react-native-skia@file:../../packages/skia#../../packages/skia::hash=510f32&locator=expo-router-app%40workspace%3A."
+  resolution: "@shopify/react-native-skia@file:../../packages/skia#../../packages/skia::hash=931ba0&locator=expo-router-app%40workspace%3A."
   dependencies:
     canvaskit-wasm: 0.39.1
     react-reconciler: 0.27.0
@@ -2563,8 +2563,8 @@ __metadata:
     react-native-reanimated:
       optional: true
   bin:
-    setup-skia-web: ./scripts/setup-canvaskit.js
-  checksum: 79fae4837b5ee11fd1e0cd5eb0d480260a29308ef3396c1b7b0b057f79171ce0a055099b67a6a14ef925f806e1d63e8e047076cfe3a2f358ec3234377865f7fb
+    setup-skia-web: scripts/setup-canvaskit.js
+  checksum: 356c3002f9ef43820dea05a2976aec42e3aa916ebec7963d2522311714d500a0eb6a2c22727eb13fa1e1a892902ee1c6d4c370ab5027b3bf60bdb0e263148559
   languageName: node
   linkType: hard
 

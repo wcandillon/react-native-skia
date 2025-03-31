@@ -162,6 +162,7 @@ void JniPlatformContext::performStreamOperation(
         jni::Environment::current()->GetByteArrayElements(array.get(), nullptr);
     if (!elements) {
       printf("Element Fail\n");
+      free(buffer);
       return;
     }
 

@@ -55,8 +55,12 @@
 
 #pragma mark Lifecycle
 
-- (void)willMoveToSuperview:(UIView *)newWindow {
-  if (newWindow != nullptr) {
+#if !TARGET_OS_OSX
+- (void)willMoveToSuperview:(UIView *)newSuperView {
+#else
+- (void)viewWillMoveToSuperview:(NSView *)newSuperView {
+#endif // !TARGET_OS_OSX
+  if (newSuperView != nullptr) {
     // Create implementation view when the parent view is set
     if (_impl == nullptr && _manager != nullptr) {
       _impl = _factory(_manager->getPlatformContext());

@@ -34,7 +34,7 @@ public:
     SkPoint tangent;
     auto result = getObject()->getPosTan(dist, &position, &tangent);
     if (!result) {
-      throw jsi::JSError(runtime, "getSegment() failed");
+      throw jsi::JSError(runtime, "getPosTan() failed");
     }
     auto posTan = jsi::Array(runtime, 2);
     auto pos = jsi::Object::createFromHostObject(

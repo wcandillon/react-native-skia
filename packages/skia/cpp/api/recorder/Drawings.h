@@ -874,9 +874,10 @@ public:
   }
 
   void draw(DrawingCtx *ctx) {
-    if (props.paragraph && props.paragraph->_paragraph) {
-      props.paragraph->_paragraph->layout(props.width);
-      props.paragraph->_paragraph->paint(ctx->canvas, props.x, props.y);
+    if (props.paragraph) {
+      auto paragraph = props.paragraph->getObject();
+      paragraph->layout(props.width);
+      paragraph->paint(ctx->canvas, props.x, props.y);
     }
   }
 };

@@ -4,7 +4,11 @@
 #import <string>
 
 #import <CoreFoundation/CoreFoundation.h>
+#if !TARGET_OS_OSX
 #import <UIKit/UIKit.h>
+#else
+#import <React/RCTUIKit.h>
+#endif // !TARGET_OS_OSX
 
 #import "RNSkManager.h"
 #import "RNSkAppleView.h"
@@ -18,7 +22,11 @@
 #if RCT_NEW_ARCH_ENABLED
     RCTViewComponentView
 #else
+#if !TARGET_OS_OSX
     UIView
+#else
+    RCTUIView
+#endif // !TARGET_OS_OSX
 #endif // RCT_NEW_ARCH_ENABLED
 
 - (instancetype)

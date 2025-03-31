@@ -37,7 +37,11 @@ RCT_CUSTOM_VIEW_PROPERTY(opaque, BOOL, SkiaUIView) {
   [(SkiaUIView *)view setOpaque:opaque];
 }
 
+#if !TARGET_OS_OSX
 - (UIView *)view {
+#else
+- (RCTUIView *)view {
+#endif // !TARGET_OS_OSX
   auto skManager = [[self skiaManager] skManager];
   // Pass SkManager as a raw pointer to avoid circular dependenciesr
   return [[SkiaUIView alloc]

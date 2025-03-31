@@ -24,6 +24,7 @@ jest.mock("react-native-reanimated", () => {
   Reanimated.useEvent = () => {};
   Reanimated.scrollTo = () => {};
   Reanimated.useFrameCallback = () => {};
+  Reanimated.convertToRGBA = () => {};
   return Reanimated;
 });
 

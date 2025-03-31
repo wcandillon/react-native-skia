@@ -45,7 +45,7 @@ public:
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkPictureFactory, MakePicture))
 
   explicit JsiSkPictureFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(context) {}
+      : JsiSkHostObject(std::move(context)) {}
 };
 
 } // namespace RNSkia

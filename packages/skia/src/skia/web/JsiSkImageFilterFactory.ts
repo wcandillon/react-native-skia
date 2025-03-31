@@ -13,7 +13,7 @@ import type {
   TileMode,
 } from "../types";
 
-import { Host, NotImplementedOnRNWeb, getEnum } from "./Host";
+import { Host, throwNotImplementedOnRNWeb, getEnum } from "./Host";
 import { JsiSkImageFilter } from "./JsiSkImageFilter";
 import { JsiSkColorFilter } from "./JsiSkColorFilter";
 
@@ -107,9 +107,7 @@ export class JsiSkImageFilterFactory
     const inputFilter =
       input === null ? null : JsiSkImageFilter.fromValue<ImageFilter>(input);
     if (cropRect) {
-      throw new NotImplementedOnRNWeb(
-        "The cropRect argument is not yet supported on React Native Web."
-      );
+      throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeDropShadow(
       dx,
@@ -134,9 +132,7 @@ export class JsiSkImageFilterFactory
     const inputFilter =
       input === null ? null : JsiSkImageFilter.fromValue<ImageFilter>(input);
     if (cropRect) {
-      throw new NotImplementedOnRNWeb(
-        "The cropRect argument is not yet supported on React Native Web."
-      );
+      throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeDropShadowOnly(
       dx,
@@ -158,9 +154,7 @@ export class JsiSkImageFilterFactory
     const inputFilter =
       input === null ? null : JsiSkImageFilter.fromValue<ImageFilter>(input);
     if (cropRect) {
-      throw new NotImplementedOnRNWeb(
-        "The cropRect argument is not yet supported on React Native Web."
-      );
+      throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeErode(rx, ry, inputFilter);
     return new JsiSkImageFilter(this.CanvasKit, filter);
@@ -175,9 +169,7 @@ export class JsiSkImageFilterFactory
     const inputFilter =
       input === null ? null : JsiSkImageFilter.fromValue<ImageFilter>(input);
     if (cropRect) {
-      throw new NotImplementedOnRNWeb(
-        "The cropRect argument is not yet supported on React Native Web."
-      );
+      throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeDilate(rx, ry, inputFilter);
     return new JsiSkImageFilter(this.CanvasKit, filter);
@@ -194,9 +186,7 @@ export class JsiSkImageFilterFactory
         ? null
         : JsiSkImageFilter.fromValue<ImageFilter>(foreground);
     if (cropRect) {
-      throw new NotImplementedOnRNWeb(
-        "The cropRect argument is not yet supported on React Native Web."
-      );
+      throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeBlend(
       getEnum(this.CanvasKit.BlendMode, mode),
@@ -210,7 +200,7 @@ export class JsiSkImageFilterFactory
     _builder: SkRuntimeShaderBuilder,
     _childShaderName: string | null,
     _input: SkImageFilter | null
-  ): SkImageFilter {
-    throw new NotImplementedOnRNWeb();
+  ) {
+    return throwNotImplementedOnRNWeb<SkImageFilter>();
   }
 }

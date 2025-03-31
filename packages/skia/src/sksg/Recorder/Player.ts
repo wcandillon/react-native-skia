@@ -44,19 +44,18 @@ import {
   isCommand,
   isDrawCommand,
   isGroup,
-  materializeProps,
+  materializeCommand,
   type Command,
 } from "./Core";
 import type { DrawingContext } from "./DrawingContext";
 
-function play(ctx: DrawingContext, command: Command) {
+function play(ctx: DrawingContext, _command: Command) {
   "worklet";
-  if (isGroup(command)) {
-    command.children.forEach((child) => play(ctx, child));
+  if (isGroup(_command)) {
+    _command.children.forEach((child) => play(ctx, child));
     return;
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  materializeProps(command as any);
+  const command = materializeCommand(_command);
   if (isCommand(command, CommandType.SaveBackdropFilter)) {
     ctx.saveBackdropFilter();
   } else if (isCommand(command, CommandType.SaveLayer)) {

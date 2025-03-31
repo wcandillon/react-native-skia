@@ -54,20 +54,21 @@ public:
 
   /**
    * Returns the underlying object exposed by this host object. This object
-   * should be wrapped in a shared pointer of some kind
+   * should be wrapped in a shared pointer of some kind.
+   * Throws if the object has been disposed.
    * @return Underlying object
    */
-  T getObject() { return _object; }
-  const T getObject() const { return _object; }
+  T getObject() { return validateObject(); }
+  const T getObject() const { return validateObject(); }
 
   /**
-   Updates the inner object with a new version of the object.
+   * Updates the inner object with a new version of the object.
    */
   void setObject(T object) { _object = object; }
 
   /**
-   Dispose function that can be exposed to JS by using the JSI_API_TYPENAME
-   macro
+   * Dispose function that can be exposed to JS by using the JSI_API_TYPENAME
+   * macro.
    */
   JSI_HOST_FUNCTION(dispose) {
     safeDispose();
@@ -76,12 +77,22 @@ public:
 
 protected:
   /**
-   Override to implement disposale of allocated resources like smart pointers
-   etc. This method will only be called once for each instance of this class.
+   * Override to implement disposal of allocated resources like smart pointers.
+   * This method will only be called once for each instance of this class.
    */
   virtual void releaseResources() = 0;
 
 private:
+  /**
+   * Validates that _object was not disposed and returns it.
+   */
+  T validateObject() const {
+    if (_isDisposed) {
+      throw std::runtime_error("Attempted to access a disposed object.");
+    }
+    return _object;
+  }
+
   void safeDispose() {
     if (!_isDisposed) {
       _isDisposed = true;
@@ -90,12 +101,12 @@ private:
   }
 
   /**
-   * Wrapped object
+   * Wrapped object.
    */
   T _object;
 
   /**
-   Resource disposed flag
+   * Resource disposed flag.
    */
   std::atomic<bool> _isDisposed = {false};
 };

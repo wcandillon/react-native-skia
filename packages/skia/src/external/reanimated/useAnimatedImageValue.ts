@@ -40,10 +40,11 @@ export const useAnimatedImageValue = (
 
     // Update the current frame
     animatedImage.decodeNextFrame();
-    if (currentFrame.value) {
-      currentFrame.value.dispose();
-    }
+    const oldFrame = currentFrame.value;
     currentFrame.value = animatedImage.getCurrentFrame();
+    if (oldFrame) {
+      oldFrame.dispose();
+    }
 
     // Update the last timestamp
     lastTimestamp.value = timestamp;

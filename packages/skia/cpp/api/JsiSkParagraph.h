@@ -24,19 +24,19 @@
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
-
 namespace para = skia::textlayout;
 
 /**
- Implementation of the Paragraph object in JSI
+ * Implementation of the Paragraph object in JSI
  */
-class JsiSkParagraph : public JsiSkHostObject {
+class JsiSkParagraph
+    : public JsiSkWrappingSharedPtrHostObject<para::Paragraph> {
 public:
   EXPORT_JSI_API_TYPENAME(JsiSkParagraph, Paragraph)
 
   JSI_HOST_FUNCTION(layout) {
     auto width = getArgumentAsNumber(runtime, arguments, count, 0);
-    _paragraph->layout(width);
+    getObject()->layout(width);
     return jsi::Value::undefined();
   }
 
@@ -45,34 +45,34 @@ public:
         getArgumentAsHostObject<JsiSkCanvas>(runtime, arguments, count, 0);
     auto x = getArgumentAsNumber(runtime, arguments, count, 1);
     auto y = getArgumentAsNumber(runtime, arguments, count, 2);
-    _paragraph->paint(jsiCanvas->getCanvas(), x, y);
+    getObject()->paint(jsiCanvas->getCanvas(), x, y);
     return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(getHeight) {
-    return static_cast<double>(_paragraph->getHeight());
+    return static_cast<double>(getObject()->getHeight());
   }
 
   JSI_HOST_FUNCTION(getMaxWidth) {
-    return static_cast<double>(_paragraph->getMaxWidth());
+    return static_cast<double>(getObject()->getMaxWidth());
   }
 
   JSI_HOST_FUNCTION(getMaxIntrinsicWidth) {
-    return static_cast<double>(_paragraph->getMaxIntrinsicWidth());
+    return static_cast<double>(getObject()->getMaxIntrinsicWidth());
   }
 
   JSI_HOST_FUNCTION(getMinIntrinsicWidth) {
-    return static_cast<double>(_paragraph->getMinIntrinsicWidth());
+    return static_cast<double>(getObject()->getMinIntrinsicWidth());
   }
 
   JSI_HOST_FUNCTION(getLongestLine) {
-    return static_cast<double>(_paragraph->getLongestLine());
+    return static_cast<double>(getObject()->getLongestLine());
   }
 
   JSI_HOST_FUNCTION(getGlyphPositionAtCoordinate) {
     auto dx = getArgumentAsNumber(runtime, arguments, count, 0);
     auto dy = getArgumentAsNumber(runtime, arguments, count, 1);
-    auto result = _paragraph->getGlyphPositionAtCoordinate(dx, dy);
+    auto result = getObject()->getGlyphPositionAtCoordinate(dx, dy);
     return result.position;
   }
 
@@ -80,8 +80,8 @@ public:
     auto start = getArgumentAsNumber(runtime, arguments, count, 0);
     auto end = getArgumentAsNumber(runtime, arguments, count, 1);
     auto result =
-        _paragraph->getRectsForRange(start, end, para::RectHeightStyle::kTight,
-                                     para::RectWidthStyle::kTight);
+        getObject()->getRectsForRange(start, end, para::RectHeightStyle::kTight,
+                                      para::RectWidthStyle::kTight);
     auto returnValue = jsi::Array(runtime, result.size());
     for (size_t i = 0; i < result.size(); ++i) {
       returnValue.setValueAtIndex(
@@ -93,7 +93,7 @@ public:
 
   JSI_HOST_FUNCTION(getLineMetrics) {
     std::vector<para::LineMetrics> metrics;
-    _paragraph->getLineMetrics(metrics);
+    getObject()->getLineMetrics(metrics);
     auto returnValue = jsi::Array(runtime, metrics.size());
     auto height = 0;
     for (size_t i = 0; i < metrics.size(); ++i) {
@@ -110,7 +110,7 @@ public:
 
   JSI_HOST_FUNCTION(getRectsForPlaceholders) {
     std::vector<para::TextBox> placeholderInfos =
-        _paragraph->getRectsForPlaceholders();
+        getObject()->getRectsForPlaceholders();
     auto returnValue = jsi::Array(runtime, placeholderInfos.size());
     for (size_t i = 0; i < placeholderInfos.size(); ++i) {
       auto obj = jsi::Object(runtime);
@@ -122,12 +122,6 @@ public:
       returnValue.setValueAtIndex(runtime, i, obj);
     }
     return returnValue;
-  }
-
-  JSI_HOST_FUNCTION(dispose) {
-    _paragraph = nullptr;
-
-    return jsi::Value::undefined();
   }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkParagraph, layout),
@@ -146,12 +140,8 @@ public:
 
   explicit JsiSkParagraph(std::shared_ptr<RNSkPlatformContext> context,
                           para::ParagraphBuilder *paragraphBuilder)
-      : JsiSkHostObject(std::move(context)) {
-    _paragraph = paragraphBuilder->Build();
-  }
-
-public:
-  std::unique_ptr<para::Paragraph> _paragraph;
+      : JsiSkWrappingSharedPtrHostObject<para::Paragraph>(
+            std::move(context), std::move(paragraphBuilder->Build())) {}
 };
 
 } // namespace RNSkia

@@ -4,6 +4,7 @@ import type { CanvasKitWebGLBuffer, Video, ImageFactory } from "../types";
 
 import { CanvasKitWebGLBufferImpl } from "./CanvasKitWebGLBufferImpl";
 import { JsiSkImageFactory } from "./JsiSkImageFactory";
+import { throwNotImplementedOnRNWeb } from "./Host";
 
 export const createVideo = async (
   CanvasKit: CanvasKit,
@@ -42,7 +43,7 @@ export class JsiVideo implements Video {
   }
 
   framerate(): number {
-    throw new Error("Video.frame is not available on React Native Web");
+    return throwNotImplementedOnRNWeb<number>();
   }
 
   setSurface(surface: Surface) {

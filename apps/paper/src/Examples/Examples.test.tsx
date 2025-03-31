@@ -19,7 +19,9 @@ import { Filters } from "./Filters";
 import { Boxes } from "./Boxes";
 
 it("should render the Breathe example correctly", () => {
-  render(<Breathe />);
+  const { getByTestId } = render(<Breathe />);
+  const breatheCanvas = getByTestId("breathe-canvas");
+  expect(breatheCanvas).toBeTruthy();
 });
 
 it("should render the Gooey example correctly", () => {
