@@ -83,9 +83,9 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     // see toSkImageInfo() from canvaskit
     const image = this.CanvasKit.MakeImage(
       {
-        alphaType: getEnum(this.CanvasKit.AlphaType, info.alphaType),
+        alphaType: getEnum(this.CanvasKit, "AlphaType", info.alphaType),
         colorSpace: this.CanvasKit.ColorSpace.SRGB,
-        colorType: getEnum(this.CanvasKit.ColorType, info.colorType),
+        colorType: getEnum(this.CanvasKit, "ColorType", info.colorType),
         height: info.height,
         width: info.width,
       },

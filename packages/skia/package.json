@@ -29,7 +29,7 @@
     "jestSetup.mjs",
     "jestEnv.mjs",
     "cpp/**/*.{h,cpp}",
-    "ios/**",
+    "apple/**",
     "libs/apple/*.xcframework/**",
     "react-native-skia.podspec",
     "scripts/setup-canvaskit.js",
@@ -46,7 +46,7 @@
     "build-skia": "ts-node ./scripts/build-skia.ts",
     "copy-skia-headers": "ts-node ./scripts/copy-skia-headers.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
-    "clang-format-ios": "find ios/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
+    "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-android": "find android/cpp/ -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-common": "find cpp/ \\( -path 'cpp//skia' -prune \\) -o \\( -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' \\) -print | xargs clang-format -i",
     "workflow-copy-libs": "yarn ts-node ./scripts/workflow-copy-libs.ts",
@@ -122,7 +122,7 @@
     "ws": "8.18.0"
   },
   "dependencies": {
-    "canvaskit-wasm": "0.39.1",
+    "canvaskit-wasm": "0.40.0",
     "react-reconciler": "0.31.0"
   },
   "eslintIgnore": [

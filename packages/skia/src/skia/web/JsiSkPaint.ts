@@ -79,7 +79,7 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
   }
 
   setBlendMode(blendMode: BlendMode) {
-    this.ref.setBlendMode(getEnum(this.CanvasKit.BlendMode, blendMode));
+    this.ref.setBlendMode(getEnum(this.CanvasKit, "BlendMode", blendMode));
   }
 
   setColor(color: SkColor) {
@@ -107,11 +107,11 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
   }
 
   setStrokeCap(cap: StrokeCap) {
-    this.ref.setStrokeCap(getEnum(this.CanvasKit.StrokeCap, cap));
+    this.ref.setStrokeCap(getEnum(this.CanvasKit, "StrokeCap", cap));
   }
 
   setStrokeJoin(join: StrokeJoin) {
-    this.ref.setStrokeJoin(getEnum(this.CanvasKit.StrokeJoin, join));
+    this.ref.setStrokeJoin(getEnum(this.CanvasKit, "StrokeJoin", join));
   }
 
   setStrokeMiter(limit: number) {

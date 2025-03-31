@@ -31,7 +31,7 @@ export const MakeVertices = (
   new JsiSkVertices(
     CanvasKit,
     CanvasKit.MakeVertices(
-      getEnum(CanvasKit.VertexMode, mode),
+      getEnum(CanvasKit, "VertexMode", mode),
       positions.map(({ x, y }) => [x, y]).flat(),
       (textureCoordinates || []).map(({ x, y }) => [x, y]).flat(),
       !colors ? null : colors.reduce((a, c) => concat(a, c)),

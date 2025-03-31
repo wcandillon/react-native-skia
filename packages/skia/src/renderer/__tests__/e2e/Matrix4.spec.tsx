@@ -217,8 +217,7 @@ describe("Matrix4", () => {
       },
       { matrix }
     );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, jest/valid-expect
-    (expect(result) as any).toBeApproximatelyEqual(
+    expect(result).toBeApproximatelyEqual(
       toMatrix3(
         processTransform3d([
           { translate: [width / 2, height / 2] },

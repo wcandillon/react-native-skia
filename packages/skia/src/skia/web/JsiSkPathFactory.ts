@@ -27,7 +27,7 @@ export class JsiSkPathFactory extends Host implements PathFactory {
     const path = this.CanvasKit.Path.MakeFromOp(
       JsiSkPath.fromValue(one),
       JsiSkPath.fromValue(two),
-      getEnum(this.CanvasKit.PathOp, op)
+      getEnum(this.CanvasKit, "PathOp", op)
     );
     if (path === null) {
       return null;

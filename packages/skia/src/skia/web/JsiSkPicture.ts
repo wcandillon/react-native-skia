@@ -36,9 +36,9 @@ export class JsiSkPicture
     return new JsiSkShader(
       this.CanvasKit,
       this.ref.makeShader(
-        getEnum(this.CanvasKit.TileMode, tmx),
-        getEnum(this.CanvasKit.TileMode, tmy),
-        getEnum(this.CanvasKit.FilterMode, mode),
+        getEnum(this.CanvasKit, "TileMode", tmx),
+        getEnum(this.CanvasKit, "TileMode", tmy),
+        getEnum(this.CanvasKit, "FilterMode", mode),
         localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined,
         tileRect ? JsiSkRect.fromValue(this.CanvasKit, tileRect) : undefined
       )

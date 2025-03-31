@@ -3,11 +3,12 @@
 import CanvasKitInit from "canvaskit-wasm/bin/full/canvaskit";
 import type { ReactNode } from "react";
 
-import { JsiSkApi } from "../skia/web";
 import type { SkSurface } from "../skia";
+import { JsiSkApi } from "../skia/web";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 
 export * from "../renderer/components";
+export * from "../skia/types";
 
 let Skia: ReturnType<typeof JsiSkApi>;
 

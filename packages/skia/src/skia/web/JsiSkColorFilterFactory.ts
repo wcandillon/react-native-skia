@@ -31,7 +31,7 @@ export class JsiSkColorFilterFactory
       this.CanvasKit,
       this.CanvasKit.ColorFilter.MakeBlend(
         color,
-        getEnum(this.CanvasKit.BlendMode, mode)
+        getEnum(this.CanvasKit, "BlendMode", mode)
       )
     );
   }

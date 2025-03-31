@@ -100,7 +100,7 @@ export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
   }
 
   setEdging(edging: FontEdging) {
-    this.ref.setEdging(getEnum(this.CanvasKit.FontEdging, edging));
+    this.ref.setEdging(getEnum(this.CanvasKit, "FontEdging", edging));
   }
 
   setEmbeddedBitmaps(embeddedBitmaps: boolean) {
@@ -108,7 +108,7 @@ export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
   }
 
   setHinting(hinting: FontHinting) {
-    this.ref.setHinting(getEnum(this.CanvasKit.FontHinting, hinting));
+    this.ref.setHinting(getEnum(this.CanvasKit, "FontHinting", hinting));
   }
 
   setLinearMetrics(linearMetrics: boolean) {

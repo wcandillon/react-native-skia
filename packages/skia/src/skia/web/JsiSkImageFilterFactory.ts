@@ -42,8 +42,8 @@ export class JsiSkImageFilterFactory
     const inputFilter =
       input === null ? null : JsiSkImageFilter.fromValue<ImageFilter>(input);
     const filter = this.CanvasKit.ImageFilter.MakeDisplacementMap(
-      getEnum(this.CanvasKit.ColorChannel, channelX),
-      getEnum(this.CanvasKit.ColorChannel, channelY),
+      getEnum(this.CanvasKit, "ColorChannel", channelX),
+      getEnum(this.CanvasKit, "ColorChannel", channelY),
       scale,
       JsiSkImageFilter.fromValue(in1),
       inputFilter
@@ -69,7 +69,7 @@ export class JsiSkImageFilterFactory
       this.CanvasKit.ImageFilter.MakeBlur(
         sigmaX,
         sigmaY,
-        getEnum(this.CanvasKit.TileMode, mode),
+        getEnum(this.CanvasKit, "TileMode", mode),
         input === null ? null : JsiSkImageFilter.fromValue(input)
       )
     );
@@ -189,7 +189,7 @@ export class JsiSkImageFilterFactory
       throwNotImplementedOnRNWeb<SkImageFilter>();
     }
     const filter = this.CanvasKit.ImageFilter.MakeBlend(
-      getEnum(this.CanvasKit.BlendMode, mode),
+      getEnum(this.CanvasKit, "BlendMode", mode),
       JsiSkImageFilter.fromValue(background),
       inputFilter
     );

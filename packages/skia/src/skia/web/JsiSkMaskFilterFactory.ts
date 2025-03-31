@@ -15,7 +15,7 @@ export class JsiSkMaskFilterFactory extends Host implements MaskFilterFactory {
     return new JsiSkMaskFilter(
       this.CanvasKit,
       this.CanvasKit.MaskFilter.MakeBlur(
-        getEnum(this.CanvasKit.BlurStyle, style),
+        getEnum(this.CanvasKit, "BlurStyle", style),
         sigma,
         respectCTM
       )

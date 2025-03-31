@@ -69,7 +69,7 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
       JsiSkPath.fromValue(path),
       advance,
       phase,
-      getEnum(this.CanvasKit.Path1DEffect, style)
+      getEnum(this.CanvasKit, "Path1DEffect", style)
     );
     if (pe === null) {
       return null;

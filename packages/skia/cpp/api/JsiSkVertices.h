@@ -70,6 +70,10 @@ public:
       if (count >= 3 && !arguments[2].isNull() && !arguments[2].isUndefined()) {
         auto jsiTexs = arguments[2].asObject(runtime).asArray(runtime);
         auto texsSize = jsiTexs.size(runtime);
+        if (texsSize != positionsSize) {
+          throw jsi::JSError(runtime, "The number of texture coordinates must "
+                                      "match the number of positions");
+        }
         texs.reserve(texsSize);
         for (int i = 0; i < texsSize; i++) {
           auto point = JsiSkPoint::fromValue(
@@ -81,6 +85,11 @@ public:
       if (count >= 4 && !arguments[3].isNull() && !arguments[3].isUndefined()) {
         auto jsiColors = arguments[3].asObject(runtime).asArray(runtime);
         auto colorsSize = jsiColors.size(runtime);
+        if (colorsSize != positionsSize) {
+          throw jsi::JSError(
+              runtime,
+              "The number of colors must match the number of positions");
+        }
         colors.reserve(colorsSize);
         for (int i = 0; i < colorsSize; i++) {
           SkColor color = JsiSkColor::fromValue(
@@ -132,9 +141,11 @@ public:
       //                    builder.indices());
       //                }
       //                auto vertices = builder.detach();
-      auto vertices = SkVertices::MakeCopy(
-          mode, positionsSize, positions.data(), texs.data(), colors.data(),
-          indicesSize, indices.data());
+      auto vertices =
+          SkVertices::MakeCopy(mode, positionsSize, positions.data(),
+                               texs.size() > 0 ? texs.data() : nullptr,
+                               colors.size() > 0 ? colors.data() : nullptr,
+                               indicesSize, indices.data());
       return jsi::Object::createFromHostObject(
           runtime,
           std::make_shared<JsiSkVertices>(context, std::move(vertices)));

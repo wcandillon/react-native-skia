@@ -77,10 +77,10 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     return new JsiSkShader(
       this.CanvasKit,
       this.ref.makeShaderOptions(
-        getEnum(this.CanvasKit.TileMode, tx),
-        getEnum(this.CanvasKit.TileMode, ty),
-        getEnum(this.CanvasKit.FilterMode, fm),
-        getEnum(this.CanvasKit.MipmapMode, mm),
+        getEnum(this.CanvasKit, "TileMode", tx),
+        getEnum(this.CanvasKit, "TileMode", ty),
+        getEnum(this.CanvasKit, "FilterMode", fm),
+        getEnum(this.CanvasKit, "MipmapMode", mm),
         localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined
       )
     );
@@ -96,8 +96,8 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     return new JsiSkShader(
       this.CanvasKit,
       this.ref.makeShaderCubic(
-        getEnum(this.CanvasKit.TileMode, tx),
-        getEnum(this.CanvasKit.TileMode, ty),
+        getEnum(this.CanvasKit, "TileMode", tx),
+        getEnum(this.CanvasKit, "TileMode", ty),
         B,
         C,
         localMatrix ? JsiSkMatrix.fromValue(localMatrix) : undefined
@@ -109,11 +109,13 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     let result: Uint8Array | null;
     if (fmt && quality) {
       result = this.ref.encodeToBytes(
-        getEnum(this.CanvasKit.ImageFormat, fmt),
+        getEnum(this.CanvasKit, "ImageFormat", fmt),
         quality
       );
     } else if (fmt) {
-      result = this.ref.encodeToBytes(getEnum(this.CanvasKit.ImageFormat, fmt));
+      result = this.ref.encodeToBytes(
+        getEnum(this.CanvasKit, "ImageFormat", fmt)
+      );
     } else {
       result = this.ref.encodeToBytes();
     }
@@ -137,11 +139,13 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
       width: imageInfo?.width ?? info.width,
       height: imageInfo?.height ?? info.height,
       alphaType: getEnum(
-        this.CanvasKit.AlphaType,
+        this.CanvasKit,
+        "AlphaType",
         (imageInfo ?? info).alphaType
       ),
       colorType: getEnum(
-        this.CanvasKit.ColorType,
+        this.CanvasKit,
+        "ColorType",
         (imageInfo ?? info).colorType
       ),
     };

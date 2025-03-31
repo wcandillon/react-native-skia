@@ -110,7 +110,7 @@ describe("Paths", () => {
       path.trim(0.0001, 1.00001, false);
       return path.toSVGString();
     });
-    expect(result).toEqual("M20 20.0048L20 40L40 20");
+    expect(result).toBeApproximatelyEqual("M20 20.0048L20 40L40 20");
   });
   it("should accept [0, 1.2] as trim value", async () => {
     const result = await surface.eval((Skia) => {
@@ -142,17 +142,19 @@ describe("Paths", () => {
         path.interpolate(path2, 1.0001)!.toSVGString(),
         path.interpolate(path2, 1.2)!.toSVGString(),
         path.interpolate(path2, 2)!.toSVGString(),
-      ];
+      ].join(" ");
     });
-    expect(result).toEqual([
-      "M-20 -20L20 0L0 60",
-      "M0 0L20 20L20 40",
-      "M0.002 0.002L20 20.002L20.002 39.998",
-      "M20 20L20 40L40 20",
-      "M20.002 20.002L20 40.002L40.002 19.998",
-      "M24 24L20 44L44 16",
-      "M40 40L20 60L60 0",
-    ]);
+    expect(result).toBeApproximatelyEqual(
+      [
+        "M-20 -20L20 0L0 60",
+        "M0 0L20 20L20 40",
+        "M0.002 0.002L20 20.002L20.002 39.998",
+        "M20 20L20 40L40 20",
+        "M20.002 20.002L20 40.002L40.002 19.998",
+        "M24 24L20 44L44 16",
+        "M40 40L20 60L60 0",
+      ].join(" ")
+    );
   });
   it("should add a path", async () => {
     const result = await surface.eval((Skia) => {

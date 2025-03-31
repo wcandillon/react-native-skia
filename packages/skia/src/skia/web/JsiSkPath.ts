@@ -150,7 +150,7 @@ export class JsiSkPath extends HostObject<Path, "Path"> implements SkPath {
   }
 
   setFillType(fill: FillType) {
-    this.ref.setFillType(getEnum(this.CanvasKit.FillType, fill));
+    this.ref.setFillType(getEnum(this.CanvasKit, "FillType", fill));
     return this;
   }
 
@@ -168,8 +168,8 @@ export class JsiSkPath extends HostObject<Path, "Path"> implements SkPath {
             // eslint-disable-next-line camelcase
             miter_limit: opts.width,
             precision: opts.width,
-            join: optEnum(this.CanvasKit.StrokeJoin, opts.join),
-            cap: optEnum(this.CanvasKit.StrokeCap, opts.cap),
+            join: optEnum(this.CanvasKit, "StrokeJoin", opts.join),
+            cap: optEnum(this.CanvasKit, "StrokeCap", opts.cap),
           }
     );
     return result === null ? result : this;
@@ -318,7 +318,7 @@ export class JsiSkPath extends HostObject<Path, "Path"> implements SkPath {
   op(path: SkPath, op: PathOp) {
     return this.ref.op(
       JsiSkPath.fromValue(path),
-      getEnum(this.CanvasKit.PathOp, op)
+      getEnum(this.CanvasKit, "PathOp", op)
     );
   }
 

@@ -36,7 +36,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
         JsiSkPoint.fromValue(end),
         colors,
         pos,
-        getEnum(this.CanvasKit.TileMode, mode),
+        getEnum(this.CanvasKit, "TileMode", mode),
         localMatrix === undefined
           ? undefined
           : JsiSkMatrix.fromValue(localMatrix),
@@ -61,7 +61,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
         radius,
         colors,
         pos,
-        getEnum(this.CanvasKit.TileMode, mode),
+        getEnum(this.CanvasKit, "TileMode", mode),
         localMatrix === undefined
           ? undefined
           : JsiSkMatrix.fromValue(localMatrix),
@@ -90,7 +90,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
         endRadius,
         colors,
         pos,
-        getEnum(this.CanvasKit.TileMode, mode),
+        getEnum(this.CanvasKit, "TileMode", mode),
         localMatrix === undefined
           ? undefined
           : JsiSkMatrix.fromValue(localMatrix),
@@ -117,7 +117,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
         cy,
         colors,
         pos,
-        getEnum(this.CanvasKit.TileMode, mode),
+        getEnum(this.CanvasKit, "TileMode", mode),
         localMatrix === undefined || localMatrix === null
           ? undefined
           : JsiSkMatrix.fromValue(localMatrix),
@@ -174,7 +174,7 @@ export class JsiSkShaderFactory extends Host implements ShaderFactory {
     return new JsiSkShader(
       this.CanvasKit,
       this.CanvasKit.Shader.MakeBlend(
-        getEnum(this.CanvasKit.BlendMode, mode),
+        getEnum(this.CanvasKit, "BlendMode", mode),
         JsiSkShader.fromValue(one),
         JsiSkShader.fromValue(two)
       )
