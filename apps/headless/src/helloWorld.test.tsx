@@ -21,7 +21,7 @@ describe("Test Skia", () => {
 	  const size = 60;
 	  const r = size * 0.33;
 
-	  const image = drawOffscreen(
+	  const image = await drawOffscreen(
 		  surface,
       <Group blendMode="multiply">
         <Circle cx={r} cy={r} r={r} color="cyan" />

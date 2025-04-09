@@ -6,6 +6,7 @@ export type StackParamList = {
   Home: undefined;
   Vertices: undefined;
   API: undefined;
+  Chess: undefined;
   Breathe: undefined;
   Filters: undefined;
   Gooey: undefined;

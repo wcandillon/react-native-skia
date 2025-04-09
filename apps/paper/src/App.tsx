@@ -37,6 +37,7 @@ import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
 import type { StackParamList } from "./types";
 import { useAssets } from "./Tests/useAssets";
+import { Chess } from "./Examples/Chess";
 
 const linking: LinkingOptions<StackParamList> = {
   config: {
@@ -51,6 +52,7 @@ const linking: LinkingOptions<StackParamList> = {
       Matrix: "matrix",
       Severance: "severance",
       Aurora: "aurora",
+      Chess: "chess",
       Glassmorphism: "glassmorphism",
       Neumorphism: "neumorphism",
       Wallpaper: "wallpaper",
@@ -131,6 +133,13 @@ const App = () => {
             />
             <Stack.Screen name="API" component={API} />
             <Stack.Screen name="Breathe" component={Breathe} />
+            <Stack.Screen
+              name="Chess"
+              component={Chess}
+              options={{
+                title: "👸🏼's Gambit",
+              }}
+            />
             <Stack.Screen name="Filters" component={Filters} />
             <Stack.Screen name="Gooey" component={Gooey} />
             <Stack.Screen name="Hue" component={Hue} />

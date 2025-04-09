@@ -25,6 +25,11 @@ export const HomeScreen = () => {
         route="Reanimated"
       />
       <HomeScreenButton
+        title="👸🏼's Gambit"
+        description="Queen's Gambit"
+        route="Chess"
+      />
+      <HomeScreenButton
         title="🧘 Breathe"
         description="Simple declarative example"
         route="Breathe"
