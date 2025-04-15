@@ -351,7 +351,7 @@ export const convertToColumnMajor = (rowMajorMatrix: Matrix4) => {
       colMajorMatrix[col * size + row] = rowMajorMatrix[row * size + col];
     }
   }
-  return colMajorMatrix as unknown as Matrix4;
+  return colMajorMatrix;
 };
 
 /**
