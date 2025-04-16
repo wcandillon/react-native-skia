@@ -243,6 +243,12 @@ public:
 
     auto jsiPoints = arguments[1].asObject(runtime).asArray(runtime);
     auto pointsSize = jsiPoints.size(runtime);
+    
+    // Check if we have at least one point
+    if (pointsSize == 0) {
+      throw std::invalid_argument("Points array must not be empty");
+    }
+    
     points.reserve(pointsSize);
 
     for (int i = 0; i < pointsSize; i++) {
@@ -274,6 +280,12 @@ public:
 
     auto jsiCubics = arguments[0].asObject(runtime).asArray(runtime);
     auto cubicsSize = jsiCubics.size(runtime);
+    
+    // Validate cubic points - must be exactly 12 points
+    if (cubicsSize != 12) {
+      throw std::invalid_argument("Cubic points array must contain exactly 12 points");
+    }
+    
     cubics.reserve(cubicsSize);
     for (int i = 0; i < cubicsSize; i++) {
       std::shared_ptr<SkPoint> point = JsiSkPoint::fromValue(
@@ -284,6 +296,12 @@ public:
     if (count >= 2 && !arguments[1].isNull() && !arguments[1].isUndefined()) {
       auto jsiColors = arguments[1].asObject(runtime).asArray(runtime);
       auto colorsSize = jsiColors.size(runtime);
+      
+      // Validate colors array - must be exactly 4 colors
+      if (colorsSize != 4) {
+        throw std::invalid_argument("Colors array must contain exactly 4 colors");
+      }
+      
       colors.reserve(colorsSize);
       for (int i = 0; i < colorsSize; i++) {
         SkColor color = JsiSkColor::fromValue(
@@ -295,6 +313,12 @@ public:
     if (count >= 3 && !arguments[2].isNull() && !arguments[2].isUndefined()) {
       auto jsiTexs = arguments[2].asObject(runtime).asArray(runtime);
       auto texsSize = jsiTexs.size(runtime);
+      
+      // Validate textures array - must be exactly 4 points
+      if (texsSize != 4) {
+        throw std::invalid_argument("Texture coordinates array must contain exactly 4 points");
+      }
+      
       texs.reserve(texsSize);
       for (int i = 0; i < texsSize; i++) {
         auto point = JsiSkPoint::fromValue(
@@ -306,7 +330,8 @@ public:
     auto paint =
         count >= 4 ? JsiSkPaint::fromValue(runtime, arguments[4]) : nullptr;
     auto blendMode = static_cast<SkBlendMode>(arguments[3].asNumber());
-    _canvas->drawPatch(cubics.data(), colors.data(), texs.data(), blendMode,
+    _canvas->drawPatch(cubics.data(), colors.empty() ? nullptr : colors.data(), 
+                       texs.empty() ? nullptr : texs.data(), blendMode,
                        *paint);
     return jsi::Value::undefined();
   }
@@ -364,6 +389,12 @@ public:
 
     std::vector<SkGlyphID> glyphs;
     int glyphsSize = static_cast<int>(jsiGlyphs.size(runtime));
+    
+    // Validate that glyphs and positions arrays have the same size
+    if (glyphsSize != pointsSize) {
+      throw std::invalid_argument("Glyphs and positions arrays must have the same length");
+    }
+    
     glyphs.reserve(glyphsSize);
     for (int i = 0; i < glyphsSize; i++) {
       glyphs.push_back(jsiGlyphs.getValueAtIndex(runtime, i).asNumber());
@@ -522,11 +553,22 @@ public:
           runtime, rects.getValueAtIndex(runtime, i).asObject(runtime));
       skRects.push_back(*rect.get());
     }
+    
+    // Validate transforms and rects have the same size
+    if (xformsSize != rectsSize) {
+      throw std::invalid_argument("Transforms and rects arrays must have the same length");
+    }
 
     std::vector<SkColor> colors;
     if (count > 5 && !arguments[5].isUndefined()) {
       auto colorsArray = arguments[5].asObject(runtime).asArray(runtime);
       int colorsSize = static_cast<int>(colorsArray.size(runtime));
+      
+      // Validate colors array matches the size of sprites and transforms
+      if (colorsSize != rectsSize) {
+        throw std::invalid_argument("Colors array must have the same length as rects/transforms");
+      }
+      
       colors.reserve(colorsSize);
       for (int i = 0; i < colorsSize; i++) {
         // Convert from [r,g,b,a] in [0,1] to SkColor
@@ -551,7 +593,8 @@ public:
       sampling = SamplingOptionsFromValue(runtime, arguments[6]);
     }
     _canvas->drawAtlas(atlas.get(), xforms.data(), skRects.data(),
-                       colors.data(), skRects.size(), blendMode, sampling,
+                       colors.empty() ? nullptr : colors.data(), 
+                       skRects.size(), blendMode, sampling,
                        nullptr, paint.get());
 
     return jsi::Value::undefined();

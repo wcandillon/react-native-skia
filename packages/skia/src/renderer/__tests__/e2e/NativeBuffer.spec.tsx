@@ -72,6 +72,7 @@ describe("Native Buffers", () => {
     );
     expect(success).toBe(true);
   });
+
   it("creates a native buffer from an image", async () => {
     if (!shouldNativeBufferTestRun()) {
       return;
@@ -114,6 +115,7 @@ describe("Native Buffers", () => {
     expect(image).not.toBeNull();
     checkImage(image, "snapshots/cyan-buffer.png");
   });
+
   it("creates an image from native color type", async () => {
     const { Skia: Sk } = setupSkia();
     // Skip outside iOS and Android

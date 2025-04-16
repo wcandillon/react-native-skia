@@ -17,7 +17,7 @@ import { SkiaSGRoot } from "../sksg/Reconciler";
 import { Skia } from "../skia";
 import type { SkiaBaseViewProps } from "../views";
 
-interface CanvasRef extends FC<CanvasProps> {
+export interface CanvasRef extends FC<CanvasProps> {
   makeImageSnapshot(rect?: SkRect): SkImage;
   makeImageSnapshotAsync(rect?: SkRect): Promise<SkImage>;
   redraw(): void;

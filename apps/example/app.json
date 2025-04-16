@@ -1,0 +1,34 @@
+{
+  "name": "example",
+  "displayName": "example",
+  "singleApp": "example-app",
+  "components": [
+    {
+      "appKey": "example",
+      "displayName": "example",
+      "slug": "example-app"
+    }
+  ],
+  "resources": {
+    "android": [
+      "dist/res",
+      "dist/main.android.jsbundle"
+    ],
+    "ios": [
+      "dist/assets",
+      "dist/main.ios.jsbundle"
+    ],
+    "macos": [
+      "dist/assets",
+      "dist/main.macos.jsbundle"
+    ],
+    "visionos": [
+      "dist/assets",
+      "dist/main.visionos.jsbundle"
+    ],
+    "windows": [
+      "dist/assets",
+      "dist/main.windows.bundle"
+    ]
+  }
+}

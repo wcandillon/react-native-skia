@@ -239,6 +239,16 @@ public:
   }
 
   void pushShader(DrawingCtx *ctx) {
+    // Validate colors array has at least 2 colors
+    if (props.colors.size() < 2) {
+      throw std::invalid_argument("Colors array must have at least 2 colors");
+    }
+    
+    // Validate positions array matches colors array in size
+    if (props.positions.has_value() && props.positions.value().size() != props.colors.size()) {
+      throw std::invalid_argument("Positions array must have the same size as colors array");
+    }
+    
     SkMatrix m3 = processTransform(props.matrix, props.transform, props.origin);
     const SkPoint pts[2] = {props.start, props.end};
     auto shader = SkGradientShader::MakeLinear(
@@ -276,6 +286,16 @@ public:
   }
 
   void pushShader(DrawingCtx *ctx) {
+    // Validate colors array has at least 2 colors
+    if (props.colors.size() < 2) {
+      throw std::invalid_argument("Colors array must have at least 2 colors");
+    }
+    
+    // Validate positions array matches colors array in size
+    if (props.positions.has_value() && props.positions.value().size() != props.colors.size()) {
+      throw std::invalid_argument("Positions array must have the same size as colors array");
+    }
+    
     SkMatrix m3 = processTransform(props.matrix, props.transform, props.origin);
     auto shader = SkGradientShader::MakeRadial(
         props.center, props.radius, props.colors.data(),
@@ -314,6 +334,16 @@ public:
   }
 
   void pushShader(DrawingCtx *ctx) {
+    // Validate colors array has at least 2 colors
+    if (props.colors.size() < 2) {
+      throw std::invalid_argument("Colors array must have at least 2 colors");
+    }
+    
+    // Validate positions array matches colors array in size
+    if (props.positions.has_value() && props.positions.value().size() != props.colors.size()) {
+      throw std::invalid_argument("Positions array must have the same size as colors array");
+    }
+    
     SkMatrix m3 = processTransform(props.matrix, props.transform, props.origin);
     auto shader = SkGradientShader::MakeSweep(
         props.center.x(), props.center.y(), props.colors.data(),
@@ -355,6 +385,16 @@ public:
   }
 
   void pushShader(DrawingCtx *ctx) {
+    // Validate colors array has at least 2 colors
+    if (props.colors.size() < 2) {
+      throw std::invalid_argument("Colors array must have at least 2 colors");
+    }
+    
+    // Validate positions array matches colors array in size
+    if (props.positions.has_value() && props.positions.value().size() != props.colors.size()) {
+      throw std::invalid_argument("Positions array must have the same size as colors array");
+    }
+    
     SkMatrix m3 = processTransform(props.matrix, props.transform, props.origin);
     auto shader = SkGradientShader::MakeTwoPointConical(
         props.start, props.startRadius, props.end, props.endRadius,

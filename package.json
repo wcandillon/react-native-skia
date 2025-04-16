@@ -31,6 +31,7 @@
   },
   "packageManager": "yarn@3.6.4",
   "devDependencies": {
+    "react-native-test-app": "^4.2.0",
     "turbo": "^2.1.1"
   }
 }

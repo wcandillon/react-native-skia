@@ -295,13 +295,17 @@ afterEvaluate { project ->
     }
 }
 
+def localBuildDir = buildDir
+def headersConfiguration = configurations.extractHeaders
+def jniConfiguration = configurations.extractJNI
+
 task extractAARHeaders {
     doLast {
-        configurations.extractHeaders.files.each {
-            def file = it.absoluteFile
-            copy {
-                from zipTree(file)
-                into "$buildDir/$file.name"
+        headersConfiguration.files.each { file ->
+            def absFile = file.absoluteFile
+            project.copy {
+                from project.zipTree(absFile)
+                into "${localBuildDir}/${absFile.name}"
                 include "**/*.h"
             }
         }
@@ -310,11 +314,11 @@ task extractAARHeaders {
 
 task extractJNIFiles {
     doLast {
-        configurations.extractJNI.files.each {
-            def file = it.absoluteFile
-            copy {
-                from zipTree(file)
-                into "$buildDir/$file.name"
+        jniConfiguration.files.each { file ->
+            def absFile = file.absoluteFile
+            project.copy {
+                from project.zipTree(absFile)
+                into "${localBuildDir}/${absFile.name}"
                 include "jni/**/*"
             }
         }
