@@ -80,4 +80,26 @@ describe("Box", () => {
     );
     checkImage(img, "snapshots/box/box-stroke.png");
   });
+
+  it("should draw a shadow with opacity", async () => {
+    const { rect } = importSkia();
+    const { width } = surface;
+    const size = width / 2;
+    const img = await surface.draw(
+      <>
+        <Fill color="white" />
+        <Box box={rect(size / 2, size / 2, size, size)} color="red">
+          <BoxShadow
+            dx={0}
+            dy={0}
+            blur={5}
+            spread={10}
+            inner
+            color={"rgba(0, 0, 255, 0.5)"}
+          />
+        </Box>
+      </>
+    );
+    checkImage(img, "snapshots/box/box-shadow-opacity.png");
+  });
 });

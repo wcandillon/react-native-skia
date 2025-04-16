@@ -418,7 +418,7 @@ public:
         SkPaint shadowPaint;
         shadowPaint.setAntiAlias(true);
         shadowPaint.setColor(shadow.color.value_or(SK_ColorBLACK));
-        shadowPaint.setAlphaf(opacity);
+        shadowPaint.setAlphaf(opacity * shadowPaint.getAlphaf());
         shadowPaint.setMaskFilter(SkMaskFilter::MakeBlur(
             SkBlurStyle::kNormal_SkBlurStyle, shadow.blur, true));
 
@@ -442,7 +442,7 @@ public:
         SkPaint shadowPaint;
         shadowPaint.setAntiAlias(true);
         shadowPaint.setColor(shadow.color.value_or(SK_ColorBLACK));
-        shadowPaint.setAlphaf(opacity);
+        shadowPaint.setAlphaf(opacity * shadowPaint.getAlphaf());
         shadowPaint.setMaskFilter(SkMaskFilter::MakeBlur(
             SkBlurStyle::kNormal_SkBlurStyle, shadow.blur, true));
 

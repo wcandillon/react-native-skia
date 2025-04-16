@@ -1,9 +1,6 @@
 import {
-  deflate,
   enumKey,
   fitRects,
-  inflate,
-  NodeType,
   processCircle,
   processColor,
   processPath,
@@ -12,8 +9,6 @@ import {
 } from "../../../dom/nodes";
 import type {
   AtlasProps,
-  BoxProps,
-  BoxShadowProps,
   CircleProps,
   DiffRectProps,
   DrawingNodeProps,
@@ -38,18 +33,13 @@ import { saturate } from "../../../renderer/processors";
 import type { SkPoint, SkRSXform } from "../../../skia/types";
 import {
   BlendMode,
-  BlurStyle,
-  ClipOp,
   FillType,
   FilterMode,
   isCubicSampling,
-  isRRect,
   MipmapMode,
   PointMode,
   VertexMode,
 } from "../../../skia/types";
-import type { Node } from "../../Node";
-import { materialize } from "../../utils";
 import type { DrawingContext } from "../DrawingContext";
 
 export const drawLine = (ctx: DrawingContext, props: LineProps) => {
@@ -62,61 +52,6 @@ export const drawOval = (ctx: DrawingContext, props: OvalProps) => {
   "worklet";
   const rect = processRect(ctx.Skia, props);
   ctx.canvas.drawOval(rect, ctx.paint);
-};
-
-export const drawBox = (
-  ctx: DrawingContext,
-  props: BoxProps,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  children: Node<any>[]
-) => {
-  "worklet";
-  const { paint, Skia, canvas } = ctx;
-  const { box: defaultBox } = props;
-  const opacity = paint.getAlphaf();
-  const box = isRRect(defaultBox) ? defaultBox : Skia.RRectXY(defaultBox, 0, 0);
-  const shadows = children
-    .map((node) => {
-      if (node.type === NodeType.BoxShadow) {
-        return materialize(node.props);
-      }
-      return null;
-    })
-    .filter((n): n is BoxShadowProps => n !== null);
-  shadows
-    .filter((shadow) => !shadow.inner)
-    .map((shadow) => {
-      const { color = "black", blur, spread = 0, dx = 0, dy = 0 } = shadow;
-      const lPaint = Skia.Paint();
-      lPaint.setColor(processColor(Skia, color));
-      lPaint.setAlphaf(paint.getAlphaf() * opacity);
-      lPaint.setMaskFilter(
-        Skia.MaskFilter.MakeBlur(BlurStyle.Normal, blur, true)
-      );
-      canvas.drawRRect(inflate(Skia, box, spread, spread, dx, dy), lPaint);
-    });
-
-  canvas.drawRRect(box, paint);
-
-  shadows
-    .filter((shadow) => shadow.inner)
-    .map((shadow) => {
-      const { color = "black", blur, spread = 0, dx = 0, dy = 0 } = shadow;
-      const delta = Skia.Point(10 + Math.abs(dx), 10 + Math.abs(dy));
-      canvas.save();
-      canvas.clipRRect(box, ClipOp.Intersect, false);
-      const lPaint = Skia.Paint();
-      lPaint.setColor(processColor(Skia, color));
-      lPaint.setAlphaf(paint.getAlphaf() * opacity);
-
-      lPaint.setMaskFilter(
-        Skia.MaskFilter.MakeBlur(BlurStyle.Normal, blur, true)
-      );
-      const inner = deflate(Skia, box, spread, spread, dx, dy);
-      const outer = inflate(Skia, box, delta.x, delta.y);
-      canvas.drawDRRect(outer, inner, lPaint);
-      canvas.restore();
-    });
 };
 
 export const drawImage = (ctx: DrawingContext, props: ImageProps) => {
