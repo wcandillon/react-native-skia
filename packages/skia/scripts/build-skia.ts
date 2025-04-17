@@ -9,6 +9,7 @@ import {
   OutFolder,
   PackageRoot,
   ProjectRoot,
+  SHOULD_BUILD_TVOS,
   SkiaSrc,
 } from "./skia-configuration";
 import { $, mapKeys, runAsync } from "./utils";
@@ -123,12 +124,14 @@ const buildXCFrameworks = () => {
   outputNames.forEach((name) => {
     console.log("Building XCFramework for " + name);
     const prefix = `${OutFolder}/${os}`;
-    $(`mkdir -p ${OutFolder}/${os}/tvsimulator`);
-    $(`rm -rf ${OutFolder}/${os}/tvsimulator/${name}`);
-    $(
-      // eslint-disable-next-line max-len
-      `lipo -create ${OutFolder}/${os}/x64-tvsimulator/${name} ${OutFolder}/${os}/arm64-tvsimulator/${name} -output ${OutFolder}/${os}/tvsimulator/${name}`
-    );
+    if (SHOULD_BUILD_TVOS) {
+      $(`mkdir -p ${OutFolder}/${os}/tvsimulator`);
+      $(`rm -rf ${OutFolder}/${os}/tvsimulator/${name}`);
+      $(
+        // eslint-disable-next-line max-len
+        `lipo -create ${OutFolder}/${os}/x64-tvsimulator/${name} ${OutFolder}/${os}/arm64-tvsimulator/${name} -output ${OutFolder}/${os}/tvsimulator/${name}`
+      );
+    }
     $(`mkdir -p ${OutFolder}/${os}/iphonesimulator`);
     $(`rm -rf ${OutFolder}/${os}/iphonesimulator/${name}`);
     $(
@@ -143,13 +146,18 @@ const buildXCFrameworks = () => {
     );
     const [lib] = name.split(".");
     const dstPath = `${PackageRoot}/libs/${os}/${lib}.xcframework`;
+    const libs = [
+      `${prefix}/arm64-iphoneos/${name}`,
+      `${prefix}/iphonesimulator/${name}`,
+      `${prefix}/arm64-tvos/${name}`,
+      `${prefix}/macosx/${name}`,
+    ];
+    if (SHOULD_BUILD_TVOS) {
+      libs.push(`${prefix}/tvsimulator/${name}`);
+    }
     $(
       "xcodebuild -create-xcframework " +
-        `-library ${prefix}/arm64-iphoneos/${name} ` +
-        `-library ${prefix}/iphonesimulator/${name} ` +
-        `-library ${prefix}/arm64-tvos/${name} ` +
-        `-library ${prefix}/tvsimulator/${name} ` +
-        `-library ${prefix}/macosx/${name} ` +
+        libs.join(" -library ") +
         ` -output ${dstPath}`
     );
   });
@@ -181,6 +189,15 @@ const buildXCFrameworks = () => {
   for (const key of mapKeys(configurations)) {
     const configuration = configurations[key];
     for (const target of mapKeys(configuration.targets)) {
+      if (!SHOULD_BUILD_TVOS) {
+        if (
+          target === "arm64-tvos" ||
+          target === "x64-tvsimulator" ||
+          target === "arm64-tvsimulator"
+        ) {
+          continue;
+        }
+      }
       await configurePlatform(key as PlatformName, configuration, target);
       await buildPlatform(key as PlatformName, target);
       process.chdir(ProjectRoot);

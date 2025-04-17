@@ -63,7 +63,6 @@ const DawnOutput = GRAPHITE
 
 export const commonArgs = [
   ["skia_use_piex", true],
-  ["skia_use_sfntly", false],
   ["skia_use_system_expat", false],
   ["skia_use_system_libjpeg_turbo", false],
   ["skia_use_system_libpng", false],
@@ -256,6 +255,7 @@ export const configurations = {
     ],
   },
 };
+export const SHOULD_BUILD_TVOS = GRAPHITE;
 
 const copyModule = (module: string) => [
   `mkdir -p ./cpp/skia/modules/${module}/include`,
