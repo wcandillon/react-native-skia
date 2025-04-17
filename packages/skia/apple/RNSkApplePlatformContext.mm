@@ -157,6 +157,10 @@ uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
 }
 
 const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
+#if defined(SK_GRAPHITE)
+  TextureInfo result;
+  return result;
+#else
   GrBackendTexture texture;
   TextureInfo result;
   if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
@@ -171,9 +175,14 @@ const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
   }
   result.mtlTexture = textureInfo.fTexture.get();
   return result;
+#endif
 }
 
 const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
+#if defined(SK_GRAPHITE)
+  TextureInfo result;
+  return result;
+#else
   GrBackendTexture texture = SkSurfaces::GetBackendTexture(
       surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
   TextureInfo result;
@@ -186,6 +195,7 @@ const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface)
   }
   result.mtlTexture = textureInfo.fTexture.get();
   return result;
+#endif
 }
 
 std::shared_ptr<RNSkVideo>
@@ -227,6 +237,9 @@ sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer)
 
 sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
     const TextureInfo &texInfo, int width, int height, bool mipMapped) {
+#if defined(SK_GRAPHITE)
+  return nullptr;
+#else
   id<MTLTexture> mtlTexture = (__bridge id<MTLTexture>)(texInfo.mtlTexture);
 
   SkColorType colorType = mtlPixelFormatToSkColorType(mtlTexture.pixelFormat);
@@ -244,6 +257,7 @@ sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
   return SkImages::BorrowTextureFrom(getDirectContext(), texture,
                                      kTopLeft_GrSurfaceOrigin, colorType,
                                      kPremul_SkAlphaType, nullptr);
+#endif
 }
 
 SkColorType RNSkApplePlatformContext::mtlPixelFormatToSkColorType(

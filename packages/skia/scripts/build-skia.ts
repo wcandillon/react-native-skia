@@ -9,6 +9,7 @@ import {
   OutFolder,
   PackageRoot,
   ProjectRoot,
+  SHOULD_BUILD_IPHONE_SIMULATOR,
   SHOULD_BUILD_TVOS,
   SkiaSrc,
 } from "./skia-configuration";
@@ -132,12 +133,14 @@ const buildXCFrameworks = () => {
         `lipo -create ${OutFolder}/${os}/x64-tvsimulator/${name} ${OutFolder}/${os}/arm64-tvsimulator/${name} -output ${OutFolder}/${os}/tvsimulator/${name}`
       );
     }
-    $(`mkdir -p ${OutFolder}/${os}/iphonesimulator`);
-    $(`rm -rf ${OutFolder}/${os}/iphonesimulator/${name}`);
-    $(
-      // eslint-disable-next-line max-len
-      `lipo -create ${OutFolder}/${os}/x64-iphonesimulator/${name} ${OutFolder}/${os}/arm64-iphonesimulator/${name} -output ${OutFolder}/${os}/iphonesimulator/${name}`
-    );
+    if (SHOULD_BUILD_IPHONE_SIMULATOR) {
+      $(`mkdir -p ${OutFolder}/${os}/iphonesimulator`);
+      $(`rm -rf ${OutFolder}/${os}/iphonesimulator/${name}`);
+      $(
+        // eslint-disable-next-line max-len
+        `lipo -create ${OutFolder}/${os}/x64-iphonesimulator/${name} ${OutFolder}/${os}/arm64-iphonesimulator/${name} -output ${OutFolder}/${os}/iphonesimulator/${name}`
+      );
+    }
     $(`mkdir -p ${OutFolder}/${os}/macosx`);
     $(`rm -rf ${OutFolder}/${os}/macosx/${name}`);
     $(
@@ -146,17 +149,17 @@ const buildXCFrameworks = () => {
     );
     const [lib] = name.split(".");
     const dstPath = `${PackageRoot}/libs/${os}/${lib}.xcframework`;
-    const libs = [
-      `${prefix}/arm64-iphoneos/${name}`,
-      `${prefix}/iphonesimulator/${name}`,
-      `${prefix}/arm64-tvos/${name}`,
-      `${prefix}/macosx/${name}`,
-    ];
+    const libs = [`${prefix}/macosx/${name}`];
     if (SHOULD_BUILD_TVOS) {
       libs.push(`${prefix}/tvsimulator/${name}`);
+      libs.push(`${prefix}/arm64-tvos/${name}`);
+    }
+    if (SHOULD_BUILD_IPHONE_SIMULATOR) {
+      libs.push(`${prefix}/iphonesimulator/${name}`);
+      libs.push(`${prefix}/arm64-iphonesimulator/${name}`);
     }
     $(
-      "xcodebuild -create-xcframework " +
+      "xcodebuild -create-xcframework -library " +
         libs.join(" -library ") +
         ` -output ${dstPath}`
     );
@@ -194,6 +197,14 @@ const buildXCFrameworks = () => {
           target === "arm64-tvos" ||
           target === "x64-tvsimulator" ||
           target === "arm64-tvsimulator"
+        ) {
+          continue;
+        }
+      }
+      if (!SHOULD_BUILD_IPHONE_SIMULATOR) {
+        if (
+          target === "x64-iphonesimulator" ||
+          target === "arm64-iphonesimulator"
         ) {
           continue;
         }

@@ -255,7 +255,8 @@ export const configurations = {
     ],
   },
 };
-export const SHOULD_BUILD_TVOS = GRAPHITE;
+export const SHOULD_BUILD_TVOS = !GRAPHITE;
+export const SHOULD_BUILD_IPHONE_SIMULATOR = !GRAPHITE;
 
 const copyModule = (module: string) => [
   `mkdir -p ./cpp/skia/modules/${module}/include`,
