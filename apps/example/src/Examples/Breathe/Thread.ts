@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
-import type { SkCanvas } from "@shopify/react-native-skia";
-import { Skia } from "@shopify/react-native-skia";
+import type { SkCanvas, SkSurface } from "@shopify/react-native-skia";
+import { Skia, useClock } from "@shopify/react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import {
   createWorkletRuntime,
@@ -10,9 +10,15 @@ import {
   useSharedValue,
 } from "react-native-reanimated";
 
+declare global {
+  var surface: SkSurface | null;
+}
+
+type DrawingCallback = (canvas: SkCanvas, time: number) => void;
+
 export const useDedicatedThread = (
   clock: SharedValue<number>,
-  draw: (canvas: SkCanvas, time: number) => void,
+  draw: DrawingCallback,
   width: number,
   height: number
 ) => {
@@ -24,24 +30,27 @@ export const useDedicatedThread = (
     },
     [texture]
   );
-  const initTexture = useCallback(() => {
-    "worklet";
-    console.log("callback to the JS thread");
+  const initTexture = useCallback(
+    (time: number) => {
+      "worklet";
+      console.log("callback to the JS thread");
 
-    const surface = Skia.Surface.MakeOffscreen(width, height);
-    if (!surface) {
-      return;
-    }
-    const canvas = surface.getCanvas();
-    draw(canvas, clock.value);
-    surface.flush();
-    const result = surface.getNativeTextureUnstable();
-    global.surface = surface;
-    runOnJS(setTexture)(result);
-  }, [clock.value, draw, height, setTexture, width]);
+      const surface = Skia.Surface.MakeOffscreen(width, height);
+      if (!surface) {
+        return;
+      }
+      const canvas = surface.getCanvas();
+      draw(canvas, time);
+      surface.flush();
+      const result = surface.getNativeTextureUnstable();
+      global.surface = surface;
+      runOnJS(setTexture)(result);
+    },
+    [draw, height, setTexture, width]
+  );
   useEffect(() => {
-    runOnRuntime(runtime, initTexture)();
-  }, [draw, initTexture, runtime]);
+    runOnRuntime(runtime, initTexture)(clock.value);
+  }, [clock, draw, initTexture, runtime]);
 
   const image = useDerivedValue(() => {
     "worklet";
@@ -54,20 +63,23 @@ export const useDedicatedThread = (
       height
     );
   });
-  const updateTextureOnThread = useCallback(() => {
-    "worklet";
-    const { surface } = global;
-    if (!surface) {
-      return;
-    }
-    const canvas = surface.getCanvas();
-    draw(canvas, clock.value);
-    surface.flush();
-  }, [clock, draw]);
+  const updateTextureOnThread = useCallback(
+    (time: number) => {
+      "worklet";
+      const { surface } = global;
+      if (!surface) {
+        return;
+      }
+      const canvas = surface.getCanvas();
+      draw(canvas, time);
+      surface.flush();
+    },
+    [draw]
+  );
   const updateTexture = useCallback(() => {
     "worklet";
-    runOnRuntime(runtime, updateTextureOnThread)();
-  }, [updateTextureOnThread, runtime]);
+    runOnRuntime(runtime, updateTextureOnThread)(clock.value);
+  }, [runtime, updateTextureOnThread, clock]);
   return { image, updateTexture };
 };
 
@@ -82,4 +94,19 @@ export const useScheduler = (...threads: { updateTexture: () => void }[]) => {
     requestAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, threads);
+};
+
+export const useDedicatedThreads = (
+  callbacks: DrawingCallback[],
+  width: number,
+  height: number
+) => {
+  const clock = useClock();
+  const threads = new Array(callbacks.length);
+  for (let i = 0; i < threads.length; i++) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    threads[i] = useDedicatedThread(clock, callbacks[i], width, height);
+  }
+  useScheduler(...threads);
+  return threads;
 };
