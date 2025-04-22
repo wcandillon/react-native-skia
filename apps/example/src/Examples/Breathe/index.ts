@@ -1,1 +1,1 @@
-export { Breathe } from "./Breathe";
+export { Multithreading as Breathe } from "./Multithreading";
