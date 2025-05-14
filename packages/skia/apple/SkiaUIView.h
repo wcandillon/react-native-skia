@@ -10,8 +10,8 @@
 #import <React/RCTUIKit.h>
 #endif // !TARGET_OS_OSX
 
-#import "RNSkManager.h"
 #import "RNSkAppleView.h"
+#import "RNSkManager.h"
 #import "SkiaManager.h"
 
 #if RCT_NEW_ARCH_ENABLED

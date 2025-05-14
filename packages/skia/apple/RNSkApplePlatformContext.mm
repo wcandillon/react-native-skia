@@ -173,7 +173,8 @@ const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
   return result;
 }
 
-const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
+const TextureInfo
+RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
   GrBackendTexture texture = SkSurfaces::GetBackendTexture(
       surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
   TextureInfo result;
@@ -195,7 +196,7 @@ RNSkApplePlatformContext::createVideo(const std::string &url) {
 
 std::shared_ptr<WindowContext>
 RNSkApplePlatformContext::makeContextFromNativeSurface(void *surface, int width,
-                                                     int height) {
+                                                       int height) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeWindow(surface, width, height);
 #else
@@ -209,7 +210,7 @@ void RNSkApplePlatformContext::raiseError(const std::exception &err) {
 }
 
 sk_sp<SkSurface> RNSkApplePlatformContext::makeOffscreenSurface(int width,
-                                                              int height) {
+                                                                int height) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeOffscreen(width, height);
 #else
@@ -217,7 +218,8 @@ sk_sp<SkSurface> RNSkApplePlatformContext::makeOffscreenSurface(int width,
 #endif
 }
 
-sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer) {
+sk_sp<SkImage>
+RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer) {
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeImageFromBuffer(buffer);
 #else

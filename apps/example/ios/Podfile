@@ -6,4 +6,4 @@ require "#{ws_dir}/node_modules/react-native-test-app/test_app.rb"
 
 workspace 'example.xcworkspace'
 
-use_test_app! :hermes_enabled => true
+use_test_app! :hermes_enabled => true, :new_arch_enabled => true

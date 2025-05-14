@@ -26,7 +26,8 @@ public:
 #if !TARGET_OS_OSX
       : RNSkPlatformContext(jsCallInvoker, [[UIScreen mainScreen] scale]) {
 #else
-      : RNSkPlatformContext(jsCallInvoker, [[NSScreen mainScreen] backingScaleFactor]) {
+      : RNSkPlatformContext(jsCallInvoker,
+                            [[NSScreen mainScreen] backingScaleFactor]) {
 #endif // !TARGET_OS_OSX
 
     // Create screenshot manager

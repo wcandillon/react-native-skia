@@ -41,7 +41,8 @@ static __weak SkiaManager *sharedInstance = nil;
       // Create the RNSkiaManager (cross platform)
       _skManager = std::make_shared<RNSkia::RNSkManager>(
           jsRuntime, jsInvoker,
-          std::make_shared<RNSkia::RNSkApplePlatformContext>(bridge, jsInvoker));
+          std::make_shared<RNSkia::RNSkApplePlatformContext>(bridge,
+                                                             jsInvoker));
     }
   }
   return self;

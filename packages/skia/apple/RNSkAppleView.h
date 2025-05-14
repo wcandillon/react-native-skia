@@ -2,9 +2,9 @@
 
 #import <memory>
 
+#import "RNSkApplePlatformContext.h"
 #import "RNSkMetalCanvasProvider.h"
 #import "RNSkView.h"
-#import "RNSkApplePlatformContext.h"
 
 class RNSkBaseAppleView {
 public:

@@ -130,8 +130,9 @@ export const sksgHostConfig: SkiaHostConfig = {
     return null;
   },
 
-  resetAfterCommit(_container) {
+  resetAfterCommit(container: Container) {
     debug("resetAfterCommit");
+    container.redraw();
   },
 
   getPublicInstance(node: Instance) {

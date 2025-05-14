@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactElement } from "react";
+import type { DependencyList, ReactElement } from "react";
 import type { SharedValue } from "react-native-reanimated";
 
 import type {
@@ -25,7 +25,11 @@ const createTexture = (
   texture.value = drawAsImageFromPicture(picture, size);
 };
 
-export const useTexture = (element: ReactElement, size: SkSize) => {
+export const useTexture = (
+  element: ReactElement,
+  size: SkSize,
+  deps?: DependencyList
+) => {
   const { width, height } = size;
   const [picture, setPicture] = useState<SkPicture | null>(null);
   useEffect(() => {
@@ -34,23 +38,11 @@ export const useTexture = (element: ReactElement, size: SkSize) => {
       y: 0,
       width,
       height,
-    }).then((pic) => setPicture(pic));
-  }, [element, width, height]);
-  return usePictureAsTexture(picture, size);
-};
-
-export const useTextureAsValue = (element: ReactElement, size: SkSize) => {
-  console.warn("useTextureAsValue has been renamed to use useTexture");
-  return useTexture(element, size);
-};
-
-export const useTextureValueFromPicture = (
-  picture: SkPicture | null,
-  size: SkSize
-) => {
-  console.warn(
-    "useTextureValueFromPicture has been renamed to use usePictureAsTexture"
-  );
+    }).then((pic) => {
+      setPicture(pic);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps ?? []);
   return usePictureAsTexture(picture, size);
 };
 
@@ -63,7 +55,7 @@ export const usePictureAsTexture = (
     if (picture !== null) {
       Rea.runOnUI(createTexture)(texture, picture, size);
     }
-  }, [texture, picture, size]);
+  }, [picture, size, texture]);
   return texture;
 };
 

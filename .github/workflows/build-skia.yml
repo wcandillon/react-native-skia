@@ -5,13 +5,13 @@ jobs:
     runs-on: macos-latest-xlarge
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           submodules: recursive
 
       - name: Setup Android NDK
         id: setup-ndk
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
         with:
           ndk-version: r22b
 
@@ -34,7 +34,7 @@ jobs:
 
       - name: Upload artifacts - Android arm
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: skia-android-arm
           path: |
@@ -49,7 +49,7 @@ jobs:
 
       - name: Upload artifacts - Android arm64
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: skia-android-arm-64
           path: |
@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload artifacts - Android x86
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: skia-android-arm-x86
           path: |
@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload artifacts - Android x64
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: skia-android-arm-x64
           path: |
@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload artifacts - Apple xcframeworks
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: skia-apple-xcframeworks
           path: |
