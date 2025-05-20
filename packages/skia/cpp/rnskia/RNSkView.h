@@ -52,7 +52,8 @@ protected:
 class RNSkRenderer {
 public:
   explicit RNSkRenderer(std::function<void()> requestRedraw)
-      : _requestRedraw(std::move(requestRedraw)), _showDebugOverlays(false) {}
+      : _requestRedraw(std::move(requestRedraw)), _showDebugOverlays(false),
+        _colorSpace("srgb") {}
 
   virtual void
   renderImmediate(std::shared_ptr<RNSkCanvasProvider> canvasProvider) = 0;
@@ -62,9 +63,16 @@ public:
   }
   bool getShowDebugOverlays() const { return _showDebugOverlays; }
 
+  void setColorSpace(std::string colorSpace) {
+    _colorSpace = colorSpace;
+  }
+
+  std::string getColorSpace() const { return _colorSpace; }
+
 protected:
   std::function<void()> _requestRedraw;
   bool _showDebugOverlays;
+  std::string _colorSpace;
 };
 
 class RNSkOffscreenCanvasProvider : public RNSkCanvasProvider {
@@ -185,6 +193,11 @@ public:
    */
   void setShowDebugOverlays(bool show) {
     _renderer->setShowDebugOverlays(show);
+    requestRedraw();
+  }
+
+  void setColorSpace(std::string colorSpace) {
+    _renderer->setColorSpace(colorSpace);
     requestRedraw();
   }
 

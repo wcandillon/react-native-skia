@@ -46,6 +46,7 @@
   _manager = manager;
   _nativeId = 0;
   _debugMode = false;
+  _colorSpace = "srgb";
   _factory = factory;
 }
 
@@ -74,6 +75,7 @@
         _manager->setSkiaView(_nativeId, _impl->getDrawView());
       }
       _impl->getDrawView()->setShowDebugOverlays(_debugMode);
+      _impl->getDrawView()->setColorSpace(_colorSpace);
     }
   }
 }
@@ -158,6 +160,9 @@
 
 - (void)setColorSpace:(std::string)colorSpace {
   _colorSpace = colorSpace;
+  if (_impl != nullptr) {
+    _impl->getDrawView()->setColorSpace(colorSpace);
+  }
 }
 
 - (void)setNativeId:(size_t)nativeId {
