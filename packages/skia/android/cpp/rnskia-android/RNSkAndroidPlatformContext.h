@@ -63,7 +63,9 @@ public:
     return DawnContext::getInstance().MakeWindow(surface, width, height);
 #else
     auto aWindow = reinterpret_cast<ANativeWindow *>(surface);
-    return OpenGLContext::getInstance().MakeWindow(aWindow);
+    // TODO: make this configurable
+    bool p3 = false;
+    return OpenGLContext::getInstance().MakeWindow(aWindow, p3);
 #endif
   }
 

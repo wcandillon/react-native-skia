@@ -39,7 +39,7 @@ public:
       : _directContext(directContext), _display(display), _glContext(glContext),
         _window(window), _p3(p3) {
     ANativeWindow_acquire(_window);
-    _glSurface = display->makeWindowSurface(config, _window);
+    _glSurface = display->makeWindowSurface(config, _window, _p3);
   }
 
   ~OpenGLWindowContext() override {

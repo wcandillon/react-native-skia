@@ -42,7 +42,7 @@ sk_sp<SkSurface> OpenGLWindowContext::getSurface() {
     auto height = ANativeWindow_getHeight(_window);
     auto backendRT =
         GrBackendRenderTargets::MakeGL(width, height, samples, stencil, fbInfo);
-    sk_sp<SkColorSpace> colorSpace(nullptr);
+    sk_sp<SkColorSpace> colorSpace = SkColorSpace::MakeSRGB();
     SkSurfaceProps surfaceProps(0, kRGB_H_SkPixelGeometry);
     _skSurface = SkSurfaces::WrapBackendRenderTarget(
         _directContext, backendRT, kBottomLeft_GrSurfaceOrigin,

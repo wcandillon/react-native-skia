@@ -165,12 +165,11 @@ public:
 #endif
   }
 
-  // TODO: remove width, height
-  std::unique_ptr<WindowContext> MakeWindow(ANativeWindow *window) {
+  std::unique_ptr<WindowContext> MakeWindow(ANativeWindow *window, bool p3) {
     auto display = OpenGLSharedContext::getInstance().getDisplay();
     return std::make_unique<OpenGLWindowContext>(
         _directContext.get(), display, _glContext.get(), window,
-        OpenGLSharedContext::getInstance().getConfig());
+        OpenGLSharedContext::getInstance().getConfig(), p3);
   }
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }

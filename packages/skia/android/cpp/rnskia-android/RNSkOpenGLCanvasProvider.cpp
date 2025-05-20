@@ -110,7 +110,7 @@ void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurfaceTexture,
 #if defined(SK_GRAPHITE)
   _surfaceHolder = DawnContext::getInstance().MakeWindow(window, width, height);
 #else
-  _surfaceHolder = OpenGLContext::getInstance().MakeWindow(window);
+  _surfaceHolder = OpenGLContext::getInstance().MakeWindow(window, _colorSpace == "p3");
 #endif
 
   // Post redraw request to ensure we paint in the next draw cycle.

@@ -12,6 +12,9 @@ import { Dimensions, ScrollView, View } from "react-native";
 const dims = Dimensions.get("window");
 const size = dims.width / 2;
 export const P3 = () => {
+  const yellowFlowerSRGB = useImage(
+    require("../../assets/p3/YellowFlower-sRGB.jpg")
+  );
   const yellowFlower = useImage(require("../../assets/p3/YellowFlower-P3.jpg"));
   const italy = useImage(require("../../assets/p3/Italy-P3.jpg"));
   const iceland = useImage(require("../../assets/p3/Iceland-P3.jpg"));
@@ -38,7 +41,7 @@ export const P3 = () => {
         </Canvas>
         <Canvas style={{ width: size, height: size }}>
           <Image
-            image={yellowFlower}
+            image={yellowFlowerSRGB}
             x={0}
             y={0}
             width={size}

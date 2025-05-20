@@ -88,9 +88,19 @@ public:
   }
 
   std::unique_ptr<Surface> makeWindowSurface(const EGLConfig &config,
-                                             ANativeWindow *window) {
-    const EGLint attribs[] = {EGL_NONE};
+                                             ANativeWindow *window, bool p3) {
+    auto const EGL_GL_COLORSPACE_KHR = 0x309D;
+    auto const EGL_GL_COLORSPACE_DISPLAY_P3_EXT = 0x3363;
+    const EGLint attribs[] = { EGL_NONE };
     auto surface = eglCreateWindowSurface(_display, config, window, attribs);
+//    void* surface;
+//    if (p3) {
+//        const EGLint attribs[] =  { EGL_GL_COLORSPACE_KHR, EGL_GL_COLORSPACE_DISPLAY_P3_EXT, EGL_NONE };
+//        surface = eglCreateWindowSurface(_display, config, window, attribs);
+//    } else {
+//        const EGLint attribs[] = { EGL_NONE };
+//        surface = eglCreateWindowSurface(_display, config, window, attribs);
+//    }
     if (surface == EGL_NO_SURFACE) {
       LOG_EGL_ERROR;
       return nullptr;
