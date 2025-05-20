@@ -158,7 +158,9 @@ public:
     if (props.color.has_value()) {
       auto currentOpacity = paint.getAlphaf();
       paint.setShader(nullptr);
-      paint.setColor(props.color.value());
+      auto space = SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB, SkNamedGamut::kDisplayP3);
+      auto cl = SkColor4f::FromColor(props.color.value());
+      paint.setColor(cl, space.get());
       paint.setAlphaf(currentOpacity * paint.getAlphaf());
     }
     if (props.blendMode.has_value()) {

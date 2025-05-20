@@ -1,4 +1,4 @@
-import { Canvas, Image, useImage } from "@shopify/react-native-skia";
+import { Canvas, Fill, Image, useImage } from "@shopify/react-native-skia";
 import React from "react";
 import { Dimensions, View } from "react-native";
 
@@ -69,6 +69,12 @@ export const P3 = () => {
           height={size}
           fit="cover"
         />
+      </Canvas>
+      <Canvas style={{ width: size, height: size }}>
+        <Fill color="rgb(0, 255, 0)" />
+      </Canvas>
+      <Canvas style={{ width: size, height: size }} colorSpace="p3">
+        <Fill color="color(display-p3 0 1 0)" />
       </Canvas>
     </View>
   );

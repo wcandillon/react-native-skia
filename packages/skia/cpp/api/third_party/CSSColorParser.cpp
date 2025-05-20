@@ -68,12 +68,59 @@ std::vector<std::string> split(const std::string &s, char delim) {
 Color parse(const std::string &css_str) {
   std::string str = css_str;
 
-  // Remove all whitespace, not compliant, but should just be more accepting.
-  str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
-
   // Convert to lowercase.
   std::transform(str.begin(), str.end(), str.begin(), ::tolower);
 
+  // Special handling for color() function to preserve spaces in parameters
+  if (str.find("color(") == 0) {
+    size_t op = str.find_first_of('('), ep = str.find_first_of(')');
+    if (op != std::string::npos && ep + 1 == str.length()) {
+      std::string colorParamStr = str.substr(op + 1, ep - (op + 1));
+      // Split to get the color space and the parameters
+      std::string colorSpace;
+      std::istringstream iss(colorParamStr);
+      iss >> colorSpace;
+      
+      if (colorSpace == "display-p3") {
+        float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+        
+        // Check if we have the / alpha syntax
+        size_t slashPos = colorParamStr.find('/');
+        if (slashPos != std::string::npos) {
+          // Extract alpha value after the slash
+          std::string alphaStr = colorParamStr.substr(slashPos + 1);
+          std::istringstream alphaStream(alphaStr);
+          alphaStream >> a;
+          a = clamp_css_float(a);
+          
+          // Truncate colorParamStr to before the slash
+          colorParamStr = colorParamStr.substr(0, slashPos);
+        }
+        
+        // Extract RGB values
+        std::istringstream rgbStream(colorParamStr);
+        rgbStream >> colorSpace >> r >> g >> b;
+        
+        r = clamp_css_float(r);
+        g = clamp_css_float(g);
+        b = clamp_css_float(b);
+        
+        // Convert P3 values to sRGB values (approximation)
+        // This is a simple approximation - in a real implementation you would use
+        // a proper color space conversion matrix
+        return {
+          clamp_css_byte(r * 255.0f),
+          clamp_css_byte(g * 255.0f),
+          clamp_css_byte(b * 255.0f),
+          a
+        };
+      }
+    }
+  }
+  
+  // For all other color formats, remove whitespace
+  str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+  
   for (const auto &namedColor : namedColors) {
     if (str == namedColor.name) {
       return {namedColor.color};
@@ -173,6 +220,58 @@ Color parse(const std::string &css_str) {
               clamp_css_byte(css_hue_to_rgb(m1, m2, h) * 255.0f),
               clamp_css_byte(css_hue_to_rgb(m1, m2, h - 1.0f / 3.0f) * 255.0f),
               alpha};
+    } else if (fname == "color") {
+      // Handle color(display-p3 r g b / a) syntax
+      if (params.size() >= 1) {
+        std::string colorSpace = params[0];
+        if (colorSpace == "display-p3") {
+          std::vector<std::string> colorParams;
+          std::string alphaStr = "1.0";
+          
+          // Check if we have the / alpha syntax
+          std::string paramStr = str.substr(op + 1, ep - (op + 1));
+          size_t slashPos = paramStr.find('/');
+          if (slashPos != std::string::npos) {
+            // Extract alpha value after the slash
+            alphaStr = paramStr.substr(slashPos + 1);
+            // Remove space if present
+            alphaStr.erase(std::remove(alphaStr.begin(), alphaStr.end(), ' '), alphaStr.end());
+            
+            // Extract color parameters before the slash
+            paramStr = paramStr.substr(colorSpace.length() + 1, slashPos - (colorSpace.length() + 1));
+          } else {
+            // No slash found, use the rest of the parameters for colors
+            paramStr = paramStr.substr(colorSpace.length() + 1);
+          }
+          
+          // Split the color parameters
+          std::stringstream ss(paramStr);
+          std::string item;
+          while (std::getline(ss, item, ' ')) {
+            if (!item.empty()) {
+              colorParams.push_back(item);
+            }
+          }
+          
+          // Expect 3 color parameters (r, g, b)
+          if (colorParams.size() == 3) {
+            float r = clamp_css_float(parseFloat(colorParams[0]));
+            float g = clamp_css_float(parseFloat(colorParams[1]));
+            float b = clamp_css_float(parseFloat(colorParams[2]));
+            float a = clamp_css_float(parseFloat(alphaStr));
+            
+            // Convert P3 values to sRGB values (approximation)
+            // This is a simple approximation - in a real implementation you would use
+            // a proper color space conversion matrix
+            return {
+              clamp_css_byte(r * 255.0f),
+              clamp_css_byte(g * 255.0f),
+              clamp_css_byte(b * 255.0f),
+              a
+            };
+          }
+        }
+      }
     }
   }
 
