@@ -32,6 +32,11 @@ RCT_CUSTOM_VIEW_PROPERTY(debug, BOOL, SkiaUIView) {
   [(SkiaUIView *)view setDebugMode:debug];
 }
 
+RCT_CUSTOM_VIEW_PROPERTY(colorSpace, NSString, SkiaUIView) {
+  NSString *colorSpace = json != NULL ? [RCTConvert NSString:json] : @"srgb";
+  [(SkiaUIView *)view setColorSpace:colorSpace];
+}
+
 RCT_CUSTOM_VIEW_PROPERTY(opaque, BOOL, SkiaUIView) {
   bool opaque = json != NULL ? [RCTConvert BOOL:json] : false;
   [(SkiaUIView *)view setOpaque:opaque];

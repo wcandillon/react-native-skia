@@ -55,6 +55,7 @@ using namespace facebook::react;
   [self setNativeId:nativeId];
   [self setDebugMode:newProps.debug];
   [self setOpaque:newProps.opaque];
+  [self setColorSpace:RCTNSStringFromString(newProps.colorSpace)];
 }
 
 @end

@@ -41,5 +41,6 @@
 - (void)setDebugMode:(bool)debugMode;
 - (void)setOpaque:(bool)opaque;
 - (void)setNativeId:(size_t)nativeId;
+- (void)setColorSpace:(NSString *)colorSpace;
 
 @end

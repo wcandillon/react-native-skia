@@ -53,6 +53,7 @@ export interface CanvasProps extends ViewProps {
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
   ref?: React.Ref<CanvasRef>;
+  colorSpace?: "srgb" | "p3";
 }
 
 export const Canvas = ({
@@ -62,6 +63,7 @@ export const Canvas = ({
   onSize,
   onLayout: _onLayout,
   ref,
+  colorSpace = "srgb",
   ...viewProps
 }: CanvasProps) => {
   const onLayout = useOnSizeEvent(onSize, _onLayout);
@@ -110,6 +112,7 @@ export const Canvas = ({
       debug={debug}
       opaque={opaque}
       onLayout={onLayout}
+      colorSpace={colorSpace}
       {...viewProps}
     />
   );

@@ -15,6 +15,10 @@ export const examples = [
     title: "🏞 Images",
   },
   {
+    screen: "P3",
+    title: "🌈 P3 Color Space",
+  },
+  {
     screen: "AnimatedImages",
     title: "🌅 Animated Images",
   },

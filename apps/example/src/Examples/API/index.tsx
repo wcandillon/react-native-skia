@@ -27,7 +27,7 @@ import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
 import { Paragraphs } from "./Paragraphs";
 import { Paragraphs2 } from "./Paragraphs2";
-
+import { P3 } from "./P3";
 const Stack = createNativeStackNavigator<Routes>();
 export const API = () => {
   return (
@@ -52,6 +52,13 @@ export const API = () => {
         component={Images}
         options={{
           title: "🏞 Images",
+        }}
+      />
+      <Stack.Screen
+        name="P3"
+        component={P3}
+        options={{
+          title: "🌈 P3 Color Space",
         }}
       />
       <Stack.Screen

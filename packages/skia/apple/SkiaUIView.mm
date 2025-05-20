@@ -17,6 +17,7 @@
   bool _debugMode;
   bool _opaque;
   size_t _nativeId;
+  std::string _colorSpace;
 }
 
 #pragma mark Initialization and destruction
@@ -153,6 +154,10 @@
 
 - (void)setOpaque:(bool)opaque {
   _opaque = opaque;
+}
+
+- (void)setColorSpace:(std::string)colorSpace {
+  _colorSpace = colorSpace;
 }
 
 - (void)setNativeId:(size_t)nativeId {
