@@ -80,10 +80,10 @@ Color parse(const std::string &css_str) {
       std::string colorSpace;
       std::istringstream iss(colorParamStr);
       iss >> colorSpace;
-      
+
       if (colorSpace == "display-p3") {
         float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
-        
+
         // Check if we have the / alpha syntax
         size_t slashPos = colorParamStr.find('/');
         if (slashPos != std::string::npos) {
@@ -92,35 +92,31 @@ Color parse(const std::string &css_str) {
           std::istringstream alphaStream(alphaStr);
           alphaStream >> a;
           a = clamp_css_float(a);
-          
+
           // Truncate colorParamStr to before the slash
           colorParamStr = colorParamStr.substr(0, slashPos);
         }
-        
+
         // Extract RGB values
         std::istringstream rgbStream(colorParamStr);
         rgbStream >> colorSpace >> r >> g >> b;
-        
+
         r = clamp_css_float(r);
         g = clamp_css_float(g);
         b = clamp_css_float(b);
-        
+
         // Convert P3 values to sRGB values (approximation)
-        // This is a simple approximation - in a real implementation you would use
-        // a proper color space conversion matrix
-        return {
-          clamp_css_byte(r * 255.0f),
-          clamp_css_byte(g * 255.0f),
-          clamp_css_byte(b * 255.0f),
-          a
-        };
+        // This is a simple approximation - in a real implementation you would
+        // use a proper color space conversion matrix
+        return {clamp_css_byte(r * 255.0f), clamp_css_byte(g * 255.0f),
+                clamp_css_byte(b * 255.0f), a};
       }
     }
   }
-  
+
   // For all other color formats, remove whitespace
   str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
-  
+
   for (const auto &namedColor : namedColors) {
     if (str == namedColor.name) {
       return {namedColor.color};
@@ -227,7 +223,7 @@ Color parse(const std::string &css_str) {
         if (colorSpace == "display-p3") {
           std::vector<std::string> colorParams;
           std::string alphaStr = "1.0";
-          
+
           // Check if we have the / alpha syntax
           std::string paramStr = str.substr(op + 1, ep - (op + 1));
           size_t slashPos = paramStr.find('/');
@@ -235,15 +231,17 @@ Color parse(const std::string &css_str) {
             // Extract alpha value after the slash
             alphaStr = paramStr.substr(slashPos + 1);
             // Remove space if present
-            alphaStr.erase(std::remove(alphaStr.begin(), alphaStr.end(), ' '), alphaStr.end());
-            
+            alphaStr.erase(std::remove(alphaStr.begin(), alphaStr.end(), ' '),
+                           alphaStr.end());
+
             // Extract color parameters before the slash
-            paramStr = paramStr.substr(colorSpace.length() + 1, slashPos - (colorSpace.length() + 1));
+            paramStr = paramStr.substr(colorSpace.length() + 1,
+                                       slashPos - (colorSpace.length() + 1));
           } else {
             // No slash found, use the rest of the parameters for colors
             paramStr = paramStr.substr(colorSpace.length() + 1);
           }
-          
+
           // Split the color parameters
           std::stringstream ss(paramStr);
           std::string item;
@@ -252,23 +250,19 @@ Color parse(const std::string &css_str) {
               colorParams.push_back(item);
             }
           }
-          
+
           // Expect 3 color parameters (r, g, b)
           if (colorParams.size() == 3) {
             float r = clamp_css_float(parseFloat(colorParams[0]));
             float g = clamp_css_float(parseFloat(colorParams[1]));
             float b = clamp_css_float(parseFloat(colorParams[2]));
             float a = clamp_css_float(parseFloat(alphaStr));
-            
+
             // Convert P3 values to sRGB values (approximation)
-            // This is a simple approximation - in a real implementation you would use
-            // a proper color space conversion matrix
-            return {
-              clamp_css_byte(r * 255.0f),
-              clamp_css_byte(g * 255.0f),
-              clamp_css_byte(b * 255.0f),
-              a
-            };
+            // This is a simple approximation - in a real implementation you
+            // would use a proper color space conversion matrix
+            return {clamp_css_byte(r * 255.0f), clamp_css_byte(g * 255.0f),
+                    clamp_css_byte(b * 255.0f), a};
           }
         }
       }
