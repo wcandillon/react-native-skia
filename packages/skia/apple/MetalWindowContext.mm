@@ -6,7 +6,7 @@
 MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
                                        id<MTLDevice> device,
                                        id<MTLCommandQueue> commandQueue,
-                                       CALayer *layer, int width, int height)
+                                       CALayer *layer, int width, int height, bool p3)
     : _directContext(directContext), _commandQueue(commandQueue) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"

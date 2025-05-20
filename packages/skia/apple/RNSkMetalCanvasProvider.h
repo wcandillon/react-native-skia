@@ -16,7 +16,8 @@
 class RNSkMetalCanvasProvider : public RNSkia::RNSkCanvasProvider {
 public:
   RNSkMetalCanvasProvider(std::function<void()> requestRedraw,
-                          std::shared_ptr<RNSkia::RNSkPlatformContext> context);
+                          std::shared_ptr<RNSkia::RNSkPlatformContext> context,
+                          std::string colorSpace);
 
   ~RNSkMetalCanvasProvider();
 
@@ -30,6 +31,7 @@ public:
 
 private:
   std::shared_ptr<RNSkia::RNSkPlatformContext> _context;
+  std::string _colorSpace;
   std::unique_ptr<RNSkia::WindowContext> _ctx = nullptr;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"

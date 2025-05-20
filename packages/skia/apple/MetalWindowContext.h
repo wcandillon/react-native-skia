@@ -10,7 +10,7 @@ class MetalWindowContext : public RNSkia::WindowContext {
 public:
   MetalWindowContext(GrDirectContext *directContext, id<MTLDevice> device,
                      id<MTLCommandQueue> commandQueue, CALayer *layer,
-                     int width, int height);
+                     int width, int height, bool p3);
   ~MetalWindowContext() = default;
 
   sk_sp<SkSurface> getSurface() override;

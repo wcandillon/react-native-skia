@@ -23,8 +23,8 @@
 
 RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(
     std::function<void()> requestRedraw,
-    std::shared_ptr<RNSkia::RNSkPlatformContext> context)
-    : RNSkCanvasProvider(requestRedraw), _context(context) {
+    std::shared_ptr<RNSkia::RNSkPlatformContext> context, std::string colorSpace)
+    : RNSkCanvasProvider(requestRedraw), _context(context), _colorSpace(colorSpace) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
@@ -100,7 +100,7 @@ void RNSkMetalCanvasProvider::setSize(int width, int height) {
   _ctx = RNSkia::DawnContext::getInstance().MakeWindow((__bridge void *)_layer,
                                                        w, h);
 #else
-  _ctx = MetalContext::getInstance().MakeWindow(_layer, w, h);
+  _ctx = MetalContext::getInstance().MakeWindow(_layer, w, h, _colorSpace);
 #endif
   _requestRedraw();
 }

@@ -61,7 +61,6 @@ public:
   void setShowDebugOverlays(bool showDebugOverlays) {
     _showDebugOverlays = showDebugOverlays;
   }
-  bool getShowDebugOverlays() const { return _showDebugOverlays; }
 
   void setColorSpace(std::string colorSpace) {
     _colorSpace = colorSpace;
