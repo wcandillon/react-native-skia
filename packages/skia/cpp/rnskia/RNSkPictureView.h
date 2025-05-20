@@ -55,7 +55,7 @@ public:
 
 private:
   bool performDraw(std::shared_ptr<RNSkCanvasProvider> canvasProvider) {
-    return canvasProvider->renderToCanvas([=](SkCanvas *canvas) {
+    return canvasProvider->renderToCanvas([=, this](SkCanvas *canvas) {
       // Make sure to scale correctly
       auto pd = _platformContext->getPixelDensity();
       canvas->clear(SK_ColorTRANSPARENT);

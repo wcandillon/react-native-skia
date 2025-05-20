@@ -197,11 +197,13 @@ RNSkApplePlatformContext::createVideo(const std::string &url) {
 std::shared_ptr<WindowContext>
 RNSkApplePlatformContext::makeContextFromNativeSurface(void *surface, int width,
                                                        int height) {
+  // Add p3 or colorSpace parameter
+  bool p3 = false;
 #if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeWindow(surface, width, height);
 #else
   return MetalContext::getInstance().MakeWindow((__bridge CALayer *)surface,
-                                                width, height);
+                                                width, height, p3);
 #endif
 }
 

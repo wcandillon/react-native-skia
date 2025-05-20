@@ -6,8 +6,9 @@
 MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
                                        id<MTLDevice> device,
                                        id<MTLCommandQueue> commandQueue,
-                                       CALayer *layer, int width, int height, bool p3)
-    : _directContext(directContext), _commandQueue(commandQueue) {
+                                       CALayer *layer, int width, int height,
+                                       bool p3)
+    : _directContext(directContext), _commandQueue(commandQueue), _p3(p3) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = (CAMetalLayer *)layer;
@@ -20,7 +21,15 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
 #else
   _layer.contentsScale = [NSScreen mainScreen].backingScaleFactor;
 #endif // !TARGET_OS_OSX
-  _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  // TODO: MTLPixelFormatR16Float?
+  _layer.pixelFormat =
+      _p3 ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+  if (_p3) {
+    CGColorSpaceRef colorSpace =
+        CGColorSpaceCreateWithName(kCGColorSpaceDisplayP3);
+    _layer.colorspace = colorSpace;
+    CGColorSpaceRelease(colorSpace);
+  }
   _layer.contentsGravity = kCAGravityBottomLeft;
   _layer.drawableSize = CGSizeMake(width, height);
 }
@@ -45,9 +54,13 @@ sk_sp<SkSurface> MetalWindowContext::getSurface() {
   GrBackendRenderTarget backendRT = GrBackendRenderTargets::MakeMtl(
       _layer.drawableSize.width, _layer.drawableSize.height, fbInfo);
 
+  sk_sp<SkColorSpace> space =
+      _p3 ? SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
+                                  SkNamedGamut::kDisplayP3)
+          : nullptr;
   _skSurface = SkSurfaces::WrapBackendRenderTarget(
       _directContext, backendRT, kTopLeft_GrSurfaceOrigin,
-      kBGRA_8888_SkColorType, nullptr, nullptr);
+      _p3 ? kRGBA_F16_SkColorType : kBGRA_8888_SkColorType, space, nullptr);
 
   return _skSurface;
 }

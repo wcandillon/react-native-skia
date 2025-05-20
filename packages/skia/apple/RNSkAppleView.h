@@ -16,9 +16,9 @@ public:
 template <class T> class RNSkAppleView : public RNSkBaseAppleView, public T {
 public:
   RNSkAppleView(std::shared_ptr<RNSkia::RNSkPlatformContext> context)
-      : T(context,
-          std::make_shared<RNSkMetalCanvasProvider>(
-              std::bind(&RNSkia::RNSkView::requestRedraw, this), context)) {}
+      : T(context, std::make_shared<RNSkMetalCanvasProvider>(
+                       std::bind(&RNSkia::RNSkView::requestRedraw, this),
+                       context, "srgb")) {}
 
   CALayer *getLayer() override {
     return std::static_pointer_cast<RNSkMetalCanvasProvider>(

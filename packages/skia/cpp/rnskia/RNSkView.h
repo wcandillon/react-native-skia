@@ -45,15 +45,17 @@ public:
    */
   virtual bool renderToCanvas(const std::function<void(SkCanvas *)> &) = 0;
 
+  void setColorSpace(const std::string colorSpace) { _colorSpace = colorSpace; }
+
 protected:
   std::function<void()> _requestRedraw;
+  std::string _colorSpace;
 };
 
 class RNSkRenderer {
 public:
   explicit RNSkRenderer(std::function<void()> requestRedraw)
-      : _requestRedraw(std::move(requestRedraw)), _showDebugOverlays(false),
-        _colorSpace("srgb") {}
+      : _requestRedraw(std::move(requestRedraw)), _showDebugOverlays(false) {}
 
   virtual void
   renderImmediate(std::shared_ptr<RNSkCanvasProvider> canvasProvider) = 0;
@@ -62,16 +64,9 @@ public:
     _showDebugOverlays = showDebugOverlays;
   }
 
-  void setColorSpace(std::string colorSpace) {
-    _colorSpace = colorSpace;
-  }
-
-  std::string getColorSpace() const { return _colorSpace; }
-
 protected:
   std::function<void()> _requestRedraw;
   bool _showDebugOverlays;
-  std::string _colorSpace;
 };
 
 class RNSkOffscreenCanvasProvider : public RNSkCanvasProvider {
@@ -196,7 +191,7 @@ public:
   }
 
   void setColorSpace(std::string colorSpace) {
-    _renderer->setColorSpace(colorSpace);
+    _canvasProvider->setColorSpace(colorSpace);
     requestRedraw();
   }
 

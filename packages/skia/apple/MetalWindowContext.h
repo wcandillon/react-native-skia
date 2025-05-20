@@ -28,6 +28,7 @@ public:
   void resize(int width, int height) override { _skSurface = nullptr; }
 
 private:
+  bool _p3;
   GrDirectContext *_directContext;
   id<MTLCommandQueue> _commandQueue;
   sk_sp<SkSurface> _skSurface = nullptr;
