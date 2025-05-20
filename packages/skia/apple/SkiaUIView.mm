@@ -158,10 +158,10 @@
   _opaque = opaque;
 }
 
-- (void)setColorSpace:(std::string)colorSpace {
-  _colorSpace = colorSpace;
+- (void)setColorSpace:(NSString *)colorSpace {
+  _colorSpace = std::string([colorSpace UTF8String]);
   if (_impl != nullptr) {
-    _impl->getDrawView()->setColorSpace(colorSpace);
+    _impl->getDrawView()->setColorSpace(_colorSpace);
   }
 }
 
