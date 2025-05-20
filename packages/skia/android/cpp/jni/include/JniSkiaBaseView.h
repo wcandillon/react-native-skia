@@ -45,6 +45,10 @@ protected:
     _skiaAndroidView->setShowDebugInfo(show);
   }
 
+  virtual void setColorSpace(std::string colorSpace) {
+    _skiaAndroidView->setColorSpace(colorSpace);
+  }
+
   virtual void registerView(int nativeId) {
     getSkiaManager()->registerSkiaView(nativeId,
                                        _skiaAndroidView->getSkiaView());

@@ -77,6 +77,8 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     protected abstract void setDebugMode(boolean show);
 
+    protected abstract void setColorSpace(String colorSpace);
+
     protected abstract void registerView(int nativeId);
 
     protected abstract void unregisterView();

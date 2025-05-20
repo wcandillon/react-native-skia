@@ -23,6 +23,8 @@ public:
 
   virtual void setShowDebugInfo(bool show) = 0;
 
+  virtual void setColorSpace(std::string colorSpace) = 0;
+
   virtual std::shared_ptr<RNSkView> getSkiaView() = 0;
 };
 
@@ -60,6 +62,10 @@ public:
   }
 
   void setShowDebugInfo(bool show) override { T::setShowDebugOverlays(show); }
+
+  void setColorSpace(std::string colorSpace) override {
+    T::setColorSpace(colorSpace);
+  }
 
   std::shared_ptr<RNSkView> getSkiaView() override {
     return T::shared_from_this();

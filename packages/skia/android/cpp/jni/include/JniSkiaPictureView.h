@@ -41,6 +41,7 @@ public:
                           JniSkiaPictureView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaPictureView::surfaceSizeChanged),
+         makeNativeMethod("setColorSpace", JniSkiaPictureView::setColorSpace),
          makeNativeMethod("setDebugMode", JniSkiaPictureView::setDebugMode),
          makeNativeMethod("registerView", JniSkiaPictureView::registerView),
          makeNativeMethod("unregisterView",
@@ -61,6 +62,10 @@ protected:
   void surfaceDestroyed() override { JniSkiaBaseView::surfaceDestroyed(); }
 
   void setDebugMode(bool show) override { JniSkiaBaseView::setDebugMode(show); }
+
+  void setColorSpace(std::string colorSpace) {
+    JniSkiaBaseView::setColorSpace(colorSpace);
+  }
 
   void registerView(int nativeId) override {
     JniSkiaBaseView::registerView(nativeId);

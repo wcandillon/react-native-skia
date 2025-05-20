@@ -26,6 +26,11 @@ public abstract class SkiaBaseViewManager<T extends SkiaBaseView> extends ReactV
         ((SkiaBaseView)view).setOpaque(value);
     }
 
+    @ReactProp(name = "colorSpace")
+    public void setColorSpace(T view, String colorSpace) {
+        ((SkiaBaseView)view).setColorSpace(colorSpace);
+    }
+
     @Override
     public void onDropViewInstance(@NonNull ReactViewGroup view) {
         super.onDropViewInstance(view);

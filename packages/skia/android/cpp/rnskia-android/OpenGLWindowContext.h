@@ -35,9 +35,9 @@ class OpenGLWindowContext : public WindowContext {
 public:
   OpenGLWindowContext(GrDirectContext *directContext, gl::Display *display,
                       gl::Context *glContext, ANativeWindow *window,
-                      EGLConfig config)
+                      EGLConfig config, bool p3)
       : _directContext(directContext), _display(display), _glContext(glContext),
-        _window(window) {
+        _window(window), _p3(p3) {
     ANativeWindow_acquire(_window);
     _glSurface = display->makeWindowSurface(config, _window);
   }
@@ -72,6 +72,7 @@ private:
   ANativeWindow *_window;
   sk_sp<SkSurface> _skSurface = nullptr;
   std::unique_ptr<gl::Surface> _glSurface = nullptr;
+  bool _p3;
 };
 
 } // namespace RNSkia
