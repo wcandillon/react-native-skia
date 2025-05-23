@@ -41,7 +41,6 @@ public:
                           JniSkiaPictureView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaPictureView::surfaceSizeChanged),
-         makeNativeMethod("setDebugMode", JniSkiaPictureView::setDebugMode),
          makeNativeMethod("registerView", JniSkiaPictureView::registerView),
          makeNativeMethod("unregisterView",
                           JniSkiaPictureView::unregisterView)});
@@ -60,7 +59,6 @@ protected:
 
   void surfaceDestroyed() override { JniSkiaBaseView::surfaceDestroyed(); }
 
-  void setDebugMode(bool show) override { JniSkiaBaseView::setDebugMode(show); }
 
   void registerView(int nativeId) override {
     JniSkiaBaseView::registerView(nativeId);

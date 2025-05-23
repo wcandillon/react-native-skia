@@ -16,10 +16,6 @@ public abstract class SkiaBaseViewManager<T extends SkiaBaseView> extends ReactV
         ((SkiaBaseView)view).registerView(nativeIdResolved);
     }
 
-    @ReactProp(name = "debug")
-    public void setDebug(T view, boolean show) {
-        ((SkiaBaseView)view).setDebugMode(show);
-    }
 
     @ReactProp(name = "opaque")
     public void setOpaque(T view, boolean value) {

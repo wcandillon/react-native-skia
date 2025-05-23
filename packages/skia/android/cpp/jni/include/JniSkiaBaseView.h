@@ -41,9 +41,6 @@ protected:
 
   virtual void surfaceDestroyed() { _skiaAndroidView->surfaceDestroyed(); }
 
-  virtual void setDebugMode(bool show) {
-    _skiaAndroidView->setShowDebugInfo(show);
-  }
 
   virtual void registerView(int nativeId) {
     getSkiaManager()->registerSkiaView(nativeId,

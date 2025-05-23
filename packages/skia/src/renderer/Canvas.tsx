@@ -49,14 +49,12 @@ const useOnSizeEvent = (
 };
 
 export interface CanvasProps extends ViewProps {
-  debug?: boolean;
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
   ref?: React.Ref<CanvasRef>;
 }
 
 export const Canvas = ({
-  debug,
   opaque,
   children,
   onSize,
@@ -107,7 +105,6 @@ export const Canvas = ({
     <SkiaPictureViewNativeComponent
       collapsable={false}
       nativeID={`${nativeId}`}
-      debug={debug}
       opaque={opaque}
       onLayout={onLayout}
       {...viewProps}

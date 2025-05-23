@@ -10,12 +10,9 @@ import androidx.annotation.NonNull;
 public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callback {
 
     SkiaViewAPI mApi;
-    boolean mDebug;
-
-    public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean debug) {
+    public SkiaSurfaceView(Context context, SkiaViewAPI api) {
         super(context);
         mApi = api;
-        mDebug = debug;
         getHolder().addCallback(this);
     }
 

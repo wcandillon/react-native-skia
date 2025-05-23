@@ -6,14 +6,12 @@ import { SkiaPictureView } from "../views/SkiaPictureView.web";
 import type { ISkiaViewApiWeb } from "./NativeSkiaModule.web";
 
 export interface NativeProps extends ViewProps {
-  debug?: boolean;
   opaque?: boolean;
   nativeID: string;
 }
 
 const SkiaPictureViewNativeComponent = ({
   nativeID,
-  debug,
   opaque,
   onLayout,
   ...viewProps
@@ -29,7 +27,6 @@ const SkiaPictureViewNativeComponent = ({
   }, [nativeID]);
   return createElement(SkiaPictureView, {
     ref,
-    debug,
     opaque,
     onLayout,
     ...viewProps,

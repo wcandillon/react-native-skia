@@ -21,7 +21,6 @@ public:
 
   virtual float getPixelDensity() = 0;
 
-  virtual void setShowDebugInfo(bool show) = 0;
 
   virtual std::shared_ptr<RNSkView> getSkiaView() = 0;
 };
@@ -59,7 +58,6 @@ public:
     return T::getPlatformContext()->getPixelDensity();
   }
 
-  void setShowDebugInfo(bool show) override { T::setShowDebugOverlays(show); }
 
   std::shared_ptr<RNSkView> getSkiaView() override {
     return T::shared_from_this();

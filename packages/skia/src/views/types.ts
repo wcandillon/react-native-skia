@@ -5,7 +5,6 @@ import type { Node } from "../dom/types";
 import type { SkImage, SkPicture, SkRect, SkSize } from "../skia/types";
 
 export type NativeSkiaViewProps = ViewProps & {
-  debug?: boolean;
   opaque?: boolean;
 };
 
@@ -18,11 +17,6 @@ export interface ISkiaViewApi {
 }
 
 export interface SkiaBaseViewProps extends ViewProps {
-  /**
-   * When set to true the view will display information about the
-   * average time it takes to render.
-   */
-  debug?: boolean;
   /**
    * Pass an animated value to the onSize property to get updates when
    * the Skia view is resized.

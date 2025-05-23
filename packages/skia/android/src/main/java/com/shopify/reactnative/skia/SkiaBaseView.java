@@ -11,23 +11,22 @@ import com.facebook.react.views.view.ReactViewGroup;
 public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI {
     private View mView;
 
-    private final boolean debug = false;
     private final String tag = "SkiaView";
 
     public SkiaBaseView(Context context) {
         super(context);
-        mView = new SkiaTextureView(context, this, debug);
+        mView = new SkiaTextureView(context, this);
         addView(mView);
     }
 
     public void setOpaque(boolean value) {
         if (value && mView instanceof SkiaTextureView) {
             removeView(mView);
-            mView = new SkiaSurfaceView(getContext(), this, debug);
+            mView = new SkiaSurfaceView(getContext(), this);
             addView(mView);
         } else if (!value && mView instanceof SkiaSurfaceView) {
             removeView(mView);
-            mView = new SkiaTextureView(getContext(), this, debug);
+            mView = new SkiaTextureView(getContext(), this);
             addView(mView);
         }
     }
@@ -75,7 +74,6 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     protected abstract void surfaceDestroyed();
 
-    protected abstract void setDebugMode(boolean show);
 
     protected abstract void registerView(int nativeId);
 

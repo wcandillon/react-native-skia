@@ -38,7 +38,6 @@
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory;
 - (std::shared_ptr<RNSkBaseAppleView>)impl;
 
-- (void)setDebugMode:(bool)debugMode;
 - (void)setOpaque:(bool)opaque;
 - (void)setNativeId:(size_t)nativeId;
 

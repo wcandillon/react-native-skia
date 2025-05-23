@@ -28,12 +28,9 @@ public class SkiaAHBView extends View implements ImageReader.OnImageAvailableLis
     private final Matrix matrix = new Matrix();
 
     SkiaViewAPI mApi;
-    boolean mDebug;
-
-    public SkiaAHBView(Context context, SkiaViewAPI api, boolean debug) {
+    public SkiaAHBView(Context context, SkiaViewAPI api) {
         super(context);
         mApi = api;
-        mDebug = debug;
     }
 
     private ImageReader createReader() {

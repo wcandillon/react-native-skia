@@ -27,10 +27,6 @@ RCT_CUSTOM_VIEW_PROPERTY(nativeID, NSNumber, SkiaUIView) {
   [(SkiaUIView *)view setNativeId:nativeId];
 }
 
-RCT_CUSTOM_VIEW_PROPERTY(debug, BOOL, SkiaUIView) {
-  bool debug = json != NULL ? [RCTConvert BOOL:json] : false;
-  [(SkiaUIView *)view setDebugMode:debug];
-}
 
 RCT_CUSTOM_VIEW_PROPERTY(opaque, BOOL, SkiaUIView) {
   bool opaque = json != NULL ? [RCTConvert BOOL:json] : false;

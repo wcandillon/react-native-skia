@@ -130,7 +130,7 @@ export abstract class SkiaBaseWebView<
   private onLayout = this.onLayoutEvent.bind(this);
 
   render() {
-    const { debug = false, ...viewProps } = this.props;
+    const { ...viewProps } = this.props;
     return (
       <Platform.View {...viewProps} onLayout={this.onLayout}>
         <canvas ref={this._canvasRef} style={{ display: "flex", flex: 1 }} />

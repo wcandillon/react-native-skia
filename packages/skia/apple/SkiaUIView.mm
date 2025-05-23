@@ -14,7 +14,6 @@
   std::function<std::shared_ptr<RNSkBaseAppleView>(
       std::shared_ptr<RNSkia::RNSkPlatformContext>)>
       _factory;
-  bool _debugMode;
   bool _opaque;
   size_t _nativeId;
 }
@@ -44,7 +43,6 @@
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory {
   _manager = manager;
   _nativeId = 0;
-  _debugMode = false;
   _factory = factory;
 }
 
@@ -72,7 +70,6 @@
       if (_nativeId != 0) {
         _manager->setSkiaView(_nativeId, _impl->getDrawView());
       }
-      _impl->getDrawView()->setShowDebugOverlays(_debugMode);
     }
   }
 }
@@ -144,12 +141,6 @@
 
 #pragma mark Properties
 
-- (void)setDebugMode:(bool)debugMode {
-  _debugMode = debugMode;
-  if (_impl != nullptr) {
-    _impl->getDrawView()->setShowDebugOverlays(debugMode);
-  }
-}
 
 - (void)setOpaque:(bool)opaque {
   _opaque = opaque;

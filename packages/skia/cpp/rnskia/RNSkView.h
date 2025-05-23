@@ -52,19 +52,14 @@ protected:
 class RNSkRenderer {
 public:
   explicit RNSkRenderer(std::function<void()> requestRedraw)
-      : _requestRedraw(std::move(requestRedraw)), _showDebugOverlays(false) {}
+      : _requestRedraw(std::move(requestRedraw)) {}
 
   virtual void
   renderImmediate(std::shared_ptr<RNSkCanvasProvider> canvasProvider) = 0;
 
-  void setShowDebugOverlays(bool showDebugOverlays) {
-    _showDebugOverlays = showDebugOverlays;
-  }
-  bool getShowDebugOverlays() const { return _showDebugOverlays; }
 
 protected:
   std::function<void()> _requestRedraw;
-  bool _showDebugOverlays;
 };
 
 class RNSkOffscreenCanvasProvider : public RNSkCanvasProvider {
@@ -180,13 +175,6 @@ public:
    */
   size_t getNativeId() { return _nativeId; }
 
-  /**
-   * Set to true to show the debug overlays on render
-   */
-  void setShowDebugOverlays(bool show) {
-    _renderer->setShowDebugOverlays(show);
-    requestRedraw();
-  }
 
   /**
    Renders the view into an SkImage instead of the screen.

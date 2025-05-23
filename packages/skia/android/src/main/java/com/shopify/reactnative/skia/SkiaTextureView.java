@@ -14,12 +14,9 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
     private String tag = "SkiaTextureView";
 
     SkiaViewAPI mApi;
-    boolean mDebug;
-
-    public SkiaTextureView(Context context, SkiaViewAPI api, boolean debug) {
+    public SkiaTextureView(Context context, SkiaViewAPI api) {
         super(context);
         mApi = api;
-        mDebug = debug;
         setOpaque(false);
         setSurfaceTextureListener(this);
     }
