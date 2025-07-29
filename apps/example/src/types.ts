@@ -29,4 +29,5 @@ export type StackParamList = {
   SpeedTest: undefined;
   Video: undefined;
   Chat: undefined;
+  Skottie: undefined;
 };

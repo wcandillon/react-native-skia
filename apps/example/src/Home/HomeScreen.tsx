@@ -122,6 +122,12 @@ export const HomeScreen = () => {
       />
       <HomeScreenButton title="📹 Video" description="Video" route="Video" />
       <HomeScreenButton title="💬 Chat" description="Chat" route="Chat" />
+      <HomeScreenButton
+        title="🪄 Skottie"
+        description="Skottie animations"
+        route="Skottie"
+        testId="Skottie"
+      />
     </ScrollView>
   );
 };

@@ -33,6 +33,7 @@ import {
   Video,
   Chat,
   LiquidGlass,
+  Skottie,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -70,6 +71,7 @@ const linking: LinkingOptions<StackParamList> = {
       SpeedTest: "speedtest",
       Video: "video",
       Chat: "chat",
+      Skottie: "skottie",
     },
   },
   prefixes: ["rnskia://"],
@@ -227,6 +229,7 @@ const App = () => {
                 headerShown: false,
               }}
             />
+            <Stack.Screen name="Skottie" component={Skottie} />
             <Stack.Screen
               name="Performance"
               component={PerformanceDrawingTest}

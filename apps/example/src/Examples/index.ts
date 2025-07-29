@@ -26,3 +26,4 @@ export * from "./FrostedCard";
 export * from "./SpeedTest";
 export * from "./Video";
 export * from "./Chat";
+export * from "./Skottie";
