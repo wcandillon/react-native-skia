@@ -28,6 +28,8 @@ export interface SkottieViewProps {
   autoPlay?: boolean;
 }
 
+// https://github.com/lottie-react-native/lottie-react-native/blob/master/packages/core/src/LottieView/index.tsx
+
 export const SkottieView = ({
   source,
   progress,
