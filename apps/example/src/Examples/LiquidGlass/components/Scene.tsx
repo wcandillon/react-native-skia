@@ -112,6 +112,25 @@ vec2 waterDropletDistortion(vec3 sdf, float radius) {
   return clamp(displacementMap, 0.0, 1.0);
 }
 
+vec2 fresnelDistortion(vec3 sdf, float radius, float scale, float thickness, vec2 viewDirection) {
+  vec2 gradient = sdf.yz;
+  vec2 normalizedGradient = normalize(gradient + vec2(0.001)); // avoid division by zero
+  
+  // Fresnel effect - stronger distortion at glancing angles
+  float edge_factor = 1.0 - abs(dot(normalizedGradient, viewDirection));
+  
+  // Thickness-based falloff inside the shape
+  float thicknessFactor = smoothstep(0.0, thickness, abs(sdf.x));
+  
+  // Calculate displacement with Fresnel modulation
+  vec2 displacement = scale * gradient * edge_factor * thicknessFactor;
+  
+  // Convert to displacement map format
+  vec2 displacementMap = 0.5 + displacement;
+  
+  return clamp(displacementMap, 0.0, 1.0);
+}
+
 
 half4 main(float2 p) {
   float circleRadius = r * (1.0 - smoothstep(0.8, 1.0, progress));
@@ -125,7 +144,19 @@ half4 main(float2 p) {
      return vec4(0.0, 0.0, 0.0, 0.0);
   }
 
-  vec2 displacementMap = waterDropletDistortion(sdf, r);
+  // Fresnel distortion parameters:
+  // Scale: distortion strength (higher = more distortion)
+  // Thickness: glass thickness falloff (lower = more visible effect) 
+  // View direction: viewing angle for Fresnel effect
+  
+  // Current: Strong glass effect
+  vec2 displacementMap = glassDistortion(sdf, r);//fresnelDistortion(sdf, r, 2.0, r * 0.2, vec2(0.0, -1.0));
+  
+  // Alternative parameter sets to try:
+  // Subtle wine glass: fresnelDistortion(sdf, r, 0.6, r * 0.5, vec2(0.0, -1.0));
+  // Heavy crystal: fresnelDistortion(sdf, r, 2.0, r * 0.2, vec2(0.0, -1.0));
+  // Side view glass: fresnelDistortion(sdf, r, 1.0, r * 0.4, vec2(1.0, 0.0));
+  // Angled viewing: fresnelDistortion(sdf, r, 1.5, r * 0.25, vec2(0.7, -0.7));
   
   return vec4(displacementMap, 0.0, 1.0);
 }
