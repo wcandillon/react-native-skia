@@ -2,6 +2,7 @@ import type {
   SkImageFilter,
   SkRuntimeEffect,
   SkShader,
+  SkSize,
 } from "@shopify/react-native-skia";
 import {
   BackdropFilter,
@@ -38,66 +39,102 @@ uniform float r;
 const source = frag`
 ${baseUniforms}
 
-vec2 sdCircle(vec2 p, vec2 center, float radius) {
-  vec2 offset = p - center;
-  float d = length(offset) - radius;
-  float t = atan(offset.y, offset.x) / (2.0 * 3.14159265) + 0.5;
-  return vec2(d, t);
+vec3 sdCircle( in vec2 p, in float r ) 
+{
+    float d = length(p);
+    return vec3( d-r, p/d );
 }
 
-vec2 sdRoundedBox( in vec2 p, in vec2 b, in vec4 r ) {
-  r.xy = (p.x>0.0) ? r.xy : r.zw;
-  r.x  = (p.y>0.0) ? r.x  : r.y;
-  vec2 q = abs(p)-b+r.x;
-  float d = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - r.x;
-  
-  // Approximate arc length using ellipse parameterization
-  vec2 ellipseB = b + vec2(r.x); // Ellipse semi-axes matching rounded rect
-  vec2 normalizedP = p / ellipseB;
-  float t = atan(normalizedP.y, normalizedP.x) / (2.0 * 3.14159265) + 0.5;
-  
-  return vec2(d, t);
+vec3 sdRoundedBox( in vec2 p, in vec2 b, vec4 ra )
+{
+    ra.xy   = (p.x>0.0)?ra.xy : ra.zw;
+    float r = (p.y>0.0)?ra.x  : ra.y;
+    
+    vec2 w = abs(p)-(b-r);
+    vec2 s = vec2(p.x<0.0?-1:1,p.y<0.0?-1:1);
+    
+    float g = max(w.x,w.y);
+	vec2  q = max(w,0.0);
+    float l = length(q);
+    
+    return vec3(   (g>0.0)?l-r: g-r,
+                s*((g>0.0)?q/l : ((w.x>w.y)?vec2(1,0):vec2(0,1))));
 }
 
-float smin(float a, float b, float k) {
-  float h = clamp(0.5 + 0.5*(a-b)/k, 0.0, 1.0);
-  return mix(a, b, h) - k*h*(1.0-h);
+
+vec3 smin( in vec3 a, in vec3 b, in float k )
+{
+    k *= 4.0;
+    float h = max(k-abs(a.x-b.x),0.0);
+    float m = 0.25*h*h/k;
+    float n = 0.50*  h/k;
+    return vec3( min(a.x,  b.x) - m, 
+                 mix(a.yz, b.yz, (a.x<b.x)?n:1.0-n) );
 }
+
+vec2 glassDistortion(vec3 sdf, float radius) {
+  vec2 gradient = sdf.yz;
+  float gradientMagnitude = length(gradient);
+  
+  // Create distance-based falloff for more realistic glass effect
+  float distanceFactor = 1.0 - smoothstep(0.0, radius * 0.8, abs(sdf.x));
+  
+  // Distortion strength - stronger at edges where gradient is high
+  float distortionStrength = gradientMagnitude * distanceFactor * 0.3;
+  
+  // Calculate displacement based on surface normals
+  // Simulate light bending through curved glass
+  vec2 displacement = gradient * distortionStrength;
+  
+  // Convert to displacement map format (0.5 = neutral, <0.5 = negative, >0.5 = positive)
+  vec2 displacementMap = 0.5 + displacement;
+  
+  // Clamp to valid range
+  return clamp(displacementMap, 0.0, 1.0);
+}
+
+vec2 waterDropletDistortion(vec3 sdf, float radius) {
+  // Maximum distortion at center, exponential falloff towards edges
+  float distance = abs(sdf.x);
+  float falloff = exp(-distance * 2.0 / radius);
+  
+  // Create radial distortion pattern from center
+  vec2 center = vec2(0.0);
+  vec2 fromCenter = normalize(sdf.yz + vec2(0.001)); // avoid division by zero
+  
+  // Lens-like radial distortion - stronger at center
+  float radialStrength = falloff * 0.6;
+  vec2 displacement = fromCenter * radialStrength;
+  
+  // Convert to displacement map format
+  vec2 displacementMap = 0.5 + displacement;
+  
+  return clamp(displacementMap, 0.0, 1.0);
+}
+
 
 half4 main(float2 p) {
   float circleRadius = r * (1.0 - smoothstep(0.8, 1.0, progress));
-  vec2 sdf1 = sdCircle(p + vec2(0, -r), c1, circleRadius);
-  vec2 sdf2 = sdRoundedBox(p - box.xy - box.zw * 0.5, box.zw * 0.5, vec4(r));
-  float k = 20 + 20 * (1.0 - abs(2.0 * progress - 1.0));
-  float d = smin(sdf1.x, sdf2.x, k);
-  
-  // Calculate the blend factor used in smin to interpolate t
-  float h = clamp(0.5 + 0.5*(sdf1.x - sdf2.x)/k, 0.0, 1.0);
-  float t = mix(sdf1.y, sdf2.y, h);
+  vec3 sdf1 = sdCircle(p + vec2(0, -r) - c1, circleRadius);
+  vec3 sdf2 = sdRoundedBox(p - box.xy - box.zw * 0.5, box.zw * 0.5, vec4(r));
+  float k = 10 + 10 * (1.0 - abs(2.0 * progress - 1.0));
+  vec3 sdf = smin(sdf1, sdf2, k);
 
-  if (d > 0.0) {
-     return vec4(0.0);
+  // Outside the shape - no displacement
+  if (sdf.x > 0.0) {
+     return vec4(0.0, 0.0, 0.0, 0.0);
   }
 
-  // Create gradient from yellow center to alternating red/green edge
-  float patternFreq = 1.0; // Frequency of the alternating pattern
-  float centerFactor = clamp(-d / r, 0.0, 1.0); // 0 at edge, 1 at center
-  float edgePattern = sin(t * 2.0 * 3.14159265 * patternFreq) * 0.5 + 0.5; // Alternating pattern
+  vec2 displacementMap = waterDropletDistortion(sdf, r);
   
-  vec3 yellow = vec3(0.5, 0.5, 0.0);
-  vec3 red = vec3(0.5, 0.0, 0.0);
-  vec3 green = vec3(0.0, 0.5, 0.0);
-  vec3 edgeColor = mix(red, green, edgePattern);
-  
-  vec3 color = mix(edgeColor, yellow, centerFactor);
-  return vec4(color, 1.0);
+  return vec4(displacementMap, 0.0, 1.0);
 }
 `;
 
 const r = 55;
 
 interface SceneProps {
-  filter?: (shader: SkShader) => SkImageFilter;
+  filter?: (shader: SkShader, size: SkSize) => SkImageFilter;
   shader?: SkRuntimeEffect;
 }
 
@@ -128,7 +165,7 @@ export const Scene = ({
         processUniforms(source, uniforms.value),
         localMatrix
       );
-      return filterCB(shader);
+      return filterCB(shader, size);
     } else if (shaderFilter) {
       const builder = Skia.RuntimeShaderBuilder(shaderFilter);
       const transform = convertToColumnMajor3(localMatrix.get());
