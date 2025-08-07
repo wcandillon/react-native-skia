@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-declare namespace global {
-  var _IS_FABRIC: boolean;
-}
-
+const { OS } = Platform;
 const ANDROID_WS_HOST = "10.0.2.2";
 const IOS_WS_HOST = "localhost";
-const HOST = Platform.OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
+const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
 const PORT = 4242;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const arch = (global as any)?.nativeFabricUIManager ? "fabric" : "paper";
 
 type UseClient = [client: WebSocket | null, hostname: string];
 export const useClient = (): UseClient => {
@@ -24,8 +22,8 @@ export const useClient = (): UseClient => {
       setClient(ws);
       ws.send(
         JSON.stringify({
-          OS: Platform.OS,
-          arch: "paper",
+          OS,
+          arch,
         })
       );
     };
