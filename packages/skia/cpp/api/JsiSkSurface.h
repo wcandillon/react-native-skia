@@ -11,6 +11,7 @@
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
+#include "JsiSkRect.h"
 
 #if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
@@ -19,6 +20,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
+#include "include/core/SkImageInfo.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 
@@ -119,12 +121,43 @@ public:
     if (!surface)
       return 0;
 
-    // Surface memory is primarily the pixel buffer: width × height × bytes per
-    // pixel
-    int width = surface->width();
-    int height = surface->height();
-    // Assume 4 bytes per pixel (RGBA) for most surfaces
-    return width * height * 4;
+    // Get the actual imageInfo from the surface to determine exact pixel format
+    auto info = surface->imageInfo();
+    size_t baseSize = info.computeMinByteSize();
+
+    // Check if this is a GPU-backed surface
+    if (surface->recordingContext()) {
+      // GPU surfaces have significant additional overhead:
+      // - Texture memory alignment and padding (~10-15%)
+      // - Render target attachments (color, depth, stencil)
+      // - Command buffer allocations
+      // - Driver overhead
+      baseSize = static_cast<size_t>(baseSize * 1.25);
+
+      // Check for multisampling (MSAA)
+      // Note: We can't directly query sample count from here, but we can
+      // estimate based on the surface props if available
+      // MSAA can multiply memory usage by the sample count (2x, 4x, 8x, etc.)
+      // Conservative estimate: add 50% for potential MSAA overhead
+      auto props = surface->props();
+      if (props.isUseDeviceIndependentFonts()) {
+        // This is a proxy for higher quality rendering that might use MSAA
+        baseSize = static_cast<size_t>(baseSize * 1.5);
+      }
+    } else {
+      // Raster surfaces have minimal overhead beyond pixel data
+      // Add ~5% for SkSurface object overhead and row padding
+      baseSize = static_cast<size_t>(baseSize * 1.05);
+    }
+
+    // Account for potential backing store or cache
+    // Surfaces often maintain a cached image snapshot
+    if (surface->getCanvas() && surface->getCanvas()->getSaveCount() > 1) {
+      // If there are active save layers, add overhead for layer buffers
+      baseSize = static_cast<size_t>(baseSize * 1.1);
+    }
+
+    return baseSize;
   }
 
   JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSurface, width),

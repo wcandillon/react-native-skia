@@ -311,14 +311,35 @@ public:
 
   size_t getMemoryPressure() const override {
     auto image = getObject();
-    if (image) {
-      if (image->isTextureBacked()) {
-        return image->textureSize();
-      } else {
-        return image->imageInfo().computeMinByteSize();
-      }
+    if (!image) {
+      return 0;
     }
-    return 0;
+
+    size_t baseSize;
+    if (image->isTextureBacked()) {
+      // For texture-backed images, use the texture size
+      baseSize = image->textureSize();
+
+      // GPU textures have additional overhead:
+      // - Driver overhead for texture management (~10-15%)
+      // - Potential alignment/padding requirements
+      // - Command buffer references
+      baseSize = static_cast<size_t>(baseSize * 1.15);
+
+      // If the image has mipmaps, add ~33% more memory
+      // (1 + 1/4 + 1/16 + ... ≈ 1.33)
+      if (image->hasMipmaps()) {
+        baseSize = static_cast<size_t>(baseSize * 1.33);
+      }
+    } else {
+      // For raster images, use the computed byte size
+      baseSize = image->imageInfo().computeMinByteSize();
+
+      // Add small overhead for SkImage object and metadata (~5%)
+      baseSize = static_cast<size_t>(baseSize * 1.05);
+    }
+
+    return baseSize;
   }
 };
 
