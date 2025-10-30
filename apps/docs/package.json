@@ -27,9 +27,9 @@
     "file-loader": "^6.2.0",
     "its-fine": "^1.0.8",
     "prism-react-renderer": "^2.4.1",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "react-native": "0.78.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.0",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-reanimated": "3.19.1",
     "url-loader": "^4.1.1"

@@ -3,7 +3,7 @@
   "compilerOptions": {
     "target": "es2018",
     "module": "commonjs",
-    "lib": ["es2018", "dom"],
+    "lib": ["es2022", "dom"],
     "jsx": "react",
     "strict": true,
     "esModuleInterop": true,
