@@ -5,11 +5,10 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "RuntimeAwareCache.h"
 
 #define STR_CAT_NX(A, B) A##B
 #define STR_CAT(A, B) STR_CAT_NX(A, B)
@@ -100,6 +99,8 @@ namespace RNJsi {
 
 namespace jsi = facebook::jsi;
 
+struct HostFunctionCacheStore;
+
 using JsPropertyType = struct {
   std::function<jsi::Value(jsi::Runtime &)> get;
   std::function<void(jsi::Runtime &, const jsi::Value &)> set;
@@ -126,7 +127,7 @@ using JsiPropertySettersMap =
 class JsiHostObject : public jsi::HostObject {
 public:
   JsiHostObject() = default;
-  ~JsiHostObject() = default;
+  ~JsiHostObject() override;
 
   /**
    * Overridden jsi::HostObject set property method
@@ -379,7 +380,11 @@ protected:
 private:
   std::unordered_map<std::string, jsi::HostFunctionType> _funcMap;
   std::unordered_map<std::string, JsPropertyType> _propMap;
-
-  RuntimeAwareCache<std::map<std::string, jsi::Function>> _hostFunctionCache;
+  std::map<std::string, jsi::Function> &
+  getHostFunctionCache(jsi::Runtime &runtime) const;
+  void releaseHostFunctionCaches() const;
+  mutable std::vector<std::weak_ptr<HostFunctionCacheStore>>
+      _hostFunctionCacheStores;
+  mutable std::mutex _hostFunctionCacheStoresMutex;
 };
 } // namespace RNJsi

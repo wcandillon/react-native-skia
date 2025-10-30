@@ -9,8 +9,6 @@
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
 
-#include "RuntimeAwareCache.h"
-
 namespace RNSkia {
 namespace jsi = facebook::jsi;
 
@@ -21,9 +19,6 @@ RNSkManager::RNSkManager(
     : _jsRuntime(jsRuntime), _platformContext(platformContext),
       _jsCallInvoker(jsCallInvoker),
       _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
-
-  // Register main runtime
-  RNJsi::BaseRuntimeAwareCache::setMainJsRuntime(_jsRuntime);
 
   // Install bindings
   installBindings();
