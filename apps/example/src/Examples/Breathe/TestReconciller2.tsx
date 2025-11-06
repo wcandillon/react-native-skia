@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Button,
   StyleSheet,
@@ -6,21 +6,9 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+// import { vec, mix, Paint } from "@shopify/react-native-skia";
+// import type { SharedValue } from "react-native-reanimated";
 import {
-  BlurMask,
-  vec,
-  Canvas,
-  Circle,
-  Fill,
-  Group,
-  polar2Canvas,
-  mix,
-  Rect,
-  Paint,
-} from "@shopify/react-native-skia";
-import type { SharedValue } from "react-native-reanimated";
-import {
-  useDerivedValue,
   useSharedValue,
   withTiming,
   withSpring,
@@ -36,55 +24,56 @@ import {
 const c1 = "#61bea2";
 const c2 = "#529ca0";
 
-interface RingProps {
-  index: number;
-  progress: SharedValue<number>;
-  total: number;
-  frameNumber: number; // Add frame tracking
-}
+// Commented out Ring component - not used with regular View implementation
+// interface RingProps {
+//   index: number;
+//   progress: SharedValue<number>;
+//   total: number;
+//   frameNumber: number; // Add frame tracking
+// }
 
-const Ring = ({ index, progress, total, frameNumber }: RingProps) => {
-  const { width, height } = useWindowDimensions();
-  const R = width / 4;
-  const center = useMemo(
-    () => vec(width / 2, height / 2 - 64),
-    [height, width]
-  );
+// const Ring = ({ index, progress, total, frameNumber }: RingProps) => {
+//   const { width, height } = useWindowDimensions();
+//   const R = width / 4;
+//   const center = useMemo(
+//     () => vec(width / 2, height / 2 - 64),
+//     [height, width]
+//   );
 
-  const theta = (index * (2 * Math.PI)) / total;
-  const transform = useDerivedValue(() => {
-    const { x, y } = polar2Canvas(
-      { theta, radius: progress.value * R },
-      { x: 0, y: 0 }
-    );
-    const scale = mix(progress.value, 0.3, 1);
-    return [{ translateX: x }, { translateY: y }, { scale }];
-  });
+//   const theta = (index * (2 * Math.PI)) / total;
+//   const transform = useDerivedValue(() => {
+//     const { x, y } = polar2Canvas(
+//       { theta, radius: progress.value * R },
+//       { x: 0, y: 0 }
+//     );
+//     const scale = mix(progress.value, 0.3, 1);
+//     return [{ translateX: x }, { translateY: y }, { scale }];
+//   });
 
-  // Visual indicator: Use opacity based on frame number to detect ordering issues
-  const opacity = 0.5 + (frameNumber % 2) * 0.5;
+//   // Visual indicator: Use opacity based on frame number to detect ordering issues
+//   const opacity = 0.5 + (frameNumber % 2) * 0.5;
 
-  return (
-    <Circle
-      c={center}
-      r={R}
-      color={index % 2 ? c1 : c2}
-      origin={center}
-      transform={transform}
-      opacity={opacity}
-    />
-  );
-};
+//   return (
+//     <Circle
+//       c={center}
+//       r={R}
+//       color={index % 2 ? c1 : c2}
+//       origin={center}
+//       transform={transform}
+//       opacity={opacity}
+//     />
+//   );
+// };
 
 export const Breathe = () => {
   const [rings, setRings] = useState(6);
   const [frameCounter, setFrameCounter] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const { width, height } = useWindowDimensions();
-  const center = useMemo(
-    () => vec(width / 2, height / 2 - 64),
-    [height, width]
-  );
+  // const center = useMemo(
+  //   () => vec(width / 2, height / 2 - 64),
+  //   [height, width]
+  // );
 
   // Shared values for gesture and animation
   const translateX = useSharedValue(0);
@@ -175,12 +164,13 @@ export const Breathe = () => {
 
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  const groupTransform = useDerivedValue(() => [
-    { translateX: translateX.value },
-    { translateY: translateY.value },
-    { scale: gestureScale.value },
-    { rotate: mix(animationProgress.value, 0, Math.PI * 2) },
-  ]);
+  // Commented out - not needed for regular View implementation
+  // const groupTransform = useDerivedValue(() => [
+  //   { translateX: translateX.value },
+  //   { translateY: translateY.value },
+  //   { scale: gestureScale.value },
+  //   { rotate: mix(animationProgress.value, 0, Math.PI * 2) },
+  // ]);
 
   const add = useCallback(() => {
     setRings((r) => Math.min(12, r + 1));
@@ -214,13 +204,13 @@ export const Breathe = () => {
     setTimeout(() => clearInterval(interval), 3000);
   }, [animationProgress]);
 
-  // Frame indicator to visually detect ordering issues
-  const frameIndicatorColor = useDerivedValue(() => {
-    // This should smoothly transition, but will flicker if frames are out of order
-    const r = Math.sin(animationProgress.value * Math.PI * 2) * 127 + 128;
-    const g = Math.cos(animationProgress.value * Math.PI * 2) * 127 + 128;
-    return `rgb(${r}, ${g}, 100)`;
-  });
+  // Commented out - not needed for regular View implementation
+  // const frameIndicatorColor = useDerivedValue(() => {
+  //   // This should smoothly transition, but will flicker if frames are out of order
+  //   const r = Math.sin(animationProgress.value * Math.PI * 2) * 127 + 128;
+  //   const g = Math.cos(animationProgress.value * Math.PI * 2) * 127 + 128;
+  //   return `rgb(${r}, ${g}, 100)`;
+  // });
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -240,45 +230,75 @@ export const Breathe = () => {
         </View>
 
         <GestureDetector gesture={composedGesture}>
-          <Canvas style={styles.container}>
-            <Fill color="rgb(36,43,56)" />
-
-            {/* Frame order indicator - should be smooth, will flicker if bug occurs */}
-            <Rect
-              x={0}
-              y={0}
-              width={width}
-              height={5}
-              color={frameIndicatorColor}
+          <View
+            style={[styles.container, { backgroundColor: "rgb(36,43,56)" }]}
+          >
+            {/* Frame order indicator - using regular View */}
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 5,
+                backgroundColor: `rgb(${Math.floor(Math.sin(frameCounter * 0.1) * 127 + 128)}, ${Math.floor(Math.cos(frameCounter * 0.1) * 127 + 128)}, 100)`,
+              }}
             />
 
-            <Group origin={center} transform={groupTransform}>
+            {/* Render rings as regular Views */}
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
               {new Array(rings).fill(0).map((_, index) => {
+                const theta = (index * (2 * Math.PI)) / rings;
+                const opacity = 0.5 + (frameCounter % 2) * 0.5;
                 return (
-                  <Ring
+                  <View
                     key={index}
-                    index={index}
-                    progress={animationProgress}
-                    total={rings}
-                    frameNumber={frameCounter}
+                    style={{
+                      position: "absolute",
+                      width: width / 2,
+                      height: width / 2,
+                      borderRadius: width / 4,
+                      backgroundColor: index % 2 ? c1 : c2,
+                      opacity: opacity,
+                      transform: [
+                        { translateX: Math.cos(theta) * 50 },
+                        { translateY: Math.sin(theta) * 50 },
+                      ],
+                    }}
                   />
                 );
               })}
-            </Group>
+            </View>
 
-            {/* Debug indicator: Should pulse smoothly */}
-            <Circle
-              c={vec(30, 30)}
-              r={10}
-              color="white"
-              opacity={useDerivedValue(
-                () =>
-                  0.3 +
-                  Math.abs(Math.sin(animationProgress.value * Math.PI * 4)) *
-                    0.7
-              )}
+            {/* Debug indicator - using regular View */}
+            <View
+              style={{
+                position: "absolute",
+                top: 20,
+                left: 20,
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                backgroundColor: "white",
+                opacity: 0.3 + Math.abs(Math.sin(frameCounter * 0.05)) * 0.7,
+              }}
             />
-          </Canvas>
+
+            {/* Status text overlay */}
+            <View
+              style={{ position: "absolute", bottom: 20, alignSelf: "center" }}
+            >
+              <Text style={{ color: "white", fontSize: 12 }}>
+                Frame: {frameCounter} | Rings: {rings}
+              </Text>
+            </View>
+          </View>
         </GestureDetector>
       </View>
     </GestureHandlerRootView>

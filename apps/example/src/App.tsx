@@ -30,7 +30,6 @@ import {
   Stickers,
   FrostedCard,
   SpeedTest,
-  Video,
   Chat,
   LiquidGlass,
 } from "./Examples";
@@ -209,13 +208,6 @@ const App = () => {
             <Stack.Screen
               name="Transitions"
               component={Transitions}
-              options={{
-                header: () => null,
-              }}
-            />
-            <Stack.Screen
-              name="Video"
-              component={Video}
               options={{
                 header: () => null,
               }}
