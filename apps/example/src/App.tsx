@@ -22,6 +22,7 @@ import {
   Glassmorphism,
   Neumorphism,
   PerformanceDrawingTest,
+  FrameRewind,
   Wallpaper,
   Vertices,
   Wallet,
@@ -63,6 +64,7 @@ const linking: LinkingOptions<StackParamList> = {
       Animation: "animation",
       Reanimated: "reanimated",
       Performance: "performance",
+      FrameRewind: "frame-rewind",
       Tests: "test",
       Transitions: "transitions",
       Stickers: "stickers",
@@ -230,6 +232,13 @@ const App = () => {
             <Stack.Screen
               name="Performance"
               component={PerformanceDrawingTest}
+            />
+            <Stack.Screen
+              name="FrameRewind"
+              component={FrameRewind}
+              options={{
+                title: "🧪 Frame Rewind",
+              }}
             />
           </Stack.Navigator>
         </NavigationContainer>

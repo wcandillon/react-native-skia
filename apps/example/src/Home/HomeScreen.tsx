@@ -116,6 +116,11 @@ export const HomeScreen = () => {
         route="Transitions"
       />
       <HomeScreenButton
+        title="🧪 Frame Rewind"
+        description="Gesture glide regression repro"
+        route="FrameRewind"
+      />
+      <HomeScreenButton
         title="🏎 Performance"
         description="Drawing Performance Test"
         route="Performance"
