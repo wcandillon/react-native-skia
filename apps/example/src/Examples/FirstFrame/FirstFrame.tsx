@@ -22,7 +22,7 @@ export const FirstFrame = () => {
     if (isRunning) {
       const interval = setInterval(() => {
         setCount((value) => value + 1);
-      }, 16); // 100ms = 10 times per second
+      }, 100); // 16ms = 60 times per second
 
       return () => clearInterval(interval);
     }
@@ -32,7 +32,8 @@ export const FirstFrame = () => {
   return (
     <View style={styles.container}>
       <Button
-        onPress={() => setIsRunning((prev) => !prev)}
+        // onPress={() => setIsRunning((prev) => !prev)}
+        onPress={() => setCount((prev) => prev + 1)}
         title={isRunning ? "PAUSE" : "START"}
       />
       <Text>{count}</Text>

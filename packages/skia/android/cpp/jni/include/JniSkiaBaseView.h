@@ -57,6 +57,10 @@ protected:
         _skiaAndroidView->getSkiaView()->getNativeId());
   }
 
+  std::shared_ptr<RNSkBaseAndroidView> getSkiaAndroidView() {
+    return _skiaAndroidView;
+  }
+
 private:
   JniSkiaManager *_manager;
   std::shared_ptr<RNSkBaseAndroidView> _skiaAndroidView;
