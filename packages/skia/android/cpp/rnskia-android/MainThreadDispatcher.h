@@ -70,8 +70,7 @@ public:
 private:
   MainThreadDispatcher() {
     ALooper *currentLooper = ALooper_forThread();
-    ALooper *primaryLooper = ALooper_mainLooper();
-    mainLooper = primaryLooper != nullptr ? primaryLooper : currentLooper;
+    mainLooper = currentLooper;
     if (!mainLooper) {
       mainLooper = ALooper_prepare(ALOOPER_PREPARE_ALLOW_NON_CALLBACKS);
     }
