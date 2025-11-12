@@ -40,17 +40,16 @@ public:
   bool isOnMainThread() { return ALooper_forThread() == mainLooper; }
 
   void post(std::function<void()> task) {
-    // TODO: this is disabled for now but we can clean this up
-    // if (ALooper_forThread() == mainLooper) {
-    //     task();
-    // } else {
+    if (ALooper_forThread() == mainLooper) {
+        task();
+    } else {
     {
       std::lock_guard<std::mutex> lock(queueMutex);
       taskQueue.push(std::move(task));
     }
     char wake = 1;
     write(messagePipe[1], &wake, 1);
-    // }
+    }
   }
 
   ~MainThreadDispatcher() {
