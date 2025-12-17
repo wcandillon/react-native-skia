@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload screenshot
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ios-simulator-screenshot-${{ github.run_id }}
           path: /Users/runner/skia-test-screenshot-ios.png
@@ -347,7 +347,7 @@ jobs:
 
       - name: Upload screenshot
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: android-emulator-screenshot-${{ github.run_id }}
           path: /Users/runner/skia-test-screenshot-android.png
@@ -480,7 +480,7 @@ jobs:
 
       - name: Upload screenshot
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: web-screenshot-${{ github.run_id }}
           path: /Users/runner/skia-test-screenshot-web.png

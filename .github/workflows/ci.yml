@@ -95,7 +95,7 @@ jobs:
         run: yarn pack
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: package-tgz
           path: packages/skia/package.tgz
@@ -161,7 +161,7 @@ jobs:
           df -h
 
       - name: Cache turborepo for Android
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-android-${{ hashFiles('yarn.lock') }}
@@ -192,7 +192,7 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > $GITHUB_WORKSPACE/apps/example/android/local.properties
 
       - name: Cache Gradle
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: |
             ~/.gradle/wrapper
@@ -208,7 +208,7 @@ jobs:
           yarn turbo run build:android --concurrency 1
 
       - name: Cache apk
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         env:
           cache-name: cache-apk
         with:
@@ -216,7 +216,7 @@ jobs:
           key: apk-${{ github.sha }}
 
       - name: Upload Android APK artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: android-example-apk
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
@@ -256,7 +256,7 @@ jobs:
 
       - name: Restore APK
         id: cache-apk
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb
         with:
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
           key: apk-${{ github.sha }}
@@ -285,13 +285,13 @@ jobs:
             # Run tests
             cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns Paragraphs
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: failure()
         with:
           path: packages/skia/src/__tests__/snapshots/
           name: tests-snapshots-screenshots
 
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: failure()
         with:
           path: apps/docs/static/
@@ -313,7 +313,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache turborepo for iOS
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-ios-${{ hashFiles('yarn.lock') }}
@@ -360,7 +360,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache turborepo for macOS
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-macos-${{ hashFiles('yarn.lock') }}

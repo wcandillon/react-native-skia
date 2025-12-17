@@ -26,7 +26,7 @@
       "android-arm64-v8a": "6be2711ca4c31523d381420e98cabfe7e7939e246975c7b427968d5dd3b62be9",
       "android-x86": "888934ddc34f431c7fac5628f633dc11a4e84d68c41adb33307ae7586cc7b0b5",
       "android-x86_64": "2180a5be52d51bbf1dabaf95051ed0ce422b047157bcda6e486657c2c7b87ceb",
-      "apple-xcframeworks": "cb50d9c85c9f02389ecc433912145e4a7ce2277bfe26a69dd7f7a9db74c9e276"
+      "apple-xcframeworks": "6c9e4c565977acaf9d4f4b113050cfe8f9804602fd3cd4ec982c605fa7b040e6"
     }
   },
   "description": "High-performance React Native Graphics using Skia",

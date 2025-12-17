@@ -59,10 +59,11 @@ console.log(
   `📦 Downloading Skia prebuilt binaries for ${releaseTag}`
 );
 
-const runCommand = (command, args) => {
+const runCommand = (command, args, options = {}) => {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ["ignore", "inherit", "inherit"],
+      ...options,
     });
     child.on("error", (error) => {
       reject(error);
@@ -75,6 +76,75 @@ const runCommand = (command, args) => {
       }
     });
   });
+};
+
+const runCommandWithOutput = (command, args, options = {}) => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    child.on("error", (error) => {
+      reject(error);
+    });
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout.trim());
+      } else {
+        reject(new Error(`Command ${command} exited with code ${code}: ${stderr}`));
+      }
+    });
+  });
+};
+
+const skiaDir = path.resolve(__dirname, "../../../externals/skia");
+
+const checkoutSkiaBranch = async (version) => {
+  const branchName = `chrome/${version}`;
+
+  // Check if the skia directory exists and is a git repo
+  // (won't exist when installed via npm - submodule is not included in the package)
+  if (!fs.existsSync(skiaDir) || !fs.existsSync(path.join(skiaDir, ".git"))) {
+    return;
+  }
+
+  console.log(`🔀 Checking out Skia branch: ${branchName}`);
+
+  try {
+    // Get current branch/commit
+    const currentRef = await runCommandWithOutput("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: skiaDir });
+
+    if (currentRef === branchName) {
+      console.log(`   ✓ Already on branch ${branchName}`);
+      return;
+    }
+
+    // Fetch the branch from origin
+    console.log(`   Fetching branch ${branchName} from origin...`);
+    try {
+      await runCommand("git", ["fetch", "origin", `${branchName}:${branchName}`], { cwd: skiaDir });
+    } catch (e) {
+      // Branch might already exist locally, try to update it
+      await runCommand("git", ["fetch", "origin", branchName], { cwd: skiaDir });
+    }
+
+    // Checkout the branch (use -f to discard local changes in the submodule)
+    console.log(`   Checking out ${branchName}...`);
+    await runCommand("git", ["checkout", "-f", branchName], { cwd: skiaDir });
+
+    console.log(`   ✓ Successfully checked out ${branchName}`);
+  } catch (error) {
+    console.error(`   ⚠️  Failed to checkout branch ${branchName}: ${error.message}`);
+    console.error("   Headers may not match the prebuilt binaries!");
+  }
 };
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -359,6 +429,9 @@ const clearDirectory = (directory) => {
 };
 
 const main = async () => {
+  // Ensure the skia submodule is on the correct branch for copying headers
+  await checkoutSkiaBranch(skiaVersion);
+
   // Check if binaries are installed and checksums match
   if (areBinariesInstalled() && verifyChecksums()) {
     console.log("✅ Prebuilt binaries already installed with matching checksums, skipping download");
