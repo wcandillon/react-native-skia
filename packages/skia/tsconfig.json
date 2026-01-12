@@ -5,6 +5,7 @@
       "dom",
       "es2024"
     ],
+    "types": ["@webgpu/types"],
     "module": "es2022",
     "noEmit": true,
     "allowJs": true,

@@ -122,6 +122,7 @@
     "@types/react": "^19.0.0",
     "@types/react-reconciler": "0.28.9",
     "@types/ws": "8.5.3",
+    "@webgpu/types": "^0.1.68",
     "eslint": "9.36.0",
     "eslint-config-react-native-wcandillon": "4.0.1",
     "eslint-plugin-import": "2.32.0",
@@ -139,6 +140,7 @@
     "semantic-release": "^24.1.0",
     "semantic-release-yarn": "^3.0.2",
     "ts-jest": "29.4.3",
+    "ts-morph": "^27.0.2",
     "tsx": "^4.20.5",
     "typescript": "^5.2.2",
     "ws": "8.18.0"
