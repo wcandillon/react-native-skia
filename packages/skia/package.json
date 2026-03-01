@@ -15,7 +15,6 @@
   "module": "lib/module/index.js",
   "types": "lib/typescript/index.d.ts",
   "files": [
-    "scripts/copy-skia-binaries.mjs",
     "scripts/setup-canvaskit.js",
     "src/**",
     "lib/**",
@@ -50,8 +49,7 @@
     "clang-format-android": "find android/cpp/ -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-common": "find cpp/ \\( -path 'cpp//skia' -prune \\) -o \\( -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' \\) -print | xargs clang-format -i",
     "workflow-copy-libs": "tsx ./scripts/workflow-copy-libs.ts",
-    "cpplint": "cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/ios --exclude=package/android/build --exclude=package/node_modules --recursive package",
-    "postinstall": "node ./scripts/copy-skia-binaries.mjs"
+    "cpplint": "cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/ios --exclude=package/android/build --exclude=package/node_modules --recursive package"
   },
   "repository": {
     "type": "git",

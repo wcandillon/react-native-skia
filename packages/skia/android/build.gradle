@@ -56,7 +56,41 @@ static def findNodeModules(baseDir) {
   throw new GradleException("React-Native-Skia: Failed to find node_modules/ path!")
 }
 
+// Resolve npm package path using Node.js resolution (handles monorepos, pnpm, etc.)
+def resolveSkiaPackage(packageName) {
+  def cmdResult = providers.exec {
+    commandLine "node", "-e", "console.log(require.resolve('${packageName}/package.json'))"
+    ignoreExitValue = true
+  }
+
+  if (cmdResult.result.get().exitValue == 0) {
+    def packageJsonPath = cmdResult.standardOutput.asText.get().trim()
+    return new File(packageJsonPath).parent
+  }
+
+  // Fallback: walk up directories looking for node_modules
+  def basePath = projectDir.toPath().normalize()
+  while (basePath) {
+    def candidate = Paths.get(basePath.toString(), "node_modules", packageName)
+    if (candidate.toFile().exists() && new File(candidate.toString(), "package.json").exists()) {
+      return candidate.toString()
+    }
+    basePath = basePath.getParent()
+  }
+
+  throw new GradleException("React-Native-Skia: Could not find ${packageName}. Make sure you have run 'yarn install' or 'npm install'.")
+}
+
 def nodeModules = findNodeModules(projectDir)
+
+// Resolve Skia Android package
+def useGraphite = System.getenv("SK_GRAPHITE") == "1" || System.getenv("SK_GRAPHITE") == "true"
+def skiaPackageName = useGraphite ? "react-native-skia-graphite-android" : "react-native-skia-android"
+def skiaAndroidPackage = resolveSkiaPackage(skiaPackageName)
+def skiaLibsPath = "${skiaAndroidPackage}/libs"
+
+logger.warn("react-native-skia: SK_GRAPHITE: ${useGraphite}")
+logger.warn("react-native-skia: Skia Android package: ${skiaAndroidPackage}")
 logger.warn("react-native-skia: node_modules/ found at: ${nodeModules}")
 
 def sourceBuild = false
@@ -158,6 +192,8 @@ android {
                           "-DREACT_NATIVE_DIR=${defaultDir}",
                           "-DNODE_MODULES_DIR=${nodeModules}",
                           "-DPREBUILT_DIR=${prebuiltDir}",
+                          "-DSKIA_LIBS_PATH=${skiaLibsPath}",
+                          "-DSK_GRAPHITE=${useGraphite ? 'ON' : 'OFF'}",
                           "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 
             }
@@ -175,7 +211,7 @@ android {
 
     sourceSets.main {
         jniLibs {
-            srcDirs += ['../libs/android']
+            srcDirs += [skiaLibsPath]
         }
         java {
             if (!isNewArchitectureEnabled()) {

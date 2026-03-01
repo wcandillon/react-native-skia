@@ -4,75 +4,93 @@ require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
-# Check if Skia prebuilt binaries are installed
-# The postinstall script copies these from the react-native-skia-* npm packages
-skia_libs_path = File.join(__dir__, "libs/apple/ios")
-unless File.exist?(skia_libs_path) && Dir.glob(File.join(skia_libs_path, "*.xcframework")).any?
+# Resolve npm package path using Node.js resolution (handles monorepos, pnpm, etc.)
+def resolve_skia_package(package_name, required: true)
+  begin
+    # Use node to resolve the package - this handles all edge cases:
+    # - Hoisted packages in monorepos
+    # - pnpm symlinked packages
+    # - Yarn PnP
+    # - Different node_modules structures
+    result = `node -e "console.log(require.resolve('#{package_name}/package.json'))" 2>/dev/null`.strip
+    if $?.success? && !result.empty?
+      return File.dirname(result)
+    end
+  rescue => e
+    # Node resolution failed
+  end
+
+  # Fallback: walk up directories looking for node_modules
+  current = __dir__
+  while current != "/"
+    candidate = File.join(current, "node_modules", package_name)
+    if File.exist?(File.join(candidate, "package.json"))
+      return candidate
+    end
+    current = File.dirname(current)
+  end
+
+  if required
+    Pod::UI.puts "\n"
+    Pod::UI.puts "ERROR: Could not find #{package_name}".red
+    Pod::UI.puts "Make sure you have run 'yarn install' or 'npm install'".red
+    Pod::UI.puts "\n"
+    raise "#{package_name} not found. Please install dependencies."
+  end
+
+  nil
+end
+
+# Check if Graphite is enabled
+use_graphite = false
+if ENV['SK_GRAPHITE']
+  use_graphite = ENV['SK_GRAPHITE'] == '1' || ENV['SK_GRAPHITE'].downcase == 'true'
+  puts "-- SK_GRAPHITE: using environment variable (#{use_graphite ? 'ON' : 'OFF'})"
+else
+  puts "-- SK_GRAPHITE: OFF (set SK_GRAPHITE=1 to enable)"
+end
+
+# Resolve Skia binary packages
+prefix = use_graphite ? "react-native-skia-graphite" : "react-native-skia"
+
+ios_package = resolve_skia_package("#{prefix}-apple-ios")
+macos_package = resolve_skia_package("#{prefix}-apple-macos")
+tvos_package = use_graphite ? nil : resolve_skia_package("#{prefix}-apple-tvos", required: false)
+
+puts "-- Skia iOS package: #{ios_package}"
+puts "-- Skia macOS package: #{macos_package}"
+puts "-- Skia tvOS package: #{tvos_package}" if tvos_package
+
+# Verify the packages contain the expected files
+ios_libs_path = File.join(ios_package, "libs")
+unless File.exist?(ios_libs_path) && Dir.glob(File.join(ios_libs_path, "*.xcframework")).any?
   Pod::UI.puts "\n"
   Pod::UI.puts "┌─────────────────────────────────────────────────────────────────────────────┐".red
   Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  ERROR: Skia prebuilt binaries not found!                                   │".red
+  Pod::UI.puts "│  ERROR: Skia prebuilt binaries not found in #{prefix}-apple-ios!            │".red
   Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  The postinstall script has not run. Some package managers require          │".red
-  Pod::UI.puts "│  explicit trust for packages with postinstall scripts.                      │".red
-  Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  To fix this:                                                               │".red
-  Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  • npm/yarn classic: Run 'npm rebuild @shopify/react-native-skia' or        │".red
-  Pod::UI.puts "│                       reinstall the package                                 │".red
-  Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  • bun: Run 'bun add --trust @shopify/react-native-skia'                    │".red
-  Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  • pnpm: Add to package.json:                                               │".red
-  Pod::UI.puts "│          \"pnpm\": { \"onlyBuiltDependencies\": [\"@shopify/react-native-skia\"] }│".red
-  Pod::UI.puts "│          Then reinstall the package                                         │".red
-  Pod::UI.puts "│                                                                             │".red
-  Pod::UI.puts "│  See: https://shopify.github.io/react-native-skia/docs/getting-started/installation │".red
+  Pod::UI.puts "│  The package was found but doesn't contain the expected xcframeworks.      │".red
+  Pod::UI.puts "│  Try reinstalling: yarn add #{prefix}-apple-ios                             │".red
   Pod::UI.puts "│                                                                             │".red
   Pod::UI.puts "└─────────────────────────────────────────────────────────────────────────────┘".red
   Pod::UI.puts "\n"
-  raise "Skia prebuilt binaries not found. Please run the postinstall script."
-end
-
-# Check if Graphite is available
-# Detection method priority:
-# 1. SK_GRAPHITE environment variable (explicit override, fastest)
-# 2. Marker file in libs directory (set during Skia build)
-# 3. Default to OFF (no slow nm symbol detection)
-use_graphite = false
-
-if ENV['SK_GRAPHITE']
-  # Explicit override via environment variable
-  use_graphite = ENV['SK_GRAPHITE'] == '1' || ENV['SK_GRAPHITE'].downcase == 'true'
-  puts "-- SK_GRAPHITE detection: using environment variable (#{use_graphite ? 'ON' : 'OFF'})"
-elsif File.exist?(File.join(__dir__, "libs/apple/graphite.enabled"))
-  # Marker file indicates Graphite-enabled build
-  use_graphite = true
-  puts "-- SK_GRAPHITE detection: marker file found"
-else
-  puts "-- SK_GRAPHITE detection: no marker file, assuming OFF"
-end
-
-if use_graphite
-  puts "-- SK_GRAPHITE: ON"
-else
-  puts "-- SK_GRAPHITE: OFF"
+  raise "Skia xcframeworks not found in #{ios_libs_path}"
 end
 
 # Set preprocessor definitions based on GRAPHITE flag
-preprocessor_defs = use_graphite ? 
-  '$(inherited) SK_GRAPHITE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1' : 
+preprocessor_defs = use_graphite ?
+  '$(inherited) SK_GRAPHITE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1' :
   '$(inherited) SK_METAL=1 SK_GANESH=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1'
 
-# Define framework names (without paths)
+# Define framework names
 framework_names = ['libskia', 'libsvg', 'libskshaper', 'libskparagraph',
                    'libskunicode_core', 'libskunicode_libgrapheme',
                    'libskottie', 'libsksg']
 
-# Build platform-specific framework paths
-ios_frameworks = framework_names.map { |f| "libs/apple/ios/#{f}.xcframework" }
-tvos_frameworks = framework_names.map { |f| "libs/apple/tvos/#{f}.xcframework" }
-osx_frameworks = framework_names.map { |f| "libs/apple/macos/#{f}.xcframework" }
+# Build platform-specific framework paths (absolute paths to npm packages)
+ios_frameworks = framework_names.map { |f| "#{ios_package}/libs/#{f}.xcframework" }
+osx_frameworks = framework_names.map { |f| "#{macos_package}/libs/#{f}.xcframework" }
+tvos_frameworks = tvos_package ? framework_names.map { |f| "#{tvos_package}/libs/#{f}.xcframework" } : []
 
 Pod::Spec.new do |s|
   s.name         = "react-native-skia"
@@ -84,7 +102,7 @@ Pod::Spec.new do |s|
   s.homepage     = "https://github.com/shopify/react-native-skia"
   s.license      = "MIT"
   s.license    = { :type => "MIT", :file => "LICENSE.md" }
-  s.authors      = { 
+  s.authors      = {
     "Christian Falch" => "christian.falch@gmail.com",
     "William Candillon" => "wcandillon@gmail.com"
   }
@@ -101,7 +119,7 @@ Pod::Spec.new do |s|
 
   s.frameworks = ['MetalKit', 'AVFoundation', 'AVKit', 'CoreMedia']
 
-  # Platform-specific vendored frameworks
+  # Platform-specific vendored frameworks (absolute paths to npm packages)
   s.ios.vendored_frameworks = ios_frameworks
   s.osx.vendored_frameworks = osx_frameworks
 
@@ -112,7 +130,7 @@ Pod::Spec.new do |s|
 
   # All iOS cpp/h files
   s.source_files = [
-    "apple/**/*.{h,c,cc,cpp,m,mm,swift}",  
+    "apple/**/*.{h,c,cc,cpp,m,mm,swift}",
     "cpp/**/*.{h,cpp}"
   ]
 
@@ -124,7 +142,7 @@ Pod::Spec.new do |s|
     'cpp/rnskia/RNImageProvider.h',
     'cpp/rnwgpu/**/*.{h,cpp}'
   ]
-  s.exclude_files = graphite_exclusions unless use_graphite 
+  s.exclude_files = graphite_exclusions unless use_graphite
 
   if defined?(install_modules_dependencies()) != nil
     install_modules_dependencies(s)
@@ -137,4 +155,3 @@ Pod::Spec.new do |s|
     s.dependency "React-Core"
   end
 end
-

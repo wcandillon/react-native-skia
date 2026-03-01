@@ -4,72 +4,36 @@ cmake_minimum_required(VERSION 3.4.1)
 set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 20)
 
-# Import prebuilt SKIA libraries path
-set (SKIA_LIBS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../libs/android/${ANDROID_ABI}")
+# SKIA_LIBS_PATH is passed from Gradle (resolved via Node.js package resolution)
+# Append the ABI to get the full path
+set (SKIA_LIBS_PATH "${SKIA_LIBS_PATH}/${ANDROID_ABI}")
 
 # Check if Skia prebuilt binaries are installed
-# The postinstall script copies these from the react-native-skia-* npm packages
 if(NOT EXISTS "${SKIA_LIBS_PATH}/libskia.a")
     message("")
     message("┌─────────────────────────────────────────────────────────────────────────────┐")
     message("│                                                                             │")
     message("│  ERROR: Skia prebuilt binaries not found!                                   │")
     message("│                                                                             │")
-    message("│  The postinstall script has not run. Some package managers require          │")
-    message("│  explicit trust for packages with postinstall scripts.                      │")
+    message("│  Could not find libskia.a at: ${SKIA_LIBS_PATH}                             │")
     message("│                                                                             │")
-    message("│  To fix this:                                                               │")
-    message("│                                                                             │")
-    message("│  • npm/yarn classic: Run 'npm rebuild @shopify/react-native-skia' or        │")
-    message("│                       reinstall the package                                 │")
-    message("│                                                                             │")
-    message("│  • bun: Run 'bun add --trust @shopify/react-native-skia'                    │")
-    message("│                                                                             │")
-    message("│  • pnpm: Add to package.json:                                               │")
-    message("│          \"pnpm\": { \"onlyBuiltDependencies\": [\"@shopify/react-native-skia\"] }│")
-    message("│          Then reinstall the package                                         │")
+    message("│  Make sure react-native-skia-android is installed:                          │")
+    message("│    yarn add react-native-skia-android                                       │")
     message("│                                                                             │")
     message("│  See: https://shopify.github.io/react-native-skia/docs/getting-started/installation │")
     message("│                                                                             │")
     message("└─────────────────────────────────────────────────────────────────────────────┘")
     message("")
-    message(FATAL_ERROR "Skia prebuilt binaries not found at ${SKIA_LIBS_PATH}. Please run the postinstall script.")
+    message(FATAL_ERROR "Skia prebuilt binaries not found at ${SKIA_LIBS_PATH}")
 endif()
 
-# Import libskia first so we can check for symbols
+# Import libskia
 add_library(skia STATIC IMPORTED)
 set_property(TARGET skia PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskia.a")
 
-# Check if Graphite is available
-# Detection method priority:
-# 1. SK_GRAPHITE environment variable (explicit override, fastest)
-# 2. Marker file in libs directory (set during Skia build)
-# 3. Fall back to nm symbol detection (slow on some CI systems)
-set(SK_GRAPHITE_AVAILABLE OFF)
-
-if(DEFINED ENV{SK_GRAPHITE})
-    # Explicit override via environment variable
-    if($ENV{SK_GRAPHITE})
-        set(SK_GRAPHITE_AVAILABLE ON)
-        message("-- SK_GRAPHITE detection: using environment variable (ON)")
-    else()
-        message("-- SK_GRAPHITE detection: using environment variable (OFF)")
-    endif()
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../libs/android/graphite.enabled")
-    # Marker file indicates Graphite-enabled build
-    set(SK_GRAPHITE_AVAILABLE ON)
-    message("-- SK_GRAPHITE detection: marker file found")
-else()
-    message("-- SK_GRAPHITE detection: no marker file, assuming OFF")
-endif()
-
-if(SK_GRAPHITE_AVAILABLE)
-    set(SK_GRAPHITE ON)
-    message("-- SK_GRAPHITE: ON")
-else()
-    set(SK_GRAPHITE OFF)
-    message("-- SK_GRAPHITE: OFF")
-endif()
+# SK_GRAPHITE is passed from Gradle
+message("-- SKIA_LIBS_PATH: ${SKIA_LIBS_PATH}")
+message("-- SK_GRAPHITE: ${SK_GRAPHITE}")
 
 string(APPEND CMAKE_CXX_FLAGS " -DSK_BUILD_FOR_ANDROID -DSK_DISABLE_LEGACY_SHAPER_FACTORY -DSK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 
@@ -100,7 +64,7 @@ message("-- PREBUILT: " ${PREBUILT_DIR})
 message("-- BUILD   : " ${build_DIR})
 message("-- LIBRN   : " ${LIBRN_DIR})
 
-link_directories(../libs/android/${ANDROID_ABI}/)
+link_directories(${SKIA_LIBS_PATH}/)
 
 if(SK_GRAPHITE)
     add_definitions(-DSK_GRAPHITE)
