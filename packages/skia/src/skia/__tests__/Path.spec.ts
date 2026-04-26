@@ -348,6 +348,80 @@ describe("Path", () => {
     const p4 = interpolatePaths(1.1, [0, 1], [p1, p2], "clamp");
     expect(p4.toCmds()).toEqual(p2.toCmds());
   });
+  it("renders a heart curve using drawPath", () => {
+    const { surface, canvas, Skia } = setupSkia(512, 512);
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("white"));
+    canvas.drawPaint(paint);
+
+    const cx = 256,
+      cy = 256,
+      s = 380;
+    const builder = Skia.PathBuilder.Make();
+    builder.moveTo(cx, cy + s * 0.45);
+    builder.cubicTo(
+      cx - s * 0.55,
+      cy + s * 0.05,
+      cx - s * 0.65,
+      cy - s * 0.45,
+      cx,
+      cy - s * 0.25
+    );
+    builder.cubicTo(
+      cx + s * 0.65,
+      cy - s * 0.45,
+      cx + s * 0.55,
+      cy + s * 0.05,
+      cx,
+      cy + s * 0.45
+    );
+    builder.close();
+
+    const heartPaint = Skia.Paint();
+    heartPaint.setAntiAlias(true);
+    heartPaint.setColor(Skia.Color("#E91E63"));
+    canvas.drawPath(builder.build(), heartPaint);
+    processResult(surface, "snapshots/path/heart.png");
+  });
+
+  it("renders a heart curve (heart2)", () => {
+    const { surface, canvas, Skia } = setupSkia(4096, 4096);
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("white"));
+    canvas.drawPaint(paint);
+
+    const cx = 512,
+      cy = 520,
+      s = 400;
+    const builder = Skia.PathBuilder.Make();
+    builder.moveTo(cx, cy + s * 0.45);
+    // Left lobe
+    builder.cubicTo(
+      cx - s * 0.55,
+      cy + s * 0.05,
+      cx - s * 0.65,
+      cy - s * 0.45,
+      cx,
+      cy - s * 0.25
+    );
+    // Right lobe
+    builder.cubicTo(
+      cx + s * 0.65,
+      cy - s * 0.45,
+      cx + s * 0.55,
+      cy + s * 0.05,
+      cx,
+      cy + s * 0.45
+    );
+    builder.close();
+
+    const heartPaint = Skia.Paint();
+    heartPaint.setAntiAlias(true);
+    heartPaint.setColor(Skia.Color("#E91E63"));
+    canvas.drawPath(builder.build(), heartPaint);
+    processResult(surface, "snapshots/path/heart2.png");
+  });
+
   it("should be possible to call dispose on a path", () => {
     const { Skia } = setupSkia();
     using path = makePath(Skia, (b) =>

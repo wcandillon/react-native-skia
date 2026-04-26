@@ -30,7 +30,6 @@ export const Neumorphism = () => {
           color="lightblue"
         />
       </Group>
-
       <Group>
         <Paint>
           <Shadow dx={12} dy={12} blur={25} color="#93b8c4" inner />

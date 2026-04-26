@@ -20,14 +20,12 @@ import { useLoop } from "../../../components/Animations";
 
 import { Title } from "./components/Title";
 import { ProgressBar } from "./components/ProgressBar";
-// import { Snow } from "./components/icons/Snow";
-// import { Control } from "./components/Control";
-// import { Wind } from "./components/icons/Wind";
-// import { Sun } from "./components/icons/Sun";
-// import { Power } from "./components/icons/Power";
-import { Mode } from "./components/Mode";
-import { Control } from "./components/Control";
 import { Snow } from "./components/icons/Snow";
+import { Control } from "./components/Control";
+import { Wind } from "./components/icons/Wind";
+import { Sun } from "./components/icons/Sun";
+import { Power } from "./components/icons/Power";
+import { Mode } from "./components/Mode";
 
 const width = 390;
 const height = 844;
@@ -76,6 +74,36 @@ export const Neumorphism = () => {
           font={font}
         >
           <Snow />
+        </Control>
+        <Control
+          x={0}
+          y={528}
+          label="Heat"
+          active={false}
+          progress={progress}
+          font={font}
+        >
+          <Sun />
+        </Control>
+        <Control
+          x={0}
+          y={592}
+          label="Fan"
+          active={false}
+          progress={progress}
+          font={font}
+        >
+          <Wind />
+        </Control>
+        <Control
+          x={0}
+          y={656}
+          label="Power"
+          active={true}
+          progress={progress}
+          font={font}
+        >
+          <Power />
         </Control>
         <Mode translateY={translateY} />
       </Group>
