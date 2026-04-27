@@ -105,7 +105,7 @@ export const Neumorphism = () => {
         >
           <Power />
         </Control>
-        <Mode translateY={translateY} />
+        {/* <Mode translateY={translateY} /> */}
       </Group>
     </Canvas>
   );

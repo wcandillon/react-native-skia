@@ -5,6 +5,10 @@ import {
   Text,
   Circle,
   LinearGradient,
+  Box,
+  BoxShadow,
+  rect,
+  rrect,
 } from "@shopify/react-native-skia";
 import type { SkFont } from "@shopify/react-native-skia";
 import type { ReactNode } from "react";
@@ -57,6 +61,36 @@ export const Control = ({
           />
           <Circle cx={r} cy={r} r={r} />
         </Group>
+        <Box box={rrect(rect(0, 0, 2 * r, 2 * r), r, r)} color="#1E2023">
+          <BoxShadow
+            dx={-4}
+            dy={-4}
+            blur={20}
+            color="rgba(255, 255, 255, 0.25)"
+            inner
+          />
+          <BoxShadow
+            dx={4}
+            dy={4}
+            blur={20}
+            color="rgba(0, 0, 0, 0.7)"
+            inner
+          />
+          <BoxShadow
+            dx={-2}
+            dy={-2}
+            blur={10}
+            color="rgba(255, 255, 255, 0.2)"
+            inner
+          />
+          <BoxShadow
+            dx={2}
+            dy={2}
+            blur={10}
+            color="rgba(0, 0, 0, 0.55)"
+            inner
+          />
+        </Box>
         <Group>
           <Circle
             cx={r}

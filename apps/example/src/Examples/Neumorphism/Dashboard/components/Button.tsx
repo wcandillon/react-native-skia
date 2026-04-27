@@ -1,9 +1,13 @@
 import {
   Blur,
+  Box,
+  BoxShadow,
   Circle,
   Group,
   LinearGradient,
   RadialGradient,
+  rect,
+  rrect,
   vec,
 } from "@shopify/react-native-skia";
 import type { ReactNode } from "react";
@@ -42,6 +46,39 @@ export const Button = ({ x, y, children }: ButtonProps) => {
         />
         <Circle cx={6 + r1} cy={6 + r1} r={r1} opacity={0.5} />
       </Group>
+      <Box
+        box={rrect(rect(PADDING, PADDING, 2 * r1, 2 * r1), r1, r1)}
+        color="#1F2225"
+      >
+        <BoxShadow
+          dx={-5}
+          dy={-5}
+          blur={22}
+          color="rgba(255, 255, 255, 0.35)"
+          inner
+        />
+        <BoxShadow
+          dx={5}
+          dy={5}
+          blur={22}
+          color="rgba(0, 0, 0, 0.75)"
+          inner
+        />
+        <BoxShadow
+          dx={-2}
+          dy={-2}
+          blur={10}
+          color="rgba(255, 255, 255, 0.2)"
+          inner
+        />
+        <BoxShadow
+          dx={2}
+          dy={2}
+          blur={10}
+          color="rgba(0, 0, 0, 0.5)"
+          inner
+        />
+      </Box>
       <Group>
         <LinearGradient
           start={vec(PADDING, PADDING)}

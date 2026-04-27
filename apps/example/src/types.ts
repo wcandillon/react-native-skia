@@ -18,6 +18,7 @@ export type StackParamList = {
   Aurora: undefined;
   Glassmorphism: undefined;
   Neumorphism: undefined;
+  RasterDashboard: undefined;
   Wallpaper: undefined;
   Wallet: undefined;
   Graphs: undefined;

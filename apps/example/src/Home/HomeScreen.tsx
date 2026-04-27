@@ -104,6 +104,11 @@ export const HomeScreen = () => {
         route="Neumorphism"
       />
       <HomeScreenButton
+        title="🐢 Raster Dashboard"
+        description="Skia ImageFilter port — slow on purpose"
+        route="RasterDashboard"
+      />
+      <HomeScreenButton
         title="🍏 Wallpaper"
         description="Wallpaper"
         route="Wallpaper"

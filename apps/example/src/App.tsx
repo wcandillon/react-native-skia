@@ -21,6 +21,7 @@ import {
   Matrix,
   Glassmorphism,
   Neumorphism,
+  RasterDashboard,
   PerformanceDrawingTest,
   Wallpaper,
   Vertices,
@@ -60,6 +61,7 @@ const linking: LinkingOptions<StackParamList> = {
       Chess: "chess",
       Glassmorphism: "glassmorphism",
       Neumorphism: "neumorphism",
+      RasterDashboard: "raster-dashboard",
       Wallpaper: "wallpaper",
       Wallet: "wallet",
       Graphs: "graphs",
@@ -112,7 +114,7 @@ const App = () => {
             screenOptions={{
               headerLeft: HeaderLeft,
             }}
-            initialRouteName={CI ? "Tests" : "Neumorphism"}
+            initialRouteName={CI ? "Tests" : "Home"}
           >
             <Stack.Screen
               name="Home"
@@ -194,6 +196,13 @@ const App = () => {
               }}
             />
             <Stack.Screen name="Neumorphism" component={Neumorphism} />
+            <Stack.Screen
+              name="RasterDashboard"
+              component={RasterDashboard}
+              options={{
+                header: () => null,
+              }}
+            />
             <Stack.Screen
               name="Wallpaper"
               component={Wallpaper}

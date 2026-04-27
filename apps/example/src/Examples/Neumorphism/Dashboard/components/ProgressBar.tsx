@@ -51,21 +51,65 @@ export const ProgressBar = ({ progress }: ProgressBarProps) => {
         <Box box={fromCircle(12 + 85, 12 + 85, 85)}>
           <BoxShadow dx={18} dy={18} blur={65} color="#141415" />
           <BoxShadow dx={-18} dy={-18} blur={65} color="#485057" />
+          <BoxShadow
+            dx={-12}
+            dy={-12}
+            blur={45}
+            color="rgba(72, 80, 87, 0.6)"
+            inner
+          />
+          <BoxShadow
+            dx={12}
+            dy={12}
+            blur={45}
+            color="rgba(0, 0, 0, 0.7)"
+            inner
+          />
         </Box>
       </Group>
       <Box box={fromCircle(37 + 60, 37 + 60, 60)} color="#32363B">
         <BoxShadow
           dx={-25}
           dy={-25}
-          blur={60}
-          color="rgba(59, 68, 81, 0.5)"
+          blur={120}
+          color="rgba(59, 68, 81, 0.7)"
           inner
         />
         <BoxShadow
           dx={25}
           dy={25}
-          blur={80}
-          color="rgba(0, 0, 0, 0.55)"
+          blur={160}
+          color="rgba(0, 0, 0, 0.7)"
+          inner
+        />
+        <BoxShadow
+          dx={-15}
+          dy={-15}
+          blur={70}
+          color="rgba(110, 120, 130, 0.5)"
+          inner
+        />
+        <BoxShadow
+          dx={15}
+          dy={15}
+          blur={90}
+          color="rgba(0, 0, 0, 0.6)"
+          inner
+        />
+      </Box>
+      <Box box={fromCircle(c.x, c.y, 42)} color="#2A2D31">
+        <BoxShadow
+          dx={-6}
+          dy={-6}
+          blur={28}
+          color="rgba(120, 130, 140, 0.45)"
+          inner
+        />
+        <BoxShadow
+          dx={6}
+          dy={6}
+          blur={28}
+          color="rgba(0, 0, 0, 0.7)"
           inner
         />
       </Box>

@@ -30,17 +30,31 @@ export const Slider = ({ x, y, progress }: SliderProps) => {
     <Group transform={[{ translate: [x, y] }]}>
       <Box box={rrect(rect(0, 3.5, 192, 8), 25, 25)} color="#1B1B1D">
         <BoxShadow
-          dx={-1.25}
-          dy={-1.25}
-          blur={6}
+          dx={-2}
+          dy={-2}
+          blur={25}
           color="rgba(255, 255, 255, 0.8)"
           inner
         />
         <BoxShadow
-          dx={1.25}
-          dy={1.25}
-          blur={6}
+          dx={2}
+          dy={2}
+          blur={25}
           color="rgba(0, 0, 0, 0.8)"
+          inner
+        />
+        <BoxShadow
+          dx={-1}
+          dy={-1}
+          blur={12}
+          color="rgba(255, 255, 255, 0.6)"
+          inner
+        />
+        <BoxShadow
+          dx={1}
+          dy={1}
+          blur={12}
+          color="rgba(0, 0, 0, 0.6)"
           inner
         />
       </Box>
