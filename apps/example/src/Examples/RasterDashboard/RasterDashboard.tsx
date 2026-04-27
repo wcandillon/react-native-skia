@@ -153,7 +153,7 @@ export const RasterDashboard = () => {
   );
   const tempFont = useFont(
     require("../Neumorphism/Dashboard/components/SF-Mono-Semibold.otf"),
-    32
+    22
   );
 
   const time = useSharedValue(0);
@@ -162,6 +162,10 @@ export const RasterDashboard = () => {
   });
 
   const arcProgress = useDerivedValue(() => (time.value % 3) / 3);
+
+  const tempText = useDerivedValue(
+    () => `${Math.round(22 + 6 * Math.sin(time.value * 0.5))}°C`
+  );
 
   const p0 = useDerivedValue(
     () => (Math.sin(time.value * SLIDER_SPEEDS[0] + SLIDER_PHASES[0]) + 1) / 2
@@ -340,7 +344,7 @@ export const RasterDashboard = () => {
         </Box>
 
         <Text
-          text="00°C"
+          text={tempText}
           x={RING_CX - tempW / 2}
           y={RING_CY + tempFont.getSize() / 3}
           font={tempFont}
