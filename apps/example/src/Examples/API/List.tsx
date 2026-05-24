@@ -47,6 +47,10 @@ export const examples = [
     title: "📺 View Snapshot",
   },
   {
+    screen: "SnapshotDemo",
+    title: "📸 Snapshot HWUI vs Legacy",
+  },
+  {
     screen: "PathEffect",
     title: "⭐️ Path Effect",
   },

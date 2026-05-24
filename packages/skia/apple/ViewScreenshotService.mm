@@ -1,12 +1,7 @@
 #import "ViewScreenshotService.h"
+
+#import <CoreGraphics/CoreGraphics.h>
 #import <QuartzCore/QuartzCore.h>
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdocumentation"
-
-#include "include/core/SkData.h"
-
-#pragma clang diagnostic pop
 
 @implementation ViewScreenshotService {
   RCTUIManager *_uiManager;
@@ -19,76 +14,73 @@
   return self;
 }
 
-- (sk_sp<SkImage>)screenshotOfViewWithTag:(NSNumber *)viewTag {
+- (CVPixelBufferRef)pixelBufferOfViewWithTag:(NSNumber *)viewTag {
 #if !TARGET_OS_OSX
-  // Find view corresponding to the tag
-  auto view = [_uiManager viewForReactTag:viewTag];
-  if (view == NULL) {
+  UIView *view = [_uiManager viewForReactTag:viewTag];
+  if (view == nil) {
     RCTFatal(RCTErrorWithMessage(@"Could not find view with tag"));
-    return nullptr;
+    return NULL;
   }
 
-  // Get size
-  CGSize size = view.frame.size;
-
-  // Setup context
-  UIGraphicsImageRendererFormat *format =
-      [UIGraphicsImageRendererFormat defaultFormat];
-  format.opaque = NO;
-  format.preferredRange = UIGraphicsImageRendererFormatRangeStandard;
-
-  UIGraphicsImageRenderer *renderer =
-      [[UIGraphicsImageRenderer alloc] initWithSize:size format:format];
-
-  // Render to context - this is now the only part of this function that shows
-  // up in the profiler!
-  UIImage *image = [renderer
-      imageWithActions:^(UIGraphicsImageRendererContext *_Nonnull context) {
-        [view drawViewHierarchyInRect:(CGRect){CGPointZero, size}
-                   afterScreenUpdates:YES];
-      }];
-
-  // Convert from UIImage -> CGImage -> SkImage
-  CGImageRef cgImage = image.CGImage;
-  if (!cgImage) {
-    return nullptr;
+  CGSize pointSize = view.frame.size;
+  CGFloat scale = view.window.screen.scale;
+  if (scale <= 0) {
+    scale = [UIScreen mainScreen].scale;
+  }
+  NSUInteger pxW = (NSUInteger)(pointSize.width * scale);
+  NSUInteger pxH = (NSUInteger)(pointSize.height * scale);
+  if (pxW == 0 || pxH == 0) {
+    return NULL;
   }
 
-  // Get some info about the image
-  auto width = CGImageGetWidth(cgImage);
-  auto height = CGImageGetHeight(cgImage);
-  auto bytesPerRow = CGImageGetBytesPerRow(cgImage);
-
-  // Convert from UIImage -> SkImage, start by getting the pixels directly from
-  // the CGImage:
-  auto dataRef = CGDataProviderCopyData(CGImageGetDataProvider(cgImage));
-  if (!dataRef) {
-    return nullptr;
+  NSDictionary *surfaceProps = @{
+    (id)kIOSurfaceWidth : @(pxW),
+    (id)kIOSurfaceHeight : @(pxH),
+    (id)kIOSurfaceBytesPerElement : @4,
+    (id)kIOSurfacePixelFormat : @((uint32_t)kCVPixelFormatType_32BGRA),
+  };
+  IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)surfaceProps);
+  if (surface == NULL) {
+    return NULL;
   }
-  auto length = CFDataGetLength(dataRef);
-  void *data = CFDataGetMutableBytePtr((CFMutableDataRef)dataRef);
 
-  // Now we'll capture the data in an SkData object and control releasing it:
-  auto skData = SkData::MakeWithProc(
-      data, length,
-      [](const void *ptr, void *context) {
-        CFDataRef dataRef = (CFDataRef)context;
-        CFRelease(dataRef);
-      },
-      (void *)dataRef);
+  IOSurfaceLock(surface, 0, NULL);
+  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CGContextRef ctx = CGBitmapContextCreate(
+      IOSurfaceGetBaseAddress(surface), pxW, pxH, 8,
+      IOSurfaceGetBytesPerRow(surface), cs,
+      kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+  CGColorSpaceRelease(cs);
+  if (ctx == NULL) {
+    IOSurfaceUnlock(surface, 0, NULL);
+    CFRelease(surface);
+    return NULL;
+  }
 
-  // Make SkImageInfo
-  // We're using kBGRA_8888_SkColorType since this is what we get when the
-  // UIGraphicsImageRenderer uses the standard format (the extended is using
-  // 64bits so it is not suitable for us).
-  SkImageInfo info =
-      SkImageInfo::Make(static_cast<int>(width), static_cast<int>(height),
-                        kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+  // CG origin is bottom-left, UIKit's drawViewHierarchyInRect: expects
+  // top-left. Translate + flip + scale to retina in one CTM.
+  CGContextTranslateCTM(ctx, 0, pxH);
+  CGContextScaleCTM(ctx, scale, -scale);
 
-  // ... and then create the SkImage itself!
-  return SkImages::RasterFromData(info, skData, bytesPerRow);
+  UIGraphicsPushContext(ctx);
+  [view drawViewHierarchyInRect:(CGRect){CGPointZero, pointSize}
+             afterScreenUpdates:YES];
+  UIGraphicsPopContext();
+
+  CGContextRelease(ctx);
+  IOSurfaceUnlock(surface, 0, NULL);
+
+  CVPixelBufferRef pixelBuffer = NULL;
+  CVReturn r =
+      CVPixelBufferCreateWithIOSurface(NULL, surface, NULL, &pixelBuffer);
+  CFRelease(surface);
+  if (r != kCVReturnSuccess || pixelBuffer == NULL) {
+    return NULL;
+  }
+  return pixelBuffer;
 #else
-  return nullptr;
+  (void)viewTag;
+  return NULL;
 #endif // !TARGET_OS_OSX
 }
 

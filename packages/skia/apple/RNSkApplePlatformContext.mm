@@ -384,8 +384,30 @@ void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
 
 sk_sp<SkImage>
 RNSkApplePlatformContext::takeScreenshotFromViewTag(size_t viewTag) {
-  return [_screenshotService
-      screenshotOfViewWithTag:[NSNumber numberWithLong:viewTag]];
+  CVPixelBufferRef pixelBuffer = [_screenshotService
+      pixelBufferOfViewWithTag:[NSNumber numberWithLong:viewTag]];
+  if (pixelBuffer == NULL) {
+    return nullptr;
+  }
+
+  sk_sp<SkImage> image;
+#if defined(SK_GRAPHITE)
+  // DawnContext::MakeImageFromBuffer reads the IOSurface out of the
+  // CVPixelBuffer and wraps it as a premultiplied Skia texture.
+  image = DawnContext::getInstance().MakeImageFromBuffer((void *)pixelBuffer);
+#else
+  // Ganesh: wrap the IOSurface-backed CVPixelBuffer as a Metal-textured
+  // SkImage with kPremul (the view tree may have transparency).
+  image = SkiaCVPixelBufferUtils::RGB::makeSkImageFromCVPixelBuffer(
+      MetalContext::getInstance().getDevice(),
+      MetalContext::getInstance().getDirectContext(), pixelBuffer,
+      kPremul_SkAlphaType);
+#endif
+  // The Skia-side wrapper (CVMetalTexture or Dawn SharedTextureMemory)
+  // transitively retains the underlying IOSurface, so we can drop our local
+  // CVPixelBuffer reference here.
+  CFRelease(pixelBuffer);
+  return image;
 }
 
 } // namespace RNSkia

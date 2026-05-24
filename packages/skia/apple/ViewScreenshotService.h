@@ -1,6 +1,7 @@
 #pragma once
 
 #import <CoreFoundation/CoreFoundation.h>
+#import <CoreVideo/CoreVideo.h>
 #if !TARGET_OS_OSX
 #import <UIKit/UIKit.h>
 #else
@@ -20,6 +21,12 @@
 }
 
 - (instancetype)initWithUiManager:(RCTUIManager *)uiManager;
-- (sk_sp<SkImage>)screenshotOfViewWithTag:(NSNumber *)viewTag;
+
+// Renders the view identified by `viewTag` into a fresh IOSurface-backed
+// CVPixelBuffer at the screen's native scale, BGRA, premultiplied alpha.
+// Returns a +1 retained CVPixelBufferRef the caller must release, or NULL
+// on failure (view not found, zero size, allocation failure).
+- (CVPixelBufferRef)pixelBufferOfViewWithTag:(NSNumber *)viewTag
+    CF_RETURNS_RETAINED;
 
 @end

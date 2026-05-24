@@ -25,6 +25,7 @@ import { PictureViewExample } from "./PictureView";
 import { OnLayoutDemo } from "./OnLayout";
 import { OnSize } from "./OnSize";
 import { Snapshot } from "./Snapshot";
+import { SnapshotDemo } from "./SnapshotDemo";
 import { IconsExample } from "./Icons";
 import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
@@ -108,6 +109,13 @@ export const API = () => {
         component={Snapshot}
         options={{
           title: "📺 View Snapshot",
+        }}
+      />
+      <Stack.Screen
+        name="SnapshotDemo"
+        component={SnapshotDemo}
+        options={{
+          title: "📸 Snapshot HWUI vs Legacy",
         }}
       />
       <Stack.Screen

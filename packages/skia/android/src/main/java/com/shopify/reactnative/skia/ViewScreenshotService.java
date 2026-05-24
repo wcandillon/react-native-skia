@@ -47,6 +47,8 @@ public class ViewScreenshotService {
             return null;
         }
 
+        Log.i(TAG, "Used legacy software-canvas snapshot path for view tag " + tag);
+
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         final Canvas canvas = new Canvas(bitmap);
         final Paint paint = createPaint();

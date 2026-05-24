@@ -227,6 +227,10 @@ public:
   }
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override {
+    // The Java side picks between the HWUI HardwareRenderer + RenderNode
+    // path (API 29+) and the legacy ViewScreenshotService software canvas,
+    // materialises the result to a software Bitmap, and hands it to JNI.
+    // We always receive a raster SkImage here.
     return _jniPlatformContext->takeScreenshotFromViewTag(tag);
   }
 

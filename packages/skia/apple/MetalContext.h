@@ -106,6 +106,8 @@ public:
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }
 
+  id<MTLDevice> getDevice() { return _device; }
+
 private:
   id<MTLDevice> _device = nullptr;
   id<MTLCommandQueue> _commandQueue = nullptr;

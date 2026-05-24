@@ -81,11 +81,15 @@ public:
   public:
     /**
      Creates a GPU-backed Skia Texture (SkImage) with the given RGB
-     CVPixelBuffer.
+     CVPixelBuffer. `alphaType` defaults to `kOpaque_SkAlphaType` to match
+     the original camera-frame use case; callers wrapping buffers that may
+     contain transparency (e.g. view snapshots) should pass
+     `kPremul_SkAlphaType`.
      */
-    static sk_sp<SkImage>
-    makeSkImageFromCVPixelBuffer(id<MTLDevice> device, GrDirectContext *context,
-                                 CVPixelBufferRef pixelBuffer);
+    static sk_sp<SkImage> makeSkImageFromCVPixelBuffer(
+        id<MTLDevice> device, GrDirectContext *context,
+        CVPixelBufferRef pixelBuffer,
+        SkAlphaType alphaType = kOpaque_SkAlphaType);
 
   private:
     static SkColorType getCVPixelBufferColorType(CVPixelBufferRef pixelBuffer);

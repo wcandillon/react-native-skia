@@ -29,6 +29,12 @@ describe("Snapshot", () => {
   itRunsE2eOnly("clipping test 2", async () => {
     await testSnapshot("Snapshot7");
   });
+  itRunsE2eOnly("should not double-apply root padding", async () => {
+    await testSnapshot("Snapshot8");
+  });
+  itRunsE2eOnly("should render elevation/shadow", async () => {
+    await testSnapshot("Snapshot9");
+  });
   // itRunsE2eOnly("should respect ScrollView offset and padding", async () => {
   //   await testSnapshot("Snapshot5");
   // });

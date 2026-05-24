@@ -136,7 +136,7 @@ SkColorType SkiaCVPixelBufferUtils::RGB::getCVPixelBufferColorType(
 
 sk_sp<SkImage> SkiaCVPixelBufferUtils::RGB::makeSkImageFromCVPixelBuffer(
     id<MTLDevice> device, GrDirectContext *context,
-    CVPixelBufferRef pixelBuffer) {
+    CVPixelBufferRef pixelBuffer, SkAlphaType alphaType) {
   // 1. Get Skia color type for RGB buffer
   SkColorType colorType = getCVPixelBufferColorType(pixelBuffer);
 
@@ -147,7 +147,7 @@ sk_sp<SkImage> SkiaCVPixelBufferUtils::RGB::makeSkImageFromCVPixelBuffer(
   // 3. Convert to image with manual memory cleanup
   return SkImages::BorrowTextureFrom(
       context, texture->toGrBackendTexture(), kTopLeft_GrSurfaceOrigin,
-      colorType, kOpaque_SkAlphaType, nullptr,
+      colorType, alphaType, nullptr,
       [](void *texture) { delete (TextureHolder *)texture; }, (void *)texture);
 }
 

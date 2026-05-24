@@ -143,6 +143,11 @@ const Component = () => {
         <RoundedRect x={0} y={20} width={80} height={80} r={10} color="blue" />
       </Canvas>
       <Text>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;👆 This is a Skia Canvas!</Text>
+      <View style={styles.elevatedCard}>
+        <Text style={styles.elevatedCardText}>
+          Elevated card (Android elevation: 12)
+        </Text>
+      </View>
       <Interleaving />
     </ScrollView>
   );
@@ -189,6 +194,22 @@ const styles = StyleSheet.create({
   innerContainer: {
     backgroundColor: "#ff8c0044",
     transform: [{ translateX: 50 }, { rotate: "45deg" }],
+  },
+  elevatedCard: {
+    marginTop: 16,
+    marginHorizontal: 20,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "white",
+    elevation: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 8,
+  },
+  elevatedCardText: {
+    color: "black",
+    textAlign: "center",
   },
 });
 

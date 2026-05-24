@@ -25,6 +25,13 @@ public class PlatformContext {
 
     private final String TAG = "PlatformContext";
 
+    // Debug toggle: flip to `true` and rebuild Android to force every
+    // makeImageFromView() call through the legacy software-canvas
+    // (ViewScreenshotService) path, bypassing the API 29+ HWUI/RenderNode
+    // pipeline. Used to compare the legacy bugs (missing shadows, padding
+    // double-count, broken rounded clipping) against the new path.
+    private static final boolean DEBUG_FORCE_LEGACY_SNAPSHOT = true;
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public PlatformContext(ReactContext reactContext) {
@@ -49,6 +56,21 @@ public class PlatformContext {
 
     @DoNotStrip
     Object takeScreenshotFromViewTag(int tag) {
+        if (!DEBUG_FORCE_LEGACY_SNAPSHOT
+                && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            try {
+                android.graphics.Bitmap bitmap =
+                        RenderNodeScreenshotService.makeViewSnapshot(mContext, tag);
+                if (bitmap != null) {
+                    return bitmap;
+                }
+            } catch (Throwable t) {
+                android.util.Log.w(
+                        TAG,
+                        "HWUI snapshot failed, falling back to legacy bitmap path",
+                        t);
+            }
+        }
         return ViewScreenshotService.makeViewScreenshotFromTag(mContext, tag);
     }
 
