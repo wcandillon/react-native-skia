@@ -68,5 +68,44 @@
                 "timestamp": 1515694810
             }
         ]
+    },
+    {
+        "id": "5b21d8a1-9cf4-4b59-9e21-7c4d7a3f7b22",
+        "user": "monicaa",
+        "read": false,
+        "messages": [
+            {
+                "id": "73f59f44-7d10-4f4d-9d3a-1ad59f7b4a8b",
+                "me": false,
+                "message": "Just landed in Paris! ✈️ Want to grab coffee tomorrow morning?",
+                "timestamp": 1515698500
+            }
+        ]
+    },
+    {
+        "id": "f1d8a214-2f1c-4f6e-9a3a-b8c1d2e3f4a5",
+        "user": "jmitch",
+        "read": true,
+        "messages": [
+            {
+                "id": "6c2a1e57-bb04-4b85-9d0b-3c5b0a7d9e1c",
+                "me": true,
+                "message": "Pushed the PR, can you take a look when you have a minute? 🙏",
+                "timestamp": 1515699000
+            }
+        ]
+    },
+    {
+        "id": "9e3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c",
+        "user": "andrea.schmidt",
+        "read": false,
+        "messages": [
+            {
+                "id": "ab12cd34-5678-90ef-1234-56789abcdef0",
+                "me": false,
+                "message": "Sending you the demo recording 🎥 — the snapshot effect looks 🔥",
+                "timestamp": 1515700000
+            }
+        ]
     }
 ]

@@ -4,7 +4,6 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../ColorSchemeContext";
 import { spacing } from "../theme";
 
-import { Avatar } from "./Avatar";
 import { ColorSchemeButton } from "./ColorSchemeButton";
 
 export const Header = () => {
@@ -13,12 +12,23 @@ export const Header = () => {
     <View>
       <View style={styles.topRow}>
         <View style={styles.leftCluster}>
-          <Avatar id="derek.russel" />
+          <View
+            style={[
+              styles.iconButton,
+              { backgroundColor: theme.secondaryBackground },
+            ]}
+          >
+            <Text style={[styles.iconGlyph, { color: theme.mainForeground }]}>
+              ☰
+            </Text>
+          </View>
           <Text style={[styles.title, { color: theme.mainForeground }]}>
             Chats
           </Text>
         </View>
-        <ColorSchemeButton />
+        <View style={styles.rightCluster}>
+          <ColorSchemeButton />
+        </View>
       </View>
       <View style={styles.searchWrap}>
         <TextInput
@@ -47,11 +57,26 @@ const styles = StyleSheet.create({
   leftCluster: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.s,
+  },
+  rightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconGlyph: {
+    fontSize: 18,
+    fontWeight: "600",
   },
   title: {
     fontSize: 30,
     fontWeight: "700",
-    marginLeft: spacing.s,
   },
   searchWrap: {
     paddingHorizontal: spacing.m,

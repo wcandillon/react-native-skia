@@ -50,7 +50,7 @@ interface ColorSchemeContextValue extends ColorScheme {
 
 const defaultValue: ColorScheme = {
   active: false,
-  colorScheme: "light",
+  colorScheme: "dark",
   overlay1: null,
   overlay2: null,
 };
