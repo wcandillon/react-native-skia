@@ -53,17 +53,21 @@ class SkiaTextureLoader extends THREE.Loader<THREE.DataTexture> {
         }
         const width = image.width();
         const height = image.height();
-        // SkImage.readPixels throws "Not implemented yet" under SK_GRAPHITE.
-        // Draw into an offscreen surface and read pixels off the canvas instead.
-        const surface = Skia.Surface.MakeOffscreen(width, height);
+        // SkImage.readPixels throws "Not implemented yet" under SK_GRAPHITE,
+        // so draw into a CPU-backed surface and read pixels off its canvas.
+        // (Surface.MakeOffscreen is GPU-backed and the sync readback returns
+        // null under Graphite.)
+        const surface = Skia.Surface.Make(width, height);
         if (!surface) {
           throw new Error(
-            `SkiaTextureLoader: Surface.MakeOffscreen failed for ${url}`
+            `SkiaTextureLoader: Surface.Make failed for ${url}`
           );
         }
         const canvas = surface.getCanvas();
         canvas.drawImage(image, 0, 0);
-        surface.flush();
+        // No flush needed: raster surfaces write to memory synchronously, and
+        // Surface.flush() under SK_GRAPHITE crashes for CPU surfaces because
+        // it dereferences a null recorder (see JsiSkSurface::flush).
         const pixels = canvas.readPixels(0, 0, {
           width,
           height,
