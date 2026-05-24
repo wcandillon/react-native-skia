@@ -99,14 +99,14 @@ fn fs(@location(0) uv: vec2f) -> @location(0) vec4f {
 }
 `;
 
-const NUM_CUBES = 7;
-const CUBE_RADIUS = 2.8;
-const CUBE_SCALE = 0.65;
+const NUM_CUBES = 5;
+const CUBE_RADIUS = 1.5;
+const CUBE_SCALE = 0.45;
 const CUBE_ORBIT_SPEED = 0.35;
 const PLANE_W = 6;
 const PLANE_H = 3;
-const CAM_RADIUS = 13;
-const CAM_Y = 1.5;
+const CAM_RADIUS = 4;
+const CAM_Y = 0.6;
 
 const TEX_W = 1024;
 const TEX_H = 512;

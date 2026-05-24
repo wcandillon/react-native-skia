@@ -73,6 +73,7 @@ export const WebGPU = () => {
         component={TextPlane}
         options={{
           title: "Text Plane",
+          header: () => null,
         }}
       />
     </Stack.Navigator>
