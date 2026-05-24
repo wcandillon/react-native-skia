@@ -65,10 +65,9 @@ fn fs(@location(0) color: vec4f) -> @location(0) vec4f {
 `;
 
 const NUM_CUBES = 32;
-const START_SCALE = 24;
+const START_SCALE = 50;
 const ANIM_DELAY_MS = 5000;
 const ANIM_DURATION_MS = 2500;
-const TEXT_OFFSET_Y = -64;
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
 type Instance = {
@@ -90,21 +89,25 @@ export function ClippedText() {
   const canvasWidth = Math.floor(width * pd);
   const canvasHeight = Math.floor(height * pd);
 
+  // Single shared font size so HELLO and SKIA render at the same scale.
+  // The multiplier leaves visible left/right padding around HELLO (a 5-letter
+  // word that would otherwise span ~edge-to-edge).
+  const fontSize = Math.min(width * 0.28, 200);
   const bigFont = useFont(
     require("../../Tests/assets/Roboto-Medium.ttf"),
-    Math.min(width * 0.45, 220)
+    fontSize
   );
   const subFont = useFont(
     require("../../Tests/assets/Roboto-Medium.ttf"),
-    Math.min(width * 0.18, 80)
+    fontSize
   );
 
   const clipData = useMemo(() => {
     if (!bigFont || !subFont) {
       return null;
     }
-    const title = "SKIA";
-    const sub = "GRAPHITE";
+    const title = "HELLO";
+    const sub = "SKIA";
     const tb = bigFont.measureText(title);
     const sb = subFont.measureText(sub);
     const tMetrics = bigFont.getMetrics();
@@ -132,8 +135,7 @@ export function ClippedText() {
     // screen — proper vertical centering of the actual ink, not metric guesses.
     const bounds = p1.computeTightBounds();
     const tx = width / 2 - (bounds.x + bounds.width / 2);
-    const ty =
-      height / 2 - (bounds.y + bounds.height / 2) + TEXT_OFFSET_Y;
+    const ty = height / 2 - (bounds.y + bounds.height / 2);
     p1.transform(
       processTransform3d([
         { translateX: tx },
@@ -141,14 +143,15 @@ export function ClippedText() {
       ])
     );
 
-    // Pivot at the center of the "I" glyph of SKIA (3rd letter — a thin
-    // vertical stem). The point is reliably inside ink, so at high zoom the
-    // scaled mask covers the screen instead of opening onto a gap.
-    const ids = bigFont.getGlyphIDs(title);
-    const widths = bigFont.getGlyphWidths(ids);
+    // Pivot inside the "I" glyph of the SKIA subtitle — a narrow vertical
+    // stem that's fully solid, so the scaled mask reliably covers the screen
+    // even at extreme zoom. SKIA is "S K I A" so the I is the 3rd glyph.
+    const subIds = subFont.getGlyphIDs(sub);
+    const subWidths = subFont.getGlyphWidths(subIds);
     const iCenterXLocal =
-      -tb.width / 2 + widths[0] + widths[1] + widths[2] / 2;
-    const iCenterYLocal = (tMetrics.ascent + tMetrics.descent) / 2;
+      -sb.width / 2 + subWidths[0] + subWidths[1] + subWidths[2] / 2;
+    const iCenterYLocal =
+      subBaseline + (sMetrics.ascent + sMetrics.descent) / 2;
     const pivotX = iCenterXLocal + tx;
     const pivotY = iCenterYLocal + ty;
 

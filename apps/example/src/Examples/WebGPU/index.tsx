@@ -57,6 +57,7 @@ export const WebGPU = () => {
         component={ClippedText}
         options={{
           title: "Clipped Text",
+          header: () => null,
         }}
       />
       <Stack.Screen
