@@ -8,6 +8,39 @@ const assetRegistryPath = path.resolve(
   root,
   "node_modules/react-native-web/dist/modules/AssetRegistry/index",
 );
+const threePackagePath = path.resolve(root, "node_modules/three");
+const r3fPath = path.resolve(root, "node_modules/@react-three/fiber");
+
+function resolveThree(moduleName) {
+  if (moduleName === "three" || moduleName === "three/webgpu") {
+    return {
+      filePath: path.resolve(threePackagePath, "build/three.webgpu.js"),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "three/tsl") {
+    return {
+      filePath: path.resolve(threePackagePath, "build/three.tsl.js"),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName.startsWith("three/addons/")) {
+    return {
+      filePath: path.resolve(
+        threePackagePath,
+        "examples/jsm/" + moduleName.replace("three/addons/", "") + ".js",
+      ),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "@react-three/fiber") {
+    return {
+      filePath: path.resolve(r3fPath, "dist/react-three-fiber.esm.js"),
+      type: "sourceFile",
+    };
+  }
+  return null;
+}
 
 const metroConfig = makeMetroConfig({
   transformer: {
@@ -19,6 +52,29 @@ const metroConfig = makeMetroConfig({
     }),
   },
 });
+
+metroConfig.resolver = metroConfig.resolver ?? {};
+metroConfig.resolver.extraNodeModules = {
+  ...(metroConfig.resolver.extraNodeModules ?? {}),
+  three: threePackagePath,
+};
+metroConfig.resolver.assetExts = [
+  ...(metroConfig.resolver.assetExts ?? []),
+  "glb",
+  "gltf",
+  "jpg",
+  "bin",
+  "hdr",
+  "mp4",
+  "mov",
+];
+metroConfig.resolver.resolveRequest = (context, moduleName, platform) => {
+  const three = resolveThree(moduleName);
+  if (three) {
+    return three;
+  }
+  return defaultResolve(context, moduleName, platform);
+};
 
 function getWebMetroConfig(config) {
   config.resolver = config.resolver ?? {};

@@ -24,6 +24,10 @@ import {
   View,
   Text as RNText,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useSharedValue, withSpring } from "react-native-reanimated";
+
+import { snapPoint } from "../../components/Animations";
 
 import {
   cubeColorOffset,
@@ -90,8 +94,45 @@ export function BlurredSheet() {
   const canvasWidth = Math.floor(width * pd);
   const canvasHeight = Math.floor(height * pd);
 
-  const sheetHeight = Math.min(320, height * 0.45);
-  const sheetTop = height - sheetHeight - 24;
+  const sheetHeight = Math.min(height - 80, Math.max(height * 0.6, 360));
+  const expandedTop = height - sheetHeight - 24;
+  // How far down the sheet can be dragged before it's "collapsed". When
+  // collapsed, only the handle + a peek of the album/title remains visible.
+  const collapsedOffset = sheetHeight - 56;
+
+  // 0 = expanded, positive = pulled down toward collapsed. Starts collapsed
+  // so the user has to drag it up to reveal the music player.
+  const offsetY = useSharedValue(collapsedOffset);
+
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-10, 10])
+        .onChange((e) => {
+          offsetY.value = Math.max(
+            0,
+            Math.min(collapsedOffset, offsetY.value + e.changeY)
+          );
+        })
+        .onEnd((e) => {
+          const dest = snapPoint(offsetY.value, e.velocityY, [
+            0,
+            collapsedOffset,
+          ]);
+          offsetY.value = withSpring(dest, {
+            velocity: e.velocityY,
+            damping: 22,
+            stiffness: 180,
+            mass: 0.8,
+          });
+        }),
+    [collapsedOffset, offsetY]
+  );
+
+  // Read at render time. The WebGPU render loop calls setImage every frame,
+  // which re-renders this component, so we sample the gesture state at
+  // ~60fps without needing useDerivedValue wrappers everywhere.
+  const sheetTop = expandedTop + offsetY.value;
   const sheetRect = rrect(rect(16, sheetTop, width - 32, sheetHeight), 28, 28);
   const albumRect = rrect(rect(32, sheetTop + 28, 88, 88), 16, 16);
   const progressBg = rrect(rect(32, sheetTop + 156, width - 64, 6), 3, 3);
@@ -360,25 +401,10 @@ export function BlurredSheet() {
   const total = formatTime(180);
 
   return (
-    <View style={styles.container}>
-      <Canvas style={StyleSheet.absoluteFill}>
-        {image && (
-          <SkiaImage
-            image={image}
-            x={0}
-            y={0}
-            width={width}
-            height={height}
-            fit="cover"
-          />
-        )}
-
-        {/* Frosted sheet — a clipped, blurred copy of the WebGPU image,
-            tinted dark. Equivalent visual to a backdrop blur, but the blur
-            is applied to the image directly so we don't need the destination
-            surface texture to have TextureBinding usage. */}
-        {image && (
-          <Group clip={sheetRect}>
+    <GestureDetector gesture={pan}>
+      <View style={styles.container}>
+        <Canvas style={StyleSheet.absoluteFill}>
+          {image && (
             <SkiaImage
               image={image}
               x={0}
@@ -386,111 +412,128 @@ export function BlurredSheet() {
               width={width}
               height={height}
               fit="cover"
-            >
-              <Blur blur={24} mode="clamp" />
-            </SkiaImage>
-            <Fill color="rgba(18, 18, 26, 0.55)" />
-          </Group>
-        )}
-
-        {/* Sheet handle */}
-        <RoundedRect
-          x={width / 2 - 20}
-          y={sheetTop + 10}
-          width={40}
-          height={4}
-          r={2}
-          color="rgba(255,255,255,0.45)"
-        />
-
-        {/* Album art */}
-        <Group>
-          <RoundedRect rect={albumRect}>
-            <LinearGradient
-              start={vec(32, sheetTop + 28)}
-              end={vec(120, sheetTop + 116)}
-              colors={["#ff6a88", "#ff99ac", "#ffc3a0"]}
             />
-          </RoundedRect>
-          <Circle
-            cx={76}
-            cy={sheetTop + 72}
-            r={14}
-            color="rgba(255,255,255,0.85)"
-          />
-          <Circle cx={76} cy={sheetTop + 72} r={4} color="#1a1a22" />
-        </Group>
+          )}
 
-        {/* Title + artist */}
-        {titleFont && (
-          <Text
-            x={140}
-            y={sheetTop + 60}
-            text="Graphite Lights"
-            font={titleFont}
+          {/* Frosted sheet — a clipped, blurred copy of the WebGPU image,
+            tinted dark. Equivalent visual to a backdrop blur, but the blur
+            is applied to the image directly so we don't need the destination
+            surface texture to have TextureBinding usage. */}
+          {image && (
+            <Group clip={sheetRect}>
+              <SkiaImage
+                image={image}
+                x={0}
+                y={0}
+                width={width}
+                height={height}
+                fit="cover"
+              >
+                <Blur blur={24} mode="clamp" />
+              </SkiaImage>
+              <Fill color="rgba(18, 18, 26, 0.55)" />
+            </Group>
+          )}
+
+          {/* Sheet handle */}
+          <RoundedRect
+            x={width / 2 - 20}
+            y={sheetTop + 10}
+            width={40}
+            height={4}
+            r={2}
+            color="rgba(255,255,255,0.45)"
+          />
+
+          {/* Album art */}
+          <Group>
+            <RoundedRect rect={albumRect}>
+              <LinearGradient
+                start={vec(32, sheetTop + 28)}
+                end={vec(120, sheetTop + 116)}
+                colors={["#ff6a88", "#ff99ac", "#ffc3a0"]}
+              />
+            </RoundedRect>
+            <Circle
+              cx={76}
+              cy={sheetTop + 72}
+              r={14}
+              color="rgba(255,255,255,0.85)"
+            />
+            <Circle cx={76} cy={sheetTop + 72} r={4} color="#1a1a22" />
+          </Group>
+
+          {/* Title + artist */}
+          {titleFont && (
+            <Text
+              x={140}
+              y={sheetTop + 60}
+              text="Graphite Lights"
+              font={titleFont}
+              color="white"
+            />
+          )}
+          {subtitleFont && (
+            <Text
+              x={140}
+              y={sheetTop + 84}
+              text="Skia x WebGPU"
+              font={subtitleFont}
+              color="rgba(255,255,255,0.7)"
+            />
+          )}
+
+          {/* Progress bar */}
+          <RoundedRect rect={progressBg} color="rgba(255,255,255,0.18)" />
+          <RoundedRect
+            x={32}
+            y={sheetTop + 156}
+            width={(width - 64) * progress}
+            height={6}
+            r={3}
             color="white"
           />
-        )}
-        {subtitleFont && (
-          <Text
-            x={140}
-            y={sheetTop + 84}
-            text="Skia x WebGPU"
-            font={subtitleFont}
-            color="rgba(255,255,255,0.7)"
-          />
-        )}
+          <Circle cx={playheadX} cy={sheetTop + 159} r={7} color="white" />
 
-        {/* Progress bar */}
-        <RoundedRect rect={progressBg} color="rgba(255,255,255,0.18)" />
-        <RoundedRect
-          x={32}
-          y={sheetTop + 156}
-          width={(width - 64) * progress}
-          height={6}
-          r={3}
-          color="white"
-        />
-        <Circle cx={playheadX} cy={sheetTop + 159} r={7} color="white" />
+          {/* Time labels */}
+          {timeFont && (
+            <Text
+              x={32}
+              y={sheetTop + 184}
+              text={elapsed}
+              font={timeFont}
+              color="rgba(255,255,255,0.6)"
+            />
+          )}
+          {timeFont && (
+            <Text
+              x={width - 64}
+              y={sheetTop + 184}
+              text={total}
+              font={timeFont}
+              color="rgba(255,255,255,0.6)"
+            />
+          )}
 
-        {/* Time labels */}
-        {timeFont && (
-          <Text
-            x={32}
-            y={sheetTop + 184}
-            text={elapsed}
-            font={timeFont}
-            color="rgba(255,255,255,0.6)"
-          />
-        )}
-        {timeFont && (
-          <Text
-            x={width - 64}
-            y={sheetTop + 184}
-            text={total}
-            font={timeFont}
-            color="rgba(255,255,255,0.6)"
-          />
-        )}
-
-        {/* Controls row */}
-        <Group
-          transform={[
-            { translateX: width / 2 },
-            { translateY: sheetTop + 230 },
-          ]}
-        >
-          <Group transform={[{ translateX: -80 }]}>
-            <Path path={prevIcon} color="white" />
+          {/* Controls row */}
+          <Group
+            transform={[
+              { translateX: width / 2 },
+              { translateY: sheetTop + 230 },
+            ]}
+          >
+            <Group transform={[{ translateX: -80 }]}>
+              <Path path={prevIcon} color="white" />
+            </Group>
+            <Circle cx={0} cy={0} r={28} color="white" />
+            <Path path={playIcon} color="#0a0a14" />
+            <Group transform={[{ translateX: 80 }]}>
+              <Path path={nextIcon} color="white" />
+            </Group>
           </Group>
-          <Circle cx={0} cy={0} r={28} color="white" />
-          <Path path={playIcon} color="#0a0a14" />
-          <Group transform={[{ translateX: 80 }]}>
-            <Path path={nextIcon} color="white" />
-          </Group>
-        </Group>
-      </Canvas>
-    </View>
+        </Canvas>
+      </View>
+    </GestureDetector>
   );
 }
 

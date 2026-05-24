@@ -137,6 +137,13 @@ export const HomeScreen = () => {
           route="WebGPU"
         />
       )}
+      {hasWebGPU && (
+        <HomeScreenButton
+          title="🎲 three.js"
+          description="three.js on WebGPU"
+          route="ThreeJS"
+        />
+      )}
     </ScrollView>
   );
 };

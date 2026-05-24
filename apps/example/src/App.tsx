@@ -9,6 +9,10 @@ import { FiberProvider } from "its-fine";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { enableScreens } from "react-native-screens";
 
+// The two lines below are needed by three.js
+import "fast-text-encoding";
+window.parent = window;
+
 import {
   ReanimatedExample,
   API,
@@ -35,6 +39,7 @@ import {
   LiquidGlass,
   Pictures,
   WebGPU,
+  ThreeJS,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -75,6 +80,7 @@ const linking: LinkingOptions<StackParamList> = {
       Chat: "chat",
       Pictures: "pictures",
       WebGPU: "webgpu",
+      ThreeJS: "threejs",
     },
   },
   prefixes: ["rnskia://"],
@@ -240,6 +246,13 @@ const App = () => {
             <Stack.Screen
               name="WebGPU"
               component={WebGPU}
+              options={{
+                header: () => null,
+              }}
+            />
+            <Stack.Screen
+              name="ThreeJS"
+              component={ThreeJS}
               options={{
                 header: () => null,
               }}
