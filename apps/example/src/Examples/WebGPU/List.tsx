@@ -21,6 +21,22 @@ export const examples = [
     title: "Textured Cube",
     description: "Rotating 3D cube with texture mapping",
   },
+  {
+    screen: "BlurredSheet",
+    title: "Blurred Sheet",
+    description:
+      "WebGPU scene behind a Skia frosted bottom sheet (backdrop blur)",
+  },
+  {
+    screen: "ClippedText",
+    title: "Clipped Text",
+    description: "WebGPU scene revealed through a Skia text path clip",
+  },
+  {
+    screen: "LayeredCubes",
+    title: "Layered Cubes",
+    description: "WebGPU back layer, Skia text, WebGPU front layer on top",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

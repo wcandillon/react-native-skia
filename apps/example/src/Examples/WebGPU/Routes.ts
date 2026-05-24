@@ -3,4 +3,7 @@ export type Routes = {
   Wireframes: undefined;
   Triangle: undefined;
   TexturedCube: undefined;
+  BlurredSheet: undefined;
+  ClippedText: undefined;
+  LayeredCubes: undefined;
 };

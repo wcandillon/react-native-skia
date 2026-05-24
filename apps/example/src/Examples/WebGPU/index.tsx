@@ -6,6 +6,9 @@ import { List } from "./List";
 import { Triangle } from "./Triangle";
 import { Wireframes } from "./Wireframes";
 import { TexturedCube } from "./TexturedCube";
+import { BlurredSheet } from "./BlurredSheet";
+import { ClippedText } from "./ClippedText";
+import { LayeredCubes } from "./LayeredCubes";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -40,6 +43,27 @@ export const WebGPU = () => {
         component={TexturedCube}
         options={{
           title: "Textured Cube",
+        }}
+      />
+      <Stack.Screen
+        name="BlurredSheet"
+        component={BlurredSheet}
+        options={{
+          title: "Blurred Sheet",
+        }}
+      />
+      <Stack.Screen
+        name="ClippedText"
+        component={ClippedText}
+        options={{
+          title: "Clipped Text",
+        }}
+      />
+      <Stack.Screen
+        name="LayeredCubes"
+        component={LayeredCubes}
+        options={{
+          title: "Layered Cubes",
         }}
       />
     </Stack.Navigator>

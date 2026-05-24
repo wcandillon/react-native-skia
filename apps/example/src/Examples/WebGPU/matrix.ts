@@ -216,6 +216,32 @@ export function mat4RotateY(m: Mat4, angle: number, dst?: Mat4): Mat4 {
   return dst;
 }
 
+export function mat4Scale(m: Mat4, v: Vec3, dst?: Mat4): Mat4 {
+  dst = dst || new Float32Array(16);
+  const x = v[0],
+    y = v[1],
+    z = v[2];
+  dst[0] = m[0] * x;
+  dst[1] = m[1] * x;
+  dst[2] = m[2] * x;
+  dst[3] = m[3] * x;
+  dst[4] = m[4] * y;
+  dst[5] = m[5] * y;
+  dst[6] = m[6] * y;
+  dst[7] = m[7] * y;
+  dst[8] = m[8] * z;
+  dst[9] = m[9] * z;
+  dst[10] = m[10] * z;
+  dst[11] = m[11] * z;
+  if (dst !== m) {
+    dst[12] = m[12];
+    dst[13] = m[13];
+    dst[14] = m[14];
+    dst[15] = m[15];
+  }
+  return dst;
+}
+
 export function mat4Rotate(
   m: Mat4,
   axis: Vec3,
