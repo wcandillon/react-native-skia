@@ -33,16 +33,11 @@ export const Helmet = () => {
     const scene = new THREE.Scene();
 
     const renderer = makeWebGPURenderer(context);
-
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
     texture.mapping = THREE.EquirectangularReflectionMapping;
-
     scene.background = texture;
     scene.environment = texture;
-
     scene.add(gltf.scene);
-    renderer.setAnimationLoop(animate);
 
     function animateCamera() {
       const elapsed = clock.getElapsedTime();
@@ -58,6 +53,8 @@ export const Helmet = () => {
       context!.present();
     }
 
+    renderer.setAnimationLoop(animate);
+
     return () => {
       renderer.setAnimationLoop(null);
     };
@@ -68,9 +65,6 @@ export const Helmet = () => {
       <View style={styles.messageContainer}>
         <Text style={styles.message}>
           WebGPU Canvas requires SK_GRAPHITE to be enabled.
-        </Text>
-        <Text style={styles.submessage}>
-          Build react-native-skia with Graphite support to use this feature.
         </Text>
       </View>
     );
@@ -109,12 +103,6 @@ const styles = StyleSheet.create({
   message: {
     color: "#fff",
     fontSize: 18,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  submessage: {
-    color: "#888",
-    fontSize: 14,
     textAlign: "center",
   },
 });

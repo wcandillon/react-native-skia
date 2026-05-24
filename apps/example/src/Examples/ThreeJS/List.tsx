@@ -11,6 +11,12 @@ export const examples = [
     title: "Damaged Helmet",
     description: "glTF model with HDR environment map (three.js + WebGPU)",
   },
+  {
+    screen: "HelmetBackdrop",
+    title: "Helmet Controls",
+    description:
+      "Same helmet, rendered through a Skia frosted bottom sheet with gamepad-style controls",
+  },
 ] as const;
 
 const styles = StyleSheet.create({
