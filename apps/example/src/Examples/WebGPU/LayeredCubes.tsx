@@ -78,6 +78,7 @@ type Layer = {
   depthTexture: GPUTexture;
   renderPass: GPURenderPassDescriptor;
   instances: Instance[];
+  bundle: GPURenderBundle;
 };
 
 export function LayeredCubes() {
@@ -218,7 +219,18 @@ export function LayeredCubes() {
           depthStoreOp: "store",
         },
       };
-      return { texture, depthTexture, renderPass, instances };
+      const bundleEncoder = device.createRenderBundleEncoder({
+        colorFormats: [presentationFormat],
+        depthStencilFormat: depthFormat,
+      });
+      bundleEncoder.setPipeline(pipeline);
+      bundleEncoder.setVertexBuffer(0, verticesBuffer);
+      for (const inst of instances) {
+        bundleEncoder.setBindGroup(0, inst.bindGroup);
+        bundleEncoder.draw(cubeVertexCount);
+      }
+      const bundle = bundleEncoder.finish();
+      return { texture, depthTexture, renderPass, instances, bundle };
     };
 
     const backLayer = makeLayer(
@@ -255,10 +267,6 @@ export function LayeredCubes() {
       );
       const viewProjection = mat4Multiply(projection, view);
 
-      const pass = encoder.beginRenderPass(layer.renderPass);
-      pass.setPipeline(pipeline);
-      pass.setVertexBuffer(0, verticesBuffer);
-
       for (const inst of layer.instances) {
         const world = mat4Identity();
         mat4Translate(
@@ -279,10 +287,10 @@ export function LayeredCubes() {
           0,
           inst.uniformValues as unknown as BufferSource
         );
-        pass.setBindGroup(0, inst.bindGroup);
-        pass.draw(cubeVertexCount);
       }
 
+      const pass = encoder.beginRenderPass(layer.renderPass);
+      pass.executeBundles([layer.bundle]);
       pass.end();
     };
 

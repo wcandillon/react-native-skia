@@ -225,6 +225,21 @@ export function BlurredSheet() {
       });
     }
 
+    // Pre-record all the per-cube draw calls into a render bundle so we only
+    // pay the JS->native cost for setPipeline / setVertexBuffer / setBindGroup
+    // / draw once, then replay it each frame via executeBundles.
+    const bundleEncoder = device.createRenderBundleEncoder({
+      colorFormats: [presentationFormat],
+      depthStencilFormat: depthFormat,
+    });
+    bundleEncoder.setPipeline(pipeline);
+    bundleEncoder.setVertexBuffer(0, verticesBuffer);
+    for (const inst of instances) {
+      bundleEncoder.setBindGroup(0, inst.bindGroup);
+      bundleEncoder.draw(cubeVertexCount);
+    }
+    const renderBundle = bundleEncoder.finish();
+
     const texture = device.createTexture({
       size: [canvasWidth, canvasHeight, 1],
       format: presentationFormat,
@@ -282,11 +297,7 @@ export function BlurredSheet() {
       );
       const viewProjection = mat4Multiply(projection, view);
 
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass(renderPass);
-      pass.setPipeline(pipeline);
-      pass.setVertexBuffer(0, verticesBuffer);
-
+      // Update uniforms only — the draw commands are baked into renderBundle.
       for (const inst of instances) {
         const world = mat4Identity();
         mat4Translate(
@@ -306,10 +317,11 @@ export function BlurredSheet() {
           0,
           inst.uniformValues as unknown as BufferSource
         );
-        pass.setBindGroup(0, inst.bindGroup);
-        pass.draw(cubeVertexCount);
       }
 
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass(renderPass);
+      pass.executeBundles([renderBundle]);
       pass.end();
       device.queue.submit([encoder.finish()]);
 
