@@ -7,6 +7,7 @@ import {
   Button,
   StyleSheet,
   Pressable,
+  ScrollView,
 } from "react-native";
 import type { SkImage } from "@shopify/react-native-skia";
 import {
@@ -25,16 +26,52 @@ import Animated, {
   clamp,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { WebView } from "react-native-webview";
 
 // Demo for the new HWUI/RenderNode-based view snapshot path on Android.
-// The scene below packs every native primitive the legacy software-canvas
-// pipeline used to mangle: `elevation` shadows, native `Switch`/`Button`
-// controls, rounded clipping with overflow children, root padding (which the
-// legacy traversal double-counted) and a nested transform. With the new
-// pipeline the snapshot is pixel-identical to the live view, which makes the
-// reveal slider's seam invisible.
-const SCENE_HEIGHT = 680;
+// The scrollable scene below packs every native primitive the legacy
+// software-canvas pipeline used to mangle: `elevation` shadows, native
+// `Switch`/`Button` controls, rounded clipping with overflow children, root
+// padding (which the legacy traversal double-counted), a nested transform,
+// a Skia Canvas (TextureView) and a WebView. The reveal slider overlays the
+// snapshot on top of the live viewport — with the new path the seam is
+// invisible.
 const TIGER_SIZE = 140;
+const HANDLE_WIDTH = 44;
+
+const WEBVIEW_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+    color: white;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 16px; box-sizing: border-box;
+    text-align: center;
+  }
+  h2 { margin: 0 0 6px; font-size: 18px; }
+  p  { margin: 0; font-size: 13px; opacity: 0.9; line-height: 1.4; }
+  .pill {
+    margin-top: 10px; padding: 4px 10px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 999px; font-size: 11px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <h2>Hello from a WebView</h2>
+  <p>Chromium WebView pixels captured by the HWUI snapshot path.</p>
+  <div class="pill">react-native-webview</div>
+</body>
+</html>
+`;
 
 export const SnapshotDemo = () => {
   const viewRef = useRef<View>(null);
@@ -86,7 +123,12 @@ export const SnapshotDemo = () => {
         }}
       >
         <View ref={viewRef} style={styles.scene} collapsable={false}>
-          <Scene />
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Scene />
+          </ScrollView>
         </View>
 
         {hasSnapshot && sceneSize.width > 0 && (
@@ -131,40 +173,27 @@ export const SnapshotDemo = () => {
             </View>
           </>
         )}
-      </View>
 
-      <View style={styles.controls}>
-        <Pressable style={styles.primaryButton} onPress={takeSnapshot}>
-          <Text style={styles.primaryButtonText}>
-            {hasSnapshot ? "Retake snapshot" : "Take snapshot"}
-          </Text>
-        </Pressable>
         {hasSnapshot && (
-          <Pressable style={styles.secondaryButton} onPress={reset}>
-            <Text style={styles.secondaryButtonText}>Reset</Text>
+          <Pressable style={styles.fabSecondary} onPress={reset}>
+            <Text style={styles.fabSecondaryText}>Reset</Text>
           </Pressable>
         )}
+        <Pressable style={styles.fab} onPress={takeSnapshot}>
+          <Text style={styles.fabIcon}>📸</Text>
+          <Text style={styles.fabLabel}>
+            {hasSnapshot ? "Retake" : "Snapshot"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.legend}>
         <Text style={styles.legendTitle}>
-          What the legacy software-canvas path used to break
+          Legacy software-canvas used to break:
         </Text>
         <Text style={styles.legendItem}>
-          • Elevation shadows on the card below
-        </Text>
-        <Text style={styles.legendItem}>
-          • Root padding (counted twice, children rendered shifted)
-        </Text>
-        <Text style={styles.legendItem}>
-          • Rounded clipping with overflow children (cyan bar)
-        </Text>
-        <Text style={styles.legendItem}>• Native Switch / Button controls</Text>
-        <Text style={styles.legendItem}>
-          • Skia Canvas children (tiger.svg in a TextureView)
-        </Text>
-        <Text style={styles.legendItem}>
-          • Drag the divider — the snapshot now matches the live view 1:1
+          shadows · padding · rounded clipping · native controls · Skia Canvas ·
+          WebView — drag the divider to compare.
         </Text>
       </View>
     </View>
@@ -228,11 +257,27 @@ const Scene = () => {
           />
         </Canvas>
       </View>
+
+      <View style={styles.webviewCard}>
+        <Text style={styles.cardTitle}>WebView</Text>
+        <Text style={styles.cardBody}>
+          A Chromium WebView. The legacy software canvas never captured live web
+          content; the new HWUI path pulls pixels straight from the WebView's
+          surface.
+        </Text>
+        <View style={styles.webviewFrame}>
+          <WebView
+            originWhitelist={["*"]}
+            source={{ html: WEBVIEW_HTML }}
+            style={styles.webview}
+            scrollEnabled={false}
+            androidLayerType="hardware"
+          />
+        </View>
+      </View>
     </View>
   );
 };
-
-const HANDLE_WIDTH = 44;
 
 const styles = StyleSheet.create({
   root: {
@@ -240,7 +285,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0e0f12",
   },
   sceneWrapper: {
-    height: SCENE_HEIGHT,
+    flex: 1,
     overflow: "hidden",
     backgroundColor: "#f3f4f6",
   },
@@ -248,8 +293,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f3f4f6",
   },
+  scrollContent: {
+    paddingBottom: 120,
+  },
   scenePadded: {
-    flex: 1,
     padding: 24,
   },
   elevatedCard: {
@@ -347,6 +394,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 6,
   },
+  webviewCard: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: "white",
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  webviewFrame: {
+    marginTop: 12,
+    height: 180,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
   handleHitArea: {
     position: "absolute",
     top: 0,
@@ -405,54 +474,65 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
   },
-  controls: {
+  fab: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
     flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    backgroundColor: "#0e0f12",
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#fbbf24",
-    paddingVertical: 12,
-    borderRadius: 10,
     alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: "#fbbf24",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 8,
   },
-  primaryButtonText: {
+  fabIcon: {
+    fontSize: 18,
+  },
+  fabLabel: {
     color: "#111827",
     fontSize: 15,
     fontWeight: "700",
   },
-  secondaryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#374151",
-    alignItems: "center",
-    justifyContent: "center",
+  fabSecondary: {
+    position: "absolute",
+    right: 16,
+    bottom: 80,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(17, 24, 39, 0.85)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 4,
   },
-  secondaryButtonText: {
-    color: "#e5e7eb",
-    fontSize: 14,
+  fabSecondaryText: {
+    color: "white",
+    fontSize: 13,
     fontWeight: "600",
   },
   legend: {
-    flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: "#0e0f12",
   },
   legendTitle: {
     color: "#fbbf24",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   legendItem: {
     color: "#d1d5db",
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });
