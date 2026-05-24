@@ -32,6 +32,22 @@ import { darkTheme, lightTheme } from "./theme";
 const wait = async (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+// requestAnimationFrame fires after the next paint, so awaiting `nextFrame()`
+// is far more reliable than `setTimeout(16)` for "wait until React committed
+// and Android actually drew the new theme."
+const nextFrame = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => {
+      resolve();
+    })
+  );
+
+const settle = async (frames: number) => {
+  for (let i = 0; i < frames; i++) {
+    await nextFrame();
+  }
+};
+
 export type ColorSchemeName = "light" | "dark";
 
 interface ColorScheme {
@@ -75,50 +91,74 @@ export const useColorScheme = () => {
   const { colorScheme, dispatch, ref, transition, circle, active } = ctx;
   const toggle = useCallback(
     async (x: number, y: number) => {
+      // Guard re-entry. Without it, fast double-taps drive two animations
+      // through the same reducer and the second one stomps the first
+      // mid-transition, which is the main source of the "shaky" feel.
+      if (active) {
+        return;
+      }
       const newColorScheme = colorScheme === "light" ? "dark" : "light";
 
-      dispatch({
-        active: true,
-        colorScheme,
-        overlay1: null,
-        overlay2: null,
-      });
-      // 0. Define the circle and its maximum radius (farthest screen corner)
+      // 0. Reset the reveal to fully clipped before we activate. If we
+      // don't, the previous run's terminal value can flash for one frame.
+      transition.value = 0;
       const r = Math.max(...corners.map((corner) => dist(corner, { x, y })));
       circle.value = { x, y, r };
 
-      // 1. Snapshot the current (old) theme
+      // 1. Snapshot the current (old) theme. Two settle frames first so any
+      // pending paint (search input focus, WebView tile load, etc.) lands
+      // before we capture.
+      await settle(2);
       const overlay1 = await makeImageFromView(ref as RefObject<View>);
-      dispatch({
-        active: true,
-        colorScheme,
-        overlay1,
-        overlay2: null,
-      });
+      if (!overlay1) {
+        return;
+      }
 
-      // 2. Switch theme and let it render
-      await wait(16);
+      // 2. Show the snapshot. Wait several frames so the Canvas actually
+      // commits the image to the overlay before we let the live view
+      // re-render in the new theme underneath. This is what stops the
+      // brief "wrong theme" flash that used to peek through.
+      dispatch({ active: true, colorScheme, overlay1, overlay2: null });
+      await settle(3);
+
+      // 3. Switch the live view to the new theme. The overlay still
+      // covers it, so the user sees no change yet.
       dispatch({
         active: true,
         colorScheme: newColorScheme,
         overlay1,
         overlay2: null,
       });
-      await wait(16);
+      // Give the WebView, contacts strip, and chat rows enough frames to
+      // finish recoloring before we capture the second snapshot.
+      await settle(4);
 
-      // 3. Snapshot the new theme
+      // 4. Snapshot the new theme.
       const overlay2 = await makeImageFromView(ref as RefObject<View>);
+      if (!overlay2) {
+        // Bail cleanly: end the transition with the new theme applied but
+        // no animation. The user sees a hard cut, not a stuck overlay.
+        dispatch({
+          active: false,
+          colorScheme: newColorScheme,
+          overlay1: null,
+          overlay2: null,
+        });
+        return;
+      }
       dispatch({
         active: true,
         colorScheme: newColorScheme,
         overlay1,
         overlay2,
       });
+      // One more frame so the second image is in the Canvas before the
+      // expanding circle starts sampling it.
+      await settle(1);
 
-      // 4. Animate the circular reveal
-      transition.value = 0;
+      // 5. Animate the circular reveal.
       transition.value = withTiming(1, { duration: 650 });
-      await wait(650);
+      await wait(700);
 
       dispatch({
         active: false,
@@ -127,7 +167,7 @@ export const useColorScheme = () => {
         overlay2: null,
       });
     },
-    [circle, colorScheme, dispatch, ref, transition]
+    [active, circle, colorScheme, dispatch, ref, transition]
   );
   return { colorScheme, toggle, active };
 };
