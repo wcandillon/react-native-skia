@@ -14,18 +14,21 @@ import type {
 } from "@shopify/react-native-skia";
 import {
   Blur,
+  BlurMask,
   Canvas,
+  Circle,
   Fill,
   Group,
   Image as SkiaImage,
+  Line,
   Path,
-  RoundedRect,
   Skia,
   Text,
   WebGPUCanvas,
   rect,
   rrect,
   useFont,
+  vec,
 } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, withSpring } from "react-native-reanimated";
@@ -39,7 +42,7 @@ type InputState = {
   yaw: number;
   pitch: number;
   distance: number;
-  yawSpeed: number; // -1, 0, 1
+  yawSpeed: number;
   pitchSpeed: number;
   zoomSpeed: number;
   autoRotate: boolean;
@@ -52,6 +55,46 @@ const INITIAL_DISTANCE = 3.5;
 const MIN_DISTANCE = 1.6;
 const MAX_DISTANCE = 8;
 const PITCH_LIMIT = Math.PI / 2.4;
+
+// HUD palette
+const CYAN = "#4dd8ff";
+const CYAN_BRIGHT = "#a8f5ff";
+const CYAN_DIM = "rgba(77, 216, 255, 0.45)";
+const AMBER = "#ffbe55";
+
+const SHEET_HEIGHT_RATIO = 0.42;
+const SHEET_TINT = "rgba(8, 14, 24, 0.28)";
+const SHEET_BORDER_RADIUS = 24;
+
+const chevronPath = (() => {
+  const p = Skia.Path.Make();
+  p.moveTo(-14, 8);
+  p.lineTo(0, -9);
+  p.lineTo(14, 8);
+  return p;
+})();
+
+const hexagonPath = (r: number) => {
+  const p = Skia.Path.Make();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) p.moveTo(x, y);
+    else p.lineTo(x, y);
+  }
+  p.close();
+  return p;
+};
+
+const cornerBracket = (size: number, flipX: boolean) => {
+  const p = Skia.Path.Make();
+  const s = flipX ? -1 : 1;
+  p.moveTo(0, size);
+  p.lineTo(0, 0);
+  p.lineTo(s * size, 0);
+  return p;
+};
 
 export const HelmetBackdrop = () => {
   const { width, height } = useWindowDimensions();
@@ -76,9 +119,9 @@ export const HelmetBackdrop = () => {
   const canvasWidth = Math.floor(width * pd);
   const canvasHeight = Math.floor(height * pd);
 
-  const sheetHeight = Math.min(height - 100, Math.max(height * 0.42, 320));
-  const expandedTop = height - sheetHeight - 24;
-  const collapsedOffset = sheetHeight - 64;
+  const sheetHeight = Math.round(height * SHEET_HEIGHT_RATIO);
+  const expandedTop = height - sheetHeight;
+  const collapsedOffset = sheetHeight - 56;
   const offsetY = useSharedValue(collapsedOffset);
 
   const pan = useMemo(
@@ -107,26 +150,29 @@ export const HelmetBackdrop = () => {
   );
 
   const sheetTop = expandedTop + offsetY.value;
-  const sheetRect = rrect(rect(16, sheetTop, width - 32, sheetHeight), 28, 28);
+  // Extend bottom past the screen so the rounded corners only show at the top.
+  const sheetRect = rrect(
+    rect(0, sheetTop, width, sheetHeight + SHEET_BORDER_RADIUS + 20),
+    SHEET_BORDER_RADIUS,
+    SHEET_BORDER_RADIUS
+  );
 
   const titleFont = useFont(
     require("../../Tests/assets/Roboto-Medium.ttf"),
-    18
+    16
   );
   const labelFont = useFont(
     require("../../Tests/assets/Roboto-Regular.ttf"),
+    11
+  );
+  const readoutFont = useFont(
+    require("../../Tests/assets/Roboto-Medium.ttf"),
     12
   );
 
-  // Static visual paths for the gamepad.
-  const arrowPath = useMemo(() => {
-    const p = Skia.Path.Make();
-    p.moveTo(-9, 5);
-    p.lineTo(0, -6);
-    p.lineTo(9, 5);
-    p.close();
-    return p;
-  }, []);
+  const hex24 = useMemo(() => hexagonPath(24), []);
+  const tlBracket = useMemo(() => cornerBracket(16, false), []);
+  const trBracket = useMemo(() => cornerBracket(16, true), []);
 
   useEffect(() => {
     if (!texture || !gltf) {
@@ -164,10 +210,6 @@ export const HelmetBackdrop = () => {
       scene.environment = texture;
       scene.add(gltf.scene);
 
-      // Render into our own texture (created by three.js's render target
-      // machinery) instead of the WebGPUCanvas swap-chain. Skia.Image.
-      // MakeImageFromTexture rejects swap-chain textures, but accepts the
-      // ones three.js allocates here (usage includes TEXTURE_BINDING).
       await renderer.init();
       if (cancelled) {
         return;
@@ -211,9 +253,11 @@ export const HelmetBackdrop = () => {
 
         renderer!.render(scene, camera);
 
-        const backendData = (renderer as unknown as {
-          backend: { get(t: THREE.Texture): { texture?: GPUTexture } };
-        }).backend.get(renderTarget!.texture);
+        const backendData = (
+          renderer as unknown as {
+            backend: { get(t: THREE.Texture): { texture?: GPUTexture } };
+          }
+        ).backend.get(renderTarget!.texture);
         if (backendData?.texture) {
           const snap = Skia.Image.MakeImageFromTexture(backendData.texture);
           if (snap) {
@@ -243,21 +287,43 @@ export const HelmetBackdrop = () => {
     );
   }
 
-  // D-pad geometry (in screen coords).
-  const dpadCx = 92;
-  const dpadCy = sheetTop + 168;
-  const dpadArm = 28;
-  const dpadButton = 44;
+  // Layout — flush to bottom, no horizontal padding. Controls center is the
+  // midpoint between the top separator (sheetTop + 76) and the bottom
+  // separator (sheetTop + sheetHeight - 56), so they breathe as the sheet
+  // height changes with screen size.
+  const controlsCy = sheetTop + Math.floor((sheetHeight + 20) / 2);
+  const dpadCx = 96;
+  const dpadCy = controlsCy;
+  const dpadArm = 52;
+  const dpadHit = 60;
+  const dpadRingR = dpadArm + 26;
 
-  // Action button cluster geometry.
-  const actCx = width - 92;
-  const actCy = sheetTop + 168;
-  const actRadius = 22;
-  const actSpread = 40;
+  const actCx = width - 96;
+  const actCy = controlsCy;
+  const actSpread = 56;
+  const actHit = 60;
 
-  const setDir = (yaw: number, pitch: number) => {
-    inputRef.current.yawSpeed = yaw;
-    inputRef.current.pitchSpeed = pitch;
+  // Read input ref each render — setImage triggers a re-render every frame so
+  // these stay live without extra state.
+  const input = inputRef.current;
+  const pressed = {
+    up: input.pitchSpeed === -1,
+    down: input.pitchSpeed === 1,
+    left: input.yawSpeed === -1,
+    right: input.yawSpeed === 1,
+    A: input.zoomSpeed === -1,
+    B: input.zoomSpeed === 1,
+  };
+  const yawDeg = Math.round((input.yaw * 180) / Math.PI) % 360;
+  const pitchDeg = Math.round((input.pitch * 180) / Math.PI);
+  const distLabel = input.distance.toFixed(2);
+  const telemetry = `YAW ${yawDeg.toString().padStart(3, " ")}°   PITCH ${(
+    pitchDeg >= 0 ? "+" : ""
+  )}${pitchDeg.toString().padStart(2, " ")}°   ZOOM ${distLabel}x`;
+
+  const setDir = (yaw: number | null, pitch: number | null) => {
+    if (yaw !== null) inputRef.current.yawSpeed = yaw;
+    if (pitch !== null) inputRef.current.pitchSpeed = pitch;
   };
   const setZoom = (z: number) => {
     inputRef.current.zoomSpeed = z;
@@ -271,6 +337,31 @@ export const HelmetBackdrop = () => {
     inputRef.current.autoRotate = true;
     setAutoRotateUI(true);
   };
+
+  const chevButtons = [
+    { dir: "up", cx: dpadCx, cy: dpadCy - dpadArm, rot: 0, active: pressed.up },
+    {
+      dir: "down",
+      cx: dpadCx,
+      cy: dpadCy + dpadArm,
+      rot: Math.PI,
+      active: pressed.down,
+    },
+    {
+      dir: "left",
+      cx: dpadCx - dpadArm,
+      cy: dpadCy,
+      rot: -Math.PI / 2,
+      active: pressed.left,
+    },
+    {
+      dir: "right",
+      cx: dpadCx + dpadArm,
+      cy: dpadCy,
+      rot: Math.PI / 2,
+      active: pressed.right,
+    },
+  ];
 
   return (
     <GestureDetector gesture={pan}>
@@ -293,7 +384,7 @@ export const HelmetBackdrop = () => {
             />
           )}
 
-          {/* Frosted backdrop sheet */}
+          {/* Frosted backdrop */}
           {image && (
             <Group clip={sheetRect}>
               <SkiaImage
@@ -304,200 +395,308 @@ export const HelmetBackdrop = () => {
                 height={height}
                 fit="cover"
               >
-                <Blur blur={24} mode="clamp" />
+                <Blur blur={28} mode="clamp" />
               </SkiaImage>
-              <Fill color="rgba(18, 18, 26, 0.55)" />
+              <Fill color={SHEET_TINT} />
+              <Fill color="rgba(77, 216, 255, 0.04)" />
             </Group>
           )}
 
-          {/* Sheet handle */}
-          <RoundedRect
-            x={width / 2 - 20}
-            y={sheetTop + 10}
-            width={40}
-            height={4}
-            r={2}
-            color="rgba(255,255,255,0.45)"
-          />
+          {/* Top accent line + handle */}
+          <Line
+            p1={vec(24, sheetTop)}
+            p2={vec(width - 24, sheetTop)}
+            color={CYAN_DIM}
+            strokeWidth={1}
+          >
+            <BlurMask blur={2} style="solid" />
+          </Line>
+          <Line
+            p1={vec(width / 2 - 18, sheetTop + 12)}
+            p2={vec(width / 2 + 18, sheetTop + 12)}
+            color={CYAN}
+            strokeWidth={2}
+          >
+            <BlurMask blur={3} style="solid" />
+          </Line>
+
+          {/* HUD corner brackets */}
+          <Group transform={[{ translateX: 14 }, { translateY: sheetTop + 28 }]}>
+            <Path
+              path={tlBracket}
+              color={CYAN}
+              style="stroke"
+              strokeWidth={1.5}
+            >
+              <BlurMask blur={2} style="solid" />
+            </Path>
+          </Group>
+          <Group
+            transform={[
+              { translateX: width - 14 },
+              { translateY: sheetTop + 28 },
+            ]}
+          >
+            <Path
+              path={trBracket}
+              color={CYAN}
+              style="stroke"
+              strokeWidth={1.5}
+            >
+              <BlurMask blur={2} style="solid" />
+            </Path>
+          </Group>
 
           {/* Title */}
           {titleFont && (
             <Text
-              x={28}
-              y={sheetTop + 50}
-              text="🎮 Helmet Controls"
+              x={36}
+              y={sheetTop + 46}
+              text="HELMET CONTROLS"
               font={titleFont}
-              color="white"
-            />
+              color={CYAN_BRIGHT}
+            >
+              <BlurMask blur={2} style="solid" />
+            </Text>
           )}
-          {labelFont && (
+
+          {/* Telemetry readout */}
+          {readoutFont && (
             <Text
-              x={28}
-              y={sheetTop + 72}
-              text={autoRotateUI ? "AUTO-ROTATE ON" : "AUTO-ROTATE OFF"}
-              font={labelFont}
-              color="rgba(255,255,255,0.55)"
+              x={36}
+              y={sheetTop + 64}
+              text={telemetry}
+              font={readoutFont}
+              color={CYAN_DIM}
             />
           )}
 
-          {/* D-pad */}
+          {/* Separator */}
+          <Line
+            p1={vec(36, sheetTop + 76)}
+            p2={vec(width - 36, sheetTop + 76)}
+            color="rgba(77, 216, 255, 0.18)"
+            strokeWidth={1}
+          />
+
+          {/* D-pad: center reticle + 4 chevrons */}
           <Group>
-            <RoundedRect
-              x={dpadCx - dpadArm - dpadButton / 2}
-              y={dpadCy - dpadButton / 2}
-              width={dpadArm * 2 + dpadButton}
-              height={dpadButton}
-              r={dpadButton / 2}
-              color="rgba(255,255,255,0.10)"
+            {/* outer ring */}
+            <Circle
+              cx={dpadCx}
+              cy={dpadCy}
+              r={dpadRingR}
+              color={CYAN_DIM}
+              style="stroke"
+              strokeWidth={1}
             />
-            <RoundedRect
-              x={dpadCx - dpadButton / 2}
-              y={dpadCy - dpadArm - dpadButton / 2}
-              width={dpadButton}
-              height={dpadArm * 2 + dpadButton}
-              r={dpadButton / 2}
-              color="rgba(255,255,255,0.10)"
-            />
-            {/* arrows */}
-            <Group
-              transform={[
-                { translateX: dpadCx },
-                { translateY: dpadCy - dpadArm },
-              ]}
+            {/* inner reticle */}
+            <Circle
+              cx={dpadCx}
+              cy={dpadCy}
+              r={6}
+              color={CYAN}
+              style="stroke"
+              strokeWidth={1.2}
             >
-              <Path path={arrowPath} color="white" />
-            </Group>
-            <Group
-              transform={[
-                { translateX: dpadCx },
-                { translateY: dpadCy + dpadArm },
-                { rotate: Math.PI },
-              ]}
-            >
-              <Path path={arrowPath} color="white" />
-            </Group>
-            <Group
-              transform={[
-                { translateX: dpadCx - dpadArm },
-                { translateY: dpadCy },
-                { rotate: -Math.PI / 2 },
-              ]}
-            >
-              <Path path={arrowPath} color="white" />
-            </Group>
-            <Group
-              transform={[
-                { translateX: dpadCx + dpadArm },
-                { translateY: dpadCy },
-                { rotate: Math.PI / 2 },
-              ]}
-            >
-              <Path path={arrowPath} color="white" />
-            </Group>
+              <BlurMask blur={2} style="solid" />
+            </Circle>
+            <Circle cx={dpadCx} cy={dpadCy} r={1.6} color={CYAN_BRIGHT}>
+              <BlurMask blur={3} style="solid" />
+            </Circle>
+            {/* tick marks at the 4 cardinal directions */}
+            {[0, 1, 2, 3].map((i) => {
+              const a = (i * Math.PI) / 2;
+              const x1 = dpadCx + Math.cos(a) * 12;
+              const y1 = dpadCy + Math.sin(a) * 12;
+              const x2 = dpadCx + Math.cos(a) * 16;
+              const y2 = dpadCy + Math.sin(a) * 16;
+              return (
+                <Line
+                  key={i}
+                  p1={vec(x1, y1)}
+                  p2={vec(x2, y2)}
+                  color={CYAN}
+                  strokeWidth={1}
+                >
+                  <BlurMask blur={2} style="solid" />
+                </Line>
+              );
+            })}
+            {/* chevrons */}
+            {chevButtons.map((b) => (
+              <Group
+                key={b.dir}
+                transform={[
+                  { translateX: b.cx },
+                  { translateY: b.cy },
+                  { rotate: b.rot },
+                ]}
+              >
+                <Path
+                  path={chevronPath}
+                  color={b.active ? CYAN_BRIGHT : CYAN}
+                  style="stroke"
+                  strokeWidth={b.active ? 3 : 1.8}
+                  strokeJoin="round"
+                  strokeCap="round"
+                >
+                  <BlurMask blur={b.active ? 10 : 3} style="solid" />
+                </Path>
+              </Group>
+            ))}
           </Group>
 
-          {/* Action buttons (A zoom-in, B zoom-out) */}
+          {/* Action buttons: A (zoom in, amber) and B (zoom out, cyan) as hexagons */}
           <Group>
-            {/* A: top-right of cluster (zoom in) */}
-            <Group transform={[{ translateX: actCx + actSpread / 2 }]}>
-              <Group transform={[{ translateY: actCy - actSpread / 2 }]}>
-                <RoundedRect
-                  x={-actRadius}
-                  y={-actRadius}
-                  width={actRadius * 2}
-                  height={actRadius * 2}
-                  r={actRadius}
-                  color="rgba(255, 90, 95, 0.85)"
-                />
-              </Group>
+            <Group
+              transform={[
+                { translateX: actCx + actSpread / 2 },
+                { translateY: actCy - actSpread / 2 },
+              ]}
+            >
+              <Path
+                path={hex24}
+                color={pressed.A ? AMBER : "rgba(255, 190, 85, 0.18)"}
+              />
+              <Path
+                path={hex24}
+                color={AMBER}
+                style="stroke"
+                strokeWidth={pressed.A ? 3 : 1.6}
+              >
+                <BlurMask blur={pressed.A ? 12 : 4} style="solid" />
+              </Path>
+              {titleFont && (
+                <Text x={-5} y={6} text="A" font={titleFont} color="white" />
+              )}
             </Group>
-            {/* B: bottom-left of cluster (zoom out) */}
-            <Group transform={[{ translateX: actCx - actSpread / 2 }]}>
-              <Group transform={[{ translateY: actCy + actSpread / 2 }]}>
-                <RoundedRect
-                  x={-actRadius}
-                  y={-actRadius}
-                  width={actRadius * 2}
-                  height={actRadius * 2}
-                  r={actRadius}
-                  color="rgba(95, 150, 231, 0.85)"
-                />
-              </Group>
+
+            <Group
+              transform={[
+                { translateX: actCx - actSpread / 2 },
+                { translateY: actCy + actSpread / 2 },
+              ]}
+            >
+              <Path
+                path={hex24}
+                color={pressed.B ? CYAN : "rgba(77, 216, 255, 0.16)"}
+              />
+              <Path
+                path={hex24}
+                color={CYAN}
+                style="stroke"
+                strokeWidth={pressed.B ? 3 : 1.6}
+              >
+                <BlurMask blur={pressed.B ? 12 : 4} style="solid" />
+              </Path>
+              {titleFont && (
+                <Text x={-5} y={6} text="B" font={titleFont} color="white" />
+              )}
             </Group>
+
             {labelFont && (
               <>
                 <Text
-                  x={actCx + actSpread / 2 - 4}
+                  x={actCx + actSpread / 2 + 28}
                   y={actCy - actSpread / 2 + 4}
-                  text="A"
-                  font={titleFont!}
-                  color="white"
+                  text="ZOOM +"
+                  font={labelFont}
+                  color={CYAN_DIM}
                 />
                 <Text
-                  x={actCx - actSpread / 2 - 4}
+                  x={actCx - actSpread / 2 - 70}
                   y={actCy + actSpread / 2 + 4}
-                  text="B"
-                  font={titleFont!}
-                  color="white"
+                  text="ZOOM -"
+                  font={labelFont}
+                  color={CYAN_DIM}
                 />
               </>
             )}
           </Group>
+
+          {/* Bottom status row */}
+          <Line
+            p1={vec(36, sheetTop + sheetHeight - 56)}
+            p2={vec(width - 36, sheetTop + sheetHeight - 56)}
+            color="rgba(77, 216, 255, 0.18)"
+            strokeWidth={1}
+          />
+          {/* Auto-rotate LED */}
+          <Circle
+            cx={48}
+            cy={sheetTop + sheetHeight - 32}
+            r={4}
+            color={autoRotateUI ? CYAN_BRIGHT : "rgba(255,255,255,0.18)"}
+          >
+            {autoRotateUI && <BlurMask blur={6} style="solid" />}
+          </Circle>
+          {labelFont && (
+            <Text
+              x={60}
+              y={sheetTop + sheetHeight - 28}
+              text={
+                autoRotateUI ? "AUTO-ROTATE ACTIVE" : "AUTO-ROTATE STANDBY"
+              }
+              font={labelFont}
+              color={autoRotateUI ? CYAN : "rgba(255,255,255,0.4)"}
+            />
+          )}
         </Canvas>
 
-        {/* Interactive layer — invisible Pressables sized to the visual buttons */}
+        {/* Interactive layer */}
         <View
           style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}
         >
           {/* D-pad hit targets */}
           <Pressable
             style={hitStyle(
-              dpadCx - dpadButton / 2,
-              dpadCy - dpadArm - dpadButton / 2,
-              dpadButton,
-              dpadButton
+              dpadCx - dpadHit / 2,
+              dpadCy - dpadArm - dpadHit / 2,
+              dpadHit,
+              dpadHit
             )}
-            onPressIn={() => setDir(inputRef.current.yawSpeed, -1)}
-            onPressOut={() => setDir(inputRef.current.yawSpeed, 0)}
+            onPressIn={() => setDir(null, -1)}
+            onPressOut={() => setDir(null, 0)}
           />
           <Pressable
             style={hitStyle(
-              dpadCx - dpadButton / 2,
-              dpadCy + dpadArm - dpadButton / 2,
-              dpadButton,
-              dpadButton
+              dpadCx - dpadHit / 2,
+              dpadCy + dpadArm - dpadHit / 2,
+              dpadHit,
+              dpadHit
             )}
-            onPressIn={() => setDir(inputRef.current.yawSpeed, 1)}
-            onPressOut={() => setDir(inputRef.current.yawSpeed, 0)}
+            onPressIn={() => setDir(null, 1)}
+            onPressOut={() => setDir(null, 0)}
           />
           <Pressable
             style={hitStyle(
-              dpadCx - dpadArm - dpadButton / 2,
-              dpadCy - dpadButton / 2,
-              dpadButton,
-              dpadButton
+              dpadCx - dpadArm - dpadHit / 2,
+              dpadCy - dpadHit / 2,
+              dpadHit,
+              dpadHit
             )}
-            onPressIn={() => setDir(-1, inputRef.current.pitchSpeed)}
-            onPressOut={() => setDir(0, inputRef.current.pitchSpeed)}
+            onPressIn={() => setDir(-1, null)}
+            onPressOut={() => setDir(0, null)}
           />
           <Pressable
             style={hitStyle(
-              dpadCx + dpadArm - dpadButton / 2,
-              dpadCy - dpadButton / 2,
-              dpadButton,
-              dpadButton
+              dpadCx + dpadArm - dpadHit / 2,
+              dpadCy - dpadHit / 2,
+              dpadHit,
+              dpadHit
             )}
-            onPressIn={() => setDir(1, inputRef.current.pitchSpeed)}
-            onPressOut={() => setDir(0, inputRef.current.pitchSpeed)}
+            onPressIn={() => setDir(1, null)}
+            onPressOut={() => setDir(0, null)}
           />
 
           {/* A (zoom in) */}
           <Pressable
             style={hitStyle(
-              actCx + actSpread / 2 - actRadius,
-              actCy - actSpread / 2 - actRadius,
-              actRadius * 2,
-              actRadius * 2
+              actCx + actSpread / 2 - actHit / 2,
+              actCy - actSpread / 2 - actHit / 2,
+              actHit,
+              actHit
             )}
             onPressIn={() => setZoom(-1)}
             onPressOut={() => setZoom(0)}
@@ -505,35 +704,39 @@ export const HelmetBackdrop = () => {
           {/* B (zoom out) */}
           <Pressable
             style={hitStyle(
-              actCx - actSpread / 2 - actRadius,
-              actCy + actSpread / 2 - actRadius,
-              actRadius * 2,
-              actRadius * 2
+              actCx - actSpread / 2 - actHit / 2,
+              actCy + actSpread / 2 - actHit / 2,
+              actHit,
+              actHit
             )}
             onPressIn={() => setZoom(1)}
             onPressOut={() => setZoom(0)}
           />
 
-          {/* Toggle + reset row */}
-          <View
-            style={{
-              position: "absolute",
-              left: 28,
-              right: 28,
-              top: sheetTop + sheetHeight - 64,
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
+          {/* Bottom buttons */}
+          <Pressable
+            style={hitStyle(
+              36,
+              sheetTop + sheetHeight - 44,
+              200,
+              28
+            )}
+            onPress={toggleAutoRotate}
+          />
+          <Pressable
+            onPress={reset}
+            style={[
+              hitStyle(
+                width - 100,
+                sheetTop + sheetHeight - 44,
+                64,
+                28
+              ),
+              styles.resetButton,
+            ]}
           >
-            <Pressable style={styles.pill} onPress={toggleAutoRotate}>
-              <RNText style={styles.pillText}>
-                {autoRotateUI ? "Pause auto-rotate" : "Resume auto-rotate"}
-              </RNText>
-            </Pressable>
-            <Pressable style={styles.pill} onPress={reset}>
-              <RNText style={styles.pillText}>Reset</RNText>
-            </Pressable>
-          </View>
+            <RNText style={styles.resetText}>RESET</RNText>
+          </Pressable>
         </View>
       </View>
     </GestureDetector>
@@ -566,15 +769,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: "center",
   },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.14)",
+  resetButton: {
+    borderWidth: 1,
+    borderColor: CYAN,
+    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(77, 216, 255, 0.08)",
   },
-  pillText: {
-    color: "white",
-    fontSize: 13,
+  resetText: {
+    color: CYAN,
+    fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 1,
   },
 });

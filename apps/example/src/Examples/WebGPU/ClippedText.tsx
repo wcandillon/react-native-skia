@@ -6,6 +6,7 @@ import {
   Image as SkiaImage,
   Path,
   Skia,
+  processTransform3d,
   useFont,
 } from "@shopify/react-native-skia";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -63,6 +64,11 @@ fn fs(@location(0) color: vec4f) -> @location(0) vec4f {
 `;
 
 const NUM_CUBES = 32;
+const START_SCALE = 10;
+const ANIM_DELAY_MS = 5000;
+const ANIM_DURATION_MS = 2500;
+const TEXT_OFFSET_Y = -64;
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
 type Instance = {
   uniformBuffer: GPUBuffer;
@@ -77,6 +83,7 @@ export function ClippedText() {
   const [image, setImage] = useState<SkImage | null>(null);
   const frameRef = useRef<number>(0);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const animStartRef = useRef<number | null>(null);
 
   const pd = PixelRatio.get();
   const canvasWidth = Math.floor(width * pd);
@@ -91,7 +98,7 @@ export function ClippedText() {
     Math.min(width * 0.18, 80)
   );
 
-  const clip = useMemo(() => {
+  const clipData = useMemo(() => {
     if (!bigFont || !subFont) {
       return null;
     }
@@ -102,32 +109,54 @@ export function ClippedText() {
     const tMetrics = bigFont.getMetrics();
     const sMetrics = subFont.getMetrics();
     const lineGap = 12;
-    const totalH = tb.height + sb.height + lineGap;
-    const yTitle = (height - totalH) / 2 + -tMetrics.ascent;
-    const ySub =
-      yTitle + sb.height + lineGap + -sMetrics.ascent - tMetrics.descent;
 
-    const p1 = Skia.Path.MakeFromText(
-      title,
-      (width - tb.width) / 2,
-      yTitle,
-      bigFont
-    );
+    // Build both paths around the origin: title baseline at y=0, horizontally
+    // centered on x=0. The subtitle baseline sits below the title using font
+    // metrics (title descent + gap + |sub ascent|).
+    const p1 = Skia.Path.MakeFromText(title, -tb.width / 2, 0, bigFont);
+    const subBaseline =
+      tMetrics.descent + lineGap + -sMetrics.ascent;
     const p2 = Skia.Path.MakeFromText(
       sub,
-      (width - sb.width) / 2,
-      ySub,
+      -sb.width / 2,
+      subBaseline,
       subFont
     );
-    if (!p1) {
-      return p2;
-    }
-    if (!p2) {
-      return p1;
+    if (!p1 || !p2) {
+      return null;
     }
     p1.addPath(p2);
-    return p1;
+
+    // Translate the combined path so its tight bounds are centered on the
+    // screen — proper vertical centering of the actual ink, not metric guesses.
+    const bounds = p1.computeTightBounds();
+    const tx = width / 2 - (bounds.x + bounds.width / 2);
+    const ty =
+      height / 2 - (bounds.y + bounds.height / 2) + TEXT_OFFSET_Y;
+    p1.transform(
+      processTransform3d([
+        { translateX: tx },
+        { translateY: ty },
+      ])
+    );
+
+    // Pivot at the center of the "I" glyph of SKIA (3rd letter — a thin
+    // vertical stem). The point is reliably inside ink, so at high zoom the
+    // scaled mask covers the screen instead of opening onto a gap.
+    const ids = bigFont.getGlyphIDs(title);
+    const widths = bigFont.getGlyphWidths(ids);
+    const iCenterXLocal =
+      -tb.width / 2 + widths[0] + widths[1] + widths[2] / 2;
+    const iCenterYLocal = (tMetrics.ascent + tMetrics.descent) / 2;
+    const pivotX = iCenterXLocal + tx;
+    const pivotY = iCenterYLocal + ty;
+
+    return { path: p1, pivotX, pivotY };
   }, [bigFont, subFont, width, height]);
+
+  const clip = clipData?.path ?? null;
+  const pivotX = clipData?.pivotX ?? width / 2;
+  const pivotY = clipData?.pivotY ?? height / 2;
 
   useEffect(() => {
     if (typeof RNWebGPU === "undefined") {
@@ -332,12 +361,39 @@ export function ClippedText() {
     );
   }
 
+  // Start the intro animation as soon as we have both the text path and the
+  // first rendered scene frame to reveal.
+  if (clip && image && animStartRef.current === null) {
+    animStartRef.current = Date.now();
+  }
+  const elapsed =
+    animStartRef.current !== null ? Date.now() - animStartRef.current : 0;
+  const animT = Math.min(
+    Math.max(elapsed - ANIM_DELAY_MS, 0) / ANIM_DURATION_MS,
+    1
+  );
+  const scale = START_SCALE + (1 - START_SCALE) * easeOutCubic(animT);
+
+  let scaledClip = null;
+  if (clip) {
+    scaledClip = clip.copy();
+    scaledClip.transform(
+      processTransform3d([
+        { translateX: pivotX },
+        { translateY: pivotY },
+        { scale },
+        { translateX: -pivotX },
+        { translateY: -pivotY },
+      ])
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Canvas style={StyleSheet.absoluteFill}>
-        <Fill color="#08080d" />
-        {clip && image && (
-          <Group clip={clip}>
+        <Fill color="white" />
+        {scaledClip && image && (
+          <Group clip={scaledClip}>
             <SkiaImage
               image={image}
               x={0}
@@ -348,12 +404,12 @@ export function ClippedText() {
             />
           </Group>
         )}
-        {clip && (
+        {scaledClip && (
           <Path
-            path={clip}
+            path={scaledClip}
             style="stroke"
             strokeWidth={1.5}
-            color="rgba(255,255,255,0.35)"
+            color="rgba(0,0,0,0.4)"
           />
         )}
       </Canvas>
