@@ -64,7 +64,7 @@ fn fs(@location(0) color: vec4f) -> @location(0) vec4f {
 `;
 
 const NUM_CUBES = 32;
-const START_SCALE = 10;
+const START_SCALE = 24;
 const ANIM_DELAY_MS = 5000;
 const ANIM_DURATION_MS = 2500;
 const TEXT_OFFSET_Y = -64;
