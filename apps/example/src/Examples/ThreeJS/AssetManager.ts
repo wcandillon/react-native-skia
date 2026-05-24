@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader";
 import { RGBELoader } from "three/addons/loaders/RGBELoader";
+import { Skia, ColorType, AlphaType } from "@shopify/react-native-skia";
 
 export interface GLTF {
   animations: THREE.AnimationClip[];
@@ -27,6 +28,75 @@ export const resolveAsset = (mod: ReturnType<typeof require>) => {
   return Image.resolveAssetSource(mod).uri;
 };
 
+// three's TextureLoader/ImageBitmapLoader need DOM image APIs that Skia doesn't
+// provide. Decode JPG/PNG bytes through Skia and hand three.js a DataTexture
+// instead so it uploads via device.queue.writeTexture.
+class SkiaTextureLoader extends THREE.Loader<THREE.DataTexture> {
+  load(
+    url: string,
+    onLoad: (texture: THREE.DataTexture) => void,
+    _onProgress?: (event: ProgressEvent) => void,
+    onError?: (event: unknown) => void
+  ) {
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`SkiaTextureLoader: HTTP ${res.status} for ${url}`);
+        }
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        const data = Skia.Data.fromBytes(new Uint8Array(buffer));
+        const image = Skia.Image.MakeImageFromEncoded(data);
+        if (!image) {
+          throw new Error(`SkiaTextureLoader: failed to decode ${url}`);
+        }
+        const width = image.width();
+        const height = image.height();
+        // SkImage.readPixels throws "Not implemented yet" under SK_GRAPHITE.
+        // Draw into an offscreen surface and read pixels off the canvas instead.
+        const surface = Skia.Surface.MakeOffscreen(width, height);
+        if (!surface) {
+          throw new Error(
+            `SkiaTextureLoader: Surface.MakeOffscreen failed for ${url}`
+          );
+        }
+        const canvas = surface.getCanvas();
+        canvas.drawImage(image, 0, 0);
+        surface.flush();
+        const pixels = canvas.readPixels(0, 0, {
+          width,
+          height,
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        });
+        if (!pixels) {
+          throw new Error(`SkiaTextureLoader: readPixels failed for ${url}`);
+        }
+        const texture = new THREE.DataTexture(
+          pixels as Uint8Array,
+          width,
+          height,
+          THREE.RGBAFormat,
+          THREE.UnsignedByteType
+        );
+        texture.flipY = false;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        onLoad(texture);
+      })
+      .catch((e) => {
+        console.warn("[SkiaTextureLoader] failed", url, e);
+        onError?.(e);
+      });
+  }
+}
+
+const skiaTextureLoaderPlugin = (parser: any) => {
+  parser.textureLoader = new SkiaTextureLoader(parser.options.manager);
+  return { name: "SKIA_TEXTURE_LOADER" };
+};
+
 export const useRGBE = (asset: ReturnType<typeof require>) => {
   const url = resolveAsset(asset);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
@@ -44,6 +114,7 @@ export const useGLTF = (asset: ReturnType<typeof require>) => {
   const url = resolveAsset(asset);
   useEffect(() => {
     const loader = new GLTFLoader();
+    loader.register(skiaTextureLoaderPlugin);
     const dracoLoader = new DRACOLoader();
     loader.setDRACOLoader(dracoLoader);
     loader.load(url, (model: GLTF) => {

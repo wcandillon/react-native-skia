@@ -9,9 +9,13 @@ import { FiberProvider } from "its-fine";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { enableScreens } from "react-native-screens";
 
-// The two lines below are needed by three.js
+// The lines below are needed by three.js
 import "fast-text-encoding";
 window.parent = window;
+if (!navigator.userAgent) {
+  // GLTFLoader reads navigator.userAgent and calls .match on it
+  (navigator as { userAgent: string }).userAgent = "react-native";
+}
 
 import {
   ReanimatedExample,
