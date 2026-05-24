@@ -32,4 +32,5 @@ export type StackParamList = {
   Chat: undefined;
   Pictures: undefined;
   WebGPU: undefined;
+  Telegram: undefined;
 };

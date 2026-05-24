@@ -1,0 +1,72 @@
+[
+    {
+        "id": "28dbf2a7-5723-4743-8c42-d68b643ef916",
+        "user": "mjcole",
+        "read": false,
+        "messages": [
+            {
+                "id": "fc2c3317-d525-4af0-91f9-1c6a0dd937d3",
+                "me": true,
+                "message": "Hey there 🙋🏼‍♀️\nAre you still game for tonight?",
+                "timestamp": 1515694896
+            },
+            {
+                "id": "d53c6fc8-0bae-48b4-8f72-76dd1c82454f",
+                "me": false,
+                "message": "Yes, see you at the show!",
+                "timestamp": 1515698496
+            }
+        ]
+    },
+    {
+        "id": "bfa9748a-5b98-4921-b04e-6724cbc7f94e",
+        "user": "griffinsof",
+        "read": true,
+        "messages": [
+            {
+                "id": "283cfc8f-cf28-4e10-ba8f-3e3de5d59d96",
+                "me": true,
+                "message": "Still up for dinner? 😎",
+                "timestamp": 1515072783
+            },
+            {
+                "id": "a29971d4-0878-4ab8-8cd3-dd12ec6f458d",
+                "me": true,
+                "message": "That new Thai place has just opened up near me and it looks 👌",
+                "timestamp": 1515072793
+            },
+            {
+                "id": "812f95f1-6f1d-4342-99d5-fd27619d29dc",
+                "me": false,
+                "message": "Sounds good to me! 🍜",
+                "timestamp": 1515072863
+            }
+        ]
+    },
+    {
+        "id": "2fcd2b0c-2540-49bf-983d-380d13e5337e",
+        "user": "itsmesuri",
+        "read": true,
+        "messages": [
+            {
+                "id": "209583c2-5b0a-4f2c-bc8b-50532adc663c",
+                "me": false,
+                "message": "Hey Sylvia, can you make it to the big reunion party on Friday?",
+                "timestamp": 1515694896
+            }
+        ]
+    },
+    {
+        "id": "a61fcf57-437b-4cd3-a389-abf46f72ced5",
+        "user": "alexandergarcia",
+        "read": true,
+        "messages": [
+            {
+                "id": "cda2ba06-c1ec-4a11-aab5-5f9a7597ab7c",
+                "me": false,
+                "message": "Tell me you saw the game last night? How about that insane play? 😲",
+                "timestamp": 1515694810
+            }
+        ]
+    }
+]

@@ -94,6 +94,11 @@ export const HomeScreen = () => {
       />
       <HomeScreenButton title="💳 Wallet" description="Wallet" route="Wallet" />
       <HomeScreenButton
+        title="📨 Telegram theme switch"
+        description="Circular reveal using makeImageFromView"
+        route="Telegram"
+      />
+      <HomeScreenButton
         title="📉 Graphs"
         description="Animated graphs with Skia"
         route="Graphs"

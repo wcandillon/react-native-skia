@@ -30,7 +30,7 @@ public class PlatformContext {
     // (ViewScreenshotService) path, bypassing the API 29+ HWUI/RenderNode
     // pipeline. Used to compare the legacy bugs (missing shadows, padding
     // double-count, broken rounded clipping) against the new path.
-    private static final boolean DEBUG_FORCE_LEGACY_SNAPSHOT = true;
+    private static final boolean DEBUG_FORCE_LEGACY_SNAPSHOT = false;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 

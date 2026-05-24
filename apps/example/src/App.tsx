@@ -35,6 +35,7 @@ import {
   LiquidGlass,
   Pictures,
   WebGPU,
+  Telegram,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -75,6 +76,7 @@ const linking: LinkingOptions<StackParamList> = {
       Chat: "chat",
       Pictures: "pictures",
       WebGPU: "webgpu",
+      Telegram: "telegram",
     },
   },
   prefixes: ["rnskia://"],
@@ -240,6 +242,13 @@ const App = () => {
             <Stack.Screen
               name="WebGPU"
               component={WebGPU}
+              options={{
+                header: () => null,
+              }}
+            />
+            <Stack.Screen
+              name="Telegram"
+              component={Telegram}
               options={{
                 header: () => null,
               }}
