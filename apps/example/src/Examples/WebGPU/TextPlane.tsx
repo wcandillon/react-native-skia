@@ -102,11 +102,11 @@ fn fs(@location(0) uv: vec2f) -> @location(0) vec4f {
 const NUM_CUBES = 5;
 const CUBE_RADIUS = 1.5;
 const CUBE_SCALE = 0.45;
-const CUBE_ORBIT_SPEED = 0.35;
+const CUBE_ORBIT_SPEED = 0.55;
 const PLANE_W = 6;
 const PLANE_H = 3;
-const CAM_RADIUS = 4;
-const CAM_Y = 0.6;
+const CAM_RADIUS = 3;
+const CAM_Y = 0.4;
 
 const TEX_W = 1024;
 const TEX_H = 512;
@@ -169,7 +169,7 @@ function createTextTexture(
     .addText("Hello React Native Developers 🙋‍♂️\n\n")
     .pop()
     .pushStyle(subStyle)
-    .addText("William here presenting from beautiful Kraków.")
+    .addText("from beautiful Kraków")
     .build();
 
   const padding = 40;
@@ -387,12 +387,14 @@ export function TextPlane() {
         }
         const t = Date.now() / 1000;
 
-        // Camera orbits slightly to add motion.
+        // Camera locked to the front of the plane (never sweeps behind), but
+        // wobbles around its rest position in X and Y with offset frequencies
+        // so the text feels alive without rotating fully around.
         const view = mat4LookAt(
           [
-            Math.cos(t * 0.18) * CAM_RADIUS,
-            CAM_Y + Math.sin(t * 0.3) * 0.4,
-            Math.sin(t * 0.18) * CAM_RADIUS,
+            Math.sin(t * 0.4) * 0.35,
+            CAM_Y + Math.sin(t * 0.5) * 0.5,
+            CAM_RADIUS,
           ] as Vec3,
           [0, 0, 0] as Vec3,
           [0, 1, 0] as Vec3
