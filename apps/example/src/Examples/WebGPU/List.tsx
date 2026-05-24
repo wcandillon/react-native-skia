@@ -37,6 +37,12 @@ export const examples = [
     title: "Layered Cubes",
     description: "WebGPU back layer, Skia text, WebGPU front layer on top",
   },
+  {
+    screen: "TextPlane",
+    title: "Text Plane",
+    description:
+      "Skia text baked into a GPU texture, sampled by a 3D plane that cubes orbit through",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

@@ -9,6 +9,7 @@ import { TexturedCube } from "./TexturedCube";
 import { BlurredSheet } from "./BlurredSheet";
 import { ClippedText } from "./ClippedText";
 import { LayeredCubes } from "./LayeredCubes";
+import { TextPlane } from "./TextPlane";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -65,6 +66,13 @@ export const WebGPU = () => {
         component={LayeredCubes}
         options={{
           title: "Layered Cubes",
+        }}
+      />
+      <Stack.Screen
+        name="TextPlane"
+        component={TextPlane}
+        options={{
+          title: "Text Plane",
         }}
       />
     </Stack.Navigator>

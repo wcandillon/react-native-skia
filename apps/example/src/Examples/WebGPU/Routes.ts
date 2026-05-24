@@ -6,4 +6,5 @@ export type Routes = {
   BlurredSheet: undefined;
   ClippedText: undefined;
   LayeredCubes: undefined;
+  TextPlane: undefined;
 };
