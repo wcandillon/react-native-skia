@@ -1,5 +1,6 @@
 import type { SkImage } from "@shopify/react-native-skia";
 import {
+  Blur,
   Canvas,
   Fill,
   Group,
@@ -391,7 +392,22 @@ export function ClippedText() {
   return (
     <View style={styles.container}>
       <Canvas style={StyleSheet.absoluteFill}>
-        <Fill color="white" />
+        {/* Blurred scene as the backdrop */}
+        {image && (
+          <SkiaImage
+            image={image}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit="cover"
+          >
+            <Blur blur={40} mode="clamp" />
+          </SkiaImage>
+        )}
+        {/* White wash on top of the blur to keep it frosted */}
+        <Fill color="rgba(255, 255, 255, 0.6)" />
+        {/* Sharp scene revealed through the text mask */}
         {scaledClip && image && (
           <Group clip={scaledClip}>
             <SkiaImage
