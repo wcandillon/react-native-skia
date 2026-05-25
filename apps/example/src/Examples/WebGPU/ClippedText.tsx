@@ -65,7 +65,6 @@ fn fs(@location(0) color: vec4f) -> @location(0) vec4f {
 `;
 
 const NUM_CUBES = 32;
-const START_SCALE = 50;
 const ANIM_DELAY_MS = 5000;
 const ANIM_DURATION_MS = 2500;
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -376,7 +375,10 @@ export function ClippedText() {
     Math.max(elapsed - ANIM_DELAY_MS, 0) / ANIM_DURATION_MS,
     1
   );
-  const scale = START_SCALE + (1 - START_SCALE) * easeOutCubic(animT);
+  // Portrait fits less of the text on screen at a given zoom, so push the
+  // initial scale higher to keep the "diving out of a single letter" effect.
+  const startScale = height > width ? 110 : 50;
+  const scale = startScale + (1 - startScale) * easeOutCubic(animT);
 
   let scaledClip = null;
   if (clip) {

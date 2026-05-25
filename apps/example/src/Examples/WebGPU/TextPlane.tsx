@@ -105,8 +105,8 @@ const CUBE_SCALE = 0.45;
 const CUBE_ORBIT_SPEED = 0.55;
 const PLANE_W = 6;
 const PLANE_H = 3;
-const CAM_RADIUS = 3;
-const CAM_Y = 0.4;
+const CAM_RADIUS = 6;
+const CAM_Y = 0.6;
 
 const TEX_W = 1024;
 const TEX_H = 512;
@@ -392,8 +392,8 @@ export function TextPlane() {
         // so the text feels alive without rotating fully around.
         const view = mat4LookAt(
           [
-            Math.sin(t * 0.4) * 0.35,
-            CAM_Y + Math.sin(t * 0.5) * 0.5,
+            Math.sin(t * 0.4) * 0.7,
+            CAM_Y + Math.sin(t * 0.5) * 1.0,
             CAM_RADIUS,
           ] as Vec3,
           [0, 0, 0] as Vec3,
