@@ -1,7 +1,7 @@
 #import "ViewScreenshotService.h"
 
 #import <CoreGraphics/CoreGraphics.h>
-#import <QuartzCore/QuartzCore.h>
+ #import <QuartzCore/QuartzCore.h>
 
 @implementation ViewScreenshotService {
   RCTUIManager *_uiManager;

@@ -38,15 +38,12 @@ export const Chat = ({ chat, pinned }: ChatProps) => {
       >
         <Avatar id={chat.user} large />
         <View style={styles.middle}>
-          <View style={styles.nameRow}>
-            <Text
-              style={[styles.name, { color: theme.mainForeground }]}
-              numberOfLines={1}
-            >
-              {user?.name ?? chat.user}
-            </Text>
-            {pinned && <Text style={styles.pin}>📌</Text>}
-          </View>
+          <Text
+            style={[styles.name, { color: theme.mainForeground }]}
+            numberOfLines={1}
+          >
+            {user?.name ?? chat.user}
+          </Text>
           <Text
             style={[styles.preview, { color: theme.muted }]}
             numberOfLines={1}
@@ -76,19 +73,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.m,
   },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   name: {
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 2,
-    flexShrink: 1,
-  },
-  pin: {
-    fontSize: 12,
-    marginLeft: 6,
   },
   preview: {
     fontSize: 14,

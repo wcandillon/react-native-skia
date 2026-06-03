@@ -5,6 +5,7 @@ import { useTheme } from "../ColorSchemeContext";
 import { spacing } from "../theme";
 
 import { ColorSchemeButton } from "./ColorSchemeButton";
+import { Icon } from "./Icon";
 
 export const Header = () => {
   const theme = useTheme();
@@ -18,9 +19,7 @@ export const Header = () => {
               { backgroundColor: theme.secondaryBackground },
             ]}
           >
-            <Text style={[styles.iconGlyph, { color: theme.mainForeground }]}>
-              ☰
-            </Text>
+            <Icon name="menu" size={22} color={theme.mainForeground} />
           </View>
           <Text style={[styles.title, { color: theme.mainForeground }]}>
             Chats
@@ -69,10 +68,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-  },
-  iconGlyph: {
-    fontSize: 18,
-    fontWeight: "600",
   },
   title: {
     fontSize: 30,

@@ -1,5 +1,7 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+
+import { Icon } from "./Icon";
 
 interface CheckmarkProps {
   checked: boolean;
@@ -8,7 +10,7 @@ interface CheckmarkProps {
 export const Checkmark = ({ checked }: CheckmarkProps) => {
   return (
     <View style={styles.box}>
-      {checked && <Text style={styles.check}>✓</Text>}
+      {checked && <Icon name="check" size={12} color="#979797" />}
     </View>
   );
 };
@@ -22,11 +24,5 @@ const styles = StyleSheet.create({
     height: 16,
     justifyContent: "center",
     alignItems: "center",
-  },
-  check: {
-    color: "#979797",
-    fontSize: 10,
-    lineHeight: 10,
-    fontWeight: "700",
   },
 });

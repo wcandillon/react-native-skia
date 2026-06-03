@@ -1,8 +1,10 @@
 import React from "react";
-import { Text } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useColorScheme, useTheme } from "../ColorSchemeContext";
+
+import { Icon } from "./Icon";
 
 export const ColorSchemeButton = () => {
   const theme = useTheme();
@@ -16,9 +18,13 @@ export const ColorSchemeButton = () => {
     });
   return (
     <GestureDetector gesture={tap}>
-      <Text style={{ fontSize: 26, color: theme.mainForeground }}>
-        {colorScheme === "light" ? "🌙" : "☀️"}
-      </Text>
+      <View>
+        <Icon
+          name={colorScheme === "light" ? "moon" : "sun"}
+          size={26}
+          color={theme.mainForeground}
+        />
+      </View>
     </GestureDetector>
   );
 };
