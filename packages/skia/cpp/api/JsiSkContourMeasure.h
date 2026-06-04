@@ -1,11 +1,15 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 #include <jsi/jsi.h>
 
 #include "JsiSkHostObjects.h"
+#include "jsi2/NativeObject.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -20,13 +24,29 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkContourMeasure
-    : public JsiSkWrappingSkPtrHostObject<SkContourMeasure> {
+/**
+ * Migrated from the deprecated jsi::HostObject API to the JSI NativeState
+ * pattern (rnwgpu::NativeObject, see cpp/jsi2/NativeObject.h).
+ *
+ * Instead of intercepting every property access through HostObject::get(),
+ * the methods/getters live on a shared prototype installed once per runtime,
+ * and the native data is attached to a plain JS object via setNativeState().
+ */
+class JsiSkContourMeasure : public rnwgpu::NativeObject<JsiSkContourMeasure> {
 public:
+  // Used both for Symbol.toStringTag and (if ever installed) the global
+  // constructor name. The JS-facing type guard relies on __typename__ below.
+  static constexpr const char *CLASS_NAME = "ContourMeasure";
+
   JsiSkContourMeasure(std::shared_ptr<RNSkPlatformContext> context,
-                      const sk_sp<SkContourMeasure> contourMeasure)
-      : JsiSkWrappingSkPtrHostObject(std::move(context),
-                                     std::move(contourMeasure)) {}
+                      sk_sp<SkContourMeasure> contourMeasure)
+      : rnwgpu::NativeObject<JsiSkContourMeasure>(CLASS_NAME),
+        _context(std::move(context)), _object(std::move(contourMeasure)) {}
+
+  // The method bodies below are unchanged from the HostObject implementation.
+  // They are installed on the prototype via installMethod(); because they
+  // return jsi::Value they take full control of argument handling (NativeObject
+  // forwards `arguments`/`count` and passes an undefined `thisValue`).
 
   JSI_HOST_FUNCTION(getPosTan) {
     auto dist = arguments[0].asNumber();
@@ -67,16 +87,66 @@ public:
     return JsiSkPath::toValue(runtime, getContext(), builder.snapshot());
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  // Preserves the SkJSIInstance<"ContourMeasure"> contract on the JS side.
+  std::string getTypename() { return CLASS_NAME; }
 
-  std::string getObjectType() const override { return "JsiSkContourMeasure"; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkContourMeasure, ContourMeasure)
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installGetter(runtime, prototype, "__typename__",
+                  &JsiSkContourMeasure::getTypename);
+    installMethod(runtime, prototype, "getPosTan",
+                  &JsiSkContourMeasure::getPosTan);
+    installMethod(runtime, prototype, "length", &JsiSkContourMeasure::length);
+    installMethod(runtime, prototype, "isClosed",
+                  &JsiSkContourMeasure::isClosed);
+    installMethod(runtime, prototype, "getSegment",
+                  &JsiSkContourMeasure::getSegment);
+    // dispose() needs access to the JS object (`thisValue`) to lower the
+    // reported memory pressure, so it is installed as a raw host function
+    // rather than through installMethod() (which hides `thisValue`).
+    prototype.setProperty(
+        runtime, "dispose",
+        jsi::Function::createFromHostFunction(
+            runtime, jsi::PropNameID::forUtf8(runtime, "dispose"), 0,
+            [](jsi::Runtime &rt, const jsi::Value &thisValue,
+               const jsi::Value * /*arguments*/,
+               size_t /*count*/) -> jsi::Value {
+              auto self = JsiSkContourMeasure::fromValue(rt, thisValue);
+              self->release();
+              if (thisValue.isObject()) {
+                thisValue.getObject(rt).setExternalMemoryPressure(
+                    rt, rnwgpu::kMinMemoryPressure);
+              }
+              return jsi::Value::undefined();
+            }));
+  }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkContourMeasure, getPosTan),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, length),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, isClosed),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, getSegment),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, dispose))
+protected:
+  /**
+   * Returns the wrapped object, throwing if it has been disposed. Mirrors the
+   * behaviour of the former JsiSkWrapping* base classes.
+   */
+  sk_sp<SkContourMeasure> getObject() const {
+    if (_disposed.load(std::memory_order_acquire)) {
+      throw std::runtime_error("Attempted to access a disposed object.");
+    }
+    return _object;
+  }
+
+  std::shared_ptr<RNSkPlatformContext> getContext() const { return _context; }
+
+private:
+  void release() {
+    bool expected = false;
+    if (_disposed.compare_exchange_strong(expected, true,
+                                          std::memory_order_acq_rel)) {
+      _object = nullptr;
+    }
+  }
+
+  std::shared_ptr<RNSkPlatformContext> _context;
+  sk_sp<SkContourMeasure> _object;
+  std::atomic<bool> _disposed = {false};
 };
 } // namespace RNSkia
