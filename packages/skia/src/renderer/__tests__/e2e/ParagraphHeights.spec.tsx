@@ -1,5 +1,6 @@
 import { resolveFile, surface } from "../setup";
-import { itRunsE2eOnly } from "../../../__tests__/setup";
+import { checkImage, itRunsE2eOnly } from "../../../__tests__/setup";
+import { PaintStyle } from "../../../skia/types";
 
 const RobotoRegular = Array.from(
   resolveFile("skia/__tests__/assets/Roboto-Regular.ttf")
@@ -15,6 +16,56 @@ const NotoSansSC = Array.from(
 // (no ascenders above cap height, no descenders) should measure smaller than
 // "Typography" (y/p/g descenders).
 describe("Paragraph height measurement (#3493)", () => {
+  it("draws the reported bounding box around each glyph of 'Hello你好'", async () => {
+    const img = await surface.drawOffscreen(
+      (Skia, canvas, ctx) => {
+        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
+        )!;
+        const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
+        )!;
+        const provider = Skia.TypefaceFontProvider.Make();
+        provider.registerFont(roboto, "Roboto");
+        provider.registerFont(noto, "Noto Sans SC");
+        const text = "Hello你好";
+        const builder = Skia.ParagraphBuilder.Make({}, provider);
+        builder.pushStyle({
+          color: Skia.Color("black"),
+          // "Hello" is shaped with Roboto, "你好" falls back to Noto Sans SC.
+          fontFamilies: ["Roboto", "Noto Sans SC"],
+          fontSize: 36,
+        });
+        builder.addText(text);
+        const paragraph = builder.build();
+        paragraph.layout(ctx.width);
+        canvas.clear(Skia.Color("white"));
+        canvas.translate(8, (ctx.height - paragraph.getHeight()) / 2);
+        paragraph.paint(canvas, 0, 0);
+        const paint = Skia.Paint();
+        paint.setColor(Skia.Color("red"));
+        paint.setStyle(ctx.PaintStyle.Stroke);
+        paint.setStrokeWidth(1);
+        for (let i = 0; i < text.length; i++) {
+          paragraph.getRectsForRange(i, i + 1).forEach((rect) => {
+            canvas.drawRect(rect, paint);
+          });
+        }
+      },
+      {
+        RobotoRegular,
+        NotoSansSC,
+        PaintStyle,
+        width: surface.width,
+        height: surface.height,
+      }
+    );
+    checkImage(
+      img,
+      `snapshots/paragraph/paragraph-glyph-bounding-boxes-${surface.OS}.png`
+    );
+  });
+
   it("returns the same metrics-based height for 'Hello' and 'Typography'", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
