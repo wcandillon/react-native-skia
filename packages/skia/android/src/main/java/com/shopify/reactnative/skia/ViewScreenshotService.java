@@ -19,10 +19,11 @@ import android.widget.ScrollView;
 import androidx.annotation.NonNull;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.UIManager;
+import com.facebook.react.uimanager.BackgroundStyleApplicator;
 import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.ViewProps;
 import com.facebook.react.views.view.ReactViewGroup;
 
-import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -118,17 +119,13 @@ public class ViewScreenshotService {
     }
 
     private static void drawChildren(Canvas canvas, ViewGroup group, Paint paint, float parentOpacity) {
-        // Handle clipping for ReactViewGroup
-        if (group instanceof ReactViewGroup) {
-            try {
-                Class[] cArg = new Class[1];
-                cArg[0] = Canvas.class;
-                Method method = ReactViewGroup.class.getDeclaredMethod("dispatchOverflowDraw", cArg);
-                method.setAccessible(true);
-                method.invoke(group, canvas);
-            } catch (Exception e) {
-                Log.e(TAG, "couldn't invoke dispatchOverflowDraw() on ReactViewGroup", e);
-            }
+        // ReactViewGroup applies `overflow: hidden` / `overflow: scroll` clipping from its
+        // dispatchDraw() override. We never call dispatchDraw() here because children are
+        // walked manually (TextureView / SurfaceView need special handling), so the clip has
+        // to be replicated explicitly, exactly as ReactViewGroup.dispatchDraw() does it.
+        if (group instanceof ReactViewGroup
+                && !ViewProps.VISIBLE.equals(((ReactViewGroup) group).getOverflow())) {
+            BackgroundStyleApplicator.clipToPaddingBox(group, canvas);
         }
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);
