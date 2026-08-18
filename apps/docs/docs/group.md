@@ -17,6 +17,7 @@ It can apply the following operations to its children:
 | Name        | Type                | Description                                                                                                                                                                                                           |
 | :---------- | :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | transform?  | `Transform2d` | [Same API that's in React Native](https://reactnative.dev/docs/transforms) except for two differences: the default origin of the transformation is at the top-left corner (React Native views use the center), and all rotations are in radians. |
+| matrix?     | `InputMatrix`       | Matrix to apply to the group. When both `matrix` and `transform` are provided, `matrix` takes precedence.                                                                                                              |
 | origin?     | `Point`             | Sets the origin of the transformation. This property is not inherited by its children.                                                                                                                                |
 | clip?       | `RectOrRRectOrPath` | Rectangle, rounded rectangle, or Path to use to clip the children.                                                                                                                                                    |
 | invertClip? | `boolean`           | Invert the clipping region: parts outside the clipping region will be shown and, inside will be hidden.                                                                                                               |
@@ -101,6 +102,95 @@ const SimpleTransform = () => {
 ```
 
 ![Origin Transformation](assets/group/origin-transform.png)
+
+### Imperative Matrices
+
+Use `Skia.Matrix()` when an API expects a matrix or when you need to build a
+transform imperatively. It creates an identity matrix. Its transformation
+methods mutate the matrix, return the same matrix for chaining, and concatenate
+each operation in call order. Rotations are expressed in radians.
+
+```tsx twoslash
+import {
+  Canvas,
+  Group,
+  RoundedRect,
+  Skia,
+} from "@shopify/react-native-skia";
+
+const center = { x: 128, y: 128 };
+const matrix = Skia.Matrix()
+  .translate(center.x, center.y)
+  .rotate(Math.PI / 6)
+  .scale(1.2, 1.2)
+  .translate(-center.x, -center.y);
+
+const ImperativeMatrix = () => (
+  <Canvas style={{ flex: 1 }}>
+    <Group matrix={matrix}>
+      <RoundedRect
+        x={64}
+        y={64}
+        width={128}
+        height={128}
+        r={10}
+        color="lightblue"
+      />
+    </Group>
+  </Canvas>
+);
+```
+
+The available mutating operations are `translate()`, `scale()`, `skew()`,
+`rotate()`, and `concat()`. These methods pre-concatenate their transform.
+The corresponding `postTranslate()`, `postScale()`, `postSkew()`, and
+`postRotate()` methods concatenate it on the other side of the current matrix,
+so changing between the two changes the order of operations. `identity()`
+resets the matrix, while `get()` returns its nine numeric entries.
+
+The `origin` prop can also move the transformation origin for a matrix supplied
+to a `Group`. Avoid applying the same origin both in the matrix and through the
+prop, or it will be applied twice. The origin is local to that group and is not
+inherited by its children.
+
+`processTransform2d()` is a convenient alternative that creates a new matrix
+from the same ordered transform-array syntax accepted by the `transform` prop:
+
+```tsx twoslash
+import {
+  Canvas,
+  Group,
+  RoundedRect,
+  processTransform2d,
+} from "@shopify/react-native-skia";
+
+const center = { x: 128, y: 128 };
+const matrix = processTransform2d([
+  { translate: [center.x, center.y] },
+  { rotate: Math.PI / 6 },
+  { scale: 1.2 },
+  { translate: [-center.x, -center.y] },
+]);
+
+const ProcessedMatrix = () => (
+  <Canvas style={{ flex: 1 }}>
+    <Group matrix={matrix}>
+      <RoundedRect
+        x={64}
+        y={64}
+        width={128}
+        height={128}
+        r={10}
+        color="lightblue"
+      />
+    </Group>
+  </Canvas>
+);
+```
+
+Historical examples may refer to computed-value helpers that are no longer part
+of the current API. For animated transforms, use Reanimated Shared Values as
+described in the [animations documentation](/docs/animations/animations).
 
 ## Clipping Operations
 
