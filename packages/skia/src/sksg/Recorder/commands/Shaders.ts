@@ -221,7 +221,7 @@ const declareImageShader = (ctx: DrawingContext, props: ImageShaderProps) => {
     );
   } else {
     shader = ctx.track(
-      image.makeShaderCubic(
+      image.makeShaderOptions(
         TileMode[enumKey(tx)],
         TileMode[enumKey(ty)],
         sampling?.filter ?? FilterMode.Linear,
