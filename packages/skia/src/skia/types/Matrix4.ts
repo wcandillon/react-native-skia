@@ -190,12 +190,16 @@ export const multiply4 = (a: Matrix4, b: Matrix4): Matrix4 => {
   return result as unknown as Matrix4;
 };
 
-const skewY = (angle: number): Matrix4 => {
+// These matrices are row-major, so the shear factor of skewX - which offsets x
+// in proportion to y - belongs in row 0, column 1, and skewY's in row 1,
+// column 0. React Native's MatrixMath stores the same transforms column-major,
+// and porting its indices verbatim is what swapped the two axes here.
+const skewX = (angle: number): Matrix4 => {
   "worklet";
   return [1, Math.tan(angle), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 };
 
-const skewX = (angle: number): Matrix4 => {
+const skewY = (angle: number): Matrix4 => {
   "worklet";
   return [1, 0, 0, 0, Math.tan(angle), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 };
