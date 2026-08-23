@@ -104,13 +104,16 @@ const processCTM = ({
   if (layer) {
     ctm.layer = layer;
   }
+  // Only record a CTM command when saveCTM() will actually save the canvas.
+  // saveCTM() saves on transform/matrix, clip or layer; restoreCTM() always
+  // restores, so recording a CTM that saves nothing - `origin` with no
+  // transform, `clip={false}` from a conditional, a bare `invertClip` - pops
+  // an enclosing save that belongs to an ancestor.
   if (
-    clip !== undefined ||
-    invertClip !== undefined ||
-    transform !== undefined ||
-    origin !== undefined ||
-    matrix !== undefined ||
-    layer !== undefined
+    ctm.clip !== undefined ||
+    ctm.transform !== undefined ||
+    ctm.matrix !== undefined ||
+    ctm.layer !== undefined
   ) {
     return ctm;
   }
