@@ -217,6 +217,16 @@ export const drawPath = (ctx: DrawingContext, props: PathProps) => {
 
   let path = processPath(ctx.Skia, pathProps.path);
 
+  // Trim runs first, so start/end address the path the caller drew. Stroking
+  // first would replace it with its outline and leave the offsets walking that
+  // outline's perimeter instead. The native recorder orders these the same way.
+  if (hasStartOffset || hasEndOffset) {
+    const trimmed = ctx.Skia.Path.Trim(path, start, end, false);
+    if (trimmed) {
+      path = trimmed;
+    }
+  }
+
   // Apply fill type using PathBuilder
   if (hasFillType) {
     const builder = ctx.Skia.PathBuilder.MakeFromPath(path);
@@ -229,14 +239,6 @@ export const drawPath = (ctx: DrawingContext, props: PathProps) => {
     const stroked = ctx.Skia.Path.Stroke(path, stroke);
     if (stroked) {
       path = stroked;
-    }
-  }
-
-  // Apply trim using static Path.Trim
-  if (hasStartOffset || hasEndOffset) {
-    const trimmed = ctx.Skia.Path.Trim(path, start, end, false);
-    if (trimmed) {
-      path = trimmed;
     }
   }
 

@@ -149,6 +149,9 @@ public:
       if (hasStrokeOptions) {
         const auto &stroke = props.stroke.value();
         SkPaint strokePaint;
+        // A default SkPaint is fill-style, and FillPathWithPaint only
+        // outlines a paint that strokes.
+        strokePaint.setStyle(SkPaint::kStroke_Style);
 
         if (stroke.cap.has_value()) {
           strokePaint.setStrokeCap(stroke.cap.value());
@@ -166,11 +169,18 @@ public:
           strokePaint.setStrokeMiter(stroke.miter_limit.value());
         }
 
+        float precision = stroke.precision.value_or(1.0f);
+
         SkPathBuilder resultBuilder;
-        if (!skpathutils::FillPathWithPaint(*p, strokePaint, &resultBuilder)) {
-          throw std::runtime_error("Failed to apply stroke to path");
+        auto ctm = SkMatrix::Scale(precision, precision);
+        if (skpathutils::FillPathWithPaint(*p, strokePaint, &resultBuilder,
+                                           nullptr, ctm)) {
+          pathToUse = std::make_shared<const SkPath>(resultBuilder.snapshot());
+        } else {
+          // The JS player keeps the unstroked path when Path.Stroke returns
+          // null (e.g. a hairline width of 0).
+          pathToUse = std::const_pointer_cast<const SkPath>(p);
         }
-        pathToUse = std::make_shared<const SkPath>(resultBuilder.snapshot());
       } else {
         pathToUse = std::const_pointer_cast<const SkPath>(p);
       }
