@@ -161,15 +161,9 @@ public:
 
   void setSize(double size) { getObject()->setSize(size); }
 
-  // The JS API declares booleans here, but the previous implementation read
-  // the arguments with asNumber() — keep accepting numbers.
-  void setEmbolden(double embolden) {
-    getObject()->setEmbolden(static_cast<bool>(embolden));
-  }
+  void setEmbolden(bool embolden) { getObject()->setEmbolden(embolden); }
 
-  void setSubpixel(double subpixel) {
-    getObject()->setSubpixel(static_cast<bool>(subpixel));
-  }
+  void setSubpixel(bool subpixel) { getObject()->setSubpixel(subpixel); }
 
   void setTypeface(std::variant<std::nullptr_t, sk_sp<SkTypeface>> typeface) {
     getObject()->setTypeface(
