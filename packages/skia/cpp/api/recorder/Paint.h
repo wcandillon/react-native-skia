@@ -154,8 +154,11 @@ public:
     }
     ctx->savePaint();
     if (standalone) {
-      SkPaint freshPaint;
-      ctx->pushPaint(freshPaint);
+      // Reset the paint that savePaint() just pushed instead of pushing a
+      // second one: the matching RestorePaintDeclaration pops a single frame,
+      // so an extra push would leave the enclosing group's opacity on the
+      // stack and leak it onto every sibling drawn afterwards.
+      ctx->getPaint() = SkPaint();
     }
     auto &paint = ctx->getPaint();
     if (props.opacity.has_value()) {

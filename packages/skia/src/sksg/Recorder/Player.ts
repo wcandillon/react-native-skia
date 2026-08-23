@@ -123,7 +123,7 @@ const play = (ctx: DrawingContext, _command: Command) => {
     ctx.canvas.saveLayer(paint);
   } else if (isDrawCommand(command, CommandType.SavePaint)) {
     if (command.props.paint) {
-      ctx.paints.push(command.props.paint);
+      ctx.pushPaint(command.props.paint);
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { standalone } = command as any;

@@ -56,6 +56,15 @@ export const createDrawingContext = (
     nextPaintIndex++;
   };
 
+  // Pushes an externally owned paint (the `paint` prop) onto the stack. It must
+  // push an opacity alongside it: restorePaint() pops both, so pushing only the
+  // paint would underflow the opacity stack and leak the enclosing group's
+  // opacity onto everything drawn afterwards.
+  const pushPaint = (paint: SkPaint) => {
+    paints.push(paint);
+    opacities.push(opacities[opacities.length - 1]);
+  };
+
   const getOpacity = () => {
     return opacities[opacities.length - 1];
   };
@@ -144,6 +153,7 @@ export const createDrawingContext = (
 
     // Public methods
     savePaint,
+    pushPaint,
     saveBackdropFilter,
     get paint() {
       return paints[paints.length - 1];
