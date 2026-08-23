@@ -135,8 +135,22 @@ private:
     auto sourceAlpha = SkImageFilters::ColorFilter(
         SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kSrcIn), nullptr);
 
+    // The shadow is generated outside the shape and then clipped back into it,
+    // so "outside" has to be the complement of the shape's silhouette. Taking
+    // SrcOut against the source graphic itself makes it the complement of the
+    // source's *alpha*: inside a translucent shape 1 - alpha is non-zero, so
+    // the shadow is generated across the whole interior and tints it, no matter
+    // how small the blur and the offset are (issue #2990). Saturating alpha
+    // first keeps the shadow tied to the shape's outline instead of to its
+    // opacity. 255 is the saturation point of an 8-bit alpha channel, so one
+    // unit of coverage is enough to reach 1.
+    static constexpr float kAlphaSaturate[20] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0};
+    auto coverage = SkImageFilters::ColorFilter(
+        SkColorFilters::Matrix(kAlphaSaturate), nullptr);
+
     auto f1 = SkImageFilters::ColorFilter(
-        SkColorFilters::Blend(color, SkBlendMode::kSrcOut), nullptr);
+        SkColorFilters::Blend(color, SkBlendMode::kSrcOut), coverage);
 
     auto f2 = SkImageFilters::Offset(dx, dy, f1);
     auto f3 = SkImageFilters::Blur(sigmaX, sigmaY, SkTileMode::kDecal, f2);
