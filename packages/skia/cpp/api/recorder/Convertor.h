@@ -361,13 +361,16 @@ SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
         m4.preScale(1, s);
       } else if (key == "skewX") {
         auto angle = value.getProperty(runtime, key.c_str()).asNumber();
-        SkM44 skewX(1, 0, 0, 0, std::tan(angle), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        // The SkM44 constructor takes its arguments in row-major reading
+        // order, so the shear factor of a horizontal skew belongs in row 0,
+        // where it scales y into x.
+        SkM44 skewX(1, std::tan(angle), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
                     1);
         m4.preConcat(skewX);
 
       } else if (key == "skewY") {
         auto angle = value.getProperty(runtime, key.c_str()).asNumber();
-        SkM44 skewY(1, std::tan(angle), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        SkM44 skewY(1, 0, 0, 0, std::tan(angle), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
                     1);
         m4.preConcat(skewY);
       } else if (key == "rotate" || key == "rotateZ") {
