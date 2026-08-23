@@ -69,12 +69,14 @@ public:
 
   void postTranslate(double x, double y) { getObject()->postTranslate(x, y); }
 
+  // A missing y means a uniform scale, matching the CanvasKit backend and the
+  // SkMatrix type, where y is optional rather than defaulted to 1.
   void scale(double x, JsiOptional<double> y) {
-    getObject()->preScale(x, y.has_value() ? *y : 1);
+    getObject()->preScale(x, y.has_value() ? *y : x);
   }
 
   void postScale(double x, JsiOptional<double> y) {
-    getObject()->postScale(x, y.has_value() ? *y : 1);
+    getObject()->postScale(x, y.has_value() ? *y : x);
   }
 
   void skew(double x, double y) { getObject()->preSkew(x, y); }
