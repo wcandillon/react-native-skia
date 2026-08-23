@@ -1,17 +1,32 @@
 import React from "react";
 
-import { surface, importSkia } from "../setup";
+import { surface, importSkia, PIXEL_RATIO } from "../setup";
 import {
+  Blur,
   Circle,
   Fill,
   Group,
   LinearGradient,
   Paint,
   Path,
+  Rect,
   SweepGradient,
 } from "../../components";
 import { checkImage, docPath } from "../../../__tests__/setup";
 import { fitbox } from "../../components/shapes/FitBox";
+import { createDrawingContext } from "../../../sksg/Recorder/DrawingContext";
+import type { SkImage, SkPaint } from "../../../skia/types";
+import { AlphaType, ColorType } from "../../../skia/types";
+
+const readPixel = (image: SkImage, x: number, y: number) =>
+  Array.from(
+    image.readPixels(x, y, {
+      width: 1,
+      height: 1,
+      colorType: ColorType.RGBA_8888,
+      alphaType: AlphaType.Unpremul,
+    })!
+  );
 
 const blendModes = [
   "clear",
@@ -81,6 +96,68 @@ describe("Paint", () => {
       </Group>
     );
     checkImage(image, "snapshots/paint/circle.png");
+  });
+  it("should not mutate a user-provided paint via child effects", async () => {
+    const { Skia } = importSkia();
+    const { width, height } = surface;
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("red"));
+    const rect = {
+      x: width / 4,
+      y: height / 4,
+      width: width / 2,
+      height: height / 2,
+    };
+    // 8 logical pixels to the left of the rectangle, on its vertical center.
+    const outside = {
+      x: (rect.x - 8) * PIXEL_RATIO,
+      y: (height / 2) * PIXEL_RATIO,
+    };
+    const center = {
+      x: (width / 2) * PIXEL_RATIO,
+      y: (height / 2) * PIXEL_RATIO,
+    };
+    const blurred = await surface.draw(
+      <Rect {...rect} paint={paint}>
+        <Blur blur={10} />
+      </Rect>
+    );
+    // Sanity check: the blur bleeds outside the rectangle bounds.
+    expect(readPixel(blurred, outside.x, outside.y)[3]).toBeGreaterThan(0);
+    // The blur was materialized on the paint stack, not on the user's paint:
+    // reusing the paint without children must render a sharp rectangle.
+    const image = await surface.draw(<Rect {...rect} paint={paint} />);
+    expect(readPixel(image, outside.x, outside.y)).toEqual([0, 0, 0, 0]);
+    expect(readPixel(image, center.x, center.y)).toEqual([255, 0, 0, 255]);
+  });
+  it("should keep the base paint anti-aliased when the paint pool is reused", async () => {
+    const { Skia } = importSkia();
+    const drawFrame = (paintPool: SkPaint[]) => {
+      const ckSurface = Skia.Surface.MakeOffscreen(64, 64)!;
+      const canvas = ckSurface.getCanvas();
+      const ctx = createDrawingContext(Skia, paintPool, canvas);
+      ctx.paint.setColor(Skia.Color("red"));
+      canvas.drawCircle(32, 32, 24, ctx.paint);
+      ctx.dispose();
+      ckSurface.flush();
+      return Array.from(
+        ckSurface.makeImageSnapshot().readPixels(0, 0, {
+          width: 64,
+          height: 64,
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        })!
+      );
+    };
+    const paintPool: SkPaint[] = [];
+    const frame1 = drawFrame(paintPool);
+    const frame2 = drawFrame(paintPool);
+    // The circle edge shows partial coverage: anti-aliasing survived the
+    // paintPool[0].reset() performed when the pool is reused.
+    const alphas = frame2.filter((_, i) => i % 4 === 3);
+    expect(alphas.some((a) => a > 0 && a < 255)).toBe(true);
+    // A redraw reusing the pool renders exactly like the first frame.
+    expect(frame2).toEqual(frame1);
   });
   it("should accept a paint object as path property", async () => {
     const { Skia } = importSkia();

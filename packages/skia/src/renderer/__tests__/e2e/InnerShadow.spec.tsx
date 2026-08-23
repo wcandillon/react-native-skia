@@ -75,14 +75,7 @@ describe("Inner shadow", () => {
     const image = await surface.draw(
       <>
         <Fill color="white" />
-        <RoundedRect
-          x={32}
-          y={32}
-          width={192}
-          height={192}
-          r={24}
-          color="red"
-        >
+        <RoundedRect x={32} y={32} width={192} height={192} r={24} color="red">
           <Shadow inner dx={0} dy={0} blur={0} color="black" />
         </RoundedRect>
       </>

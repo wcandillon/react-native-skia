@@ -325,7 +325,9 @@ const downloadDawnLibs = async (): Promise<void> => {
       "libwebgpu_dawn.so"
     );
     if (!existsSync(src)) {
-      throw new Error(`Missing libwebgpu_dawn.so for ${abi} in ${androidAsset}`);
+      throw new Error(
+        `Missing libwebgpu_dawn.so for ${abi} in ${androidAsset}`
+      );
     }
     fileOps.cp(src, path.join(LIBS_DIR, "android", abi, "libwebgpu_dawn.so"));
   }
@@ -381,8 +383,7 @@ const downloadAppleLibs = async (): Promise<void> => {
   const extractedIosDir = path.join(iosTempDir, "ios");
   if (existsSync(extractedIosDir)) {
     const xcframeworks = readdirSync(extractedIosDir).filter(
-      (f) =>
-        f.endsWith(".xcframework") && f !== "libdawn_combined.xcframework"
+      (f) => f.endsWith(".xcframework") && f !== "libdawn_combined.xcframework"
     );
     for (const xcf of xcframeworks) {
       fileOps.cp(path.join(extractedIosDir, xcf), path.join(iosDir, xcf));
@@ -402,8 +403,7 @@ const downloadAppleLibs = async (): Promise<void> => {
   const extractedMacosDir = path.join(macosTempDir, "macos");
   if (existsSync(extractedMacosDir)) {
     const xcframeworks = readdirSync(extractedMacosDir).filter(
-      (f) =>
-        f.endsWith(".xcframework") && f !== "libdawn_combined.xcframework"
+      (f) => f.endsWith(".xcframework") && f !== "libdawn_combined.xcframework"
     );
     for (const xcf of xcframeworks) {
       fileOps.cp(path.join(extractedMacosDir, xcf), path.join(macosDir, xcf));

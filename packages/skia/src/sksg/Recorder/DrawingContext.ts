@@ -37,7 +37,10 @@ export const createDrawingContext = (
   if (paintPool.length === 0) {
     paintPool.push(Skia.Paint());
   } else {
+    // reset() produces an anti-alias false paint, unlike the Skia.Paint()
+    // factory: restore the default so reused pools render like the first frame.
     paintPool[0].reset();
+    paintPool[0].setAntiAlias(true);
   }
   paints.push(paintPool[0]);
   opacities.push(1);
@@ -56,12 +59,14 @@ export const createDrawingContext = (
     nextPaintIndex++;
   };
 
-  // Pushes an externally owned paint (the `paint` prop) onto the stack. It must
-  // push an opacity alongside it: restorePaint() pops both, so pushing only the
-  // paint would underflow the opacity stack and leak the enclosing group's
-  // opacity onto everything drawn afterwards.
+  // Pushes an externally owned paint (the `paint` prop) onto the stack. It
+  // pushes a frame-scoped copy, like the C++ DrawingCtx: materializePaint()
+  // mutates the top of the stack, and those mutations must not leak into the
+  // user-owned paint. It must also push an opacity alongside it: restorePaint()
+  // pops both, so pushing only the paint would underflow the opacity stack and
+  // leak the enclosing group's opacity onto everything drawn afterwards.
   const pushPaint = (paint: SkPaint) => {
-    paints.push(paint);
+    paints.push(track(paint.copy()));
     opacities.push(opacities[opacities.length - 1]);
   };
 
