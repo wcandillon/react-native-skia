@@ -370,22 +370,27 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
   // - The renderer is created synchronously on mount (the canvas element is
   //   guaranteed to exist in useLayoutEffect; a zero size at that point is
   //   fine, the surface is created once the canvas is measurable).
-  // - Redraw requests coalesce into a single animation frame. A picture
-  //   dispatched before the canvas has a size stays in pictureRef (drawing
-  //   while unmeasured is a no-op) and is painted by the resize path below
-  //   once the canvas becomes measurable, so it is never lost.
+  // - Redraw requests coalesce into a single microtask. A microtask (not an
+  //   animation frame) so that a picture produced inside a rAF callback (the
+  //   Reanimated mapper) is drawn before the current frame paints: deferring
+  //   to the next rAF alternates between "flush pending in this frame" and
+  //   "flush scheduled for the next frame", drawing on every other frame
+  //   only and halving the effective frame rate. A picture dispatched before
+  //   the canvas has a size stays in pictureRef (drawing while unmeasured is
+  //   a no-op) and is painted by the resize path below once the canvas
+  //   becomes measurable, so it is never lost.
   // - A ResizeObserver on the canvas itself recreates the surface and repaints
   //   synchronously (its callbacks run after layout, before paint), and is
   //   also the source of the user-facing onLayout event.
   const redrawPendingRef = useRef(false);
-  const frameRef = useRef(0);
+  const flushScheduledRef = useRef(false);
   const onLayoutRef = useRef(onLayout);
   useLayoutEffect(() => {
     onLayoutRef.current = onLayout;
   }, [onLayout]);
 
   const flushRedraw = useCallback(() => {
-    frameRef.current = 0;
+    flushScheduledRef.current = false;
     if (redrawPendingRef.current && rendererRef.current && pictureRef.current) {
       redrawPendingRef.current = false;
       rendererRef.current.draw(pictureRef.current);
@@ -396,8 +401,9 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
 
   const redraw = useCallback(() => {
     redrawPendingRef.current = true;
-    if (frameRef.current === 0) {
-      frameRef.current = requestAnimationFrame(flushRedraw);
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true;
+      queueMicrotask(flushRedraw);
     }
   }, [flushRedraw]);
 
@@ -568,12 +574,9 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
     };
   }, [isStatic]);
 
-  useEffect(() => {
-    return () => {
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = 0;
-    };
-  }, []);
+  // No flush cancellation is needed on unmount: a microtask queued before
+  // unmount runs within the same task, and flushRedraw no-ops once the
+  // layout-effect cleanup has nulled rendererRef.
 
   useImperativeHandle(
     ref,

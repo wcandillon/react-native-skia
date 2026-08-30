@@ -46,13 +46,6 @@ class ResizeObserverMock {
 
 const canvasSize = { width: 0, height: 0 };
 
-const rafQueue: FrameRequestCallback[] = [];
-const flushFrames = () => {
-  while (rafQueue.length > 0) {
-    rafQueue.shift()!(0);
-  }
-};
-
 const makeRawCanvas = () => ({
   clear: jest.fn(),
   save: jest.fn(),
@@ -120,11 +113,6 @@ beforeAll(() => {
   })) as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (global as any).ResizeObserver = ResizeObserverMock;
-  global.requestAnimationFrame = (cb: FrameRequestCallback) => {
-    rafQueue.push(cb);
-    return rafQueue.length;
-  };
-  global.cancelAnimationFrame = () => {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (global as any).IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -132,7 +120,6 @@ beforeAll(() => {
 beforeEach(() => {
   resizeObservers.length = 0;
   mediaQueryListeners.length = 0;
-  rafQueue.length = 0;
   canvasSize.width = 0;
   canvasSize.height = 0;
   display.pixelDensity = 1;
@@ -160,7 +147,7 @@ const mountView = (nativeID: string, onLayout?: () => void) => {
 };
 
 describe("SkiaPictureView.web", () => {
-  it("paints a picture without ever receiving a layout event", () => {
+  it("paints a picture without ever receiving a layout event", async () => {
     const { CanvasKitMock, rawCanvas } = createCanvasKitMock();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).CanvasKit = CanvasKitMock;
@@ -173,11 +160,11 @@ describe("SkiaPictureView.web", () => {
     expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
 
     // Dispatch a picture the way the reconciler does — note that no
-    // ResizeObserver entry has been delivered at this point.
+    // ResizeObserver entry has been delivered at this point. The draw is
+    // flushed from a microtask, hence the async act.
     const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    act(() => {
+    await act(async () => {
       api.setJsiProperty(1, "picture", fakePicture as unknown as SkPicture);
-      flushFrames();
     });
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
 
@@ -185,7 +172,7 @@ describe("SkiaPictureView.web", () => {
     expect(CanvasKitMock.deleteContext).toHaveBeenCalledWith(1);
   });
 
-  it("holds a picture dispatched while unmeasured and paints it on first resize", () => {
+  it("holds a picture dispatched while unmeasured and paints it on first resize", async () => {
     const { CanvasKitMock, rawCanvas } = createCanvasKitMock();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).CanvasKit = CanvasKitMock;
@@ -196,9 +183,8 @@ describe("SkiaPictureView.web", () => {
     expect(CanvasKitMock.MakeOnScreenGLSurface).not.toHaveBeenCalled();
 
     const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    act(() => {
+    await act(async () => {
       api.setJsiProperty(2, "picture", fakePicture as unknown as SkPicture);
-      flushFrames();
     });
     expect(rawCanvas.drawPicture).not.toHaveBeenCalled();
 
@@ -221,7 +207,7 @@ describe("SkiaPictureView.web", () => {
     view.unmount();
   });
 
-  it("recreates the surface at the new density when the pixel density changes", () => {
+  it("recreates the surface at the new density when the pixel density changes", async () => {
     const { CanvasKitMock, rawCanvas } = createCanvasKitMock();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).CanvasKit = CanvasKitMock;
@@ -230,9 +216,8 @@ describe("SkiaPictureView.web", () => {
 
     const view = mountView("4");
     const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    act(() => {
+    await act(async () => {
       api.setJsiProperty(4, "picture", fakePicture as unknown as SkPicture);
-      flushFrames();
     });
     expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenLastCalledWith(
       expect.anything(),
