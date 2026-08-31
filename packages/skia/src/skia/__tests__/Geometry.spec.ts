@@ -1,3 +1,4 @@
+import { isEdge } from "../../dom/nodes";
 import { importSkia } from "../../renderer/__tests__/setup";
 
 describe("Geometry", () => {
@@ -35,5 +36,30 @@ describe("Geometry", () => {
     expect(color[1]).toBeCloseTo(0.5);
     expect(color[2]).toBeCloseTo(0);
     expect(color[3]).toBeCloseTo(0.5);
+  });
+
+  it("should detect the edges of a rectangle away from the origin", () => {
+    const { rect } = importSkia();
+
+    const r = rect(10, 20, 100, 50);
+    expect(isEdge({ x: 10, y: 45 }, r)).toBe(true);
+    expect(isEdge({ x: 60, y: 20 }, r)).toBe(true);
+    expect(isEdge({ x: 110, y: 45 }, r)).toBe(true);
+    expect(isEdge({ x: 60, y: 70 }, r)).toBe(true);
+    expect(isEdge({ x: 100, y: 45 }, r)).toBe(false);
+    expect(isEdge({ x: 60, y: 50 }, r)).toBe(false);
+    expect(isEdge({ x: 60, y: 45 }, r)).toBe(false);
+  });
+
+  it("should only detect points on the border of a rectangle", () => {
+    const { rect } = importSkia();
+
+    const r = rect(10, 20, 100, 50);
+    expect(isEdge({ x: 10, y: 20 }, r)).toBe(true);
+    expect(isEdge({ x: 110, y: 70 }, r)).toBe(true);
+    expect(isEdge({ x: 10, y: 5000 }, r)).toBe(false);
+    expect(isEdge({ x: 110, y: 0 }, r)).toBe(false);
+    expect(isEdge({ x: -5000, y: 20 }, r)).toBe(false);
+    expect(isEdge({ x: 500, y: 70 }, r)).toBe(false);
   });
 });
