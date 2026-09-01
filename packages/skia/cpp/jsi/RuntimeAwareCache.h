@@ -34,6 +34,21 @@ public:
   static uint64_t getMainJsRuntimeGeneration() {
     return _mainRuntimeGeneration.load(std::memory_order_acquire);
   }
+  /**
+   * Called when the main runtime is about to go away (RNSkManager destruction).
+   * Bumps the generation so process-wide caches keyed on it
+   * (StaticRuntimeAwareCache) stop trusting their contents before the next
+   * install(). This closes the window where a runtime allocated at the dead
+   * runtime's address would otherwise be taken for the main runtime and be
+   * handed the stale jsi::Objects of the previous one.
+   *
+   * The pointer itself is intentionally left in place: worklet runtime
+   * threads may still call getMainJsRuntime() while teardown overlaps, and
+   * that accessor asserts on nullptr.
+   */
+  static void invalidateMainJsRuntime() {
+    _mainRuntimeGeneration.fetch_add(1, std::memory_order_acq_rel);
+  }
   static jsi::Runtime *getMainJsRuntime() {
     auto *rt = _mainRuntime.load(std::memory_order_acquire);
     assert(rt != nullptr && "Expected main Javascript runtime to be set in the "

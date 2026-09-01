@@ -149,9 +149,29 @@ public:
    */
   static void installPrototype(jsi::Runtime &runtime) {
     std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
+    ensurePrototypeLocked(runtime);
+  }
+
+  /**
+   * Look up (and install on first use) the prototype entry for this runtime.
+   *
+   * Callers must hold getPrototypeCacheMutex() and must consume the returned
+   * entry while still holding it: the lookup and the use of the prototype
+   * have to share one lock scope, because a reinstall of the native module
+   * (generation bump, see StaticRuntimeAwareCache) can swap the cache from
+   * any thread. A caller that released the lock in between would re-resolve
+   * a fresh cache with an empty entry and hand out an object without a
+   * prototype.
+   *
+   * The returned reference stays valid for the runtime's lifetime: the
+   * RuntimeAwareCache is heap-allocated and never freed, and
+   * std::unordered_map keeps references to its elements stable across
+   * rehashes.
+   */
+  static PrototypeCacheEntry &ensurePrototypeLocked(jsi::Runtime &runtime) {
     auto &entry = getPrototypeCache(runtime).get(runtime);
     if (entry.prototype.has_value()) {
-      return; // Already installed
+      return entry; // Already installed
     }
 
     // Create prototype object
@@ -270,6 +290,7 @@ public:
 
     // Cache the prototype
     entry.prototype = std::move(prototype);
+    return entry;
   }
 
   /**
@@ -280,13 +301,8 @@ public:
    * created internally by the native code).
    */
   static void installConstructor(jsi::Runtime &runtime) {
-    installPrototype(runtime);
-
     std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
-    auto &entry = getPrototypeCache(runtime).get(runtime);
-    if (!entry.prototype.has_value()) {
-      return;
-    }
+    auto &entry = ensurePrototypeLocked(runtime);
 
     // Create a constructor function that throws when called directly
     auto ctor = jsi::Function::createFromHostFunction(
@@ -314,8 +330,6 @@ public:
    */
   static jsi::Value create(jsi::Runtime &runtime,
                            std::shared_ptr<Derived> instance) {
-    installPrototype(runtime);
-
     // Store creation runtime for logging etc.
     instance->setCreationRuntime(&runtime);
 
@@ -325,18 +339,16 @@ public:
     // Attach native state
     obj.setNativeState(runtime, instance);
 
-    // Set prototype
+    // Install (on first use) and apply the prototype in a single lock scope
+    // so a concurrent cache swap cannot slip in between the two steps.
     {
       std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
-      auto &entry = getPrototypeCache(runtime).get(runtime);
-      if (entry.prototype.has_value()) {
-        // Use Object.setPrototypeOf to set the prototype
-        auto objectCtor =
-            runtime.global().getPropertyAsObject(runtime, "Object");
-        auto setPrototypeOf =
-            objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
-        setPrototypeOf.call(runtime, obj, *entry.prototype);
-      }
+      auto &entry = ensurePrototypeLocked(runtime);
+      // Use Object.setPrototypeOf to set the prototype
+      auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
+      auto setPrototypeOf =
+          objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
+      setPrototypeOf.call(runtime, obj, *entry.prototype);
     }
 
     // Set memory pressure hint for GC
