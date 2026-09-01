@@ -66,6 +66,12 @@ void RuntimeLifecycleMonitor::removeListener(
     // nothing to do here
   } else {
     listenersSet->second.erase(listener);
+    if (listenersSet->second.empty()) {
+      // addListener() uses "entry exists" as "monitor already installed in
+      // this runtime". Drop empty entries so a later runtime allocated at the
+      // same address still gets its own lifecycle monitor.
+      listeners.erase(listenersSet);
+    }
   }
 }
 
