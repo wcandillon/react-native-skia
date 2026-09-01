@@ -22,8 +22,12 @@ const copyFrameOnAndroid = (currentFrame: SharedValue<SkImage | null>) => {
   if (Platform.OS === "android") {
     const tex = currentFrame.value;
     if (tex) {
-      currentFrame.value = tex.makeNonTextureImage();
-      tex.dispose();
+      const copy = tex.makeNonTextureImage();
+      if (copy) {
+        currentFrame.value = copy;
+        tex.dispose();
+      }
+      // If copy fails, keep the original frame rather than showing black
     }
   }
 };
