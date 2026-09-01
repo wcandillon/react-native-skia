@@ -30,6 +30,11 @@ RNSkManager::RNSkManager(
 }
 
 RNSkManager::~RNSkManager() {
+  // The main runtime is going away: key out the process-wide prototype
+  // caches now rather than at the next install(), so nothing allocated at
+  // this runtime's address in between can be mistaken for it.
+  RNJsi::BaseRuntimeAwareCache::invalidateMainJsRuntime();
+
   // Free up any references
   _viewApi = nullptr;
   _jsRuntime = nullptr;

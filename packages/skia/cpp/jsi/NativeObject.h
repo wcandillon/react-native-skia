@@ -51,26 +51,32 @@ struct PrototypeCacheEntry {
  *
  * When used with static storage (like prototype caches), the cache persists
  * across hot reloads. But the JSI objects inside become invalid when the
- * runtime is destroyed. This wrapper tracks which runtime the cache was
- * created for and allocates a new cache when the runtime changes.
+ * runtime is destroyed. This wrapper tracks which main-runtime generation the
+ * cache was created for and allocates a new cache when the native module is
+ * reinstalled (RNSkManager construction bumps the generation).
+ *
+ * The generation is used instead of the runtime pointer on purpose: on an
+ * in-process runtime recreate (expo-updates reloadAsync, DevSettings.reload)
+ * Hermes frequently allocates the new runtime at the address of the freed
+ * one. A pointer comparison then sees "same runtime", keeps the stale cache,
+ * and create()/installConstructor() end up passing a jsi::Object owned by the
+ * dead runtime to the new one (use-after-free).
  *
  * The old cache is intentionally leaked - we cannot safely destroy JSI
  * objects after their runtime is gone.
  */
 template <typename T> struct StaticRuntimeAwareCache {
   RNJsi::RuntimeAwareCache<T> *cache = nullptr;
-  jsi::Runtime *cacheRuntime = nullptr;
+  uint64_t cacheGeneration = 0;
 
-  RNJsi::RuntimeAwareCache<T> &get(jsi::Runtime &rt) {
-    auto mainRuntime = RNJsi::BaseRuntimeAwareCache::getMainJsRuntime();
-    if (&rt == mainRuntime && cacheRuntime != mainRuntime) {
-      // Main runtime changed (hot reload) - allocate new cache, leak old one
+  RNJsi::RuntimeAwareCache<T> &get(jsi::Runtime & /*rt*/) {
+    auto generation =
+        RNJsi::BaseRuntimeAwareCache::getMainJsRuntimeGeneration();
+    if (cache == nullptr || cacheGeneration != generation) {
+      // First use, or the main runtime was reinstalled (hot reload / OTA):
+      // allocate a fresh cache and leak the old one.
       cache = new RNJsi::RuntimeAwareCache<T>();
-      cacheRuntime = mainRuntime;
-    }
-    if (cache == nullptr) {
-      cache = new RNJsi::RuntimeAwareCache<T>();
-      cacheRuntime = mainRuntime;
+      cacheGeneration = generation;
     }
     return *cache;
   }
@@ -143,9 +149,29 @@ public:
    */
   static void installPrototype(jsi::Runtime &runtime) {
     std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
+    ensurePrototypeLocked(runtime);
+  }
+
+  /**
+   * Look up (and install on first use) the prototype entry for this runtime.
+   *
+   * Callers must hold getPrototypeCacheMutex() and must consume the returned
+   * entry while still holding it: the lookup and the use of the prototype
+   * have to share one lock scope, because a reinstall of the native module
+   * (generation bump, see StaticRuntimeAwareCache) can swap the cache from
+   * any thread. A caller that released the lock in between would re-resolve
+   * a fresh cache with an empty entry and hand out an object without a
+   * prototype.
+   *
+   * The returned reference stays valid for the runtime's lifetime: the
+   * RuntimeAwareCache is heap-allocated and never freed, and
+   * std::unordered_map keeps references to its elements stable across
+   * rehashes.
+   */
+  static PrototypeCacheEntry &ensurePrototypeLocked(jsi::Runtime &runtime) {
     auto &entry = getPrototypeCache(runtime).get(runtime);
     if (entry.prototype.has_value()) {
-      return; // Already installed
+      return entry; // Already installed
     }
 
     // Create prototype object
@@ -264,6 +290,7 @@ public:
 
     // Cache the prototype
     entry.prototype = std::move(prototype);
+    return entry;
   }
 
   /**
@@ -274,13 +301,8 @@ public:
    * created internally by the native code).
    */
   static void installConstructor(jsi::Runtime &runtime) {
-    installPrototype(runtime);
-
     std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
-    auto &entry = getPrototypeCache(runtime).get(runtime);
-    if (!entry.prototype.has_value()) {
-      return;
-    }
+    auto &entry = ensurePrototypeLocked(runtime);
 
     // Create a constructor function that throws when called directly
     auto ctor = jsi::Function::createFromHostFunction(
@@ -308,8 +330,6 @@ public:
    */
   static jsi::Value create(jsi::Runtime &runtime,
                            std::shared_ptr<Derived> instance) {
-    installPrototype(runtime);
-
     // Store creation runtime for logging etc.
     instance->setCreationRuntime(&runtime);
 
@@ -319,18 +339,16 @@ public:
     // Attach native state
     obj.setNativeState(runtime, instance);
 
-    // Set prototype
+    // Install (on first use) and apply the prototype in a single lock scope
+    // so a concurrent cache swap cannot slip in between the two steps.
     {
       std::lock_guard<std::mutex> lock(getPrototypeCacheMutex());
-      auto &entry = getPrototypeCache(runtime).get(runtime);
-      if (entry.prototype.has_value()) {
-        // Use Object.setPrototypeOf to set the prototype
-        auto objectCtor =
-            runtime.global().getPropertyAsObject(runtime, "Object");
-        auto setPrototypeOf =
-            objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
-        setPrototypeOf.call(runtime, obj, *entry.prototype);
-      }
+      auto &entry = ensurePrototypeLocked(runtime);
+      // Use Object.setPrototypeOf to set the prototype
+      auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
+      auto setPrototypeOf =
+          objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
+      setPrototypeOf.call(runtime, obj, *entry.prototype);
     }
 
     // Set memory pressure hint for GC
