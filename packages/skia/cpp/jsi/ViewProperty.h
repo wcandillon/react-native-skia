@@ -1,39 +1,15 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <jsi/jsi.h>
 #include <memory>
 #include <string>
 #include <variant>
 
-#include "RuntimeLifecycleMonitor.h"
 #include "api/JsiSkPicture.h"
 
 namespace RNJsi {
 namespace jsi = facebook::jsi;
-
-class RuntimeAwareRuntimeGuard : public RuntimeLifecycleListener {
-public:
-  explicit RuntimeAwareRuntimeGuard(jsi::Runtime &runtime)
-      : _runtime(&runtime) {
-    RuntimeLifecycleMonitor::addListener(runtime, this);
-  }
-
-  ~RuntimeAwareRuntimeGuard() override {
-    auto runtime = _runtime.load();
-    if (runtime != nullptr) {
-      RuntimeLifecycleMonitor::removeListener(*runtime, this);
-    }
-  }
-
-  void onRuntimeDestroyed(jsi::Runtime *) override { _runtime.store(nullptr); }
-
-  jsi::Runtime *getRuntime() const { return _runtime.load(); }
-
-private:
-  std::atomic<jsi::Runtime *> _runtime;
-};
 
 class ViewProperty {
 public:

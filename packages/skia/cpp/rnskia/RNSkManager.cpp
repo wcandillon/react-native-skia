@@ -9,8 +9,6 @@
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
 
-#include "jsi/RuntimeAwareCache.h"
-
 namespace RNSkia {
 namespace jsi = facebook::jsi;
 
@@ -21,20 +19,11 @@ RNSkManager::RNSkManager(
     : _jsRuntime(jsRuntime), _platformContext(platformContext),
       _jsCallInvoker(jsCallInvoker),
       _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
-
-  // Register main runtime
-  RNJsi::BaseRuntimeAwareCache::setMainJsRuntime(_jsRuntime);
-
   // Install bindings
   installBindings();
 }
 
 RNSkManager::~RNSkManager() {
-  // The main runtime is going away: key out the process-wide prototype
-  // caches now rather than at the next install(), so nothing allocated at
-  // this runtime's address in between can be mistaken for it.
-  RNJsi::BaseRuntimeAwareCache::invalidateMainJsRuntime();
-
   // Free up any references
   _viewApi = nullptr;
   _jsRuntime = nullptr;
