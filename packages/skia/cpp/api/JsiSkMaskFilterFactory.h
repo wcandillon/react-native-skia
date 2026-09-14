@@ -6,7 +6,9 @@
 #include <jsi/jsi.h>
 
 #include "JsiSkColorFilter.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkConverters.h"
+#include "JsiSkMaskFilter.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -19,29 +21,27 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkMaskFilterFactory : public JsiSkHostObject {
+class JsiSkMaskFilterFactory
+    : public JsiSkNativeObject<JsiSkMaskFilterFactory> {
 public:
-  JSI_HOST_FUNCTION(MakeBlur) {
-    int blurStyle = arguments[0].asNumber();
-    float sigma = arguments[1].asNumber();
-    bool respectCTM = arguments[2].getBool();
-    auto maskFilter = std::make_shared<JsiSkMaskFilter>(
-        getContext(),
-        SkMaskFilter::MakeBlur((SkBlurStyle)blurStyle, sigma, respectCTM));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, maskFilter,
-                                                       getContext());
+  static constexpr const char *CLASS_NAME = "MaskFilterFactory";
+
+  std::shared_ptr<JsiSkMaskFilter> MakeBlur(int blurStyle, float sigma,
+                                            bool respectCTM) {
+    return std::make_shared<JsiSkMaskFilter>(
+        getContext(), SkMaskFilter::MakeBlur(static_cast<SkBlurStyle>(blurStyle),
+                                             sigma, respectCTM));
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  std::string getObjectType() const override {
-    return "JsiSkMaskFilterFactory";
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "MakeBlur",
+                  &JsiSkMaskFilterFactory::MakeBlur);
   }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkMaskFilterFactory, MakeBlur))
 
   explicit JsiSkMaskFilterFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkMaskFilterFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

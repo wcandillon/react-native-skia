@@ -2,13 +2,18 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkConverters.h"
+#include "JsiSkFont.h"
 #include "JsiSkMatrix.h"
+#include "JsiSkNativeObjects.h"
+#include "JsiSkPath.h"
 #include "JsiSkPathEffect.h"
 #include "JsiSkPoint.h"
 #include "JsiSkRRect.h"
@@ -17,7 +22,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
-#include "RNSkLog.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkPathBuilder.h"
 #include "include/core/SkPathUtils.h"
@@ -26,6 +30,7 @@
 #include "include/effects/SkTrimPathEffect.h"
 #include "include/pathops/SkPathOps.h"
 #include "include/utils/SkTextUtils.h"
+#include "utils/RNSkLog.h"
 
 #pragma clang diagnostic pop
 
@@ -33,7 +38,7 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkPathFactory : public JsiSkHostObject {
+class JsiSkPathFactory : public JsiSkNativeObject<JsiSkPathFactory> {
 
   static const int MOVE = 0;
   static const int LINE = 1;
@@ -42,111 +47,83 @@ class JsiSkPathFactory : public JsiSkHostObject {
   static const int CUBIC = 4;
   static const int CLOSE = 5;
 
+  using NullablePath = std::variant<std::nullptr_t, std::shared_ptr<JsiSkPath>>;
+
 public:
-  JSI_HOST_FUNCTION(Make) {
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), SkPath());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+  static constexpr const char *CLASS_NAME = "PathFactory";
+
+  std::shared_ptr<JsiSkPath> Make() {
+    return std::make_shared<JsiSkPath>(getContext(), SkPath());
   }
 
-  JSI_HOST_FUNCTION(MakeFromSVGString) {
-    auto svgString = arguments[0].asString(runtime).utf8(runtime);
+  std::shared_ptr<JsiSkPath> MakeFromSVGString(std::string svgString) {
     auto result = SkParsePath::FromSVGString(svgString.c_str());
     if (!result.has_value()) {
-      throw jsi::JSError(runtime, "Could not parse Svg path");
-      return jsi::Value(nullptr);
+      throw std::runtime_error("Could not parse Svg path");
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(),
+                                       std::move(result.value()));
   }
 
-  JSI_HOST_FUNCTION(MakeFromOp) {
-    auto one = JsiSkPath::fromValue(runtime, arguments[0])->snapshot();
-    auto two = JsiSkPath::fromValue(runtime, arguments[1])->snapshot();
-    SkPathOp op = (SkPathOp)arguments[2].asNumber();
-    auto result = Op(one, two, op);
+  NullablePath MakeFromOp(std::shared_ptr<SkPathBuilder> pathOne,
+                          std::shared_ptr<SkPathBuilder> pathTwo, double op) {
+    auto one = pathOne->snapshot();
+    auto two = pathTwo->snapshot();
+    auto result = Op(one, two, static_cast<SkPathOp>(op));
     if (!result.has_value()) {
-      return jsi::Value(nullptr);
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(),
+                                       std::move(result.value()));
   }
 
-  JSI_HOST_FUNCTION(MakeFromCmds) {
+  NullablePath MakeFromCmds(std::vector<std::vector<double>> cmds) {
     SkPathBuilder builder;
-    auto cmds = arguments[0].asObject(runtime).asArray(runtime);
-    auto cmdCount = cmds.size(runtime);
-    for (int i = 0; i < cmdCount; i++) {
-      auto cmd =
-          cmds.getValueAtIndex(runtime, i).asObject(runtime).asArray(runtime);
-      if (cmd.size(runtime) < 1) {
+    for (const auto &cmd : cmds) {
+      if (cmd.size() < 1) {
         RNSkLogger::logToConsole("Invalid command found (got an empty array)");
-        return jsi::Value::null();
+        return nullptr;
       }
-      auto verb = static_cast<int>(cmd.getValueAtIndex(runtime, 0).asNumber());
+      auto verb = static_cast<int>(cmd[0]);
       switch (verb) {
       case MOVE: {
-        if (cmd.size(runtime) < 3) {
+        if (cmd.size() < 3) {
           RNSkLogger::logToConsole("Invalid move command found");
-          return jsi::Value::null();
+          return nullptr;
         }
-        auto x = cmd.getValueAtIndex(runtime, 1).asNumber();
-        auto y = cmd.getValueAtIndex(runtime, 2).asNumber();
-        builder.moveTo(x, y);
+        builder.moveTo(cmd[1], cmd[2]);
         break;
       }
       case LINE: {
-        if (cmd.size(runtime) < 3) {
+        if (cmd.size() < 3) {
           RNSkLogger::logToConsole("Invalid line command found");
-          return jsi::Value::null();
+          return nullptr;
         }
-        auto x = cmd.getValueAtIndex(runtime, 1).asNumber();
-        auto y = cmd.getValueAtIndex(runtime, 2).asNumber();
-        builder.lineTo(x, y);
+        builder.lineTo(cmd[1], cmd[2]);
         break;
       }
       case QUAD: {
-        if (cmd.size(runtime) < 5) {
+        if (cmd.size() < 5) {
           RNSkLogger::logToConsole("Invalid line command found");
-          return jsi::Value::null();
+          return nullptr;
         }
-        auto x1 = cmd.getValueAtIndex(runtime, 1).asNumber();
-        auto y1 = cmd.getValueAtIndex(runtime, 2).asNumber();
-        auto x2 = cmd.getValueAtIndex(runtime, 3).asNumber();
-        auto y2 = cmd.getValueAtIndex(runtime, 4).asNumber();
-        builder.quadTo(x1, y1, x2, y2);
+        builder.quadTo(cmd[1], cmd[2], cmd[3], cmd[4]);
         break;
       }
       case CONIC: {
-        if (cmd.size(runtime) < 6) {
+        if (cmd.size() < 6) {
           RNSkLogger::logToConsole("Invalid line command found");
-          return jsi::Value::null();
+          return nullptr;
         }
-        auto x1 = cmd.getValueAtIndex(runtime, 1).asNumber();
-        auto y1 = cmd.getValueAtIndex(runtime, 2).asNumber();
-        auto x2 = cmd.getValueAtIndex(runtime, 3).asNumber();
-        auto y2 = cmd.getValueAtIndex(runtime, 4).asNumber();
-        auto w = cmd.getValueAtIndex(runtime, 5).asNumber();
-        builder.conicTo(x1, y1, x2, y2, w);
+        builder.conicTo(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
         break;
       }
       case CUBIC: {
-        if (cmd.size(runtime) < 7) {
+        if (cmd.size() < 7) {
           RNSkLogger::logToConsole("Invalid line command found");
-          return jsi::Value::null();
+          return nullptr;
         }
-        auto x1 = cmd.getValueAtIndex(runtime, 1).asNumber();
-        auto y1 = cmd.getValueAtIndex(runtime, 2).asNumber();
-        auto x2 = cmd.getValueAtIndex(runtime, 3).asNumber();
-        auto y2 = cmd.getValueAtIndex(runtime, 4).asNumber();
-        auto x3 = cmd.getValueAtIndex(runtime, 5).asNumber();
-        auto y3 = cmd.getValueAtIndex(runtime, 6).asNumber();
-        builder.cubicTo(x1, y1, x2, y2, x3, y3);
+        builder.cubicTo(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5], cmd[6]);
         break;
       }
       case CLOSE: {
@@ -155,118 +132,68 @@ public:
       }
       default: {
         RNSkLogger::logToConsole("Found an unknown command");
-        return jsi::Value::null();
+        return nullptr;
       }
       }
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(MakeFromText) {
-    auto text = arguments[0].asString(runtime).utf8(runtime);
-    auto x = arguments[1].asNumber();
-    auto y = arguments[2].asNumber();
-    auto font = JsiSkFont::fromValue(runtime, arguments[3]);
+  std::shared_ptr<JsiSkPath> MakeFromText(std::string text, double x, double y,
+                                          std::shared_ptr<SkFont> font) {
     SkPath path;
     SkTextUtils::GetPath(text.c_str(), strlen(text.c_str()),
                          SkTextEncoding::kUTF8, x, y, *font, &path);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), std::move(path));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), std::move(path));
   }
 
   // Static shape factories
-  JSI_HOST_FUNCTION(Rect) {
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto direction = SkPathDirection::kCW;
-    if (count >= 2 && arguments[1].getBool()) {
-      direction = SkPathDirection::kCCW;
-    }
+  std::shared_ptr<JsiSkPath> Rect(SkRect rect, JsiOptional<bool> isCCW) {
     SkPathBuilder builder;
-    builder.addRect(*rect, direction);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    builder.addRect(rect, toDirection(isCCW));
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(Oval) {
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto direction = SkPathDirection::kCW;
-    if (count >= 2 && arguments[1].getBool()) {
-      direction = SkPathDirection::kCCW;
-    }
-    unsigned startIndex = count < 3 ? 0 : arguments[2].asNumber();
+  std::shared_ptr<JsiSkPath> Oval(SkRect rect, JsiOptional<bool> isCCW,
+                                  JsiOptional<double> startIndex) {
     SkPathBuilder builder;
-    builder.addOval(*rect, direction, startIndex);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    builder.addOval(rect, toDirection(isCCW),
+                    startIndex.has_value()
+                        ? static_cast<unsigned>(*startIndex)
+                        : 0);
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(Circle) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    auto r = arguments[2].asNumber();
+  std::shared_ptr<JsiSkPath> Circle(double x, double y, double r) {
     SkPathBuilder builder;
     builder.addCircle(x, y, r);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(RRect) {
-    auto rrect = JsiSkRRect::fromValue(runtime, arguments[0]);
-    auto direction = SkPathDirection::kCW;
-    if (count >= 2 && arguments[1].getBool()) {
-      direction = SkPathDirection::kCCW;
-    }
+  std::shared_ptr<JsiSkPath> RRect(std::shared_ptr<SkRRect> rrect,
+                                   JsiOptional<bool> isCCW) {
     SkPathBuilder builder;
-    builder.addRRect(*rrect, direction);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    builder.addRRect(*rrect, toDirection(isCCW));
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(Line) {
-    auto p1 = JsiSkPoint::fromValue(runtime, arguments[0].asObject(runtime));
-    auto p2 = JsiSkPoint::fromValue(runtime, arguments[1].asObject(runtime));
+  std::shared_ptr<JsiSkPath> Line(SkPoint p1, SkPoint p2) {
     SkPathBuilder builder;
-    builder.moveTo(*p1);
-    builder.lineTo(*p2);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    builder.moveTo(p1);
+    builder.lineTo(p2);
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  JSI_HOST_FUNCTION(Polygon) {
-    std::vector<SkPoint> points;
-    auto jsiPoints = arguments[0].asObject(runtime).asArray(runtime);
-    auto close = arguments[1].getBool();
-    auto pointsSize = jsiPoints.size(runtime);
-    points.reserve(pointsSize);
-    for (int i = 0; i < pointsSize; i++) {
-      std::shared_ptr<SkPoint> point = JsiSkPoint::fromValue(
-          runtime, jsiPoints.getValueAtIndex(runtime, i).asObject(runtime));
-      points.push_back(*point.get());
-    }
+  std::shared_ptr<JsiSkPath> Polygon(std::vector<SkPoint> points, bool close) {
     SkPathBuilder builder;
     builder.addPolygon(SkSpan(points), close);
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
   // Static path operations
+
+  // Stays raw: the options object is read leniently property by property
+  // (unknown properties and non-numeric values are ignored).
   JSI_HOST_FUNCTION(Stroke) {
     auto srcPath = JsiSkPath::fromValue(runtime, arguments[0]);
     SkPath path = srcPath->snapshot();
@@ -307,148 +234,131 @@ public:
       auto success =
           skpathutils::FillPathWithPaint(path, p, &resultBuilder, nullptr, ctm);
       if (success) {
-        auto hostObjectInstance =
-            std::make_shared<JsiSkPath>(getContext(), resultBuilder.snapshot());
-        return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-            runtime, hostObjectInstance, getContext());
+        return makeJsiObject(
+            runtime, std::make_shared<JsiSkPath>(getContext(),
+                                                 resultBuilder.snapshot()));
       }
     } else {
       SkPathBuilder resultBuilder;
       auto success = skpathutils::FillPathWithPaint(path, p, &resultBuilder);
       if (success) {
-        auto hostObjectInstance =
-            std::make_shared<JsiSkPath>(getContext(), resultBuilder.snapshot());
-        return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-            runtime, hostObjectInstance, getContext());
+        return makeJsiObject(
+            runtime, std::make_shared<JsiSkPath>(getContext(),
+                                                 resultBuilder.snapshot()));
       }
     }
     return jsi::Value::null();
   }
 
-  JSI_HOST_FUNCTION(Trim) {
-    auto srcPath = JsiSkPath::fromValue(runtime, arguments[0]);
-    float start =
-        std::clamp(static_cast<float>(arguments[1].asNumber()), 0.0f, 1.0f);
-    float end =
-        std::clamp(static_cast<float>(arguments[2].asNumber()), 0.0f, 1.0f);
-    auto isComplement = arguments[3].getBool();
+  NullablePath Trim(std::shared_ptr<SkPathBuilder> srcPath, double startValue,
+                    double endValue, bool isComplement) {
+    float start = std::clamp(static_cast<float>(startValue), 0.0f, 1.0f);
+    float end = std::clamp(static_cast<float>(endValue), 0.0f, 1.0f);
     // If requesting the full path in normal mode, just return a copy
     if (start <= 0 && end >= 1 && !isComplement) {
-      SkPath result = srcPath->snapshot();
-      auto hostObjectInstance =
-          std::make_shared<JsiSkPath>(getContext(), std::move(result));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, getContext());
+      return std::make_shared<JsiSkPath>(getContext(), srcPath->snapshot());
     }
     SkPath path = srcPath->snapshot();
     auto mode = isComplement ? SkTrimPathEffect::Mode::kInverted
                              : SkTrimPathEffect::Mode::kNormal;
     auto pe = SkTrimPathEffect::Make(start, end, mode);
     if (!pe) {
-      return jsi::Value::null();
+      return nullptr;
     }
     SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
     SkPathBuilder resultBuilder;
     if (pe->filterPath(&resultBuilder, path, &rec)) {
-      auto result = resultBuilder.detach();
-      auto hostObjectInstance =
-          std::make_shared<JsiSkPath>(getContext(), std::move(result));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, getContext());
+      return std::make_shared<JsiSkPath>(getContext(), resultBuilder.detach());
     }
-    return jsi::Value::null();
+    return nullptr;
   }
 
-  JSI_HOST_FUNCTION(Simplify) {
-    auto srcPath = JsiSkPath::fromValue(runtime, arguments[0]);
+  NullablePath Simplify(std::shared_ptr<SkPathBuilder> srcPath) {
     auto result = ::Simplify(srcPath->snapshot());
     if (result.has_value()) {
-      auto hostObjectInstance =
-          std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, getContext());
+      return std::make_shared<JsiSkPath>(getContext(),
+                                         std::move(result.value()));
     }
-    return jsi::Value::null();
+    return nullptr;
   }
 
-  JSI_HOST_FUNCTION(Dash) {
-    auto srcPath = JsiSkPath::fromValue(runtime, arguments[0]);
-    SkScalar on = arguments[1].asNumber();
-    SkScalar off = arguments[2].asNumber();
-    auto phase = arguments[3].asNumber();
-    SkScalar intervals[] = {on, off};
+  NullablePath Dash(std::shared_ptr<SkPathBuilder> srcPath, double on,
+                    double off, double phase) {
+    SkScalar intervals[] = {static_cast<SkScalar>(on),
+                            static_cast<SkScalar>(off)};
     auto i = SkSpan(intervals, 2);
     auto pe = SkDashPathEffect::Make(i, phase);
     if (!pe) {
-      return jsi::Value::null();
+      return nullptr;
     }
     SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
     SkPathBuilder resultBuilder;
     if (pe->filterPath(&resultBuilder, srcPath->snapshot(), &rec)) {
-      auto result = resultBuilder.detach();
-      auto hostObjectInstance =
-          std::make_shared<JsiSkPath>(getContext(), std::move(result));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, getContext());
+      return std::make_shared<JsiSkPath>(getContext(), resultBuilder.detach());
     }
-    return jsi::Value::null();
+    return nullptr;
   }
 
-  JSI_HOST_FUNCTION(AsWinding) {
-    auto srcPath = JsiSkPath::fromValue(runtime, arguments[0]);
+  NullablePath AsWinding(std::shared_ptr<SkPathBuilder> srcPath) {
     auto result = ::AsWinding(srcPath->snapshot());
     if (result.has_value()) {
-      auto hostObjectInstance =
-          std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, getContext());
+      return std::make_shared<JsiSkPath>(getContext(),
+                                         std::move(result.value()));
     }
-    return jsi::Value::null();
+    return nullptr;
   }
 
-  JSI_HOST_FUNCTION(Interpolate) {
-    auto path1 = JsiSkPath::fromValue(runtime, arguments[0]);
-    auto path2 = JsiSkPath::fromValue(runtime, arguments[1]);
-    auto weight = arguments[2].asNumber();
-    auto p1 = path1->snapshot();
-    auto p2 = path2->snapshot();
+  NullablePath Interpolate(std::shared_ptr<SkPathBuilder> pathOne,
+                           std::shared_ptr<SkPathBuilder> pathTwo,
+                           double weight) {
+    auto p1 = pathOne->snapshot();
+    auto p2 = pathTwo->snapshot();
     SkPath result;
     auto succeed = p1.interpolate(p2, weight, &result);
     if (!succeed) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), std::move(result));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), std::move(result));
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  std::string getObjectType() const override { return "JsiSkPathFactory"; }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkPathFactory, Make),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, MakeFromSVGString),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, MakeFromOp),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, MakeFromCmds),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, MakeFromText),
-                       // Static shape factories
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Rect),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Oval),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Circle),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, RRect),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Line),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Polygon),
-                       // Static path operations
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Stroke),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Trim),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Simplify),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Dash),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, AsWinding),
-                       JSI_EXPORT_FUNC(JsiSkPathFactory, Interpolate))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "Make", &JsiSkPathFactory::Make);
+    installMethod(runtime, prototype, "MakeFromSVGString",
+                  &JsiSkPathFactory::MakeFromSVGString);
+    installMethod(runtime, prototype, "MakeFromOp",
+                  &JsiSkPathFactory::MakeFromOp);
+    installMethod(runtime, prototype, "MakeFromCmds",
+                  &JsiSkPathFactory::MakeFromCmds);
+    installMethod(runtime, prototype, "MakeFromText",
+                  &JsiSkPathFactory::MakeFromText);
+    // Static shape factories
+    installMethod(runtime, prototype, "Rect", &JsiSkPathFactory::Rect);
+    installMethod(runtime, prototype, "Oval", &JsiSkPathFactory::Oval);
+    installMethod(runtime, prototype, "Circle", &JsiSkPathFactory::Circle);
+    installMethod(runtime, prototype, "RRect", &JsiSkPathFactory::RRect);
+    installMethod(runtime, prototype, "Line", &JsiSkPathFactory::Line);
+    installMethod(runtime, prototype, "Polygon", &JsiSkPathFactory::Polygon);
+    // Static path operations
+    installHostMethod(runtime, prototype, "Stroke", &JsiSkPathFactory::Stroke);
+    installMethod(runtime, prototype, "Trim", &JsiSkPathFactory::Trim);
+    installMethod(runtime, prototype, "Simplify", &JsiSkPathFactory::Simplify);
+    installMethod(runtime, prototype, "Dash", &JsiSkPathFactory::Dash);
+    installMethod(runtime, prototype, "AsWinding",
+                  &JsiSkPathFactory::AsWinding);
+    installMethod(runtime, prototype, "Interpolate",
+                  &JsiSkPathFactory::Interpolate);
+  }
 
   explicit JsiSkPathFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkPathFactory>(std::move(context)) {}
+
+private:
+  static SkPathDirection toDirection(const JsiOptional<bool> &isCCW) {
+    return isCCW.has_value() && *isCCW ? SkPathDirection::kCCW
+                                       : SkPathDirection::kCW;
+  }
 };
 
 } // namespace RNSkia

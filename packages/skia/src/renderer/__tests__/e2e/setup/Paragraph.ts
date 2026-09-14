@@ -1,4 +1,9 @@
-import type { SkParagraph, Skia, SkCanvas } from "../../../../skia/types";
+import type {
+  ParagraphExtendedVisitor,
+  SkParagraph,
+  Skia,
+  SkCanvas,
+} from "../../../../skia/types";
 import type { EvalContext } from "../../setup";
 
 import { SkiaObject } from "./SkiaObject";
@@ -47,6 +52,12 @@ export class ParagraphAsset<Ctx extends EvalContext>
   }
   getRectsForPlaceholders() {
     return this.instance.getRectsForPlaceholders();
+  }
+  getPath(lineNumber: number) {
+    return this.instance.getPath(lineNumber);
+  }
+  extendedVisit(visitor: ParagraphExtendedVisitor) {
+    this.instance.extendedVisit(visitor);
   }
   __typename__ = "Paragraph" as const;
 

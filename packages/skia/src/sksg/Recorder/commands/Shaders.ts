@@ -43,10 +43,12 @@ const declareShader = (
   const { source, uniforms, ...transform } = props;
   const m3 = ctx.Skia.Matrix();
   processTransformProps(m3, transform);
-  const shader = source.makeShaderWithChildren(
-    processUniforms(source, uniforms),
-    ctx.shaders.splice(0, children),
-    m3
+  const shader = ctx.track(
+    source.makeShaderWithChildren(
+      processUniforms(source, uniforms),
+      ctx.shaders.splice(0, children),
+      m3
+    )
   );
   ctx.shaders.push(shader);
 };
@@ -208,20 +210,24 @@ const declareImageShader = (ctx: DrawingContext, props: ImageShaderProps) => {
   processTransformProps(lm, imageShaderProps);
   let shader: SkShader;
   if (sampling && isCubicSampling(sampling)) {
-    shader = image.makeShaderCubic(
-      TileMode[enumKey(tx)],
-      TileMode[enumKey(ty)],
-      sampling.B,
-      sampling.C,
-      lm
+    shader = ctx.track(
+      image.makeShaderCubic(
+        TileMode[enumKey(tx)],
+        TileMode[enumKey(ty)],
+        sampling.B,
+        sampling.C,
+        lm
+      )
     );
   } else {
-    shader = image.makeShaderCubic(
-      TileMode[enumKey(tx)],
-      TileMode[enumKey(ty)],
-      sampling?.filter ?? FilterMode.Linear,
-      sampling?.mipmap ?? MipmapMode.None,
-      lm
+    shader = ctx.track(
+      image.makeShaderOptions(
+        TileMode[enumKey(tx)],
+        TileMode[enumKey(ty)],
+        sampling?.filter ?? FilterMode.Linear,
+        sampling?.mipmap ?? MipmapMode.None,
+        lm
+      )
     );
   }
   ctx.shaders.push(shader);

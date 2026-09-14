@@ -31,13 +31,15 @@ public:
 
 protected:
   virtual void surfaceAvailable(jobject surface, int width, int height,
-                                bool opaque) {
-    _skiaAndroidView->surfaceAvailable(surface, width, height, opaque);
+                                bool opaque, bool highBitDepth) {
+    _skiaAndroidView->surfaceAvailable(surface, width, height, opaque,
+                                       highBitDepth);
   }
 
   virtual void surfaceSizeChanged(jobject surface, int width, int height,
-                                  bool opaque) {
-    _skiaAndroidView->surfaceSizeChanged(surface, width, height, opaque);
+                                  bool opaque, bool highBitDepth) {
+    _skiaAndroidView->surfaceSizeChanged(surface, width, height, opaque,
+                                         highBitDepth);
   }
 
   virtual void surfaceDestroyed() { _skiaAndroidView->surfaceDestroyed(); }

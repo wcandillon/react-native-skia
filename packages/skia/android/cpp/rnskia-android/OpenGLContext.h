@@ -42,6 +42,11 @@ private:
     _glConfig = _glDisplay->chooseConfig();
     _glContext = _glDisplay->makeContext(_glConfig, nullptr);
     _glSurface = _glDisplay->makePixelBufferSurface(_glConfig, 1, 1);
+    if (_glContext == nullptr || _glSurface == nullptr) {
+      RNSkLogger::logToConsole(
+          "Couldn't create the shared OpenGL context or surface");
+      return;
+    }
     _glContext->makeCurrent(_glSurface.get());
   }
 };
@@ -60,6 +65,10 @@ public:
 
   sk_sp<SkSurface> MakeOffscreen(int width, int height,
                                  bool useP3ColorSpace = false) {
+    if (_directContext == nullptr) {
+      return nullptr;
+    }
+
     auto colorType = kRGBA_8888_SkColorType;
 
     SkSurfaceProps props(0, kUnknown_SkPixelGeometry);
@@ -110,6 +119,9 @@ public:
   sk_sp<SkImage> MakeImageFromBuffer(void *buffer,
                                      bool requireKnownFormat = false) {
 #if __ANDROID_API__ >= 26
+    if (_directContext == nullptr) {
+      return nullptr;
+    }
     const AHardwareBuffer *hardwareBuffer =
         static_cast<AHardwareBuffer *>(buffer);
     DeleteImageProc deleteImageProc = nullptr;
@@ -119,27 +131,34 @@ public:
     AHardwareBuffer_Desc description;
     AHardwareBuffer_describe(hardwareBuffer, &description);
     GrBackendFormat format;
+    auto colorType = kRGBA_8888_SkColorType;
     switch (description.format) {
     // TODO: find out if we can detect, which graphic buffers support
     // GR_GL_TEXTURE_2D
     case AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:
       format = GrBackendFormats::MakeGL(GR_GL_RGBA8, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kRGBA_8888_SkColorType;
       break;
     case AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT:
       format = GrBackendFormats::MakeGL(GR_GL_RGBA16F, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kRGBA_F16_SkColorType;
       break;
     case AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM:
-      GrBackendFormats::MakeGL(GR_GL_RGB565, GR_GL_TEXTURE_EXTERNAL);
+      format = GrBackendFormats::MakeGL(GR_GL_RGB565, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kRGB_565_SkColorType;
       break;
     case AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM:
       format = GrBackendFormats::MakeGL(GR_GL_RGB10_A2, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kRGBA_1010102_SkColorType;
       break;
     case AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM:
       format = GrBackendFormats::MakeGL(GR_GL_RGB8, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kRGB_888x_SkColorType;
       break;
 #if __ANDROID_API__ >= 33
     case AHARDWAREBUFFER_FORMAT_R8_UNORM:
       format = GrBackendFormats::MakeGL(GR_GL_R8, GR_GL_TEXTURE_EXTERNAL);
+      colorType = kAlpha_8_SkColorType;
       break;
 #endif
     default:
@@ -161,9 +180,8 @@ public:
       return nullptr;
     }
     sk_sp<SkImage> image = SkImages::BorrowTextureFrom(
-        _directContext.get(), backendTex, kTopLeft_GrSurfaceOrigin,
-        kRGBA_8888_SkColorType, kOpaque_SkAlphaType, nullptr, deleteImageProc,
-        deleteImageCtx);
+        _directContext.get(), backendTex, kTopLeft_GrSurfaceOrigin, colorType,
+        kOpaque_SkAlphaType, nullptr, deleteImageProc, deleteImageCtx);
     return image;
 #else
     throw std::runtime_error(
@@ -173,15 +191,33 @@ public:
   }
 
   // TODO: remove width, height
-  std::unique_ptr<WindowContext> MakeWindow(ANativeWindow *window) {
+  std::unique_ptr<WindowContext> MakeWindow(ANativeWindow *window,
+                                            bool highBitDepth = false) {
+    if (_directContext == nullptr) {
+      RNSkLogger::logToConsole(
+          "The OpenGL context is invalid, the surface will not be rendered");
+      return nullptr;
+    }
     auto display = OpenGLSharedContext::getInstance().getDisplay();
+    if (highBitDepth) {
+      // A 10-bit window surface would require the shared EGL context to be
+      // created without a config (EGL_KHR_no_config_context) for every app,
+      // which is too risky for existing 8-bit clients on brittle drivers.
+      RNSkLogger::logToConsole(
+          "highBitDepth is not supported on the OpenGL backend, falling back "
+          "to the 8-bit format (the Graphite backend supports it)");
+    }
     return std::make_unique<OpenGLWindowContext>(
         _directContext.get(), display, _glContext.get(), window,
         OpenGLSharedContext::getInstance().getConfig());
   }
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }
-  void makeCurrent() { _glContext->makeCurrent(_glSurface.get()); }
+  void makeCurrent() {
+    if (_glContext != nullptr) {
+      _glContext->makeCurrent(_glSurface.get());
+    }
+  }
 
 private:
   std::unique_ptr<gl::Context> _glContext;
@@ -194,12 +230,17 @@ private:
     auto glConfig = OpenGLSharedContext::getInstance().getConfig();
     _glContext = display->makeContext(glConfig, sharedContext);
     _glSurface = display->makePixelBufferSurface(glConfig, 1, 1);
-    _glContext->makeCurrent(_glSurface.get());
+    if (_glContext == nullptr || _glSurface == nullptr ||
+        !_glContext->makeCurrent(_glSurface.get())) {
+      RNSkLogger::logToConsole(
+          "Couldn't create the OpenGL context, Skia rendering is disabled");
+      return;
+    }
     auto backendInterface = GrGLMakeNativeInterface();
     _directContext = GrDirectContexts::MakeGL(backendInterface);
 
     if (_directContext == nullptr) {
-      throw std::runtime_error("GrDirectContexts::MakeGL failed");
+      RNSkLogger::logToConsole("GrDirectContexts::MakeGL failed");
     }
   }
 };

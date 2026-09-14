@@ -42,6 +42,16 @@ public:
    textHeightBehavior?: SkTextHeightBehavior;
    textStyle?: SkTextStyle;
    */
+  // A property set to undefined or null is treated as absent, like on web.
+  static bool hasValue(jsi::Runtime &runtime, const jsi::Object &object,
+                       const char *name) {
+    if (!object.hasProperty(runtime, name)) {
+      return false;
+    }
+    auto propValue = object.getProperty(runtime, name);
+    return !propValue.isUndefined() && !propValue.isNull();
+  }
+
   static para::ParagraphStyle fromValue(jsi::Runtime &runtime,
                                         const jsi::Value &value) {
     para::ParagraphStyle retVal;
@@ -59,52 +69,52 @@ public:
 
     auto object = value.asObject(runtime);
 
-    if (object.hasProperty(runtime, "disableHinting")) {
+    if (hasValue(runtime, object, "disableHinting")) {
       auto propValue = object.getProperty(runtime, "disableHinting");
       if (asBool(runtime, propValue)) {
         retVal.turnHintingOff();
       }
     }
-    if (object.hasProperty(runtime, "ellipsis")) {
+    if (hasValue(runtime, object, "ellipsis")) {
       auto propValue = object.getProperty(runtime, "ellipsis");
       auto inStr = propValue.asString(runtime).utf8(runtime);
       std::u16string uStr;
       fromUTF8(inStr, uStr);
       retVal.setEllipsis(uStr);
     }
-    if (object.hasProperty(runtime, "heightMultiplier")) {
+    if (hasValue(runtime, object, "heightMultiplier")) {
       auto propValue = object.getProperty(runtime, "heightMultiplier");
       retVal.setHeight(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "maxLines")) {
+    if (hasValue(runtime, object, "maxLines")) {
       auto propValue = object.getProperty(runtime, "maxLines");
       if (propValue.asNumber() != 0) {
         retVal.setMaxLines(propValue.asNumber());
       }
     }
-    if (object.hasProperty(runtime, "replaceTabCharacters")) {
+    if (hasValue(runtime, object, "replaceTabCharacters")) {
       auto propValue = object.getProperty(runtime, "replaceTabCharacters");
       retVal.setReplaceTabCharacters(asBool(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "textAlign")) {
+    if (hasValue(runtime, object, "textAlign")) {
       auto propValue = object.getProperty(runtime, "textAlign");
       retVal.setTextAlign(static_cast<para::TextAlign>(propValue.asNumber()));
     }
-    if (object.hasProperty(runtime, "textDirection")) {
+    if (hasValue(runtime, object, "textDirection")) {
       auto propValue = object.getProperty(runtime, "textDirection");
       retVal.setTextDirection(
           static_cast<para::TextDirection>(propValue.asNumber()));
     }
-    if (object.hasProperty(runtime, "textHeightBehavior")) {
+    if (hasValue(runtime, object, "textHeightBehavior")) {
       auto propValue = object.getProperty(runtime, "textHeightBehavior");
       retVal.setTextHeightBehavior(
           static_cast<para::TextHeightBehavior>(propValue.asNumber()));
     }
-    if (object.hasProperty(runtime, "strutStyle")) {
+    if (hasValue(runtime, object, "strutStyle")) {
       auto propValue = object.getProperty(runtime, "strutStyle");
       retVal.setStrutStyle(JsiSkStrutStyle::fromValue(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "textStyle")) {
+    if (hasValue(runtime, object, "textStyle")) {
       auto propValue = object.getProperty(runtime, "textStyle");
       retVal.setTextStyle(JsiSkTextStyle::fromValue(runtime, propValue));
     }

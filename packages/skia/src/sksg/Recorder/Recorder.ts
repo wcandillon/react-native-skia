@@ -30,9 +30,9 @@ import type {
   DrawingNodeProps,
 } from "../../dom/types";
 import type { AnimatedProps } from "../../renderer";
-import { isSharedValue } from "../utils";
+import { isSharedValue, isSharedValueSelector } from "../utils";
 import { isColorFilter, isImageFilter, isPathEffect, isShader } from "../Node";
-import type { SkPaint, BaseRecorder } from "../../skia/types";
+import type { SkPaint, SkPicture, BaseRecorder } from "../../skia/types";
 
 import { CommandType } from "./Core";
 import type { Command } from "./Core";
@@ -40,7 +40,21 @@ import type { Command } from "./Core";
 export interface Recording {
   commands: Command[];
   paintPool: SkPaint[];
+  // Last picture produced from this recording. The view keeps its own
+  // reference to the picture it displays, so the renderer owns this one and
+  // disposes it when the next frame replaces it or the recording is disposed.
+  lastPicture?: SkPicture | null;
 }
+
+export const disposeRecording = (recording: Recording) => {
+  "worklet";
+  recording.paintPool.forEach((paint) => paint.dispose());
+  recording.paintPool.length = 0;
+  if (recording.lastPicture) {
+    recording.lastPicture.dispose();
+    recording.lastPicture = null;
+  }
+};
 
 interface AnimationValues {
   animationValues: Set<SharedValue<unknown>>;
@@ -64,13 +78,17 @@ export class Recorder implements BaseRecorder {
   }
 
   private processProps(props: Record<string, unknown>) {
-    const animatedProps: Record<string, SharedValue<unknown>> = {};
+    const animatedProps: Record<string, unknown> = {};
     let hasAnimatedProps = false;
 
     for (const key in props) {
       const prop = props[key];
       if (isSharedValue(prop)) {
         this.animationValues.add(prop);
+        animatedProps[key] = prop;
+        hasAnimatedProps = true;
+      } else if (isSharedValueSelector(prop)) {
+        this.animationValues.add(prop.__sv);
         animatedProps[key] = prop;
         hasAnimatedProps = true;
       }
@@ -208,7 +226,7 @@ export class Recorder implements BaseRecorder {
     boxProps: AnimatedProps<BoxProps>,
     shadows: {
       props: BoxShadowProps;
-      animatedProps?: Record<string, SharedValue<unknown>>;
+      animatedProps?: Record<string, unknown>;
     }[]
   ) {
     shadows.forEach((shadow) => {

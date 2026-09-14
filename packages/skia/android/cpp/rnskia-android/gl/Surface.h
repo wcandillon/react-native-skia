@@ -17,7 +17,7 @@ public:
     }
   }
 
-  bool isValid() { return _surface != EGL_NO_SURFACE; }
+  bool isValid() const { return _surface != EGL_NO_SURFACE; }
 
   const EGLSurface &getHandle() const { return _surface; }
 

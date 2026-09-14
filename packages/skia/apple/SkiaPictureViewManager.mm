@@ -37,6 +37,11 @@ RCT_CUSTOM_VIEW_PROPERTY(opaque, BOOL, SkiaUIView) {
   [(SkiaUIView *)view setOpaque:opaque];
 }
 
+RCT_CUSTOM_VIEW_PROPERTY(highBitDepth, BOOL, SkiaUIView) {
+  bool highBitDepth = json != NULL ? [RCTConvert BOOL:json] : false;
+  [(SkiaUIView *)view setHighBitDepth:highBitDepth];
+}
+
 #if !TARGET_OS_OSX
 - (UIView *)view {
 #else

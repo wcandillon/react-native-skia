@@ -6,7 +6,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -21,32 +21,30 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkRRect : public JsiSkWrappingSharedPtrHostObject<SkRRect> {
+class JsiSkRRect
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkRRect, SkRRect> {
 public:
-  JSI_PROPERTY_GET(rx) {
+  static constexpr const char *CLASS_NAME = "RRect";
+
+  double getRx() {
     return static_cast<double>(getObject()->getSimpleRadii().x());
   }
-  JSI_PROPERTY_GET(ry) {
+  double getRy() {
     return static_cast<double>(getObject()->getSimpleRadii().y());
   }
-  JSI_PROPERTY_GET(rect) {
-    auto rectObj =
-        std::make_shared<JsiSkRect>(getContext(), getObject()->getBounds());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rectObj,
-                                                       getContext());
+  std::shared_ptr<JsiSkRect> getRect() {
+    return std::make_shared<JsiSkRect>(getContext(), getObject()->getBounds());
   }
 
-  JSI_API_TYPENAME("RRect");
-
-  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkRRect, rx),
-                              JSI_EXPORT_PROP_GET(JsiSkRRect, ry),
-                              JSI_EXPORT_PROP_GET(JsiSkRRect, rect),
-                              JSI_EXPORT_PROP_GET(JsiSkRRect, __typename__))
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkRRect, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installGetter(runtime, prototype, "rx", &JsiSkRRect::getRx);
+    installGetter(runtime, prototype, "ry", &JsiSkRRect::getRy);
+    installGetter(runtime, prototype, "rect", &JsiSkRRect::getRect);
+  }
 
   JsiSkRRect(std::shared_ptr<RNSkPlatformContext> context, const SkRRect &rect)
-      : JsiSkWrappingSharedPtrHostObject<SkRRect>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkRRect, SkRRect>(
             std::move(context), std::make_shared<SkRRect>(rect)) {}
 
   /**
@@ -56,10 +54,9 @@ public:
                                             const jsi::Value &obj) {
 
     const auto &object = obj.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      return obj.asObject(runtime)
-          .asHostObject<JsiSkRRect>(runtime)
-          ->getObject();
+    auto rrect = tryGetJsiObject<JsiSkRRect>(runtime, object);
+    if (rrect) {
+      return rrect->getObject();
     } else {
       auto rect =
           JsiSkRect::fromValue(runtime, object.getProperty(runtime, "rect"));
@@ -101,16 +98,13 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkRRect &rect) {
-    auto rrectObj = std::make_shared<JsiSkRRect>(std::move(context), rect);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rrectObj,
-                                                       context);
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkRRect>(std::move(context), rect));
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkRRect), kMinMemoryPressure);
   }
-
-  std::string getObjectType() const override { return "JsiSkRRect"; }
 
   /**
    * Creates the function for construction a new instance of the SkRect
@@ -128,10 +122,8 @@ public:
       auto ry = arguments[2].asNumber();
       auto rrect = SkRRect::MakeRectXY(*rect, rx, ry);
       // Return the newly constructed object
-      auto rrectObj =
-          std::make_shared<JsiSkRRect>(std::move(context), std::move(rrect));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rrectObj,
-                                                         context);
+      return makeJsiObject(runtime, std::make_shared<JsiSkRRect>(
+                                        std::move(context), std::move(rrect)));
     };
   }
 };

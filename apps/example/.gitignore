@@ -14,3 +14,6 @@ dist/*
 local.properties
 msbuild.binlog
 node_modules/
+e2e/screenshots/
+test-results/
+playwright-report/

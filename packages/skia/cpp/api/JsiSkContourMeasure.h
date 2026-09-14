@@ -2,10 +2,12 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
+#include "JsiSkPoint.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -21,62 +23,53 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class JsiSkContourMeasure
-    : public JsiSkWrappingSkPtrHostObject<SkContourMeasure> {
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkContourMeasure,
+                                            SkContourMeasure> {
 public:
+  static constexpr const char *CLASS_NAME = "ContourMeasure";
+
   JsiSkContourMeasure(std::shared_ptr<RNSkPlatformContext> context,
                       const sk_sp<SkContourMeasure> contourMeasure)
-      : JsiSkWrappingSkPtrHostObject(std::move(context),
-                                     std::move(contourMeasure)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkContourMeasure, SkContourMeasure>(
+            std::move(context), std::move(contourMeasure)) {}
 
-  JSI_HOST_FUNCTION(getPosTan) {
-    auto dist = arguments[0].asNumber();
+  std::vector<std::shared_ptr<JsiSkPoint>> getPosTan(double dist) {
     SkPoint position;
     SkPoint tangent;
     auto result = getObject()->getPosTan(dist, &position, &tangent);
     if (!result) {
-      throw jsi::JSError(runtime, "getPosTan() failed");
+      throw std::runtime_error("getPosTan() failed");
     }
-    auto posTan = jsi::Array(runtime, 2);
-    auto posPoint = std::make_shared<JsiSkPoint>(getContext(), position);
-    auto pos = JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, posPoint,
-                                                           getContext());
-    auto tanPoint = std::make_shared<JsiSkPoint>(getContext(), tangent);
-    auto tan = JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, tanPoint,
-                                                           getContext());
-    posTan.setValueAtIndex(runtime, 0, pos);
-    posTan.setValueAtIndex(runtime, 1, tan);
-    return posTan;
+    return {std::make_shared<JsiSkPoint>(getContext(), position),
+            std::make_shared<JsiSkPoint>(getContext(), tangent)};
   }
 
-  JSI_HOST_FUNCTION(length) {
-    return jsi::Value(SkScalarToDouble(getObject()->length()));
-  }
+  double length() { return SkScalarToDouble(getObject()->length()); }
 
-  JSI_HOST_FUNCTION(isClosed) { return jsi::Value(getObject()->isClosed()); }
+  bool isClosed() { return getObject()->isClosed(); }
 
-  JSI_HOST_FUNCTION(getSegment) {
-    auto start = arguments[0].asNumber();
-    auto end = arguments[1].asNumber();
-    auto startWithMoveTo = arguments[2].getBool();
+  std::shared_ptr<JsiSkPath> getSegment(double start, double end,
+                                        bool startWithMoveTo) {
     SkPathBuilder builder;
     auto result =
         getObject()->getSegment(start, end, &builder, startWithMoveTo);
     if (!result) {
-      throw jsi::JSError(runtime, "getSegment() failed");
+      throw std::runtime_error("getSegment() failed");
     }
-    return JsiSkPath::toValue(runtime, getContext(), builder.snapshot());
+    return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  std::string getObjectType() const override { return "JsiSkContourMeasure"; }
-
-  EXPORT_JSI_API_TYPENAME(JsiSkContourMeasure, ContourMeasure)
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkContourMeasure, getPosTan),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, length),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, isClosed),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, getSegment),
-                       JSI_EXPORT_FUNC(JsiSkContourMeasure, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "getPosTan",
+                  &JsiSkContourMeasure::getPosTan);
+    installMethod(runtime, prototype, "length", &JsiSkContourMeasure::length);
+    installMethod(runtime, prototype, "isClosed",
+                  &JsiSkContourMeasure::isClosed);
+    installMethod(runtime, prototype, "getSegment",
+                  &JsiSkContourMeasure::getSegment);
+  }
 };
 } // namespace RNSkia

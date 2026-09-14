@@ -7,7 +7,7 @@
 #include <jsi/jsi.h>
 
 #include "JsiSkData.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkSVG.h"
 #include "JsiSkTypeface.h"
 
@@ -55,8 +55,10 @@ private:
   const skresources::ImageDecodeStrategy fStrategy;
 };
 
-class JsiSkSVGFactory : public JsiSkHostObject {
+class JsiSkSVGFactory : public JsiSkNativeObject<JsiSkSVGFactory> {
 public:
+  static constexpr const char *CLASS_NAME = "SVGFactory";
+
   // Helper function to parse asset map from JS object
   static SVGAssetProvider::AssetMap parseAssetMap(jsi::Runtime &runtime,
                                                   const jsi::Value &jsValue) {
@@ -83,15 +85,9 @@ public:
         continue;
       }
 
-      if (jsValue.isObject()) {
-        auto jsObject = jsValue.asObject(runtime);
-        if (jsObject.isHostObject(runtime)) {
-          auto hostObject = jsObject.getHostObject(runtime);
-          auto skData = std::dynamic_pointer_cast<JsiSkData>(hostObject);
-          if (skData) {
-            assets[key] = skData->getObject();
-          }
-        }
+      auto skData = tryGetJsiObject<JsiSkData>(runtime, jsValue);
+      if (skData) {
+        assets[key] = skData->getObject();
       }
     }
 
@@ -120,9 +116,8 @@ private:
     builder.setResourceProvider(provider);
 
     auto svg_dom = builder.make(*stream);
-    auto svg = std::make_shared<JsiSkSVG>(getContext(), std::move(svg_dom));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, svg,
-                                                       getContext());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSVG>(getContext(), std::move(svg_dom)));
   }
 
 public:
@@ -160,15 +155,17 @@ public:
                              std::move(assets));
   }
 
-  size_t getMemoryPressure() const override { return kMinMemoryPressure; }
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
-  std::string getObjectType() const override { return "JsiSkSVGFactory"; }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSVGFactory, MakeFromData),
-                       JSI_EXPORT_FUNC(JsiSkSVGFactory, MakeFromString))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installHostMethod(runtime, prototype, "MakeFromData",
+                      &JsiSkSVGFactory::MakeFromData);
+    installHostMethod(runtime, prototype, "MakeFromString",
+                      &JsiSkSVGFactory::MakeFromString);
+  }
 
   explicit JsiSkSVGFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkSVGFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

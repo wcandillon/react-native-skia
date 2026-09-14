@@ -2,7 +2,7 @@ import type { Skia, SkCanvas } from "../skia/types";
 
 import type { Node } from "./Node";
 import type { Recording } from "./Recorder/Recorder";
-import { Recorder } from "./Recorder/Recorder";
+import { Recorder, disposeRecording } from "./Recorder/Recorder";
 import { visit } from "./Recorder/Visitor";
 import { replay } from "./Recorder/Player";
 import { createDrawingContext } from "./Recorder/DrawingContext";
@@ -41,7 +41,14 @@ export abstract class Container {
       this.recording.paintPool,
       canvas
     );
-    replay(ctx, this.recording.commands);
+    try {
+      replay(ctx, this.recording.commands);
+    } finally {
+      // Frame-scoped objects created during the replay are no longer needed
+      // once drawn — delete them, otherwise they leak on Web where the GC
+      // cannot see WASM memory.
+      ctx.dispose();
+    }
   }
 
   abstract redraw(): void;
@@ -55,7 +62,24 @@ export class StaticContainer extends Container {
     super(Skia);
   }
 
+  unmount() {
+    super.unmount();
+    if (this.recording) {
+      disposeRecording(this.recording);
+      this.recording = null;
+    }
+  }
+
   redraw() {
+    if (this.unmounted) {
+      // The unmount commit triggers a last redraw — recording it would
+      // resurrect a recording for a container that has just disposed it.
+      return;
+    }
+    if (this.recording) {
+      disposeRecording(this.recording);
+      this.recording = null;
+    }
     const recorder = new Recorder();
     visit(recorder, this.root);
     this.recording = recorder.getRecording();
@@ -67,6 +91,9 @@ export class StaticContainer extends Container {
       const picture = rec.finishRecordingAsPicture();
       rec.dispose();
       SkiaViewApi.setJsiProperty(this.nativeId, "picture", picture);
+      // The view keeps its own reference to the picture it displays; this
+      // one is renderer-owned and disposed with the recording.
+      this.recording.lastPicture = picture;
     }
   }
 }

@@ -138,7 +138,17 @@ public:
     wgpu::SharedTextureMemoryBeginAccessDescriptor beginAccessDesc;
     beginAccessDesc.initialized = true;
     beginAccessDesc.fenceCount = 0;
-    bool success = memory.BeginAccess(texture, &beginAccessDesc);
+#if defined(__ANDROID__)
+    // Dawn's Vulkan backend requires the acquired VkImageLayout to be chained.
+    // UNDEFINED (= 0) on both ends is the canonical "no prior GPU producer"
+    // pattern (matches GPUSharedTextureMemory::beginAccess).
+    wgpu::SharedTextureMemoryVkImageLayoutBeginState vkBegin = {};
+    vkBegin.oldLayout = 0;
+    vkBegin.newLayout = 0;
+    beginAccessDesc.nextInChain = &vkBegin;
+#endif
+    bool success =
+        memory.BeginAccess(texture, &beginAccessDesc) == wgpu::Status::Success;
 
     if (success) {
       skgpu::graphite::BackendTexture betFromView =
@@ -149,6 +159,10 @@ public:
           [](void *context) {
             auto ctx = static_cast<SharedTextureContext *>(context);
             wgpu::SharedTextureMemoryEndAccessState endState = {};
+#if defined(__ANDROID__)
+            wgpu::SharedTextureMemoryVkImageLayoutEndState vkEnd = {};
+            endState.nextInChain = &vkEnd;
+#endif
             ctx->sharedTextureMemory.EndAccess(ctx->texture, &endState);
             delete ctx;
           },
@@ -312,8 +326,8 @@ public:
   }
 
   // Create onscreen surface with window
-  std::unique_ptr<WindowContext> MakeWindow(void *window, int width,
-                                            int height) {
+  std::unique_ptr<WindowContext> MakeWindow(void *window, int width, int height,
+                                            bool highBitDepth = false) {
     // 1. Create Surface
     wgpu::SurfaceDescriptor surfaceDescriptor;
 #ifdef __APPLE__
@@ -328,7 +342,8 @@ public:
     auto surface =
         wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
     return std::make_unique<DawnWindowContext>(
-        getRecorder(), backendContext.fDevice, surface, width, height);
+        getRecorder(), backendContext.fDevice, surface, window, width, height,
+        highBitDepth);
   }
 
   skgpu::graphite::Recorder *getRecorder() {
@@ -352,8 +367,9 @@ private:
   std::mutex _mutex;
 
   DawnContext() {
-    DawnProcTable backendProcs = dawn::native::GetProcs();
-    dawnProcSetProcs(&backendProcs);
+    // No dawnProcSetProcs() here: the monolithic libwebgpu_dawn (shared with
+    // react-native-webgpu) exposes the real wgpu* C entry points directly
+    // rather than the settable dawn_proc trampoline, which it does not ship.
     static const auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
 
     wgpu::InstanceDescriptor instanceDesc{.requiredFeatureCount = 1,
@@ -362,6 +378,21 @@ private:
     // For limits:
     wgpu::InstanceLimits limits{.timedWaitAnyMaxCount = 64};
     instanceDesc.requiredLimits = &limits;
+
+    // Same instance-stage toggles react-native-webgpu sets on its own
+    // instance: when webgpu adopts this instance (rnskia_getWGPUInstance),
+    // its external-texture path expects experimental adapter features to be
+    // visible. These only un-hide features in adapter.features; nothing
+    // becomes active unless a device requests it.
+    static const char *const kInstanceToggles[] = {
+        "allow_unsafe_apis",
+        "expose_wgsl_experimental_features",
+    };
+    wgpu::DawnTogglesDescriptor instanceToggles;
+    instanceToggles.enabledToggleCount = std::size(kInstanceToggles);
+    instanceToggles.enabledToggles = kInstanceToggles;
+    instanceDesc.nextInChain = &instanceToggles;
+
     instance = std::make_unique<dawn::native::Instance>(&instanceDesc);
 
     backendContext = DawnUtils::createDawnBackendContext(instance.get());

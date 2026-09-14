@@ -107,7 +107,7 @@ const ImageDemo = () => {
 The `sampling` prop allows you to control how the image is sampled when it is drawn.
 Use cubic sampling for best quality: you can use the default `sampling={CubicSampling}` (defaults to `{ B: 0, C: 0 }`) or any value you would like: `sampling={{ B: 0, C: 0.5 }}`.
 
-You can also use filter modes (`nearest` or `linear`) and mimap modes (`none`, `nearest`, or `linear`). Default is `nearest`.
+You can also use filter modes (`nearest` or `linear`) and mipmap modes (`none`, `nearest`, or `linear`). The defaults are `linear` filtering and `none` mipmapping.
 
 ```tsx twoslash
 import { Canvas, Image, useImage, CubicSampling, FilterMode, MipmapMode } from "@shopify/react-native-skia";

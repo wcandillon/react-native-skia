@@ -57,12 +57,11 @@ public:
 
   uint64_t makeNativeBuffer(sk_sp<SkImage> image) override;
 
+  uint64_t makeTestNativeBuffer(int width, int height) override;
+
   void releaseNativeBuffer(uint64_t pointer) override;
 
   std::shared_ptr<RNSkVideo> createVideo(const std::string &url) override;
-
-  std::shared_ptr<WindowContext>
-  makeContextFromNativeSurface(void *surface, int width, int height) override;
 
   virtual void performStreamOperation(
       const std::string &sourceUri,

@@ -35,11 +35,17 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(install) {
     // Already initialized, ignore call.
     return @true;
   }
-  RCTCxxBridge *cxxBridge = (RCTCxxBridge *)self.bridge;
+#ifndef RCT_REMOVE_LEGACY_ARCH
   if (!jsInvoker) {
+    RCTCxxBridge *cxxBridge = (RCTCxxBridge *)self.bridge;
     jsInvoker = cxxBridge.jsCallInvoker;
   }
-  skiaManager = [[SkiaManager alloc] initWithBridge:cxxBridge
+#endif
+  if (!jsInvoker) {
+    NSLog(@"[RNSkiaModule] Failed to install SkiaManager: jsInvoker is not initialized.");
+    return @false;
+  }
+  skiaManager = [[SkiaManager alloc] initWithBridge:self.bridge
                                           jsInvoker:jsInvoker];
   return @true;
 }

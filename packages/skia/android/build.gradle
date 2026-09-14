@@ -58,10 +58,68 @@ static def findNodeModules(baseDir) {
 
 def nodeModules = findNodeModules(projectDir)
 
-// Skia prebuilt libs are copied into libs/android/ by the npm postinstall script
-// Graphite is detected via marker file created by install-skia-graphite
+// Resolve a node package directory using Node's own module resolution, so we
+// pick up the prebuilt Skia binaries straight from node_modules (no postinstall
+// copy step needed). Mirrors `require.resolve(pkg/package.json)`.
+static def resolveNodePackage(packageName, baseDir) {
+  def script = "process.stdout.write(require('path').dirname(require.resolve('${packageName}/package.json')))"
+  def proc = ["node", "-e", script].execute(null, baseDir)
+  proc.waitFor()
+  if (proc.exitValue() != 0) {
+    throw new GradleException(
+      "react-native-skia: Could not resolve the '${packageName}' package. " +
+      "Make sure dependencies are installed (yarn install / npm install).\n" + proc.err.text
+    )
+  }
+  return proc.text.trim()
+}
+
+// Graphite is detected via a marker file (created by install-skia-graphite for
+// in-repo development, or shipped in the npm tarball for next-channel releases).
+// The prebuilt binaries live in the react-native-skia-android npm package for the
+// default (Ganesh) build and in react-native-skia-graphite-android for Graphite.
+// In-repo Graphite development downloads them directly into libs/android instead,
+// which takes precedence over the npm package when present.
 def useGraphite = file("${projectDir}/../libs/.graphite").exists()
-def skiaLibsPath = "${projectDir}/../libs/android"
+def localGraphiteLibs = file("${projectDir}/../libs/android")
+def skiaLibsPath = useGraphite
+    ? (localGraphiteLibs.exists()
+        ? "${projectDir}/../libs/android"
+        : "${resolveNodePackage('react-native-skia-graphite-android', projectDir)}/libs")
+    : "${resolveNodePackage('react-native-skia-android', projectDir)}/libs"
+
+// Both packages must link the exact same Dawn artifact: compare this
+// Graphite build's Dawn release tag (libs/.dawn-version) with the tag
+// react-native-webgpu declares in its package.json `dawn` field.
+if (useGraphite) {
+    def dawnMarker = file("${projectDir}/../libs/.dawn-version")
+    def webgpuDir = null
+    try {
+        webgpuDir = resolveNodePackage('react-native-webgpu', projectDir)
+    } catch (Exception ignored) {
+        // react-native-webgpu not installed: nothing to check
+    }
+    if (dawnMarker.exists() && webgpuDir != null) {
+        def skiaDawn = dawnMarker.text.trim()
+        def webgpuJson = new groovy.json.JsonSlurper().parse(file("${webgpuDir}/package.json"))
+        if (webgpuJson.dawn == null) {
+            throw new GradleException(
+                "react-native-skia: the installed react-native-webgpu " +
+                "(${webgpuJson.version}) does not declare a `dawn` field in its " +
+                "package.json, so it predates shared-Dawn support and cannot be " +
+                "paired with this Graphite build (which links ${skiaDawn}). " +
+                "Upgrade react-native-webgpu.")
+        }
+        def webgpuDawn = "dawn-" + webgpuJson.dawn.toString().replace('/', '-')
+        if (skiaDawn != webgpuDawn) {
+            throw new GradleException(
+                "react-native-skia: Dawn version mismatch. This Graphite build links " +
+                "${skiaDawn} but react-native-webgpu links ${webgpuDawn}. " +
+                "Align the two packages so the app contains exactly one Dawn.")
+        }
+        logger.warn("react-native-skia: Dawn versions match (${skiaDawn})")
+    }
+}
 
 logger.warn("react-native-skia: SK_GRAPHITE: ${useGraphite}")
 logger.warn("react-native-skia: Skia libs: ${skiaLibsPath}")

@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,48 +18,36 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkRSXform : public JsiSkWrappingSharedPtrHostObject<SkRSXform> {
+class JsiSkRSXform
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkRSXform, SkRSXform> {
 public:
+  static constexpr const char *CLASS_NAME = "RSXform";
+
   JsiSkRSXform(std::shared_ptr<RNSkPlatformContext> context,
                const SkRSXform &rsxform)
-      : JsiSkWrappingSharedPtrHostObject<SkRSXform>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkRSXform, SkRSXform>(
             std::move(context), std::make_shared<SkRSXform>(rsxform)) {}
 
-  JSI_API_TYPENAME("RSXform");
-
-  JSI_PROPERTY_GET(scos) {
-    return jsi::Value(SkScalarToDouble(getObject()->fSCos));
-  }
-  JSI_PROPERTY_GET(ssin) {
-    return jsi::Value(SkScalarToDouble(getObject()->fSSin));
-  }
-  JSI_PROPERTY_GET(tx) {
-    return jsi::Value(SkScalarToDouble(getObject()->fTx));
-  }
-  JSI_PROPERTY_GET(ty) {
-    return jsi::Value(SkScalarToDouble(getObject()->fTy));
-  }
+  double getScos() { return SkScalarToDouble(getObject()->fSCos); }
+  double getSsin() { return SkScalarToDouble(getObject()->fSSin); }
+  double getTx() { return SkScalarToDouble(getObject()->fTx); }
+  double getTy() { return SkScalarToDouble(getObject()->fTy); }
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Woverloaded-virtual"
-  JSI_HOST_FUNCTION(set) {
-    auto scos = arguments[0].asNumber();
-    auto ssin = arguments[1].asNumber();
-    auto tx = arguments[2].asNumber();
-    auto ty = arguments[3].asNumber();
+  void set(double scos, double ssin, double tx, double ty) {
     getObject()->set(scos, ssin, tx, ty);
-    return jsi::Value::undefined();
   }
 #pragma clang diagnostic pop
 
-  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkRSXform, __typename__),
-                              JSI_EXPORT_PROP_GET(JsiSkRSXform, scos),
-                              JSI_EXPORT_PROP_GET(JsiSkRSXform, ssin),
-                              JSI_EXPORT_PROP_GET(JsiSkRSXform, tx),
-                              JSI_EXPORT_PROP_GET(JsiSkRSXform, ty))
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkRSXform, set),
-                       JSI_EXPORT_FUNC(JsiSkRSXform, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installGetter(runtime, prototype, "scos", &JsiSkRSXform::getScos);
+    installGetter(runtime, prototype, "ssin", &JsiSkRSXform::getSsin);
+    installGetter(runtime, prototype, "tx", &JsiSkRSXform::getTx);
+    installGetter(runtime, prototype, "ty", &JsiSkRSXform::getTy);
+    installMethod(runtime, prototype, "set", &JsiSkRSXform::set);
+  }
 
   /**
   Returns the underlying object from a host object of this type
@@ -67,8 +55,9 @@ public:
   static std::shared_ptr<SkRSXform> fromValue(jsi::Runtime &runtime,
                                               const jsi::Value &obj) {
     const auto &object = obj.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      return object.asHostObject<JsiSkRSXform>(runtime)->getObject();
+    auto rsxform = tryGetJsiObject<JsiSkRSXform>(runtime, object);
+    if (rsxform) {
+      return rsxform->getObject();
     } else {
       auto scos = object.getProperty(runtime, "scos").asNumber();
       auto ssin = object.getProperty(runtime, "ssin").asNumber();
@@ -84,10 +73,8 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkRSXform &rsxform) {
-    auto rsxformObj =
-        std::make_shared<JsiSkRSXform>(std::move(context), rsxform);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rsxformObj,
-                                                       context);
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkRSXform>(std::move(context), rsxform));
   }
 
   /**
@@ -105,17 +92,14 @@ public:
           arguments[2].asNumber(), arguments[3].asNumber(),
           arguments[4].asNumber(), arguments[5].asNumber());
       // Return the newly constructed object
-      auto rsxformObj = std::make_shared<JsiSkRSXform>(std::move(context),
-                                                       std::move(rsxform));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rsxformObj,
-                                                         context);
+      return makeJsiObject(runtime,
+                           std::make_shared<JsiSkRSXform>(std::move(context),
+                                                          std::move(rsxform)));
     };
   }
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkRSXform), kMinMemoryPressure);
   }
-
-  std::string getObjectType() const override { return "JsiSkRSXform"; }
 
   /**
    * Creates the function for construction a new instance of the SkRSXform
@@ -131,10 +115,9 @@ public:
           SkRSXform::Make(arguments[0].asNumber(), arguments[1].asNumber(),
                           arguments[2].asNumber(), arguments[3].asNumber());
       // Return the newly constructed object
-      auto rsxformObj = std::make_shared<JsiSkRSXform>(std::move(context),
-                                                       std::move(rsxform));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, rsxformObj,
-                                                         context);
+      return makeJsiObject(runtime,
+                           std::make_shared<JsiSkRSXform>(std::move(context),
+                                                          std::move(rsxform)));
     };
   }
 };

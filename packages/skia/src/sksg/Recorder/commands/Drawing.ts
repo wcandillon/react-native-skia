@@ -131,14 +131,14 @@ export const drawTextPath = (ctx: DrawingContext, props: TextPathProps) => {
     const widths = font.getGlyphWidths(ids);
     const rsx: SkRSXform[] = [];
     const meas = ctx.Skia.ContourMeasureIter(path, false, 1);
-    let cont = meas.next();
+    let cont = ctx.track(meas.next());
     let dist = initialOffset;
     for (let i = 0; i < text.length && cont; i++) {
       const width = widths[i];
       dist += width / 2;
       if (dist > cont.length()) {
         // jump to next contour
-        cont = meas.next();
+        cont = ctx.track(meas.next());
         if (!cont) {
           // We have come to the end of the path - terminate the string
           // right here.
@@ -217,11 +217,21 @@ export const drawPath = (ctx: DrawingContext, props: PathProps) => {
 
   let path = processPath(ctx.Skia, pathProps.path);
 
+  // Trim runs first, so start/end address the path the caller drew. Stroking
+  // first would replace it with its outline and leave the offsets walking that
+  // outline's perimeter instead. The native recorder orders these the same way.
+  if (hasStartOffset || hasEndOffset) {
+    const trimmed = ctx.Skia.Path.Trim(path, start, end, false);
+    if (trimmed) {
+      path = trimmed;
+    }
+  }
+
   // Apply fill type using PathBuilder
   if (hasFillType) {
     const builder = ctx.Skia.PathBuilder.MakeFromPath(path);
     builder.setFillType(FillType[enumKey(fillType)]);
-    path = builder.build();
+    path = ctx.track(builder.build());
   }
 
   // Apply stroke using static Path.Stroke
@@ -229,14 +239,6 @@ export const drawPath = (ctx: DrawingContext, props: PathProps) => {
     const stroked = ctx.Skia.Path.Stroke(path, stroke);
     if (stroked) {
       path = stroked;
-    }
-  }
-
-  // Apply trim using static Path.Trim
-  if (hasStartOffset || hasEndOffset) {
-    const trimmed = ctx.Skia.Path.Trim(path, start, end, false);
-    if (trimmed) {
-      path = trimmed;
     }
   }
 
@@ -295,7 +297,8 @@ export const drawImageSVG = (ctx: DrawingContext, props: ImageSVGProps) => {
     return;
   }
   canvas.save();
-  if (x && y) {
+  // An offset of 0 is a valid position, so it must not be read as "unset".
+  if (x !== undefined && y !== undefined) {
     canvas.translate(x, y);
   }
   canvas.drawSvg(svg, width, height);

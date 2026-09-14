@@ -26,6 +26,16 @@ namespace para = skia::textlayout;
  */
 class JsiSkTextStyle {
 public:
+  // A property set to undefined or null is treated as absent, like on web.
+  static bool hasValue(jsi::Runtime &runtime, const jsi::Object &object,
+                       const char *name) {
+    if (!object.hasProperty(runtime, name)) {
+      return false;
+    }
+    auto propValue = object.getProperty(runtime, name);
+    return !propValue.isUndefined() && !propValue.isNull();
+  }
+
   static para::TextStyle fromValue(jsi::Runtime &runtime,
                                    const jsi::Value &value) {
 
@@ -43,35 +53,35 @@ public:
 
     auto object = value.asObject(runtime);
 
-    if (object.hasProperty(runtime, "backgroundColor")) {
+    if (hasValue(runtime, object, "backgroundColor")) {
       auto propValue = object.getProperty(runtime, "backgroundColor");
       SkPaint p;
       p.setColor(JsiSkColor::fromValue(runtime, propValue));
       retVal.setBackgroundPaint(p);
     }
-    if (object.hasProperty(runtime, "color")) {
+    if (hasValue(runtime, object, "color")) {
       auto propValue = object.getProperty(runtime, "color");
       retVal.setColor(JsiSkColor::fromValue(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "decoration")) {
+    if (hasValue(runtime, object, "decoration")) {
       auto propValue = object.getProperty(runtime, "decoration");
       retVal.setDecoration(
           static_cast<para::TextDecoration>(propValue.asNumber()));
     }
-    if (object.hasProperty(runtime, "decorationColor")) {
+    if (hasValue(runtime, object, "decorationColor")) {
       auto propValue = object.getProperty(runtime, "decorationColor");
       retVal.setDecorationColor(JsiSkColor::fromValue(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "decorationThickness")) {
+    if (hasValue(runtime, object, "decorationThickness")) {
       auto propValue = object.getProperty(runtime, "decorationThickness");
       retVal.setDecorationThicknessMultiplier(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "decorationStyle")) {
+    if (hasValue(runtime, object, "decorationStyle")) {
       auto propValue = object.getProperty(runtime, "decorationStyle");
       retVal.setDecorationStyle(
           static_cast<para::TextDecorationStyle>(propValue.asNumber()));
     }
-    if (object.hasProperty(runtime, "fontFamilies")) {
+    if (hasValue(runtime, object, "fontFamilies")) {
       auto propValue = object.getProperty(runtime, "fontFamilies")
                            .asObject(runtime)
                            .asArray(runtime);
@@ -85,7 +95,7 @@ public:
       }
       retVal.setFontFamilies(families);
     }
-    if (object.hasProperty(runtime, "fontFeatures")) {
+    if (hasValue(runtime, object, "fontFeatures")) {
       auto propValue = object.getProperty(runtime, "fontFeatures")
                            .asObject(runtime)
                            .asArray(runtime);
@@ -100,58 +110,58 @@ public:
         retVal.addFontFeature(SkString(name), value);
       }
     }
-    if (object.hasProperty(runtime, "fontSize")) {
+    if (hasValue(runtime, object, "fontSize")) {
       auto propValue = object.getProperty(runtime, "fontSize");
       retVal.setFontSize(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "fontStyle")) {
+    if (hasValue(runtime, object, "fontStyle")) {
       auto propValue =
           object.getProperty(runtime, "fontStyle").asObject(runtime);
       auto weight = static_cast<SkFontStyle::Weight>(
-          propValue.hasProperty(runtime, "weight")
+          hasValue(runtime, propValue, "weight")
               ? propValue.getProperty(runtime, "weight").asNumber()
               : static_cast<double>(SkFontStyle::Weight::kNormal_Weight));
 
       auto width = static_cast<SkFontStyle::Width>(
-          propValue.hasProperty(runtime, "width")
+          hasValue(runtime, propValue, "width")
               ? propValue.getProperty(runtime, "width").asNumber()
               : static_cast<double>(SkFontStyle::Width::kNormal_Width));
 
       auto slant = static_cast<SkFontStyle::Slant>(
-          propValue.hasProperty(runtime, "slant")
+          hasValue(runtime, propValue, "slant")
               ? propValue.getProperty(runtime, "slant").asNumber()
               : static_cast<double>(SkFontStyle::Slant::kUpright_Slant));
 
       retVal.setFontStyle(SkFontStyle(weight, width, slant));
     }
-    if (object.hasProperty(runtime, "foregroundColor")) {
+    if (hasValue(runtime, object, "foregroundColor")) {
       auto propValue = object.getProperty(runtime, "foregroundColor");
       SkPaint p;
       p.setColor(JsiSkColor::fromValue(runtime, propValue));
       retVal.setForegroundColor(p);
     }
-    if (object.hasProperty(runtime, "heightMultiplier")) {
+    if (hasValue(runtime, object, "heightMultiplier")) {
       auto propValue = object.getProperty(runtime, "heightMultiplier");
       retVal.setHeight(propValue.asNumber());
       retVal.setHeightOverride(true);
     }
-    if (object.hasProperty(runtime, "halfLeading")) {
+    if (hasValue(runtime, object, "halfLeading")) {
       auto propValue = object.getProperty(runtime, "halfLeading");
       retVal.setHalfLeading(propValue.getBool());
     }
-    if (object.hasProperty(runtime, "letterSpacing")) {
+    if (hasValue(runtime, object, "letterSpacing")) {
       auto propValue = object.getProperty(runtime, "letterSpacing");
       retVal.setLetterSpacing(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "wordSpacing")) {
+    if (hasValue(runtime, object, "wordSpacing")) {
       auto propValue = object.getProperty(runtime, "wordSpacing");
       retVal.setWordSpacing(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "locale")) {
+    if (hasValue(runtime, object, "locale")) {
       auto propValue = object.getProperty(runtime, "locale");
       retVal.setLocale(SkString(propValue.asString(runtime).utf8(runtime)));
     }
-    if (object.hasProperty(runtime, "shadows")) {
+    if (hasValue(runtime, object, "shadows")) {
       auto propValue = object.getProperty(runtime, "shadows")
                            .asObject(runtime)
                            .asArray(runtime);
@@ -159,24 +169,24 @@ public:
       retVal.resetShadows();
       for (size_t i = 0; i < size; ++i) {
         auto element = propValue.getValueAtIndex(runtime, i).asObject(runtime);
-        auto color = element.hasProperty(runtime, "color")
+        auto color = hasValue(runtime, element, "color")
                          ? JsiSkColor::fromValue(
                                runtime, element.getProperty(runtime, "color"))
                          : SK_ColorBLACK;
         SkPoint offset =
-            element.hasProperty(runtime, "offset")
+            hasValue(runtime, element, "offset")
                 ? *JsiSkPoint::fromValue(runtime,
                                          element.getProperty(runtime, "offset"))
                        .get()
                 : SkPoint::Make(0, 0);
         auto blurSigma =
-            element.hasProperty(runtime, "blurRadius")
+            hasValue(runtime, element, "blurRadius")
                 ? element.getProperty(runtime, "blurRadius").asNumber()
                 : 0;
         retVal.addShadow(para::TextShadow(color, offset, blurSigma));
       }
     }
-    if (object.hasProperty(runtime, "textBaseline")) {
+    if (hasValue(runtime, object, "textBaseline")) {
       auto propValue = object.getProperty(runtime, "textBaseline");
       retVal.setTextBaseline(
           static_cast<para::TextBaseline>(propValue.asNumber()));

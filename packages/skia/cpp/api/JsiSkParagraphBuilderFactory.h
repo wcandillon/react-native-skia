@@ -5,8 +5,11 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiSkConverters.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkParagraphBuilder.h"
 #include "JsiSkParagraphStyle.h"
+#include "JsiSkTypefaceFontProvider.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -25,37 +28,30 @@ namespace para = skia::textlayout;
  Implementation of the ParagraphBuilderFactory for making ParagraphBuilder JSI
  object
  */
-class JsiSkParagraphBuilderFactory : public JsiSkHostObject {
+class JsiSkParagraphBuilderFactory
+    : public JsiSkNativeObject<JsiSkParagraphBuilderFactory> {
 public:
-  JSI_HOST_FUNCTION(Make) {
-    // Get paragraph style from params
-    auto paragraphStyle =
-        count > 0 ? JsiSkParagraphStyle::fromValue(runtime, arguments[0])
-                  : para::ParagraphStyle();
+  static constexpr const char *CLASS_NAME = "ParagraphBuilderFactory";
 
-    // get font manager
-    auto fontMgr =
-        count > 1 ? JsiSkTypefaceFontProvider::fromValue(runtime, arguments[1])
-                  : nullptr;
-
-    // Create the paragraph builder
-    auto builder = std::make_shared<JsiSkParagraphBuilder>(
-        getContext(), paragraphStyle, fontMgr);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, builder,
-                                                       getContext());
+  std::shared_ptr<JsiSkParagraphBuilder>
+  Make(JsiOptional<para::ParagraphStyle> paragraphStyle,
+       JsiOptional<sk_sp<para::TypefaceFontProvider>> fontMgr) {
+    return std::make_shared<JsiSkParagraphBuilder>(
+        getContext(),
+        paragraphStyle.has_value() ? *paragraphStyle : para::ParagraphStyle(),
+        fontMgr.has_value() ? *fontMgr : nullptr);
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkParagraphBuilderFactory, Make))
-
-  size_t getMemoryPressure() const override { return 1024 * 1024; }
-
-  std::string getObjectType() const override {
-    return "JsiSkParagraphBuilderFactory";
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "Make",
+                  &JsiSkParagraphBuilderFactory::Make);
   }
+
+  size_t getMemoryPressure() override { return 1024 * 1024; }
 
   explicit JsiSkParagraphBuilderFactory(
       std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkParagraphBuilderFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

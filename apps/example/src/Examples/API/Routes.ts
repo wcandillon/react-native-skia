@@ -27,6 +27,8 @@ export type Routes = {
   IconsExample: undefined;
   Paragraphs: undefined;
   Paragraphs2: undefined;
+  ParagraphPath: undefined;
+  GlyphBounds: undefined;
   Skottie: undefined;
   StressTest: undefined;
   StressTest2: undefined;
@@ -37,4 +39,9 @@ export type Routes = {
   FirstFrameEmpty: undefined;
   PictureBug: undefined;
   Atlas: undefined;
+  Web: undefined;
+  WebLayout: undefined;
+  WebGLContexts: undefined;
+  WebGLLifecycle: undefined;
+  WebMemory: undefined;
 };

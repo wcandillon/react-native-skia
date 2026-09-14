@@ -2,71 +2,58 @@
 
 #include <memory>
 #include <utility>
+#include <variant>
 
 #include <jsi/jsi.h>
 
-#include "JsiPromises.h"
+#include "JsiSkConverters.h"
 #include "JsiSkData.h"
-#include "JsiSkHostObjects.h"
 #include "JsiSkImage.h"
 #include "JsiSkImageInfo.h"
+#include "JsiSkNativeObjects.h"
+#include "jsi/JsiPromises.h"
 
 #ifdef SK_GRAPHITE
-#include "RNDawnContext.h"
-#include "rnwgpu/api/GPUTexture.h"
+#include "rnskia/RNDawnContext.h"
 #endif
 
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkImageFactory : public JsiSkHostObject {
+class JsiSkImageFactory : public JsiSkNativeObject<JsiSkImageFactory> {
 public:
-  JSI_HOST_FUNCTION(MakeNull) {
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), nullptr);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+  static constexpr const char *CLASS_NAME = "ImageFactory";
+
+  std::shared_ptr<JsiSkImage> MakeNull() {
+    return std::make_shared<JsiSkImage>(getContext(), nullptr);
   }
 
-  JSI_HOST_FUNCTION(MakeImageFromEncoded) {
-    auto data = JsiSkData::fromValue(runtime, arguments[0]);
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
+  MakeImageFromEncoded(sk_sp<SkData> data) {
     auto image = SkImages::DeferredFromEncodedData(data);
     if (image == nullptr) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
 
-  JSI_HOST_FUNCTION(MakeImageFromNativeBuffer) {
-    jsi::BigInt pointer = arguments[0].asBigInt(runtime);
-    const uintptr_t nativeBufferPointer = pointer.asUint64(runtime);
-    void *rawPointer = reinterpret_cast<void *>(nativeBufferPointer);
+  std::shared_ptr<JsiSkImage> MakeImageFromNativeBuffer(void *rawPointer) {
     auto image = getContext()->makeImageFromNativeBuffer(rawPointer);
     if (image == nullptr) {
       throw std::runtime_error("Failed to convert NativeBuffer to SkImage!");
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
 
-  JSI_HOST_FUNCTION(MakeImage) {
-    auto imageInfo = JsiSkImageInfo::fromValue(runtime, arguments[0]);
-    auto pixelData = JsiSkData::fromValue(runtime, arguments[1]);
-    auto bytesPerRow = arguments[2].asNumber();
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
+  MakeImage(std::shared_ptr<SkImageInfo> imageInfo, sk_sp<SkData> pixelData,
+            double bytesPerRow) {
     auto image = SkImages::RasterFromData(*imageInfo, pixelData, bytesPerRow);
     if (image == nullptr) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
 
   JSI_HOST_FUNCTION(MakeImageFromViewTag) {
@@ -88,10 +75,9 @@ public:
                     promise->reject("Failed to create image from view tag");
                     return;
                   }
-                  auto hostObjectInstance =
-                      std::make_shared<JsiSkImage>(context, std::move(result));
-                  promise->resolve(JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-                      runtime, hostObjectInstance, context));
+                  promise->resolve(
+                      makeJsiObject(runtime, std::make_shared<JsiSkImage>(
+                                                 context, std::move(result))));
                 });
               });
         });
@@ -105,97 +91,109 @@ public:
     if (image == nullptr) {
       throw std::runtime_error("Failed to convert native texture to SkImage!");
     }
-    if (count > 4 && arguments[4].isObject() &&
-        arguments[4].asObject(runtime).isHostObject(runtime)) {
-      auto jsiImage =
-          arguments[4].asObject(runtime).asHostObject<JsiSkImage>(runtime);
-      jsiImage->setObject(image);
-      return jsi::Value(runtime, arguments[4]);
+    if (count > 4) {
+      auto jsiImage = tryGetJsiObject<JsiSkImage>(runtime, arguments[4]);
+      if (jsiImage) {
+        jsiImage->setObject(image);
+        return jsi::Value(runtime, arguments[4]);
+      }
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }
 
-  JSI_HOST_FUNCTION(MakeImageFromTexture) {
+  // Pointer-based texture interop with react-native-webgpu. The GPUTexture
+  // JS objects live in react-native-webgpu, so textures cross the package
+  // boundary as raw WGPUTexture pointers (BigInt), exactly like the device
+  // handoff (Skia.getNativeDevice / importDevice). Only sound on the shared
+  // device: both packages link one Dawn and share one wgpu::Instance.
+
+  JSI_HOST_FUNCTION(MakeImageFromNativeTexture) {
 #ifdef SK_GRAPHITE
-    if (count < 1 || !arguments[0].isObject()) {
+    if (count < 1 || !arguments[0].isBigInt()) {
+      throw std::runtime_error("MakeImageFromNativeTexture requires a "
+                               "WGPUTexture pointer (BigInt), e.g. "
+                               "texture.nativePointer");
+    }
+    auto raw = reinterpret_cast<WGPUTexture>(
+        arguments[0].asBigInt(runtime).asUint64(runtime));
+    if (raw == nullptr) {
       throw std::runtime_error(
-          "MakeImageFromTexture requires a GPUTexture argument");
+          "MakeImageFromNativeTexture: pointer must be non-null");
     }
-    auto obj = arguments[0].asObject(runtime);
-    auto gpuTexture = obj.getNativeState<rnwgpu::GPUTexture>(runtime);
-    if (!gpuTexture) {
-      throw std::runtime_error("Invalid GPUTexture object");
-    }
-
-    wgpu::Texture texture = gpuTexture->get();
-    int width = static_cast<int>(gpuTexture->getWidth());
-    int height = static_cast<int>(gpuTexture->getHeight());
-    wgpu::TextureFormat format = gpuTexture->getFormat();
-
+    // Borrow: AddRef so our wgpu::Texture holds its own reference; the
+    // wrapped SkImage retains the texture for its lifetime (see
+    // DawnContext::MakeImageFromTexture) and the caller keeps ownership of
+    // the JS GPUTexture.
+    wgpuTextureAddRef(raw);
+    wgpu::Texture texture = wgpu::Texture::Acquire(raw);
     auto &dawnContext = DawnContext::getInstance();
-    auto image =
-        dawnContext.MakeImageFromTexture(texture, width, height, format);
+    auto image = dawnContext.MakeImageFromTexture(
+        texture, static_cast<int>(texture.GetWidth()),
+        static_cast<int>(texture.GetHeight()), texture.GetFormat());
     if (image == nullptr) {
-      throw std::runtime_error("Failed to create SkImage from GPUTexture!");
+      throw std::runtime_error(
+          "MakeImageFromNativeTexture: failed to wrap the texture");
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
 #else
     throw std::runtime_error(
-        "MakeImageFromTexture is only available with the Graphite backend. "
-        "Rebuild with SK_GRAPHITE enabled.");
+        "MakeImageFromNativeTexture is only available with the Graphite "
+        "backend. Rebuild with SK_GRAPHITE enabled.");
 #endif
   }
 
-  JSI_HOST_FUNCTION(MakeTextureFromImage) {
+  JSI_HOST_FUNCTION(MakeNativeTextureFromImage) {
 #ifdef SK_GRAPHITE
     if (count < 1) {
       throw std::runtime_error(
-          "MakeTextureFromImage requires an SkImage argument");
+          "MakeNativeTextureFromImage requires an SkImage argument");
     }
     auto image = JsiSkImage::fromValue(runtime, arguments[0]);
     if (!image) {
       throw std::runtime_error("Invalid SkImage object");
     }
-
     auto &dawnContext = DawnContext::getInstance();
     wgpu::Texture texture = dawnContext.MakeTextureFromImage(image);
     if (!texture) {
-      throw std::runtime_error("Failed to create GPUTexture from SkImage!");
+      throw std::runtime_error(
+          "MakeNativeTextureFromImage: failed to create the texture");
     }
-
-    auto gpuTexture =
-        std::make_shared<rnwgpu::GPUTexture>(texture, "SkImage Texture");
-    return rnwgpu::GPUTexture::create(runtime, gpuTexture);
+    // Transfer ownership: the returned pointer carries one reference and must
+    // be adopted exactly once (react-native-webgpu's adoptTexture()), which
+    // releases it when the JS GPUTexture is destroyed.
+    return jsi::BigInt::fromUint64(
+        runtime, reinterpret_cast<uint64_t>(texture.MoveToCHandle()));
 #else
     throw std::runtime_error(
-        "MakeTextureFromImage is only available with the Graphite backend. "
-        "Rebuild with SK_GRAPHITE enabled.");
+        "MakeNativeTextureFromImage is only available with the Graphite "
+        "backend. Rebuild with SK_GRAPHITE enabled.");
 #endif
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  std::string getObjectType() const override { return "JsiSkImageFactory"; }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImageFromEncoded),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImageFromViewTag),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory,
-                                       MakeImageFromNativeBuffer),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory,
-                                       MakeImageFromNativeTextureUnstable),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImage),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory, MakeNull),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory, MakeImageFromTexture),
-                       JSI_EXPORT_FUNC(JsiSkImageFactory, MakeTextureFromImage))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "MakeImageFromEncoded",
+                  &JsiSkImageFactory::MakeImageFromEncoded);
+    installHostMethod(runtime, prototype, "MakeImageFromViewTag",
+                      &JsiSkImageFactory::MakeImageFromViewTag);
+    installMethod(runtime, prototype, "MakeImageFromNativeBuffer",
+                  &JsiSkImageFactory::MakeImageFromNativeBuffer);
+    installHostMethod(runtime, prototype, "MakeImageFromNativeTextureUnstable",
+                      &JsiSkImageFactory::MakeImageFromNativeTextureUnstable);
+    installMethod(runtime, prototype, "MakeImage",
+                  &JsiSkImageFactory::MakeImage);
+    installMethod(runtime, prototype, "MakeNull", &JsiSkImageFactory::MakeNull);
+    installHostMethod(runtime, prototype, "MakeImageFromNativeTexture",
+                      &JsiSkImageFactory::MakeImageFromNativeTexture);
+    installHostMethod(runtime, prototype, "MakeNativeTextureFromImage",
+                      &JsiSkImageFactory::MakeNativeTextureFromImage);
+  }
 
   explicit JsiSkImageFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkImageFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

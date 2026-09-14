@@ -1,22 +1,25 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 
+#include "JsiSkConverters.h"
 #include "JsiSkDispatcher.h"
-#include "JsiSkHostObjects.h"
 #include "JsiSkImageInfo.h"
 #include "JsiSkMatrix.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkShader.h"
-#include "third_party/base64.h"
+#include "api/third_party/base64.h"
 
 #include "JsiTextureInfo.h"
-#include "RNSkTypedArray.h"
+#include "utils/RNSkTypedArray.h"
 
 #if defined(SK_GRAPHITE)
-#include "RNDawnContext.h"
 #include "include/gpu/graphite/Context.h"
+#include "rnskia/RNDawnContext.h"
 #else
 #include "include/gpu/ganesh/GrDirectContext.h"
 #endif
@@ -140,63 +143,50 @@ inline SkSamplingOptions SamplingOptionsFromValue(jsi::Runtime &runtime,
   return samplingOptions;
 }
 
-class JsiSkImage : public JsiSkWrappingSkPtrHostObject<SkImage> {
+class JsiSkImage : public JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage> {
 private:
   std::shared_ptr<Dispatcher> _dispatcher;
 
 public:
+  static constexpr const char *CLASS_NAME = "Image";
+
   // TODO-API: Properties?
-  JSI_HOST_FUNCTION(width) { return static_cast<double>(getObject()->width()); }
-  JSI_HOST_FUNCTION(height) {
-    return static_cast<double>(getObject()->height());
+  double width() { return static_cast<double>(getObject()->width()); }
+  double height() { return static_cast<double>(getObject()->height()); }
+
+  std::shared_ptr<JsiSkImageInfo> getImageInfo() {
+    return std::make_shared<JsiSkImageInfo>(getContext(),
+                                            getObject()->imageInfo());
   }
 
-  JSI_HOST_FUNCTION(getImageInfo) {
-    return JsiSkImageInfo::toValue(runtime, getContext(),
-                                   getObject()->imageInfo());
+  std::shared_ptr<JsiSkShader>
+  makeShaderOptions(double tmx, double tmy, double fm, double mm,
+                    std::optional<std::shared_ptr<SkMatrix>> m) {
+    auto shader = getObject()->makeShader(
+        static_cast<SkTileMode>(tmx), static_cast<SkTileMode>(tmy),
+        SkSamplingOptions(static_cast<SkFilterMode>(fm),
+                          static_cast<SkMipmapMode>(mm)),
+        m.has_value() ? m->get() : nullptr);
+    return std::make_shared<JsiSkShader>(getContext(), std::move(shader));
   }
 
-  JSI_HOST_FUNCTION(makeShaderOptions) {
-    auto tmx = (SkTileMode)arguments[0].asNumber();
-    auto tmy = (SkTileMode)arguments[1].asNumber();
-    auto fm = (SkFilterMode)arguments[2].asNumber();
-    auto mm = (SkMipmapMode)arguments[3].asNumber();
-    auto m = count > 4 && !arguments[4].isUndefined()
-                 ? JsiSkMatrix::fromValue(runtime, arguments[4]).get()
-                 : nullptr;
-    auto shader =
-        getObject()->makeShader(tmx, tmy, SkSamplingOptions(fm, mm), m);
-    auto shaderObj =
-        std::make_shared<JsiSkShader>(getContext(), std::move(shader));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, shaderObj,
-                                                       getContext());
+  std::shared_ptr<JsiSkShader>
+  makeShaderCubic(double tmx, double tmy, double B, double C,
+                  std::optional<std::shared_ptr<SkMatrix>> m) {
+    auto shader = getObject()->makeShader(
+        static_cast<SkTileMode>(tmx), static_cast<SkTileMode>(tmy),
+        SkSamplingOptions({SkDoubleToScalar(B), SkDoubleToScalar(C)}),
+        m.has_value() ? m->get() : nullptr);
+    return std::make_shared<JsiSkShader>(getContext(), std::move(shader));
   }
 
-  JSI_HOST_FUNCTION(makeShaderCubic) {
-    auto tmx = (SkTileMode)arguments[0].asNumber();
-    auto tmy = (SkTileMode)arguments[1].asNumber();
-    auto B = SkDoubleToScalar(arguments[2].asNumber());
-    auto C = SkDoubleToScalar(arguments[3].asNumber());
-    auto m = count > 4 && !arguments[4].isUndefined()
-                 ? JsiSkMatrix::fromValue(runtime, arguments[4]).get()
-                 : nullptr;
-    auto shader =
-        getObject()->makeShader(tmx, tmy, SkSamplingOptions({B, C}), m);
-    auto shaderObj =
-        std::make_shared<JsiSkShader>(getContext(), std::move(shader));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, shaderObj,
-                                                       getContext());
-  }
-
-  sk_sp<SkData> encodeImageData(const jsi::Value *arguments, size_t count) {
+  sk_sp<SkData> encodeImageData(JsiOptional<double> formatParam,
+                                JsiOptional<double> qualityParam) {
     // Get optional parameters
-    auto format =
-        count >= 1 ? static_cast<SkEncodedImageFormat>(arguments[0].asNumber())
-                   : SkEncodedImageFormat::kPNG;
-
-    auto quality = (count >= 2 && arguments[1].isNumber())
-                       ? arguments[1].asNumber()
-                       : 100.0;
+    auto format = formatParam.has_value()
+                      ? static_cast<SkEncodedImageFormat>(*formatParam)
+                      : SkEncodedImageFormat::kPNG;
+    auto quality = qualityParam.has_value() ? *qualityParam : 100.0;
     auto image = getObject();
 #if defined(SK_GRAPHITE)
     image = DawnContext::getInstance().MakeRasterImage(image);
@@ -240,8 +230,17 @@ public:
     return data;
   }
 
+  // Stays raw: constructs a Uint8Array result.
   JSI_HOST_FUNCTION(encodeToBytes) {
-    auto data = encodeImageData(arguments, count);
+    JsiOptional<double> format =
+        count >= 1 && !arguments[0].isUndefined() && !arguments[0].isNull()
+            ? JsiOptional<double>(arguments[0].asNumber())
+            : JsiOptional<double>();
+    JsiOptional<double> quality = count >= 2 && arguments[1].isNumber()
+                                      ? JsiOptional<double>(
+                                            arguments[1].asNumber())
+                                      : JsiOptional<double>();
+    auto data = encodeImageData(format, quality);
     if (!data) {
       return jsi::Value::null();
     }
@@ -263,23 +262,21 @@ public:
     return array;
   }
 
-  JSI_HOST_FUNCTION(encodeToBase64) {
-    auto data = encodeImageData(arguments, count);
+  std::variant<std::nullptr_t, std::string>
+  encodeToBase64(JsiOptional<double> format, JsiOptional<double> quality) {
+    auto data = encodeImageData(format, quality);
     if (!data) {
-      return jsi::Value::null();
+      return nullptr;
     }
 
     auto len = Base64::Encode(data->bytes(), data->size(), nullptr);
     auto buffer = std::string(len, 0);
     Base64::Encode(data->bytes(), data->size(),
                    reinterpret_cast<void *>(&buffer[0]));
-    return jsi::String::createFromAscii(runtime, buffer);
+    return buffer;
   }
 
   JSI_HOST_FUNCTION(readPixels) {
-#if defined(SK_GRAPHITE)
-    throw std::runtime_error("Not implemented yet");
-#else
     int srcX = 0;
     int srcY = 0;
     if (count > 0 && !arguments[0].isUndefined()) {
@@ -313,33 +310,42 @@ public:
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
 
+#if defined(SK_GRAPHITE)
+    // Graphite offers no synchronous GPU readback, so fall back to a CPU raster
+    // copy of the image (a no-op when the image is already raster) and read the
+    // pixels from that. This matches the Ganesh behaviour for non-texture and
+    // texture-backed images alike.
+    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
+    if (!image ||
+        !image->readPixels(nullptr, info, bfrPtr, bytesPerRow, srcX, srcY)) {
+      return jsi::Value::null();
+    }
+#else
     auto grContext = getContext()->getDirectContext();
     if (!getObject()->readPixels(grContext, info, bfrPtr, bytesPerRow, srcX,
                                  srcY)) {
       return jsi::Value::null();
     }
-    return dest;
 #endif
+    return dest;
   }
 
-  JSI_HOST_FUNCTION(makeNonTextureImage) {
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
+  makeNonTextureImage() {
 #if defined(SK_GRAPHITE)
     auto rasterImage = DawnContext::getInstance().MakeRasterImage(getObject());
 #else
     auto grContext = getContext()->getDirectContext();
     auto image = getObject();
     if (!grContext) {
-      throw jsi::JSError(runtime, "No GPU context available.");
+      throw std::runtime_error("No GPU context available.");
     }
     auto rasterImage = image->makeRasterImage(grContext);
 #endif
     if (!rasterImage) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
   }
 
   JSI_HOST_FUNCTION(getNativeTextureUnstable) {
@@ -351,29 +357,44 @@ public:
     return JsiTextureInfo::toValue(runtime, texInfo);
   }
 
-  JSI_HOST_FUNCTION(isTextureBacked) {
-    return jsi::Value(getObject()->isTextureBacked());
+  bool isTextureBacked() { return getObject()->isTextureBacked(); }
+
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static sk_sp<SkImage> fromValue(jsi::Runtime &runtime,
+                                  const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
   }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkImage, Image)
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkImage, width),
-                       JSI_EXPORT_FUNC(JsiSkImage, height),
-                       JSI_EXPORT_FUNC(JsiSkImage, getImageInfo),
-                       JSI_EXPORT_FUNC(JsiSkImage, makeShaderOptions),
-                       JSI_EXPORT_FUNC(JsiSkImage, makeShaderCubic),
-                       JSI_EXPORT_FUNC(JsiSkImage, encodeToBytes),
-                       JSI_EXPORT_FUNC(JsiSkImage, encodeToBase64),
-                       JSI_EXPORT_FUNC(JsiSkImage, readPixels),
-                       JSI_EXPORT_FUNC(JsiSkImage, makeNonTextureImage),
-                       JSI_EXPORT_FUNC(JsiSkImage, getNativeTextureUnstable),
-                       JSI_EXPORT_FUNC(JsiSkImage, isTextureBacked),
-                       JSI_EXPORT_FUNC(JsiSkImage, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "width", &JsiSkImage::width);
+    installMethod(runtime, prototype, "height", &JsiSkImage::height);
+    installMethod(runtime, prototype, "getImageInfo",
+                  &JsiSkImage::getImageInfo);
+    installMethod(runtime, prototype, "makeShaderOptions",
+                  &JsiSkImage::makeShaderOptions);
+    installMethod(runtime, prototype, "makeShaderCubic",
+                  &JsiSkImage::makeShaderCubic);
+    installHostMethod(runtime, prototype, "encodeToBytes",
+                      &JsiSkImage::encodeToBytes);
+    installMethod(runtime, prototype, "encodeToBase64",
+                  &JsiSkImage::encodeToBase64);
+    installHostMethod(runtime, prototype, "readPixels",
+                      &JsiSkImage::readPixels);
+    installMethod(runtime, prototype, "makeNonTextureImage",
+                  &JsiSkImage::makeNonTextureImage);
+    installHostMethod(runtime, prototype, "getNativeTextureUnstable",
+                      &JsiSkImage::getNativeTextureUnstable);
+    installMethod(runtime, prototype, "isTextureBacked",
+                  &JsiSkImage::isTextureBacked);
+  }
 
   JsiSkImage(std::shared_ptr<RNSkPlatformContext> context,
              const sk_sp<SkImage> image)
-      : JsiSkWrappingSkPtrHostObject<SkImage>(std::move(context),
-                                              std::move(image)) {
+      : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
+                                                            std::move(image)) {
     // Get the dispatcher for the current thread
     _dispatcher = Dispatcher::getDispatcher();
     // Process any pending operations (e.g. deletions of previous resources)
@@ -398,7 +419,7 @@ public:
     }
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     if (isDisposed()) {
       return 0;
     }
@@ -412,8 +433,6 @@ public:
     }
     return 0;
   }
-
-  std::string getObjectType() const override { return "JsiSkImage"; }
 };
 
 } // namespace RNSkia

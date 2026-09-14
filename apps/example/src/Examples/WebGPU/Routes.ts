@@ -7,4 +7,5 @@ export type Routes = {
   ClippedText: undefined;
   LayeredCubes: undefined;
   TextPlane: undefined;
+  ImportExternalTexture: undefined;
 };

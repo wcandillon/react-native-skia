@@ -28,6 +28,11 @@ public abstract class SkiaBaseViewManager<T extends SkiaBaseView> extends ReactV
         ((SkiaBaseView)view).setOpaque(value);
     }
 
+    @ReactProp(name = "highBitDepth")
+    public void setHighBitDepth(T view, boolean value) {
+        ((SkiaBaseView)view).setHighBitDepth(value);
+    }
+
     @ReactProp(name = ViewProps.POINTER_EVENTS)
     public void setPointerEvents(T view, @Nullable String pointerEventsStr) {
         view.setPointerEvents(PointerEvents.parsePointerEvents(pointerEventsStr));

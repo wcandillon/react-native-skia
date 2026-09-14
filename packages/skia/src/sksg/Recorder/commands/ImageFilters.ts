@@ -31,6 +31,14 @@ export enum MorphologyOperator {
 
 const Black = Float32Array.of(0, 0, 0, 1);
 
+// Turns the source graphic into a hard silhouette: alpha is multiplied by 255
+// and clamped, so any pixel the shape covers at all becomes fully opaque, and
+// the colour channels are dropped. 255 is the saturation point of an 8-bit
+// alpha channel, so one unit of coverage is enough to reach 1.
+const AlphaSaturate = [
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0,
+];
+
 const MakeInnerShadow = (
   Skia: Skia,
   shadowOnly: boolean | undefined,
@@ -50,9 +58,20 @@ const MakeInnerShadow = (
     Skia.ColorFilter.MakeBlend(Black, BlendMode.SrcIn),
     null
   );
+  // The shadow is generated outside the shape and then clipped back into it, so
+  // "outside" has to be the complement of the shape's silhouette. Taking SrcOut
+  // against the source graphic itself makes it the complement of the source's
+  // *alpha*: inside a translucent shape 1 - alpha is non-zero, so the shadow is
+  // generated across the whole interior and tints it, no matter how small the
+  // blur and the offset are (issue #2990). Saturating alpha first keeps the
+  // shadow tied to the shape's outline instead of to its opacity.
+  const coverage = Skia.ImageFilter.MakeColorFilter(
+    Skia.ColorFilter.MakeMatrix(AlphaSaturate),
+    null
+  );
   const f1 = Skia.ImageFilter.MakeColorFilter(
     Skia.ColorFilter.MakeBlend(color, BlendMode.SrcOut),
-    null
+    coverage
   );
   const f2 = Skia.ImageFilter.MakeOffset(dx, dy, f1);
   const f3 = Skia.ImageFilter.MakeBlur(sigmaX, sigmaY, TileMode.Decal, f2);

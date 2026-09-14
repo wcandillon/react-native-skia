@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,38 +18,40 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkSVG : public JsiSkWrappingSkPtrHostObject<SkSVGDOM> {
+class JsiSkSVG : public JsiSkWrappingSkPtrNativeObject<JsiSkSVG, SkSVGDOM> {
 public:
+  static constexpr const char *CLASS_NAME = "SVG";
+
   JsiSkSVG(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkSVGDOM> svgdom,
            sk_sp<skresources::ResourceProvider> resourceProvider = nullptr)
-      : JsiSkWrappingSkPtrHostObject<SkSVGDOM>(std::move(context),
-                                               std::move(svgdom)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkSVG, SkSVGDOM>(std::move(context),
+                                                           std::move(svgdom)) {}
 
   ~JsiSkSVG() = default;
 
-  EXPORT_JSI_API_TYPENAME(JsiSkSVG, SVG)
-
-  JSI_HOST_FUNCTION(width) {
+  double width() {
     return static_cast<double>(getObject()->containerSize().width());
   }
 
-  JSI_HOST_FUNCTION(height) {
+  double height() {
     return static_cast<double>(getObject()->containerSize().height());
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSVG, width),
-                       JSI_EXPORT_FUNC(JsiSkSVG, height),
-                       JSI_EXPORT_FUNC(JsiSkSVG, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "width", &JsiSkSVG::width);
+    installMethod(runtime, prototype, "height", &JsiSkSVG::height);
+  }
 
   /**
     Returns the underlying object from a host object of this type
    */
   static sk_sp<SkSVGDOM> fromValue(jsi::Runtime &runtime,
                                    const jsi::Value &obj) {
-    return obj.asObject(runtime).asHostObject<JsiSkSVG>(runtime)->getObject();
+    return getJsiObject<JsiSkSVG>(runtime, obj)->getObject();
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     auto svgdom = getObject();
     if (!svgdom) {
       return 1024; // Base size if no SVG
@@ -72,8 +74,6 @@ public:
     return (rasterBufferSize / 4) +
            baseOverhead; // Quarter of full raster + overhead
   }
-
-  std::string getObjectType() const override { return "JsiSkSVG"; }
 };
 
 } // namespace RNSkia

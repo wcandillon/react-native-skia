@@ -40,7 +40,16 @@ export interface NativeBufferFactory {
    */
   MakeFromImage: (image: SkImage) => NativeBuffer;
   /**
-   * Release a native buffer that was created with `MakeFromImage`.
+   * Create a native buffer of the given size filled with a procedural test
+   * pattern (RGB gradient + diagonal stripes), entirely on the CPU. Useful for
+   * examples and tests that need a buffer to feed into
+   * `GPUDevice.importExternalTexture` without a camera/video source. Release it
+   * with `Release`.
+   */
+  MakeTestBuffer: (width: number, height: number) => NativeBuffer;
+  /**
+   * Release a native buffer that was created with `MakeFromImage` or
+   * `MakeTestBuffer`.
    */
   Release: (nativeBuffer: NativeBuffer) => void;
 }

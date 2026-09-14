@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Skia } from "../Skia";
-import { FontSlant } from "../types";
+import { FontSlant, FontWeight } from "../types";
 import type { DataModule, DataSourceParam, SkFontMgr } from "../types";
 import { Platform } from "../../Platform";
 import type { SkTypefaceFontProvider } from "../types/Paragraph/TypefaceFontProvider";
@@ -29,8 +29,18 @@ export const useFont = (
   }, [size, typeface]);
 };
 
-type Slant = "normal" | "italic" | "oblique";
-type Weight =
+/**
+ * React Native style font slant, as found in the `fontStyle` property of
+ * `TextStyle`. The Skia {@link FontSlant} enum is accepted as well.
+ */
+export type RNFontSlant = "normal" | "italic" | "oblique" | FontSlant;
+
+/**
+ * React Native style font weight, as found in the `fontWeight` property of
+ * `TextStyle`. Numeric weights such as the {@link FontWeight} enum values
+ * used by the Paragraph API are accepted as well.
+ */
+export type RNFontWeight =
   | "normal"
   | "bold"
   | "100"
@@ -41,13 +51,20 @@ type Weight =
   | "600"
   | "700"
   | "800"
-  | "900";
+  | "900"
+  | FontWeight;
 
-interface RNFontStyle {
+/**
+ * Font style accepted by {@link matchFont}.
+ * `fontStyle` and `fontWeight` accept both the React Native string values
+ * and the Skia enums ({@link FontSlant} and {@link FontWeight}), so the same
+ * values can be shared with the Paragraph API.
+ */
+export interface RNFontStyle {
   fontFamily: string;
   fontSize: number;
-  fontStyle: Slant;
-  fontWeight: Weight;
+  fontStyle: RNFontSlant;
+  fontWeight: RNFontWeight;
 }
 
 const defaultFontStyle: RNFontStyle = {
@@ -57,8 +74,10 @@ const defaultFontStyle: RNFontStyle = {
   fontWeight: "normal",
 };
 
-const slant = (s: Slant) => {
-  if (s === "italic") {
+const slant = (s: RNFontSlant): FontSlant => {
+  if (typeof s === "number") {
+    return s;
+  } else if (s === "italic") {
     return FontSlant.Italic;
   } else if (s === "oblique") {
     return FontSlant.Oblique;
@@ -67,14 +86,16 @@ const slant = (s: Slant) => {
   }
 };
 
-const weight = (fontWeight: Weight) => {
+const weight = (fontWeight: RNFontWeight): FontWeight => {
   switch (fontWeight) {
     case "normal":
-      return 400;
+      return FontWeight.Normal;
     case "bold":
-      return 700;
+      return FontWeight.Bold;
     default:
-      return parseInt(fontWeight, 10);
+      return typeof fontWeight === "number"
+        ? fontWeight
+        : (parseInt(fontWeight, 10) as FontWeight);
   }
 };
 

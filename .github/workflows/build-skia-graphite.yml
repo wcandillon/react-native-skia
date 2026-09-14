@@ -15,11 +15,6 @@ on:
         required: false
         type: boolean
         default: false
-      skip_skia_download:
-        description: 'Skip downloading prebuilt Skia (always true for building from source)'
-        required: false
-        type: boolean
-        default: true
 jobs:
   prepare-release:
     runs-on: ubuntu-latest
@@ -30,7 +25,7 @@ jobs:
       release_name: ${{ steps.release_meta.outputs.release_name }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
           fetch-depth: 0
@@ -85,7 +80,7 @@ jobs:
       - name: Create GitHub release
         if: ${{ github.event.inputs.dry_run != 'true' }}
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -124,7 +119,7 @@ jobs:
       fail-fast: false
     steps:
       - name: checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -140,7 +135,7 @@ jobs:
       - name: Setup Android NDK
         id: setup-ndk
         if: startsWith(matrix.target, 'android')
-        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         with:
           ndk-version: r27d
 
@@ -149,12 +144,11 @@ jobs:
         run: echo "ANDROID_NDK=$ANDROID_HOME/ndk-bundle" >> $GITHUB_ENV
 
       - name: Setup Ninja
-        uses: seanmiddleditch/gha-setup-ninja@master
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
 
       - name: Setup
         uses: ./.github/actions/setup
         with:
-          download_skia: ${{ github.event.inputs.skip_skia_download == 'true' && 'false' || 'true' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update depot_tools
@@ -184,8 +178,43 @@ jobs:
           SK_GRAPHITE: 1
         run: yarn build-skia ${{ matrix.target }}
 
-      - name: Package binaries - ${{ matrix.artifact_name }}
-        id: package
+      - name: Package Apple xcframeworks (per-framework zips) - ${{ matrix.artifact_name }}
+        if: startsWith(matrix.target, 'apple')
+        run: |
+          set -eo pipefail
+          ROOT="${{ matrix.package_root }}"
+          TAG="${DISPATCH_TAG}"
+          if [ -z "$TAG" ]; then
+            TAG="${SKIA_BRANCH_SLUG}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF_NAME:-}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_SHA}"
+          fi
+          mkdir -p release-assets
+          # SPM binaryTarget requires one .xcframework per .zip archive, so each
+          # framework in the bundle is zipped separately (ditto preserves the
+          # symlinks inside .xcframework, unlike the default `zip` tool) and its
+          # SPM checksum recorded for the future Package.swift binaryTargets.
+          MANIFEST="release-assets/${{ matrix.artifact_name }}-${TAG}.checksums.txt"
+          : > "$MANIFEST"
+          for fw in "$ROOT"/*.xcframework; do
+            NAME="$(basename "$fw" .xcframework)"
+            ZIP_NAME="${{ matrix.artifact_name }}-${NAME}-${TAG}.zip"
+            ZIP_PATH="release-assets/$ZIP_NAME"
+            ditto -c -k --sequesterRsrc --keepParent "$fw" "$ZIP_PATH"
+            CHECKSUM="$(swift package compute-checksum "$ZIP_PATH")"
+            echo "$ZIP_NAME  $CHECKSUM" >> "$MANIFEST"
+          done
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          SKIA_BRANCH_SLUG: ${{ needs.prepare-release.outputs.skia_branch_slug }}
+
+      - name: Package Android binaries - ${{ matrix.artifact_name }}
+        if: startsWith(matrix.target, 'android')
         run: |
           set -eo pipefail
           ROOT="${{ matrix.package_root }}"
@@ -204,8 +233,6 @@ jobs:
           ARCHIVE="${{ matrix.artifact_name }}-${TAG}.tar.gz"
           mkdir -p release-assets
           tar -czf "release-assets/$ARCHIVE" -C "$PARENT" "$BASENAME"
-          echo "asset_path=release-assets/$ARCHIVE" >> "$GITHUB_OUTPUT"
-          echo "asset_name=$ARCHIVE" >> "$GITHUB_OUTPUT"
         shell: bash
         env:
           DISPATCH_TAG: ${{ needs.prepare-release.outputs.tag_name }}
@@ -213,12 +240,12 @@ jobs:
 
       - name: Upload binaries to GitHub release - ${{ matrix.artifact_name }}
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.prepare-release.outputs.tag_name }}
-          files: ${{ steps.package.outputs.asset_path }}
+          files: release-assets/*
           prerelease: true
 
       - name: Upload binaries as workflow artifact (dry run) - ${{ matrix.artifact_name }}
@@ -226,7 +253,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ steps.package.outputs.asset_path }}
+          path: release-assets/
           retention-days: 7
 
       - name: Package Graphite Headers
@@ -258,7 +285,7 @@ jobs:
 
       - name: Upload Graphite Headers to GitHub release
         if: ${{ matrix.target == 'apple-ios' && github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

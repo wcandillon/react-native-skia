@@ -1,15 +1,18 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 
 #include <jsi/jsi.h>
 
+#include "JsiSkConverters.h"
 #include "JsiSkFontStyle.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkTypeface.h"
 
-#include "RNSkLog.h"
+#include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -25,29 +28,21 @@ namespace jsi = facebook::jsi;
 namespace para = skia::textlayout;
 
 class JsiSkTypefaceFontProvider
-    : public JsiSkWrappingSkPtrHostObject<para::TypefaceFontProvider> {
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkTypefaceFontProvider,
+                                            para::TypefaceFontProvider> {
 public:
-  EXPORT_JSI_API_TYPENAME(JsiSkTypefaceFontProvider, TypefaceFontProvider)
+  static constexpr const char *CLASS_NAME = "TypefaceFontProvider";
 
-  JSI_EXPORT_FUNCTIONS(
-      JSI_EXPORT_FUNC(JsiSkTypefaceFontProvider, dispose),
-      JSI_EXPORT_FUNC(JsiSkTypefaceFontProvider, registerFont),
-      JSI_EXPORT_FUNC(JsiSkTypefaceFontProvider, matchFamilyStyle),
-      JSI_EXPORT_FUNC(JsiSkTypefaceFontProvider, countFamilies),
-      JSI_EXPORT_FUNC(JsiSkTypefaceFontProvider, getFamilyName))
-
-  JSI_HOST_FUNCTION(registerFont) {
-    sk_sp<SkTypeface> typeface =
-        JsiSkTypeface::fromValue(runtime, arguments[0]);
-    SkString familyName(arguments[1].asString(runtime).utf8(runtime).c_str());
+  void registerFont(sk_sp<SkTypeface> typeface, std::string familyNameStr) {
+    SkString familyName(familyNameStr.c_str());
     getObject()->registerTypeface(typeface, familyName);
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(matchFamilyStyle) {
-    auto name = count > 0 ? arguments[0].asString(runtime).utf8(runtime) : "";
-    auto fontStyle =
-        count > 1 ? JsiSkFontStyle::fromValue(runtime, arguments[1]) : nullptr;
+  std::shared_ptr<JsiSkTypeface>
+  matchFamilyStyle(std::optional<std::string> nameParam,
+                   std::optional<std::shared_ptr<SkFontStyle>> fontStyleParam) {
+    auto name = nameParam.value_or("");
+    auto fontStyle = fontStyleParam.value_or(nullptr);
     if (name == "" || fontStyle == nullptr) {
       throw std::runtime_error("matchFamilyStyle requires a name and a style");
     }
@@ -59,31 +54,24 @@ public:
     if (!typeface) {
       throw std::runtime_error("Could not find font style for " + name);
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkTypeface>(getContext(), std::move(typeface));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkTypeface>(getContext(), std::move(typeface));
   }
 
-  JSI_HOST_FUNCTION(countFamilies) { return getObject()->countFamilies(); }
+  int countFamilies() { return getObject()->countFamilies(); }
 
-  JSI_HOST_FUNCTION(getFamilyName) {
-    auto i = static_cast<int>(arguments[0].asNumber());
+  std::string getFamilyName(int i) {
     SkString name;
     getObject()->getFamilyName(i, &name);
-    return jsi::String::createFromUtf8(runtime, name.c_str());
+    return std::string(name.c_str());
   }
 
   JsiSkTypefaceFontProvider(std::shared_ptr<RNSkPlatformContext> context,
                             sk_sp<para::TypefaceFontProvider> tfProvider)
-      : JsiSkWrappingSkPtrHostObject(std::move(context),
-                                     std::move(tfProvider)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkTypefaceFontProvider,
+                                       para::TypefaceFontProvider>(
+            std::move(context), std::move(tfProvider)) {}
 
-  size_t getMemoryPressure() const override { return 4096; }
-
-  std::string getObjectType() const override {
-    return "JsiSkTypefaceFontProvider";
-  }
+  size_t getMemoryPressure() override { return 4096; }
 
   /**
    Returns the jsi object from a host object of this type
@@ -91,10 +79,26 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             sk_sp<para::TypefaceFontProvider> tfProvider) {
-    auto provider = std::make_shared<JsiSkTypefaceFontProvider>(
-        std::move(context), std::move(tfProvider));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, provider,
-                                                       context);
+    return makeJsiObject(runtime,
+                         std::make_shared<JsiSkTypefaceFontProvider>(
+                             std::move(context), std::move(tfProvider)));
+  }
+
+  static sk_sp<para::TypefaceFontProvider> fromValue(jsi::Runtime &runtime,
+                                                     const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
+
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "registerFont",
+                  &JsiSkTypefaceFontProvider::registerFont);
+    installMethod(runtime, prototype, "matchFamilyStyle",
+                  &JsiSkTypefaceFontProvider::matchFamilyStyle);
+    installMethod(runtime, prototype, "countFamilies",
+                  &JsiSkTypefaceFontProvider::countFamilies);
+    installMethod(runtime, prototype, "getFamilyName",
+                  &JsiSkTypefaceFontProvider::getFamilyName);
   }
 };
 

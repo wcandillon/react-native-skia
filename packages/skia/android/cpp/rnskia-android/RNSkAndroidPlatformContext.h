@@ -3,6 +3,8 @@
 #if __ANDROID_API__ >= 26
 #include <android/hardware_buffer.h>
 #endif
+#include <algorithm>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -61,16 +63,6 @@ public:
 #endif
   }
 
-  std::shared_ptr<WindowContext>
-  makeContextFromNativeSurface(void *surface, int width, int height) override {
-#if defined(SK_GRAPHITE)
-    return DawnContext::getInstance().MakeWindow(surface, width, height);
-#else
-    auto aWindow = reinterpret_cast<ANativeWindow *>(surface);
-    return OpenGLContext::getInstance().MakeWindow(aWindow);
-#endif
-  }
-
   sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) override {
 #if defined(SK_GRAPHITE)
     return DawnContext::getInstance().MakeImageFromBuffer(buffer);
@@ -120,6 +112,13 @@ public:
 
   uint64_t makeNativeBuffer(sk_sp<SkImage> image) override {
 #if __ANDROID_API__ >= 26
+#if defined(SK_GRAPHITE)
+    // A Graphite GPU texture can't be read with readPixels(nullptr); read it
+    // back to a raster image first or the buffer ends up uninitialized/black.
+    if (image && image->isTextureBacked()) {
+      image = DawnContext::getInstance().MakeRasterImage(image);
+    }
+#endif
     auto bytesPerPixel = image->imageInfo().bytesPerPixel();
     int bytesPerRow = image->width() * bytesPerPixel;
     auto buf = SkData::MakeUninitialized(image->width() * image->height() *
@@ -171,6 +170,59 @@ public:
 
     // Return the buffer pointer as a uint64_t. It's the caller's responsibility
     // to manage this buffer.
+    return reinterpret_cast<uint64_t>(buffer);
+#else
+    return 0;
+#endif
+  }
+
+  uint64_t makeTestNativeBuffer(int width, int height) override {
+#if __ANDROID_API__ >= 26
+    // Allocate an RGBA8 AHardwareBuffer and fill it with a procedural test
+    // pattern (RGB gradient + diagonal stripes), entirely on the CPU. We read
+    // the buffer's actual row stride after locking (the allocator may pad it),
+    // so the upload is correct regardless of width alignment.
+    AHardwareBuffer_Desc desc = {};
+    desc.width = static_cast<uint32_t>(width);
+    desc.height = static_cast<uint32_t>(height);
+    desc.layers = 1;
+    desc.format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    desc.usage = AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY |
+                 AHARDWAREBUFFER_USAGE_CPU_READ_RARELY |
+                 AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+
+    AHardwareBuffer *buffer = nullptr;
+    if (AHardwareBuffer_allocate(&desc, &buffer) != 0) {
+      return 0;
+    }
+
+    AHardwareBuffer_Desc allocated = {};
+    AHardwareBuffer_describe(buffer, &allocated);
+    const size_t rowBytes = static_cast<size_t>(allocated.stride) * 4;
+
+    void *mappedBuffer = nullptr;
+    AHardwareBuffer_lock(buffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY, -1,
+                         nullptr, &mappedBuffer);
+    if (mappedBuffer == nullptr) {
+      AHardwareBuffer_release(buffer);
+      return 0;
+    }
+
+    auto *base = static_cast<uint8_t *>(mappedBuffer);
+    for (int y = 0; y < height; ++y) {
+      uint8_t *row = base + y * rowBytes;
+      for (int x = 0; x < width; ++x) {
+        uint8_t r = static_cast<uint8_t>((x * 255) / std::max(width - 1, 1));
+        uint8_t g = static_cast<uint8_t>((y * 255) / std::max(height - 1, 1));
+        uint8_t b = static_cast<uint8_t>(((x + y) & 0x20) ? 220 : 30);
+        row[x * 4 + 0] = r; // RGBA byte order
+        row[x * 4 + 1] = g;
+        row[x * 4 + 2] = b;
+        row[x * 4 + 3] = 0xFF;
+      }
+    }
+
+    AHardwareBuffer_unlock(buffer, nullptr);
     return reinterpret_cast<uint64_t>(buffer);
 #else
     return 0;

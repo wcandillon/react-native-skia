@@ -43,6 +43,11 @@ export const examples = [
     description:
       "Skia text baked into a GPU texture, sampled by a 3D plane that cubes orbit through",
   },
+  {
+    screen: "ImportExternalTexture",
+    title: "Import External Texture",
+    description: "Import a Skia NativeBuffer as a GPUExternalTexture",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

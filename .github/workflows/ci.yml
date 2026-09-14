@@ -18,10 +18,11 @@ concurrency:
 
 jobs:
   lint:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -30,7 +31,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       - run: pip install cpplint
       - run: cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/apple --exclude=package/android/build --exclude=package/node_modules --recursive package
 
@@ -57,10 +58,11 @@ jobs:
         run: yarn tsc
 
   test:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -72,13 +74,50 @@ jobs:
       - name: Test
         run: yarn test
 
+  test-web:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Playwright Chromium
+        run: yarn playwright install chromium
+
+      - name: Run web example tests
+        run: yarn test:web
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        with:
+          name: web-example-screenshots
+          path: apps/example/e2e/screenshots/
+          if-no-files-found: ignore
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        with:
+          name: web-example-test-results
+          path: apps/example/test-results/
+          if-no-files-found: ignore
+
   build-library:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ github.run_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -109,6 +148,7 @@ jobs:
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   test-package-e2e:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     needs: build-library
     uses: ./.github/workflows/test-skia-package.yml
     with:
@@ -117,11 +157,23 @@ jobs:
       test_android: true
       test_web: true
 
+  test-package-e2e-static-frameworks:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
+    needs: build-library
+    uses: ./.github/workflows/test-skia-package.yml
+    with:
+      skia_version: artifact:${{ needs.build-library.outputs.run_id }}
+      test_ios: true
+      test_android: false
+      test_web: false
+      ios_use_frameworks: static
+
   build-windows-library:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -134,12 +186,13 @@ jobs:
         run: yarn build
 
   build-android:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: ubuntu-latest
     env:
       TURBO_CACHE_DIR: .turbo/android
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -161,7 +214,7 @@ jobs:
           df -h
 
       - name: Cache turborepo for Android
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-android-${{ hashFiles('yarn.lock') }}
@@ -169,13 +222,13 @@ jobs:
             ${{ runner.os }}-turborepo-android
 
       - name: Install JDK
-        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'zulu'
           java-version: '17'
 
       - name: Install NDK
-        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         id: setup-ndk
         with:
           ndk-version: r27d
@@ -192,7 +245,7 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > $GITHUB_WORKSPACE/apps/example/android/local.properties
 
       - name: Cache Gradle
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/wrapper
@@ -208,7 +261,7 @@ jobs:
           yarn turbo run build:android --concurrency 1
 
       - name: Cache apk
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
           cache-name: cache-apk
         with:
@@ -222,6 +275,7 @@ jobs:
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
 
   test-android:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     needs: build-android
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -229,7 +283,7 @@ jobs:
       TURBO_CACHE_DIR: .turbo/android
     steps:
       - name: checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -239,7 +293,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         
       - name: Install Android SDK tools
         run: |
@@ -256,7 +310,7 @@ jobs:
 
       - name: Restore APK
         id: cache-apk
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
           key: apk-${{ github.sha }}
@@ -266,7 +320,7 @@ jobs:
         run: E2E=true yarn start &
 
       - name: Run Android Emulator Tests
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 30
           arch: x86_64
@@ -298,12 +352,13 @@ jobs:
           name: tests-docs-screenshots
 
   build-test-ios:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: macos-latest-xlarge
     env:
       TURBO_CACHE_DIR: .turbo/ios
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -313,7 +368,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache turborepo for iOS
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-ios-${{ hashFiles('yarn.lock') }}
@@ -335,22 +390,41 @@ jobs:
       - name: Start Package Manager
         working-directory: apps/example
         run: E2E=true yarn start &
-  
+
+      - name: Select iOS simulator
+        run: |
+          SIMULATOR_NAME=$(xcrun simctl list devices available --json | jq -r '
+            .devices
+            | to_entries
+            | map(select(.key | contains("iOS")))
+            | sort_by(.key)
+            | reverse
+            | map(.value[] | select(.name | startswith("iPhone")))
+            | .[0].name // empty')
+          if [ -z "$SIMULATOR_NAME" ]; then
+            echo "No available iPhone simulator found"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator: $SIMULATOR_NAME"
+          echo "IOS_SIMULATOR=$SIMULATOR_NAME" >> $GITHUB_ENV
+
       - name: Build example for iOS
         working-directory: apps/example
-        run: yarn ios --simulator 'iPhone 16 Pro'
+        run: yarn ios --simulator "$IOS_SIMULATOR"
 
       - name: Run e2e tests
         working-directory: packages/skia
         run: CI=true yarn e2e
 
   build-test-macos:
+    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: macos-latest
     env:
       TURBO_CACHE_DIR: .turbo/macos
     steps:
       - name: Checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
@@ -360,7 +434,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache turborepo for macOS
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.TURBO_CACHE_DIR }}
           key: ${{ runner.os }}-turborepo-macos-${{ hashFiles('yarn.lock') }}
@@ -374,7 +448,7 @@ jobs:
   #   runs-on: macos-latest
   #   steps:
   #     - name: Checkout
-  #       uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
   #       with:
   #         submodules: recursive
 

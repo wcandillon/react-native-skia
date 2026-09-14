@@ -2,7 +2,7 @@
 
 #include <jsi/jsi.h>
 
-#include "RNSkPlatformContext.h"
+#include "rnskia/RNSkPlatformContext.h"
 
 namespace jsi = facebook::jsi;
 namespace react = facebook::react;

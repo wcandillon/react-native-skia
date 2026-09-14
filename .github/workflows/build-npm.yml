@@ -15,17 +15,40 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: checkout
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
+      # The next channel ships the Graphite build; main ships the default (Ganesh)
+      # build. Both branches are identical — the graphite setup bakes the Dawn and
+      # Graphite headers into cpp/ and creates the libs/.graphite marker (shipped
+      # via the files field) that the podspec and build.gradle key off at build time.
       - name: Setup
         uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          graphite: ${{ github.ref_name == 'next' }}
 
       - name: Build package and documentation
         run: yarn build
+
+      # Swap the prebuilt binary packages for their Graphite variants, pinned in
+      # graphiteDependencies (package.json). Only done at release time so that
+      # main and next stay identical.
+      - name: Swap in Graphite binary packages (next channel only)
+        if: github.ref_name == 'next'
+        working-directory: packages/skia
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            for (const name of Object.keys(pkg.dependencies)) {
+              if (name.startsWith('react-native-skia-')) delete pkg.dependencies[name];
+            }
+            Object.assign(pkg.dependencies, pkg.graphiteDependencies);
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          node -p "JSON.stringify(require('./package.json').dependencies, null, 2)"
 
       - name: Build NPM Package
         working-directory: packages/skia
@@ -38,7 +61,7 @@ jobs:
           NPM_CONFIG_PROVENANCE: true
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./apps/docs/build

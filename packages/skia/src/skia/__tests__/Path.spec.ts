@@ -1,6 +1,6 @@
 import { interpolatePaths } from "../../animation/functions/interpolatePaths";
-import type { Skia, SkPath } from "../types";
-import { FillType, PathOp, PathVerb } from "../types";
+import type { Skia, SkImage, SkPath } from "../types";
+import { AlphaType, ColorType, FillType, PathOp, PathVerb } from "../types";
 import { processResult } from "../../__tests__/setup";
 import { PaintStyle } from "../types/Paint/Paint";
 
@@ -8,6 +8,16 @@ import { setupSkia } from "./setup";
 
 const roundtrip = (Skia: Skia, path: SkPath) =>
   Skia.Path.MakeFromCmds(path.toCmds())!;
+
+const readPixel = (image: SkImage, x: number, y: number) =>
+  Array.from(
+    image.readPixels(x, y, {
+      width: 1,
+      height: 1,
+      colorType: ColorType.RGBA_8888,
+      alphaType: AlphaType.Unpremul,
+    })!
+  );
 
 // Helper to create a path with moveTo and lineTo
 const makePath = (
@@ -354,5 +364,31 @@ describe("Path", () => {
       b.moveTo(20, 20).lineTo(20, 40).lineTo(40, 20)
     );
     expect(path).toBeTruthy();
+  });
+  // The non-zero winding rule reads the contour direction, so isCCW is what
+  // turns an inner contour into a hole rather than more of the same fill.
+  it("should add a circle in the direction given by isCCW", () => {
+    const { surface, canvas, Skia } = setupSkia(64, 64);
+    const donut = (isCCW: boolean) =>
+      Skia.PathBuilder.Make()
+        .setFillType(FillType.Winding)
+        .addRect(Skia.XYWHRect(0, 0, 64, 64), false)
+        .addCircle(32, 32, 20, isCCW)
+        .build();
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("red"));
+
+    canvas.drawPath(donut(true), paint);
+    surface.flush();
+    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+      0, 0, 0, 0,
+    ]);
+
+    canvas.clear(Float32Array.of(0, 0, 0, 0));
+    canvas.drawPath(donut(false), paint);
+    surface.flush();
+    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+      255, 0, 0, 255,
+    ]);
   });
 });

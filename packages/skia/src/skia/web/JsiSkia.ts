@@ -4,7 +4,6 @@ import type {
   JsiRecorder,
   SkContourMeasureIter,
   Skia,
-  SkiaContext,
   SkPath,
   SkRect,
   SkRuntimeEffect,
@@ -137,16 +136,10 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   NativeBuffer: new JsiSkNativeBufferFactory(CanvasKit),
   Skottie: new JsiSkottieFactory(CanvasKit),
   Video: createVideo.bind(null, CanvasKit),
-  Context: (_surface: bigint, _width: number, _height: number) => {
-    return throwNotImplementedOnRNWeb<SkiaContext>();
-  },
   Recorder: () => {
     return throwNotImplementedOnRNWeb<JsiRecorder>();
   },
-  getDevice: () => {
-    return throwNotImplementedOnRNWeb<GPUDevice>();
-  },
-  hasDevice: () => {
-    return false;
+  getNativeDevice: () => {
+    return throwNotImplementedOnRNWeb<bigint>();
   },
 });

@@ -8,10 +8,9 @@ import {
   Text as RNText,
   View,
 } from "react-native";
-import type {
-  SkImage,
-  WebGPUCanvasRef,
-} from "@shopify/react-native-skia";
+import type { SkImage } from "@shopify/react-native-skia";
+import type { CanvasRef } from "react-native-webgpu";
+import { Canvas as WebGPUCanvas } from "react-native-webgpu";
 import {
   Blur,
   BlurMask,
@@ -24,7 +23,6 @@ import {
   Path,
   Skia,
   Text,
-  WebGPUCanvas,
   rect,
   rrect,
   useFont,
@@ -100,7 +98,7 @@ export const HelmetBackdrop = () => {
   const { width, height } = useWindowDimensions();
   const texture = useRGBE(require("./assets/helmet/royal_esplanade_1k.hdr"));
   const gltf = useGLTF(require("./assets/helmet/DamagedHelmet.gltf"));
-  const canvasRef = useRef<WebGPUCanvasRef>(null);
+  const canvasRef = useRef<CanvasRef>(null);
   const [image, setImage] = useState<SkImage | null>(null);
 
   const inputRef = useRef<InputState>({
@@ -239,7 +237,10 @@ export const HelmetBackdrop = () => {
         input.yaw += input.yawSpeed * dt * 1.6;
         input.pitch += input.pitchSpeed * dt * 1.2;
         input.distance += input.zoomSpeed * dt * 3;
-        input.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, input.pitch));
+        input.pitch = Math.max(
+          -PITCH_LIMIT,
+          Math.min(PITCH_LIMIT, input.pitch)
+        );
         input.distance = Math.max(
           MIN_DISTANCE,
           Math.min(MAX_DISTANCE, input.distance)
@@ -259,7 +260,9 @@ export const HelmetBackdrop = () => {
           }
         ).backend.get(renderTarget!.texture);
         if (backendData?.texture) {
-          const snap = Skia.Image.MakeImageFromTexture(backendData.texture);
+          const snap = Skia.Image.MakeImageFromNativeTexture(
+            backendData.texture.nativePointer
+          );
           if (snap) {
             setImage(snap);
           }
@@ -317,9 +320,9 @@ export const HelmetBackdrop = () => {
   const yawDeg = Math.round((input.yaw * 180) / Math.PI) % 360;
   const pitchDeg = Math.round((input.pitch * 180) / Math.PI);
   const distLabel = input.distance.toFixed(2);
-  const telemetry = `YAW ${yawDeg.toString().padStart(3, " ")}°   PITCH ${(
+  const telemetry = `YAW ${yawDeg.toString().padStart(3, " ")}°   PITCH ${
     pitchDeg >= 0 ? "+" : ""
-  )}${pitchDeg.toString().padStart(2, " ")}°   ZOOM ${distLabel}x`;
+  }${pitchDeg.toString().padStart(2, " ")}°   ZOOM ${distLabel}x`;
 
   const setDir = (yaw: number | null, pitch: number | null) => {
     if (yaw !== null) inputRef.current.yawSpeed = yaw;
@@ -369,7 +372,7 @@ export const HelmetBackdrop = () => {
         <WebGPUCanvas
           ref={canvasRef}
           style={StyleSheet.absoluteFill}
-          transparent
+          opaque={false}
         />
 
         <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -421,7 +424,9 @@ export const HelmetBackdrop = () => {
           </Line>
 
           {/* HUD corner brackets */}
-          <Group transform={[{ translateX: 14 }, { translateY: sheetTop + 28 }]}>
+          <Group
+            transform={[{ translateX: 14 }, { translateY: sheetTop + 28 }]}
+          >
             <Path
               path={tlBracket}
               color={CYAN}
@@ -635,9 +640,7 @@ export const HelmetBackdrop = () => {
             <Text
               x={60}
               y={sheetTop + sheetHeight - 28}
-              text={
-                autoRotateUI ? "AUTO-ROTATE ACTIVE" : "AUTO-ROTATE STANDBY"
-              }
+              text={autoRotateUI ? "AUTO-ROTATE ACTIVE" : "AUTO-ROTATE STANDBY"}
               font={labelFont}
               color={autoRotateUI ? CYAN : "rgba(255,255,255,0.4)"}
             />
@@ -645,9 +648,7 @@ export const HelmetBackdrop = () => {
         </Canvas>
 
         {/* Interactive layer */}
-        <View
-          style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}
-        >
+        <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
           {/* D-pad hit targets */}
           <Pressable
             style={hitStyle(
@@ -715,23 +716,13 @@ export const HelmetBackdrop = () => {
 
           {/* Bottom buttons */}
           <Pressable
-            style={hitStyle(
-              36,
-              sheetTop + sheetHeight - 44,
-              200,
-              28
-            )}
+            style={hitStyle(36, sheetTop + sheetHeight - 44, 200, 28)}
             onPress={toggleAutoRotate}
           />
           <Pressable
             onPress={reset}
             style={[
-              hitStyle(
-                width - 100,
-                sheetTop + sheetHeight - 44,
-                64,
-                28
-              ),
+              hitStyle(width - 100, sheetTop + sheetHeight - 44, 64, 28),
               styles.resetButton,
             ]}
           >
@@ -743,14 +734,13 @@ export const HelmetBackdrop = () => {
   );
 };
 
-const hitStyle = (x: number, y: number, w: number, h: number) =>
-  ({
-    position: "absolute" as const,
-    left: x,
-    top: y,
-    width: w,
-    height: h,
-  });
+const hitStyle = (x: number, y: number, w: number, h: number) => ({
+  position: "absolute" as const,
+  left: x,
+  top: y,
+  width: w,
+  height: h,
+});
 
 const styles = StyleSheet.create({
   container: {

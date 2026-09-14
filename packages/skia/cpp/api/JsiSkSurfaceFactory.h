@@ -2,10 +2,11 @@
 
 #include <memory>
 #include <utility>
+#include <variant>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #include "JsiSkSurface.h"
 
@@ -20,20 +21,18 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkSurfaceFactory : public JsiSkHostObject {
+class JsiSkSurfaceFactory : public JsiSkNativeObject<JsiSkSurfaceFactory> {
 public:
-  JSI_HOST_FUNCTION(Make) {
-    auto width = static_cast<int>(arguments[0].asNumber());
-    auto height = static_cast<int>(arguments[1].asNumber());
+  static constexpr const char *CLASS_NAME = "SurfaceFactory";
+
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkSurface>> Make(int width,
+                                                                   int height) {
     auto imageInfo = SkImageInfo::MakeN32Premul(width, height);
     auto surface = SkSurfaces::Raster(imageInfo);
     if (surface == nullptr) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkSurface>(getContext(), std::move(surface));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkSurface>(getContext(), std::move(surface));
   }
 
   JSI_HOST_FUNCTION(MakeOffscreen) {
@@ -56,21 +55,20 @@ public:
     if (surface == nullptr) {
       return jsi::Value::null();
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkSurface>(getContext(), std::move(surface));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
+                                      getContext(), std::move(surface)));
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSurfaceFactory, Make),
-                       JSI_EXPORT_FUNC(JsiSkSurfaceFactory, MakeOffscreen))
+  size_t getMemoryPressure() override { return 2048; }
 
-  size_t getMemoryPressure() const override { return 2048; }
-
-  std::string getObjectType() const override { return "JsiSkSurfaceFactory"; }
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "Make", &JsiSkSurfaceFactory::Make);
+    installHostMethod(runtime, prototype, "MakeOffscreen",
+                      &JsiSkSurfaceFactory::MakeOffscreen);
+  }
 
   explicit JsiSkSurfaceFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkSurfaceFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

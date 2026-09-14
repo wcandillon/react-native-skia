@@ -78,7 +78,8 @@ bool RNSkOpenGLCanvasProvider::renderToCanvas(
 
 void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurfaceTexture,
                                                 int width, int height,
-                                                bool opaque) {
+                                                bool opaque,
+                                                bool highBitDepth) {
   // Release the old surface
   _surfaceHolder = nullptr;
 
@@ -108,9 +109,11 @@ void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurfaceTexture,
     window = ANativeWindow_fromSurface(env, jSurfaceTexture);
   }
 #if defined(SK_GRAPHITE)
-  _surfaceHolder = DawnContext::getInstance().MakeWindow(window, width, height);
+  _surfaceHolder = DawnContext::getInstance().MakeWindow(window, width, height,
+                                                         highBitDepth);
 #else
-  _surfaceHolder = OpenGLContext::getInstance().MakeWindow(window);
+  _surfaceHolder =
+      OpenGLContext::getInstance().MakeWindow(window, highBitDepth);
 #endif
 
   // Post redraw request to ensure we paint in the next draw cycle.
@@ -128,7 +131,8 @@ void RNSkOpenGLCanvasProvider::surfaceDestroyed() {
 }
 
 void RNSkOpenGLCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
-                                                  int height, bool opaque) {
+                                                  int height, bool opaque,
+                                                  bool highBitDepth) {
   if (width == 0 && height == 0) {
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.
@@ -137,7 +141,7 @@ void RNSkOpenGLCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
 
   if (_surfaceHolder == nullptr) {
     _surfaceHolder = nullptr;
-    surfaceAvailable(jSurface, width, height, opaque);
+    surfaceAvailable(jSurface, width, height, opaque, highBitDepth);
   } else {
     _surfaceHolder->resize(width, height);
   }

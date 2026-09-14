@@ -10,7 +10,8 @@ class MetalWindowContext : public RNSkia::WindowContext {
 public:
   MetalWindowContext(GrDirectContext *directContext, id<MTLDevice> device,
                      id<MTLCommandQueue> commandQueue, CALayer *layer,
-                     int width, int height, bool useP3ColorSpace = true);
+                     int width, int height, bool useP3ColorSpace = true,
+                     bool highBitDepth = false);
   ~MetalWindowContext() = default;
 
   sk_sp<SkSurface> getSurface() override;
@@ -37,4 +38,5 @@ private:
 #pragma clang diagnostic pop
   id<CAMetalDrawable> _currentDrawable = nil;
   bool _useP3ColorSpace = false;
+  bool _highBitDepth = false;
 };

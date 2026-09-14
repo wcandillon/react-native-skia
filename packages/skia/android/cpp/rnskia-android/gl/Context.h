@@ -26,6 +26,9 @@ public:
     if (_context == EGL_NO_CONTEXT) {
       return false;
     }
+    if (surface == nullptr || !surface->isValid()) {
+      return false;
+    }
     const auto result =
         eglMakeCurrentIfNecessary(_display, surface->getHandle(),
                                   surface->getHandle(), _context) == EGL_TRUE;

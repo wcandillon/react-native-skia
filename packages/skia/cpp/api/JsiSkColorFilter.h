@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 #include <jsi/jsi.h>
 #include <memory>
 #include <utility>
@@ -16,19 +16,26 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkColorFilter : public JsiSkWrappingSkPtrHostObject<SkColorFilter> {
+class JsiSkColorFilter
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkColorFilter, SkColorFilter> {
 public:
+  static constexpr const char *CLASS_NAME = "ColorFilter";
+
   JsiSkColorFilter(std::shared_ptr<RNSkPlatformContext> context,
                    sk_sp<SkColorFilter> colorFilter)
-      : JsiSkWrappingSkPtrHostObject<SkColorFilter>(std::move(context),
-                                                    std::move(colorFilter)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkColorFilter, SkColorFilter>(
+            std::move(context), std::move(colorFilter)) {}
 
-  size_t getMemoryPressure() const override { return 2048; }
+  size_t getMemoryPressure() override { return 2048; }
 
-  std::string getObjectType() const override { return "JsiSkColorFilter"; }
+  static sk_sp<SkColorFilter> fromValue(jsi::Runtime &runtime,
+                                        const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkColorFilter, ColorFilter)
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkColorFilter, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+  }
 };
 
 } // namespace RNSkia

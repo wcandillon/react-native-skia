@@ -12,7 +12,8 @@
     "paths": {
       "three": ["../../node_modules/@types/three/src/Three.WebGPU.d.ts"],
       "three/tsl": ["../../node_modules/@types/three/src/Three.TSL.d.ts"],
-      "three/addons/*": ["../../node_modules/@types/three/examples/jsm/*"]
+      "three/addons/*": ["../../node_modules/@types/three/examples/jsm/*"],
+      "@shopify/react-native-skia": ["../../packages/skia/src/index.ts"]
     }
   }
 }

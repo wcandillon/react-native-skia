@@ -14,14 +14,16 @@ import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import androidx.annotation.NonNull;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.UIManager;
+import com.facebook.react.uimanager.BackgroundStyleApplicator;
 import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.ViewProps;
 import com.facebook.react.views.view.ReactViewGroup;
 
-import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -82,13 +84,16 @@ public class ViewScreenshotService {
         canvas.save();
         applyTransformations(canvas, view);
 
-        // If the view is a ScrollView or similar, clip to its bounds
-        if (view instanceof ScrollView) {
-            ScrollView scrollView = (ScrollView) view;
-            int clipLeft = scrollView.getScrollX();
-            int clipTop = scrollView.getScrollY();
-            int clipRight = clipLeft + scrollView.getWidth();
-            int clipBottom = clipTop + scrollView.getHeight();
+        // If the view is a scroll container, clip to its viewport bounds.
+        // HorizontalScrollView does NOT extend ScrollView (both extend
+        // FrameLayout), so it must be checked explicitly — otherwise an
+        // oversized child (e.g. a wide Skia <Canvas> TextureView) bleeds past
+        // a horizontal ScrollView's viewport in the screenshot.
+        if (view instanceof ScrollView || view instanceof HorizontalScrollView) {
+            int clipLeft = view.getScrollX();
+            int clipTop = view.getScrollY();
+            int clipRight = clipLeft + view.getWidth();
+            int clipBottom = clipTop + view.getHeight();
 
             canvas.clipRect(clipLeft, clipTop, clipRight, clipBottom);
         }
@@ -114,17 +119,13 @@ public class ViewScreenshotService {
     }
 
     private static void drawChildren(Canvas canvas, ViewGroup group, Paint paint, float parentOpacity) {
-        // Handle clipping for ReactViewGroup
-        if (group instanceof ReactViewGroup) {
-            try {
-                Class[] cArg = new Class[1];
-                cArg[0] = Canvas.class;
-                Method method = ReactViewGroup.class.getDeclaredMethod("dispatchOverflowDraw", cArg);
-                method.setAccessible(true);
-                method.invoke(group, canvas);
-            } catch (Exception e) {
-                Log.e(TAG, "couldn't invoke dispatchOverflowDraw() on ReactViewGroup", e);
-            }
+        // ReactViewGroup applies `overflow: hidden` / `overflow: scroll` clipping from its
+        // dispatchDraw() override. We never call dispatchDraw() here because children are
+        // walked manually (TextureView / SurfaceView need special handling), so the clip has
+        // to be replicated explicitly, exactly as ReactViewGroup.dispatchDraw() does it.
+        if (group instanceof ReactViewGroup
+                && !ViewProps.VISIBLE.equals(((ReactViewGroup) group).getOverflow())) {
+            BackgroundStyleApplicator.clipToPaddingBox(group, canvas);
         }
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);

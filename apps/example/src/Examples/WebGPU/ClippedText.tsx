@@ -1,4 +1,5 @@
 import type { SkImage } from "@shopify/react-native-skia";
+import { importDevice } from "react-native-webgpu";
 import {
   Blur,
   Canvas,
@@ -117,14 +118,8 @@ export function ClippedText() {
     // centered on x=0. The subtitle baseline sits below the title using font
     // metrics (title descent + gap + |sub ascent|).
     const p1 = Skia.Path.MakeFromText(title, -tb.width / 2, 0, bigFont);
-    const subBaseline =
-      tMetrics.descent + lineGap + -sMetrics.ascent;
-    const p2 = Skia.Path.MakeFromText(
-      sub,
-      -sb.width / 2,
-      subBaseline,
-      subFont
-    );
+    const subBaseline = tMetrics.descent + lineGap + -sMetrics.ascent;
+    const p2 = Skia.Path.MakeFromText(sub, -sb.width / 2, subBaseline, subFont);
     if (!p1 || !p2) {
       return null;
     }
@@ -135,12 +130,7 @@ export function ClippedText() {
     const bounds = p1.computeTightBounds();
     const tx = width / 2 - (bounds.x + bounds.width / 2);
     const ty = height / 2 - (bounds.y + bounds.height / 2);
-    p1.transform(
-      processTransform3d([
-        { translateX: tx },
-        { translateY: ty },
-      ])
-    );
+    p1.transform(processTransform3d([{ translateX: tx }, { translateY: ty }]));
 
     // Pivot inside the "I" glyph of the SKIA subtitle — a narrow vertical
     // stem that's fully solid, so the scaled mask reliably covers the screen
@@ -165,7 +155,7 @@ export function ClippedText() {
     if (typeof RNWebGPU === "undefined") {
       return;
     }
-    const device = Skia.getDevice();
+    const device = importDevice(Skia.getNativeDevice());
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     const depthFormat = "depth24plus";
 
@@ -335,7 +325,7 @@ export function ClippedText() {
       pass.end();
       device.queue.submit([encoder.finish()]);
 
-      setImage(Skia.Image.MakeImageFromTexture(texture));
+      setImage(Skia.Image.MakeImageFromNativeTexture(texture.nativePointer));
       frameRef.current = requestAnimationFrame(render);
     };
     frameRef.current = requestAnimationFrame(render);

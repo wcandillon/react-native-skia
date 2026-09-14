@@ -209,7 +209,9 @@ export class JsiSkCanvas
       cubics.map(({ x, y }) => [x, y]).flat(),
       colors,
       texs ? texs.flatMap((p) => Array.from(JsiSkPoint.fromValue(p))) : texs,
-      mode ? getEnum(this.CanvasKit, "BlendMode", mode) : null,
+      mode !== undefined && mode !== null
+        ? getEnum(this.CanvasKit, "BlendMode", mode)
+        : null,
       paint ? JsiSkPaint.fromValue(paint) : undefined
     );
   }
@@ -362,7 +364,9 @@ export class JsiSkCanvas
   drawColor(color: SkColor, blendMode?: BlendMode) {
     this.ref.drawColor(
       color,
-      blendMode ? getEnum(this.CanvasKit, "BlendMode", blendMode) : undefined
+      blendMode !== undefined
+        ? getEnum(this.CanvasKit, "BlendMode", blendMode)
+        : undefined
     );
   }
 
@@ -430,9 +434,10 @@ export class JsiSkCanvas
     } else if (sampling) {
       ckSampling = {
         filter: getEnum(this.CanvasKit, "FilterMode", sampling.filter),
-        mipmap: sampling.mipmap
-          ? getEnum(this.CanvasKit, "MipmapMode", sampling.mipmap)
-          : this.CanvasKit.MipmapMode.None,
+        mipmap:
+          sampling.mipmap !== undefined
+            ? getEnum(this.CanvasKit, "MipmapMode", sampling.mipmap)
+            : this.CanvasKit.MipmapMode.None,
       };
     }
     this.ref.drawAtlas(
@@ -440,7 +445,7 @@ export class JsiSkCanvas
       src,
       dst,
       JsiSkPaint.fromValue(paint),
-      blendMode
+      blendMode !== undefined
         ? getEnum(this.CanvasKit, "BlendMode", blendMode)
         : this.CanvasKit.BlendMode.DstOver,
       cls,

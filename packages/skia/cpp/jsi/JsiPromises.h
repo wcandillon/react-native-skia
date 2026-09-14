@@ -6,7 +6,7 @@
 
 #include <jsi/jsi.h>
 
-#include "third_party/base64.h"
+#include "api/third_party/base64.h"
 
 namespace RNJsi {
 namespace jsi = facebook::jsi;

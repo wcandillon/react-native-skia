@@ -1,13 +1,16 @@
 #pragma once
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include "webgpu/webgpu_cpp.h"
 
-#include "dawn/dawn_proc.h"
 #include "dawn/native/DawnNative.h"
 
-#include "RNSkLog.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
+#include "utils/RNSkLog.h"
 
 namespace DawnUtils {
 
@@ -19,6 +22,24 @@ static const wgpu::TextureFormat PreferredTextureFormat =
 static const SkColorType PreferedColorType = kRGBA_8888_SkColorType;
 static const wgpu::TextureFormat PreferredTextureFormat =
     wgpu::TextureFormat::RGBA8Unorm;
+#endif
+
+// On-screen format used when the view requests high bit depth. The values
+// stay sRGB-encoded (SDR), only with more precision than 8 bits per channel;
+// this is about banding, not HDR.
+// - Apple: 16-bit float, displayed through the extended sRGB layer colorspace
+//   so colors match the 8-bit path exactly.
+// - Android: 10-bit unorm. SurfaceFlinger quantizes SDR float16 layers during
+//   composition, but RGBA_1010102 buffers keep their precision through
+//   composition, including direct scanout on 10-bit panels.
+#ifdef __APPLE__
+static const SkColorType HighBitDepthColorType = kRGBA_F16_SkColorType;
+static const wgpu::TextureFormat HighBitDepthTextureFormat =
+    wgpu::TextureFormat::RGBA16Float;
+#else
+static const SkColorType HighBitDepthColorType = kRGBA_1010102_SkColorType;
+static const wgpu::TextureFormat HighBitDepthTextureFormat =
+    wgpu::TextureFormat::RGB10A2Unorm;
 #endif
 
 // Find the best matching GPU adapter for the current platform.
@@ -97,6 +118,20 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   wgpu::DawnTogglesDescriptor togglesDesc;
   togglesDesc.enabledToggleCount = std::size(kToggles);
   togglesDesc.enabledToggles = kToggles;
+#if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
+  // The iOS Simulator only advertises MTLFeatureSet_iOS_GPUFamily2, so Dawn
+  // defaults disable_base_instance/disable_base_vertex on and then rejects
+  // every draw with a non-zero firstInstance or baseVertex, which Graphite
+  // emits routinely. The simulator forwards Metal calls to the host GPU,
+  // which does support base vertex/instance drawing, so force the toggles
+  // off. Device builds are unaffected: Graphite-capable iPhones and iPads
+  // are all GPUFamily3+. (Same override as react-native-webgpu; see
+  // https://issues.chromium.org/issues/42241591.)
+  static constexpr const char *kDisabledToggles[] = {"disable_base_instance",
+                                                     "disable_base_vertex"};
+  togglesDesc.disabledToggleCount = std::size(kDisabledToggles);
+  togglesDesc.disabledToggles = kDisabledToggles;
+#endif
 
   wgpu::DeviceDescriptor desc;
   desc.requiredFeatureCount = features.size();
@@ -206,12 +241,23 @@ createDawnBackendContext(dawn::native::Instance *instance) {
       wgpu::FeatureName::ImplicitDeviceSynchronization,
 #ifdef __APPLE__
       wgpu::FeatureName::SharedTextureMemoryIOSurface,
+      // Required to call SharedTextureMemory::EndAccess on Metal (it exports a
+      // MTLSharedEvent fence). importExternalTexture /
+      // importSharedTextureMemory end the access window after submit; without
+      // this EndAccess errors with "Required feature
+      // (SharedFenceMTLSharedEvent) is missing". Safe here because we always
+      // queue.submit() before EndAccess (the secondary device omits it on
+      // purpose; its camera path doesn't commit first).
+      wgpu::FeatureName::SharedFenceMTLSharedEvent,
       wgpu::FeatureName::DawnMultiPlanarFormats,
       wgpu::FeatureName::MultiPlanarFormatP010,
       wgpu::FeatureName::MultiPlanarFormatP210,
       wgpu::FeatureName::MultiPlanarFormatExtendedUsages,
 #else
       wgpu::FeatureName::SharedTextureMemoryAHardwareBuffer,
+      // Vulkan equivalent of the above: EndAccess exports a sync-fd fence.
+      wgpu::FeatureName::SharedFenceSyncFD,
+      wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
 #endif
   };
 

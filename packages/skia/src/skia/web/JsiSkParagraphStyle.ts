@@ -1,7 +1,9 @@
-import type { CanvasKit, ParagraphStyle } from "canvaskit-wasm";
+import type { CanvasKit, ParagraphStyle, TextStyle } from "canvaskit-wasm";
 
 import { TextDirection } from "../types";
 import type { SkParagraphStyle } from "../types";
+
+import { JsiSkTextStyle } from "./JsiSkTextStyle";
 
 export class JsiSkParagraphStyle {
   static toParagraphStyle(
@@ -10,7 +12,19 @@ export class JsiSkParagraphStyle {
   ): ParagraphStyle {
     // Seems like we need to provide the textStyle.color value, otherwise
     // the constructor crashes.
-    const ps = new ck.ParagraphStyle({ textStyle: { color: ck.BLACK } });
+    const textStyle: TextStyle = { color: ck.BLACK };
+    if (value.textStyle) {
+      // Only merge the properties that are set; toTextStyle() emits undefined
+      // for the others and the ParagraphStyle constructor requires a color.
+      Object.entries(JsiSkTextStyle.toTextStyle(value.textStyle)).forEach(
+        ([key, v]) => {
+          if (v !== undefined) {
+            (textStyle as Record<string, unknown>)[key] = v;
+          }
+        }
+      );
+    }
+    const ps = new ck.ParagraphStyle({ textStyle });
 
     ps.disableHinting = value.disableHinting ?? ps.disableHinting;
     ps.ellipsis = value.ellipsis ?? ps.ellipsis;

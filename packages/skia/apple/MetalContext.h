@@ -95,13 +95,14 @@ public:
     }
   }
 
-  std::unique_ptr<RNSkia::WindowContext>
-  MakeWindow(CALayer *window, int width, int height,
-             bool useP3ColorSpace = true) {
+  std::unique_ptr<RNSkia::WindowContext> MakeWindow(CALayer *window, int width,
+                                                    int height,
+                                                    bool useP3ColorSpace = true,
+                                                    bool highBitDepth = false) {
     auto device = _device;
-    return std::make_unique<MetalWindowContext>(_directContext.get(), device,
-                                                _commandQueue, window, width,
-                                                height, useP3ColorSpace);
+    return std::make_unique<MetalWindowContext>(
+        _directContext.get(), device, _commandQueue, window, width, height,
+        useP3ColorSpace, highBitDepth);
   }
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }

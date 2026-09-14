@@ -5,8 +5,9 @@
 #include <utility>
 #include <vector>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkConverters.h"
 #include "JsiSkMatrix.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkShader.h"
 
 #include <jsi/jsi.h>
@@ -36,115 +37,111 @@ struct RuntimeEffectUniform {
   bool isInteger;
 };
 
+} // namespace RNSkia
+
+namespace RNJsi {
+
+// RuntimeEffectUniform -> {columns, rows, slot, isInteger}
+template <> struct JSIConverter<RNSkia::RuntimeEffectUniform> {
+  static jsi::Value toJSI(jsi::Runtime &runtime,
+                          const RNSkia::RuntimeEffectUniform &u) {
+    jsi::Object result(runtime);
+    result.setProperty(runtime, "columns", u.columns);
+    result.setProperty(runtime, "rows", u.rows);
+    result.setProperty(runtime, "slot", u.slot);
+    result.setProperty(runtime, "isInteger", u.isInteger);
+    return result;
+  }
+};
+
+} // namespace RNJsi
+
+namespace RNSkia {
+
 class JsiSkRuntimeEffect
-    : public JsiSkWrappingSkPtrHostObject<SkRuntimeEffect> {
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkRuntimeEffect,
+                                            SkRuntimeEffect> {
 public:
-  JSI_HOST_FUNCTION(makeShader) {
-    auto uniforms = castUniforms(runtime, arguments[0]);
+  static constexpr const char *CLASS_NAME = "RuntimeEffect";
 
-    auto matrix =
-        count >= 2 && !arguments[1].isUndefined() && !arguments[1].isNull()
-            ? JsiSkMatrix::fromValue(runtime, arguments[1]).get()
-            : nullptr;
-
-    // Create and return shader as host object
-    auto shader =
-        getObject()->makeShader(std::move(uniforms), nullptr, 0, matrix);
-
-    auto shaderObj =
-        std::make_shared<JsiSkShader>(getContext(), std::move(shader));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, shaderObj,
-                                                       getContext());
+  std::shared_ptr<JsiSkShader>
+  makeShader(std::vector<double> uniformValues,
+             JsiOptional<std::shared_ptr<SkMatrix>> matrix) {
+    auto uniforms = castUniforms(uniformValues);
+    auto shader = getObject()->makeShader(
+        std::move(uniforms), nullptr, 0,
+        matrix.has_value() ? matrix->get() : nullptr);
+    return std::make_shared<JsiSkShader>(getContext(), std::move(shader));
   }
 
-  JSI_HOST_FUNCTION(makeShaderWithChildren) {
-    auto uniforms = castUniforms(runtime, arguments[0]);
-
-    // Children
-    std::vector<sk_sp<SkShader>> children;
-    auto jsiChildren = arguments[1].asObject(runtime).asArray(runtime);
-    auto jsiChildCount = jsiChildren.size(runtime);
-    children.reserve(jsiChildCount);
-    for (int i = 0; i < jsiChildCount; i++) {
-      auto shader = jsiChildren.getValueAtIndex(runtime, i)
-                        .asObject(runtime)
-                        .asHostObject<JsiSkShader>(runtime)
-                        ->getObject();
-      children.push_back(shader);
-    }
-
-    auto matrix =
-        count >= 3 && !arguments[2].isUndefined() && !arguments[2].isNull()
-            ? JsiSkMatrix::fromValue(runtime, arguments[2]).get()
-            : nullptr;
-
-    // Create and return shader as host object
-    auto shader = getObject()->makeShader(std::move(uniforms), children.data(),
-                                          children.size(), matrix);
-
-    auto shaderObj =
-        std::make_shared<JsiSkShader>(getContext(), std::move(shader));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, shaderObj,
-                                                       getContext());
+  std::shared_ptr<JsiSkShader>
+  makeShaderWithChildren(std::vector<double> uniformValues,
+                         std::vector<sk_sp<SkShader>> children,
+                         JsiOptional<std::shared_ptr<SkMatrix>> matrix) {
+    auto uniforms = castUniforms(uniformValues);
+    auto shader = getObject()->makeShader(
+        std::move(uniforms), children.data(), children.size(),
+        matrix.has_value() ? matrix->get() : nullptr);
+    return std::make_shared<JsiSkShader>(getContext(), std::move(shader));
   }
 
-  JSI_HOST_FUNCTION(getUniformCount) {
+  int getUniformCount() {
     return static_cast<int>(getObject()->uniforms().size());
   }
 
-  JSI_HOST_FUNCTION(getUniformFloatCount) {
+  int getUniformFloatCount() {
     return static_cast<int>(getObject()->uniformSize() / sizeof(float));
   }
 
-  JSI_HOST_FUNCTION(getUniformName) {
-    auto i = static_cast<int>(arguments[0].asNumber());
+  std::string getUniformName(int i) {
     if (i < 0 || i >= getObject()->uniforms().size()) {
-      throw jsi::JSError(runtime, "invalid uniform index");
+      throw std::runtime_error("invalid uniform index");
     }
     auto it = getObject()->uniforms().begin() + i;
-    return jsi::String::createFromAscii(runtime, std::string(it->name));
+    return std::string(it->name);
   }
 
-  JSI_HOST_FUNCTION(getUniform) {
-    auto i = static_cast<int>(arguments[0].asNumber());
+  RuntimeEffectUniform getUniform(int i) {
     if (i < 0 || i >= getObject()->uniforms().size()) {
-      throw jsi::JSError(runtime, "invalid uniform index");
+      throw std::runtime_error("invalid uniform index");
     }
     auto it = getObject()->uniforms().begin() + i;
-    auto result = jsi::Object(runtime);
-    RuntimeEffectUniform su = fromUniform(*it);
-    result.setProperty(runtime, "columns", su.columns);
-    result.setProperty(runtime, "rows", su.rows);
-    result.setProperty(runtime, "slot", su.slot);
-    result.setProperty(runtime, "isInteger", su.isInteger);
-    return result;
+    return fromUniform(*it);
   }
 
-  JSI_HOST_FUNCTION(source) {
-    return jsi::String::createFromAscii(runtime, getObject()->source());
+  std::string source() { return std::string(getObject()->source()); }
+
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "makeShader",
+                  &JsiSkRuntimeEffect::makeShader);
+    installMethod(runtime, prototype, "makeShaderWithChildren",
+                  &JsiSkRuntimeEffect::makeShaderWithChildren);
+    installMethod(runtime, prototype, "getUniformCount",
+                  &JsiSkRuntimeEffect::getUniformCount);
+    installMethod(runtime, prototype, "getUniformFloatCount",
+                  &JsiSkRuntimeEffect::getUniformFloatCount);
+    installMethod(runtime, prototype, "getUniformName",
+                  &JsiSkRuntimeEffect::getUniformName);
+    installMethod(runtime, prototype, "getUniform",
+                  &JsiSkRuntimeEffect::getUniform);
+    installMethod(runtime, prototype, "source", &JsiSkRuntimeEffect::source);
   }
-
-  EXPORT_JSI_API_TYPENAME(JsiSkRuntimeEffect, RuntimeEffect)
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkRuntimeEffect, makeShader),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect,
-                                       makeShaderWithChildren),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect, getUniformCount),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect,
-                                       getUniformFloatCount),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect, getUniformName),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect, getUniform),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect, source),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeEffect, dispose))
 
   JsiSkRuntimeEffect(std::shared_ptr<RNSkPlatformContext> context,
                      sk_sp<SkRuntimeEffect> rt)
-      : JsiSkWrappingSkPtrHostObject<SkRuntimeEffect>(std::move(context),
-                                                      std::move(rt)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkRuntimeEffect, SkRuntimeEffect>(
+            std::move(context), std::move(rt)) {}
 
-  size_t getMemoryPressure() const override { return 4096; }
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static sk_sp<SkRuntimeEffect> fromValue(jsi::Runtime &runtime,
+                                          const jsi::Value &obj) {
+    return getJsiObject<JsiSkRuntimeEffect>(runtime, obj)->getObject();
+  }
 
-  std::string getObjectType() const override { return "JsiSkRuntimeEffect"; }
+  size_t getMemoryPressure() override { return 4096; }
 
   static RuntimeEffectUniform fromUniform(const SkRuntimeEffect::Uniform &u) {
     RuntimeEffectUniform su;
@@ -197,17 +194,13 @@ public:
   }
 
 private:
-  sk_sp<SkData> castUniforms(jsi::Runtime &runtime, const jsi::Value &value) {
-    auto jsiUniforms = value.asObject(runtime).asArray(runtime);
-    auto jsiUniformsSize = jsiUniforms.size(runtime);
-
+  sk_sp<SkData> castUniforms(const std::vector<double> &values) {
     // verify size of input uniforms
-    if (jsiUniformsSize * sizeof(float) != getObject()->uniformSize()) {
-      std::string msg =
+    if (values.size() * sizeof(float) != getObject()->uniformSize()) {
+      throw std::runtime_error(
           "Uniforms size differs from effect's uniform size. Received " +
-          std::to_string(jsiUniformsSize) + " expected " +
-          std::to_string(getObject()->uniformSize() / sizeof(float));
-      throw jsi::JSError(runtime, msg.c_str());
+          std::to_string(values.size()) + " expected " +
+          std::to_string(getObject()->uniformSize() / sizeof(float)));
     }
 
     auto uniforms = SkData::MakeUninitialized(getObject()->uniformSize());
@@ -219,7 +212,7 @@ private:
       RuntimeEffectUniform reu = fromUniform(*it);
       for (std::size_t j = 0; j < reu.columns * reu.rows; ++j) {
         const std::size_t offset = reu.slot + j;
-        float fValue = jsiUniforms.getValueAtIndex(runtime, offset).asNumber();
+        float fValue = static_cast<float>(values[offset]);
         int iValue = static_cast<int>(fValue);
         auto value = reu.isInteger ? SkBits2Float(iValue) : fValue;
         memcpy(SkTAddOffset<void>(uniforms->writable_data(),

@@ -18,6 +18,7 @@
   bool _debugMode;
   bool _opaque;
   bool _useP3ColorSpace;
+  bool _highBitDepth;
   size_t _nativeId;
 }
 
@@ -76,6 +77,7 @@
       }
       _impl->getDrawView()->setShowDebugOverlays(_debugMode);
       _impl->setUseP3ColorSpace(_useP3ColorSpace);
+      _impl->setHighBitDepth(_highBitDepth);
     }
   }
 }
@@ -173,6 +175,13 @@
   _useP3ColorSpace = useP3ColorSpace;
   if (_impl != nullptr) {
     _impl->setUseP3ColorSpace(_useP3ColorSpace);
+  }
+}
+
+- (void)setHighBitDepth:(bool)highBitDepth {
+  _highBitDepth = highBitDepth;
+  if (_impl != nullptr) {
+    _impl->setHighBitDepth(_highBitDepth);
   }
 }
 

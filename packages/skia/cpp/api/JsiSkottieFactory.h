@@ -5,14 +5,17 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiSkNativeObjects.h"
 #include "JsiSkSkottie.h"
 
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkottieFactory : public JsiSkHostObject {
+class JsiSkottieFactory : public JsiSkNativeObject<JsiSkottieFactory> {
 public:
+  static constexpr const char *CLASS_NAME = "SkottieFactory";
+
   JSI_HOST_FUNCTION(Make) {
     auto fontMgr = JsiSkFontMgrFactory::getFontMgr(getContext());
     auto json = arguments[0].asString(runtime).utf8(runtime);
@@ -34,13 +37,10 @@ public:
           auto jsObject = jsValue.asObject(runtime);
 
           // Check if the object is a SkData host object
-          if (jsObject.isHostObject(runtime)) {
-            auto hostObject = jsObject.getHostObject(runtime);
-            auto skData = std::dynamic_pointer_cast<JsiSkData>(hostObject);
-            if (skData) {
-              std::string k = key;
-              assets[k] = skData->getObject();
-            }
+          auto skData = tryGetJsiObject<JsiSkData>(runtime, jsObject);
+          if (skData) {
+            std::string k = key;
+            assets[k] = skData->getObject();
           }
         }
       }
@@ -51,20 +51,19 @@ public:
     if (!managedAnimation->_animation) {
       return jsi::Value::null();
     }
-    auto skottie = std::make_shared<JsiSkSkottie>(getContext(),
-                                                  std::move(managedAnimation));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, skottie,
-                                                       getContext());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSkottie>(getContext(),
+                                                std::move(managedAnimation)));
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkottieFactory, Make))
+  size_t getMemoryPressure() override { return 4096; }
 
-  size_t getMemoryPressure() const override { return 4096; }
-
-  std::string getObjectType() const override { return "JsiSkottieFactory"; }
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installHostMethod(runtime, prototype, "Make", &JsiSkottieFactory::Make);
+  }
 
   explicit JsiSkottieFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkottieFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

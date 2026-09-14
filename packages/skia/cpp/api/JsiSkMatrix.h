@@ -2,10 +2,12 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkConverters.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,10 +20,13 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkMatrix : public JsiSkWrappingSharedPtrHostObject<SkMatrix> {
+class JsiSkMatrix
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkMatrix, SkMatrix> {
 public:
+  static constexpr const char *CLASS_NAME = "Matrix";
+
   JsiSkMatrix(std::shared_ptr<RNSkPlatformContext> context, SkMatrix m)
-      : JsiSkWrappingSharedPtrHostObject<SkMatrix>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkMatrix, SkMatrix>(
             context, std::make_shared<SkMatrix>(std::move(m))) {}
 
   static SkMatrix getMatrix(jsi::Runtime &runtime, const jsi::Value &value) {
@@ -56,121 +61,83 @@ public:
                            std::to_string(array.size(runtime)));
   }
 
-  JSI_HOST_FUNCTION(concat) {
-    if (arguments[0].isObject() &&
-        arguments[0].asObject(runtime).isHostObject(runtime)) {
-      auto m3 = JsiSkMatrix::fromValue(runtime, arguments[0]);
-      getObject()->preConcat(*m3);
-    } else {
-      auto m3 = JsiSkMatrix::getMatrix(runtime, arguments[0]);
-      getObject()->preConcat(m3);
-    }
-    return thisValue.asObject(runtime);
+  void concat(std::shared_ptr<SkMatrix> matrix) {
+    getObject()->preConcat(*matrix);
   }
 
-  JSI_HOST_FUNCTION(translate) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    getObject()->preTranslate(x, y);
-    return thisValue.asObject(runtime);
+  void translate(double x, double y) { getObject()->preTranslate(x, y); }
+
+  void postTranslate(double x, double y) { getObject()->postTranslate(x, y); }
+
+  // A missing y means a uniform scale, matching the CanvasKit backend and the
+  // SkMatrix type, where y is optional rather than defaulted to 1.
+  void scale(double x, JsiOptional<double> y) {
+    getObject()->preScale(x, y.has_value() ? *y : x);
   }
 
-  JSI_HOST_FUNCTION(postTranslate) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    getObject()->postTranslate(x, y);
-    return thisValue.asObject(runtime);
+  void postScale(double x, JsiOptional<double> y) {
+    getObject()->postScale(x, y.has_value() ? *y : x);
   }
 
-  JSI_HOST_FUNCTION(scale) {
-    auto x = arguments[0].asNumber();
-    auto y = count > 1 ? arguments[1].asNumber() : 1;
-    getObject()->preScale(x, y);
-    return thisValue.asObject(runtime);
-  }
+  void skew(double x, double y) { getObject()->preSkew(x, y); }
 
-  JSI_HOST_FUNCTION(postScale) {
-    auto x = arguments[0].asNumber();
-    auto y = count > 1 ? arguments[1].asNumber() : 1;
-    getObject()->postScale(x, y);
-    return thisValue.asObject(runtime);
-  }
+  void postSkew(double x, double y) { getObject()->postSkew(x, y); }
 
-  JSI_HOST_FUNCTION(skew) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    getObject()->preSkew(x, y);
-    return thisValue.asObject(runtime);
-  }
+  void rotate(double a) { getObject()->preRotate(SkRadiansToDegrees(a)); }
 
-  JSI_HOST_FUNCTION(postSkew) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    getObject()->postSkew(x, y);
-    return thisValue.asObject(runtime);
-  }
+  void postRotate(double a) { getObject()->postRotate(SkRadiansToDegrees(a)); }
 
-  JSI_HOST_FUNCTION(rotate) {
-    auto a = arguments[0].asNumber();
-    getObject()->preRotate(SkRadiansToDegrees(a));
-    return thisValue.asObject(runtime);
-  }
-
-  JSI_HOST_FUNCTION(postRotate) {
-    auto a = arguments[0].asNumber();
-    getObject()->postRotate(SkRadiansToDegrees(a));
-    return thisValue.asObject(runtime);
-  }
-
-  JSI_HOST_FUNCTION(identity) {
-    getObject()->setIdentity();
-    return thisValue.asObject(runtime);
-  }
+  void identity() { getObject()->setIdentity(); }
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Woverloaded-virtual"
-  JSI_HOST_FUNCTION(get) {
-    auto values = jsi::Array(runtime, 9);
+  std::vector<float> get() {
+    std::vector<float> values;
+    values.reserve(9);
     for (auto i = 0; i < 9; i++) {
-      values.setValueAtIndex(runtime, i, getObject()->get(i));
+      values.push_back(getObject()->get(i));
     }
     return values;
   }
 #pragma clang diagnostic pop
 
-  EXPORT_JSI_API_TYPENAME(JsiSkMatrix, Matrix)
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkMatrix, concat),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, translate),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, postTranslate),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, scale),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, postScale),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, skew),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, postSkew),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, rotate),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, postRotate),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, identity),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, get),
-                       JSI_EXPORT_FUNC(JsiSkMatrix, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installChainableMethod(runtime, prototype, "concat", &JsiSkMatrix::concat);
+    installChainableMethod(runtime, prototype, "translate",
+                           &JsiSkMatrix::translate);
+    installChainableMethod(runtime, prototype, "postTranslate",
+                           &JsiSkMatrix::postTranslate);
+    installChainableMethod(runtime, prototype, "scale", &JsiSkMatrix::scale);
+    installChainableMethod(runtime, prototype, "postScale",
+                           &JsiSkMatrix::postScale);
+    installChainableMethod(runtime, prototype, "skew", &JsiSkMatrix::skew);
+    installChainableMethod(runtime, prototype, "postSkew",
+                           &JsiSkMatrix::postSkew);
+    installChainableMethod(runtime, prototype, "rotate", &JsiSkMatrix::rotate);
+    installChainableMethod(runtime, prototype, "postRotate",
+                           &JsiSkMatrix::postRotate);
+    installChainableMethod(runtime, prototype, "identity",
+                           &JsiSkMatrix::identity);
+    installMethod(runtime, prototype, "get", &JsiSkMatrix::get);
+  }
 
   /**
    * Returns the underlying object from a host object of this type
    */
   static std::shared_ptr<SkMatrix> fromValue(jsi::Runtime &runtime,
                                              const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      return object.asHostObject<JsiSkMatrix>(runtime)->getObject();
+    auto matrix = tryGetJsiObject<JsiSkMatrix>(runtime, obj);
+    if (matrix) {
+      return matrix->getObject();
     } else {
       return std::make_shared<SkMatrix>(JsiSkMatrix::getMatrix(runtime, obj));
     }
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkMatrix), kMinMemoryPressure);
   }
-
-  std::string getObjectType() const override { return "JsiSkMatrix"; }
 
   static const jsi::HostFunctionType
   createCtor(std::shared_ptr<RNSkPlatformContext> context) {
@@ -181,10 +148,8 @@ public:
       } else {
         matrix = SkMatrix::I();
       }
-      auto hostObjectInstance =
-          std::make_shared<JsiSkMatrix>(context, std::move(matrix));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, context);
+      return makeJsiObject(
+          runtime, std::make_shared<JsiSkMatrix>(context, std::move(matrix)));
     };
   }
 };

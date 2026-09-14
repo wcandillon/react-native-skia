@@ -10,6 +10,7 @@ import { BlurredSheet } from "./BlurredSheet";
 import { ClippedText } from "./ClippedText";
 import { LayeredCubes } from "./LayeredCubes";
 import { TextPlane } from "./TextPlane";
+import { ImportExternalTexture } from "./ImportExternalTexture";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -74,6 +75,13 @@ export const WebGPU = () => {
         options={{
           title: "Text Plane",
           header: () => null,
+        }}
+      />
+      <Stack.Screen
+        name="ImportExternalTexture"
+        component={ImportExternalTexture}
+        options={{
+          title: "Import External Texture",
         }}
       />
     </Stack.Navigator>

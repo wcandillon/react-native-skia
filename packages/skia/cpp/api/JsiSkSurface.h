@@ -7,15 +7,16 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiSkConverters.h"
 #include "JsiSkDispatcher.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiTextureInfo.h"
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
 
 #if defined(SK_GRAPHITE)
-#include "RNDawnContext.h"
+#include "rnskia/RNDawnContext.h"
 #endif
 
 #pragma clang diagnostic push
@@ -30,15 +31,18 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkSurface : public JsiSkWrappingSkPtrHostObject<SkSurface> {
+class JsiSkSurface
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface> {
 private:
   std::shared_ptr<Dispatcher> _dispatcher;
 
 public:
+  static constexpr const char *CLASS_NAME = "Surface";
+
   JsiSkSurface(std::shared_ptr<RNSkPlatformContext> context,
                sk_sp<SkSurface> surface)
-      : JsiSkWrappingSkPtrHostObject<SkSurface>(std::move(context),
-                                                std::move(surface)) {
+      : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
+            std::move(context), std::move(surface)) {
     // Get the dispatcher for the current thread
     _dispatcher = Dispatcher::getDispatcher();
     // Process any pending operations
@@ -63,32 +67,40 @@ public:
     }
   }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkSurface, Surface)
-
   // TODO-API: Properties?
-  JSI_HOST_FUNCTION(width) { return static_cast<double>(getObject()->width()); }
-  JSI_HOST_FUNCTION(height) {
-    return static_cast<double>(getObject()->height());
-  }
+  double width() { return static_cast<double>(getObject()->width()); }
+  double height() { return static_cast<double>(getObject()->height()); }
 
-  JSI_HOST_FUNCTION(getCanvas) {
-    auto canvas =
-        std::make_shared<JsiSkCanvas>(getContext(), getObject()->getCanvas());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, canvas,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(flush) {
+  std::shared_ptr<JsiSkCanvas> getCanvas() {
     auto surface = getObject();
+    auto canvas =
+        std::make_shared<JsiSkCanvas>(getContext(), surface->getCanvas());
+    // Keep a reference to the owning surface so the canvas can read pixels back
+    // through a snapshot on Graphite (which lacks synchronous canvas readback).
+    canvas->setSurface(surface);
+    return canvas;
+  }
+
+  void flush(JsiOptional<bool> syncParam) {
+    auto surface = getObject();
+    // When `sync` is true, block until the GPU has finished executing the
+    // submitted work. Required before a native consumer on a different command
+    // queue reads this surface's texture via getNativeTextureUnstable(). #3916
+    bool sync = syncParam.has_value() && *syncParam;
 #if defined(SK_GRAPHITE)
-    auto recording = surface->recorder()->snap();
-    DawnContext::getInstance().submitRecording(recording.get());
+    // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
+    // only Graphite-backed surfaces need to snap and submit a recording.
+    if (auto *recorder = surface->recorder()) {
+      auto recording = recorder->snap();
+      DawnContext::getInstance().submitRecording(
+          recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
+                                : skgpu::graphite::SyncToCpu::kNo);
+    }
 #else
     if (auto dContext = GrAsDirectContext(surface->recordingContext())) {
-      dContext->flushAndSubmit();
+      dContext->flushAndSubmit(sync ? GrSyncCpu::kYes : GrSyncCpu::kNo);
     }
 #endif
-    return jsi::Value::undefined();
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -102,19 +114,20 @@ public:
       image = surface->makeImageSnapshot();
     }
 #if defined(SK_GRAPHITE)
-    auto recording = surface->recorder()->snap();
-    DawnContext::getInstance().submitRecording(recording.get());
+    // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
+    // snapshot is already a valid CPU image, so skip the recording submit.
+    if (auto *recorder = surface->recorder()) {
+      auto recording = recorder->snap();
+      DawnContext::getInstance().submitRecording(recording.get());
+    }
 #endif
     if (count > 1 && arguments[1].isObject()) {
-      auto jsiImage =
-          arguments[1].asObject(runtime).asHostObject<JsiSkImage>(runtime);
+      auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
       jsiImage->setObject(image);
       return jsi::Value(runtime, arguments[1]);
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }
 
   JSI_HOST_FUNCTION(getNativeTextureUnstable) {
@@ -122,7 +135,7 @@ public:
     return JsiTextureInfo::toValue(runtime, texInfo);
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     if (isDisposed()) {
       return 0;
     }
@@ -178,15 +191,17 @@ public:
     return estimated;
   }
 
-  std::string getObjectType() const override { return "JsiSkSurface"; }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkSurface, width),
-                       JSI_EXPORT_FUNC(JsiSkSurface, height),
-                       JSI_EXPORT_FUNC(JsiSkSurface, getCanvas),
-                       JSI_EXPORT_FUNC(JsiSkSurface, makeImageSnapshot),
-                       JSI_EXPORT_FUNC(JsiSkSurface, flush),
-                       JSI_EXPORT_FUNC(JsiSkSurface, getNativeTextureUnstable),
-                       JSI_EXPORT_FUNC(JsiSkSurface, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "width", &JsiSkSurface::width);
+    installMethod(runtime, prototype, "height", &JsiSkSurface::height);
+    installMethod(runtime, prototype, "getCanvas", &JsiSkSurface::getCanvas);
+    installHostMethod(runtime, prototype, "makeImageSnapshot",
+                      &JsiSkSurface::makeImageSnapshot);
+    installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
+    installHostMethod(runtime, prototype, "getNativeTextureUnstable",
+                      &JsiSkSurface::getNativeTextureUnstable);
+  }
 };
 
 } // namespace RNSkia

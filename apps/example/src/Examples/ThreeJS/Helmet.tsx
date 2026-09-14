@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { StyleSheet, Text, View } from "react-native";
-import type { WebGPUCanvasRef } from "@shopify/react-native-skia";
-import { WebGPUCanvas } from "@shopify/react-native-skia";
+import type { CanvasRef } from "react-native-webgpu";
+import { Canvas } from "react-native-webgpu";
 
 import { useGLTF, useRGBE } from "./AssetManager";
 import { makeWebGPURenderer } from "./components/makeWebGPURenderer";
@@ -10,7 +10,7 @@ import { makeWebGPURenderer } from "./components/makeWebGPURenderer";
 export const Helmet = () => {
   const texture = useRGBE(require("./assets/helmet/royal_esplanade_1k.hdr"));
   const gltf = useGLTF(require("./assets/helmet/DamagedHelmet.gltf"));
-  const ref = useRef<WebGPUCanvasRef>(null);
+  const ref = useRef<CanvasRef>(null);
 
   useEffect(() => {
     if (!texture || !gltf) {
@@ -74,7 +74,7 @@ export const Helmet = () => {
     <View style={styles.container}>
       <Text style={styles.loading}>Loading assets...</Text>
       <View style={StyleSheet.absoluteFill}>
-        <WebGPUCanvas ref={ref} style={styles.canvas} />
+        <Canvas ref={ref} style={styles.canvas} />
       </View>
     </View>
   );

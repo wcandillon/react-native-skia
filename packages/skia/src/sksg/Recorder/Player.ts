@@ -123,7 +123,7 @@ const play = (ctx: DrawingContext, _command: Command) => {
     ctx.canvas.saveLayer(paint);
   } else if (isDrawCommand(command, CommandType.SavePaint)) {
     if (command.props.paint) {
-      ctx.paints.push(command.props.paint);
+      ctx.pushPaint(command.props.paint);
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { standalone } = command as any;
@@ -166,9 +166,8 @@ const play = (ctx: DrawingContext, _command: Command) => {
   } else if (isCommand(command, CommandType.RestoreCTM)) {
     ctx.canvas.restore();
   } else {
-    // TODO: is a copy needed here?
     // apply opacity to the current paint.
-    const paint = ctx.paint.copy();
+    const paint = ctx.track(ctx.paint.copy());
     paint.setAlphaf(paint.getAlphaf() * ctx.getOpacity());
     const paints = [paint, ...ctx.paintDeclarations];
     ctx.paintDeclarations = [];

@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,22 +18,23 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkPoint : public JsiSkWrappingSharedPtrHostObject<SkPoint> {
+class JsiSkPoint
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkPoint, SkPoint> {
 public:
-  JSI_PROPERTY_GET(x) { return static_cast<double>(getObject()->x()); }
+  static constexpr const char *CLASS_NAME = "Point";
 
-  JSI_PROPERTY_GET(y) { return static_cast<double>(getObject()->y()); }
+  double getX() { return static_cast<double>(getObject()->x()); }
 
-  JSI_API_TYPENAME("Point");
+  double getY() { return static_cast<double>(getObject()->y()); }
 
-  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkPoint, x),
-                              JSI_EXPORT_PROP_GET(JsiSkPoint, y),
-                              JSI_EXPORT_PROP_GET(JsiSkPoint, __typename__))
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkPoint, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installGetter(runtime, prototype, "x", &JsiSkPoint::getX);
+    installGetter(runtime, prototype, "y", &JsiSkPoint::getY);
+  }
 
   JsiSkPoint(std::shared_ptr<RNSkPlatformContext> context, const SkPoint &point)
-      : JsiSkWrappingSharedPtrHostObject<SkPoint>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkPoint, SkPoint>(
             std::move(context), std::make_shared<SkPoint>(point)) {}
 
   /**
@@ -42,8 +43,9 @@ public:
   static std::shared_ptr<SkPoint> fromValue(jsi::Runtime &runtime,
                                             const jsi::Value &obj) {
     const auto &object = obj.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      return object.asHostObject<JsiSkPoint>(runtime)->getObject();
+    auto point = tryGetJsiObject<JsiSkPoint>(runtime, object);
+    if (point) {
+      return point->getObject();
     } else {
       auto x = object.getProperty(runtime, "x").asNumber();
       auto y = object.getProperty(runtime, "y").asNumber();
@@ -57,16 +59,13 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkPoint &point) {
-    auto pointObj = std::make_shared<JsiSkPoint>(std::move(context), point);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, pointObj,
-                                                       context);
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkPoint>(std::move(context), point));
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkPoint), kMinMemoryPressure);
   }
-
-  std::string getObjectType() const override { return "JsiSkPoint"; }
 
   /**
    * Creates the function for construction a new instance of the SkPoint
@@ -82,10 +81,8 @@ public:
           SkPoint::Make(arguments[0].asNumber(), arguments[1].asNumber());
 
       // Return the newly constructed object
-      auto pointObj =
-          std::make_shared<JsiSkPoint>(std::move(context), std::move(point));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, pointObj,
-                                                         context);
+      return makeJsiObject(runtime, std::make_shared<JsiSkPoint>(
+                                        std::move(context), std::move(point)));
     };
   }
 };

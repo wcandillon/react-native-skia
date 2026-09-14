@@ -32,6 +32,16 @@ bool asBool(jsi::Runtime &runtime, const jsi::Value &value) {
  */
 class JsiSkStrutStyle {
 public:
+  // A property set to undefined or null is treated as absent, like on web.
+  static bool hasValue(jsi::Runtime &runtime, const jsi::Object &object,
+                       const char *name) {
+    if (!object.hasProperty(runtime, name)) {
+      return false;
+    }
+    auto propValue = object.getProperty(runtime, name);
+    return !propValue.isUndefined() && !propValue.isNull();
+  }
+
   static para::StrutStyle fromValue(jsi::Runtime &runtime,
                                     const jsi::Value &value) {
     // Read values from the argument - expected to be a TextStyle shaped object
@@ -52,11 +62,11 @@ public:
 
     para::StrutStyle retVal;
 
-    if (object.hasProperty(runtime, "strutEnabled")) {
+    if (hasValue(runtime, object, "strutEnabled")) {
       auto propValue = object.getProperty(runtime, "strutEnabled");
       retVal.setStrutEnabled(asBool(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "fontFamilies")) {
+    if (hasValue(runtime, object, "fontFamilies")) {
       auto propValue = object.getProperty(runtime, "fontFamilies")
                            .asObject(runtime)
                            .asArray(runtime);
@@ -70,28 +80,28 @@ public:
       }
     }
 
-    if (object.hasProperty(runtime, "fontStyle")) {
+    if (hasValue(runtime, object, "fontStyle")) {
       auto propValue = object.getProperty(runtime, "fontStyle");
       retVal.setFontStyle(*JsiSkFontStyle::fromValue(runtime, propValue).get());
     }
-    if (object.hasProperty(runtime, "fontSize")) {
+    if (hasValue(runtime, object, "fontSize")) {
       auto propValue = object.getProperty(runtime, "fontSize");
       retVal.setFontSize(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "heightMultiplier")) {
+    if (hasValue(runtime, object, "heightMultiplier")) {
       auto propValue = object.getProperty(runtime, "heightMultiplier");
       retVal.setHeight(propValue.asNumber());
       retVal.setHeightOverride(true);
     }
-    if (object.hasProperty(runtime, "halfLeading")) {
+    if (hasValue(runtime, object, "halfLeading")) {
       auto propValue = object.getProperty(runtime, "halfLeading");
       retVal.setHalfLeading(asBool(runtime, propValue));
     }
-    if (object.hasProperty(runtime, "leading")) {
+    if (hasValue(runtime, object, "leading")) {
       auto propValue = object.getProperty(runtime, "leading");
       retVal.setLeading(propValue.asNumber());
     }
-    if (object.hasProperty(runtime, "forceStrutHeight")) {
+    if (hasValue(runtime, object, "forceStrutHeight")) {
       auto propValue = object.getProperty(runtime, "forceStrutHeight");
       retVal.setForceStrutHeight(asBool(runtime, propValue));
     }

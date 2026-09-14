@@ -55,6 +55,7 @@ using namespace facebook::react;
   [self setNativeId:nativeId];
   [self setDebugMode:newProps.debug];
   [self setOpaque:newProps.opaque];
+  [self setHighBitDepth:newProps.highBitDepth];
   if (newProps.colorSpace == "" || newProps.colorSpace == "srgb") {
     bool useP3 = false;
     [self setUseP3ColorSpace:useP3];

@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 3.4.1)
 set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 20)
 
-# SKIA_LIBS_PATH is passed from Gradle (pointing to libs/android/, populated by npm postinstall)
+# SKIA_LIBS_PATH is passed from Gradle (pointing at the prebuilt Skia binaries,
+# read straight from the react-native-skia-android npm package, or libs/android for Graphite)
 # Append the ABI to get the full path
 set (SKIA_LIBS_PATH "${SKIA_LIBS_PATH}/${ANDROID_ABI}")
 
@@ -17,12 +18,12 @@ if(NOT EXISTS "${SKIA_LIBS_PATH}/libskia.a")
     message("│                                                                             │")
     message("│  Could not find libskia.a at: ${SKIA_LIBS_PATH}                             │")
     message("│                                                                             │")
-    message("│  Run the following command to install them:                                  │")
-    message("│    npx install-skia                                                         │")
+    message("│  Make sure dependencies are installed:                                       │")
+    message("│    yarn install   (or npm install)                                          │")
     message("│                                                                             │")
     message("└─────────────────────────────────────────────────────────────────────────────┘")
     message("")
-    message(FATAL_ERROR "Skia prebuilt binaries not found. Run `npx install-skia` to fix this.")
+    message(FATAL_ERROR "Skia prebuilt binaries not found. Run `yarn install` to fix this.")
 endif()
 
 # Import libskia
@@ -69,6 +70,7 @@ if(SK_GRAPHITE)
     set(BACKEND_SOURCES
     #TODO: is this source needed to be added?
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnWindowContext.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnInterop.cpp"
     )
 else()
     add_definitions(-DSK_GL -DSK_GANESH)
@@ -98,10 +100,9 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/AHardwareBufferUtils.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkAndroidVideo.cpp"
 
-        "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiHostObject.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/jsi/RuntimeLifecycleMonitor.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/jsi/RuntimeAwareCache.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/jsi/JSICache.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiPromises.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/jsi/Promise.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkManager.cpp"
 
@@ -113,40 +114,6 @@ add_library(
         ${BACKEND_SOURCES}
 )
 
-if(SK_GRAPHITE)
-    # WebGPU JSI infrastructure (jsi2)
-    target_sources(${PACKAGE_NAME} PRIVATE
-        "${PROJECT_SOURCE_DIR}/../cpp/jsi2/Promise.cpp"
-
-        # WebGPU async system
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/async/AsyncRunner.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/async/AsyncTaskHandle.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/async/JSIMicrotaskDispatcher.cpp"
-
-        # WebGPU API
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPU.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUAdapter.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUBindGroup.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUBuffer.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUCanvasContext.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUCommandEncoder.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUComputePassEncoder.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUComputePipeline.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUDevice.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUDeviceLostInfo.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUQuerySet.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUQueue.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPURenderBundleEncoder.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPURenderPassEncoder.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPURenderPipeline.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUShaderModule.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUSupportedLimits.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnwgpu/api/GPUTexture.cpp"
-
-        # WebGPU Canvas JNI bindings
-        "${PROJECT_SOURCE_DIR}/cpp/jni/JniWebGPUView.cpp"
-    )
-endif()
 
 
 target_include_directories(
@@ -176,13 +143,8 @@ target_include_directories(
         ../cpp/rnskia/values
         ../cpp/utils
 
-        # WebGPU bindings
+        # Shared JSI infrastructure (cpp/jsi) via prefix-qualified includes
         ../cpp
-        ../cpp/jsi2
-        ../cpp/rnwgpu
-        ../cpp/rnwgpu/api
-        ../cpp/rnwgpu/api/descriptors
-        ../cpp/rnwgpu/async
 
         ${libfbjni_include_DIRS}
 )
@@ -215,8 +177,10 @@ add_library(jsonreader STATIC IMPORTED)
 set_property(TARGET jsonreader PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libjsonreader.a")
 
 if(SK_GRAPHITE)
-    add_library(dawn_combined STATIC IMPORTED)
-    set_property(TARGET dawn_combined PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libdawn_combined.a")
+    # Dawn is a shared library, the same artifact react-native-webgpu links, so
+    # an app that installs both packages loads exactly one Dawn copy.
+    add_library(webgpu_dawn SHARED IMPORTED)
+    set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libwebgpu_dawn.so")
 endif()
 
 find_library(
@@ -391,7 +355,7 @@ endif()
 if(SK_GRAPHITE)
     target_link_libraries(${PACKAGE_NAME}
         ${COMMON_LIBS}
-        dawn_combined
+        webgpu_dawn
     )
 else()
     target_link_libraries(${PACKAGE_NAME}

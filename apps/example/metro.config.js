@@ -76,6 +76,28 @@ metroConfig.resolver.resolveRequest = (context, moduleName, platform) => {
   return defaultResolve(context, moduleName, platform);
 };
 
+// Serve index.html for navigation requests like /api/shapes so that
+// react-navigation deep links work on web (history API fallback).
+// This runs at the end of the dev server middleware chain, after the static
+// file server, so it only sees requests nothing else handled.
+function historyApiFallback(middleware) {
+  const fs = require("fs");
+  const indexHtml = path.join(__dirname, "index.html");
+  return (req, res, next) => {
+    const url = (req.url ?? "").split("?")[0];
+    const isNavigation =
+      req.method === "GET" &&
+      (req.headers.accept ?? "").includes("text/html") &&
+      !url.includes(".");
+    if (isNavigation && url !== "/") {
+      res.setHeader("Content-Type", "text/html; charset=UTF-8");
+      fs.createReadStream(indexHtml).pipe(res);
+      return undefined;
+    }
+    return middleware(req, res, next);
+  };
+}
+
 function getWebMetroConfig(config) {
   config.resolver = config.resolver ?? {};
   config.resolver.platforms = ["ios", "android", "web"];
@@ -104,6 +126,15 @@ function getWebMetroConfig(config) {
 
   config.transformer = config.transformer ?? {};
   config.transformer.assetRegistryPath = assetRegistryPath;
+
+  config.server = config.server ?? {};
+  const origEnhanceMiddleware = config.server.enhanceMiddleware;
+  config.server.enhanceMiddleware = (middleware, server) =>
+    historyApiFallback(
+      origEnhanceMiddleware
+        ? origEnhanceMiddleware(middleware, server)
+        : middleware,
+    );
 
   return config;
 }

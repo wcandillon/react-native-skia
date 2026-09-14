@@ -21,6 +21,15 @@ const scale = s / PixelRatio.get();
 const size = 256 * scale;
 const timeToDraw = CI ? 1500 : 500;
 
+// Report a failure back to the host as { $$error: message } so the matching
+// test can `.rejects` instead of hanging on a missing reply, and so the throw
+// is not surfaced as an unhandled exception that could break the socket for
+// subsequent tests.
+const errorEnvelope = (error: unknown) =>
+  JSON.stringify({
+    $$error: error instanceof Error ? error.message : String(error),
+  });
+
 interface TestsProps {
   assets: { [key: string]: any };
 }
@@ -38,22 +47,29 @@ export const Tests = ({ assets }: TestsProps) => {
       const handleMessage = (e: MessageEvent) => {
         const tree: any = JSON.parse(e.data);
         if (tree.code) {
-          client.send(
-            JSON.stringify(
-              eval(
-                `(function Main() {
+          try {
+            const result = eval(
+              `(function Main() {
                   const __addDisposableResource = (e, o) => { return o; };
                   const __disposeResources = () => {};
                   return (${tree.code})(this.Skia, this.ctx, this.size, this.scale);
                 })`
-              ).call({
-                Skia,
-                ctx: parseProps(tree.ctx, assets),
-                size: size * PixelRatio.get(),
-                scale: s,
-              })
-            )
-          );
+            ).call({
+              Skia,
+              ctx: parseProps(tree.ctx, assets),
+              size: size * PixelRatio.get(),
+              scale: s,
+            });
+            if (result instanceof Promise) {
+              result
+                .then((r) => client.send(JSON.stringify(r)))
+                .catch((error) => client.send(errorEnvelope(error)));
+            } else {
+              client.send(JSON.stringify(result));
+            }
+          } catch (error) {
+            client.send(errorEnvelope(error));
+          }
         } else if (typeof tree.screen === "string") {
           const Screen = Screens[tree.screen];
           if (!Screen) {
@@ -96,6 +112,7 @@ export const Tests = ({ assets }: TestsProps) => {
             })
             .catch((e) => {
               console.error(e);
+              client.send(errorEnvelope(e));
             });
         }
       }, timeToDraw);
@@ -109,10 +126,15 @@ export const Tests = ({ assets }: TestsProps) => {
   useEffect(() => {
     if (screen && client) {
       const it = setTimeout(async () => {
-        const image = await makeImageFromView(viewRef as RefObject<View>);
-        if (image && client) {
-          const data = image.encodeToBytes();
-          client.send(data);
+        try {
+          const image = await makeImageFromView(viewRef as RefObject<View>);
+          if (image && client) {
+            const data = image.encodeToBytes();
+            client.send(data);
+          }
+        } catch (e) {
+          console.error(e);
+          client.send(errorEnvelope(e));
         }
       }, timeToDraw);
       return () => {

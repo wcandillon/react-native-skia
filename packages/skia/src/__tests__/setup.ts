@@ -10,6 +10,12 @@ import type { SkSurface, SkImage } from "../skia/types";
 export const E2E = process.env.E2E === "true";
 export const CI = process.env.CI === "true";
 export const WEB = process.env.WEB === "true";
+// Whether the connected device runs the Graphite (Dawn/WebGPU) backend. Set by
+// globalSetup once the example app reports its backend, so it is available by
+// the time spec files are collected. Used by checkImage to pick up a
+// backend-specific (…-graphite.png) baseline when one exists.
+export const GRAPHITE =
+  E2E && (global as { testGraphite?: boolean }).testGraphite === true;
 export const itFailsE2e = E2E ? it.failing : it;
 export const itSkipsCanvasKit = WEB || !E2E ? it.skip : it;
 export const itRunsE2eOnly = E2E && !WEB ? it : it.skip;
@@ -57,7 +63,18 @@ export const checkImage = (
   const options = { ...defaultCheckImageOptions, ...opts };
   const { overwrite, threshold, mute, maxPixelDiff, shouldFail } = options;
   const png = image.encodeToBytes();
-  const p = path.resolve(__dirname, relPath);
+  let p = path.resolve(__dirname, relPath);
+  // Some Skia APIs render differently on the Graphite (Dawn/WebGPU) backend
+  // than on Ganesh. When a backend-specific baseline (…-graphite.png) exists we
+  // compare against it; otherwise we fall back to the shared baseline. With
+  // `overwrite` we always target the Graphite-specific file so its baseline can
+  // be (re)generated without touching the Ganesh one.
+  if (GRAPHITE) {
+    const graphitePath = p.replace(/\.png$/, "-graphite.png");
+    if (overwrite || fs.existsSync(graphitePath)) {
+      p = graphitePath;
+    }
+  }
   if (fs.existsSync(p) && !overwrite) {
     const ref = fs.readFileSync(p);
     const baseline = PNG.sync.read(ref);

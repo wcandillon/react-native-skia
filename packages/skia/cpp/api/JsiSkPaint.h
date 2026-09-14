@@ -7,10 +7,11 @@
 
 #include "CustomBlendModes.h"
 #include "JsiSkColor.h"
+#include "JsiSkConverters.h"
 #include "JsiSkColorFilter.h"
-#include "JsiSkHostObjects.h"
 #include "JsiSkImageFilter.h"
 #include "JsiSkMaskFilter.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkPathEffect.h"
 #include "JsiSkShader.h"
 
@@ -24,183 +25,147 @@
 namespace RNSkia {
 namespace jsi = facebook::jsi;
 
-class JsiSkPaint : public JsiSkWrappingSharedPtrHostObject<SkPaint> {
+class JsiSkPaint
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkPaint, SkPaint> {
 public:
-  EXPORT_JSI_API_TYPENAME(JsiSkPaint, Paint)
+  static constexpr const char *CLASS_NAME = "Paint";
 
-  JSI_HOST_FUNCTION(assign) {
-    SkPaint *paint = JsiSkPaint::fromValue(runtime, arguments[0]).get();
-    *getObject() = *paint;
-    return jsi::Value::undefined();
-  }
+  void assign(std::shared_ptr<SkPaint> paint) { *getObject() = *paint; }
 
-  JSI_HOST_FUNCTION(copy) {
+  std::shared_ptr<JsiSkPaint> copy() {
     const auto *paint = getObject().get();
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPaint>(getContext(), SkPaint(*paint));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPaint>(getContext(), SkPaint(*paint));
   }
 
-  JSI_HOST_FUNCTION(reset) {
-    getObject()->reset();
-    return jsi::Value::undefined();
-  }
+  void reset() { getObject()->reset(); }
 
-  JSI_HOST_FUNCTION(getColor) {
-    return JsiSkColor::toValue(runtime, getObject()->getColor());
-  }
+  JsiColor getColor() { return {getObject()->getColor()}; }
 
-  JSI_HOST_FUNCTION(getStrokeCap) {
+  double getStrokeCap() {
     return static_cast<double>(getObject()->getStrokeCap());
   }
 
-  JSI_HOST_FUNCTION(getStrokeJoin) {
+  double getStrokeJoin() {
     return static_cast<double>(getObject()->getStrokeJoin());
   }
 
-  JSI_HOST_FUNCTION(getStrokeMiter) {
+  double getStrokeMiter() {
     return static_cast<double>(getObject()->getStrokeMiter());
   }
 
-  JSI_HOST_FUNCTION(getStrokeWidth) {
+  double getStrokeWidth() {
     return static_cast<double>(getObject()->getStrokeWidth());
   }
 
-  JSI_HOST_FUNCTION(getAlphaf) {
-    float alphaf = getObject()->getAlphaf();
-    return jsi::Value(SkScalarToDouble(alphaf));
-  }
+  double getAlphaf() { return SkScalarToDouble(getObject()->getAlphaf()); }
 
-  JSI_HOST_FUNCTION(setColor) {
-    SkColor color = JsiSkColor::fromValue(runtime, arguments[0]);
-    getObject()->setColor(color);
-    return jsi::Value::undefined();
-  }
+  void setColor(JsiColor color) { getObject()->setColor(color); }
 
-  JSI_HOST_FUNCTION(setAlphaf) {
-    SkScalar alpha = arguments[0].asNumber();
-    getObject()->setAlphaf(alpha);
-    return jsi::Value::undefined();
-  }
+  void setAlphaf(double alpha) { getObject()->setAlphaf(alpha); }
 
-  JSI_HOST_FUNCTION(setAntiAlias) {
-    bool antiAliased = arguments[0].getBool();
+  void setAntiAlias(bool antiAliased) {
     getObject()->setAntiAlias(antiAliased);
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(setDither) {
-    bool dithered = arguments[0].getBool();
-    getObject()->setDither(dithered);
-    return jsi::Value::undefined();
-  }
+  void setDither(bool dithered) { getObject()->setDither(dithered); }
 
-  JSI_HOST_FUNCTION(setStrokeWidth) {
-    SkScalar width = arguments[0].asNumber();
-    getObject()->setStrokeWidth(width);
-    return jsi::Value::undefined();
-  }
+  void setStrokeWidth(double width) { getObject()->setStrokeWidth(width); }
 
-  JSI_HOST_FUNCTION(setStyle) {
-    auto style = arguments[0].asNumber();
+  void setStyle(double style) {
     getObject()->setStyle(static_cast<SkPaint::Style>(style));
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(setStrokeCap) {
-    auto cap = arguments[0].asNumber();
+  void setStrokeCap(double cap) {
     getObject()->setStrokeCap(static_cast<SkPaint::Cap>(cap));
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(setStrokeJoin) {
-    int join = arguments[0].asNumber();
+  void setStrokeJoin(int join) {
     getObject()->setStrokeJoin(static_cast<SkPaint::Join>(join));
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(setStrokeMiter) {
-    int limit = arguments[0].asNumber();
-    getObject()->setStrokeMiter(limit);
-    return jsi::Value::undefined();
-  }
+  void setStrokeMiter(int limit) { getObject()->setStrokeMiter(limit); }
 
-  JSI_HOST_FUNCTION(setBlendMode) {
-    int blendModeValue = static_cast<int>(arguments[0].asNumber());
+  void setBlendMode(int blendModeValue) {
     applyBlendMode(*getObject(), blendModeValue);
-    return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(setMaskFilter) {
-    auto maskFilter = arguments[0].isNull() || arguments[0].isUndefined()
-                          ? nullptr
-                          : JsiSkMaskFilter::fromValue(runtime, arguments[0]);
-    getObject()->setMaskFilter(std::move(maskFilter));
-    return jsi::Value::undefined();
+  void setMaskFilter(JsiOptional<sk_sp<SkMaskFilter>> maskFilter) {
+    getObject()->setMaskFilter(
+        maskFilter.has_value() ? std::move(*maskFilter) : nullptr);
   }
 
-  JSI_HOST_FUNCTION(setImageFilter) {
-    auto imageFilter = arguments[0].isNull() || arguments[0].isUndefined()
-                           ? nullptr
-                           : JsiSkImageFilter::fromValue(runtime, arguments[0]);
-    getObject()->setImageFilter(std::move(imageFilter));
-    return jsi::Value::undefined();
+  void setImageFilter(JsiOptional<sk_sp<SkImageFilter>> imageFilter) {
+    getObject()->setImageFilter(
+        imageFilter.has_value() ? std::move(*imageFilter) : nullptr);
   }
 
-  JSI_HOST_FUNCTION(setColorFilter) {
-    auto colorFilter = arguments[0].isNull() || arguments[0].isUndefined()
-                           ? nullptr
-                           : JsiSkColorFilter::fromValue(runtime, arguments[0]);
-    getObject()->setColorFilter(std::move(colorFilter));
-    return jsi::Value::undefined();
+  void setColorFilter(JsiOptional<sk_sp<SkColorFilter>> colorFilter) {
+    getObject()->setColorFilter(
+        colorFilter.has_value() ? std::move(*colorFilter) : nullptr);
   }
 
-  JSI_HOST_FUNCTION(setShader) {
-    auto shader = arguments[0].isNull() || arguments[0].isUndefined()
-                      ? nullptr
-                      : JsiSkShader::fromValue(runtime, arguments[0]);
-    getObject()->setShader(std::move(shader));
-    return jsi::Value::undefined();
+  void setShader(JsiOptional<sk_sp<SkShader>> shader) {
+    getObject()->setShader(shader.has_value() ? std::move(*shader) : nullptr);
   }
 
-  JSI_HOST_FUNCTION(setPathEffect) {
-    auto pathEffect = arguments[0].isNull() || arguments[0].isUndefined()
-                          ? nullptr
-                          : JsiSkPathEffect::fromValue(runtime, arguments[0]);
-    getObject()->setPathEffect(std::move(pathEffect));
-    return jsi::Value::undefined();
+  void setPathEffect(JsiOptional<sk_sp<SkPathEffect>> pathEffect) {
+    getObject()->setPathEffect(
+        pathEffect.has_value() ? std::move(*pathEffect) : nullptr);
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkPaint, assign),
-                       JSI_EXPORT_FUNC(JsiSkPaint, copy),
-                       JSI_EXPORT_FUNC(JsiSkPaint, reset),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getAlphaf),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getColor),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getStrokeCap),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getStrokeJoin),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getStrokeMiter),
-                       JSI_EXPORT_FUNC(JsiSkPaint, getStrokeWidth),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setPathEffect),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setShader),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setColorFilter),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setImageFilter),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setMaskFilter),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setBlendMode),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setStrokeMiter),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setStrokeJoin),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setStrokeCap),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setAntiAlias),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setDither),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setStrokeWidth),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setStyle),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setColor),
-                       JSI_EXPORT_FUNC(JsiSkPaint, setAlphaf),
-                       JSI_EXPORT_FUNC(JsiSkPaint, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "assign", &JsiSkPaint::assign);
+    installMethod(runtime, prototype, "copy", &JsiSkPaint::copy);
+    installMethod(runtime, prototype, "reset", &JsiSkPaint::reset);
+    installMethod(runtime, prototype, "getAlphaf", &JsiSkPaint::getAlphaf);
+    installMethod(runtime, prototype, "getColor", &JsiSkPaint::getColor);
+    installMethod(runtime, prototype, "getStrokeCap",
+                  &JsiSkPaint::getStrokeCap);
+    installMethod(runtime, prototype, "getStrokeJoin",
+                  &JsiSkPaint::getStrokeJoin);
+    installMethod(runtime, prototype, "getStrokeMiter",
+                  &JsiSkPaint::getStrokeMiter);
+    installMethod(runtime, prototype, "getStrokeWidth",
+                  &JsiSkPaint::getStrokeWidth);
+    installMethod(runtime, prototype, "setPathEffect",
+                  &JsiSkPaint::setPathEffect);
+    installMethod(runtime, prototype, "setShader", &JsiSkPaint::setShader);
+    installMethod(runtime, prototype, "setColorFilter",
+                  &JsiSkPaint::setColorFilter);
+    installMethod(runtime, prototype, "setImageFilter",
+                  &JsiSkPaint::setImageFilter);
+    installMethod(runtime, prototype, "setMaskFilter",
+                  &JsiSkPaint::setMaskFilter);
+    installMethod(runtime, prototype, "setBlendMode",
+                  &JsiSkPaint::setBlendMode);
+    installMethod(runtime, prototype, "setStrokeMiter",
+                  &JsiSkPaint::setStrokeMiter);
+    installMethod(runtime, prototype, "setStrokeJoin",
+                  &JsiSkPaint::setStrokeJoin);
+    installMethod(runtime, prototype, "setStrokeCap",
+                  &JsiSkPaint::setStrokeCap);
+    installMethod(runtime, prototype, "setAntiAlias",
+                  &JsiSkPaint::setAntiAlias);
+    installMethod(runtime, prototype, "setDither", &JsiSkPaint::setDither);
+    installMethod(runtime, prototype, "setStrokeWidth",
+                  &JsiSkPaint::setStrokeWidth);
+    installMethod(runtime, prototype, "setStyle", &JsiSkPaint::setStyle);
+    installMethod(runtime, prototype, "setColor", &JsiSkPaint::setColor);
+    installMethod(runtime, prototype, "setAlphaf", &JsiSkPaint::setAlphaf);
+  }
 
   JsiSkPaint(std::shared_ptr<RNSkPlatformContext> context, SkPaint paint)
-      : JsiSkWrappingSharedPtrHostObject<SkPaint>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkPaint, SkPaint>(
             std::move(context), std::make_shared<SkPaint>(std::move(paint))) {}
+
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static std::shared_ptr<SkPaint> fromValue(jsi::Runtime &runtime,
+                                            const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
   /**
    Copy from another paint
@@ -209,11 +174,9 @@ public:
     setObject(std::make_shared<SkPaint>(std::move(paint)));
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkPaint), kMinMemoryPressure);
   }
-
-  std::string getObjectType() const override { return "JsiSkPaint"; }
 
   /**
    * Creates the function for construction a new instance of the SkPaint
@@ -228,9 +191,8 @@ public:
       auto paint = SkPaint();
       paint.setAntiAlias(true);
       // Return the newly constructed object
-      auto hostObjectInstance = std::make_shared<JsiSkPaint>(context, paint);
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-          runtime, hostObjectInstance, context);
+      return makeJsiObject(runtime,
+                           std::make_shared<JsiSkPaint>(context, paint));
     };
   }
 };

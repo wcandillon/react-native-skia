@@ -2,19 +2,22 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkConverters.h"
 #include "JsiSkMatrix.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkPoint.h"
 #include "JsiSkRRect.h"
 #include "JsiSkRect.h"
-#include "RNSkLog.h"
+#include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -61,7 +64,11 @@ inline void warnDeprecatedPathMethod(jsi::Runtime &runtime,
   RNSkLogger::warnToJavascriptConsole(runtime, message);
 }
 
-class JsiSkPath : public JsiSkWrappingSharedPtrHostObject<SkPathBuilder> {
+class JsiSkPath
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkPath, SkPathBuilder> {
+public:
+  static constexpr const char *CLASS_NAME = "Path";
+
 private:
   static const int MOVE = 0;
   static const int LINE = 1;
@@ -73,338 +80,233 @@ private:
   SkPath asPath() const { return getObject()->snapshot(); }
 
 public:
-  // Mutable building methods (deprecated)
+  // Mutable building methods (deprecated) — chainable, and they take the
+  // runtime for the JS console deprecation warning.
 
-  JSI_HOST_FUNCTION(moveTo) {
+  void moveTo(jsi::Runtime &runtime, double x, double y) {
     warnDeprecatedPathMethod(runtime, "moveTo",
                              "Use Skia.PathBuilder.Make().moveTo() instead.");
-    SkScalar x = arguments[0].asNumber();
-    SkScalar y = arguments[1].asNumber();
     getObject()->moveTo(x, y);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rMoveTo) {
+  void rMoveTo(jsi::Runtime &runtime, double x, double y) {
     warnDeprecatedPathMethod(runtime, "rMoveTo",
                              "Use Skia.PathBuilder.Make().rMoveTo() instead.");
-    SkScalar x = arguments[0].asNumber();
-    SkScalar y = arguments[1].asNumber();
-    getObject()->rMoveTo({x, y});
-    return thisValue.getObject(runtime);
+    getObject()->rMoveTo({static_cast<SkScalar>(x), static_cast<SkScalar>(y)});
   }
 
-  JSI_HOST_FUNCTION(lineTo) {
+  void lineTo(jsi::Runtime &runtime, double x, double y) {
     warnDeprecatedPathMethod(runtime, "lineTo",
                              "Use Skia.PathBuilder.Make().lineTo() instead.");
-    SkScalar x = arguments[0].asNumber();
-    SkScalar y = arguments[1].asNumber();
     getObject()->lineTo(x, y);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rLineTo) {
+  void rLineTo(jsi::Runtime &runtime, double x, double y) {
     warnDeprecatedPathMethod(runtime, "rLineTo",
                              "Use Skia.PathBuilder.Make().rLineTo() instead.");
-    SkScalar x = arguments[0].asNumber();
-    SkScalar y = arguments[1].asNumber();
     getObject()->rLineTo(x, y);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(quadTo) {
+  void quadTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+              double y2) {
     warnDeprecatedPathMethod(runtime, "quadTo",
                              "Use Skia.PathBuilder.Make().quadTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
     getObject()->quadTo(x1, y1, x2, y2);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rQuadTo) {
+  void rQuadTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+               double y2) {
     warnDeprecatedPathMethod(runtime, "rQuadTo",
                              "Use Skia.PathBuilder.Make().rQuadTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
     getObject()->rQuadTo(x1, y1, x2, y2);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(conicTo) {
+  void conicTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+               double y2, double w) {
     warnDeprecatedPathMethod(runtime, "conicTo",
                              "Use Skia.PathBuilder.Make().conicTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
-    SkScalar w = arguments[4].asNumber();
     getObject()->conicTo(x1, y1, x2, y2, w);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rConicTo) {
+  void rConicTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+                double y2, double w) {
     warnDeprecatedPathMethod(runtime, "rConicTo",
                              "Use Skia.PathBuilder.Make().rConicTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
-    SkScalar w = arguments[4].asNumber();
     getObject()->rConicTo(x1, y1, x2, y2, w);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(cubicTo) {
+  void cubicTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+               double y2, double x3, double y3) {
     warnDeprecatedPathMethod(runtime, "cubicTo",
                              "Use Skia.PathBuilder.Make().cubicTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
-    SkScalar x3 = arguments[4].asNumber();
-    SkScalar y3 = arguments[5].asNumber();
     getObject()->cubicTo(x1, y1, x2, y2, x3, y3);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rCubicTo) {
+  void rCubicTo(jsi::Runtime &runtime, double x1, double y1, double x2,
+                double y2, double x3, double y3) {
     warnDeprecatedPathMethod(runtime, "rCubicTo",
                              "Use Skia.PathBuilder.Make().rCubicTo() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
-    SkScalar x3 = arguments[4].asNumber();
-    SkScalar y3 = arguments[5].asNumber();
     getObject()->rCubicTo(x1, y1, x2, y2, x3, y3);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(close) {
+  void close(jsi::Runtime &runtime) {
     warnDeprecatedPathMethod(runtime, "close",
                              "Use Skia.PathBuilder.Make().close() instead.");
     getObject()->close();
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(reset) {
+  void reset(jsi::Runtime &runtime) {
     warnDeprecatedPathMethod(runtime, "reset",
                              "Use Skia.PathBuilder.Make().reset() instead.");
     getObject()->reset();
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rewind) {
+  void rewind(jsi::Runtime &runtime) {
     warnDeprecatedPathMethod(runtime, "rewind",
                              "Use Skia.PathBuilder.Make().reset() instead.");
     getObject()->reset();
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(addPath) {
+  void addPath(jsi::Runtime &runtime, std::shared_ptr<SkPathBuilder> src,
+               JsiOptional<std::shared_ptr<SkMatrix>> matrix,
+               JsiOptional<bool> extend) {
     warnDeprecatedPathMethod(runtime, "addPath",
                              "Use Skia.PathBuilder.Make().addPath() instead.");
-    auto src = JsiSkPath::fromValue(runtime, arguments[0]);
     auto srcPath = src->snapshot();
-    auto matrix =
-        count > 1 && !arguments[1].isUndefined() && !arguments[1].isNull()
-            ? JsiSkMatrix::fromValue(runtime, arguments[1])
-            : nullptr;
-    auto extend = count > 2 && arguments[2].getBool();
-    auto mode =
-        extend ? SkPath::kExtend_AddPathMode : SkPath::kAppend_AddPathMode;
-    if (matrix) {
-      getObject()->addPath(srcPath, *matrix, mode);
+    auto mode = extend.has_value() && *extend ? SkPath::kExtend_AddPathMode
+                                              : SkPath::kAppend_AddPathMode;
+    if (matrix.has_value()) {
+      getObject()->addPath(srcPath, **matrix, mode);
     } else {
       getObject()->addPath(srcPath, mode);
     }
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(addArc) {
+  void addArc(jsi::Runtime &runtime, std::shared_ptr<SkRect> rect,
+              double start, double sweep) {
     warnDeprecatedPathMethod(runtime, "addArc",
                              "Use Skia.PathBuilder.Make().addArc() instead.");
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto start = arguments[1].asNumber();
-    auto sweep = arguments[2].asNumber();
     getObject()->addArc(*rect, start, sweep);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(addOval) {
+  void addOval(jsi::Runtime &runtime, std::shared_ptr<SkRect> rect,
+               JsiOptional<bool> isCCW, JsiOptional<double> startIndex) {
     warnDeprecatedPathMethod(
         runtime, "addOval",
         "Use Skia.Path.Oval() or Skia.PathBuilder.Make().addOval() instead.");
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto isCCW = count > 1 && arguments[1].getBool();
-    auto startIndex =
-        count > 2 ? static_cast<unsigned>(arguments[2].asNumber()) : 1;
-    auto direction = isCCW ? SkPathDirection::kCCW : SkPathDirection::kCW;
-    getObject()->addOval(*rect, direction, startIndex);
-    return thisValue.getObject(runtime);
+    getObject()->addOval(*rect, toDirection(isCCW),
+                         startIndex.has_value()
+                             ? static_cast<unsigned>(*startIndex)
+                             : 1);
   }
 
-  JSI_HOST_FUNCTION(addRect) {
+  void addRect(jsi::Runtime &runtime, std::shared_ptr<SkRect> rect,
+               JsiOptional<bool> isCCW) {
     warnDeprecatedPathMethod(
         runtime, "addRect",
         "Use Skia.Path.Rect() or Skia.PathBuilder.Make().addRect() instead.");
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto isCCW = count > 1 && arguments[1].getBool();
-    auto direction = isCCW ? SkPathDirection::kCCW : SkPathDirection::kCW;
-    getObject()->addRect(*rect, direction);
-    return thisValue.getObject(runtime);
+    getObject()->addRect(*rect, toDirection(isCCW));
   }
 
-  JSI_HOST_FUNCTION(addRRect) {
+  void addRRect(jsi::Runtime &runtime, std::shared_ptr<SkRRect> rrect,
+                JsiOptional<bool> isCCW) {
     warnDeprecatedPathMethod(
         runtime, "addRRect",
         "Use Skia.Path.RRect() or Skia.PathBuilder.Make().addRRect() instead.");
-    auto rrect = JsiSkRRect::fromValue(runtime, arguments[0]);
-    auto isCCW = count > 1 && arguments[1].getBool();
-    auto direction = isCCW ? SkPathDirection::kCCW : SkPathDirection::kCW;
-    getObject()->addRRect(*rrect, direction);
-    return thisValue.getObject(runtime);
+    getObject()->addRRect(*rrect, toDirection(isCCW));
   }
 
-  JSI_HOST_FUNCTION(addCircle) {
+  void addCircle(jsi::Runtime &runtime, double x, double y, double r) {
     warnDeprecatedPathMethod(
         runtime, "addCircle",
         "Use Skia.Path.Circle() or Skia.PathBuilder.Make().addCircle() "
         "instead.");
-    SkScalar x = arguments[0].asNumber();
-    SkScalar y = arguments[1].asNumber();
-    SkScalar r = arguments[2].asNumber();
     getObject()->addCircle(x, y, r);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(addPoly) {
+  void addPoly(jsi::Runtime &runtime, std::vector<SkPoint> points,
+               bool close) {
     warnDeprecatedPathMethod(
         runtime, "addPoly",
         "Use Skia.Path.Polygon() or Skia.PathBuilder.Make().addPoly() "
         "instead.");
-    auto jsiPoints = arguments[0].asObject(runtime).asArray(runtime);
-    auto close = arguments[1].getBool();
-    auto pointsSize = static_cast<int>(jsiPoints.size(runtime));
-    std::vector<SkPoint> points;
-    points.reserve(pointsSize);
-    for (int i = 0; i < pointsSize; i++) {
-      auto pt =
-          JsiSkPoint::fromValue(runtime, jsiPoints.getValueAtIndex(runtime, i));
-      points.push_back(*pt);
-    }
     getObject()->addPolygon(SkSpan<const SkPoint>(points.data(), points.size()),
                             close);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(arcToOval) {
+  void arcToOval(jsi::Runtime &runtime, std::shared_ptr<SkRect> rect,
+                 double start, double sweep, bool forceMoveTo) {
     warnDeprecatedPathMethod(
         runtime, "arcToOval",
         "Use Skia.PathBuilder.Make().arcToOval() instead.");
-    auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-    auto start = arguments[1].asNumber();
-    auto sweep = arguments[2].asNumber();
-    auto forceMoveTo = arguments[3].getBool();
     getObject()->arcTo(*rect, start, sweep, forceMoveTo);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(arcToRotated) {
+  void arcToRotated(jsi::Runtime &runtime, double rx, double ry,
+                    double xAxisRotate, bool useSmallArc, bool isCCW, double x,
+                    double y) {
     warnDeprecatedPathMethod(
         runtime, "arcToRotated",
         "Use Skia.PathBuilder.Make().arcToRotated() instead.");
-    SkScalar rx = arguments[0].asNumber();
-    SkScalar ry = arguments[1].asNumber();
-    SkScalar xAxisRotate = arguments[2].asNumber();
-    auto useSmallArc = arguments[3].getBool();
-    auto isCCW = arguments[4].getBool();
-    SkScalar x = arguments[5].asNumber();
-    SkScalar y = arguments[6].asNumber();
     auto arcSize = useSmallArc ? SkPathBuilder::kSmall_ArcSize
                                : SkPathBuilder::kLarge_ArcSize;
     auto sweep = isCCW ? SkPathDirection::kCCW : SkPathDirection::kCW;
     getObject()->arcTo(SkPoint::Make(rx, ry), xAxisRotate, arcSize, sweep,
                        SkPoint::Make(x, y));
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(rArcTo) {
+  void rArcTo(jsi::Runtime &runtime, double rx, double ry, double xAxisRotate,
+              bool useSmallArc, bool isCCW, double dx, double dy) {
     warnDeprecatedPathMethod(runtime, "rArcTo",
                              "Use Skia.PathBuilder.Make().rArcTo() instead.");
-    SkScalar rx = arguments[0].asNumber();
-    SkScalar ry = arguments[1].asNumber();
-    SkScalar xAxisRotate = arguments[2].asNumber();
-    auto useSmallArc = arguments[3].getBool();
-    auto isCCW = arguments[4].getBool();
-    SkScalar dx = arguments[5].asNumber();
-    SkScalar dy = arguments[6].asNumber();
     auto arcSize = useSmallArc ? SkPathBuilder::kSmall_ArcSize
                                : SkPathBuilder::kLarge_ArcSize;
     auto sweep = isCCW ? SkPathDirection::kCCW : SkPathDirection::kCW;
     SkVector dxdy(dx, dy);
     SkPoint r(rx, ry);
     getObject()->rArcTo(r, xAxisRotate, arcSize, sweep, dxdy);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(arcToTangent) {
+  void arcToTangent(jsi::Runtime &runtime, double x1, double y1, double x2,
+                    double y2, double r) {
     warnDeprecatedPathMethod(
         runtime, "arcToTangent",
         "Use Skia.PathBuilder.Make().arcToTangent() instead.");
-    SkScalar x1 = arguments[0].asNumber();
-    SkScalar y1 = arguments[1].asNumber();
-    SkScalar x2 = arguments[2].asNumber();
-    SkScalar y2 = arguments[3].asNumber();
-    SkScalar r = arguments[4].asNumber();
     getObject()->arcTo(SkPoint::Make(x1, y1), SkPoint::Make(x2, y2), r);
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(setFillType) {
+  void setFillType(jsi::Runtime &runtime, double ft) {
     warnDeprecatedPathMethod(
         runtime, "setFillType",
         "Use Skia.PathBuilder.Make().setFillType() instead.");
-    auto ft = arguments[0].asNumber();
     getObject()->setFillType(static_cast<SkPathFillType>(static_cast<int>(ft)));
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(setIsVolatile) {
+  void setIsVolatile(jsi::Runtime &runtime, bool v) {
     warnDeprecatedPathMethod(
         runtime, "setIsVolatile",
         "Use Skia.PathBuilder.Make().setIsVolatile() instead.");
-    auto v = arguments[0].getBool();
     getObject()->setIsVolatile(v);
-    return thisValue.getObject(runtime);
   }
 
   // Mutable transform methods (deprecated)
 
-  JSI_HOST_FUNCTION(transform) {
+  void transform(jsi::Runtime &runtime, std::shared_ptr<SkMatrix> m3) {
     warnDeprecatedPathMethod(
         runtime, "transform",
         "Use Skia.PathBuilder.Make().transform() instead.");
-    auto m3 = *JsiSkMatrix::fromValue(runtime, arguments[0]);
-    getObject()->transform(m3);
-    return thisValue.getObject(runtime);
+    getObject()->transform(*m3);
   }
 
-  JSI_HOST_FUNCTION(offset) {
+  void offset(jsi::Runtime &runtime, double dx, double dy) {
     warnDeprecatedPathMethod(runtime, "offset",
                              "Use Skia.PathBuilder.Make().offset() instead.");
-    SkScalar dx = arguments[0].asNumber();
-    SkScalar dy = arguments[1].asNumber();
     getObject()->offset(dx, dy);
-    return thisValue.getObject(runtime);
   }
 
   // Mutable path operations (deprecated)
 
-  JSI_HOST_FUNCTION(simplify) {
+  void simplify(jsi::Runtime &runtime) {
     warnDeprecatedPathMethod(runtime, "simplify",
                              "Use Skia.Path.Simplify(path) instead.");
     auto path = asPath();
@@ -412,25 +314,22 @@ public:
     if (result.has_value()) {
       *getObject() = SkPathBuilder(result.value());
     }
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(op) {
+  void op(jsi::Runtime &runtime, std::shared_ptr<SkPathBuilder> path2,
+          double pathOp) {
     warnDeprecatedPathMethod(runtime, "op",
                              "Use Skia.Path.MakeFromOp() instead.");
-    auto path2 = JsiSkPath::fromValue(runtime, arguments[0]);
-    auto pathOp =
-        static_cast<SkPathOp>(static_cast<int>(arguments[1].asNumber()));
     auto p1 = asPath();
     auto p2 = path2->snapshot();
-    auto result = ::Op(p1, p2, pathOp);
+    auto result =
+        ::Op(p1, p2, static_cast<SkPathOp>(static_cast<int>(pathOp)));
     if (result.has_value()) {
       *getObject() = SkPathBuilder(result.value());
     }
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(makeAsWinding) {
+  void makeAsWinding(jsi::Runtime &runtime) {
     warnDeprecatedPathMethod(runtime, "makeAsWinding",
                              "Use Skia.Path.AsWinding(path) instead.");
     auto path = asPath();
@@ -438,17 +337,14 @@ public:
     if (result.has_value()) {
       *getObject() = SkPathBuilder(result.value());
     }
-    return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(dash) {
+  void dash(jsi::Runtime &runtime, double on, double off, double phase) {
     warnDeprecatedPathMethod(
         runtime, "dash", "Use Skia.Path.Dash(path, on, off, phase) instead.");
     auto path = asPath();
-    SkScalar on = arguments[0].asNumber();
-    SkScalar off = arguments[1].asNumber();
-    auto phase = arguments[2].asNumber();
-    SkScalar intervals[] = {on, off};
+    SkScalar intervals[] = {static_cast<SkScalar>(on),
+                            static_cast<SkScalar>(off)};
     auto pe = SkDashPathEffect::Make(SkSpan(intervals, 2), phase);
     if (pe) {
       SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
@@ -457,9 +353,9 @@ public:
         *getObject() = std::move(resultBuilder);
       }
     }
-    return thisValue.getObject(runtime);
   }
 
+  // Stays raw: the options object is read leniently property by property.
   JSI_HOST_FUNCTION(stroke) {
     warnDeprecatedPathMethod(runtime, "stroke",
                              "Use Skia.Path.Stroke(path, opts) instead.");
@@ -501,16 +397,14 @@ public:
     return thisValue.getObject(runtime);
   }
 
-  JSI_HOST_FUNCTION(trim) {
+  void trim(jsi::Runtime &runtime, double startValue, double endValue,
+            bool isComplement) {
     warnDeprecatedPathMethod(
         runtime, "trim",
         "Use Skia.Path.Trim(path, start, end, isComplement) instead.");
     auto path = asPath();
-    float start =
-        std::clamp(static_cast<float>(arguments[0].asNumber()), 0.0f, 1.0f);
-    float end =
-        std::clamp(static_cast<float>(arguments[1].asNumber()), 0.0f, 1.0f);
-    auto isComplement = arguments[2].getBool();
+    float start = std::clamp(static_cast<float>(startValue), 0.0f, 1.0f);
+    float end = std::clamp(static_cast<float>(endValue), 0.0f, 1.0f);
     auto mode = isComplement ? SkTrimPathEffect::Mode::kInverted
                              : SkTrimPathEffect::Mode::kNormal;
     auto pe = SkTrimPathEffect::Make(start, end, mode);
@@ -521,112 +415,77 @@ public:
         *getObject() = std::move(resultBuilder);
       }
     }
-    return thisValue.getObject(runtime);
   }
 
   // Query methods
 
-  JSI_HOST_FUNCTION(computeTightBounds) {
+  std::shared_ptr<JsiSkRect> computeTightBounds() {
     auto path = asPath();
-    auto result = path.computeTightBounds();
-    auto hostObjectInstance = std::make_shared<JsiSkRect>(getContext(), result);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkRect>(getContext(),
+                                       path.computeTightBounds());
   }
 
-  JSI_HOST_FUNCTION(getBounds) {
-    auto result = getObject()->computeBounds();
-    auto hostObjectInstance = std::make_shared<JsiSkRect>(getContext(), result);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+  std::shared_ptr<JsiSkRect> getBounds() {
+    return std::make_shared<JsiSkRect>(getContext(),
+                                       getObject()->computeBounds());
   }
 
-  JSI_HOST_FUNCTION(contains) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    return jsi::Value(asPath().contains(x, y));
-  }
+  bool contains(double x, double y) { return asPath().contains(x, y); }
 
-  JSI_HOST_FUNCTION(getFillType) {
-    auto fillType = getObject()->fillType();
-    return jsi::Value(static_cast<int>(fillType));
-  }
+  int getFillType() { return static_cast<int>(getObject()->fillType()); }
 
-  JSI_HOST_FUNCTION(isVolatile) { return jsi::Value(asPath().isVolatile()); }
+  bool isVolatile() { return asPath().isVolatile(); }
 
-  JSI_HOST_FUNCTION(getPoint) {
-    auto index = arguments[0].asNumber();
+  std::shared_ptr<JsiSkPoint> getPoint(int index) {
     auto point = asPath().getPoint(index);
-    auto hostObjectInstance = std::make_shared<JsiSkPoint>(getContext(), point);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPoint>(getContext(), point);
   }
 
-  JSI_HOST_FUNCTION(isEmpty) { return jsi::Value(getObject()->isEmpty()); }
+  bool isEmpty() { return getObject()->isEmpty(); }
 
-  JSI_HOST_FUNCTION(countPoints) {
-    auto points = asPath().countPoints();
-    return jsi::Value(points);
-  }
+  int countPoints() { return asPath().countPoints(); }
 
-  JSI_HOST_FUNCTION(getLastPt) {
+  SkPoint getLastPt() {
     auto last = getObject()->getLastPt();
-    auto point = jsi::Object(runtime);
-    if (last.has_value()) {
-      point.setProperty(runtime, "x", static_cast<double>(last->fX));
-      point.setProperty(runtime, "y", static_cast<double>(last->fY));
-    } else {
-      point.setProperty(runtime, "x", 0.0);
-      point.setProperty(runtime, "y", 0.0);
-    }
-    return point;
+    return last.value_or(SkPoint::Make(0, 0));
   }
 
-  JSI_HOST_FUNCTION(toSVGString) {
+  std::string toSVGString() {
     auto path = asPath();
     auto s = SkParsePath::ToSVGString(path);
-    return jsi::String::createFromUtf8(runtime, s.c_str());
+    return std::string(s.c_str());
   }
 
-  JSI_HOST_FUNCTION(equals) {
-    auto p1 = JsiSkPath::fromValue(runtime, arguments[0]);
-    auto p2 = JsiSkPath::fromValue(runtime, arguments[1]);
-    return jsi::Value(p1->snapshot() == p2->snapshot());
+  bool equals(std::shared_ptr<SkPathBuilder> p1,
+              std::shared_ptr<SkPathBuilder> p2) {
+    return p1->snapshot() == p2->snapshot();
   }
 
-  JSI_HOST_FUNCTION(copy) {
-    auto path = asPath();
-    auto hostObjectInstance = std::make_shared<JsiSkPath>(getContext(), path);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+  std::shared_ptr<JsiSkPath> copy() {
+    return std::make_shared<JsiSkPath>(getContext(), asPath());
   }
 
-  JSI_HOST_FUNCTION(isInterpolatable) {
-    auto path2 = JsiSkPath::fromValue(runtime, arguments[0]);
+  bool isInterpolatable(std::shared_ptr<SkPathBuilder> path2) {
     auto p1 = asPath();
     auto p2 = path2->snapshot();
     return p1.isInterpolatable(p2);
   }
 
-  JSI_HOST_FUNCTION(interpolate) {
-    auto path2 = JsiSkPath::fromValue(runtime, arguments[0]);
-    auto weight = arguments[1].asNumber();
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkPath>>
+  interpolate(std::shared_ptr<SkPathBuilder> path2, double weight) {
     auto p1 = asPath();
     auto p2 = path2->snapshot();
     SkPath result;
     auto succeed = p1.interpolate(p2, weight, &result);
     if (!succeed) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(getContext(), std::move(result));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkPath>(getContext(), std::move(result));
   }
 
-  JSI_HOST_FUNCTION(toCmds) {
+  std::vector<std::vector<double>> toCmds() {
     auto path = asPath();
-    std::vector<jsi::Array> cmdList;
+    std::vector<std::vector<double>> cmds;
     SkPoint pts[4];
     SkPath::Iter iter(path, false);
     SkPath::Verb verb;
@@ -634,120 +493,145 @@ public:
     while ((verb = iter.next(pts)) != SkPath::kDone_Verb) {
       switch (verb) {
       case SkPath::kMove_Verb: {
-        auto cmd = jsi::Array(runtime, 3);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(MOVE));
-        cmd.setValueAtIndex(runtime, 1, static_cast<double>(pts[0].x()));
-        cmd.setValueAtIndex(runtime, 2, static_cast<double>(pts[0].y()));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back({static_cast<double>(MOVE),
+                        static_cast<double>(pts[0].x()),
+                        static_cast<double>(pts[0].y())});
         break;
       }
       case SkPath::kLine_Verb: {
-        auto cmd = jsi::Array(runtime, 3);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(LINE));
-        cmd.setValueAtIndex(runtime, 1, static_cast<double>(pts[1].x()));
-        cmd.setValueAtIndex(runtime, 2, static_cast<double>(pts[1].y()));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back({static_cast<double>(LINE),
+                        static_cast<double>(pts[1].x()),
+                        static_cast<double>(pts[1].y())});
         break;
       }
       case SkPath::kQuad_Verb: {
-        auto cmd = jsi::Array(runtime, 5);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(QUAD));
-        cmd.setValueAtIndex(runtime, 1, static_cast<double>(pts[1].x()));
-        cmd.setValueAtIndex(runtime, 2, static_cast<double>(pts[1].y()));
-        cmd.setValueAtIndex(runtime, 3, static_cast<double>(pts[2].x()));
-        cmd.setValueAtIndex(runtime, 4, static_cast<double>(pts[2].y()));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back(
+            {static_cast<double>(QUAD), static_cast<double>(pts[1].x()),
+             static_cast<double>(pts[1].y()), static_cast<double>(pts[2].x()),
+             static_cast<double>(pts[2].y())});
         break;
       }
       case SkPath::kConic_Verb: {
-        auto cmd = jsi::Array(runtime, 6);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(CONIC));
-        cmd.setValueAtIndex(runtime, 1, static_cast<double>(pts[1].x()));
-        cmd.setValueAtIndex(runtime, 2, static_cast<double>(pts[1].y()));
-        cmd.setValueAtIndex(runtime, 3, static_cast<double>(pts[2].x()));
-        cmd.setValueAtIndex(runtime, 4, static_cast<double>(pts[2].y()));
-        cmd.setValueAtIndex(runtime, 5,
-                            static_cast<double>(iter.conicWeight()));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back(
+            {static_cast<double>(CONIC), static_cast<double>(pts[1].x()),
+             static_cast<double>(pts[1].y()), static_cast<double>(pts[2].x()),
+             static_cast<double>(pts[2].y()),
+             static_cast<double>(iter.conicWeight())});
         break;
       }
       case SkPath::kCubic_Verb: {
-        auto cmd = jsi::Array(runtime, 7);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(CUBIC));
-        cmd.setValueAtIndex(runtime, 1, static_cast<double>(pts[1].x()));
-        cmd.setValueAtIndex(runtime, 2, static_cast<double>(pts[1].y()));
-        cmd.setValueAtIndex(runtime, 3, static_cast<double>(pts[2].x()));
-        cmd.setValueAtIndex(runtime, 4, static_cast<double>(pts[2].y()));
-        cmd.setValueAtIndex(runtime, 5, static_cast<double>(pts[3].x()));
-        cmd.setValueAtIndex(runtime, 6, static_cast<double>(pts[3].y()));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back(
+            {static_cast<double>(CUBIC), static_cast<double>(pts[1].x()),
+             static_cast<double>(pts[1].y()), static_cast<double>(pts[2].x()),
+             static_cast<double>(pts[2].y()), static_cast<double>(pts[3].x()),
+             static_cast<double>(pts[3].y())});
         break;
       }
       case SkPath::kClose_Verb: {
-        auto cmd = jsi::Array(runtime, 1);
-        cmd.setValueAtIndex(runtime, 0, static_cast<double>(CLOSE));
-        cmdList.push_back(std::move(cmd));
+        cmds.push_back({static_cast<double>(CLOSE)});
         break;
       }
       default:
         break;
       }
     }
-
-    // Create the jsi::Array with the exact size
-    auto cmds = jsi::Array(runtime, cmdList.size());
-    for (size_t i = 0; i < cmdList.size(); ++i) {
-      cmds.setValueAtIndex(runtime, i, cmdList[i]);
-    }
-
     return cmds;
   }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkPath, Path)
-
-  JSI_EXPORT_FUNCTIONS(
-      // Mutable building methods
-      JSI_EXPORT_FUNC(JsiSkPath, moveTo), JSI_EXPORT_FUNC(JsiSkPath, rMoveTo),
-      JSI_EXPORT_FUNC(JsiSkPath, lineTo), JSI_EXPORT_FUNC(JsiSkPath, rLineTo),
-      JSI_EXPORT_FUNC(JsiSkPath, quadTo), JSI_EXPORT_FUNC(JsiSkPath, rQuadTo),
-      JSI_EXPORT_FUNC(JsiSkPath, conicTo), JSI_EXPORT_FUNC(JsiSkPath, rConicTo),
-      JSI_EXPORT_FUNC(JsiSkPath, cubicTo), JSI_EXPORT_FUNC(JsiSkPath, rCubicTo),
-      JSI_EXPORT_FUNC(JsiSkPath, close), JSI_EXPORT_FUNC(JsiSkPath, reset),
-      JSI_EXPORT_FUNC(JsiSkPath, rewind), JSI_EXPORT_FUNC(JsiSkPath, addPath),
-      JSI_EXPORT_FUNC(JsiSkPath, addArc), JSI_EXPORT_FUNC(JsiSkPath, addOval),
-      JSI_EXPORT_FUNC(JsiSkPath, addRect), JSI_EXPORT_FUNC(JsiSkPath, addRRect),
-      JSI_EXPORT_FUNC(JsiSkPath, addCircle),
-      JSI_EXPORT_FUNC(JsiSkPath, addPoly),
-      JSI_EXPORT_FUNC(JsiSkPath, arcToOval),
-      JSI_EXPORT_FUNC(JsiSkPath, arcToRotated),
-      JSI_EXPORT_FUNC(JsiSkPath, rArcTo),
-      JSI_EXPORT_FUNC(JsiSkPath, arcToTangent),
-      JSI_EXPORT_FUNC(JsiSkPath, setFillType),
-      JSI_EXPORT_FUNC(JsiSkPath, setIsVolatile),
-      // Mutable transform methods
-      JSI_EXPORT_FUNC(JsiSkPath, transform), JSI_EXPORT_FUNC(JsiSkPath, offset),
-      // Mutable path operations
-      JSI_EXPORT_FUNC(JsiSkPath, simplify), JSI_EXPORT_FUNC(JsiSkPath, op),
-      JSI_EXPORT_FUNC(JsiSkPath, makeAsWinding),
-      JSI_EXPORT_FUNC(JsiSkPath, dash), JSI_EXPORT_FUNC(JsiSkPath, stroke),
-      JSI_EXPORT_FUNC(JsiSkPath, trim),
-      // Query methods
-      JSI_EXPORT_FUNC(JsiSkPath, computeTightBounds),
-      JSI_EXPORT_FUNC(JsiSkPath, getBounds),
-      JSI_EXPORT_FUNC(JsiSkPath, contains),
-      JSI_EXPORT_FUNC(JsiSkPath, getFillType),
-      JSI_EXPORT_FUNC(JsiSkPath, isVolatile),
-      JSI_EXPORT_FUNC(JsiSkPath, getPoint), JSI_EXPORT_FUNC(JsiSkPath, isEmpty),
-      JSI_EXPORT_FUNC(JsiSkPath, countPoints),
-      JSI_EXPORT_FUNC(JsiSkPath, getLastPt),
-      JSI_EXPORT_FUNC(JsiSkPath, toSVGString),
-      JSI_EXPORT_FUNC(JsiSkPath, equals), JSI_EXPORT_FUNC(JsiSkPath, copy),
-      JSI_EXPORT_FUNC(JsiSkPath, isInterpolatable),
-      JSI_EXPORT_FUNC(JsiSkPath, interpolate),
-      JSI_EXPORT_FUNC(JsiSkPath, toCmds), JSI_EXPORT_FUNC(JsiSkPath, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    // Mutable building methods
+    installChainableMethodWithRuntime(runtime, prototype, "moveTo",
+                                      &JsiSkPath::moveTo);
+    installChainableMethodWithRuntime(runtime, prototype, "rMoveTo",
+                                      &JsiSkPath::rMoveTo);
+    installChainableMethodWithRuntime(runtime, prototype, "lineTo",
+                                      &JsiSkPath::lineTo);
+    installChainableMethodWithRuntime(runtime, prototype, "rLineTo",
+                                      &JsiSkPath::rLineTo);
+    installChainableMethodWithRuntime(runtime, prototype, "quadTo",
+                                      &JsiSkPath::quadTo);
+    installChainableMethodWithRuntime(runtime, prototype, "rQuadTo",
+                                      &JsiSkPath::rQuadTo);
+    installChainableMethodWithRuntime(runtime, prototype, "conicTo",
+                                      &JsiSkPath::conicTo);
+    installChainableMethodWithRuntime(runtime, prototype, "rConicTo",
+                                      &JsiSkPath::rConicTo);
+    installChainableMethodWithRuntime(runtime, prototype, "cubicTo",
+                                      &JsiSkPath::cubicTo);
+    installChainableMethodWithRuntime(runtime, prototype, "rCubicTo",
+                                      &JsiSkPath::rCubicTo);
+    installChainableMethodWithRuntime(runtime, prototype, "close",
+                                      &JsiSkPath::close);
+    installChainableMethodWithRuntime(runtime, prototype, "reset",
+                                      &JsiSkPath::reset);
+    installChainableMethodWithRuntime(runtime, prototype, "rewind",
+                                      &JsiSkPath::rewind);
+    installChainableMethodWithRuntime(runtime, prototype, "addPath",
+                                      &JsiSkPath::addPath);
+    installChainableMethodWithRuntime(runtime, prototype, "addArc",
+                                      &JsiSkPath::addArc);
+    installChainableMethodWithRuntime(runtime, prototype, "addOval",
+                                      &JsiSkPath::addOval);
+    installChainableMethodWithRuntime(runtime, prototype, "addRect",
+                                      &JsiSkPath::addRect);
+    installChainableMethodWithRuntime(runtime, prototype, "addRRect",
+                                      &JsiSkPath::addRRect);
+    installChainableMethodWithRuntime(runtime, prototype, "addCircle",
+                                      &JsiSkPath::addCircle);
+    installChainableMethodWithRuntime(runtime, prototype, "addPoly",
+                                      &JsiSkPath::addPoly);
+    installChainableMethodWithRuntime(runtime, prototype, "arcToOval",
+                                      &JsiSkPath::arcToOval);
+    installChainableMethodWithRuntime(runtime, prototype, "arcToRotated",
+                                      &JsiSkPath::arcToRotated);
+    installChainableMethodWithRuntime(runtime, prototype, "rArcTo",
+                                      &JsiSkPath::rArcTo);
+    installChainableMethodWithRuntime(runtime, prototype, "arcToTangent",
+                                      &JsiSkPath::arcToTangent);
+    installChainableMethodWithRuntime(runtime, prototype, "setFillType",
+                                      &JsiSkPath::setFillType);
+    installChainableMethodWithRuntime(runtime, prototype, "setIsVolatile",
+                                      &JsiSkPath::setIsVolatile);
+    // Mutable transform methods
+    installChainableMethodWithRuntime(runtime, prototype, "transform",
+                                      &JsiSkPath::transform);
+    installChainableMethodWithRuntime(runtime, prototype, "offset",
+                                      &JsiSkPath::offset);
+    // Mutable path operations
+    installChainableMethodWithRuntime(runtime, prototype, "simplify",
+                                      &JsiSkPath::simplify);
+    installChainableMethodWithRuntime(runtime, prototype, "op",
+                                      &JsiSkPath::op);
+    installChainableMethodWithRuntime(runtime, prototype, "makeAsWinding",
+                                      &JsiSkPath::makeAsWinding);
+    installChainableMethodWithRuntime(runtime, prototype, "dash",
+                                      &JsiSkPath::dash);
+    installHostMethod(runtime, prototype, "stroke", &JsiSkPath::stroke);
+    installChainableMethodWithRuntime(runtime, prototype, "trim",
+                                      &JsiSkPath::trim);
+    // Query methods
+    installMethod(runtime, prototype, "computeTightBounds",
+                  &JsiSkPath::computeTightBounds);
+    installMethod(runtime, prototype, "getBounds", &JsiSkPath::getBounds);
+    installMethod(runtime, prototype, "contains", &JsiSkPath::contains);
+    installMethod(runtime, prototype, "getFillType", &JsiSkPath::getFillType);
+    installMethod(runtime, prototype, "isVolatile", &JsiSkPath::isVolatile);
+    installMethod(runtime, prototype, "getPoint", &JsiSkPath::getPoint);
+    installMethod(runtime, prototype, "isEmpty", &JsiSkPath::isEmpty);
+    installMethod(runtime, prototype, "countPoints", &JsiSkPath::countPoints);
+    installMethod(runtime, prototype, "getLastPt", &JsiSkPath::getLastPt);
+    installMethod(runtime, prototype, "toSVGString", &JsiSkPath::toSVGString);
+    installMethod(runtime, prototype, "equals", &JsiSkPath::equals);
+    installMethod(runtime, prototype, "copy", &JsiSkPath::copy);
+    installMethod(runtime, prototype, "isInterpolatable",
+                  &JsiSkPath::isInterpolatable);
+    installMethod(runtime, prototype, "interpolate", &JsiSkPath::interpolate);
+    installMethod(runtime, prototype, "toCmds", &JsiSkPath::toCmds);
+  }
 
   JsiSkPath(std::shared_ptr<RNSkPlatformContext> context, SkPathBuilder builder)
-      : JsiSkWrappingSharedPtrHostObject<SkPathBuilder>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkPath, SkPathBuilder>(
             std::move(context),
             std::make_shared<SkPathBuilder>(std::move(builder))) {}
 
@@ -755,7 +639,7 @@ public:
   JsiSkPath(std::shared_ptr<RNSkPlatformContext> context, const SkPath &path)
       : JsiSkPath(std::move(context), SkPathBuilder(path)) {}
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     auto builder = getObject();
     if (!builder)
       return 0;
@@ -763,7 +647,13 @@ public:
     return builder->snapshot().approximateBytesUsed();
   }
 
-  std::string getObjectType() const override { return "JsiSkPath"; }
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static std::shared_ptr<SkPathBuilder> fromValue(jsi::Runtime &runtime,
+                                                  const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
   static SkPath pathFromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
     return fromValue(runtime, obj)->snapshot();
@@ -772,18 +662,20 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkPath &path) {
-    auto hostObjectInstance = std::make_shared<JsiSkPath>(context, path);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, context);
+    return makeJsiObject(runtime, std::make_shared<JsiSkPath>(context, path));
   }
 
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             SkPath &&path) {
-    auto hostObjectInstance =
-        std::make_shared<JsiSkPath>(context, std::move(path));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, context);
+    return makeJsiObject(runtime,
+                         std::make_shared<JsiSkPath>(context, std::move(path)));
+  }
+
+private:
+  static SkPathDirection toDirection(const JsiOptional<bool> &isCCW) {
+    return isCCW.has_value() && *isCCW ? SkPathDirection::kCCW
+                                       : SkPathDirection::kCW;
   }
 };
 

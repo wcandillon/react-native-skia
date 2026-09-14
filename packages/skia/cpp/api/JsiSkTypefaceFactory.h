@@ -2,41 +2,43 @@
 
 #include <memory>
 #include <utility>
+#include <variant>
 
 #include <jsi/jsi.h>
 
+#include "JsiSkConverters.h"
 #include "JsiSkData.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkFontMgrFactory.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkTypeface.h"
 
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkTypefaceFactory : public JsiSkHostObject {
+class JsiSkTypefaceFactory : public JsiSkNativeObject<JsiSkTypefaceFactory> {
 public:
-  JSI_HOST_FUNCTION(MakeFreeTypeFaceFromData) {
-    auto data = JsiSkData::fromValue(runtime, arguments[0]);
+  static constexpr const char *CLASS_NAME = "TypefaceFactory";
+
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkTypeface>>
+  MakeFreeTypeFaceFromData(sk_sp<SkData> data) {
     auto fontMgr = JsiSkFontMgrFactory::getFontMgr(getContext());
     auto typeface = fontMgr->makeFromData(std::move(data));
     if (typeface == nullptr) {
-      return jsi::Value::null();
+      return nullptr;
     }
-    auto hostObjectInstance =
-        std::make_shared<JsiSkTypeface>(getContext(), std::move(typeface));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkTypeface>(getContext(), std::move(typeface));
   }
 
-  size_t getMemoryPressure() const override { return 1024; }
+  size_t getMemoryPressure() override { return 1024; }
 
-  std::string getObjectType() const override { return "JsiSkTypefaceFactory"; }
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkTypefaceFactory,
-                                       MakeFreeTypeFaceFromData))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "MakeFreeTypeFaceFromData",
+                  &JsiSkTypefaceFactory::MakeFreeTypeFaceFromData);
+  }
 
   explicit JsiSkTypefaceFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkTypefaceFactory>(std::move(context)) {}
 };
 
 } // namespace RNSkia

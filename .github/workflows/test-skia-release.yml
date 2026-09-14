@@ -9,9 +9,9 @@ on:
         default: 'latest'
         type: string
       simulator_device:
-        description: 'iOS Simulator device'
+        description: 'iOS Simulator device (empty = auto-detect an available iPhone)'
         required: false
-        default: 'iPhone 16 Pro'
+        default: ''
         type: string
       android_api_level:
         description: 'Android API level'
@@ -38,6 +38,11 @@ on:
         required: false
         default: true
         type: boolean
+      ios_use_frameworks:
+        description: 'iOS framework linkage: "dynamic" (default) or "static"'
+        required: false
+        default: 'dynamic'
+        type: string
 
 jobs:
   test-skia:
@@ -50,3 +55,4 @@ jobs:
       simulator_device: ${{ inputs.simulator_device }}
       android_api_level: ${{ inputs.android_api_level }}
       android_device: ${{ inputs.android_device }}
+      ios_use_frameworks: ${{ inputs.ios_use_frameworks }}

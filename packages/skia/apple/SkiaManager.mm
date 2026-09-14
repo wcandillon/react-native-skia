@@ -2,11 +2,18 @@
 
 #import <Foundation/Foundation.h>
 
-#import <React/RCTBridge+Private.h>
 #import <React/RCTBridge.h>
 #import <React/RCTUIManager.h>
 
 #import "RNSkApplePlatformContext.h"
+
+// Forward-declared runtime accessor that is satisfied by RCTCxxBridge
+// (legacy/transitional) and RCTBridgeProxy (bridgeless). Avoids referencing
+// RCTCxxBridge directly, which is compiled out when RCT_REMOVE_LEGACY_ARCH
+// is set (React Native 0.82+).
+@interface RCTBridge (RNSkiaRuntime)
+- (void *)runtime;
+@end
 
 static __weak SkiaManager *sharedInstance = nil;
 
@@ -29,11 +36,9 @@ static __weak SkiaManager *sharedInstance = nil;
   self = [super init];
   if (self) {
     sharedInstance = self;
-    RCTCxxBridge *cxxBridge = (RCTCxxBridge *)bridge;
-    if (cxxBridge.runtime) {
-
+    if (bridge.runtime) {
       facebook::jsi::Runtime *jsRuntime =
-          (facebook::jsi::Runtime *)cxxBridge.runtime;
+          (facebook::jsi::Runtime *)bridge.runtime;
 
       // Create the RNSkiaManager (cross platform)
       _skManager = std::make_shared<RNSkia::RNSkManager>(

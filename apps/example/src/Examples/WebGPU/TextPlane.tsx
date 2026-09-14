@@ -1,15 +1,12 @@
-import type {
-  DataModule,
-  SkTextStyle,
-  WebGPUCanvasRef,
-} from "@shopify/react-native-skia";
+import type { DataModule, SkTextStyle } from "@shopify/react-native-skia";
 import {
   FontWeight,
   Skia,
   TextAlign,
-  WebGPUCanvas,
   useFonts,
 } from "@shopify/react-native-skia";
+import type { CanvasRef } from "react-native-webgpu";
+import { adoptTexture, Canvas, importDevice } from "react-native-webgpu";
 import React, { useEffect, useRef } from "react";
 import {
   PixelRatio,
@@ -121,12 +118,42 @@ const fonts: Record<string, DataModule[]> = {
 const planeVertexStride = 6 * 4; // vec4 pos + vec2 uv
 // 6 vertices, 2 triangles. Plane is in the XY plane at z=0, facing +Z.
 const planeVertices = new Float32Array([
-  -PLANE_W / 2, -PLANE_H / 2, 0, 1, 0, 1,
-  PLANE_W / 2, -PLANE_H / 2, 0, 1, 1, 1,
-  PLANE_W / 2, PLANE_H / 2, 0, 1, 1, 0,
-  -PLANE_W / 2, -PLANE_H / 2, 0, 1, 0, 1,
-  PLANE_W / 2, PLANE_H / 2, 0, 1, 1, 0,
-  -PLANE_W / 2, PLANE_H / 2, 0, 1, 0, 0,
+  -PLANE_W / 2,
+  -PLANE_H / 2,
+  0,
+  1,
+  0,
+  1,
+  PLANE_W / 2,
+  -PLANE_H / 2,
+  0,
+  1,
+  1,
+  1,
+  PLANE_W / 2,
+  PLANE_H / 2,
+  0,
+  1,
+  1,
+  0,
+  -PLANE_W / 2,
+  -PLANE_H / 2,
+  0,
+  1,
+  0,
+  1,
+  PLANE_W / 2,
+  PLANE_H / 2,
+  0,
+  1,
+  1,
+  0,
+  -PLANE_W / 2,
+  PLANE_H / 2,
+  0,
+  1,
+  0,
+  0,
 ]);
 
 type CubeInstance = {
@@ -179,12 +206,12 @@ function createTextTexture(
 
   surface.flush();
   const snapshot = surface.makeImageSnapshot();
-  return Skia.Image.MakeTextureFromImage(snapshot);
+  return adoptTexture(Skia.Image.MakeNativeTextureFromImage(snapshot));
 }
 
 export function TextPlane() {
   const { width, height } = useWindowDimensions();
-  const canvasRef = useRef<WebGPUCanvasRef>(null);
+  const canvasRef = useRef<CanvasRef>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
   // Text rendered by Skia once via ParagraphBuilder, baked into a GPU texture
@@ -210,7 +237,7 @@ export function TextPlane() {
       if (!context) {
         return;
       }
-      const device = Skia.getDevice();
+      const device = importDevice(Skia.getNativeDevice());
       const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
       const depthFormat: GPUTextureFormat = "depth24plus";
 
@@ -413,11 +440,7 @@ export function TextPlane() {
           mat4Translate(world, [x, y, z] as Vec3, world);
           mat4RotateY(world, t * 0.7 + c.seed, world);
           mat4RotateX(world, t * 0.5 + c.seed * 0.7, world);
-          mat4Scale(
-            world,
-            [CUBE_SCALE, CUBE_SCALE, CUBE_SCALE] as Vec3,
-            world
-          );
+          mat4Scale(world, [CUBE_SCALE, CUBE_SCALE, CUBE_SCALE] as Vec3, world);
           mat4Multiply(viewProjection, world, c.uniformValues);
           device.queue.writeBuffer(
             c.uniformBuffer,
@@ -504,7 +527,7 @@ export function TextPlane() {
 
   return (
     <View style={styles.container}>
-      <WebGPUCanvas ref={canvasRef} style={StyleSheet.absoluteFill} />
+      <Canvas ref={canvasRef} style={StyleSheet.absoluteFill} />
     </View>
   );
 }

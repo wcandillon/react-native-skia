@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -19,18 +19,25 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkShader : public JsiSkWrappingSkPtrHostObject<SkShader> {
+class JsiSkShader
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkShader, SkShader> {
 public:
+  static constexpr const char *CLASS_NAME = "Shader";
+
   JsiSkShader(std::shared_ptr<RNSkPlatformContext> context,
               sk_sp<SkShader> shader)
-      : JsiSkWrappingSkPtrHostObject<SkShader>(std::move(context),
-                                               std::move(shader)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkShader, SkShader>(
+            std::move(context), std::move(shader)) {}
 
-  size_t getMemoryPressure() const override { return 1024 * 1024; }
+  size_t getMemoryPressure() override { return 1024 * 1024; }
 
-  std::string getObjectType() const override { return "JsiSkShader"; }
+  static sk_sp<SkShader> fromValue(jsi::Runtime &runtime,
+                                   const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkShader, Shader)
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkShader, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+  }
 };
 } // namespace RNSkia

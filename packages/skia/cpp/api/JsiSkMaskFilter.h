@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,18 +18,29 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkMaskFilter : public JsiSkWrappingSkPtrHostObject<SkMaskFilter> {
+class JsiSkMaskFilter
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkMaskFilter, SkMaskFilter> {
 public:
+  static constexpr const char *CLASS_NAME = "MaskFilter";
+
   JsiSkMaskFilter(std::shared_ptr<RNSkPlatformContext> context,
                   sk_sp<SkMaskFilter> maskFilter)
-      : JsiSkWrappingSkPtrHostObject<SkMaskFilter>(std::move(context),
-                                                   std::move(maskFilter)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkMaskFilter, SkMaskFilter>(
+            std::move(context), std::move(maskFilter)) {}
 
-  size_t getMemoryPressure() const override { return 2048; }
+  size_t getMemoryPressure() override { return 2048; }
 
-  std::string getObjectType() const override { return "JsiSkMaskFilter"; }
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+  }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkMaskFilter, MaskFilter)
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static sk_sp<SkMaskFilter> fromValue(jsi::Runtime &runtime,
+                                       const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 };
 
 } // namespace RNSkia

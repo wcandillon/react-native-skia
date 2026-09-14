@@ -30,6 +30,8 @@ import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
 import { Paragraphs } from "./Paragraphs";
 import { Paragraphs2 } from "./Paragraphs2";
+import { ParagraphPath } from "./ParagraphPath";
+import { GlyphBounds } from "./GlyphBounds";
 import { Skottie } from "./Skottie";
 import { StressTest } from "./StressTest";
 import { StressTest2 } from "./StressTest2";
@@ -40,6 +42,11 @@ import { FirstFrame, FirstFrameEmpty } from "./FirstFrame";
 import { ZIndexExample } from "./ZIndex";
 import { PictureBug } from "./PictureBug";
 import { AtlasExample } from "./AtlasExample";
+import { Web } from "./Web";
+import { WebLayout } from "./WebLayout";
+import { WebGLContexts } from "./WebGLContexts";
+import { WebGLLifecycle } from "./WebGLLifecycle";
+import { WebMemory } from "./WebMemory";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -101,6 +108,20 @@ export const API = () => {
         component={Paragraphs2}
         options={{
           title: "📚 Text & Paragraphs 2",
+        }}
+      />
+      <Stack.Screen
+        name="ParagraphPath"
+        component={ParagraphPath}
+        options={{
+          title: "✍️ Paragraph to Path",
+        }}
+      />
+      <Stack.Screen
+        name="GlyphBounds"
+        component={GlyphBounds}
+        options={{
+          title: "🔠 Glyph Bounds",
         }}
       />
       <Stack.Screen
@@ -311,6 +332,41 @@ export const API = () => {
         component={AtlasExample}
         options={{
           title: "🎯 Atlas",
+        }}
+      />
+      <Stack.Screen
+        name="Web"
+        component={Web}
+        options={{
+          title: "🕸️ Web",
+        }}
+      />
+      <Stack.Screen
+        name="WebLayout"
+        component={WebLayout}
+        options={{
+          title: "🕸️ Web Layout",
+        }}
+      />
+      <Stack.Screen
+        name="WebGLContexts"
+        component={WebGLContexts}
+        options={{
+          title: "🔥 WebGL Contexts",
+        }}
+      />
+      <Stack.Screen
+        name="WebGLLifecycle"
+        component={WebGLLifecycle}
+        options={{
+          title: "♻️ WebGL Lifecycle",
+        }}
+      />
+      <Stack.Screen
+        name="WebMemory"
+        component={WebMemory}
+        options={{
+          title: "💧 WASM Memory",
         }}
       />
     </Stack.Navigator>

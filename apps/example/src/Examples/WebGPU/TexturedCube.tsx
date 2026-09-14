@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, View, Text } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type {
   SkCanvas,
   SkParagraph,
   SkTextStyle,
-  WebGPUCanvasRef,
 } from "@shopify/react-native-skia";
+import type { CanvasRef } from "react-native-webgpu";
+import { adoptTexture, Canvas, importDevice } from "react-native-webgpu";
 import {
-  WebGPUCanvas,
   Skia,
   BlurStyle,
   BlendMode,
@@ -159,7 +159,7 @@ function drawTexture3(canvas: SkCanvas, t: number) {
 }
 
 export function TexturedCube() {
-  const canvasRef = useRef<WebGPUCanvasRef>(null);
+  const canvasRef = useRef<CanvasRef>(null);
   const animationRef = useRef<number>(0);
   const cleanupRef = useRef<(() => void) | null>(null);
   const customFontMgr = useFonts(paragraphFonts);
@@ -167,9 +167,6 @@ export function TexturedCube() {
   useEffect(() => {
     const timeoutId = setTimeout(async () => {
       if (!canvasRef.current) {
-        return;
-      }
-      if (typeof RNWebGPU === "undefined") {
         return;
       }
       if (!customFontMgr) {
@@ -180,7 +177,7 @@ export function TexturedCube() {
         return;
       }
 
-      const device = Skia.getDevice();
+      const device = importDevice(Skia.getNativeDevice());
       const canvas = ctx.canvas as HTMLCanvasElement;
       const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
@@ -391,27 +388,29 @@ export function TexturedCube() {
         // Update Skia textures
         drawTexture1(surface1.getCanvas(), t);
         surface1.flush();
-        const tex1 = Skia.Image.MakeTextureFromImage(
-          surface1.makeImageSnapshot()
+        const tex1 = adoptTexture(
+          Skia.Image.MakeNativeTextureFromImage(surface1.makeImageSnapshot())
         );
         const bindGroup1 = createBindGroup(tex1);
 
         drawTexture2(surface2.getCanvas(), t, paragraph);
         surface2.flush();
-        const tex2 = Skia.Image.MakeTextureFromImage(
-          surface2.makeImageSnapshot()
+        const tex2 = adoptTexture(
+          Skia.Image.MakeNativeTextureFromImage(surface2.makeImageSnapshot())
         );
         const bindGroup2 = createBindGroup(tex2);
 
         drawTexture3(surface3.getCanvas(), t);
         surface3.flush();
-        const tex3 = Skia.Image.MakeTextureFromImage(
-          surface3.makeImageSnapshot()
+        const tex3 = adoptTexture(
+          Skia.Image.MakeNativeTextureFromImage(surface3.makeImageSnapshot())
         );
         const bindGroup3 = createBindGroup(tex3);
 
         const frame = video.nextImage();
-        const tex4 = frame ? Skia.Image.MakeTextureFromImage(frame) : null;
+        const tex4 = frame
+          ? adoptTexture(Skia.Image.MakeNativeTextureFromImage(frame))
+          : null;
         const bindGroup4 = tex4 ? createBindGroup(tex4) : null;
 
         // Update MVP matrix
@@ -453,6 +452,15 @@ export function TexturedCube() {
         device.queue.submit([commandEncoder.finish()]);
         ctx.present();
 
+        // These textures are recreated every frame; destroy them eagerly
+        // instead of waiting for GC so VRAM stays bounded. destroy() after
+        // submit is safe: already-submitted work keeps the texture alive
+        // until it completes.
+        tex1.destroy();
+        tex2.destroy();
+        tex3.destroy();
+        tex4?.destroy();
+
         animationRef.current = requestAnimationFrame(render);
       };
 
@@ -471,24 +479,9 @@ export function TexturedCube() {
     };
   }, [customFontMgr]);
 
-  if (typeof RNWebGPU === "undefined") {
-    return (
-      <View style={styles.container}>
-        <View style={styles.messageContainer}>
-          <Text style={styles.message}>
-            WebGPU Canvas requires SK_GRAPHITE to be enabled.
-          </Text>
-          <Text style={styles.submessage}>
-            Build react-native-skia with Graphite support to use this feature.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <WebGPUCanvas ref={canvasRef} style={styles.canvas} />
+      <Canvas ref={canvasRef} style={styles.canvas} />
     </View>
   );
 }

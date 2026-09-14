@@ -1,14 +1,24 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkColor.h"
+#include "JsiSkColorFilter.h"
+#include "JsiSkConverters.h"
+#include "JsiSkImage.h"
 #include "JsiSkImageFilter.h"
+#include "JsiSkMatrix.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkPicture.h"
+#include "JsiSkRect.h"
 #include "JsiSkRuntimeShaderBuilder.h"
+#include "JsiSkShader.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -22,681 +32,417 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-inline bool hasOptionalArgument(const jsi::Value *arguments, size_t count,
-                                size_t index) {
-  return (index < count && !arguments[index].isNull() &&
-          !arguments[index].isUndefined());
-}
-
-class JsiSkImageFilterFactory : public JsiSkHostObject {
+class JsiSkImageFilterFactory
+    : public JsiSkNativeObject<JsiSkImageFilterFactory> {
 public:
-  JSI_HOST_FUNCTION(MakeBlur) {
-    float sigmaX = arguments[0].asNumber();
-    float sigmaY = arguments[1].asNumber();
-    int tileMode = arguments[2].asNumber();
-    sk_sp<SkImageFilter> imageFilter = nullptr;
-    if (hasOptionalArgument(arguments, count, 3)) {
-      imageFilter = JsiSkImageFilter::fromValue(runtime, arguments[3]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 4)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[4]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::Blur(sigmaX, sigmaY, (SkTileMode)tileMode,
-                                           imageFilter, cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
+  static constexpr const char *CLASS_NAME = "ImageFilterFactory";
 
-  JSI_HOST_FUNCTION(MakeColorFilter) {
-    auto cf = JsiSkColorFilter::fromValue(runtime, arguments[0]);
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[1]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 2)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[2]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeBlur(float sigmaX, float sigmaY, int tileMode,
+           JsiOptional<sk_sp<SkImageFilter>> input,
+           JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::ColorFilter(std::move(cf), std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Blur(sigmaX, sigmaY, static_cast<SkTileMode>(tileMode),
+                             orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeOffset) {
-    auto x = arguments[0].asNumber();
-    auto y = arguments[1].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 3)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[3]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::Offset(x, y, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(MakeDisplacementMap) {
-    auto fXChannelSelector =
-        static_cast<SkColorChannel>(arguments[0].asNumber());
-    auto fYChannelSelector =
-        static_cast<SkColorChannel>(arguments[1].asNumber());
-    auto scale = arguments[2].asNumber();
-    auto in2 = JsiSkImageFilter::fromValue(runtime, arguments[3]);
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 4)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[4]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 5)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[5]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::DisplacementMap(
-                          fXChannelSelector, fYChannelSelector, scale,
-                          std::move(in2), std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(MakeShader) {
-    auto shader = JsiSkShader::fromValue(runtime, arguments[0]);
-    SkImageFilters::Dither dither = SkImageFilters::Dither::kNo;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      dither = arguments[1].asBool() ? SkImageFilters::Dither::kYes
-                                     : SkImageFilters::Dither::kNo;
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 2)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[2]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeColorFilter(sk_sp<SkColorFilter> cf,
+                  JsiOptional<sk_sp<SkImageFilter>> input,
+                  JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Shader(std::move(shader), dither, cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::ColorFilter(std::move(cf), orNull(std::move(input)),
+                                    toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeCompose) {
-    sk_sp<SkImageFilter> outer = nullptr;
-    if (hasOptionalArgument(arguments, count, 0)) {
-      outer = JsiSkImageFilter::fromValue(runtime, arguments[0]);
-    }
-    sk_sp<SkImageFilter> inner = nullptr;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      inner = JsiSkImageFilter::fromValue(runtime, arguments[1]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeOffset(double x, double y, JsiOptional<sk_sp<SkImageFilter>> input,
+             JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::Offset(x, y, orNull(std::move(input)),
+                                             toCropRect(crop)));
+  }
+
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDisplacementMap(double xChannelSelector, double yChannelSelector,
+                      double scale, sk_sp<SkImageFilter> in2,
+                      JsiOptional<sk_sp<SkImageFilter>> input,
+                      JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Compose(std::move(outer), std::move(inner)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::DisplacementMap(
+            static_cast<SkColorChannel>(xChannelSelector),
+            static_cast<SkColorChannel>(yChannelSelector), scale,
+            std::move(in2), orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeBlend) {
-    auto mode = static_cast<SkBlendMode>(arguments[0].asNumber());
-    sk_sp<SkImageFilter> background =
-        JsiSkImageFilter::fromValue(runtime, arguments[1]);
-    sk_sp<SkImageFilter> foreground = nullptr;
-
-    if (hasOptionalArgument(arguments, count, 2)) {
-      foreground = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 3)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[3]);
-    }
-
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter> MakeShader(sk_sp<SkShader> shader,
+                                               JsiOptional<bool> dither,
+                                               JsiOptional<SkRect> crop) {
+    auto ditherMode = dither.has_value() && *dither
+                          ? SkImageFilters::Dither::kYes
+                          : SkImageFilters::Dither::kNo;
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Blend(std::move(mode), std::move(background),
-                              std::move(foreground), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Shader(std::move(shader), ditherMode, toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeDropShadow) {
-    auto dx = arguments[0].asNumber();
-    auto dy = arguments[1].asNumber();
-    auto sigmaX = arguments[2].asNumber();
-    auto sigmaY = arguments[3].asNumber();
-    auto color = JsiSkColor::fromValue(runtime, arguments[4]);
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 6)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[6]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::DropShadow(dx, dy, sigmaX, sigmaY, color,
-                                                 std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+  std::shared_ptr<JsiSkImageFilter>
+  MakeCompose(JsiOptional<sk_sp<SkImageFilter>> outer,
+              JsiOptional<sk_sp<SkImageFilter>> inner) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::Compose(orNull(std::move(outer)),
+                                              orNull(std::move(inner))));
   }
 
-  JSI_HOST_FUNCTION(MakeDropShadowOnly) {
-    auto dx = arguments[0].asNumber();
-    auto dy = arguments[1].asNumber();
-    auto sigmaX = arguments[2].asNumber();
-    auto sigmaY = arguments[3].asNumber();
-    auto color = JsiSkColor::fromValue(runtime, arguments[4]);
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 6)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[6]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeBlend(double mode, sk_sp<SkImageFilter> background,
+            JsiOptional<sk_sp<SkImageFilter>> foreground,
+            JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::DropShadowOnly(dx, dy, sigmaX, sigmaY, color,
-                                       std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Blend(static_cast<SkBlendMode>(mode),
+                              std::move(background),
+                              orNull(std::move(foreground)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeErode) {
-    auto rx = arguments[0].asNumber();
-    auto ry = arguments[1].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 3)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[3]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDropShadow(double dx, double dy, double sigmaX, double sigmaY,
+                 JsiColor color, JsiOptional<sk_sp<SkImageFilter>> input,
+                 JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Erode(rx, ry, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::DropShadow(dx, dy, sigmaX, sigmaY, color,
+                                   orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeDilate) {
-    auto rx = arguments[0].asNumber();
-    auto ry = arguments[1].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 3)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[3]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDropShadowOnly(double dx, double dy, double sigmaX, double sigmaY,
+                     JsiColor color, JsiOptional<sk_sp<SkImageFilter>> input,
+                     JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::DropShadowOnly(
+                          dx, dy, sigmaX, sigmaY, color,
+                          orNull(std::move(input)), toCropRect(crop)));
+  }
+
+  std::shared_ptr<JsiSkImageFilter>
+  MakeErode(double rx, double ry, JsiOptional<sk_sp<SkImageFilter>> input,
+            JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::Erode(rx, ry, orNull(std::move(input)),
+                                            toCropRect(crop)));
+  }
+
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDilate(double rx, double ry, JsiOptional<sk_sp<SkImageFilter>> input,
+             JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::Dilate(rx, ry, orNull(std::move(input)),
+                                             toCropRect(crop)));
+  }
+
+  std::shared_ptr<JsiSkImageFilter>
+  MakeRuntimeShader(std::shared_ptr<SkRuntimeShaderBuilder> rtb,
+                    JsiOptional<std::string> childName,
+                    JsiOptional<sk_sp<SkImageFilter>> input) {
+    std::string childNameStr = childName.value_or("");
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Dilate(rx, ry, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::RuntimeShader(*rtb, childNameStr.c_str(),
+                                      orNull(std::move(input))));
   }
 
-  JSI_HOST_FUNCTION(MakeRuntimeShader) {
-    auto rtb = JsiSkRuntimeShaderBuilder::fromValue(runtime, arguments[0]);
-
-    std::string childNameStr = "";
-    const char *childName = childNameStr.c_str();
-    if (hasOptionalArgument(arguments, count, 1)) {
-      childNameStr = arguments[1].asString(runtime).utf8(runtime);
-      childName = childNameStr.c_str();
-    }
-
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeArithmetic(float k1, float k2, float k3, float k4, bool enforcePMColor,
+                 JsiOptional<sk_sp<SkImageFilter>> background,
+                 JsiOptional<sk_sp<SkImageFilter>> foreground,
+                 JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::RuntimeShader(*rtb, childName, std::move(input)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Arithmetic(k1, k2, k3, k4, enforcePMColor,
+                                   orNull(std::move(background)),
+                                   orNull(std::move(foreground)),
+                                   toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeArithmetic) {
-    float k1 = arguments[0].asNumber();
-    float k2 = arguments[1].asNumber();
-    float k3 = arguments[2].asNumber();
-    float k4 = arguments[3].asNumber();
-    bool enforcePMColor = arguments[4].asBool();
-    sk_sp<SkImageFilter> background = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      background = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    sk_sp<SkImageFilter> foreground = nullptr;
-    if (hasOptionalArgument(arguments, count, 6)) {
-      foreground = JsiSkImageFilter::fromValue(runtime, arguments[6]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 7)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[7]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::Arithmetic(
-                          k1, k2, k3, k4, enforcePMColor, std::move(background),
-                          std::move(foreground), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(MakeCrop) {
-    SkRect rect = *JsiSkRect::fromValue(runtime, arguments[0]);
-    SkTileMode tileMode = SkTileMode::kDecal;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      tileMode = (SkTileMode)arguments[1].asNumber();
-    }
-    sk_sp<SkImageFilter> imageFilter = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      imageFilter = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeCrop(SkRect rect, JsiOptional<double> tileMode,
+           JsiOptional<sk_sp<SkImageFilter>> imageFilter) {
+    auto mode = tileMode.has_value() ? static_cast<SkTileMode>(*tileMode)
+                                     : SkTileMode::kDecal;
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Crop(rect, tileMode, std::move(imageFilter)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Crop(rect, mode, orNull(std::move(imageFilter))));
   }
 
-  JSI_HOST_FUNCTION(MakeEmpty) {
-    auto filter = std::make_shared<JsiSkImageFilter>(getContext(),
-                                                     SkImageFilters::Empty());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+  std::shared_ptr<JsiSkImageFilter> MakeEmpty() {
+    return std::make_shared<JsiSkImageFilter>(getContext(),
+                                              SkImageFilters::Empty());
   }
 
-  inline SkPoint3 SkPoint3FromValue(jsi::Runtime &runtime,
-                                    const jsi::Value &obj) {
-    const auto &object = obj.asObject(runtime);
-    auto x = object.getProperty(runtime, "x").asNumber();
-    auto y = object.getProperty(runtime, "y").asNumber();
-    auto z = object.getProperty(runtime, "z").asNumber();
-    return SkPoint3::Make(x, y, z);
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDistantLitDiffuse(SkPoint3 direction, JsiColor lightColor,
+                        float surfaceScale, float kd,
+                        JsiOptional<sk_sp<SkImageFilter>> input,
+                        JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::DistantLitDiffuse(
+                          direction, lightColor, surfaceScale, kd,
+                          orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeDistantLitDiffuse) {
-    SkPoint3 direction = SkPoint3FromValue(runtime, arguments[0]);
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[1]);
-    float surfaceScale = arguments[2].asNumber();
-    float kd = arguments[3].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 4)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[4]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 5)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[5]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(),
-        SkImageFilters::DistantLitDiffuse(direction, lightColor, surfaceScale,
-                                          kd, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+  std::shared_ptr<JsiSkImageFilter>
+  MakePointLitDiffuse(SkPoint3 location, JsiColor lightColor,
+                      float surfaceScale, float kd,
+                      JsiOptional<sk_sp<SkImageFilter>> input,
+                      JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::PointLitDiffuse(
+                          location, lightColor, surfaceScale, kd,
+                          orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakePointLitDiffuse) {
-    SkPoint3 location = SkPoint3FromValue(runtime, arguments[0]);
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[1]);
-    float surfaceScale = arguments[2].asNumber();
-    float kd = arguments[3].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 4)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[4]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 5)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[5]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(),
-        SkImageFilters::PointLitDiffuse(location, lightColor, surfaceScale, kd,
-                                        std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+  std::shared_ptr<JsiSkImageFilter>
+  MakeSpotLitDiffuse(SkPoint3 location, SkPoint3 target, float falloffExponent,
+                     float cutoffAngle, JsiColor lightColor, float surfaceScale,
+                     float kd, JsiOptional<sk_sp<SkImageFilter>> input,
+                     JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::SpotLitDiffuse(
+                          location, target, falloffExponent, cutoffAngle,
+                          lightColor, surfaceScale, kd,
+                          orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeSpotLitDiffuse) {
-    SkPoint3 location = SkPoint3FromValue(runtime, arguments[0]);
-    SkPoint3 target = SkPoint3FromValue(runtime, arguments[1]);
-    float falloffExponent = arguments[2].asNumber();
-    float cutoffAngle = arguments[3].asNumber();
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[4]);
-    float surfaceScale = arguments[5].asNumber();
-    float kd = arguments[6].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 7)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[7]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 8)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[8]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(),
-        SkImageFilters::SpotLitDiffuse(location, target, falloffExponent,
-                                       cutoffAngle, lightColor, surfaceScale,
-                                       kd, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(MakeDistantLitSpecular) {
-    SkPoint3 direction = SkPoint3FromValue(runtime, arguments[0]);
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[1]);
-    float surfaceScale = arguments[2].asNumber();
-    float ks = arguments[3].asNumber();
-    float shininess = arguments[4].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 6)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[6]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeDistantLitSpecular(SkPoint3 direction, JsiColor lightColor,
+                         float surfaceScale, float ks, float shininess,
+                         JsiOptional<sk_sp<SkImageFilter>> input,
+                         JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(), SkImageFilters::DistantLitSpecular(
                           direction, lightColor, surfaceScale, ks, shininess,
-                          std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+                          orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakePointLitSpecular) {
-    SkPoint3 location = SkPoint3FromValue(runtime, arguments[0]);
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[1]);
-    float surfaceScale = arguments[2].asNumber();
-    float ks = arguments[3].asNumber();
-    float shininess = arguments[4].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 6)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[6]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakePointLitSpecular(SkPoint3 location, JsiColor lightColor,
+                       float surfaceScale, float ks, float shininess,
+                       JsiOptional<sk_sp<SkImageFilter>> input,
+                       JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(), SkImageFilters::PointLitSpecular(
                           location, lightColor, surfaceScale, ks, shininess,
-                          std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+                          orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeSpotLitSpecular) {
-    SkPoint3 location = SkPoint3FromValue(runtime, arguments[0]);
-    SkPoint3 target = SkPoint3FromValue(runtime, arguments[1]);
-    float falloffExponent = arguments[2].asNumber();
-    float cutoffAngle = arguments[3].asNumber();
-    SkColor lightColor = JsiSkColor::fromValue(runtime, arguments[4]);
-    float surfaceScale = arguments[5].asNumber();
-    float ks = arguments[6].asNumber();
-    float shininess = arguments[7].asNumber();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 8)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[8]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 9)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[9]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeSpotLitSpecular(SkPoint3 location, SkPoint3 target,
+                      float falloffExponent, float cutoffAngle,
+                      JsiColor lightColor, float surfaceScale, float ks,
+                      float shininess, JsiOptional<sk_sp<SkImageFilter>> input,
+                      JsiOptional<SkRect> crop) {
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::SpotLitSpecular(
-            location, target, falloffExponent, cutoffAngle, lightColor,
-            surfaceScale, ks, shininess, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::SpotLitSpecular(location, target, falloffExponent,
+                                        cutoffAngle, lightColor, surfaceScale,
+                                        ks, shininess, orNull(std::move(input)),
+                                        toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeImage) {
-    sk_sp<SkImage> image = JsiSkImage::fromValue(runtime, arguments[0]);
-    SkRect srcRect;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      srcRect = *JsiSkRect::fromValue(runtime, arguments[1]);
-    } else {
-      srcRect = SkRect::Make(image->bounds());
-    }
-    SkRect dstRect;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      dstRect = *JsiSkRect::fromValue(runtime, arguments[2]);
-    } else {
-      dstRect = srcRect;
-    }
-    SkFilterMode filterMode = SkFilterMode::kNearest;
-    if (hasOptionalArgument(arguments, count, 3)) {
-      filterMode = (SkFilterMode)arguments[3].asNumber();
-    }
-    SkMipmapMode mipmap = SkMipmapMode::kNone;
-    if (hasOptionalArgument(arguments, count, 4)) {
-      mipmap = (SkMipmapMode)arguments[4].asNumber();
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeImage(sk_sp<SkImage> image, JsiOptional<SkRect> src,
+            JsiOptional<SkRect> dst, JsiOptional<double> filterMode,
+            JsiOptional<double> mipmap) {
+    SkRect srcRect = src.has_value() ? *src : SkRect::Make(image->bounds());
+    SkRect dstRect = dst.has_value() ? *dst : srcRect;
+    auto sampling = SkSamplingOptions(toFilterMode(filterMode),
+                                      toMipmapMode(mipmap));
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Image(std::move(image), srcRect, dstRect,
-                              SkSamplingOptions(filterMode, mipmap)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Image(std::move(image), srcRect, dstRect, sampling));
   }
 
-  JSI_HOST_FUNCTION(MakeMagnifier) {
-    SkRect lensBounds = *JsiSkRect::fromValue(runtime, arguments[0]);
-    float zoomAmount = arguments[1].asNumber();
-    float inset = arguments[2].asNumber();
-    SkFilterMode filterMode = SkFilterMode::kNearest;
-    if (hasOptionalArgument(arguments, count, 3)) {
-      filterMode = (SkFilterMode)arguments[3].asNumber();
-    }
-    SkMipmapMode mipmap = SkMipmapMode::kNone;
-    if (hasOptionalArgument(arguments, count, 4)) {
-      mipmap = (SkMipmapMode)arguments[4].asNumber();
-    }
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 5)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[5]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 6)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[6]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter>
+  MakeMagnifier(SkRect lensBounds, float zoomAmount, float inset,
+                JsiOptional<double> filterMode, JsiOptional<double> mipmap,
+                JsiOptional<sk_sp<SkImageFilter>> input,
+                JsiOptional<SkRect> crop) {
+    auto sampling = SkSamplingOptions(toFilterMode(filterMode),
+                                      toMipmapMode(mipmap));
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Magnifier(lensBounds, zoomAmount, inset,
-                                  SkSamplingOptions(filterMode, mipmap), input,
-                                  cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Magnifier(lensBounds, zoomAmount, inset, sampling,
+                                  orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeMatrixConvolution) {
-    SkISize kernelSize =
-        SkISize::Make(arguments[0].asNumber(), arguments[1].asNumber());
-    std::vector<float> kernel;
-    auto kernelArray = arguments[2].asObject(runtime).asArray(runtime);
-    auto size = kernelArray.size(runtime);
-    for (size_t i = 0; i < size; i++) {
-      kernel.push_back(kernelArray.getValueAtIndex(runtime, i).asNumber());
-    }
-    auto gain = arguments[3].asNumber();
-    auto bias = arguments[4].asNumber();
-    SkIPoint kernelOffset =
-        SkIPoint::Make(arguments[5].asNumber(), arguments[6].asNumber());
-    auto tileMode = static_cast<SkTileMode>(arguments[7].asNumber());
-    bool convolveAlpha = arguments[8].asBool();
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 9)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[9]);
-    }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 10)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[10]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::MatrixConvolution(
-                          kernelSize, kernel.data(), gain, bias, kernelOffset,
-                          tileMode, convolveAlpha, std::move(input), cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
-  }
-
-  JSI_HOST_FUNCTION(MakeMatrixTransform) {
-    SkMatrix matrix = *JsiSkMatrix::fromValue(runtime, arguments[0]);
-    SkFilterMode filterMode = SkFilterMode::kNearest;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      filterMode = (SkFilterMode)arguments[1].asNumber();
-    }
-    SkMipmapMode mipmap = SkMipmapMode::kNone;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      mipmap = (SkMipmapMode)arguments[2].asNumber();
-    }
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 3)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[3]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter> MakeMatrixConvolution(
+      int kernelSizeX, int kernelSizeY, std::vector<float> kernel, double gain,
+      double bias, int kernelOffsetX, int kernelOffsetY, double tileMode,
+      bool convolveAlpha, JsiOptional<sk_sp<SkImageFilter>> input,
+      JsiOptional<SkRect> crop) {
+    auto kernelSize = SkISize::Make(kernelSizeX, kernelSizeY);
+    auto kernelOffset = SkIPoint::Make(kernelOffsetX, kernelOffsetY);
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::MatrixTransform(
-            matrix, SkSamplingOptions(filterMode, mipmap), std::move(input)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::MatrixConvolution(
+            kernelSize, kernel.data(), gain, bias, kernelOffset,
+            static_cast<SkTileMode>(tileMode), convolveAlpha,
+            orNull(std::move(input)), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakeMerge) {
+  std::shared_ptr<JsiSkImageFilter>
+  MakeMatrixTransform(SkMatrix matrix, JsiOptional<double> filterMode,
+                      JsiOptional<double> mipmap,
+                      JsiOptional<sk_sp<SkImageFilter>> input) {
+    auto sampling = SkSamplingOptions(toFilterMode(filterMode),
+                                      toMipmapMode(mipmap));
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::MatrixTransform(
+                          matrix, sampling, orNull(std::move(input))));
+  }
+
+  std::shared_ptr<JsiSkImageFilter>
+  MakeMerge(std::vector<JsiOptional<sk_sp<SkImageFilter>>> jsiFilters,
+            JsiOptional<SkRect> crop) {
     std::vector<sk_sp<SkImageFilter>> filters;
-    auto filtersArray = arguments[0].asObject(runtime).asArray(runtime);
-    auto filtersCount = filtersArray.size(runtime);
-    for (size_t i = 0; i < filtersCount; ++i) {
-      auto element = filtersArray.getValueAtIndex(runtime, i);
-      if (element.isNull()) {
-        filters.push_back(nullptr);
-      } else {
-        filters.push_back(JsiSkImageFilter::fromValue(runtime, element));
-      }
+    filters.reserve(jsiFilters.size());
+    for (auto &filter : jsiFilters) {
+      filters.push_back(orNull(std::move(filter)));
     }
-    SkImageFilters::CropRect cropRect = {};
-    if (hasOptionalArgument(arguments, count, 1)) {
-      cropRect = *JsiSkRect::fromValue(runtime, arguments[1]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+    return std::make_shared<JsiSkImageFilter>(
         getContext(),
-        SkImageFilters::Merge(filters.data(), filtersCount, cropRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+        SkImageFilters::Merge(filters.data(), filters.size(), toCropRect(crop)));
   }
 
-  JSI_HOST_FUNCTION(MakePicture) {
-    sk_sp<SkPicture> picture = JsiSkPicture::fromValue(runtime, arguments[0]);
-    SkRect targetRect;
-    if (hasOptionalArgument(arguments, count, 1)) {
-      targetRect = *JsiSkRect::fromValue(runtime, arguments[1]);
-    } else {
-      targetRect = picture ? picture->cullRect() : SkRect::MakeEmpty();
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
+  std::shared_ptr<JsiSkImageFilter> MakePicture(sk_sp<SkPicture> picture,
+                                                JsiOptional<SkRect> target) {
+    SkRect targetRect = target.has_value()
+                            ? *target
+                            : (picture ? picture->cullRect()
+                                       : SkRect::MakeEmpty());
+    return std::make_shared<JsiSkImageFilter>(
         getContext(), SkImageFilters::Picture(std::move(picture), targetRect));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
   }
 
-  JSI_HOST_FUNCTION(MakeRuntimeShaderWithChildren) {
-    auto rtb = JsiSkRuntimeShaderBuilder::fromValue(runtime, arguments[0]);
-    float maxSampleRadius = arguments[1].asNumber();
-    std::vector<std::string> childNames;
-    auto childNamesJS = arguments[2].asObject(runtime).asArray(runtime);
-    size_t length = childNamesJS.size(runtime);
-    for (size_t i = 0; i < length; ++i) {
-      auto element = childNamesJS.getValueAtIndex(runtime, i);
-      childNames.push_back(element.asString(runtime).utf8(runtime).c_str());
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImageFilter>>
+  MakeRuntimeShaderWithChildren(
+      std::shared_ptr<SkRuntimeShaderBuilder> rtb, float maxSampleRadius,
+      std::vector<std::string> childNames,
+      std::vector<JsiOptional<sk_sp<SkImageFilter>>> jsiInputs) {
+    if (jsiInputs.size() != childNames.size()) {
+      return nullptr;
     }
     std::vector<std::string_view> childNamesStringView;
     childNamesStringView.reserve(childNames.size());
     for (const auto &name : childNames) {
       childNamesStringView.push_back(std::string_view(name));
     }
-
     std::vector<sk_sp<SkImageFilter>> inputs;
-    auto inputsJS = arguments[3].asObject(runtime).asArray(runtime);
-    if (inputsJS.size(runtime) != length) {
-      return jsi::Value::null();
+    inputs.reserve(jsiInputs.size());
+    for (auto &input : jsiInputs) {
+      inputs.push_back(orNull(std::move(input)));
     }
-    for (size_t i = 0; i < length; ++i) {
-      auto element = inputsJS.getValueAtIndex(runtime, i);
-      if (element.isNull()) {
-        inputs.push_back(nullptr);
-      } else {
-        inputs.push_back(JsiSkImageFilter::fromValue(runtime, element));
-      }
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::RuntimeShader(*rtb, maxSampleRadius,
-                                                    childNamesStringView.data(),
-                                                    inputs.data(), length));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::RuntimeShader(
+                          *rtb, maxSampleRadius, childNamesStringView.data(),
+                          inputs.data(), inputs.size()));
   }
 
-  JSI_HOST_FUNCTION(MakeTile) {
-    SkRect src = *JsiSkRect::fromValue(runtime, arguments[0]);
-    SkRect dst = *JsiSkRect::fromValue(runtime, arguments[1]);
-    sk_sp<SkImageFilter> input = nullptr;
-    if (hasOptionalArgument(arguments, count, 2)) {
-      input = JsiSkImageFilter::fromValue(runtime, arguments[2]);
-    }
-    auto filter = std::make_shared<JsiSkImageFilter>(
-        getContext(), SkImageFilters::Tile(src, dst, std::move(input)));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, filter,
-                                                       getContext());
+  std::shared_ptr<JsiSkImageFilter>
+  MakeTile(SkRect src, SkRect dst, JsiOptional<sk_sp<SkImageFilter>> input) {
+    return std::make_shared<JsiSkImageFilter>(
+        getContext(), SkImageFilters::Tile(src, dst, orNull(std::move(input))));
   }
 
-  JSI_EXPORT_FUNCTIONS(
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeBlur),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeOffset),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeColorFilter),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeShader),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDisplacementMap),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeCompose),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeErode),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDilate),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeBlend),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDropShadow),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDropShadowOnly),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeRuntimeShader),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeArithmetic),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeCrop),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeEmpty),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeImage),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeMagnifier),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeMatrixConvolution),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeMatrixTransform),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeMerge),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakePicture),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeRuntimeShaderWithChildren),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeTile),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDistantLitDiffuse),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakePointLitDiffuse),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeSpotLitDiffuse),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeDistantLitSpecular),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakePointLitSpecular),
-      JSI_EXPORT_FUNC(JsiSkImageFilterFactory, MakeSpotLitSpecular))
-
-  size_t getMemoryPressure() const override { return 2048; }
-
-  std::string getObjectType() const override {
-    return "JsiSkImageFilterFactory";
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "MakeBlur",
+                  &JsiSkImageFilterFactory::MakeBlur);
+    installMethod(runtime, prototype, "MakeOffset",
+                  &JsiSkImageFilterFactory::MakeOffset);
+    installMethod(runtime, prototype, "MakeColorFilter",
+                  &JsiSkImageFilterFactory::MakeColorFilter);
+    installMethod(runtime, prototype, "MakeShader",
+                  &JsiSkImageFilterFactory::MakeShader);
+    installMethod(runtime, prototype, "MakeDisplacementMap",
+                  &JsiSkImageFilterFactory::MakeDisplacementMap);
+    installMethod(runtime, prototype, "MakeCompose",
+                  &JsiSkImageFilterFactory::MakeCompose);
+    installMethod(runtime, prototype, "MakeErode",
+                  &JsiSkImageFilterFactory::MakeErode);
+    installMethod(runtime, prototype, "MakeDilate",
+                  &JsiSkImageFilterFactory::MakeDilate);
+    installMethod(runtime, prototype, "MakeBlend",
+                  &JsiSkImageFilterFactory::MakeBlend);
+    installMethod(runtime, prototype, "MakeDropShadow",
+                  &JsiSkImageFilterFactory::MakeDropShadow);
+    installMethod(runtime, prototype, "MakeDropShadowOnly",
+                  &JsiSkImageFilterFactory::MakeDropShadowOnly);
+    installMethod(runtime, prototype, "MakeRuntimeShader",
+                  &JsiSkImageFilterFactory::MakeRuntimeShader);
+    installMethod(runtime, prototype, "MakeArithmetic",
+                  &JsiSkImageFilterFactory::MakeArithmetic);
+    installMethod(runtime, prototype, "MakeCrop",
+                  &JsiSkImageFilterFactory::MakeCrop);
+    installMethod(runtime, prototype, "MakeEmpty",
+                  &JsiSkImageFilterFactory::MakeEmpty);
+    installMethod(runtime, prototype, "MakeImage",
+                  &JsiSkImageFilterFactory::MakeImage);
+    installMethod(runtime, prototype, "MakeMagnifier",
+                  &JsiSkImageFilterFactory::MakeMagnifier);
+    installMethod(runtime, prototype, "MakeMatrixConvolution",
+                  &JsiSkImageFilterFactory::MakeMatrixConvolution);
+    installMethod(runtime, prototype, "MakeMatrixTransform",
+                  &JsiSkImageFilterFactory::MakeMatrixTransform);
+    installMethod(runtime, prototype, "MakeMerge",
+                  &JsiSkImageFilterFactory::MakeMerge);
+    installMethod(runtime, prototype, "MakePicture",
+                  &JsiSkImageFilterFactory::MakePicture);
+    installMethod(runtime, prototype, "MakeRuntimeShaderWithChildren",
+                  &JsiSkImageFilterFactory::MakeRuntimeShaderWithChildren);
+    installMethod(runtime, prototype, "MakeTile",
+                  &JsiSkImageFilterFactory::MakeTile);
+    installMethod(runtime, prototype, "MakeDistantLitDiffuse",
+                  &JsiSkImageFilterFactory::MakeDistantLitDiffuse);
+    installMethod(runtime, prototype, "MakePointLitDiffuse",
+                  &JsiSkImageFilterFactory::MakePointLitDiffuse);
+    installMethod(runtime, prototype, "MakeSpotLitDiffuse",
+                  &JsiSkImageFilterFactory::MakeSpotLitDiffuse);
+    installMethod(runtime, prototype, "MakeDistantLitSpecular",
+                  &JsiSkImageFilterFactory::MakeDistantLitSpecular);
+    installMethod(runtime, prototype, "MakePointLitSpecular",
+                  &JsiSkImageFilterFactory::MakePointLitSpecular);
+    installMethod(runtime, prototype, "MakeSpotLitSpecular",
+                  &JsiSkImageFilterFactory::MakeSpotLitSpecular);
   }
+
+  size_t getMemoryPressure() override { return 2048; }
 
   explicit JsiSkImageFilterFactory(std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkImageFilterFactory>(std::move(context)) {}
+
+private:
+  static sk_sp<SkImageFilter> orNull(JsiOptional<sk_sp<SkImageFilter>> filter) {
+    return filter.has_value() ? std::move(*filter) : nullptr;
+  }
+
+  static SkImageFilters::CropRect toCropRect(const JsiOptional<SkRect> &rect) {
+    return rect.has_value() ? SkImageFilters::CropRect(*rect)
+                            : SkImageFilters::CropRect{};
+  }
+
+  static SkFilterMode toFilterMode(const JsiOptional<double> &mode) {
+    return mode.has_value() ? static_cast<SkFilterMode>(*mode)
+                            : SkFilterMode::kNearest;
+  }
+
+  static SkMipmapMode toMipmapMode(const JsiOptional<double> &mode) {
+    return mode.has_value() ? static_cast<SkMipmapMode>(*mode)
+                            : SkMipmapMode::kNone;
+  }
 };
 
 } // namespace RNSkia

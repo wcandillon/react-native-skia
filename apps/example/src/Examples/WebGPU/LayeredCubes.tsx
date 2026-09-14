@@ -1,4 +1,5 @@
 import type { SkImage } from "@shopify/react-native-skia";
+import { importDevice } from "react-native-webgpu";
 import {
   Canvas,
   Fill,
@@ -105,7 +106,7 @@ export function LayeredCubes() {
     if (typeof RNWebGPU === "undefined") {
       return;
     }
-    const device = Skia.getDevice();
+    const device = importDevice(Skia.getNativeDevice());
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     const depthFormat = "depth24plus";
 
@@ -305,8 +306,12 @@ export function LayeredCubes() {
       renderLayer(encoder, frontLayer, t, 11, 0, Math.PI / 3);
       device.queue.submit([encoder.finish()]);
 
-      setBack(Skia.Image.MakeImageFromTexture(backLayer.texture));
-      setFront(Skia.Image.MakeImageFromTexture(frontLayer.texture));
+      setBack(
+        Skia.Image.MakeImageFromNativeTexture(backLayer.texture.nativePointer)
+      );
+      setFront(
+        Skia.Image.MakeImageFromNativeTexture(frontLayer.texture.nativePointer)
+      );
       frameRef.current = requestAnimationFrame(render);
     };
     frameRef.current = requestAnimationFrame(render);

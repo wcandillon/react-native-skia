@@ -31,7 +31,7 @@ import type {
   DrawingNodeProps,
 } from "../../dom/types";
 import type { AnimatedProps } from "../../renderer";
-import { isSharedValue } from "../utils";
+import { isSharedValue, isSharedValueSelector } from "../utils";
 
 /**
  * Currently the recorder only work if the GPU resources (e.g Images) are owned by the main thread.
@@ -55,6 +55,15 @@ export class ReanimatedRecorder implements BaseRecorder {
       return;
     }
     Object.values(props).forEach((value) => {
+      if (isSharedValueSelector(value) && !this.values.has(value.__sv)) {
+        const sv = value.__sv;
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
+        sv.name = `variable${this.values.size}`;
+        this.values.add(sv as SharedValue<unknown>);
+        return;
+      }
+
       if (isSharedValue(value) && !this.values.has(value)) {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error

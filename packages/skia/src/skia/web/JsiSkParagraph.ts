@@ -4,10 +4,12 @@ import type {
   SkRect,
   SkRectWithDirection,
   SkParagraph,
+  SkPath,
   LineMetrics,
+  ParagraphExtendedVisitor,
 } from "../types";
 
-import { HostObject } from "./Host";
+import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
 import type { JsiSkCanvas } from "./JsiSkCanvas";
 import { JsiSkRect } from "./JsiSkRect";
 
@@ -63,5 +65,11 @@ export class JsiSkParagraph
   }
   getLineMetrics(): LineMetrics[] {
     return this.ref.getLineMetrics();
+  }
+  getPath(_lineNumber: number): SkPath | null {
+    return throwNotImplementedOnRNWeb<SkPath | null>();
+  }
+  extendedVisit(_visitor: ParagraphExtendedVisitor): void {
+    return throwNotImplementedOnRNWeb<void>();
   }
 }

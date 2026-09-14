@@ -1,6 +1,7 @@
 #include "MetalWindowContext.h"
 
 #include "MetalContext.h"
+#include "MetalLayerColorSpaceUtils.h"
 #include "RNSkLog.h"
 #include "include/core/SkColorSpace.h"
 
@@ -8,8 +9,9 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
                                        id<MTLDevice> device,
                                        id<MTLCommandQueue> commandQueue,
                                        CALayer *layer, int width, int height,
-                                       bool useP3ColorSpace)
-    : _directContext(directContext), _commandQueue(commandQueue) {
+                                       bool useP3ColorSpace, bool highBitDepth)
+    : _directContext(directContext), _commandQueue(commandQueue),
+      _highBitDepth(highBitDepth) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = (CAMetalLayer *)layer;
@@ -22,7 +24,8 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
 #else
   _layer.contentsScale = [NSScreen mainScreen].backingScaleFactor;
 #endif // !TARGET_OS_OSX
-  _layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  _layer.pixelFormat =
+      _highBitDepth ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
   _layer.contentsGravity = kCAGravityBottomLeft;
   _layer.drawableSize = CGSizeMake(width, height);
   BOOL supportsWideColor = NO;
@@ -43,12 +46,9 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
 #endif // !TARGET_OS_OSX
   }
   if (supportsWideColor) {
-    CGColorSpaceRef colorSpace =
-        CGColorSpaceCreateWithName(kCGColorSpaceDisplayP3);
-    _layer.colorspace = colorSpace;
-    CGColorSpaceRelease(colorSpace);
     _useP3ColorSpace = true;
   }
+  RNSkia::setCAMetalLayerColorSpace(_layer, _highBitDepth, _useP3ColorSpace);
 }
 
 sk_sp<SkSurface> MetalWindowContext::getSurface() {
@@ -77,7 +77,8 @@ sk_sp<SkSurface> MetalWindowContext::getSurface() {
                        : nullptr;
   _skSurface = SkSurfaces::WrapBackendRenderTarget(
       _directContext, backendRT, kTopLeft_GrSurfaceOrigin,
-      kBGRA_8888_SkColorType, skColorSpace, nullptr);
+      _highBitDepth ? kRGBA_F16_SkColorType : kBGRA_8888_SkColorType,
+      skColorSpace, nullptr);
 
   return _skSurface;
 }

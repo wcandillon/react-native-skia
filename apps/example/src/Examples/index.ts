@@ -31,3 +31,4 @@ export * from "./Chat";
 export * from "./Pictures";
 export * from "./WebGPU";
 export * from "./ThreeJS";
+export * from "./HighBitDepth";

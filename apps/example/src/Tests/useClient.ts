@@ -1,3 +1,4 @@
+import { Skia } from "@shopify/react-native-skia";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 
@@ -8,6 +9,18 @@ const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
 const PORT = 4242;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const arch = (global as any)?.nativeFabricUIManager ? "fabric" : "paper";
+// Whether this Skia build runs the Graphite backend. Probed via
+// getNativeDevice(), which throws on Ganesh builds — checking navigator.gpu
+// would only tell us react-native-webgpu is installed, which can be true on
+// a non-Graphite build. Reported to the test server so it can gate
+// Graphite-only specs.
+const graphite = (() => {
+  try {
+    return typeof Skia.getNativeDevice() === "bigint";
+  } catch {
+    return false;
+  }
+})();
 
 type UseClient = [client: WebSocket | null, hostname: string];
 export const useClient = (): UseClient => {
@@ -24,6 +37,7 @@ export const useClient = (): UseClient => {
         JSON.stringify({
           OS,
           arch,
+          graphite,
         })
       );
     };

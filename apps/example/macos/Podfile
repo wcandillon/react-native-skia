@@ -8,4 +8,17 @@ workspace 'example.xcworkspace'
 
 platform :osx, '14.0'
 
-use_test_app! :hermes_enabled => true, :new_arch_enabled => true
+use_test_app!(:hermes_enabled => true, :new_arch_enabled => true) do
+  # react-native-webgpu doesn't support macOS yet. Its podspec still declares
+  # `:osx` support, so plain autolinking (which only looks at the podspec, not
+  # react-native.config.js platform overrides) would otherwise pull it in here.
+  # AutolinkingUtils is defined by this point (use_react_native! ran above),
+  # and use_native_modules! (which reads it) hasn't run yet.
+  AutolinkingUtils.singleton_class.prepend(Module.new do
+    def is_platform_supported?(current_target_definition, spec)
+      return false if spec.name == 'react-native-webgpu'
+
+      super
+    end
+  end)
+end

@@ -188,8 +188,8 @@ export class JsiSkPathBuilder
     return this;
   }
 
-  addCircle(x: number, y: number, r: number, _isCCW?: boolean) {
-    this.ref.addCircle(x, y, r);
+  addCircle(x: number, y: number, r: number, isCCW?: boolean) {
+    this.ref.addCircle(x, y, r, isCCW);
     return this;
   }
 

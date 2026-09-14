@@ -20,17 +20,24 @@ export const Mask = ({
 }: MaskProps) => {
   return (
     <Group layer>
+      {children}
+      {/* The children composite against each other in the layer above; the
+          mask is then applied once, when its own layer is restored. A blend
+          mode attached to a <Group> without a layer would instead be applied
+          per draw call, compositing every child after the first against the
+          previous child rather than against the mask (issue #3254).
+          dstIn keeps the children where the mask is opaque and erases them
+          where it is transparent. Without clip, dstATop additionally keeps
+          the mask artwork itself wherever the children leave it uncovered. */}
       <Group
         layer={
-          <Paint blendMode="src">
+          <Paint blendMode={clip ? "dstIn" : "dstATop"}>
             {mode === "luminance" && <LumaColorFilter />}
           </Paint>
         }
       >
         {mask}
-        {clip && <Group layer={<Paint blendMode="dstIn" />}>{children}</Group>}
       </Group>
-      <Group blendMode="srcIn">{children}</Group>
     </Group>
   );
 };

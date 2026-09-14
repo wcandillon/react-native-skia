@@ -59,9 +59,7 @@ class SkiaTextureLoader extends THREE.Loader<THREE.DataTexture> {
         // null under Graphite.)
         const surface = Skia.Surface.Make(width, height);
         if (!surface) {
-          throw new Error(
-            `SkiaTextureLoader: Surface.Make failed for ${url}`
-          );
+          throw new Error(`SkiaTextureLoader: Surface.Make failed for ${url}`);
         }
         const canvas = surface.getCanvas();
         canvas.drawImage(image, 0, 0);

@@ -16,7 +16,12 @@ namespace RNSkia {
 
 sk_sp<SkSurface> OpenGLWindowContext::getSurface() {
   if (_skSurface == nullptr) {
-    _glContext->makeCurrent(_glSurface.get());
+    if (_glSurface == nullptr || !_glContext->makeCurrent(_glSurface.get())) {
+      RNSkLogger::logToConsole(
+          "Couldn't create the EGL window surface, the surface will not be "
+          "rendered");
+      return nullptr;
+    }
     GLint stencil;
     glGetIntegerv(GL_STENCIL_BITS, &stencil);
 
@@ -52,7 +57,9 @@ sk_sp<SkSurface> OpenGLWindowContext::getSurface() {
 }
 
 void OpenGLWindowContext::present() {
-  _glContext->makeCurrent(_glSurface.get());
+  if (_glSurface == nullptr || !_glContext->makeCurrent(_glSurface.get())) {
+    return;
+  }
   _directContext->flushAndSubmit();
   _glSurface->present();
 }

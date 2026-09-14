@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "JsiSkHostObjects.h"
-#include "third_party/base64.h"
+#include "JsiSkNativeObjects.h"
+#include "api/third_party/base64.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -29,44 +29,45 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class JsiSkAnimatedImage
-    : public JsiSkWrappingSkPtrHostObject<SkAnimatedImage> {
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkAnimatedImage,
+                                            SkAnimatedImage> {
 public:
+  static constexpr const char *CLASS_NAME = "AnimatedImage";
+
   // TODO-API: Properties?
-  JSI_HOST_FUNCTION(getCurrentFrame) {
+  std::shared_ptr<JsiSkImage> getCurrentFrame() {
     auto image = getObject()->getCurrentFrame();
-    auto hostObjectInstance =
-        std::make_shared<JsiSkImage>(getContext(), std::move(image));
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(
-        runtime, hostObjectInstance, getContext());
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
 
-  JSI_HOST_FUNCTION(getFrameCount) {
-    return static_cast<int>(getObject()->getFrameCount());
-  }
+  int getFrameCount() { return static_cast<int>(getObject()->getFrameCount()); }
 
-  JSI_HOST_FUNCTION(currentFrameDuration) {
+  int currentFrameDuration() {
     return static_cast<int>(getObject()->currentFrameDuration());
   }
 
-  JSI_HOST_FUNCTION(decodeNextFrame) {
+  int decodeNextFrame() {
     return static_cast<int>(getObject()->decodeNextFrame());
   }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkAnimatedImage, AnimatedImage)
-
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkAnimatedImage, dispose),
-                       JSI_EXPORT_FUNC(JsiSkAnimatedImage, getFrameCount),
-                       JSI_EXPORT_FUNC(JsiSkAnimatedImage, getCurrentFrame),
-                       JSI_EXPORT_FUNC(JsiSkAnimatedImage,
-                                       currentFrameDuration),
-                       JSI_EXPORT_FUNC(JsiSkAnimatedImage, decodeNextFrame))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "getFrameCount",
+                  &JsiSkAnimatedImage::getFrameCount);
+    installMethod(runtime, prototype, "getCurrentFrame",
+                  &JsiSkAnimatedImage::getCurrentFrame);
+    installMethod(runtime, prototype, "currentFrameDuration",
+                  &JsiSkAnimatedImage::currentFrameDuration);
+    installMethod(runtime, prototype, "decodeNextFrame",
+                  &JsiSkAnimatedImage::decodeNextFrame);
+  }
 
   JsiSkAnimatedImage(std::shared_ptr<RNSkPlatformContext> context,
                      const sk_sp<SkAnimatedImage> image)
-      : JsiSkWrappingSkPtrHostObject<SkAnimatedImage>(std::move(context),
-                                                      std::move(image)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkAnimatedImage, SkAnimatedImage>(
+            std::move(context), std::move(image)) {}
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     auto animation = getObject();
     if (!animation) {
       return 0;
@@ -131,8 +132,6 @@ public:
 
     return estimated;
   }
-
-  std::string getObjectType() const override { return "JsiSkAnimatedImage"; }
 };
 
 } // namespace RNSkia

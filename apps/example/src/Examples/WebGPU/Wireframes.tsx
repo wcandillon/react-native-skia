@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useDerivedValue } from "react-native-reanimated";
+import { importDevice } from "react-native-webgpu";
 
 import { useLoop } from "../../components/Animations";
 
@@ -163,7 +164,7 @@ export function Wireframes() {
   //rect(0, 0, 300, (300 * bounds.height) / bounds.width);
 
   useEffect(() => {
-    const device = Skia.getDevice();
+    const device = importDevice(Skia.getNativeDevice());
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     const depthFormat = "depth24plus";
 
@@ -498,7 +499,9 @@ export function Wireframes() {
       device.queue.submit([commandBuffer]);
 
       // Convert texture to SkImage
-      const skImage = Skia.Image.MakeImageFromTexture(texture);
+      const skImage = Skia.Image.MakeImageFromNativeTexture(
+        texture.nativePointer
+      );
       setImage(skImage);
     };
 

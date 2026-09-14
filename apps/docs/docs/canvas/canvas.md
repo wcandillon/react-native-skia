@@ -14,6 +14,7 @@ Behind the scenes, it is using its own React renderer.
 | style?   | `ViewStyle` | View style |
 | ref?   | `Ref<SkiaView>` | Reference to the `SkiaView` object |
 | onSize? | `SharedValue<Size>` | Reanimated value to which the canvas size will be assigned  (see [canvas size](#canvas-size)) |
+| highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
 | androidWarmup? | `boolean` | Draw the first frame directly on the Android compositor. Use it for static icons or fully opaque drawings—animated or translucent canvases can misrender, so it remains opt-in. |
 
 ## Canvas size
@@ -84,6 +85,36 @@ const Demo = () => {
 };
 ```
 
+
+## High bit depth
+
+By default the canvas renders into an 8-bit surface. With only 256 levels per channel, subtle gradients quantize into visible bands, especially in dark tones and on OLED displays.
+With `highBitDepth`, the canvas renders into a 16-bit float surface on iOS and a 10-bit surface on Android.
+Colors are identical to the default surface, only with more precision: this is about bit depth, not HDR.
+
+```tsx twoslash
+import {Canvas, Fill, LinearGradient, vec} from "@shopify/react-native-skia";
+
+const Demo = () => {
+  return (
+    <Canvas style={{ flex: 1 }} opaque highBitDepth>
+      <Fill>
+        <LinearGradient
+          start={vec(0, 0)}
+          end={vec(0, 512)}
+          colors={["rgb(51, 56, 77)", "rgb(59, 64, 85)"]}
+        />
+      </Fill>
+    </Canvas>
+  );
+};
+```
+
+:::warning
+
+On Android, `highBitDepth` requires the Graphite backend; with the default OpenGL backend the canvas falls back to 8-bit.
+
+:::
 
 ## Getting a Canvas Snapshot
 

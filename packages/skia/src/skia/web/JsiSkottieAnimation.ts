@@ -164,28 +164,28 @@ export class JsiSkottieAnimation
       if (result.text) {
         textSlot.text = result.text;
       }
-      if (result.textSize) {
+      if (result.textSize !== undefined) {
         textSlot.textSize = result.textSize;
       }
-      if (result.minTextSize) {
+      if (result.minTextSize !== undefined) {
         textSlot.minTextSize = result.minTextSize;
       }
-      if (result.maxTextSize) {
+      if (result.maxTextSize !== undefined) {
         textSlot.maxTextSize = result.maxTextSize;
       }
-      if (result.strokeWidth) {
+      if (result.strokeWidth !== undefined) {
         textSlot.strokeWidth = result.strokeWidth;
       }
-      if (result.lineHeight) {
+      if (result.lineHeight !== undefined) {
         textSlot.lineHeight = result.lineHeight;
       }
-      if (result.lineShift) {
+      if (result.lineShift !== undefined) {
         textSlot.lineShift = result.lineShift;
       }
-      if (result.ascent) {
+      if (result.ascent !== undefined) {
         textSlot.ascent = result.ascent;
       }
-      if (result.maxLines) {
+      if (result.maxLines !== undefined) {
         textSlot.maxLines = result.maxLines;
       }
       // if (result.horizAlign) {

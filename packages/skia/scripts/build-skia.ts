@@ -323,7 +323,10 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         `      }`,
         `    } else if (current_cpu == "x86") {`,
       ].join("\n");
-      const replace = [`      ]`, `    } else if (current_cpu == "x86") {`].join("\n");
+      const replace = [
+        `      ]`,
+        `    } else if (current_cpu == "x86") {`,
+      ].join("\n");
       const content = fs.readFileSync(filePath, "utf-8");
       if (!content.includes(search)) {
         throw new Error(`Patch target not found in ${filePath}`);
@@ -348,7 +351,10 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       const content = fs.readFileSync(filePath, "utf-8");
       fs.writeFileSync(
         filePath,
-        content.replace(/uint32\(bindingInfo\.binding\)/g, "uint32_t(bindingInfo.binding)")
+        content.replace(
+          /uint32\(bindingInfo\.binding\)/g,
+          "uint32_t(bindingInfo.binding)"
+        )
       );
     }
     // Add iOS support to Dawn cmake_utils.py

@@ -12,7 +12,6 @@ jest.mock("react-native", () => ({
   View: jest.fn(),
 }));
 jest.mock("../../specs/SkiaPictureViewNativeComponent", () => {});
-jest.mock("../../specs/WebGPUViewNativeComponent", () => {});
 jest.mock("../../external/reanimated/index", () => {});
 
 describe("Mocks", () => {

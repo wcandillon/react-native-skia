@@ -6,9 +6,11 @@ const config = {
     "^react-native$": "<rootDir>/../../node_modules/react-native",
   },
   modulePathIgnorePatterns: ["<rootDir>/lib/typescript", "setup.(ts|tsx)$"],
+  testPathIgnorePatterns: ["<rootDir>/e2e/"],
   testEnvironment: "@shopify/react-native-skia/jestEnv.js",
   setupFilesAfterEnv: [
     "@shopify/react-native-skia/jestSetup.js",
+    "react-native-webgpu/jestSetup.js",
     "<rootDir>/../../node_modules/react-native-gesture-handler/jestSetup.js",
     "<rootDir>/jestSetup.js",
   ],

@@ -132,8 +132,26 @@ The `fontStyle` object can have the following list of optional attributes:
 
 - `fontFamily`: The name of the font family.
 - `fontSize`: The size of the font.
-- `fontStyle`: The slant of the font. Can be `normal`, `italic`, or `oblique`.
-- `fontWeight`: The weight of the font. Can be `normal`, `bold`, or any of `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900`.
+- `fontStyle`: The slant of the font. Can be `normal`, `italic`, or `oblique`, or a `FontSlant` enum value.
+- `fontWeight`: The weight of the font. Can be `normal`, `bold`, or any of `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900`, or a `FontWeight` enum value.
+
+The font style type is exported as `RNFontStyle` (with its `fontStyle` and `fontWeight` attributes typed as `RNFontSlant` and `RNFontWeight`), so you can type your own helpers.
+`fontWeight` and `fontStyle` also accept the `FontWeight` and `FontSlant` enums used by the [Paragraph API](/docs/text/paragraph/), meaning the same style values can be shared between `matchFont` and a Paragraph `TextStyle` without any conversion:
+
+```tsx twoslash
+import {matchFont, FontWeight, FontSlant} from "@shopify/react-native-skia";
+import type {RNFontStyle} from "@shopify/react-native-skia";
+
+const labelStyle: Partial<RNFontStyle> = {
+  fontFamily: "Roboto",
+  fontSize: 16,
+  // FontWeight.Medium (500) and FontSlant.Italic are the same values
+  // you would use in a Paragraph TextStyle
+  fontWeight: FontWeight.Medium,
+  fontStyle: FontSlant.Italic,
+};
+const font = matchFont(labelStyle);
+```
 
 By default, `matchFont` uses the system font manager to match the font style. However, if you want to use your custom font manager, you can pass it as the second parameter to the `matchFont` function:
 

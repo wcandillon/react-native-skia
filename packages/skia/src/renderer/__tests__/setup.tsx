@@ -27,6 +27,7 @@ declare global {
   var testServer: Server;
   var testClient: WebSocket;
   var testOS: TestOS;
+  var testGraphite: boolean;
 }
 export let surface: TestingSurface;
 const assets = new Map<SkImage | SkFont, string>();
@@ -109,6 +110,47 @@ beforeAll(async () => {
 
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+// Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start
+// with the 0x89 signature and base64/other JSON responses won't carry $$error,
+// so we only attempt a parse when the buffer looks like a JSON object.
+const parseErrorResponse = (raw: Buffer): string | null => {
+  if (raw[0] !== 0x7b) {
+    return null;
+  }
+  try {
+    const obj = JSON.parse(raw.toString());
+    if (obj && typeof obj === "object" && "$$error" in obj) {
+      return String(obj.$$error);
+    }
+  } catch {
+    // Not a JSON object; treat as a normal payload.
+  }
+  return null;
+};
+
+// Registers a test that only runs against a device using the Graphite backend
+// (Dawn/WebGPU). The backend is only known after the websocket handshake, so —
+// like itSkipsOnWeb in react-native-webgpu — the guard is a runtime early
+// return rather than it.skip at collection time. This also keeps the Graphite
+// specs inert in Node/Local mode and on Ganesh builds, where
+// Skia.getNativeDevice() would throw.
+export const itRunsWithGraphite = (
+  name: string,
+  fn: () => Promise<void>,
+  timeout?: number
+) => {
+  it(
+    name,
+    async () => {
+      if (!E2E || !surface.graphite) {
+        return;
+      }
+      await fn();
+    },
+    timeout
+  );
+};
 
 export const resolveFile = (uri: string) =>
   fs.readFileSync(path.resolve(__dirname, `../../${uri}`));
@@ -378,6 +420,10 @@ interface TestingSurface {
   fontSize: number;
   OS: TestOS;
   arch: "paper" | "fabric";
+  // True when the connected device runs the Graphite backend, i.e.
+  // Skia.getNativeDevice() is available (see useClient.ts in the example
+  // app). Always false in Node (LocalSurface) and on Ganesh builds.
+  graphite: boolean;
 }
 
 class LocalSurface implements TestingSurface {
@@ -386,6 +432,7 @@ class LocalSurface implements TestingSurface {
   readonly fontSize = 32;
   readonly OS = "node";
   readonly arch = "paper";
+  readonly graphite = false;
 
   eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => R,
@@ -433,6 +480,7 @@ class RemoteSurface implements TestingSurface {
   readonly fontSize = 32;
   readonly OS = global.testOS;
   readonly arch = global.testArch;
+  readonly graphite = global.testGraphite ?? false;
 
   eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => any,
@@ -504,10 +552,32 @@ return surface.makeImageSnapshot().encodeToBase64();
     body: string,
     json?: boolean
   ): Promise<R> {
-    return new Promise((resolve) => {
-      this.client.once("message", (raw: Buffer) => {
+    // Guard against an eval that never replies (e.g. the device threw before it
+    // could post a result back). Without this the host would await forever and
+    // a single failing case would stall the whole serial suite.
+    const EVAL_TIMEOUT_MS = 30 * 1000;
+    return new Promise((resolve, reject) => {
+      const onMessage = (raw: Buffer) => {
+        clearTimeout(timeout);
+        // The device reports a thrown error as { $$error: message } (always
+        // JSON, even for image responses) so the matching test can `.rejects`
+        // instead of hanging or trying to decode an error string as a PNG.
+        const error = parseErrorResponse(raw);
+        if (error !== null) {
+          reject(new Error(error));
+          return;
+        }
         resolve(json ? JSON.parse(raw.toString()) : this.decodeImage(raw));
-      });
+      };
+      const timeout = setTimeout(() => {
+        this.client.off("message", onMessage);
+        reject(
+          new Error(
+            `eval timed out after ${EVAL_TIMEOUT_MS}ms without a response from the device`
+          )
+        );
+      }, EVAL_TIMEOUT_MS);
+      this.client.once("message", onMessage);
       this.client.send(body);
     });
   }

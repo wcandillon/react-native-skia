@@ -51,12 +51,9 @@ std::shared_ptr<SkRect> processRect(jsi::Runtime &runtime,
                                     const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      auto ptr = std::dynamic_pointer_cast<JsiSkRect>(
-          value.asObject(runtime).asHostObject(runtime));
-      if (ptr != nullptr) {
-        return ptr->getObject();
-      }
+    auto ptr = tryGetJsiObject<JsiSkRect>(runtime, object);
+    if (ptr != nullptr) {
+      return ptr->getObject();
     } else if (object.hasProperty(runtime, "x") &&
                object.hasProperty(runtime, "y") &&
                object.hasProperty(runtime, "width") &&
@@ -88,12 +85,9 @@ std::shared_ptr<SkRRect> processRRect(jsi::Runtime &runtime,
                                       const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      auto ptr = std::dynamic_pointer_cast<JsiSkRRect>(
-          value.asObject(runtime).asHostObject(runtime));
-      if (ptr != nullptr) {
-        return ptr->getObject();
-      }
+    auto ptr = tryGetJsiObject<JsiSkRRect>(runtime, object);
+    if (ptr != nullptr) {
+      return ptr->getObject();
     } else if (object.hasProperty(runtime, "rect") &&
                object.hasProperty(runtime, "rx") &&
                object.hasProperty(runtime, "ry")) {
@@ -136,10 +130,8 @@ std::shared_ptr<SkPath> processPath(jsi::Runtime &runtime,
     } else {
       throw std::runtime_error("Could not parse path from string.");
     }
-  } else if (value.isObject() &&
-             value.asObject(runtime).isHostObject(runtime)) {
-    auto ptr = std::dynamic_pointer_cast<JsiSkPath>(
-        value.asObject(runtime).asHostObject(runtime));
+  } else {
+    auto ptr = tryGetJsiObject<JsiSkPath>(runtime, value);
     if (ptr != nullptr) {
       return std::make_shared<SkPath>(ptr->getObject()->snapshot());
     }

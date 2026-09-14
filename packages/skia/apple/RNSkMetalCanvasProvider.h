@@ -28,6 +28,7 @@ public:
 
   void setSize(int width, int height);
   void setUseP3ColorSpace(bool useP3ColorSpace);
+  void setHighBitDepth(bool highBitDepth);
   CALayer *getLayer();
 
 private:
@@ -38,4 +39,5 @@ private:
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
   bool _useP3ColorSpace = true;
+  bool _highBitDepth = false;
 };

@@ -76,11 +76,16 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
   }
 
   assign(paint: JsiSkPaint) {
+    const previous = this.ref;
     this.ref = paint.ref.copy();
+    // The replaced ref is a WASM object the GC will not reclaim.
+    previous.delete();
   }
 
   reset() {
+    const previous = this.ref;
     this.ref = new this.CanvasKit.Paint();
+    previous.delete();
   }
 
   getAlphaf() {

@@ -19,7 +19,8 @@ export class JsiSkSurface
     this.ref.dispose();
   }
 
-  flush() {
+  flush(_sync?: boolean) {
+    // CanvasKit has no separate CPU sync; flush() is sufficient on the web backend.
     this.ref.flush();
   }
 

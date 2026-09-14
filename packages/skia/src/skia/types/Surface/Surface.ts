@@ -39,8 +39,12 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
 
   /**
    * Make sure any queued draws are sent to the screen or the GPU.
+   * @param sync - When true, block until the GPU has finished executing the
+   * submitted work. Use this before reading the surface's texture from a native
+   * consumer on a different command queue (see {@link getNativeTextureUnstable}).
+   * Defaults to false.
    */
-  flush(): void;
+  flush(sync?: boolean): void;
 
   /**
    * Returns the possibly scaled width of the surface.

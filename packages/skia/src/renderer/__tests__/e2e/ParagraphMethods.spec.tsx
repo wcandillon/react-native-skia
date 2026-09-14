@@ -10,6 +10,55 @@ const RobotoRegular = Array.from(
 );
 
 describe("Paragraph Methods", () => {
+  describe("paragraph style", () => {
+    it("should apply the default textStyle from the paragraph style", async () => {
+      const heights = await surface.eval(
+        (Skia, ctx) => {
+          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+            Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
+          )!;
+          const provider = Skia.TypefaceFontProvider.Make();
+          provider.registerFont(robotoRegular, "Roboto");
+
+          const textStyle = {
+            color: Skia.Color("black"),
+            fontFamilies: ["Roboto"],
+            fontSize: 24,
+          };
+
+          // The default textStyle set on the paragraph style should produce
+          // the same layout as the same style pushed explicitly.
+          const fromParagraphStyle = Skia.ParagraphBuilder.Make(
+            { textStyle },
+            provider
+          )
+            .addText("Hello")
+            .build();
+          fromParagraphStyle.layout(512);
+
+          const fromPushStyle = Skia.ParagraphBuilder.Make({}, provider)
+            .pushStyle(textStyle)
+            .addText("Hello")
+            .build();
+          fromPushStyle.layout(512);
+
+          return {
+            fromParagraphStyle: fromParagraphStyle.getLineMetrics()[0].height,
+            fromPushStyle: fromPushStyle.getLineMetrics()[0].height,
+          };
+        },
+        {
+          RobotoRegular,
+        }
+      );
+
+      expect(heights.fromParagraphStyle).toBeCloseTo(heights.fromPushStyle, 3);
+      // Roboto at fontSize 24 has a line height of ~28; the default fontSize
+      // (14) would yield ~16.4.
+      expect(heights.fromParagraphStyle).toBeGreaterThan(24);
+    });
+  });
+
   describe("getRectsForPlaceholders", () => {
     it("should handle multiple placeholders with different alignments", async () => {
       const placeholderRects = await surface.eval(

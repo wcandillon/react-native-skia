@@ -1,6 +1,8 @@
 import { Platform } from "../Platform";
 import NativeSkiaModule from "../specs/NativeSkiaModule";
 
+import { registerSkiaWorkletSerialization } from "./SkiaWorkletSerialization";
+
 if (Platform.OS !== "web" && global.SkiaApi == null) {
   // Initialize RN Skia
   const SkiaModule = NativeSkiaModule;
@@ -16,4 +18,7 @@ if (Platform.OS !== "web" && global.SkiaApi == null) {
       `Native Skia Module failed to correctly install JSI Bindings! Result: ${result}`
     );
   }
+  // Skia objects use the JSI NativeState pattern and need a custom
+  // serializer to be transferable to worklet runtimes (Reanimated).
+  registerSkiaWorkletSerialization();
 }

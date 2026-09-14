@@ -18,9 +18,9 @@ on:
         type: boolean
         default: true
       simulator_device:
-        description: 'iOS Simulator device'
+        description: 'iOS Simulator device (empty = auto-detect an available iPhone)'
         required: false
-        default: 'iPhone 16 Pro'
+        default: ''
         type: string
       android_api_level:
         description: 'Android API level'
@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: true
+      ios_use_frameworks:
+        description: 'iOS framework linkage: "dynamic" (default) or "static"'
+        required: false
+        type: string
+        default: 'dynamic'
 
 jobs:
   test-skia-ios:
@@ -46,20 +51,49 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
 
       - name: Setup Yarn
         run: |
           corepack enable
           yarn --version
 
+      - name: Select latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -n 1)
+          echo "Selecting: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
       - name: List available simulators
         run: xcrun simctl list devices
+
+      - name: Select iOS simulator
+        run: |
+          SIMULATOR_NAME="${{ inputs.simulator_device }}"
+          if [ -z "$SIMULATOR_NAME" ]; then
+            SIMULATOR_NAME=$(xcrun simctl list devices available --json | jq -r '
+              .devices
+              | to_entries
+              | map(select(.key | contains("iOS")))
+              | sort_by(.key)
+              | reverse
+              | map(.value[] | select(.name | startswith("iPhone")))
+              | .[0].name // empty')
+          fi
+          if [ -z "$SIMULATOR_NAME" ]; then
+            echo "No available iPhone simulator found"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator: $SIMULATOR_NAME"
+          echo "IOS_SIMULATOR=$SIMULATOR_NAME" >> $GITHUB_ENV
 
       - name: Create test directory
         run: |
@@ -68,7 +102,7 @@ jobs:
           pwd
 
       - name: Create Expo app with Skia template
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -111,12 +145,6 @@ jobs:
           echo "Installed React Native Skia version:"
           yarn list @shopify/react-native-skia --depth=0
 
-      - name: Install compatible Worklets version
-        working-directory: /Users/runner/skia-test-app/my-app
-        run: |
-          echo "Installing react-native-worklets@^0.7.1 for Reanimated compatibility..."
-          yarn add react-native-worklets@^0.7.1
-
       - name: Install TypeScript dependencies
         working-directory: /Users/runner/skia-test-app/my-app
         run: |
@@ -129,10 +157,24 @@ jobs:
           echo "Installing expo-dev-client..."
           yarn expo install expo-dev-client
 
+      - name: Enable static frameworks (iOS)
+        if: inputs.ios_use_frameworks == 'static'
+        working-directory: /Users/runner/skia-test-app/my-app
+        run: |
+          echo "Configuring expo-build-properties for useFrameworks: 'static'..."
+          yarn expo install expo-build-properties
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            cfg.expo.plugins = cfg.expo.plugins || [];
+            cfg.expo.plugins.push(['expo-build-properties', { ios: { useFrameworks: 'static' } }]);
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2));
+          "
+
       - name: Prebuild native directories
         working-directory: /Users/runner/skia-test-app/my-app
         run: |
-          echo "Generating native iOS directory..."
+          echo "Generating native iOS directory (linkage: ${{ inputs.ios_use_frameworks }})..."
           yarn expo prebuild --platform ios
 
       - name: Install iOS dependencies
@@ -152,8 +194,8 @@ jobs:
       - name: Build and run iOS app
         working-directory: /Users/runner/skia-test-app/my-app
         run: |
-          echo "Building and running iOS app on simulator: ${{ inputs.simulator_device }}..."
-          yarn expo run:ios --device "${{ inputs.simulator_device }}"
+          echo "Building and running iOS app on simulator: $IOS_SIMULATOR..."
+          yarn expo run:ios --device "$IOS_SIMULATOR"
 
       - name: Wait for app to launch
         run: |
@@ -163,7 +205,7 @@ jobs:
       - name: Capture simulator screenshot
         if: always()
         run: |
-          SIMULATOR_ID=$(xcrun simctl list devices | grep "${{ inputs.simulator_device }}" | grep -E 'Booted' | head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1)
+          SIMULATOR_ID=$(xcrun simctl list devices | grep "$IOS_SIMULATOR" | grep -E 'Booted' | head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1)
           if [ -n "$SIMULATOR_ID" ]; then
             echo "Capturing screenshot from simulator ID: $SIMULATOR_ID"
             xcrun simctl io $SIMULATOR_ID screenshot /Users/runner/skia-test-screenshot-ios.png
@@ -188,7 +230,8 @@ jobs:
           echo "✓ Created Expo app with Skia template"
           echo "✓ Installed @shopify/react-native-skia@${{ inputs.skia_version }}"
           echo "✓ Installed expo-dev-client"
-          echo "✓ Built and ran iOS app on ${{ inputs.simulator_device }}"
+          echo "✓ Framework linkage: ${{ inputs.ios_use_frameworks }}"
+          echo "✓ Built and ran iOS app on $IOS_SIMULATOR"
           echo "================================================================"
 
   test-skia-android:
@@ -198,12 +241,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
 
       - name: Setup Yarn
         run: |
@@ -211,7 +254,7 @@ jobs:
           yarn --version
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -231,7 +274,7 @@ jobs:
           pwd
 
       - name: Create Expo app with Skia template
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -273,12 +316,6 @@ jobs:
         run: |
           echo "Installed React Native Skia version:"
           yarn list @shopify/react-native-skia --depth=0
-
-      - name: Install compatible Worklets version
-        working-directory: /Users/runner/skia-test-app/my-app
-        run: |
-          echo "Installing react-native-worklets@^0.7.1 for Reanimated compatibility..."
-          yarn add react-native-worklets@^0.7.1
 
       - name: Install TypeScript dependencies
         working-directory: /Users/runner/skia-test-app/my-app
@@ -362,12 +399,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
 
       - name: Setup Yarn
         run: |
@@ -381,7 +418,7 @@ jobs:
           pwd
 
       - name: Create Expo app with Skia template
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -423,12 +460,6 @@ jobs:
         run: |
           echo "Installed React Native Skia version:"
           yarn list @shopify/react-native-skia --depth=0
-
-      - name: Install compatible Worklets version
-        working-directory: /Users/runner/skia-test-app/my-app
-        run: |
-          echo "Installing react-native-worklets@^0.7.1 for Reanimated compatibility..."
-          yarn add react-native-worklets@^0.7.1
 
       - name: Install TypeScript dependencies
         working-directory: /Users/runner/skia-test-app/my-app

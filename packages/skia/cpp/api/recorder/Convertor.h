@@ -16,7 +16,7 @@
 #include <modules/skparagraph/include/ParagraphStyle.h>
 
 #include "../CustomBlendModes.h"
-#include "third_party/CSSColorParser.h"
+#include "api/third_party/CSSColorParser.h"
 
 #include "DataTypes.h"
 
@@ -69,7 +69,51 @@ template <typename T> struct unwrap_optional<std::optional<T>> {
 template <typename T>
 T getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value);
 
-// Base template for convertProperty
+template <typename T, typename Target>
+bool convertSelectorProperty(jsi::Runtime &runtime, const jsi::Value &prop,
+                             Target &target, Variables &variables) {
+  if (!prop.isObject()) {
+    return false;
+  }
+  auto wrapper = prop.asObject(runtime);
+  if (!wrapper.hasProperty(runtime, "__sv") ||
+      !wrapper.hasProperty(runtime, "__key")) {
+    return false;
+  }
+  auto svVal = wrapper.getProperty(runtime, "__sv");
+  auto keyVal = wrapper.getProperty(runtime, "__key");
+  if (!isSharedValue(runtime, svVal) || !keyVal.isString()) {
+    return false;
+  }
+  auto sharedValue = svVal.asObject(runtime);
+  auto key = keyVal.asString(runtime).utf8(runtime);
+  auto name =
+      sharedValue.getProperty(runtime, "name").asString(runtime).utf8(runtime);
+
+  auto conv = [target = &target, key](jsi::Runtime &runtime,
+                                      const jsi::Object &val) {
+    auto value = val.getProperty(runtime, "value");
+    if (!value.isObject()) {
+      return;
+    }
+    auto values = value.asObject(runtime);
+    if (!values.hasProperty(runtime, key.c_str())) {
+      return;
+    }
+
+    auto selected = values.getProperty(runtime, key.c_str());
+    if (selected.isUndefined() || selected.isNull() ||
+        (selected.isObject() && selected.asObject(runtime).isFunction(runtime))) {
+      return;
+    }
+    *target = getPropertyValue<T>(runtime, selected);
+  };
+
+  variables[name].push_back(conv);
+  conv(runtime, sharedValue);
+  return true;
+}
+
 template <typename T, typename Target>
 void convertPropertyImpl(jsi::Runtime &runtime, const jsi::Object &object,
                          const std::string &propertyName, Target &target,
@@ -78,13 +122,16 @@ void convertPropertyImpl(jsi::Runtime &runtime, const jsi::Object &object,
     return;
   }
 
-  auto property = object.getProperty(runtime, propertyName.c_str());
+  auto prop = object.getProperty(runtime, propertyName.c_str());
 
-  if (isSharedValue(runtime, property)) {
-    auto sharedValue = property.asObject(runtime);
-    auto name = sharedValue.getProperty(runtime, "name")
-                    .asString(runtime)
-                    .utf8(runtime);
+  if (convertSelectorProperty<T>(runtime, prop, target, variables)) {
+    return;
+  }
+
+  if (isSharedValue(runtime, prop)) {
+    auto sharedValue = prop.asObject(runtime);
+    auto name =
+        sharedValue.getProperty(runtime, "name").asString(runtime).utf8(runtime);
     auto conv = [target = &target](jsi::Runtime &runtime,
                                    const jsi::Object &val) {
       auto value = val.getProperty(runtime, "value");
@@ -92,9 +139,10 @@ void convertPropertyImpl(jsi::Runtime &runtime, const jsi::Object &object,
     };
     variables[name].push_back(conv);
     conv(runtime, sharedValue);
-  } else {
-    target = getPropertyValue<T>(runtime, property);
+    return;
   }
+
+  target = getPropertyValue<T>(runtime, prop);
 }
 
 // Main convertProperty template
@@ -313,13 +361,16 @@ SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
         m4.preScale(1, s);
       } else if (key == "skewX") {
         auto angle = value.getProperty(runtime, key.c_str()).asNumber();
-        SkM44 skewX(1, 0, 0, 0, std::tan(angle), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        // The SkM44 constructor takes its arguments in row-major reading
+        // order, so the shear factor of a horizontal skew belongs in row 0,
+        // where it scales y into x.
+        SkM44 skewX(1, std::tan(angle), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
                     1);
         m4.preConcat(skewX);
 
       } else if (key == "skewY") {
         auto angle = value.getProperty(runtime, key.c_str()).asNumber();
-        SkM44 skewY(1, std::tan(angle), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        SkM44 skewY(1, 0, 0, 0, std::tan(angle), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
                     1);
         m4.preConcat(skewY);
       } else if (key == "rotate" || key == "rotateZ") {
@@ -394,8 +445,7 @@ SkSamplingOptions getPropertyValue(jsi::Runtime &runtime,
 template <>
 SkFont getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
-    auto font =
-        value.asObject(runtime).asHostObject<JsiSkFont>(runtime)->getObject();
+    auto font = getJsiObject<JsiSkFont>(runtime, value)->getObject();
     return SkFont(*font);
   }
   throw std::runtime_error("Invalid prop value for SkFont received");
@@ -427,9 +477,7 @@ GlyphData getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 template <>
 SkRSXform getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
-    auto form = value.asObject(runtime)
-                    .asHostObject<JsiSkRSXform>(runtime)
-                    ->getObject();
+    auto form = getJsiObject<JsiSkRSXform>(runtime, value)->getObject();
     return SkRSXform::Make(form->fSCos, form->fSSin, form->fTx, form->fTy);
   }
   throw std::runtime_error("Invalid prop value for SkRSXform received");
@@ -438,13 +486,11 @@ SkRSXform getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 template <>
 sk_sp<SkSVGDOM> getPropertyValue(jsi::Runtime &runtime,
                                  const jsi::Value &value) {
-  if (value.isObject() && value.asObject(runtime).isHostObject(runtime)) {
-    auto ptr = std::dynamic_pointer_cast<JsiSkSVG>(
-        value.asObject(runtime).asHostObject(runtime));
-    if (ptr != nullptr) {
-      return ptr->getObject();
-    }
-  } else if (value.isNull()) {
+  auto ptr = tryGetJsiObject<JsiSkSVG>(runtime, value);
+  if (ptr != nullptr) {
+    return ptr->getObject();
+  }
+  if (value.isNull()) {
     return nullptr;
   }
   throw std::runtime_error(
@@ -454,13 +500,11 @@ sk_sp<SkSVGDOM> getPropertyValue(jsi::Runtime &runtime,
 template <>
 sk_sp<skottie::Animation> getPropertyValue(jsi::Runtime &runtime,
                                            const jsi::Value &value) {
-  if (value.isObject() && value.asObject(runtime).isHostObject(runtime)) {
-    auto ptr = std::dynamic_pointer_cast<JsiSkSkottie>(
-        value.asObject(runtime).asHostObject(runtime));
-    if (ptr != nullptr) {
-      return ptr->getObject()->_animation;
-    }
-  } else if (value.isNull()) {
+  auto ptr = tryGetJsiObject<JsiSkSkottie>(runtime, value);
+  if (ptr != nullptr) {
+    return ptr->getObject()->_animation;
+  }
+  if (value.isNull()) {
     return nullptr;
   }
   throw std::runtime_error(
@@ -470,13 +514,11 @@ sk_sp<skottie::Animation> getPropertyValue(jsi::Runtime &runtime,
 template <>
 sk_sp<SkImageFilter> getPropertyValue(jsi::Runtime &runtime,
                                       const jsi::Value &value) {
-  if (value.isObject() && value.asObject(runtime).isHostObject(runtime)) {
-    auto ptr = std::dynamic_pointer_cast<JsiSkImageFilter>(
-        value.asObject(runtime).asHostObject(runtime));
-    if (ptr != nullptr) {
-      return ptr->getObject();
-    }
-  } else if (value.isNull()) {
+  auto ptr = tryGetJsiObject<JsiSkImageFilter>(runtime, value);
+  if (ptr != nullptr) {
+    return ptr->getObject();
+  }
+  if (value.isNull()) {
     return nullptr;
   }
   throw std::runtime_error(
@@ -487,9 +529,7 @@ template <>
 sk_sp<SkPicture> getPropertyValue(jsi::Runtime &runtime,
                                   const jsi::Value &value) {
   if (value.isObject()) {
-    auto picture = value.asObject(runtime)
-                       .asHostObject<JsiSkPicture>(runtime)
-                       ->getObject();
+    auto picture = getJsiObject<JsiSkPicture>(runtime, value)->getObject();
     return picture;
   }
   throw std::runtime_error("Invalid prop value for SkTextBlob received");
@@ -498,8 +538,7 @@ sk_sp<SkPicture> getPropertyValue(jsi::Runtime &runtime,
 template <>
 SkPaint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
-    auto paint =
-        value.asObject(runtime).asHostObject<JsiSkPaint>(runtime)->getObject();
+    auto paint = getJsiObject<JsiSkPaint>(runtime, value)->getObject();
     return SkPaint(*paint);
   }
   throw std::runtime_error("Invalid prop value for SkPaint received");
@@ -508,28 +547,15 @@ SkPaint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 template <>
 std::shared_ptr<JsiSkParagraph> getPropertyValue(jsi::Runtime &runtime,
                                                  const jsi::Value &value) {
-  if (value.isObject()) {
-    auto hostObject = value.asObject(runtime).asHostObject(runtime);
-    if (!hostObject) {
-      return nullptr;
-    }
-    auto para = std::dynamic_pointer_cast<JsiSkParagraph>(hostObject);
-    if (!para) {
-      return nullptr;
-    }
-    // Return a shared_ptr instead of raw pointer
-    return para;
-  }
-  return nullptr;
+  // Return a shared_ptr instead of raw pointer
+  return tryGetJsiObject<JsiSkParagraph>(runtime, value);
 }
 
 template <>
 sk_sp<SkTextBlob> getPropertyValue(jsi::Runtime &runtime,
                                    const jsi::Value &value) {
   if (value.isObject()) {
-    auto blob = value.asObject(runtime)
-                    .asHostObject<JsiSkTextBlob>(runtime)
-                    ->getObject();
+    auto blob = getJsiObject<JsiSkTextBlob>(runtime, value)->getObject();
     return blob;
   }
   throw std::runtime_error("Invalid prop value for SkTextBlob received");
@@ -539,9 +565,7 @@ template <>
 sk_sp<SkRuntimeEffect> getPropertyValue(jsi::Runtime &runtime,
                                         const jsi::Value &value) {
   if (value.isObject()) {
-    auto effect = value.asObject(runtime)
-                      .asHostObject<JsiSkRuntimeEffect>(runtime)
-                      ->getObject();
+    auto effect = getJsiObject<JsiSkRuntimeEffect>(runtime, value)->getObject();
     return effect;
   }
   throw std::runtime_error("Invalid prop value for SkRuntimeEffect received");
@@ -552,8 +576,7 @@ sk_sp<SkImage> getPropertyValue(jsi::Runtime &runtime,
                                 const jsi::Value &value) {
 
   if (value.isObject()) {
-    auto effect =
-        value.asObject(runtime).asHostObject<JsiSkImage>(runtime)->getObject();
+    auto effect = getJsiObject<JsiSkImage>(runtime, value)->getObject();
     return effect;
   } else if (value.isNull()) {
     return nullptr;
@@ -564,11 +587,9 @@ sk_sp<SkImage> getPropertyValue(jsi::Runtime &runtime,
 template <>
 SkMatrix getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
-    auto object = value.asObject(runtime);
-
-    if (object.isHostObject(runtime)) {
-      auto matrix =
-          object.asHostObject<JsiSkMatrix>(runtime)->getObject().get();
+    auto ptr = tryGetJsiObject<JsiSkMatrix>(runtime, value);
+    if (ptr != nullptr) {
+      auto matrix = ptr->getObject().get();
       return SkMatrix(*matrix);
     } else {
       return JsiSkMatrix::getMatrix(runtime, value);
@@ -1008,10 +1029,10 @@ Layer getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isBool()) {
     Layer layer = value.asBool();
     return layer;
-  } else if (value.isObject() &&
-             value.asObject(runtime).isHostObject(runtime)) {
-    auto paint =
-        value.asObject(runtime).asHostObject<JsiSkPaint>(runtime)->getObject();
+  }
+  auto ptr = tryGetJsiObject<JsiSkPaint>(runtime, value);
+  if (ptr != nullptr) {
+    auto paint = ptr->getObject();
     Layer layer = SkPaint(*paint);
     return layer;
   }

@@ -6,6 +6,8 @@ import { AnimateTextOnPath } from "./AnimateTextOnPath";
 import { AnimationWithTouchHandler } from "./AnimationWithTouchHandler";
 import { BokehExample } from "./BokehExample";
 import { InterpolationWithEasing } from "./InterpolationWithEasing";
+import { NullableGroupedValue } from "./NullableGroupedValue";
+import { SharedValueComparison } from "./SharedValueComparison";
 import { SimpleAnimation } from "./SimpleAnimation";
 import { SpringBackTouchAnimation } from "./SpringBackTouch";
 
@@ -18,6 +20,8 @@ export const ReanimatedExample: React.FC = () => {
       <AnimateTextOnPath />
       <SpringBackTouchAnimation />
       <BokehExample />
+      <SharedValueComparison />
+      <NullableGroupedValue />
     </ScrollView>
   );
 };

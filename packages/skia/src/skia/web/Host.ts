@@ -41,6 +41,13 @@ export abstract class BaseHostObject<T, N extends string>
       "delete" in this.ref &&
       typeof this.ref.delete === "function"
     ) {
+      // Renderer-owned and user-owned disposal can overlap (and emscripten
+      // throws on double delete) — make disposing an already-deleted object
+      // a no-op.
+      const ref = this.ref as unknown as { isDeleted?: () => boolean };
+      if (typeof ref.isDeleted === "function" && ref.isDeleted()) {
+        return;
+      }
       this.ref.delete();
     }
   }

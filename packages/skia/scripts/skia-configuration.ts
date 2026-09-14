@@ -88,6 +88,11 @@ export const commonArgs = [
   //["skia_enable_ganesh", !GRAPHITE],
   ["skia_enable_graphite", GRAPHITE],
   ["skia_use_dawn", GRAPHITE],
+  // m152 turns PartitionAlloc on by default for clang builds, which leaves
+  // raw_ptr/PartitionAddressSpace symbols undefined when linking against the
+  // prebuilt libskia.a (the allocator lives in its own target we don't ship).
+  // Skia's noop raw_ptr shims are used instead.
+  ["skia_use_partition_alloc", false],
   // C++20 is required for Graphite builds (Dawn uses C++20 concepts)
   // Passed via extra_cflags_cc per-target instead of skia_use_cpp20 (not available in all Skia versions)
 ];
@@ -497,6 +502,12 @@ export const copyHeaders = () => {
         "../../externals/skia/third_party/externals/dawn/include",
         "./cpp/dawn/include"
       );
+      // Dawn's cmake build (as of the Dawn revision pinned at chrome/m154)
+      // also generates a webgpu_upstream/ copy of webgpu_cpp.h and friends
+      // under its own path. Nothing in this repo or react-native-webgpu
+      // includes from webgpu_upstream/, and leaving it in trips the
+      // duplicate-header check below (same basenames as dawn/ and webgpu/).
+      fileOps.rm("./cpp/dawn/include/webgpu_upstream");
 
       console.log("      - Fixing WebGPU header references...");
       // Fix WebGPU header references
@@ -635,27 +646,30 @@ export const copyHeaders = () => {
 
   console.log("✅ Skia headers copied successfully");
 
-  // Copy src/base files
-  fileOps.mkdir("./cpp/skia/src/base");
+  // These used to live in src/base; they were folded into src/core in m152.
   fileOps.cp(
-    "../../externals/skia/src/base/SkTLazy.h",
-    "./cpp/skia/src/base/SkTLazy.h"
+    "../../externals/skia/src/core/SkTLazy.h",
+    "./cpp/skia/src/core/SkTLazy.h"
   );
   fileOps.cp(
-    "../../externals/skia/src/base/SkMathPriv.h",
-    "./cpp/skia/src/base/SkMathPriv.h"
+    "../../externals/skia/src/core/SkMathPriv.h",
+    "./cpp/skia/src/core/SkMathPriv.h"
   );
   fileOps.cp(
-    "../../externals/skia/src/base/SkTInternalLList.h",
-    "./cpp/skia/src/base/SkTInternalLList.h"
+    "../../externals/skia/src/core/SkTInternalLList.h",
+    "./cpp/skia/src/core/SkTInternalLList.h"
   );
   fileOps.cp(
-    "../../externals/skia/src/base/SkUTF.h",
-    "./cpp/skia/src/base/SkUTF.h"
+    "../../externals/skia/src/core/SkUTF.h",
+    "./cpp/skia/src/core/SkUTF.h"
   );
   fileOps.cp(
-    "../../externals/skia/src/base/SkArenaAlloc.h",
-    "./cpp/skia/src/base/SkArenaAlloc.h"
+    "../../externals/skia/src/core/SkArenaAlloc.h",
+    "./cpp/skia/src/core/SkArenaAlloc.h"
+  );
+  fileOps.cp(
+    "../../externals/skia/src/core/SkAutoLocaleSetter.h",
+    "./cpp/skia/src/core/SkAutoLocaleSetter.h"
   );
 
   // Copy skunicode

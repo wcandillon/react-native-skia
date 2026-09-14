@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -19,19 +19,25 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkData : public JsiSkWrappingSkPtrHostObject<SkData> {
+class JsiSkData : public JsiSkWrappingSkPtrNativeObject<JsiSkData, SkData> {
 public:
-  JsiSkData(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkData> asset)
-      : JsiSkWrappingSkPtrHostObject(std::move(context), std::move(asset)) {}
+  static constexpr const char *CLASS_NAME = "Data";
 
-  size_t getMemoryPressure() const override {
+  JsiSkData(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkData> asset)
+      : JsiSkWrappingSkPtrNativeObject<JsiSkData, SkData>(std::move(context),
+                                                          std::move(asset)) {}
+
+  size_t getMemoryPressure() override {
     auto data = getObject();
     return data ? data->size() : 0;
   }
 
-  std::string getObjectType() const override { return "JsiSkData"; }
+  static sk_sp<SkData> fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkData, Data)
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkData, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+  }
 };
 } // namespace RNSkia

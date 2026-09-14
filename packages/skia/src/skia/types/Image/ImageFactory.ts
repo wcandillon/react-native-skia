@@ -97,23 +97,32 @@ export interface ImageFactory {
 
   /**
    * Creates an SkImage from a WebGPU texture.
-   * This allows using textures rendered by WebGPU in Skia drawings.
+   * This allows using textures rendered by WebGPU in Skia drawings. The
+   * texture crosses the package boundary as a raw pointer: pass
+   * `texture.nativePointer` from a react-native-webgpu GPUTexture created on
+   * the shared device (importDevice(Skia.getNativeDevice())). The native side
+   * takes its own reference, so the handle stays valid even if the JS
+   * GPUTexture is garbage collected — but do not call texture.destroy()
+   * while the image is in use: destroy() releases the underlying GPU
+   * resource regardless of reference counts.
    *
    * Note: This method is only available when the Graphite backend is enabled.
    *
-   * @param texture - A GPUTexture object from the WebGPU API
+   * @param pointer - The WGPUTexture pointer (texture.nativePointer)
    * @returns An SkImage wrapping the texture, or throws if the texture is invalid
    */
-  MakeImageFromTexture(texture: GPUTexture): SkImage;
+  MakeImageFromNativeTexture(pointer: bigint): SkImage;
 
   /**
    * Creates a WebGPU texture from an SkImage.
-   * This allows using Skia images in WebGPU rendering pipelines.
+   * This allows using Skia images in WebGPU rendering pipelines. The
+   * returned pointer carries one reference and must be adopted exactly once
+   * with react-native-webgpu's adoptTexture(), which owns it from then on.
    *
    * Note: This method is only available when the Graphite backend is enabled.
    *
    * @param image - An SkImage to convert to a texture
-   * @returns A GPUTexture containing the image data, or throws if conversion fails
+   * @returns A WGPUTexture pointer for adoptTexture(), or throws on failure
    */
-  MakeTextureFromImage(image: SkImage): GPUTexture;
+  MakeNativeTextureFromImage(image: SkImage): bigint;
 }

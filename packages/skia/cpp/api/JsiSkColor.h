@@ -6,8 +6,8 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
-#include "third_party/CSSColorParser.h"
+#include "JsiSkNativeObjects.h"
+#include "api/third_party/CSSColorParser.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -20,11 +20,13 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkColor : public RNJsi::JsiHostObject {
+/**
+ * JsiSkColor is a pure utility class — colors are represented as
+ * Float32Arrays on the JS side, so there is no wrapper object.
+ */
+class JsiSkColor {
 public:
-  JsiSkColor() : JsiHostObject() {}
-
-  ~JsiSkColor() override = default;
+  JsiSkColor() = default;
 
   static jsi::Object toValue(jsi::Runtime &runtime, SkColor color) {
     auto result = runtime.global()

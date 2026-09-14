@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, View, Text } from "react-native";
-import type { WebGPUCanvasRef } from "@shopify/react-native-skia";
-import { WebGPUCanvas } from "@shopify/react-native-skia";
+import { StyleSheet, View } from "react-native";
+import type { CanvasRef } from "react-native-webgpu";
+import { Canvas, importDevice } from "react-native-webgpu";
+import { Skia } from "@shopify/react-native-skia";
 
 const triangleShader = `
 @vertex
@@ -21,54 +22,52 @@ fn fs_main() -> @location(0) vec4f {
 `;
 
 export function Triangle() {
-  const canvasRef = useRef<WebGPUCanvasRef>(null);
-  const animationRef = useRef<number>(0);
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const ref = useRef<CanvasRef>(null);
 
   useEffect(() => {
-    // Small delay to ensure the canvas is mounted
-    const timeoutId = setTimeout(async () => {
-      if (!canvasRef.current) {
-        return;
-      }
+    let running = true;
+    let frame = 0;
 
-      // Check if RNWebGPU is available (SK_GRAPHITE must be enabled)
-      if (typeof RNWebGPU === "undefined") {
-        console.warn(
-          "RNWebGPU is not available. Make sure SK_GRAPHITE is enabled."
+    (async () => {
+      // Shared-device interop: adopt Skia's Graphite device so WebGPU work and
+      // Skia rendering share one wgpu::Device (zero-copy handoff becomes
+      // possible). Falls back to a standalone device when unavailable.
+      let device: GPUDevice;
+      try {
+        device = importDevice(Skia.getNativeDevice());
+        console.log(
+          "[webgpu-coexistence] rendering with Skia's Graphite device"
         );
-        return;
+      } catch (e) {
+        console.log(
+          "[webgpu-coexistence] falling back to a standalone device",
+          e
+        );
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) {
+          console.warn("Failed to get GPU adapter");
+          return;
+        }
+        device = await adapter.requestDevice();
       }
 
-      const ctx = canvasRef.current.getContext("webgpu");
-      if (!ctx) {
+      const context = ref.current?.getContext("webgpu");
+      if (!context) {
         console.warn("Failed to get WebGPU context");
         return;
       }
 
-      // Get the device from navigator.gpu
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) {
-        console.warn("Failed to get GPU adapter");
-        return;
-      }
-
-      const device = await adapter.requestDevice();
-
-      // Configure the context
       const format = navigator.gpu.getPreferredCanvasFormat();
-      ctx.configure({
+      context.configure({
         device,
         format,
         alphaMode: "opaque",
       });
 
-      // Create shader module
       const shaderModule = device.createShaderModule({
         code: triangleShader,
       });
 
-      // Create render pipeline
       const pipeline = device.createRenderPipeline({
         layout: "auto",
         vertex: {
@@ -85,14 +84,14 @@ export function Triangle() {
         },
       });
 
-      let running = true;
+      console.log("[webgpu-coexistence] pipeline ready, rendering triangle");
 
       const render = () => {
         if (!running) {
           return;
         }
 
-        const texture = ctx.getCurrentTexture();
+        const texture = context.getCurrentTexture();
         const renderPassDescriptor: GPURenderPassDescriptor = {
           colorAttachments: [
             {
@@ -112,44 +111,23 @@ export function Triangle() {
         passEncoder.end();
 
         device.queue.submit([commandEncoder.finish()]);
-        ctx.present();
+        context.present();
 
-        animationRef.current = requestAnimationFrame(render);
+        frame = requestAnimationFrame(render);
       };
 
-      animationRef.current = requestAnimationFrame(render);
-
-      cleanupRef.current = () => {
-        running = false;
-        cancelAnimationFrame(animationRef.current);
-      };
-    }, 100);
+      frame = requestAnimationFrame(render);
+    })();
 
     return () => {
-      clearTimeout(timeoutId);
-      cleanupRef.current?.();
+      running = false;
+      cancelAnimationFrame(frame);
     };
   }, []);
 
-  // Check if WebGPU is available
-  if (typeof RNWebGPU === "undefined") {
-    return (
-      <View style={styles.container}>
-        <View style={styles.messageContainer}>
-          <Text style={styles.message}>
-            WebGPU Canvas requires SK_GRAPHITE to be enabled.
-          </Text>
-          <Text style={styles.submessage}>
-            Build react-native-skia with Graphite support to use this feature.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <WebGPUCanvas ref={canvasRef} style={styles.canvas} />
+      <Canvas ref={ref} style={styles.canvas} />
     </View>
   );
 }
@@ -161,22 +139,5 @@ const styles = StyleSheet.create({
   },
   canvas: {
     flex: 1,
-  },
-  messageContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  message: {
-    color: "#fff",
-    fontSize: 18,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  submessage: {
-    color: "#888",
-    fontSize: 14,
-    textAlign: "center",
   },
 });

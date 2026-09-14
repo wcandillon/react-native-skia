@@ -7,11 +7,11 @@
 #include <vector>
 
 #include "RNSkPlatformContext.h"
-#include "ViewProperty.h"
+#include "jsi/ViewProperty.h"
 
-#include "JsiSkImage.h"
-#include "JsiSkPoint.h"
-#include "JsiSkRect.h"
+#include "api/JsiSkImage.h"
+#include "api/JsiSkPoint.h"
+#include "api/JsiSkRect.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -84,6 +84,9 @@ public:
    Returns a snapshot of the current surface/canvas
    */
   sk_sp<SkImage> makeSnapshot(SkRect *bounds) {
+    if (_surface == nullptr) {
+      return nullptr;
+    }
     sk_sp<SkImage> image;
     if (bounds != nullptr) {
       SkIRect b =
@@ -94,8 +97,11 @@ public:
       image = _surface->makeImageSnapshot();
     }
 #if defined(SK_GRAPHITE)
-    DawnContext::getInstance().submitRecording(
-        _surface->recorder()->snap().get());
+    // Only Graphite-backed surfaces have a recorder to snap/submit; a raster
+    // surface's snapshot is already a valid CPU image.
+    if (auto *recorder = _surface->recorder()) {
+      DawnContext::getInstance().submitRecording(recorder->snap().get());
+    }
     return DawnContext::getInstance().MakeRasterImage(image);
 #else
     auto grContext = _context->getDirectContext();
@@ -117,6 +123,9 @@ public:
    Render to a canvas
    */
   bool renderToCanvas(const std::function<void(SkCanvas *)> &cb) override {
+    if (_surface == nullptr) {
+      return false;
+    }
     cb(_surface->getCanvas());
     return true;
   };

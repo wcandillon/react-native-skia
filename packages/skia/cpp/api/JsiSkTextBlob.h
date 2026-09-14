@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,14 +18,17 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkTextBlob : public JsiSkWrappingSkPtrHostObject<SkTextBlob> {
+class JsiSkTextBlob
+    : public JsiSkWrappingSkPtrNativeObject<JsiSkTextBlob, SkTextBlob> {
 public:
+  static constexpr const char *CLASS_NAME = "TextBlob";
+
   JsiSkTextBlob(std::shared_ptr<RNSkPlatformContext> context,
                 sk_sp<SkTextBlob> shader)
-      : JsiSkWrappingSkPtrHostObject<SkTextBlob>(std::move(context),
-                                                 std::move(shader)) {}
+      : JsiSkWrappingSkPtrNativeObject<JsiSkTextBlob, SkTextBlob>(
+            std::move(context), std::move(shader)) {}
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     auto textBlob = getObject();
     if (!textBlob)
       return 0;
@@ -37,9 +40,13 @@ public:
            1024; // Area estimation + base overhead
   }
 
-  std::string getObjectType() const override { return "JsiSkTextBlob"; }
+  static sk_sp<SkTextBlob> fromValue(jsi::Runtime &runtime,
+                                     const jsi::Value &obj) {
+    return objectFromValue(runtime, obj);
+  }
 
-  EXPORT_JSI_API_TYPENAME(JsiSkTextBlob, TextBlob)
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkTextBlob, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+  }
 };
 } // namespace RNSkia

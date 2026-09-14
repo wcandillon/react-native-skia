@@ -1,4 +1,4 @@
-import type { CanvasKit, Font } from "canvaskit-wasm";
+import type { CanvasKit, Font, Paint } from "canvaskit-wasm";
 
 import type {
   FontEdging,
@@ -10,7 +10,7 @@ import type {
   SkTypeface,
 } from "../types";
 
-import { HostObject, getEnum, throwNotImplementedOnRNWeb } from "./Host";
+import { HostObject, getEnum } from "./Host";
 import { JsiSkPaint } from "./JsiSkPaint";
 import { JsiSkPoint } from "./JsiSkPoint";
 import { JsiSkRect } from "./JsiSkRect";
@@ -21,8 +21,52 @@ export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
     super(CanvasKit, ref, "Font");
   }
 
-  measureText(_text: string, _paint?: SkPaint | undefined) {
-    return throwNotImplementedOnRNWeb<SkRect>();
+  measureText(text: string, paint?: SkPaint | undefined): SkRect {
+    // CanvasKit doesn't expose SkFont::measureText directly, so we polyfill
+    // it: for each glyph we take its ink bounds (relative to its own origin),
+    // offset it by the accumulated advance, and union the results. This
+    // matches the bounds computed natively by SkFont::measureText.
+    const glyphs = this.ref.getGlyphIDs(text);
+    if (glyphs.length === 0) {
+      return new JsiSkRect(this.CanvasKit, this.CanvasKit.XYWHRect(0, 0, 0, 0));
+    }
+    const skPaint = paint ? JsiSkPaint.fromValue<Paint>(paint) : null;
+    // Flattened rectangles: 4 floats (left, top, right, bottom) per glyph.
+    const bounds = this.ref.getGlyphBounds(glyphs, skPaint);
+    const advances = this.ref.getGlyphWidths(glyphs, skPaint);
+    let left = 0;
+    let top = 0;
+    let right = 0;
+    let bottom = 0;
+    let isEmpty = true;
+    let xPos = 0;
+    for (let i = 0; i < glyphs.length; i++) {
+      const l = bounds[i * 4] + xPos;
+      const t = bounds[i * 4 + 1];
+      const r = bounds[i * 4 + 2] + xPos;
+      const b = bounds[i * 4 + 3];
+      xPos += advances[i];
+      // Skip empty glyph bounds (e.g. whitespace), like SkRect::join does.
+      if (l >= r || t >= b) {
+        continue;
+      }
+      if (isEmpty) {
+        left = l;
+        top = t;
+        right = r;
+        bottom = b;
+        isEmpty = false;
+      } else {
+        left = Math.min(left, l);
+        top = Math.min(top, t);
+        right = Math.max(right, r);
+        bottom = Math.max(bottom, b);
+      }
+    }
+    return new JsiSkRect(
+      this.CanvasKit,
+      this.CanvasKit.LTRBRect(left, top, right, bottom)
+    );
   }
 
   getTextWidth(text: string, paint?: SkPaint | undefined) {

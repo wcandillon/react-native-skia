@@ -9,23 +9,27 @@ export class JsiSkTextStyle {
       color: value.color,
       decoration: value.decoration,
       decorationColor: value.decorationColor,
-      decorationStyle: value.decorationStyle
-        ? { value: value.decorationStyle }
-        : undefined,
+      decorationStyle:
+        value.decorationStyle !== undefined
+          ? { value: value.decorationStyle }
+          : undefined,
       decorationThickness: value.decorationThickness,
       fontFamilies: value.fontFamilies,
       fontSize: value.fontSize,
       fontStyle: value.fontStyle
         ? {
-            slant: value.fontStyle.slant
-              ? { value: value.fontStyle.slant }
-              : undefined,
-            weight: value.fontStyle.weight
-              ? { value: value.fontStyle.weight }
-              : undefined,
-            width: value.fontStyle.width
-              ? { value: value.fontStyle.width }
-              : undefined,
+            slant:
+              value.fontStyle.slant !== undefined
+                ? { value: value.fontStyle.slant }
+                : undefined,
+            weight:
+              value.fontStyle.weight !== undefined
+                ? { value: value.fontStyle.weight }
+                : undefined,
+            width:
+              value.fontStyle.width !== undefined
+                ? { value: value.fontStyle.width }
+                : undefined,
           }
         : undefined,
       fontFeatures: value.fontFeatures,
@@ -44,9 +48,10 @@ export class JsiSkTextStyle {
               : undefined,
           }))
         : undefined,
-      textBaseline: value.textBaseline
-        ? { value: value.textBaseline }
-        : undefined,
+      textBaseline:
+        value.textBaseline !== undefined
+          ? { value: value.textBaseline }
+          : undefined,
       wordSpacing: value.wordSpacing,
     };
   }

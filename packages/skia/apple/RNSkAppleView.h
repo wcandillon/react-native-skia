@@ -11,6 +11,7 @@ public:
   virtual CALayer *getLayer() = 0;
   virtual void setSize(int width, int height) = 0;
   virtual void setUseP3ColorSpace(bool useP3ColorSpace) = 0;
+  virtual void setHighBitDepth(bool highBitDepth) = 0;
   virtual std::shared_ptr<RNSkia::RNSkView> getDrawView() = 0;
 };
 
@@ -35,6 +36,11 @@ public:
   void setUseP3ColorSpace(bool useP3ColorSpace) override {
     std::static_pointer_cast<RNSkMetalCanvasProvider>(this->getCanvasProvider())
         ->setUseP3ColorSpace(useP3ColorSpace);
+  }
+
+  void setHighBitDepth(bool highBitDepth) override {
+    std::static_pointer_cast<RNSkMetalCanvasProvider>(this->getCanvasProvider())
+        ->setHighBitDepth(highBitDepth);
   }
 
   std::shared_ptr<RNSkia::RNSkView> getDrawView() override {

@@ -5,10 +5,6 @@ inputs:
   github_token:
     description: 'GitHub Token'
     required: false
-  download_skia:
-    description: 'Download Skia Binary Artifacts'
-    required: false
-    default: 'true'
   graphite:
     description: 'Use Graphite Skia Build'
     required: false
@@ -25,20 +21,14 @@ runs:
         cache-dependency-path: yarn.lock
         registry-url: 'https://registry.npmjs.org'
 
-    - name: Upgrade npm
-      run: npm install -g npm@latest
-      shell: bash
-
     - name: Install dependencies
       run: yarn install --immutable
       shell: bash
-      env:
-        SKIP_SKIA_DOWNLOAD: ${{ inputs.download_skia == 'false' && '1' || '' }}
 
-    - name: Copy Skia headers (standard build)
+    - name: Install Skia (standard build)
       if: inputs.graphite != 'true'
       working-directory: packages/skia
-      run: yarn copy-skia-headers
+      run: yarn install-skia
       shell: bash
 
     - name: Install Skia Graphite

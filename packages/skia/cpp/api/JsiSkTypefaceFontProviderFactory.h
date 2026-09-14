@@ -6,7 +6,7 @@
 #include <jsi/jsi.h>
 
 #include "JsiSkData.h"
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 #include "JsiSkTypefaceFontProvider.h"
 
 namespace RNSkia {
@@ -14,26 +14,27 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 namespace para = skia::textlayout;
 
-class JsiSkTypefaceFontProviderFactory : public JsiSkHostObject {
+class JsiSkTypefaceFontProviderFactory
+    : public JsiSkNativeObject<JsiSkTypefaceFontProviderFactory> {
 public:
-  JSI_HOST_FUNCTION(Make) {
-    auto provider = std::make_shared<JsiSkTypefaceFontProvider>(
+  static constexpr const char *CLASS_NAME = "TypefaceFontProviderFactory";
+
+  std::shared_ptr<JsiSkTypefaceFontProvider> Make() {
+    return std::make_shared<JsiSkTypefaceFontProvider>(
         getContext(), sk_make_sp<para::TypefaceFontProvider>());
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, provider,
-                                                       getContext());
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkTypefaceFontProviderFactory, Make))
+  size_t getMemoryPressure() override { return 2048; }
 
-  size_t getMemoryPressure() const override { return 2048; }
-
-  std::string getObjectType() const override {
-    return "JsiSkTypefaceFontProviderFactory";
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installMethod(runtime, prototype, "Make",
+                  &JsiSkTypefaceFontProviderFactory::Make);
   }
 
   explicit JsiSkTypefaceFontProviderFactory(
       std::shared_ptr<RNSkPlatformContext> context)
-      : JsiSkHostObject(std::move(context)) {}
+      : JsiSkNativeObject<JsiSkTypefaceFontProviderFactory>(
+            std::move(context)) {}
 };
 
 } // namespace RNSkia

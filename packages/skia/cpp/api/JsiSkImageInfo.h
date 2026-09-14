@@ -5,7 +5,7 @@
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -18,11 +18,14 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
-class JsiSkImageInfo : public JsiSkWrappingSharedPtrHostObject<SkImageInfo> {
+class JsiSkImageInfo
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkImageInfo, SkImageInfo> {
 public:
+  static constexpr const char *CLASS_NAME = "ImageInfo";
+
   JsiSkImageInfo(std::shared_ptr<RNSkPlatformContext> context,
                  const SkImageInfo &imageInfo)
-      : JsiSkWrappingSharedPtrHostObject<SkImageInfo>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkImageInfo, SkImageInfo>(
             std::move(context), std::make_shared<SkImageInfo>(imageInfo)) {}
 
   /**
@@ -31,8 +34,9 @@ public:
   static std::shared_ptr<SkImageInfo> fromValue(jsi::Runtime &runtime,
                                                 const jsi::Value &obj) {
     const auto &object = obj.asObject(runtime);
-    if (object.isHostObject(runtime)) {
-      return object.asHostObject<JsiSkImageInfo>(runtime)->getObject();
+    auto imageInfo = tryGetJsiObject<JsiSkImageInfo>(runtime, object);
+    if (imageInfo) {
+      return imageInfo->getObject();
     } else {
       auto width = object.getProperty(runtime, "width").asNumber();
       auto height = object.getProperty(runtime, "height").asNumber();
@@ -52,35 +56,31 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkImageInfo &imageInfo) {
-    auto imageInfoObj =
-        std::make_shared<JsiSkImageInfo>(std::move(context), imageInfo);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, imageInfoObj,
-                                                       context);
+    return makeJsiObject(runtime, std::make_shared<JsiSkImageInfo>(
+                                      std::move(context), imageInfo));
   }
 
-  JSI_PROPERTY_GET(width) { return static_cast<double>(getObject()->width()); }
-  JSI_PROPERTY_GET(height) {
-    return static_cast<double>(getObject()->height());
-  }
-  JSI_PROPERTY_GET(colorType) {
+  double getWidth() { return static_cast<double>(getObject()->width()); }
+  double getHeight() { return static_cast<double>(getObject()->height()); }
+  double getColorType() {
     return static_cast<double>(getObject()->colorType());
   }
-  JSI_PROPERTY_GET(alphaType) {
+  double getAlphaType() {
     return static_cast<double>(getObject()->alphaType());
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkImageInfo), kMinMemoryPressure);
   }
 
-  std::string getObjectType() const override { return "JsiSkImageInfo"; }
-
-  JSI_API_TYPENAME(ImageInfo);
-
-  JSI_EXPORT_PROPERTY_GETTERS(JSI_EXPORT_PROP_GET(JsiSkImageInfo, width),
-                              JSI_EXPORT_PROP_GET(JsiSkImageInfo, height),
-                              JSI_EXPORT_PROP_GET(JsiSkImageInfo, colorType),
-                              JSI_EXPORT_PROP_GET(JsiSkImageInfo, alphaType),
-                              JSI_EXPORT_PROP_GET(JsiSkImageInfo, __typename__))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installGetter(runtime, prototype, "width", &JsiSkImageInfo::getWidth);
+    installGetter(runtime, prototype, "height", &JsiSkImageInfo::getHeight);
+    installGetter(runtime, prototype, "colorType",
+                  &JsiSkImageInfo::getColorType);
+    installGetter(runtime, prototype, "alphaType",
+                  &JsiSkImageInfo::getAlphaType);
+  }
 };
 } // namespace RNSkia

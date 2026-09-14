@@ -69,6 +69,15 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
   colorSpace?: "p3" | "srgb";
+  /**
+   * Renders into a surface with more than 8 bits per channel (16-bit float on
+   * iOS, 10-bit on Android) to avoid banding in subtle gradients. Colors are
+   * identical to the default 8-bit surface, only with more precision (this is
+   * about bit depth, not HDR). On Android the extra precision survives
+   * composition only when combined with `opaque`, and the prop must be set
+   * before the canvas is mounted.
+   */
+  highBitDepth?: boolean;
   ref?: React.Ref<CanvasRef>;
   androidWarmup?: boolean;
   __destroyWebGLContextAfterRender?: boolean;
@@ -80,6 +89,7 @@ export const Canvas = ({
   children,
   onSize,
   colorSpace = "p3",
+  highBitDepth = false,
   androidWarmup = false,
   ref,
   onLayout,
@@ -180,6 +190,7 @@ export const Canvas = ({
       debug={debug}
       opaque={opaque}
       colorSpace={colorSpace}
+      highBitDepth={highBitDepth}
       androidWarmup={androidWarmup}
       onLayout={
         Platform.OS === "web" && (onSize || onLayout) ? onLayoutWeb : onLayout

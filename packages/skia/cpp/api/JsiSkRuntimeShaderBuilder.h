@@ -1,12 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <jsi/jsi.h>
 
-#include "JsiSkHostObjects.h"
+#include "JsiSkNativeObjects.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -21,34 +22,39 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class JsiSkRuntimeShaderBuilder
-    : public JsiSkWrappingSharedPtrHostObject<SkRuntimeShaderBuilder> {
+    : public JsiSkWrappingSharedPtrNativeObject<JsiSkRuntimeShaderBuilder,
+                                                SkRuntimeShaderBuilder> {
 public:
+  static constexpr const char *CLASS_NAME = "RuntimeShaderBuilder";
+
   /**
    Constructor
    */
   JsiSkRuntimeShaderBuilder(std::shared_ptr<RNSkPlatformContext> context,
                             const SkRuntimeShaderBuilder &rt)
-      : JsiSkWrappingSharedPtrHostObject<SkRuntimeShaderBuilder>(
+      : JsiSkWrappingSharedPtrNativeObject<JsiSkRuntimeShaderBuilder,
+                                           SkRuntimeShaderBuilder>(
             std::move(context), std::make_shared<SkRuntimeShaderBuilder>(rt)) {}
 
-  JSI_HOST_FUNCTION(setUniform) {
-    auto name = arguments[0].asString(runtime).utf8(runtime);
-    auto jsiValue = arguments[1].asObject(runtime).asArray(runtime);
-    auto size = jsiValue.size(runtime);
-    std::vector<SkScalar> value;
-    value.reserve(size);
-    for (int i = 0; i < size; i++) {
-      auto e = jsiValue.getValueAtIndex(runtime, i).asNumber();
-      value.push_back(e);
-    }
+  void setUniform(std::string name, std::vector<float> value) {
     getObject()
         ->uniform(name.c_str())
-        .set(value.data(), static_cast<int>(size));
-    return jsi::Value::undefined();
+        .set(value.data(), static_cast<int>(value.size()));
   }
 
-  JSI_EXPORT_FUNCTIONS(JSI_EXPORT_FUNC(JsiSkRuntimeShaderBuilder, setUniform),
-                       JSI_EXPORT_FUNC(JsiSkRuntimeShaderBuilder, dispose))
+  static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installCommon(runtime, prototype);
+    installMethod(runtime, prototype, "setUniform",
+                  &JsiSkRuntimeShaderBuilder::setUniform);
+  }
+
+  /**
+    Returns the underlying object from a host object of this type
+   */
+  static std::shared_ptr<SkRuntimeShaderBuilder>
+  fromValue(jsi::Runtime &runtime, const jsi::Value &obj) {
+    return getJsiObject<JsiSkRuntimeShaderBuilder>(runtime, obj)->getObject();
+  }
 
   /**
     Returns the jsi object from a host object of this type
@@ -56,18 +62,12 @@ public:
   static jsi::Value toValue(jsi::Runtime &runtime,
                             std::shared_ptr<RNSkPlatformContext> context,
                             const SkRuntimeShaderBuilder &rt) {
-    auto builder =
-        std::make_shared<JsiSkRuntimeShaderBuilder>(std::move(context), rt);
-    return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, builder,
-                                                       context);
+    return makeJsiObject(runtime, std::make_shared<JsiSkRuntimeShaderBuilder>(
+                                      std::move(context), rt));
   }
 
-  size_t getMemoryPressure() const override {
+  size_t getMemoryPressure() override {
     return std::max(sizeof(SkRuntimeShaderBuilder), kMinMemoryPressure);
-  }
-
-  std::string getObjectType() const override {
-    return "JsiSkRuntimeShaderBuilder";
   }
 
   /**
@@ -83,10 +83,8 @@ public:
       auto rt = JsiSkRuntimeEffect::fromValue(runtime, arguments[0]);
       auto rtb = SkRuntimeShaderBuilder(rt);
       // Return the newly constructed object
-      auto builder = std::make_shared<JsiSkRuntimeShaderBuilder>(
-          std::move(context), std::move(rtb));
-      return JSI_CREATE_HOST_OBJECT_WITH_MEMORY_PRESSURE(runtime, builder,
-                                                         context);
+      return makeJsiObject(runtime, std::make_shared<JsiSkRuntimeShaderBuilder>(
+                                        std::move(context), std::move(rtb)));
     };
   }
 };

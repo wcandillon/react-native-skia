@@ -3,6 +3,7 @@
 #import <CoreMedia/CMSampleBuffer.h>
 #include <Metal/Metal.h>
 #import <React/RCTUtils.h>
+#include <algorithm>
 #include <set>
 #include <thread>
 #include <utility>
@@ -82,6 +83,15 @@ void RNSkApplePlatformContext::releaseNativeBuffer(uint64_t pointer) {
 }
 
 uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
+#if defined(SK_GRAPHITE)
+  // A Graphite GPU texture can't be read with readPixels(nullptr) (and can't be
+  // drawn onto a raster surface) — both yield uninitialized/black pixels. Read
+  // it back to a raster image first. (JsiNativeBuffer calls the Ganesh-only
+  // SkImage::makeNonTextureImage(), which is a no-op on Graphite.)
+  if (image && image->isTextureBacked()) {
+    image = DawnContext::getInstance().MakeRasterImage(image);
+  }
+#endif
   // 0. If Image is not in BGRA, convert to BGRA as only BGRA is supported.
   if (image->colorType() != kBGRA_8888_SkColorType) {
     const SkImageInfo bgraInfo =
@@ -170,6 +180,67 @@ uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
   return reinterpret_cast<uint64_t>(pixelBuffer);
 }
 
+uint64_t RNSkApplePlatformContext::makeTestNativeBuffer(int width, int height) {
+  // Allocate a BGRA IOSurface and fill it with a procedural test pattern (RGB
+  // gradient + diagonal stripes), entirely on the CPU. No GPU / SkImage round
+  // trip, so this works the same on every backend.
+  const int bytesPerElement = 4;
+  const int pitch = width * bytesPerElement;
+  const int allocSize = width * height * bytesPerElement;
+  OSType pixelFormat = kCVPixelFormatType_32BGRA;
+  CFMutableDictionaryRef dict = CFDictionaryCreateMutable(
+      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks,
+      &kCFTypeDictionaryValueCallBacks);
+  auto setInt = [&](CFStringRef key, int value) {
+    CFNumberRef num =
+        CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &value);
+    CFDictionarySetValue(dict, key, num);
+    CFRelease(num);
+  };
+  setInt(kIOSurfaceWidth, width);
+  setInt(kIOSurfaceHeight, height);
+  setInt(kIOSurfaceBytesPerRow, pitch);
+  setInt(kIOSurfaceBytesPerElement, bytesPerElement);
+  setInt(kIOSurfacePixelFormat, static_cast<int>(pixelFormat));
+  setInt(kIOSurfaceAllocSize, allocSize);
+  IOSurfaceRef surface = IOSurfaceCreate(dict);
+  CFRelease(dict);
+  if (surface == nil) {
+    throw std::runtime_error("Failed to create " + std::to_string(width) + "x" +
+                             std::to_string(height) + " test IOSurface!");
+  }
+
+  IOSurfaceLock(surface, 0, nil);
+  auto *base = static_cast<uint8_t *>(IOSurfaceGetBaseAddress(surface));
+  const size_t rowBytes = IOSurfaceGetBytesPerRow(surface);
+  for (int y = 0; y < height; ++y) {
+    uint8_t *row = base + y * rowBytes;
+    for (int x = 0; x < width; ++x) {
+      uint8_t r = static_cast<uint8_t>((x * 255) / std::max(width - 1, 1));
+      uint8_t g = static_cast<uint8_t>((y * 255) / std::max(height - 1, 1));
+      uint8_t b = static_cast<uint8_t>(((x + y) & 0x20) ? 220 : 30);
+      row[x * 4 + 0] = b; // BGRA byte order
+      row[x * 4 + 1] = g;
+      row[x * 4 + 2] = r;
+      row[x * 4 + 3] = 0xFF;
+    }
+  }
+  IOSurfaceUnlock(surface, 0, nil);
+
+  CVPixelBufferRef pixelBuffer = nullptr;
+  CVReturn result =
+      CVPixelBufferCreateWithIOSurface(nil, surface, nil, &pixelBuffer);
+  // The CVPixelBuffer retains the IOSurface; drop our reference so the
+  // CVPixelBuffer is its sole owner (freed by releaseNativeBuffer).
+  CFRelease(surface);
+  if (result != kCVReturnSuccess) {
+    throw std::runtime_error("Failed to create CVPixelBuffer for test native "
+                             "buffer! Return value: " +
+                             std::to_string(result));
+  }
+  return reinterpret_cast<uint64_t>(pixelBuffer);
+}
+
 #if !defined(SK_GRAPHITE)
 GrDirectContext *RNSkApplePlatformContext::getDirectContext() {
   return MetalContext::getInstance().getDirectContext();
@@ -234,17 +305,6 @@ sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
 std::shared_ptr<RNSkVideo>
 RNSkApplePlatformContext::createVideo(const std::string &url) {
   return std::make_shared<RNSkAppleVideo>(url, this);
-}
-
-std::shared_ptr<WindowContext>
-RNSkApplePlatformContext::makeContextFromNativeSurface(void *surface, int width,
-                                                       int height) {
-#if defined(SK_GRAPHITE)
-  return DawnContext::getInstance().MakeWindow(surface, width, height);
-#else
-  return MetalContext::getInstance().MakeWindow((__bridge CALayer *)surface,
-                                                width, height);
-#endif
 }
 
 void RNSkApplePlatformContext::raiseError(const std::exception &err) {

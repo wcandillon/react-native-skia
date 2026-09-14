@@ -105,6 +105,8 @@ SkiaCVPixelBufferUtils::getCVPixelBufferBaseFormat(
   case kCVPixelFormatType_32BGRA:
   case kCVPixelFormatType_32ABGR:
   case kCVPixelFormatType_32RGBA:
+  // 16-bit half-float RGBA
+  case kCVPixelFormatType_64RGBAHalf:
     return CVPixelBufferBaseFormat::rgb;
   default:
     [[unlikely]] throw std::runtime_error(
@@ -125,6 +127,8 @@ SkColorType SkiaCVPixelBufferUtils::RGB::getCVPixelBufferColorType(
     [[likely]] return kBGRA_8888_SkColorType;
   case kCVPixelFormatType_32RGBA:
     return kRGBA_8888_SkColorType;
+  case kCVPixelFormatType_64RGBAHalf:
+    return kRGBA_F16_SkColorType;
   // This can be extended with branches for specific RGB formats if Apple
   // uses new formats.
   default:
@@ -444,6 +448,12 @@ MTLPixelFormat SkiaCVPixelBufferUtils::getMTLPixelFormatForCVPixelBufferPlane(
       return throwInvalidPlaneIndexForFormat(1);
     }
     return MTLPixelFormatRGBA8Unorm;
+  case kCVPixelFormatType_64RGBAHalf:
+    // 1 plane, 16-bit half-float interleaved RGBA.
+    if (planeIndex != 0) {
+      return throwInvalidPlaneIndexForFormat(1);
+    }
+    return MTLPixelFormatRGBA16Float;
   case kCVPixelFormatType_420YpCbCr8Planar:
   case kCVPixelFormatType_420YpCbCr8PlanarFullRange:
     // 3 planes, 8-bit 4:2:0 planar (Y, U, V), each plane is single channel.

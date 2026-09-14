@@ -23,6 +23,7 @@ import type {
   DrawingNodeProps,
   SkottieProps,
 } from "../../dom/types";
+import { isSharedValueSelector } from "../utils";
 
 export enum CommandType {
   // Context
@@ -79,7 +80,16 @@ export const materializeCommand = (command: any) => {
   const newProps = { ...command.props };
   if (command.animatedProps) {
     for (const key in command.animatedProps) {
-      newProps[key] = command.animatedProps[key].value;
+      const entry = command.animatedProps[key];
+      if (isSharedValueSelector(entry)) {
+        const group = entry.__sv.value;
+        newProps[key] =
+          group && typeof group === "object"
+            ? (group as Record<string, unknown>)[entry.__key]
+            : undefined;
+      } else {
+        newProps[key] = entry.value;
+      }
     }
   }
   return { ...command, props: newProps };

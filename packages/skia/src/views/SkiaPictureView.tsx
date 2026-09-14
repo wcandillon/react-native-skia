@@ -87,6 +87,7 @@ export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
       mode,
       debug = false,
       opaque = false,
+      highBitDepth = false,
       androidWarmup = false,
       ...viewProps
     } = this.props;
@@ -96,6 +97,7 @@ export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
         nativeID={`${this._nativeId}`}
         debug={debug}
         opaque={opaque}
+        highBitDepth={highBitDepth}
         androidWarmup={androidWarmup}
         {...viewProps}
       />

@@ -1,4 +1,5 @@
 import type { SkImage } from "@shopify/react-native-skia";
+import { importDevice } from "react-native-webgpu";
 import {
   Blur,
   Canvas,
@@ -189,7 +190,7 @@ export function BlurredSheet() {
     if (typeof RNWebGPU === "undefined") {
       return;
     }
-    const device = Skia.getDevice();
+    const device = importDevice(Skia.getNativeDevice());
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     const depthFormat = "depth24plus";
 
@@ -366,7 +367,7 @@ export function BlurredSheet() {
       pass.end();
       device.queue.submit([encoder.finish()]);
 
-      setImage(Skia.Image.MakeImageFromTexture(texture));
+      setImage(Skia.Image.MakeImageFromNativeTexture(texture.nativePointer));
       frameRef.current = requestAnimationFrame(render);
     };
     frameRef.current = requestAnimationFrame(render);

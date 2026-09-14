@@ -1,5 +1,6 @@
-import type { NativeCanvas } from "@shopify/react-native-skia";
 import { Skia } from "@shopify/react-native-skia";
+import type { NativeCanvas } from "react-native-webgpu";
+import { importDevice } from "react-native-webgpu";
 import * as THREE from "three";
 
 // three's WebGPURenderer expects a DOM-like canvas. Wrap the NativeCanvas in
@@ -57,11 +58,11 @@ export const makeWebGPURenderer = (
   new THREE.WebGPURenderer({
     antialias,
     // Share Skia's GPUDevice so textures three allocates can be wrapped by
-    // Skia.Image.MakeImageFromTexture without "associated with different
+    // Skia.Image.MakeImageFromNativeTexture without "associated with different
     // device" validation errors. Skia.hasDevice() is the WebGPU/Graphite
     // gate; callers already check it before constructing the renderer.
-    device: Skia.getDevice(),
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    device: importDevice(Skia.getNativeDevice()),
+
     // @ts-expect-error - three expects an HTMLCanvasElement, our wrapper duck-types it
     canvas: new ReactNativeCanvas(context.canvas as unknown as NativeCanvas),
     context,

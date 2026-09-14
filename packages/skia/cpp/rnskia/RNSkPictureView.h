@@ -11,12 +11,12 @@
 #include <jsi/jsi.h>
 
 #include "RNSkView.h"
-#include "ViewProperty.h"
+#include "jsi/ViewProperty.h"
 
-#include "JsiSkPicture.h"
-#include "RNSkLog.h"
 #include "RNSkPlatformContext.h"
-#include "RNSkTimingInfo.h"
+#include "api/JsiSkPicture.h"
+#include "utils/RNSkLog.h"
+#include "utils/RNSkTimingInfo.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"

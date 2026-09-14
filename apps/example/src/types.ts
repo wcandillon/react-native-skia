@@ -1,3 +1,7 @@
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
+import type { Routes as APIRoutes } from "./Examples/API/Routes";
+
 export type StackParamList = {
   Tests: {
     title?: string;
@@ -5,7 +9,7 @@ export type StackParamList = {
   };
   Home: undefined;
   Vertices: undefined;
-  API: undefined;
+  API: NavigatorScreenParams<APIRoutes> | undefined;
   LiquidGlass: undefined;
   Chess: undefined;
   Breathe: undefined;
@@ -33,4 +37,5 @@ export type StackParamList = {
   Pictures: undefined;
   WebGPU: undefined;
   ThreeJS: undefined;
+  HighBitDepth: undefined;
 };

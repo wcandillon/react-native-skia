@@ -447,7 +447,10 @@ export class JsiSkPath
   }
 
   simplify() {
-    warnDeprecatedPathMethod("simplify", "Use Skia.Path.Simplify(path) instead.");
+    warnDeprecatedPathMethod(
+      "simplify",
+      "Use Skia.Path.Simplify(path) instead."
+    );
     const path = this.asPath();
     const result = path.makeSimplified();
     path.delete();
@@ -500,7 +503,10 @@ export class JsiSkPath
   }
 
   stroke(opts?: StrokeOpts) {
-    warnDeprecatedPathMethod("stroke", "Use Skia.Path.Stroke(path, opts) instead.");
+    warnDeprecatedPathMethod(
+      "stroke",
+      "Use Skia.Path.Stroke(path, opts) instead."
+    );
     const path = this.asPath();
     const result = path.makeStroked(
       opts === undefined

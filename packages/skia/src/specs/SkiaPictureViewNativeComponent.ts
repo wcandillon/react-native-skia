@@ -7,6 +7,7 @@ export interface NativeProps extends ViewProps {
   debug?: boolean;
   opaque?: boolean;
   colorSpace?: string;
+  highBitDepth?: boolean;
   androidWarmup?: boolean;
   pointerEvents?: WithDefault<
     "auto" | "none" | "box-none" | "box-only",
