@@ -82,6 +82,7 @@ private:
     config.width = _width;
     config.height = _height;
     config.presentMode = wgpu::PresentMode::Fifo;
+    config.usage = supportedSurfaceUsage();
 #ifdef __APPLE__
     config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
@@ -91,6 +92,27 @@ private:
     // the sRGB-encoded values display identically to the 8-bit path.
     applyCAMetalLayerColorSpace(_nativeSurface, _format);
 #endif
+  }
+
+  // Graphite needs more than RenderAttachment on the swapchain texture:
+  // TextureBinding so a render pass can reload the existing contents through
+  // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
+  // splits the pass), and CopySrc for copy tasks. Only request what the
+  // surface reports as supported.
+  wgpu::TextureUsage supportedSurfaceUsage() {
+    wgpu::TextureUsage usage = wgpu::TextureUsage::RenderAttachment;
+    wgpu::SurfaceCapabilities capabilities;
+    if (_surface.GetCapabilities(_device.GetAdapter(), &capabilities) !=
+        wgpu::Status::Success) {
+      return usage;
+    }
+    for (auto extra :
+         {wgpu::TextureUsage::TextureBinding, wgpu::TextureUsage::CopySrc}) {
+      if (capabilities.usages & extra) {
+        usage |= extra;
+      }
+    }
+    return usage;
   }
 
   bool surfaceSupportsFormat(wgpu::TextureFormat format) {

@@ -53,15 +53,20 @@ export class ReactNativeCanvas {
 
 export const makeWebGPURenderer = (
   context: GPUCanvasContext,
-  { antialias = true }: { antialias?: boolean } = {}
-) =>
-  new THREE.WebGPURenderer({
-    antialias,
+  {
+    antialias = true,
     // Share Skia's GPUDevice so textures three allocates can be wrapped by
     // Skia.Image.MakeImageFromNativeTexture without "associated with different
     // device" validation errors. Skia.hasDevice() is the WebGPU/Graphite
     // gate; callers already check it before constructing the renderer.
-    device: importDevice(Skia.getNativeDevice()),
+    // Callers that configured `context` themselves should pass the same
+    // device here: three re-configures the context with it in init().
+    device = importDevice(Skia.getNativeDevice()),
+  }: { antialias?: boolean; device?: GPUDevice } = {}
+) =>
+  new THREE.WebGPURenderer({
+    antialias,
+    device,
 
     // @ts-expect-error - three expects an HTMLCanvasElement, our wrapper duck-types it
     canvas: new ReactNativeCanvas(context.canvas as unknown as NativeCanvas),

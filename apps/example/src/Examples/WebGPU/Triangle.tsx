@@ -4,7 +4,7 @@ import type { CanvasRef } from "react-native-webgpu";
 import { Canvas, importDevice } from "react-native-webgpu";
 import { Skia } from "@shopify/react-native-skia";
 
-const triangleShader = `
+const triangleShader = /* wgsl */`
 @vertex
 fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4f {
   var pos = array<vec2f, 3>(
