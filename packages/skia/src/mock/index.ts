@@ -49,7 +49,6 @@ export const Mock = (CanvasKit: CanvasKit) => {
     useValueEffect: Noop,
     // Reanimated hooks
     isOnMainThread: () => true,
-    isFabric: true,
     useClock: NoopSharedValue,
     usePathInterpolation: NoopSharedValue,
     useImageAsTexture: NoopSharedValue,

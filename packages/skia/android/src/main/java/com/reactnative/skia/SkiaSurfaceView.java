@@ -1,4 +1,4 @@
-package com.shopify.reactnative.skia;
+package com.reactnative.skia;
 
 import android.annotation.SuppressLint;
 import android.content.Context;

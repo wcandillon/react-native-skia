@@ -7,8 +7,6 @@ const ANDROID_WS_HOST = "10.0.2.2";
 const IOS_WS_HOST = "localhost";
 const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
 const PORT = 4242;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const arch = (global as any)?.nativeFabricUIManager ? "fabric" : "paper";
 // Whether this Skia build runs the Graphite backend. Probed via
 // getNativeDevice(), which throws on Ganesh builds — checking navigator.gpu
 // would only tell us react-native-webgpu is installed, which can be true on
@@ -36,7 +34,6 @@ export const useClient = (): UseClient => {
       ws.send(
         JSON.stringify({
           OS,
-          arch,
           graphite,
         })
       );

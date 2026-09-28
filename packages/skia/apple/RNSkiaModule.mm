@@ -1,6 +1,5 @@
 
 #import "RNSkiaModule.h"
-#import <React/RCTBridge+Private.h>
 #import <ReactCommon/RCTTurboModule.h>
 
 @implementation RNSkiaModule {
@@ -35,14 +34,9 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(install) {
     // Already initialized, ignore call.
     return @true;
   }
-#ifndef RCT_REMOVE_LEGACY_ARCH
   if (!jsInvoker) {
-    RCTCxxBridge *cxxBridge = (RCTCxxBridge *)self.bridge;
-    jsInvoker = cxxBridge.jsCallInvoker;
-  }
-#endif
-  if (!jsInvoker) {
-    NSLog(@"[RNSkiaModule] Failed to install SkiaManager: jsInvoker is not initialized.");
+    NSLog(@"[RNSkiaModule] Failed to install SkiaManager: jsInvoker is not "
+          @"initialized.");
     return @false;
   }
   skiaManager = [[SkiaManager alloc] initWithBridge:self.bridge
@@ -50,12 +44,10 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(install) {
   return @true;
 }
 
-#ifdef RCT_NEW_ARCH_ENABLED
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params {
   jsInvoker = params.jsInvoker;
   return std::make_shared<facebook::react::NativeSkiaModuleSpecJSI>(params);
 }
-#endif
 
 @end

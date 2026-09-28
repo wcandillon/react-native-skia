@@ -419,7 +419,6 @@ interface TestingSurface {
   height: number;
   fontSize: number;
   OS: TestOS;
-  arch: "paper" | "fabric";
   // True when the connected device runs the Graphite backend, i.e.
   // Skia.getNativeDevice() is available (see useClient.ts in the example
   // app). Always false in Node (LocalSurface) and on Ganesh builds.
@@ -431,7 +430,6 @@ class LocalSurface implements TestingSurface {
   readonly height = 256;
   readonly fontSize = 32;
   readonly OS = "node";
-  readonly arch = "paper";
   readonly graphite = false;
 
   eval<Ctx extends EvalContext, R>(
@@ -479,7 +477,6 @@ class RemoteSurface implements TestingSurface {
   readonly height = 256;
   readonly fontSize = 32;
   readonly OS = global.testOS;
-  readonly arch = global.testArch;
   readonly graphite = global.testGraphite ?? false;
 
   eval<Ctx extends EvalContext, R>(

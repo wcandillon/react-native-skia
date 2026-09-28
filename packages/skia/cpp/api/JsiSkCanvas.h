@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "CustomBlendModes.h"
 #include "JsiSkConverters.h"
 #include "JsiSkFont.h"
 #include "JsiSkImage.h"
@@ -226,8 +227,7 @@ public:
 
   void drawVertices(sk_sp<SkVertices> vertices, double blendMode,
                     std::shared_ptr<SkPaint> paint) {
-    _canvas->drawVertices(vertices, static_cast<SkBlendMode>(blendMode),
-                          *paint);
+    _canvas->drawVertices(vertices, toBlendMode(blendMode), *paint);
   }
 
   JSI_HOST_FUNCTION(drawPatch) {
@@ -287,11 +287,19 @@ public:
       }
     }
 
-    auto paint =
-        count >= 4 ? JsiSkPaint::fromValue(runtime, arguments[4]) : nullptr;
-    auto blendMode = static_cast<SkBlendMode>(arguments[3].asNumber());
+    auto blendMode =
+        count >= 4 && !arguments[3].isNull() && !arguments[3].isUndefined()
+            ? toBlendMode(arguments[3].asNumber())
+            : SkBlendMode::kModulate;
+
+    std::shared_ptr<SkPaint> paint;
+    if (count >= 5 && !arguments[4].isNull() && !arguments[4].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[4]);
+    }
+    SkPaint defaultPaint;
     _canvas->drawPatch(cubics.data(), colors.empty() ? nullptr : colors.data(),
-                       texs.empty() ? nullptr : texs.data(), blendMode, *paint);
+                       texs.empty() ? nullptr : texs.data(), blendMode,
+                       paint ? *paint : defaultPaint);
     return jsi::Value::undefined();
   }
 
@@ -392,7 +400,7 @@ public:
 
   void drawColor(JsiColor cl, JsiOptional<double> mode) {
     if (mode.has_value()) {
-      _canvas->drawColor(cl, static_cast<SkBlendMode>(*mode));
+      _canvas->drawColor(cl, toBlendMode(*mode));
     } else {
       _canvas->drawColor(cl);
     }
@@ -411,9 +419,10 @@ public:
     auto rects = arguments[1].asObject(runtime).asArray(runtime);
     auto transforms = arguments[2].asObject(runtime).asArray(runtime);
     auto paint = JsiSkPaint::fromValue(runtime, arguments[3]);
-    auto blendMode = count > 5 && !arguments[4].isUndefined()
-                         ? static_cast<SkBlendMode>(arguments[4].asNumber())
-                         : SkBlendMode::kDstOver;
+    auto blendMode =
+        count > 4 && !arguments[4].isNull() && !arguments[4].isUndefined()
+            ? toBlendMode(arguments[4].asNumber())
+            : SkBlendMode::kDstOver;
 
     std::vector<SkRSXform> xforms;
     int xformsSize = static_cast<int>(transforms.size(runtime));

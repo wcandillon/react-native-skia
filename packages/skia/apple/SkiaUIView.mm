@@ -1,5 +1,4 @@
 #import <QuartzCore/CATransaction.h>
-#import <React/RCTBridge.h>
 
 #import "RNSkiaModule.h"
 #import "SkiaUIView.h"
@@ -24,24 +23,6 @@
 
 #pragma mark Initialization and destruction
 
-- (instancetype)initWithManager:(RNSkia::RNSkManager *)manager
-                        factory:
-                            (std::function<std::shared_ptr<RNSkBaseAppleView>(
-                                 std::shared_ptr<RNSkia::RNSkPlatformContext>)>)
-                                factory {
-  self = [super init];
-  if (self) {
-    [self initCommon:manager factory:factory];
-  }
-  // Listen to notifications about module invalidation
-  [[NSNotificationCenter defaultCenter]
-      addObserver:self
-         selector:@selector(willInvalidateModules)
-             name:RCTBridgeWillInvalidateModulesNotification
-           object:nil];
-  return self;
-}
-
 - (void)initCommon:(RNSkia::RNSkManager *)manager
            factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory {
@@ -49,11 +30,6 @@
   _nativeId = 0;
   _debugMode = false;
   _factory = factory;
-}
-
-- (void)willInvalidateModules {
-  _impl = nullptr;
-  _manager = nullptr;
 }
 
 #pragma mark Lifecycle
@@ -99,13 +75,8 @@
 
 - (void)dealloc {
   [self unregisterView];
-  [[NSNotificationCenter defaultCenter]
-      removeObserver:self
-                name:RCTBridgeWillInvalidateModulesNotification
-              object:nil];
 }
 
-#ifdef RCT_NEW_ARCH_ENABLED
 - (void)prepareForRecycle {
   [super prepareForRecycle];
   [self unregisterView];
@@ -120,7 +91,6 @@
     _manager = [SkiaManager latestActiveSkManager].get();
   }
 }
-#endif // RCT_NEW_ARCH_ENABLED
 
 - (void)unregisterView {
   if (_manager != nullptr && _nativeId != 0) {

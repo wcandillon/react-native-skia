@@ -5,7 +5,6 @@ declare global {
   var testServer: Server;
   var testClient: WebSocket;
   var testOS: "ios" | "android" | "web" | "node" | "macos";
-  var testArch: "paper" | "fabric";
   // Whether the connected device is running the Graphite backend (Dawn/WebGPU).
   // Older example-app builds don't send this field, so it defaults to false.
   var testGraphite: boolean;
@@ -15,10 +14,6 @@ const isOS = (
   os: string
 ): os is "android" | "ios" | "web" | "node" | "macos" => {
   return ["ios", "android", "web", "node", "macos"].indexOf(os) !== -1;
-};
-
-const isArch = (arc: string): arc is "paper" | "fabric" => {
-  return ["paper", "fabric"].indexOf(arc) !== -1;
 };
 
 const globalSetup = () => {
@@ -35,18 +30,14 @@ const globalSetup = () => {
         global.testClient = client;
         client.once("message", (msg) => {
           const obj = JSON.parse(msg.toString("utf8"));
-          const { OS, arch, graphite } = obj;
+          const { OS, graphite } = obj;
           if (!isOS(OS)) {
             throw new Error("Unknown testing platform: " + OS);
           }
-          if (!isArch(arch)) {
-            throw new Error("Unknown testing architecture: " + arch);
-          }
           global.testOS = OS;
-          global.testArch = arch;
           global.testGraphite = graphite === true;
           console.log(
-            `${OS} device connected (${arch}, graphite: ${global.testGraphite})`
+            `${OS} device connected (graphite: ${global.testGraphite})`
           );
           resolve();
         });

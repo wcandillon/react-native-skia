@@ -1,4 +1,3 @@
-#ifdef RCT_NEW_ARCH_ENABLED
 #import "SkiaPictureView.h"
 
 #import "RNSkAppleView.h"
@@ -9,7 +8,6 @@
 #import "SkiaManager.h"
 #import "SkiaUIView.h"
 
-#import <React/RCTBridge+Private.h>
 #import <React/RCTConversions.h>
 #import <React/RCTFabricComponentsPlugins.h>
 
@@ -70,5 +68,3 @@ using namespace facebook::react;
 Class<RCTComponentViewProtocol> SkiaPictureViewCls(void) {
   return SkiaPictureView.class;
 }
-
-#endif // RCT_NEW_ARCH_ENABLED

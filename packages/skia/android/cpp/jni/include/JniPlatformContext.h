@@ -21,7 +21,7 @@ namespace jni = facebook::jni;
 class JniPlatformContext : public jni::HybridClass<JniPlatformContext> {
 public:
   static auto constexpr kJavaDescriptor =
-      "Lcom/shopify/reactnative/skia/PlatformContext;";
+      "Lcom/reactnative/skia/PlatformContext;";
 
   static jni::local_ref<jhybriddata>
   initHybrid(jni::alias_ref<jhybridobject> jThis, const float);

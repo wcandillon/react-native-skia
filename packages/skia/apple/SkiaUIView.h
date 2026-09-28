@@ -10,29 +10,14 @@
 #import <React/RCTUIKit.h>
 #endif // !TARGET_OS_OSX
 
+#import <React/RCTViewComponentView.h>
+
 #import "RNSkAppleView.h"
 #import "RNSkManager.h"
 #import "SkiaManager.h"
 
-#if RCT_NEW_ARCH_ENABLED
-#import <React/RCTViewComponentView.h>
-#endif // RCT_NEW_ARCH_ENABLED
+@interface SkiaUIView : RCTViewComponentView
 
-@interface SkiaUIView :
-#if RCT_NEW_ARCH_ENABLED
-    RCTViewComponentView
-#else
-#if !TARGET_OS_OSX
-    UIView
-#else
-    RCTUIView
-#endif // !TARGET_OS_OSX
-#endif // RCT_NEW_ARCH_ENABLED
-
-- (instancetype)
-    initWithManager:(RNSkia::RNSkManager *)manager
-            factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
-                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory;
 - (void)initCommon:(RNSkia::RNSkManager *)manager
            factory:(std::function<std::shared_ptr<RNSkBaseAppleView>(
                         std::shared_ptr<RNSkia::RNSkPlatformContext>)>)factory;

@@ -7,47 +7,6 @@
 
 #include "RNSkManager.h"
 
-namespace {
-
-#if REACT_NATIVE_VERSION >= 75
-using CallFuncType = facebook::react::CallFunc;
-#else
-using CallFuncType = std::function<void()>;
-#endif
-
-// For bridgeless mode, currently we don't have a way to get the JSCallInvoker
-// from Java. Workaround to use RuntimeExecutor to simulate the behavior of
-// JSCallInvoker. In the future when bridgeless mode is a standard and no more
-// backward compatible to be considered, we could just use RuntimeExecutor to
-// run task on JS thread.
-class BridgelessJSCallInvoker : public facebook::react::CallInvoker {
-public:
-  explicit BridgelessJSCallInvoker(
-      facebook::react::RuntimeExecutor runtimeExecutor)
-      : runtimeExecutor_(std::move(runtimeExecutor)) {}
-
-  void invokeAsync(CallFuncType &&func) noexcept override {
-    runtimeExecutor_([func = std::move(func)](facebook::jsi::Runtime &runtime) {
-#if REACT_NATIVE_VERSION >= 75
-      func(runtime);
-#else
-      func();
-#endif
-    });
-  }
-
-  void invokeSync(CallFuncType &&func) override {
-    throw std::runtime_error(
-        "Synchronous native -> JS calls are currently not supported.");
-  }
-
-private:
-  facebook::react::RuntimeExecutor runtimeExecutor_;
-
-}; // class BridgelessJSCallInvoker
-
-} // namespace
-
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -65,12 +24,11 @@ void JniSkiaManager::registerNatives() {
 jni::local_ref<jni::HybridClass<JniSkiaManager>::jhybriddata>
 JniSkiaManager::initHybrid(
     jni::alias_ref<jhybridobject> jThis, jlong jsContext,
-    jni::alias_ref<facebook::react::JRuntimeExecutor::javaobject>
-        jRuntimeExecutor,
+    jni::alias_ref<facebook::react::CallInvokerHolder::javaobject>
+        jsCallInvokerHolder,
     JavaPlatformContext skiaContext) {
 
-  auto jsCallInvoker = std::make_shared<BridgelessJSCallInvoker>(
-      jRuntimeExecutor->cthis()->get());
+  auto jsCallInvoker = jsCallInvokerHolder->cthis()->getCallInvoker();
   // cast from JNI hybrid objects to C++ instances
   return makeCxxInstance(jThis, reinterpret_cast<jsi::Runtime *>(jsContext),
                          jsCallInvoker, skiaContext->cthis());

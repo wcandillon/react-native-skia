@@ -9,10 +9,6 @@ const shouldNativeBufferTestRun = () => {
   if (surface.OS !== "ios" && surface.OS !== "android") {
     return false;
   }
-  // Skip test on Fabric (it runs on API Level 21 which doesn't support native buffers)
-  if (surface.arch === "fabric" && surface.OS === "android") {
-    return false;
-  }
   return true;
 };
 

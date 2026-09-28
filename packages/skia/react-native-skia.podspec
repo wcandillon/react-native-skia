@@ -193,14 +193,8 @@ Pod::Spec.new do |s|
   ]
   s.exclude_files = graphite_exclusions unless use_graphite
 
-  if defined?(install_modules_dependencies()) != nil
-    install_modules_dependencies(s)
-    s.dependency "React"
-    s.dependency "React-callinvoker"
-    s.dependency "React-Core"
-  else
-    s.dependency "React"
-    s.dependency "React-callinvoker"
-    s.dependency "React-Core"
-  end
+  install_modules_dependencies(s)
+  s.dependency "React"
+  s.dependency "React-callinvoker"
+  s.dependency "React-Core"
 end

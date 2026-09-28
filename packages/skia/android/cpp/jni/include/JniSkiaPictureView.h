@@ -39,7 +39,7 @@ class JniSkiaPictureView : public jni::HybridClass<JniSkiaPictureView>,
                            public JniSkiaBaseView {
 public:
   static auto constexpr kJavaDescriptor =
-      "Lcom/shopify/reactnative/skia/SkiaPictureView;";
+      "Lcom/reactnative/skia/SkiaPictureView;";
 
   static jni::local_ref<jhybriddata>
   initHybrid(jni::alias_ref<jhybridobject> jThis,

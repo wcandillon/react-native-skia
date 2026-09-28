@@ -1,4 +1,4 @@
-package com.shopify.reactnative.skia;
+package com.reactnative.skia;
 
 import com.facebook.react.uimanager.PointerEvents;
 import com.facebook.react.uimanager.ViewProps;

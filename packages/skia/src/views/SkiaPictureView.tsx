@@ -20,14 +20,10 @@ export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
   constructor(props: SkiaPictureViewProps) {
     super(props);
     this._nativeId = SkiaViewNativeId.current++;
-    const { picture, onSize } = props;
+    const { picture } = props;
     if (picture) {
       assertSkiaViewApi();
       SkiaViewApi.setJsiProperty(this._nativeId, "picture", picture);
-    }
-    if (onSize) {
-      assertSkiaViewApi();
-      SkiaViewApi.setJsiProperty(this._nativeId, "onSize", onSize);
     }
     this.tick();
   }
@@ -39,14 +35,10 @@ export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
   }
 
   componentDidUpdate(prevProps: SkiaPictureViewProps) {
-    const { picture, onSize } = this.props;
+    const { picture } = this.props;
     if (picture !== prevProps.picture) {
       assertSkiaViewApi();
       SkiaViewApi.setJsiProperty(this._nativeId, "picture", picture);
-    }
-    if (onSize !== prevProps.onSize) {
-      assertSkiaViewApi();
-      SkiaViewApi.setJsiProperty(this._nativeId, "onSize", onSize);
     }
     this.tick();
   }

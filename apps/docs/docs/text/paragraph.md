@@ -10,7 +10,7 @@ React Native Skia offers an API to perform text layouts using the Skia Paragraph
 ## Hello World
 
 In the example below, we create a simple paragraph based on custom fonts.
-The emojis will be renderer using the emoji font available on the platform.
+The emojis will be rendered using the emoji font available on the platform.
 Other system fonts are available as well.
 
 ```tsx twoslash

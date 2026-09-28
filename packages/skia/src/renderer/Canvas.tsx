@@ -59,12 +59,9 @@ export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
   return { ref, size };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const isFabric = Boolean((global as any)?.nativeFabricUIManager);
-
 export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   debug?: boolean;
-  /** @deprecated Not supported on Fabric. Use `onSize` or `useCanvasSize()` instead. */
+  /** @deprecated Not supported on native. Use `onSize` or `useCanvasSize()` instead. */
   onLayout?: ViewProps["onLayout"];
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
@@ -95,7 +92,7 @@ export const Canvas = ({
   onLayout,
   ...viewProps
 }: CanvasProps) => {
-  if (onLayout && isFabric) {
+  if (onLayout && Platform.OS !== "web") {
     console.error(
       "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://shopify.github.io/react-native-skia/docs/canvas/overview/#getting-the-canvas-size"
     );

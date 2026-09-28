@@ -7,10 +7,9 @@
 
 #import "RNSkApplePlatformContext.h"
 
-// Forward-declared runtime accessor that is satisfied by RCTCxxBridge
-// (legacy/transitional) and RCTBridgeProxy (bridgeless). Avoids referencing
-// RCTCxxBridge directly, which is compiled out when RCT_REMOVE_LEGACY_ARCH
-// is set (React Native 0.82+).
+// Forward-declared runtime accessor satisfied by RCTBridgeProxy (bridgeless).
+// Avoids referencing RCTCxxBridge, which is compiled out when
+// RCT_REMOVE_LEGACY_ARCH is set (React Native 0.82+).
 @interface RCTBridge (RNSkiaRuntime)
 - (void *)runtime;
 @end
@@ -54,12 +53,11 @@ static __weak SkiaManager *sharedInstance = nil;
   sharedInstance = nil;
 }
 
-#ifdef RCT_NEW_ARCH_ENABLED
 + (std::shared_ptr<RNSkia::RNSkManager>)latestActiveSkManager {
   if (sharedInstance != nil) {
     return [sharedInstance skManager];
   }
   return nullptr;
 }
-#endif // RCT_NEW_ARCH_ENABLED
+
 @end

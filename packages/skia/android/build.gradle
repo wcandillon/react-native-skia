@@ -2,39 +2,23 @@ import java.nio.file.Paths
 
 // android/build.gradle
 
-// based on:
-//
-// * https://github.com/facebook/react-native/blob/0.60-stable/template/android/build.gradle
-//   previous location:
-//   - https://github.com/facebook/react-native/blob/0.58-stable/local-cli/templates/HelloWorld/android/build.gradle
-//
-// * https://github.com/facebook/react-native/blob/0.60-stable/template/android/app/build.gradle
-//   previous location:
-//   - https://github.com/facebook/react-native/blob/0.58-stable/local-cli/templates/HelloWorld/android/app/build.gradle
-
 // FBJNI build is based on:
 // https://github.com/facebookincubator/fbjni/blob/main/docs/android_setup.md
 
 // These defaults should reflect the SDK versions used by
-// the minimum React Native version supported.
-def DEFAULT_COMPILE_SDK_VERSION = 28
-def DEFAULT_BUILD_TOOLS_VERSION = '28.0.3'
-def DEFAULT_MIN_SDK_VERSION = 21
-def DEFAULT_TARGET_SDK_VERSION = 28
+// the minimum React Native version supported (0.78).
+def DEFAULT_COMPILE_SDK_VERSION = 35
+def DEFAULT_BUILD_TOOLS_VERSION = '35.0.0'
+def DEFAULT_MIN_SDK_VERSION = 24
+def DEFAULT_TARGET_SDK_VERSION = 34
 
 def safeExtGet(prop, fallback) {
     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
-def isNewArchitectureEnabled() {
-    // To opt-in for the New Architecture, you can either:
-    // - Set `newArchEnabled` to true inside the `gradle.properties` file
-    // - Invoke gradle with `-newArchEnabled=true`
-    // - Set an environment variable `ORG_GRADLE_PROJECT_newArchEnabled=true`
-    return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
-}
-
 apply plugin: 'com.android.library'
+// Runs codegen for the TurboModule spec and the Fabric component (src/specs).
+apply plugin: 'com.facebook.react'
 
 def reactNativeArchitectures() {
   def value = project.getProperties().get("reactNativeArchitectures")
@@ -128,10 +112,6 @@ logger.warn("react-native-skia: node_modules/ found at: ${nodeModules}")
 def sourceBuild = false
 def defaultDir
 
-if (isNewArchitectureEnabled()) {
-    apply plugin: "com.facebook.react"
-}
-
 if (rootProject.ext.has('reactNativeAndroidRoot')) {
   defaultDir = rootProject.ext.get('reactNativeAndroidRoot')
 } else if (findProject(':ReactAndroid') != null) {
@@ -147,54 +127,18 @@ if (!defaultDir.exists()) {
     )
 }
 
-def prebuiltDir = sourceBuild
-    ? "$nodeModules/react-native/ReactAndroid/src/main/jni/prebuilt/lib"
-    : "$buildDir/react-native-0*/jni"
-
-
-def buildType = "debug"
-if (gradle.startParameter.taskRequests.args[0].toString().contains("Release")) {
-    buildType = "release"
-} else if (gradle.startParameter.taskRequests.args[0].toString().contains("Debug")) {
-    buildType = "debug"
-}
-
 def reactProperties = new Properties()
 file("$nodeModules/react-native/ReactAndroid/gradle.properties").withInputStream { reactProperties.load(it) }
 def FULL_RN_VERSION =  (System.getenv("REACT_NATIVE_OVERRIDE_VERSION") ?: reactProperties.getProperty("VERSION_NAME"))
 def REACT_NATIVE_VERSION = FULL_RN_VERSION.split("\\.")[1].toInteger()
-def ENABLE_PREFAB = REACT_NATIVE_VERSION > 68
 
 logger.warn("react-native-skia: RN Version: ${REACT_NATIVE_VERSION} / ${FULL_RN_VERSION}")
 logger.warn("react-native-skia: isSourceBuild: ${sourceBuild}")
-logger.warn("react-native-skia: PrebuiltDir: ${prebuiltDir}")
-logger.warn("react-native-skia: buildType: ${buildType}")
 logger.warn("react-native-skia: buildDir: ${buildDir}")
 logger.warn("react-native-skia: node_modules: ${nodeModules}")
-logger.warn("react-native-skia: Enable Prefab: ${ENABLE_PREFAB}")
-
-buildscript {
-    // The Android Gradle plugin is only required when opening the android folder stand-alone.
-    // This avoids unnecessary downloads and potential conflicts when the library is included as a
-    // module dependency in an application project.
-    // ref: https://docs.gradle.org/current/userguide/tutorial_using_tasks.html#sec:build_script_external_dependencies
-    if (project == rootProject) {
-        repositories {
-            google()
-        }
-        dependencies {
-            // This should reflect the Gradle plugin version used by
-            // the minimum React Native version supported.
-            classpath 'com.android.tools.build:gradle:3.4.1'
-        }
-    }
-}
 
 android {
-    def agpVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
-    if (agpVersion.tokenize('.')[0].toInteger() >= 7) {
-      namespace "com.shopify.reactnative.skia"
-    }
+    namespace "com.reactnative.skia"
 
     compileSdkVersion safeExtGet('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION)
     buildToolsVersion safeExtGet('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION)
@@ -213,17 +157,15 @@ android {
         targetSdkVersion safeExtGet('targetSdkVersion', DEFAULT_TARGET_SDK_VERSION)
         versionCode 1
         versionName "1.0"
-        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
 
         externalNativeBuild {
             cmake {
-                cppFlags "-fexceptions", "-frtti", "-std=c++1y", "-DONANDROID"
+                cppFlags "-fexceptions", "-frtti"
                 abiFilters (*reactNativeArchitectures())
                 arguments '-DANDROID_STL=c++_shared',
                           "-DREACT_NATIVE_VERSION=${REACT_NATIVE_VERSION}",
                           "-DREACT_NATIVE_DIR=${defaultDir}",
                           "-DNODE_MODULES_DIR=${nodeModules}",
-                          "-DPREBUILT_DIR=${prebuiltDir}",
                           "-DSKIA_LIBS_PATH=${skiaLibsPath}",
                           "-DSK_GRAPHITE=${useGraphite ? 'ON' : 'OFF'}",
                           "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
@@ -245,25 +187,6 @@ android {
         jniLibs {
             srcDirs += [skiaLibsPath]
         }
-        java {
-            if (!isNewArchitectureEnabled()) {
-                srcDirs += [
-                    "src/paper/java",
-                ]
-            }
-
-            if (REACT_NATIVE_VERSION == 74) {
-                srcDirs += [
-                    "src/reactnative74/java"
-                ]
-            } else {
-                // the name latest here might be confusing as it applies for versions
-                // below 74 as well
-                srcDirs += [
-                    "src/latest/java"
-                ]
-            }
-        }
     }
 
     externalNativeBuild {
@@ -277,45 +200,23 @@ android {
              "**/libc++_shared.so",
              "**/libfbjni.so",
              "**/libjsi.so",
-             "**/libreact_nativemodule_core.so",
-             "**/libreactnativejni.so",
-             "**/libruntimeexecutor.so",
-             "**/libturbomodulejsijni.so",
              "**/libreactnative.so",
              "META-INF/**"
         ]
     }
 
-    if (ENABLE_PREFAB) {
-        buildFeatures {
-                prefab true
-                prefabPublishing true
-        }
-        prefab {
-            rnskia {
-                headers "${project.buildDir}/headers/rnskia/"
-            }
-        }
+    buildFeatures {
+        prefab true
+        prefabPublishing true
     }
-
-    // Create new configurations that can be referred to in dependencies.
-    // The Android Gradle Plugin 3.* does not allow hooking into existing
-    // configurations like `implementation`.
-    configurations {
-        extractHeaders
-        extractJNI
+    prefab {
+        rnskia {
+            headers "${project.buildDir}/headers/rnskia/"
+        }
     }
 }
 
 repositories {
-    maven {
-        // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-        url("$rootDir/../node_modules/react-native/android")
-    }
-    maven {
-        // Android JSC is installed from npm
-        url("$rootDir/../node_modules/jsc-android/dist")
-    }
     mavenCentral {
         // We don't want to fetch react-native from Maven Central as there are
         // older versions over there.
@@ -329,102 +230,32 @@ repositories {
 dependencies {
     //noinspection GradleDynamicVersion
     implementation 'com.facebook.react:react-native:+'  // From node_modules
+}
 
-    if (REACT_NATIVE_VERSION < 71) {
-        logger.warn("react-native-skia: Extracting files from AAR (pre RN 0.71)")
-        //noinspection GradleDynamicVersion
-        extractHeaders("com.facebook.fbjni:fbjni:0.2.2:headers")
-        //noinspection GradleDynamicVersion
-        extractJNI("com.facebook.fbjni:fbjni:0.2.2")
-    }
+// Package all the cpp code in a flattened directory structure
+task prepareHeaders(type: Copy) {
+    from("../cpp")
+    from("./cpp")
+    into "${project.buildDir}/headers/rnskia/react-native-skia"
+    includeEmptyDirs = false
+    include "**/*.h"
+    eachFile {
+        String path = it.path
 
-    if (!sourceBuild) {
-        def rnAarMatcher = "**/react-native/**/*${buildType}.aar"
-        if (REACT_NATIVE_VERSION < 69) {
-            logger.warn("react-native-skia: aar state pre 69. match **/**/*.aar")
-            rnAarMatcher = "**/**/*.aar"
-        } else if (REACT_NATIVE_VERSION >= 71) {
-            logger.warn("react-native-skia: aar state post 70, do nothing")
-            return
+        if (path.contains("api/third_party")) {
+            // Skip flattening third_party dir
+            path = path.substring("api/".length())
+        } else if (path.contains("skia/include") || path.contains("skia/modules") || path.contains("skia/src")) {
+            // Skip flattening Skia dir
+            path = path.substring("skia/".length())
+        } else if (path.startsWith("dawn/include/")) {
+            // Flatten dawn/include/dawn and dawn/include/webgpu
+            path = path.substring("dawn/include/".length())
+        } else {
+            // flatten anything else
+            path = path.substring(path.lastIndexOf("/") + 1)
         }
-        def rnAAR = fileTree("${nodeModules}/react-native/android").matching({ it.include rnAarMatcher }).singleFile
-        logger.warn("react-native-skia: Extracting JNI files (pre RN 0.71) ${rnAAR}")
-        extractJNI(files(rnAAR))
+        it.path = path
     }
 }
-
-def localBuildDir = buildDir
-def headersConfiguration = configurations.extractHeaders
-def jniConfiguration = configurations.extractJNI
-
-task extractAARHeaders {
-    doLast {
-        headersConfiguration.files.each { file ->
-            def absFile = file.absoluteFile
-            project.copy {
-                from project.zipTree(absFile)
-                into "${localBuildDir}/${absFile.name}"
-                include "**/*.h"
-            }
-        }
-    }
-}
-
-task extractJNIFiles {
-    doLast {
-        jniConfiguration.files.each { file ->
-            def absFile = file.absoluteFile
-            project.copy {
-                from project.zipTree(absFile)
-                into "${localBuildDir}/${absFile.name}"
-                include "jni/**/*"
-            }
-        }
-    }
-}
-
-extractJNIFiles.mustRunAfter extractAARHeaders
-
-if (ENABLE_PREFAB) {
-    // Package all the cpp code in a flattened directory structure
-    task prepareHeaders(type: Copy) {
-        from("../cpp")
-        from("./cpp")
-        into "${project.buildDir}/headers/rnskia/react-native-skia"
-        includeEmptyDirs = false
-        include "**/*.h"
-        eachFile {
-            String path = it.path
-
-            if (path.contains("api/third_party")) {
-                // Skip flattening third_party dir
-                path = path.substring("api/".length())
-            } else if (path.contains("skia/include") || path.contains("skia/modules") || path.contains("skia/src")) {
-                // Skip flattening Skia dir
-                path = path.substring("skia/".length())
-            } else if (path.startsWith("dawn/include/")) {
-                // Flatten dawn/include/dawn and dawn/include/webgpu
-                path = path.substring("dawn/include/".length())
-            } else {
-                // flatten anything else
-                path = path.substring(path.lastIndexOf("/") + 1)
-            }
-            it.path = path
-        }
-    }
-    preBuild.dependsOn(prepareHeaders)
-}
-
-def nativeBuildDependsOn(dependsOnTask, variant) {
-  def buildTasks = tasks.findAll({ task ->
-      !task.name.contains("Clean") && (task.name.contains("externalNative") || task.name.contains("CMake")) })
-  if (variant != null) {
-    buildTasks = buildTasks.findAll({ task -> task.name.contains(variant) })
-  }
-  buildTasks.forEach { task -> task.dependsOn(dependsOnTask) }
-}
-
-afterEvaluate {
-  nativeBuildDependsOn(extractAARHeaders, null)
-  nativeBuildDependsOn(extractJNIFiles, null)
-}
+preBuild.dependsOn(prepareHeaders)

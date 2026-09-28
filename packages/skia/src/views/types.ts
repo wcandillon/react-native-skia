@@ -1,7 +1,5 @@
 import type { ViewProps } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
 
-import type { Node } from "../dom/types";
 import type { SkImage, SkPicture, SkRect, SkSize } from "../skia/types";
 
 export type NativeSkiaViewProps = ViewProps & {
@@ -24,11 +22,6 @@ export interface SkiaBaseViewProps extends ViewProps {
    * average time it takes to render.
    */
   debug?: boolean;
-  /**
-   * Pass an animated value to the onSize property to get updates when
-   * the Skia view is resized.
-   */
-  onSize?: SharedValue<SkSize>;
 
   opaque?: boolean;
 
@@ -47,8 +40,4 @@ export interface SkiaBaseViewProps extends ViewProps {
 export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
   picture?: SkPicture;
   androidWarmup?: boolean;
-}
-
-export interface SkiaDomViewNativeProps extends SkiaBaseViewProps {
-  root?: Node<unknown>;
 }

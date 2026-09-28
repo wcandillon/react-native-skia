@@ -205,15 +205,20 @@ export class JsiSkCanvas
     mode?: BlendMode | null,
     paint?: SkPaint
   ) {
-    this.ref.drawPatch(
-      cubics.map(({ x, y }) => [x, y]).flat(),
-      colors,
-      texs ? texs.flatMap((p) => Array.from(JsiSkPoint.fromValue(p))) : texs,
-      mode !== undefined && mode !== null
-        ? getEnum(this.CanvasKit, "BlendMode", mode)
-        : null,
-      paint ? JsiSkPaint.fromValue(paint) : undefined
-    );
+    const defaultPaint = paint ? null : new this.CanvasKit.Paint();
+    try {
+      this.ref.drawPatch(
+        cubics.map(({ x, y }) => [x, y]).flat(),
+        colors,
+        texs ? texs.flatMap((p) => Array.from(JsiSkPoint.fromValue(p))) : texs,
+        mode !== undefined && mode !== null
+          ? getEnum(this.CanvasKit, "BlendMode", mode)
+          : null,
+        paint ? JsiSkPaint.fromValue(paint) : defaultPaint!
+      );
+    } finally {
+      defaultPaint?.delete();
+    }
   }
 
   restoreToCount(saveCount: number) {

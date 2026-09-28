@@ -32,6 +32,9 @@
     "cpp/**/*.{h,cpp}",
     "apple/**",
     "react-native-skia.podspec",
+    "Package.swift",
+    "include/**",
+    "react-native.config.js",
     "dist/**",
     "libs/.graphite"
   ],
@@ -61,7 +64,7 @@
   "keywords": [
     "react-native"
   ],
-  "author": "Shopify Inc.",
+  "author": "William Candillon",
   "contributors": [
     {
       "name": "Christian Falch",
@@ -159,7 +162,7 @@
     "type": "all",
     "jsSrcsDir": "src/specs",
     "android": {
-      "javaPackageName": "com.shopify.reactnative.skia"
+      "javaPackageName": "com.reactnative.skia"
     },
     "ios": {
       "componentProvider": {

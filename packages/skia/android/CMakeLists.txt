@@ -1,7 +1,6 @@
 project(RNSkia)
 cmake_minimum_required(VERSION 3.4.1)
 
-set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 20)
 
 # SKIA_LIBS_PATH is passed from Gradle (pointing at the prebuilt Skia binaries,
@@ -48,20 +47,7 @@ set (SKIA_SKSG_LIB "sksg")
 set (SKIA_JSONREADER_LIB "jsonreader")
 
 
-# Clear some variables
-unset(LIBRN_DIR CACHE)
-unset(libfbjni_link_DIRS CACHE)
-unset(libfbjni_include_DIRS CACHE)
-
-set(build_DIR ${CMAKE_SOURCE_DIR}/build)
-file(GLOB LIBRN_DIR "${PREBUILT_DIR}/${ANDROID_ABI}")
-file(GLOB libfbjni_link_DIRS "${build_DIR}/fbjni*.aar/jni/${ANDROID_ABI}")
-file(GLOB libfbjni_include_DIRS "${build_DIR}/fbjni-*-headers.jar/")
-
 message("-- ABI     : " ${ANDROID_ABI})
-message("-- PREBUILT: " ${PREBUILT_DIR})
-message("-- BUILD   : " ${build_DIR})
-message("-- LIBRN   : " ${LIBRN_DIR})
 
 link_directories(${SKIA_LIBS_PATH}/)
 
@@ -78,14 +64,6 @@ else()
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/OpenGLWindowContext.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/GrAHardwareBufferUtils.cpp"
     )
-endif()
-
-if(${REACT_NATIVE_VERSION} LESS 66)
-        file(
-                TO_CMAKE_PATH
-                "${NODE_MODULES_DIR}/react-native/ReactCommon/jsi/jsi/jsi.cpp"
-                INCLUDE_JSI_CPP
-        )
 endif()
 
 add_library(
@@ -145,8 +123,6 @@ target_include_directories(
 
         # Shared JSI infrastructure (cpp/jsi) via prefix-qualified includes
         ../cpp
-
-        ${libfbjni_include_DIRS}
 )
 
 add_library(svg STATIC IMPORTED)
@@ -189,113 +165,9 @@ find_library(
 )
 message("-- LOG     : " ${LOG_LIB})
 
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # We need to find packages since from RN 0.71 binaries are prebuilt
-    find_package(fbjni REQUIRED CONFIG)
-    find_package(ReactAndroid REQUIRED CONFIG)
-endif()
-
-unset(JSI_LIB CACHE)
-if(${REACT_NATIVE_VERSION} LESS 66)
-    # JSI lib didn't exist on RN 0.65 and before. Simply omit it.
-    set (JSI_LIB "")
-elseif(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (JSI_LIB ReactAndroid::jsi)
-else()
-    # RN 0.66 distributes libjsi.so, can be used instead of compiling jsi.cpp manually.
-    find_library(
-        JSI_LIB
-        jsi
-        PATHS ${LIBRN_DIR}
-        NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- JSI     : " ${JSI_LIB})
-
-unset(REACT_LIB CACHE)
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
-    # RN 0.76 packs react_nativemodule_core into ReactAndroid::reactnative
-    set (REACT_LIB ReactAndroid::reactnative)
-elseif(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (REACT_LIB ReactAndroid::react_nativemodule_core)
-    else()
-    find_library(
-            REACT_LIB
-            react_nativemodule_core
-            PATHS ${LIBRN_DIR}
-            NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- REACT   : " ${REACT_LIB})
-
-unset(FBJNI_LIBRARY CACHE)
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (FBJNI_LIBRARY fbjni::fbjni)
-else()
-    find_library(
-            FBJNI_LIBRARY
-            fbjni
-            PATHS ${libfbjni_link_DIRS}
-            NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- FBJNI   : " ${FBJNI_LIBRARY})
-
-unset(REACTNATIVEJNI_LIB CACHE)
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
-    # RN 0.76 doesn't have reactnativejni
-    # DO NOTHING, we'll not link these libraries
-elseif(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (REACTNATIVEJNI_LIB "ReactAndroid::reactnativejni")
-else()
-    find_library(
-            REACTNATIVEJNI_LIB
-            reactnativejni
-            PATHS ${LIBRN_DIR}
-            NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- REACTNATIVEJNI   : " ${REACTNATIVEJNI_LIB})
-
-unset(RUNTIMEEXECUTOR_LIB CACHE)
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
-    # RN 0.76 doesn't have runtimeexecutor
-    # DO NOTHING, we'll not link these libraries
-elseif(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (RUNTIMEEXECUTOR_LIB "ReactAndroid::runtimeexecutor")
-else()
-    find_library(
-            RUNTIMEEXECUTOR_LIB
-            runtimeexecutor
-            PATHS ${LIBRN_DIR}
-            NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- RUNTIMEEXECUTOR   : " ${RUNTIMEEXECUTOR_LIB})
-
-unset(TURBOMODULES_LIB CACHE)
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
-    # RN 0.76 doesn't have turbomodulejsijni
-    # DO NOTHING, we'll not link these libraries
-elseif(${REACT_NATIVE_VERSION} GREATER_EQUAL 71)
-    # RN 0.71 distributes prebuilt binaries.
-    set (TURBOMODULES_LIB "ReactAndroid::turbomodulejsijni")
-else()
-    find_library(
-            TURBOMODULES_LIB
-            turbomodulejsijni
-            PATHS ${LIBRN_DIR}
-            NO_CMAKE_FIND_ROOT_PATH
-    )
-endif()
-message("-- TURBO   : " ${TURBOMODULES_LIB})
-
-add_definitions(-DREACT_NATIVE_VERSION=${REACT_NATIVE_VERSION})
+# React Native distributes prebuilt binaries via prefab.
+find_package(fbjni REQUIRED CONFIG)
+find_package(ReactAndroid REQUIRED CONFIG)
 
 # Set RN_SERIALIZABLE_STATE and C++ flags for React Native 0.81+
 if(${REACT_NATIVE_VERSION} GREATER_EQUAL 80)
@@ -307,50 +179,25 @@ else()
 endif()
 
 # Link
-if(${REACT_NATIVE_VERSION} GREATER_EQUAL 76)
-    set(COMMON_LIBS
-        ${LOG_LIB}
-        ${REACT_LIB}
-        ${FBJNI_LIBRARY}
-        ${JSI_LIB}
-        ${SKIA_SVG_LIB}
-        ${SKIA_SKSHAPER_LIB}
-        ${SKIA_SKPARAGRAPH_LIB}
-        ${SKIA_SKUNICODE_CORE_LIB}
-        ${SKIA_SKUNICODE_ICU_LIB}
-        ${SKIA_SKOTTIE_LIB}
-        ${SKIA_SKSG_LIB}
-        ${SKIA_JSONREADER_LIB}
-        ${SKIA_LIB}
-        -ljnigraphics
-        -lGLESv2
-        -lEGL
-        -landroid
-    )
-else()
-    set(COMMON_LIBS
-        ${LOG_LIB}
-        ${FBJNI_LIBRARY}
-        ${REACT_LIB}
-        ${JSI_LIB}
-        ${REACTNATIVEJNI_LIB}
-        ${RUNTIMEEXECUTOR_LIB}
-        ${TURBOMODULES_LIB}
-        ${SKIA_SVG_LIB}
-        ${SKIA_SKSHAPER_LIB}
-        ${SKIA_SKPARAGRAPH_LIB}
-        ${SKIA_SKUNICODE_CORE_LIB}
-        ${SKIA_SKUNICODE_ICU_LIB}
-        ${SKIA_SKOTTIE_LIB}
-        ${SKIA_SKSG_LIB}
-        ${SKIA_JSONREADER_LIB}
-        ${SKIA_LIB}
-        -ljnigraphics
-        -lGLESv2
-        -lEGL
-        -landroid
-    )
-endif()
+set(COMMON_LIBS
+    ${LOG_LIB}
+    ReactAndroid::reactnative
+    fbjni::fbjni
+    ReactAndroid::jsi
+    ${SKIA_SVG_LIB}
+    ${SKIA_SKSHAPER_LIB}
+    ${SKIA_SKPARAGRAPH_LIB}
+    ${SKIA_SKUNICODE_CORE_LIB}
+    ${SKIA_SKUNICODE_ICU_LIB}
+    ${SKIA_SKOTTIE_LIB}
+    ${SKIA_SKSG_LIB}
+    ${SKIA_JSONREADER_LIB}
+    ${SKIA_LIB}
+    -ljnigraphics
+    -lGLESv2
+    -lEGL
+    -landroid
+)
 
 if(SK_GRAPHITE)
     target_link_libraries(${PACKAGE_NAME}
@@ -360,8 +207,6 @@ if(SK_GRAPHITE)
 else()
     target_link_libraries(${PACKAGE_NAME}
         ${COMMON_LIBS}
-        -lGLESv2
-        -lEGL
     )
 endif()
 
