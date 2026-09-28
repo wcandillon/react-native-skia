@@ -5,6 +5,7 @@ import type { Routes } from "./Routes";
 import { List } from "./List";
 import { Helmet } from "./Helmet";
 import { HelmetBackdrop } from "./HelmetBackdrop";
+import { Cloth } from "./Cloth";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -32,6 +33,13 @@ export const ThreeJS = () => {
         options={{
           title: "Helmet Controls",
           header: () => null,
+        }}
+      />
+      <Stack.Screen
+        name="Cloth"
+        component={Cloth}
+        options={{
+          title: "Compute Cloth",
         }}
       />
     </Stack.Navigator>

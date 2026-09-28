@@ -17,6 +17,12 @@ export const examples = [
     description:
       "Same helmet, rendered through a Skia frosted bottom sheet with gamepad-style controls",
   },
+  {
+    screen: "Cloth",
+    title: "Compute Cloth",
+    description:
+      "Verlet cloth simulation running in compute shaders (three.js + WebGPU)",
+  },
 ] as const;
 
 const styles = StyleSheet.create({
