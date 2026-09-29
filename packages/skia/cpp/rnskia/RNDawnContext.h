@@ -104,6 +104,27 @@ public:
     insertAndSubmit(info, syncToCpu);
   }
 
+  /** Inserts one recording without submitting; pair with submit(). */
+  bool insert(const skgpu::graphite::InsertRecordingInfo &info) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto status = fGraphiteContext->insertRecording(info);
+    if (status != skgpu::graphite::InsertStatus::kSuccess) {
+      RNSkLogger::logToConsole(
+          "insertRecording failed with status %d",
+          static_cast<int>(
+              static_cast<skgpu::graphite::InsertStatus::V>(status)));
+      return false;
+    }
+    return true;
+  }
+
+  /** Submits everything inserted so far, once. */
+  void submit(
+      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    fGraphiteContext->submit(syncToCpu);
+  }
+
   /**
    * Inserts one recording (optionally bound to a deferred target surface
    * through info.fTargetSurface) and submits exactly once. insertRecording

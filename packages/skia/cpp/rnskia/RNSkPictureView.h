@@ -51,18 +51,27 @@ public:
     performDraw(canvasProvider);
   }
 
+  // The picture is set from any thread (JS, a worklet, a producer thread)
+  // and read on the render thread: the handoff is under a mutex so the
+  // refcount of the previous picture is never torn.
   void setPicture(sk_sp<SkPicture> picture) {
-    _picture = picture;
+    {
+      std::lock_guard<std::mutex> lock(_pictureMutex);
+      _picture = std::move(picture);
+    }
     _requestRedraw();
   }
 
-  sk_sp<SkPicture> getPicture() const { return _picture; }
+  sk_sp<SkPicture> getPicture() const {
+    std::lock_guard<std::mutex> lock(_pictureMutex);
+    return _picture;
+  }
 
 private:
   bool performDraw(std::shared_ptr<RNSkCanvasProvider> canvasProvider) {
-    // Capture picture pointer to ensure thread safety - _picture can be
-    // modified from the JS thread while we're drawing on the render thread
-    sk_sp<SkPicture> picture = _picture;
+    // A copy under the lock: _picture can be replaced from another thread
+    // while we draw.
+    sk_sp<SkPicture> picture = getPicture();
     auto pd = _platformContext->getPixelDensity();
     bool presented = canvasProvider->renderToCanvas([=](SkCanvas *canvas) {
       canvas->clear(SK_ColorTRANSPARENT);
@@ -80,6 +89,7 @@ private:
   }
 
   std::shared_ptr<RNSkPlatformContext> _platformContext;
+  mutable std::mutex _pictureMutex;
   sk_sp<SkPicture> _picture;
 };
 

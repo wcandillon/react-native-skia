@@ -89,6 +89,12 @@ void RNSkAppleFrameScheduler::armOnMainThread() {
     _displayLink =
         [CADisplayLink displayLinkWithTarget:target
                                     selector:@selector(displayLinkFired:)];
+    // Ask for the display's full rate on ProMotion devices (120 Hz); the
+    // system falls back to 60 elsewhere. On iPhone this also needs
+    // CADisableMinimumFrameDurationOnPhone=YES in the app's Info.plist.
+    if (@available(iOS 15.0, tvOS 15.0, *)) {
+      _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(80, 120, 120);
+    }
     [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
                        forMode:NSRunLoopCommonModes];
   }

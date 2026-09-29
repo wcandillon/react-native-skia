@@ -7,14 +7,12 @@
 
 #include <jsi/jsi.h>
 
-#include <pthread.h>
-#include <sys/resource.h>
-#if defined(__ANDROID__)
-#include <unistd.h>
-#endif
-
 #include "JsiSkCanvas.h"
+#include "JsiSkColor.h"
 #include "JsiSkNativeObjects.h"
+#include "JsiSkPicture.h"
+#include "rnskia/RNSkBenchmarkProducer.h"
+#include "rnskia/RNSkThreadPriority.h"
 
 #if defined(SK_GRAPHITE)
 #include "JsiSkRecording.h"
@@ -111,26 +109,160 @@ public:
    * which on big.LITTLE devices means the little cores.
    */
   void setThreadPriority(std::string level) {
-#if defined(__APPLE__)
-    qos_class_t qos = QOS_CLASS_DEFAULT;
-    if (level == "high") {
-      qos = QOS_CLASS_USER_INTERACTIVE;
-    } else if (level == "low") {
-      qos = QOS_CLASS_BACKGROUND;
+    RNSkThreadPriority::set(level);
+  }
+
+  /**
+   * Benchmark helper: starts native producer threads that animate the field
+   * picture in the given views (see RNSkBenchmarkProducer). Options:
+   * { mode: "picture" | "recording", threads, ids, picture, background }.
+   * A running producer is stopped first.
+   */
+  JSI_HOST_FUNCTION(startProducer) {
+    if (count < 1 || !arguments[0].isObject()) {
+      throw jsi::JSError(runtime, "startProducer: expected an options object");
     }
-    pthread_set_qos_class_self_np(qos, 0);
-#elif defined(__ANDROID__)
-    // Same values as android.os.Process.THREAD_PRIORITY_*.
-    int nice = 0;
-    if (level == "high") {
-      nice = -4; // THREAD_PRIORITY_DISPLAY
-    } else if (level == "low") {
-      nice = 10; // THREAD_PRIORITY_BACKGROUND
+    auto opts = arguments[0].asObject(runtime);
+    RNSkBenchmarkProducer::Options options;
+    auto mode = opts.getProperty(runtime, "mode");
+    options.recording =
+        mode.isString() && mode.asString(runtime).utf8(runtime) == "recording";
+#if !defined(SK_GRAPHITE)
+    if (options.recording) {
+      throw jsi::JSError(runtime, "startProducer: the recording mode requires "
+                                  "the Graphite backend (SK_GRAPHITE)");
     }
-    setpriority(PRIO_PROCESS, gettid(), nice);
-#else
-    (void)level;
 #endif
+    auto threads = opts.getProperty(runtime, "threads");
+    options.threads =
+        threads.isNumber() ? static_cast<int>(threads.asNumber()) : 1;
+    auto idsValue = opts.getProperty(runtime, "ids");
+    if (!idsValue.isObject() || !idsValue.asObject(runtime).isArray(runtime)) {
+      throw jsi::JSError(runtime, "startProducer: ids must be an array");
+    }
+    auto ids = idsValue.asObject(runtime).asArray(runtime);
+    auto n = ids.size(runtime);
+    for (size_t i = 0; i < n; i++) {
+      auto id = ids.getValueAtIndex(runtime, i);
+      options.ids.push_back(id.isNumber() ? static_cast<long>(id.asNumber())
+                                          : -1);
+    }
+    auto pictures = opts.getProperty(runtime, "pictures");
+    if (pictures.isObject() && pictures.asObject(runtime).isArray(runtime)) {
+      auto array = pictures.asObject(runtime).asArray(runtime);
+      auto length = array.size(runtime);
+      for (size_t i = 0; i < length; i++) {
+        auto value = array.getValueAtIndex(runtime, i);
+        if (!value.isObject()) {
+          continue;
+        }
+        auto picture = JsiSkPicture::fromValue(runtime, value);
+        if (picture) {
+          options.fields.push_back(std::move(picture));
+        }
+      }
+    } else {
+      auto pictureValue = opts.getProperty(runtime, "picture");
+      if (pictureValue.isObject()) {
+        auto picture = JsiSkPicture::fromValue(runtime, pictureValue);
+        if (picture) {
+          options.fields.push_back(std::move(picture));
+        }
+      }
+    }
+    auto scene = opts.getProperty(runtime, "scene");
+    options.chart =
+        scene.isString() && scene.asString(runtime).utf8(runtime) == "chart";
+    auto bars = opts.getProperty(runtime, "bars");
+    if (bars.isNumber()) {
+      options.bars = static_cast<int>(bars.asNumber());
+    }
+    auto line = opts.getProperty(runtime, "line");
+    if (!line.isUndefined() && !line.isNull()) {
+      options.line = JsiSkColor::fromValue(runtime, line);
+    }
+    if (options.fields.empty() && !options.chart) {
+      throw jsi::JSError(runtime, "startProducer: picture (or pictures) must "
+                                  "be an SkPicture");
+    }
+    auto background = opts.getProperty(runtime, "background");
+    if (!background.isUndefined() && !background.isNull()) {
+      options.background = JsiSkColor::fromValue(runtime, background);
+    }
+    auto page = opts.getProperty(runtime, "page");
+    if (!page.isUndefined() && !page.isNull()) {
+      options.page = JsiSkColor::fromValue(runtime, page);
+    }
+    auto cornerRadius = opts.getProperty(runtime, "cornerRadius");
+    if (cornerRadius.isNumber()) {
+      options.cornerRadius = static_cast<float>(cornerRadius.asNumber());
+    }
+    auto kaleidoscope = opts.getProperty(runtime, "kaleidoscope");
+    options.kaleidoscope = kaleidoscope.isBool() && kaleidoscope.getBool();
+    auto draw = opts.getProperty(runtime, "draw");
+    options.direct =
+        draw.isString() && draw.asString(runtime).utf8(runtime) == "direct";
+    auto svg = opts.getProperty(runtime, "svg");
+    if (svg.isString()) {
+      options.svg = svg.asString(runtime).utf8(runtime);
+    }
+    auto circles = opts.getProperty(runtime, "circles");
+    if (circles.isNumber()) {
+      options.circles = static_cast<int>(circles.asNumber());
+    }
+    auto radius = opts.getProperty(runtime, "radius");
+    if (radius.isNumber()) {
+      options.radius = static_cast<float>(radius.asNumber());
+    }
+    options.pixelDensity = getContext()->getPixelDensity();
+    auto present = opts.getProperty(runtime, "present");
+    options.presentOnProducer =
+        present.isString() &&
+        present.asString(runtime).utf8(runtime) == "producer";
+    stopProducer(runtime, thisValue, nullptr, 0);
+    producer() = std::make_shared<RNSkBenchmarkProducer>(getContext(),
+                                                         std::move(options));
+    producer()->start();
+    return jsi::Value::undefined();
+  }
+
+  /** Slots the running producer should draw (booleans, in slot order). */
+  JSI_HOST_FUNCTION(setProducerEnabled) {
+    if (!producer() || count < 1 || !arguments[0].isObject() ||
+        !arguments[0].asObject(runtime).isArray(runtime)) {
+      return jsi::Value::undefined();
+    }
+    auto array = arguments[0].asObject(runtime).asArray(runtime);
+    auto n = array.size(runtime);
+    std::vector<bool> enabled(n, true);
+    for (size_t i = 0; i < n; i++) {
+      auto value = array.getValueAtIndex(runtime, i);
+      enabled[i] = !(value.isBool() && !value.getBool());
+    }
+    producer()->setEnabled(enabled);
+    return jsi::Value::undefined();
+  }
+
+  JSI_HOST_FUNCTION(stopProducer) {
+    if (producer()) {
+      producer()->stop();
+      producer().reset();
+    }
+    return jsi::Value::undefined();
+  }
+
+  /** { batchMs, batches, threads } of the running producer (zeros if none). */
+  JSI_HOST_FUNCTION(getProducerStats) {
+    RNSkBenchmarkProducer::Stats stats;
+    if (producer()) {
+      stats = producer()->getStats();
+    }
+    auto result = jsi::Object(runtime);
+    result.setProperty(runtime, "batchMs", stats.batchMs);
+    result.setProperty(runtime, "batches",
+                       static_cast<double>(stats.batches));
+    result.setProperty(runtime, "threads", stats.threads);
+    return result;
   }
 
   // True on Graphite builds, where recordings and SkiaRecordingView exist.
@@ -150,11 +282,24 @@ public:
                   &JsiSkContext::getIsSupported);
     installMethod(runtime, prototype, "setThreadPriority",
                   &JsiSkContext::setThreadPriority);
+    installHostMethod(runtime, prototype, "startProducer",
+                      &JsiSkContext::startProducer);
+    installHostMethod(runtime, prototype, "stopProducer",
+                      &JsiSkContext::stopProducer);
+    installHostMethod(runtime, prototype, "setProducerEnabled",
+                      &JsiSkContext::setProducerEnabled);
+    installHostMethod(runtime, prototype, "getProducerStats",
+                      &JsiSkContext::getProducerStats);
   }
 
 private:
+  // The benchmark producer, one per process (started and stopped from JS).
+  static std::shared_ptr<RNSkBenchmarkProducer> &producer() {
+    static std::shared_ptr<RNSkBenchmarkProducer> instance;
+    return instance;
+  }
 #if defined(SK_GRAPHITE)
-  // The target of the deferred canvas open on the calling thread, if any.
+  // The target of the deferred canvas open on the calling thread, if any;
   static std::optional<RNSkDeferredTarget> &pendingTarget() {
     static thread_local std::optional<RNSkDeferredTarget> target;
     return target;

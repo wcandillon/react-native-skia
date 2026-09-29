@@ -100,7 +100,9 @@ export const UIMeter = ({
         </Text>
       )}
       {batchMs !== undefined && (
-        <Text style={styles.stat}>{`Producer thread: ${batchMs} ms per batch`}</Text>
+        <Text
+          style={styles.stat}
+        >{`Producer thread: ${batchMs} ms per batch`}</Text>
       )}
     </View>
   );
@@ -145,9 +147,11 @@ export const ProducerCell = ({
   onSize,
   onTarget,
   style,
+  opaque,
 }: {
   index: number;
   mode: Mode;
+  opaque?: boolean;
   onId: (index: number, id: number) => void;
   onSize: (index: number, width: number, height: number) => void;
   onTarget: (index: number, target: SkDeferredTargetInfo | null) => void;
@@ -179,10 +183,11 @@ export const ProducerCell = ({
         <SkiaRecordingView
           ref={recordingRef}
           style={styles.cell}
+          opaque={opaque}
           onTarget={(target) => onTarget(index, target)}
         />
       ) : (
-        <SkiaPictureView ref={pictureRef} style={styles.cell} />
+        <SkiaPictureView ref={pictureRef} style={styles.cell} opaque={opaque} />
       )}
     </View>
   );
@@ -197,25 +202,30 @@ export const ViewGrid = ({
   onId,
   onSize,
   onTarget,
+  cellStyle,
+  opaque,
 }: {
   n: number;
+  opaque?: boolean;
   mode: Mode;
   cellWidth: number;
   cellHeight: number;
   onId: (index: number, id: number) => void;
   onSize: (index: number, width: number, height: number) => void;
   onTarget: (index: number, target: SkDeferredTargetInfo | null) => void;
+  cellStyle?: object;
 }) => (
   <View style={styles.grid}>
     {Array.from({ length: n }, (_, index) => (
       <ProducerCell
-        key={`${mode}-${index}`}
+        key={`${mode}-${opaque ? "o" : "t"}-${index}`}
         index={index}
         mode={mode}
         onId={onId}
         onSize={onSize}
         onTarget={onTarget}
-        style={{ width: cellWidth, height: cellHeight, margin: 4 }}
+        opaque={opaque}
+        style={[{ width: cellWidth, height: cellHeight, margin: 4 }, cellStyle]}
       />
     ))}
   </View>
@@ -228,11 +238,7 @@ export type Sample = Record<string, number>;
  * each key. Results are also logged as one JSON line prefixed with
  * "[benchmark]" so they can be copied from the Metro output.
  */
-export const useRun = (
-  name: string,
-  sampler: () => Sample,
-  seconds = 10
-) => {
+export const useRun = (name: string, sampler: () => Sample, seconds = 10) => {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<Sample | null>(null);

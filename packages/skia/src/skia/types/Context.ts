@@ -1,4 +1,6 @@
 import type { SkCanvas } from "./Canvas";
+import type { SkColor } from "./Color";
+import type { SkPicture } from "./Picture";
 import type { SkJSIInstance } from "./JsiInstance";
 
 /**
@@ -57,4 +59,70 @@ export interface ContextFactory {
    * means the little cores. No-op on web.
    */
   setThreadPriority(level: "high" | "normal" | "low"): void;
+  /**
+   * Benchmark helper: starts native producer threads that animate `picture`
+   * (rotating and breathing) in the views `ids`, one frame per view per
+   * vsync, with no JS in the loop. "recording" hands Graphite recordings to
+   * SkiaRecordingViews; "picture" hands small pictures to SkiaPictureViews.
+   * A running producer is stopped first. Native only.
+   */
+  startProducer(options: ProducerOptions): void;
+  /** Slots the running producer draws (all by default), e.g. visible tiles. */
+  setProducerEnabled(enabled: boolean[]): void;
+  stopProducer(): void;
+  getProducerStats(): ProducerStats;
+}
+
+export interface ProducerOptions {
+  mode: "picture" | "recording";
+  /** Producer threads; view `i` belongs to thread `i % threads`. */
+  threads: number;
+  /** Native view ids in slot order; a negative id is an empty slot. */
+  ids: number[];
+  /** The picture every view animates, or one per slot with `pictures`. */
+  picture?: SkPicture;
+  pictures?: SkPicture[];
+  /** Fill behind the picture. */
+  background?: SkColor;
+  /**
+   * With `cornerRadius` (points), the frame is `page` outside a rounded rect
+   * of `background`, for opaque views that the parent cannot clip.
+   */
+  page?: SkColor;
+  cornerRadius?: number;
+  /** Draw the picture six times, mirrored every other time (a wedge field). */
+  kaleidoscope?: boolean;
+  /**
+   * "picture" (default) replays `picture`; "direct" ignores it and draws the
+   * same circle layout with drawCircle calls, regenerated from `circles` and
+   * `radius` (points), to measure picture playback against direct draws.
+   */
+  draw?: "picture" | "direct" | "svg";
+  circles?: number;
+  radius?: number;
+  /** "svg" mode: the field as SVG text, parsed into a DOM per thread. */
+  svg?: string;
+  /**
+   * "field" (default) animates the picture(s); "chart" draws `bars` bars and
+   * a `bars`-point line per view, all moving, with no picture involved.
+   */
+  scene?: "field" | "chart";
+  bars?: number;
+  /** Chart line color. */
+  line?: SkColor;
+  /**
+   * Recording mode only: who presents. "main" (default) hands each recording
+   * to its view, which presents it on the main thread at the next vsync;
+   * "producer" presents from the producer thread itself, leaving the main
+   * thread out of the frame entirely.
+   */
+  present?: "main" | "producer";
+}
+
+export interface ProducerStats {
+  /** Milliseconds the slowest thread's last batch took. */
+  batchMs: number;
+  /** Batches produced so far by the first thread. */
+  batches: number;
+  threads: number;
 }

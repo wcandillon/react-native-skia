@@ -279,6 +279,10 @@ public:
     _jniPlatformContext->runTaskOnMainThread(std::move(task));
   }
 
+  std::shared_ptr<void> attachThread() override {
+    return std::make_shared<facebook::jni::ThreadScope>();
+  }
+
   std::shared_ptr<RNSkFrameScheduler>
   makeFrameScheduler(std::function<void()> onFrame) override {
     auto *jniPlatformContext = _jniPlatformContext;

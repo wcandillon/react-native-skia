@@ -42,6 +42,15 @@ public:
   virtual bool presentRecording(skgpu::graphite::Recording *recording) {
     return false;
   }
+  /**
+   * presentRecording in three steps, so several windows can share one
+   * submit: insertRecording() binds the swapchain texture and inserts,
+   * DawnContext::submit() submits, presentInserted() presents. Any thread.
+   */
+  virtual bool insertRecording(skgpu::graphite::Recording *recording) {
+    return false;
+  }
+  virtual bool presentInserted() { return false; }
 #endif
 };
 

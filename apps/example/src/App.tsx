@@ -273,7 +273,7 @@ const App = () => {
             <Stack.Screen
               name="BenchMultipleViews"
               component={BenchMultipleViews}
-              options={{ title: "Multiple views" }}
+              options={{ title: "Multiple views", headerShown: false }}
             />
             <Stack.Screen
               name="BenchHeadroom"
@@ -283,7 +283,7 @@ const App = () => {
             <Stack.Screen
               name="BenchAnimatedList"
               component={BenchAnimatedList}
-              options={{ title: "Animated list" }}
+              options={{ title: "Animated list", headerShown: false }}
             />
             <Stack.Screen
               name="BenchCanvasRenderers"

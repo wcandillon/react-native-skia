@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { runOnJS, useFrameCallback, useSharedValue } from "react-native-reanimated";
+import {
+  runOnJS,
+  useFrameCallback,
+  useSharedValue,
+} from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 
 import { SkiaViewApi, percentile, round } from "./api";
@@ -74,7 +78,7 @@ export interface ContentStats {
  * second actually reach the screen, per view.
  */
 export const useContentMeter = (
-  ids: SharedValue<number[]>,
+  ids: { readonly value: number[] },
   disabled?: SharedValue<boolean[]>
 ) => {
   const [stats, setStats] = useState<ContentStats>({ fps: 0, active: 0 });
@@ -98,7 +102,7 @@ export const useContentMeter = (
         // Counters are tracked for every view so that a view that just
         // became visible (list scrolling) has a previous value to compare
         // with; only visible views contribute to the rate.
-        const presented = SkiaViewApi.getPresentStats(id).presented;
+        const { presented } = SkiaViewApi.getPresentStats(id);
         counts.set(id, presented);
         const previous = last.current.counts.get(id);
         if (

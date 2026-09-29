@@ -104,6 +104,58 @@ public:
     }
   }
 
+  /**
+   * Presents `recording` right away on the calling thread (any thread with a
+   * Recorder; the swapchain and the Graphite context are thread-safe), so
+   * the main thread is not involved. Used by the benchmark producer; the
+   * regular path is setRecording() + requestRedraw().
+   */
+  bool presentNow(const std::shared_ptr<RNSkCanvasProvider> &canvasProvider,
+                  std::shared_ptr<RNSkDeferredRecording> recording) {
+    auto target = canvasProvider->getDeferredTarget();
+    if (!target || !recording->target || *recording->target != *target) {
+      return false;
+    }
+    if (!canvasProvider->presentRecording(recording->recording.get())) {
+      return false;
+    }
+    notePresented();
+    std::lock_guard<std::mutex> lock(_mutex);
+    _last = std::move(recording);
+    return true;
+  }
+
+  /**
+   * presentNow in steps, so several views share one DawnContext::submit():
+   * insertNow() for each, submit, presentInsertedNow() for each. insertNow
+   * returns false when the provider cannot split the present (use
+   * presentNow) or the recording does not match the target.
+   */
+  bool insertNow(const std::shared_ptr<RNSkCanvasProvider> &canvasProvider,
+                 std::shared_ptr<RNSkDeferredRecording> recording) {
+    auto target = canvasProvider->getDeferredTarget();
+    if (!target || !recording->target || *recording->target != *target) {
+      return false;
+    }
+    if (!canvasProvider->insertRecording(recording->recording.get())) {
+      return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    _inserted = std::move(recording);
+    return true;
+  }
+
+  bool presentInsertedNow(
+      const std::shared_ptr<RNSkCanvasProvider> &canvasProvider) {
+    if (!canvasProvider->presentInserted()) {
+      return false;
+    }
+    notePresented();
+    std::lock_guard<std::mutex> lock(_mutex);
+    _last = std::move(_inserted);
+    return true;
+  }
+
   // Coalesces: a recording that is replaced before the next vsync is
   // released here (and by JS whenever it drops its handle).
   void setRecording(std::shared_ptr<RNSkDeferredRecording> recording) {
@@ -155,6 +207,7 @@ private:
   std::mutex _mutex;
   std::shared_ptr<RNSkDeferredRecording> _pending;
   std::shared_ptr<RNSkDeferredRecording> _last;
+  std::shared_ptr<RNSkDeferredRecording> _inserted;
   std::optional<RNSkDeferredTarget> _loggedMismatchFor;
 };
 
@@ -191,6 +244,19 @@ public:
       renderer->setRecording(prop.second.getRecording());
       requestRedraw();
     }
+  }
+
+  /** Presents on the calling thread; see RNSkRecordingRenderer::presentNow. */
+  bool presentNow(std::shared_ptr<RNSkDeferredRecording> recording) {
+    return getRecordingRenderer()->presentNow(getCanvasProvider(),
+                                              std::move(recording));
+  }
+  bool insertNow(std::shared_ptr<RNSkDeferredRecording> recording) {
+    return getRecordingRenderer()->insertNow(getCanvasProvider(),
+                                             std::move(recording));
+  }
+  bool presentInsertedNow() {
+    return getRecordingRenderer()->presentInsertedNow(getCanvasProvider());
   }
 
   void onSurfaceChanged() override { notifyTarget(); }

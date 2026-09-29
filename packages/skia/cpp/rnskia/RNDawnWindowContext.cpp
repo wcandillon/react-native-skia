@@ -36,36 +36,58 @@ std::optional<RNSkDeferredTarget> DawnWindowContext::getDeferredTarget() {
       width, height, _format == DawnUtils::HighBitDepthTextureFormat);
 }
 
-bool DawnWindowContext::presentRecording(
+bool DawnWindowContext::insertRecording(
     skgpu::graphite::Recording *recording) {
-  wgpu::SurfaceTexture surfaceTexture;
-  _surface.GetCurrentTexture(&surfaceTexture);
-  auto texture = surfaceTexture.texture;
+  if (_pendingSurface) {
+    // Two inserts without a present: the earlier frame is dropped.
+    _pendingSurface.reset();
+  }
+  _surface.GetCurrentTexture(&_pendingTexture);
+  auto texture = _pendingTexture.texture;
   if (!texture) {
     return false;
   }
   // Wrap the swapchain texture exactly like getSurface() does so that the
-  // texture info matches what makeDeferredTarget() described.
+  // texture info matches what makeDeferredTarget() described. The calling
+  // thread's Recorder: presenting may happen off the main thread.
   auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
   SkSurfaceProps surfaceProps;
-  auto surface =
-      SkSurfaces::WrapBackendTexture(_recorder, backendTex, _colorType,
-                                     SkColorSpace::MakeSRGB(), &surfaceProps);
-  if (!surface) {
+  _pendingSurface = SkSurfaces::WrapBackendTexture(
+      DawnContext::getInstance().getRecorder(), backendTex, _colorType,
+      SkColorSpace::MakeSRGB(), &surfaceProps);
+  if (!_pendingSurface) {
     return false;
   }
   skgpu::graphite::InsertRecordingInfo info;
   info.fRecording = recording;
-  info.fTargetSurface = surface.get();
-  bool inserted = DawnContext::getInstance().insertAndSubmit(info);
-  if (!inserted) {
+  info.fTargetSurface = _pendingSurface.get();
+  if (!DawnContext::getInstance().insert(info)) {
+    _pendingSurface.reset();
+    return false;
+  }
+  return true;
+}
+
+bool DawnWindowContext::presentInserted() {
+  if (!_pendingSurface) {
     return false;
   }
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
   _surface.Present();
+  _pendingSurface.reset();
+  _pendingTexture = {};
   return true;
+}
+
+bool DawnWindowContext::presentRecording(
+    skgpu::graphite::Recording *recording) {
+  if (!insertRecording(recording)) {
+    return false;
+  }
+  DawnContext::getInstance().submit();
+  return presentInserted();
 }
 
 } // namespace RNSkia

@@ -72,6 +72,13 @@ public:
   makeFrameScheduler(std::function<void()> onFrame) = 0;
 
   /**
+   * Keeps the calling native thread attached to the platform runtime for as
+   * long as the returned token lives (JNI on Android, where presenting a
+   * TextureView frame calls into Java). Nothing to do on other platforms.
+   */
+  virtual std::shared_ptr<void> attachThread() { return nullptr; }
+
+  /**
    * Takes a screenshot of a given view represented by the view tag
    * @param tag React view tag
    */

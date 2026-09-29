@@ -71,6 +71,16 @@ public:
   virtual bool presentRecording(skgpu::graphite::Recording *recording) {
     return false;
   }
+
+  /**
+   presentRecording in steps, so several views can share one submit: bind
+   and insert, then DawnContext::submit(), then present. Providers that do
+   not support it return false and callers fall back to presentRecording.
+   */
+  virtual bool insertRecording(skgpu::graphite::Recording *recording) {
+    return false;
+  }
+  virtual bool presentInserted() { return false; }
 #endif
 
 protected:

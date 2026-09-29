@@ -32,6 +32,7 @@ RNSkOpenGLCanvasProvider::RNSkOpenGLCanvasProvider(
 RNSkOpenGLCanvasProvider::~RNSkOpenGLCanvasProvider() = default;
 
 int RNSkOpenGLCanvasProvider::getWidth() {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (_surfaceHolder) {
     return _surfaceHolder->getWidth();
   }
@@ -39,6 +40,7 @@ int RNSkOpenGLCanvasProvider::getWidth() {
 }
 
 int RNSkOpenGLCanvasProvider::getHeight() {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (_surfaceHolder) {
     return _surfaceHolder->getHeight();
   }
@@ -47,6 +49,7 @@ int RNSkOpenGLCanvasProvider::getHeight() {
 
 bool RNSkOpenGLCanvasProvider::renderToCanvas(
     const std::function<void(SkCanvas *)> &cb) {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (_surfaceHolder != nullptr && cb != nullptr) {
     // Get the surface
     auto surface = _surfaceHolder->getSurface();
@@ -79,6 +82,7 @@ bool RNSkOpenGLCanvasProvider::renderToCanvas(
 #if defined(SK_GRAPHITE)
 std::optional<RNSkDeferredTarget>
 RNSkOpenGLCanvasProvider::getDeferredTarget() {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (_surfaceHolder == nullptr) {
     return std::nullopt;
   }
@@ -87,9 +91,30 @@ RNSkOpenGLCanvasProvider::getDeferredTarget() {
 
 bool RNSkOpenGLCanvasProvider::presentRecording(
     skgpu::graphite::Recording *recording) {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (_surfaceHolder == nullptr) {
     return false;
   }
+  consumePreviousFrame();
+  return _surfaceHolder->presentRecording(recording);
+}
+
+bool RNSkOpenGLCanvasProvider::insertRecording(
+    skgpu::graphite::Recording *recording) {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
+  if (_surfaceHolder == nullptr) {
+    return false;
+  }
+  consumePreviousFrame();
+  return _surfaceHolder->insertRecording(recording);
+}
+
+bool RNSkOpenGLCanvasProvider::presentInserted() {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
+  return _surfaceHolder != nullptr && _surfaceHolder->presentInserted();
+}
+
+void RNSkOpenGLCanvasProvider::consumePreviousFrame() {
   if (_jSurfaceTexture) {
     // Same as renderToCanvas: let the TextureView consume the previous frame.
     JNIEnv *env = facebook::jni::Environment::current();
@@ -98,7 +123,6 @@ bool RNSkOpenGLCanvasProvider::presentRecording(
       env->ExceptionClear();
     }
   }
-  return _surfaceHolder->presentRecording(recording);
 }
 #endif
 
@@ -106,6 +130,7 @@ void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurfaceTexture,
                                                 int width, int height,
                                                 bool opaque,
                                                 bool highBitDepth) {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   // Release the old surface
   _surfaceHolder = nullptr;
 
@@ -146,6 +171,7 @@ void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject jSurfaceTexture,
   _requestRedraw();
 }
 void RNSkOpenGLCanvasProvider::surfaceDestroyed() {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   // destroy the renderer (a unique pointer so the dtor will be called
   // immediately.)
   _surfaceHolder = nullptr;
@@ -159,6 +185,7 @@ void RNSkOpenGLCanvasProvider::surfaceDestroyed() {
 void RNSkOpenGLCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
                                                   int height, bool opaque,
                                                   bool highBitDepth) {
+  std::lock_guard<std::recursive_mutex> lock(_surfaceMutex);
   if (width == 0 && height == 0) {
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.

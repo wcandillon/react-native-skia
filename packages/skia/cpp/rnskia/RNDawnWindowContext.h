@@ -74,6 +74,8 @@ public:
   std::optional<RNSkDeferredTarget> getDeferredTarget() override;
 
   bool presentRecording(skgpu::graphite::Recording *recording) override;
+  bool insertRecording(skgpu::graphite::Recording *recording) override;
+  bool presentInserted() override;
 
   void resize(int width, int height) override {
     {
@@ -164,6 +166,10 @@ private:
   std::mutex _sizeMutex;
   int _width;
   int _height;
+  // Between insertRecording() and presentInserted(): the swapchain texture
+  // (a surface can only hold one at a time) and the surface wrapping it.
+  wgpu::SurfaceTexture _pendingTexture;
+  sk_sp<SkSurface> _pendingSurface;
 };
 
 } // namespace RNSkia

@@ -1,6 +1,12 @@
 import type { CanvasKit } from "canvaskit-wasm";
 
-import type { ContextFactory, SkCanvas, SkDeferredTargetInfo } from "../types";
+import type {
+  ContextFactory,
+  ProducerOptions,
+  ProducerStats,
+  SkCanvas,
+  SkDeferredTargetInfo,
+} from "../types";
 
 import { Host } from "./Host";
 import { JsiSkRecording } from "./JsiSkRecording";
@@ -25,6 +31,18 @@ export class JsiSkContext extends Host implements ContextFactory {
 
   setThreadPriority(_level: "high" | "normal" | "low") {
     // Browsers do not expose thread priorities.
+  }
+
+  startProducer(_options: ProducerOptions) {
+    throw new Error("Skia.Context.startProducer() is native only");
+  }
+
+  setProducerEnabled(_enabled: boolean[]) {}
+
+  stopProducer() {}
+
+  getProducerStats(): ProducerStats {
+    return { batchMs: 0, batches: 0, threads: 0 };
   }
 
   private pending: PendingTarget | null = null;

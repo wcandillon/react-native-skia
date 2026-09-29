@@ -21,11 +21,58 @@
 
 #pragma clang diagnostic pop
 
+namespace {
+std::atomic<bool> gBackgrounded{false};
+
+// Registered once, on first use (the main thread): the notifications are
+// posted on the main thread and only flip the flag.
+void observeAppState() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+#if !TARGET_OS_OSX
+    auto center = NSNotificationCenter.defaultCenter;
+    gBackgrounded = UIApplication.sharedApplication.applicationState ==
+                    UIApplicationStateBackground;
+    [center addObserverForName:UIApplicationDidEnterBackgroundNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      gBackgrounded = true;
+                    }];
+    [center addObserverForName:UIApplicationWillEnterForegroundNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      gBackgrounded = false;
+                    }];
+#else
+    gBackgrounded = NSApplication.sharedApplication.isHidden;
+    auto center = NSNotificationCenter.defaultCenter;
+    [center addObserverForName:NSApplicationDidHideNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      gBackgrounded = true;
+                    }];
+    [center addObserverForName:NSApplicationDidUnhideNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      gBackgrounded = false;
+                    }];
+#endif
+  });
+}
+} // namespace
+
+bool RNSkMetalCanvasProvider::isBackgrounded() { return gBackgrounded; }
+
 RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(
     std::function<void()> requestRedraw,
     std::shared_ptr<RNSkia::RNSkPlatformContext> context, bool useP3ColorSpace)
     : RNSkCanvasProvider(requestRedraw), _context(context),
       _useP3ColorSpace(useP3ColorSpace) {
+  observeAppState();
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
@@ -38,6 +85,7 @@ RNSkMetalCanvasProvider::~RNSkMetalCanvasProvider() {}
  Returns the scaled width of the view
  */
 int RNSkMetalCanvasProvider::getWidth() {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
   return _ctx ? _ctx->getWidth() : -1;
 };
 
@@ -45,6 +93,7 @@ int RNSkMetalCanvasProvider::getWidth() {
  Returns the scaled height of the view
  */
 int RNSkMetalCanvasProvider::getHeight() {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
   return _ctx ? _ctx->getHeight() : -1;
 };
 
@@ -53,6 +102,7 @@ int RNSkMetalCanvasProvider::getHeight() {
  */
 bool RNSkMetalCanvasProvider::renderToCanvas(
     const std::function<void(SkCanvas *)> &cb) {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
   if (!_ctx) {
     return false;
   }
@@ -93,6 +143,7 @@ bool RNSkMetalCanvasProvider::renderToCanvas(
 #if defined(SK_GRAPHITE)
 std::optional<RNSkia::RNSkDeferredTarget>
 RNSkMetalCanvasProvider::getDeferredTarget() {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
   if (!_ctx) {
     return std::nullopt;
   }
@@ -101,28 +152,38 @@ RNSkMetalCanvasProvider::getDeferredTarget() {
 
 bool RNSkMetalCanvasProvider::presentRecording(
     skgpu::graphite::Recording *recording) {
-  if (!_ctx || ![[NSThread currentThread] isMainThread]) {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
+  if (!_ctx) {
     return false;
   }
   // Same background guard as renderToCanvas: presenting while backgrounded
   // can clear the CAMetalLayer (#1257). The frame stays pending and the
   // display link, which does not fire in the background, replays it on
-  // foregrounding.
-#if !TARGET_OS_OSX
-  auto state = UIApplication.sharedApplication.applicationState;
-  bool appIsBackgrounded = (state == UIApplicationStateBackground);
-#else
-  bool appIsBackgrounded = NSApplication.sharedApplication.isHidden;
-#endif // !TARGET_OS_OSX
-  if (appIsBackgrounded) {
+  // foregrounding. Any thread: the state is tracked from notifications.
+  if (isBackgrounded()) {
     _requestRedraw();
     return false;
   }
   return _ctx->presentRecording(recording);
 }
+
+bool RNSkMetalCanvasProvider::insertRecording(
+    skgpu::graphite::Recording *recording) {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
+  if (!_ctx || isBackgrounded()) {
+    return false;
+  }
+  return _ctx->insertRecording(recording);
+}
+
+bool RNSkMetalCanvasProvider::presentInserted() {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
+  return _ctx != nullptr && _ctx->presentInserted();
+}
 #endif
 
 void RNSkMetalCanvasProvider::setSize(int width, int height) {
+  std::lock_guard<std::recursive_mutex> lock(_ctxMutex);
   _layer.frame = CGRectMake(0, 0, width, height);
   auto w = width * _context->getPixelDensity();
   auto h = height * _context->getPixelDensity();
