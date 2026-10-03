@@ -137,7 +137,6 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 #endif
       "disable_lazy_clear_for_mapped_at_creation_buffer",
       "allow_unsafe_apis",
-      "use_user_defined_labels_in_backend",
       "disable_robustness",
   };
   wgpu::DawnTogglesDescriptor togglesDesc;
