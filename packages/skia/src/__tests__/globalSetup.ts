@@ -18,7 +18,7 @@ const globalSetup = () => {
     if (process.env.E2E !== "true") {
       resolve();
     } else {
-      const port = 4242;
+      const port = Number(process.env.E2E_PORT ?? 4242);
       global.testServer = new WebSocketServer({ port });
       console.log(
         `\n\nTest server listening on port ${port} (waiting for the example app to open on E2E tests screen)`

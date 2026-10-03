@@ -5,7 +5,7 @@ const { OS } = Platform;
 const ANDROID_WS_HOST = "localhost";
 const IOS_WS_HOST = "localhost";
 const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
-const PORT = 4242;
+const PORT = Number(process.env.E2E_PORT ?? 4242);
 
 type UseClient = [client: WebSocket | null, hostname: string];
 export const useClient = (): UseClient => {
