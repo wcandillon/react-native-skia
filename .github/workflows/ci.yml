@@ -255,9 +255,21 @@ jobs:
           path: apps/docs/static/
           name: tests-docs-screenshots
 
+  # The iOS and macOS jobs run on the self-hosted Mac that also serves the
+  # react-native-webgpu and redraw CI. Fork PRs skip them so outside code never
+  # runs on that machine; the merge queue still runs them before anything lands.
   build-test-ios:
-    if: ${{ github.event_name != 'push' }}
-    runs-on: macos-latest-xlarge
+    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      # The other projects on the machine use Metro on 8081 and a test server
+      # on 4242, so this job runs on its own ports and its own simulator and
+      # can run concurrently with them. RCT_METRO_PORT is compiled into the
+      # app by xcodebuild; E2E_PORT is inlined into the JS bundle.
+      METRO_PORT: 8082
+      E2E_PORT: 4243
+      IOS_SIMULATOR: skia-ci
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
@@ -273,39 +285,88 @@ jobs:
         working-directory: apps/example/ios
         run: pod install
 
+      # Clear anything a previous or cancelled run left on this job's ports.
+      - name: Ensure Metro and test server ports are free
+        run: |
+          lsof -ti :$METRO_PORT | xargs -r kill -9 || true
+          lsof -ti :$E2E_PORT | xargs -r kill -9 || true
+
+      # --reset-cache: Metro's transform cache lives in $TMPDIR and survives
+      # between runs on the self-hosted machine. A stale cache would serve JS
+      # built by an older Babel transform (e.g. a worklets version mismatch
+      # after a bump) or with a previously inlined E2E_PORT.
       - name: Start Package Manager
         working-directory: apps/example
-        run: E2E=true yarn start &
+        run: E2E=true yarn start --port $METRO_PORT --reset-cache &
 
-      - name: Select iOS simulator
+      # A dedicated simulator, created once on the newest iOS runtime, so this
+      # job never shares a device with the other repositories on the machine.
+      - name: Prepare iOS simulator
         run: |
-          SIMULATOR_NAME=$(xcrun simctl list devices available --json | jq -r '
-            .devices
-            | to_entries
-            | map(select(.key | contains("iOS")))
-            | sort_by(.key)
-            | reverse
-            | map(.value[] | select(.name | startswith("iPhone")))
-            | .[0].name // empty')
-          if [ -z "$SIMULATOR_NAME" ]; then
-            echo "No available iPhone simulator found"
-            xcrun simctl list devices available
-            exit 1
+          UDID=$(xcrun simctl list devices available --json | jq -r --arg name "$IOS_SIMULATOR" '
+            .devices[] | .[] | select(.name == $name) | .udid' | head -n 1)
+          if [ -z "$UDID" ]; then
+            RUNTIME=$(xcrun simctl list runtimes available --json | jq -r '
+              .runtimes | map(select(.platform == "iOS")) | sort_by(.version) | last | .identifier')
+            DEVICE_TYPE=$(xcrun simctl list devicetypes --json | jq -r '
+              .devicetypes | map(select(.name | test("^iPhone [0-9]+ Pro$"))) | last | .identifier')
+            echo "Creating $IOS_SIMULATOR ($DEVICE_TYPE, $RUNTIME)"
+            UDID=$(xcrun simctl create "$IOS_SIMULATOR" "$DEVICE_TYPE" "$RUNTIME")
           fi
-          echo "Using simulator: $SIMULATOR_NAME"
-          echo "IOS_SIMULATOR=$SIMULATOR_NAME" >> $GITHUB_ENV
+          echo "Using simulator $IOS_SIMULATOR ($UDID)"
+          echo "IOS_SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          # Never test against a binary left over from a previous run.
+          xcrun simctl uninstall "$UDID" com.microsoft.ReactTestApp || true
 
+      # Plain xcodebuild rather than `yarn ios`: the CLI insists on opening
+      # Simulator.app from the Xcode bundle, which Xcode 27 no longer ships
+      # there, and a headless booted simulator is all the tests need.
+      # RCT_METRO_PORT feeds React-Core's GCC_PREPROCESSOR_DEFINITIONS.
       - name: Build example for iOS
-        working-directory: apps/example
-        run: yarn ios --simulator "$IOS_SIMULATOR"
+        working-directory: apps/example/ios
+        run: |
+          set -o pipefail && xcodebuild \
+            -workspace example.xcworkspace \
+            -scheme example \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath build \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            RCT_METRO_PORT=$METRO_PORT \
+            build | tee xcodebuild.log | xcpretty || {
+              # xcpretty drops some errors (e.g. project-level ones), so show
+              # them from the raw log.
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }
+
+      - name: Install and launch app on simulator
+        run: |
+          xcrun simctl install "$IOS_SIMULATOR_UDID" apps/example/ios/build/Build/Products/Debug-iphonesimulator/ReactTestApp.app
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp
 
       - name: Run e2e tests
         working-directory: packages/skia
         run: CI=true yarn e2e --testPathIgnorePatterns "Paragraph"
 
+      # Stop Metro and shut the simulator down so they don't hold memory
+      # while the machine runs the other repositories' jobs.
+      - name: Clean up
+        if: always()
+        run: |
+          lsof -ti :$METRO_PORT | xargs -r kill -9 || true
+          lsof -ti :$E2E_PORT | xargs -r kill -9 || true
+          if [ -n "$IOS_SIMULATOR_UDID" ]; then
+            xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
+          fi
+
   build-test-macos:
-    if: ${{ github.event_name != 'push' }}
-    runs-on: macos-latest
+    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0

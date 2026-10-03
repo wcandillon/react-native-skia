@@ -8,7 +8,27 @@ workspace 'example.xcworkspace'
 
 platform :osx, '14.0'
 
-use_test_app!(:hermes_enabled => true, :new_arch_enabled => true) do
+# react-native-webgpu is filtered out of this target below, so it can't provide
+# Dawn here: have react-native-skia vendor its own libwebgpu_dawn instead.
+ENV['RNSKIA_VENDOR_DAWN'] = '1'
+
+# Some pods (e.g. RNSVG's RNSVGFilters subspec) still declare a 10.14
+# deployment target, which Xcode 27 rejects (it supports 12.0 and up). Raise
+# any pod below the app's own target to it.
+raise_pod_deployment_targets = ->(installer) do
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      current = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+      next if current.nil? || Gem::Version.new(current) >= Gem::Version.new('14.0')
+
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+    end
+  end
+end
+
+use_test_app!(:hermes_enabled => true,
+              :new_arch_enabled => true,
+              :post_install => raise_pod_deployment_targets) do
   # react-native-webgpu doesn't support macOS yet. Its podspec still declares
   # `:osx` support, so plain autolinking (which only looks at the podspec, not
   # react-native.config.js platform overrides) would otherwise pull it in here.
