@@ -266,7 +266,7 @@ jobs:
       # The other projects on the machine use Metro on 8081 and a test server
       # on 4242, so this job runs on its own ports and its own simulator and
       # can run concurrently with them. RCT_METRO_PORT is compiled into the
-      # app by `yarn ios --port`; E2E_PORT is inlined into the JS bundle.
+      # app by xcodebuild; E2E_PORT is inlined into the JS bundle.
       METRO_PORT: 8082
       E2E_PORT: 4243
       IOS_SIMULATOR: skia-ci
@@ -320,9 +320,28 @@ jobs:
           # Never test against a binary left over from a previous run.
           xcrun simctl uninstall "$UDID" com.microsoft.ReactTestApp || true
 
+      # Plain xcodebuild rather than `yarn ios`: the CLI insists on opening
+      # Simulator.app from the Xcode bundle, which Xcode 27 no longer ships
+      # there, and a headless booted simulator is all the tests need.
+      # RCT_METRO_PORT feeds React-Core's GCC_PREPROCESSOR_DEFINITIONS.
       - name: Build example for iOS
-        working-directory: apps/example
-        run: yarn ios --udid "$IOS_SIMULATOR_UDID" --port $METRO_PORT
+        working-directory: apps/example/ios
+        run: |
+          set -o pipefail && xcodebuild \
+            -workspace example.xcworkspace \
+            -scheme example \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath build \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            RCT_METRO_PORT=$METRO_PORT \
+            build | xcpretty
+
+      - name: Install and launch app on simulator
+        run: |
+          xcrun simctl install "$IOS_SIMULATOR_UDID" apps/example/ios/build/Build/Products/Debug-iphonesimulator/ReactTestApp.app
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp
 
       - name: Run e2e tests
         working-directory: packages/skia
