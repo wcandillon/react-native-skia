@@ -12,7 +12,7 @@ Behind the scenes, it is using its own React renderer.
 | Name | Type     |  Description    |
 |:-----|:---------|:-----------------|
 | style?   | `ViewStyle` | View style |
-| ref?   | `Ref<CanvasRef>` | Reference to the canvas (see [canvas size](#canvas-size) and [snapshots](#snapshots)) |
+| ref?   | `Ref<CanvasRef>` | Reference to the canvas (see [canvas size](#canvas-size) and [snapshots](#getting-a-canvas-snapshot)) |
 | onSize? | `SharedValue<Size>` | Reanimated value to which the canvas size will be assigned  (see [canvas size](#canvas-size)) |
 | opaque? | `boolean` | Declares that the canvas covers every pixel of its bounds. Defaults to `false`. On Android it selects the cheapest backing view (see [Android rendering options](#android-rendering-options)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
