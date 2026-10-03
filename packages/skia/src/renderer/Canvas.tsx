@@ -19,8 +19,9 @@ import type { SharedValue } from "react-native-reanimated";
 
 import Rea from "../external/reanimated/ReanimatedProxy";
 import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
-import type { AndroidCanvasProps, AndroidSurfaceType } from "../views/types";
-import SkiaPictureViewNativeComponent from "../specs/SkiaPictureViewNativeComponent";
+import { androidNativeProps } from "../views/android";
+import type { AndroidCanvasProps } from "../views/types";
+import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import type { SkImage, SkRect, SkSize } from "../skia/types";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 import { Skia } from "../skia";
@@ -61,7 +62,6 @@ export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
 };
 
 export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
-  debug?: boolean;
   /** @deprecated Not supported on native. Use `onSize` or `useCanvasSize()` instead. */
   onLayout?: ViewProps["onLayout"];
   /**
@@ -72,7 +72,6 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
    */
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
-  colorSpace?: "p3" | "srgb";
   /**
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. Colors are
@@ -85,25 +84,14 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   /** Android-only rendering options. Ignored on iOS and web. */
   android?: AndroidCanvasProps;
   ref?: React.Ref<CanvasRef>;
-  androidWarmup?: boolean;
   __destroyWebGLContextAfterRender?: boolean;
 }
 
-// Anything else reaching the native component would hit the generated
-// string-enum parser, which aborts on unknown values.
-const resolveSurfaceType = (
-  surfaceType: AndroidSurfaceType | undefined
-): "auto" | AndroidSurfaceType =>
-  surfaceType === "SurfaceView" || surfaceType === "TextureView"
-    ? surfaceType
-    : "auto";
-
 /**
- * What every canvas shares, whichever native view it renders into: the native
- * id, the scene graph root rendered into it, the `onSize` measurement and the
- * imperative handle of the ref.
+ * What the canvas owns: the native id, the scene graph root rendered into it,
+ * the `onSize` measurement and the imperative handle of the ref.
  */
-export const useCanvasRoot = ({
+const useCanvasRoot = ({
   children,
   onSize,
   ref,
@@ -186,14 +174,26 @@ export const useCanvasRoot = ({
   return { nativeId, viewRef };
 };
 
+/**
+ * The declarative canvas. Its children are rendered by Skia's own React
+ * renderer; the frames are produced off the JS thread:
+ *
+ * - the JS thread records the scene graph into a native recorder once per
+ *   React commit and hands it to the view;
+ * - the Reanimated UI runtime only reads the shared values into it (the one
+ *   step that needs a JS runtime), it never replays anything;
+ * - a dedicated native thread pool replays the recorder into a Graphite
+ *   recording whenever the content changed, at most once per presented frame;
+ * - the view presents the recording on the next vsync.
+ *
+ * On the web the scene is drawn into a picture on the JS thread and painted
+ * on a WebGL canvas.
+ */
 export const Canvas = ({
-  debug,
   opaque,
   children,
   onSize,
-  colorSpace = "p3",
   highBitDepth = false,
-  androidWarmup = false,
   android,
   ref,
   onLayout,
@@ -219,17 +219,13 @@ export const Canvas = ({
     [onLayout, onSize]
   );
   return (
-    <SkiaPictureViewNativeComponent
+    <SkiaViewNativeComponent
       ref={viewRef}
       collapsable={false}
       nativeID={`${nativeId}`}
-      debug={debug}
       opaque={opaque}
-      colorSpace={colorSpace}
       highBitDepth={highBitDepth}
-      androidWarmup={androidWarmup}
-      androidSurfaceType={resolveSurfaceType(android?.surfaceType)}
-      androidZOrderOnTop={!!android?.zOrderOnTop}
+      {...androidNativeProps(android)}
       onLayout={
         Platform.OS === "web" && (onSize || onLayout) ? onLayoutWeb : onLayout
       }

@@ -11,12 +11,10 @@ import androidx.annotation.NonNull;
 public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callback {
 
     SkiaViewAPI mApi;
-    boolean mDebug;
 
-    public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean debug, boolean zOrderOnTop, boolean opaque) {
+    public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean zOrderOnTop, boolean opaque) {
         super(context);
         mApi = api;
-        mDebug = debug;
         // Must be set before the surface is created.
         setZOrderOnTop(zOrderOnTop);
         setOpaque(opaque);

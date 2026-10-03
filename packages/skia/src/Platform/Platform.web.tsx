@@ -7,7 +7,7 @@ import { isRNModule, unwrapModule } from "../skia/types";
 
 import type { IPlatform } from "./IPlatform";
 
-// Layout is observed by the views themselves (see SkiaPictureView.web.tsx):
+// Layout is observed by the views themselves (see SkiaView.web.tsx):
 // this shim only reproduces react-native-web's default View styling.
 const View = (({ children, style: rawStyle }: ViewProps) => {
   const style = useMemo(() => (rawStyle ?? {}) as CSSProperties, [rawStyle]);

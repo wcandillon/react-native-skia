@@ -9,7 +9,7 @@ import type { SkPicture } from "../../skia/types";
 import type { ISkiaViewApiWeb } from "../../specs/NativeSkiaModule.web";
 // Installs global.SkiaViewApi
 import "../../specs/NativeSkiaModule.web";
-import { SkiaPictureView } from "../SkiaPictureView.web";
+import { SkiaView } from "../SkiaView.web";
 
 import {
   installWebEnvironment,
@@ -26,9 +26,11 @@ import {
   canvasSize,
 } from "./web-setup";
 
-// The view must paint without ever receiving a layout event (#3829):
-// these tests mount it with a mocked CanvasKit and never fire the
-// ResizeObserver unless the test does so explicitly.
+// The picture path of the web view, driven the way <Canvas> and
+// <SkiaPictureView> drive it: through SkiaViewApi.setJsiProperty. The view
+// must paint without ever receiving a layout event (#3829): these tests mount
+// it with a mocked CanvasKit and never fire the ResizeObserver unless the
+// test does so explicitly.
 
 // Resolve the Platform module to its web implementation, as a web bundler
 // would (the native one imports react-native, which jest cannot parse).
@@ -65,7 +67,7 @@ const mountView = (nativeID: string, options: MountOptions = {}) => {
     isStatic = false,
   }: MountOptions) => {
     const view = (
-      <SkiaPictureView
+      <SkiaView
         nativeID={nativeID}
         onLayout={onLayout}
         __destroyWebGLContextAfterRender={isStatic}
@@ -93,7 +95,7 @@ const mountView = (nativeID: string, options: MountOptions = {}) => {
   };
 };
 
-describe("SkiaPictureView.web", () => {
+describe("SkiaView.web", () => {
   it("paints a picture without ever receiving a layout event", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
     canvasSize.width = 360;

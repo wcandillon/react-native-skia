@@ -1,4 +1,3 @@
-import { Skia } from "react-native-skia";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 
@@ -6,22 +5,7 @@ const { OS } = Platform;
 const ANDROID_WS_HOST = "localhost";
 const IOS_WS_HOST = "localhost";
 const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
-// E2E_PORT is inlined at bundle time (transform-inline-environment-variables),
-// so CI can run the test server on another port than other projects sharing
-// the machine. Metro must be started with --reset-cache for a change to apply.
 const PORT = Number(process.env.E2E_PORT ?? 4242);
-// Whether this Skia build runs the Graphite backend. Probed via
-// getNativeDevice(), which throws on Ganesh builds — checking navigator.gpu
-// would only tell us react-native-webgpu is installed, which can be true on
-// a non-Graphite build. Reported to the test server so it can gate
-// Graphite-only specs.
-const graphite = (() => {
-  try {
-    return typeof Skia.getNativeDevice() === "bigint";
-  } catch {
-    return false;
-  }
-})();
 
 type UseClient = [client: WebSocket | null, hostname: string];
 export const useClient = (): UseClient => {
@@ -34,12 +18,7 @@ export const useClient = (): UseClient => {
     const ws = new WebSocket(url);
     ws.onopen = () => {
       setClient(ws);
-      ws.send(
-        JSON.stringify({
-          OS,
-          graphite,
-        })
-      );
+      ws.send(JSON.stringify({ OS }));
     };
     ws.onclose = () => {
       setClient(null);

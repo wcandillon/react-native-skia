@@ -33,8 +33,7 @@ public class RNSkiaPackage extends BaseReactPackage implements ReactPackage {
     @Override
     public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
         return Arrays.<ViewManager>asList(
-            new SkiaPictureViewManager(),
-            new SkiaGraphiteViewManager()
+            new SkiaViewManager()
         );
     }
 

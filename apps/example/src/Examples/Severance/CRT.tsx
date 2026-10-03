@@ -1,10 +1,4 @@
-import {
-  Group,
-  Skia,
-  RuntimeShader,
-  Paint,
-  vec,
-} from "react-native-skia";
+import { Group, Skia, RuntimeShader, Paint, vec } from "react-native-skia";
 import type { ReactNode } from "react";
 import React from "react";
 import { useWindowDimensions } from "react-native";

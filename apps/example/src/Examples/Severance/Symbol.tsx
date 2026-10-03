@@ -1,11 +1,5 @@
 import type { SkFont, Vector } from "react-native-skia";
-import {
-  interpolate,
-  dist,
-  vec,
-  Group,
-  Text,
-} from "react-native-skia";
+import { interpolate, dist, vec, Group, Text } from "react-native-skia";
 import React from "react";
 import { useWindowDimensions } from "react-native";
 import type { SharedValue } from "react-native-reanimated";

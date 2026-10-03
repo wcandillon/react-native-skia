@@ -106,8 +106,7 @@ export interface Skia {
   /**
    * Raw WGPUDevice pointer of Skia's Graphite device, as a BigInt. Pass it to
    * react-native-webgpu's importDevice() to get a GPUDevice sharing Skia's
-   * device (zero-copy interop). Only available on Graphite builds; throws
-   * otherwise.
+   * device (zero-copy interop). Native only.
    */
   getNativeDevice(): bigint;
 }

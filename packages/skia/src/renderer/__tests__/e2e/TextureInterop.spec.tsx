@@ -1,5 +1,6 @@
 import { AlphaType, ColorType } from "../../../skia/types";
-import { itRunsWithGraphite, surface } from "../setup";
+import { itRunsE2eOnly } from "../../../__tests__/setup";
+import { surface } from "../setup";
 
 // Covers the pointer-based interop surface with react-native-webgpu:
 // Skia.getNativeDevice(), the
@@ -8,7 +9,7 @@ import { itRunsWithGraphite, surface } from "../setup";
 // The pointers never cross the eval boundary (BigInt is not JSON
 // serializable); everything runs on-device and only plain data comes back.
 describe("Texture interop (Graphite)", () => {
-  itRunsWithGraphite("getNativeDevice() returns a device pointer", async () => {
+  itRunsE2eOnly("getNativeDevice() returns a device pointer", async () => {
     const result = await surface.eval((Skia) => {
       const device = Skia.getNativeDevice();
       if (typeof device !== "bigint") {
@@ -23,69 +24,64 @@ describe("Texture interop (Graphite)", () => {
     expect(result).toBe("ok");
   });
 
-  itRunsWithGraphite(
-    "round-trips an SkImage through a native texture",
-    async () => {
-      const result = await surface.eval(
-        (Skia, ctx) => {
-          const size = 64;
-          const src = Skia.Surface.MakeOffscreen(size, size);
-          if (!src) {
-            return "could not create the source surface";
-          }
-          const canvas = src.getCanvas();
-          const paint = Skia.Paint();
-          paint.setColor(Skia.Color("red"));
-          canvas.drawRect(Skia.XYWHRect(0, 0, size / 2, size), paint);
-          paint.setColor(Skia.Color("lime"));
-          canvas.drawRect(Skia.XYWHRect(size / 2, 0, size / 2, size), paint);
-          src.flush();
-          const original = src.makeImageSnapshot();
+  itRunsE2eOnly("round-trips an SkImage through a native texture", async () => {
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        const size = 64;
+        const src = Skia.Surface.MakeOffscreen(size, size);
+        if (!src) {
+          return "could not create the source surface";
+        }
+        const canvas = src.getCanvas();
+        const paint = Skia.Paint();
+        paint.setColor(Skia.Color("red"));
+        canvas.drawRect(Skia.XYWHRect(0, 0, size / 2, size), paint);
+        paint.setColor(Skia.Color("lime"));
+        canvas.drawRect(Skia.XYWHRect(size / 2, 0, size / 2, size), paint);
+        src.flush();
+        const original = src.makeImageSnapshot();
 
-          // SkImage -> WGPUTexture pointer -> SkImage. The returned pointer
-          // carries the reference normally adopted by react-native-webgpu's
-          // adoptTexture(); the wrap below only borrows it, so this spec leaks
-          // one 64x64 texture per run — acceptable in a test.
-          const pointer = Skia.Image.MakeNativeTextureFromImage(original);
-          if (typeof pointer !== "bigint" || pointer === BigInt(0)) {
-            return "MakeNativeTextureFromImage did not return a pointer";
-          }
-          const roundTripped = Skia.Image.MakeImageFromNativeTexture(pointer);
-          if (roundTripped.width() !== size || roundTripped.height() !== size) {
-            return `unexpected size ${roundTripped.width()}x${roundTripped.height()}`;
-          }
+        // SkImage -> WGPUTexture pointer -> SkImage. The returned pointer
+        // carries the reference normally adopted by react-native-webgpu's
+        // adoptTexture(); the wrap below only borrows it, so this spec leaks
+        // one 64x64 texture per run — acceptable in a test.
+        const pointer = Skia.Image.MakeNativeTextureFromImage(original);
+        if (typeof pointer !== "bigint" || pointer === BigInt(0)) {
+          return "MakeNativeTextureFromImage did not return a pointer";
+        }
+        const roundTripped = Skia.Image.MakeImageFromNativeTexture(pointer);
+        if (roundTripped.width() !== size || roundTripped.height() !== size) {
+          return `unexpected size ${roundTripped.width()}x${roundTripped.height()}`;
+        }
 
-          // Draw the wrapped image so the texture is actually sampled, then
-          // read the result back through the canvas.
-          const dst = Skia.Surface.MakeOffscreen(size, size);
-          if (!dst) {
-            return "could not create the destination surface";
-          }
-          dst.getCanvas().drawImage(roundTripped, 0, 0);
-          dst.flush();
-          const pixels = dst.getCanvas().readPixels(0, 0, {
-            width: size,
-            height: size,
-            colorType: ctx.colorType,
-            alphaType: ctx.alphaType,
-          });
-          if (!pixels) {
-            return "readPixels returned null";
-          }
-          const px = (x: number, y: number) =>
-            Array.from(
-              pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
-            );
-          // One sample from the center of each half.
-          return [...px(16, 32), ...px(48, 32)];
-        },
-        { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
-      );
-      expect(result).toEqual([255, 0, 0, 255, 0, 255, 0, 255]);
-    }
-  );
+        // Draw the wrapped image so the texture is actually sampled, then
+        // read the result back through the canvas.
+        const dst = Skia.Surface.MakeOffscreen(size, size);
+        if (!dst) {
+          return "could not create the destination surface";
+        }
+        dst.getCanvas().drawImage(roundTripped, 0, 0);
+        dst.flush();
+        const pixels = dst.getCanvas().readPixels(0, 0, {
+          width: size,
+          height: size,
+          colorType: ctx.colorType,
+          alphaType: ctx.alphaType,
+        });
+        if (!pixels) {
+          return "readPixels returned null";
+        }
+        const px = (x: number, y: number) =>
+          Array.from(pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4));
+        // One sample from the center of each half.
+        return [...px(16, 32), ...px(48, 32)];
+      },
+      { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
+    );
+    expect(result).toEqual([255, 0, 0, 255, 0, 255, 0, 255]);
+  });
 
-  itRunsWithGraphite(
+  itRunsE2eOnly(
     "draws into a native texture through Surface.MakeFromNativeTexture",
     async () => {
       const result = await surface.eval(

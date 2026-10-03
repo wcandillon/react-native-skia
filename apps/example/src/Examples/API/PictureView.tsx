@@ -1,10 +1,6 @@
 import React, { useMemo } from "react";
 import { StyleSheet } from "react-native";
-import {
-  createPicture,
-  Skia,
-  SkiaPictureView,
-} from "react-native-skia";
+import { createPicture, Skia, SkiaPictureView } from "react-native-skia";
 
 export const PictureViewExample = () => {
   // Create picture
@@ -22,7 +18,7 @@ export const PictureViewExample = () => {
     []
   );
 
-  return <SkiaPictureView style={styles.container} picture={picture} debug />;
+  return <SkiaPictureView style={styles.container} picture={picture} />;
 };
 
 const styles = StyleSheet.create({

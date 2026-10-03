@@ -42,4 +42,14 @@ bool DawnWindowContext::presentRecordings(
   return success;
 }
 
+bool DawnWindowContext::presentImage(const sk_sp<SkImage> &image) {
+  auto surface = getSurface();
+  if (!surface) {
+    return false;
+  }
+  surface->getCanvas()->drawImage(image, 0, 0);
+  present();
+  return true;
+}
+
 } // namespace RNSkia

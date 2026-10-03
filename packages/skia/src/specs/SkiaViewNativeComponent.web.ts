@@ -1,33 +1,31 @@
 import type { ViewProps } from "react-native";
 import { createElement } from "react";
 
-import { SkiaPictureView } from "../views/SkiaPictureView.web";
+import { SkiaView } from "../views/SkiaView.web";
 
 export interface NativeProps extends ViewProps {
-  debug?: boolean;
   opaque?: boolean;
+  highBitDepth?: boolean;
   nativeID: string;
   androidSurfaceType?: "auto" | "SurfaceView" | "TextureView";
   androidZOrderOnTop?: boolean;
 }
 
-const SkiaPictureViewNativeComponent = ({
+const SkiaViewNativeComponent = ({
   nativeID,
-  debug,
-  opaque,
   onLayout,
-  // Android-only, never reaches the DOM
+  // Surface settings, never reach the DOM
+  opaque: _opaque,
+  highBitDepth: _highBitDepth,
   androidSurfaceType: _androidSurfaceType,
   androidZOrderOnTop: _androidZOrderOnTop,
   ...viewProps
 }: NativeProps) => {
-  return createElement(SkiaPictureView, {
+  return createElement(SkiaView, {
     nativeID,
-    debug,
-    opaque,
     onLayout,
     ...viewProps,
   });
 };
 // eslint-disable-next-line import/no-default-export
-export default SkiaPictureViewNativeComponent;
+export default SkiaViewNativeComponent;

@@ -1,7 +1,5 @@
 #pragma once
 
-#if defined(SK_GRAPHITE)
-
 #include <memory>
 #include <utility>
 
@@ -10,7 +8,7 @@
 #include "JsiSkCanvas.h"
 #include "JsiSkGraphiteRecording.h"
 #include "JsiSkNativeObjects.h"
-#include "rnskia/RNSkGraphiteView.h"
+#include "rnskia/RNSkGraphiteTarget.h"
 
 namespace RNSkia {
 
@@ -78,5 +76,3 @@ private:
 };
 
 } // namespace RNSkia
-
-#endif // SK_GRAPHITE

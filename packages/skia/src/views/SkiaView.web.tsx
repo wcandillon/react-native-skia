@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import type { ViewProps } from "react-native";
 
 import type {
   SkCanvas,
@@ -19,31 +20,30 @@ import { JsiSkPictureRecorder } from "../skia/web/JsiSkPictureRecorder";
 import { Platform } from "../Platform";
 import type {
   ISkiaViewApiWeb,
-  SkiaGraphiteViewHandle,
+  SkiaWebViewHandle,
 } from "../specs/NativeSkiaModule.web";
 
-import type { SkiaGraphiteViewNativeProps } from "./types";
 import { SkiaViewNativeId } from "./SkiaViewNativeId";
 import { useSkiaWebRenderer } from "./SkiaWebRenderer";
-import type { Renderer } from "./SkiaWebRenderer";
+import type { Renderer, WebFrame } from "./SkiaWebRenderer";
 
-// The web has no Graphite: a recording is an SkPicture, replayed onto the
-// view's WebGL surface by the same renderer as SkiaPictureView (with its
-// context-loss handling and the destroy-context-after-render mode). Frames
-// keep their native semantics, presented in submission order and never
-// dropped, with one difference: the surface starts cleared on every frame,
-// so a recording draws the whole frame rather than a delta.
+// The web has no Graphite: the view paints pictures on a WebGL canvas (with
+// context-loss recovery and the destroy-context-after-render mode). It shows
+// one of two kinds of content. The picture of a <Canvas> or a
+// <SkiaPictureView> is a whole frame: the latest one wins. The recordings
+// submitted through the view's context (SkiaGraphiteView) keep their native
+// semantics, presented in submission order and never dropped, with one
+// difference: the surface starts cleared on every frame, so a recording draws
+// the whole frame rather than a delta.
 
-export interface SkiaGraphiteViewRef {
-  /**
-   * The recording side of the view. Call it once the view is mounted.
-   */
-  getContext(): SkGraphiteContext;
-  getNativeId(): number;
+export interface SkiaViewHandle extends SkiaWebViewHandle {
+  /** The canvas element, for Reanimated's measure(). */
+  readonly canvasRef: () => HTMLCanvasElement | null;
 }
 
-export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
-  ref?: React.Ref<SkiaGraphiteViewRef>;
+export interface SkiaViewProps extends ViewProps {
+  ref?: React.Ref<SkiaViewHandle>;
+  __destroyWebGLContextAfterRender?: boolean;
 }
 
 /**
@@ -146,9 +146,11 @@ class WebGraphiteContext implements SkGraphiteContext {
   [Symbol.dispose]() {}
 }
 
-export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
+export const SkiaView = (props: SkiaViewProps) => {
   const { ref, onLayout } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The picture of a <Canvas> or a <SkiaPictureView>: a whole frame.
+  const pictureRef = useRef<SkPicture | null>(null);
   // Recordings submitted since the last frame, in order, and the frame on
   // screen, replayed when the surface is recreated.
   const queueRef = useRef<WebGraphiteRecording[]>([]);
@@ -164,9 +166,9 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
 
   const isStatic = props.__destroyWebGLContextAfterRender === true;
 
-  // Presents what was submitted since the last frame. A frame that cannot be
-  // painted yet (unmeasured canvas, lost context) stays queued for the next
-  // opportunity.
+  // Presents the recordings submitted since the last frame. A frame that
+  // cannot be painted yet (unmeasured canvas, lost context) stays queued for
+  // the next opportunity.
   const present = useCallback((renderer: Renderer) => {
     const frame = queueRef.current;
     if (frame.length === 0) {
@@ -182,10 +184,14 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     previous.forEach((recording) => recording.release());
   }, []);
 
+  // Paints what the view holds: pending recordings first, else the picture,
+  // else the frame on screen again (the surface was recreated).
   const paint = useCallback(
     (renderer: Renderer) => {
       if (queueRef.current.length > 0) {
         present(renderer);
+      } else if (pictureRef.current) {
+        renderer.draw([pictureRef.current]);
       } else if (shownRef.current.length > 0) {
         renderer.draw(shownRef.current.map((recording) => recording.picture));
       }
@@ -197,27 +203,44 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     onLayout,
   });
 
+  // Draws are flushed from a microtask rather than an animation frame: the
+  // browser composites once per frame either way, and painting right away
+  // keeps a frame produced inside an animation callback (the Reanimated
+  // mapper, a frame loop) from slipping to the next one. Deferring to the
+  // next animation frame would alternate between "flush pending in this
+  // frame" and "flush scheduled for the next frame", halving the effective
+  // frame rate. Without a renderer yet (an unmeasured canvas), the content
+  // stays held and is painted by the renderer once it exists, so it is
+  // never lost.
   const flush = useCallback(() => {
     flushScheduledRef.current = false;
     if (rendererRef.current) {
-      present(rendererRef.current);
+      paint(rendererRef.current);
     }
-  }, [present, rendererRef]);
+  }, [paint, rendererRef]);
 
-  // Frames are presented from a microtask rather than an animation frame:
-  // the browser composites once per frame either way, and painting right
-  // away keeps a frame recorded inside an animation callback from slipping
-  // to the next one (see SkiaPictureView.web).
+  const redraw = useCallback(() => {
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true;
+      queueMicrotask(flush);
+    }
+  }, [flush]);
+
+  const setPicture = useCallback(
+    (picture: SkPicture) => {
+      pictureRef.current = picture;
+      redraw();
+    },
+    [redraw]
+  );
+
   const submit = useCallback(
     (recording: WebGraphiteRecording) => {
       recording.retain();
       queueRef.current.push(recording);
-      if (!flushScheduledRef.current) {
-        flushScheduledRef.current = true;
-        queueMicrotask(flush);
-      }
+      redraw();
     },
-    [flush]
+    [redraw]
   );
 
   const getSize = useCallback(
@@ -233,23 +256,24 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     [getSize, submit]
   );
 
-  const redraw = useCallback(() => {
-    if (rendererRef.current) {
-      paint(rendererRef.current);
-    }
-  }, [paint, rendererRef]);
-
   const makeImageSnapshot = useCallback(
     (rect?: SkRect): SkImage | null => {
-      const frame =
-        queueRef.current.length > 0 ? queueRef.current : shownRef.current;
-      if (!rendererRef.current || frame.length === 0) {
+      const renderer = rendererRef.current;
+      if (!renderer) {
         return null;
       }
-      return rendererRef.current.makeImageSnapshot(
-        frame.map((recording) => recording.picture),
-        rect
-      );
+      let frame: WebFrame;
+      if (queueRef.current.length > 0) {
+        frame = queueRef.current.map((recording) => recording.picture);
+      } else if (pictureRef.current) {
+        frame = [pictureRef.current];
+      } else {
+        frame = shownRef.current.map((recording) => recording.picture);
+      }
+      if (frame.length === 0) {
+        return null;
+      }
+      return renderer.makeImageSnapshot(frame, rect);
     },
     [rendererRef]
   );
@@ -273,10 +297,12 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
           top: 0,
         };
         callback(
+          // x, y are relative to the parent
           rect.left - parentRect.left,
           rect.top - parentRect.top,
           rect.width,
           rect.height,
+          // pageX, pageY are absolute screen coordinates
           rect.left + window.scrollX,
           rect.top + window.scrollY
         );
@@ -297,29 +323,53 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     []
   );
 
+  // No flush cancellation is needed on unmount: a microtask queued before
+  // unmount runs within the same task, and flush no-ops once the
+  // layout-effect cleanup has nulled rendererRef.
+
   useImperativeHandle(
     ref,
     () => ({
-      getContext,
-      getNativeId: () => nativeId,
-    }),
-    [getContext, nativeId]
-  );
-
-  useEffect(() => {
-    const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    api.registerView(`${nativeId}`, {
+      setPicture,
       getContext,
       getSize,
       redraw,
       makeImageSnapshot,
       measure,
       measureInWindow,
-    } as SkiaGraphiteViewHandle);
+      get canvasRef() {
+        return () => canvasRef.current;
+      },
+    }),
+    [
+      setPicture,
+      getContext,
+      getSize,
+      redraw,
+      makeImageSnapshot,
+      measure,
+      measureInWindow,
+    ]
+  );
+
+  useEffect(() => {
+    const api = global.SkiaViewApi as ISkiaViewApiWeb;
+    api.registerView(`${nativeId}`, {
+      setPicture,
+      getContext,
+      getSize,
+      redraw,
+      makeImageSnapshot,
+      measure,
+      measureInWindow,
+    });
     return () => {
+      // Views must be removed on unmount: the handle's closures capture the
+      // canvas element, so a stale entry retains the whole detached DOM tree.
       api.unregisterView(`${nativeId}`);
     };
   }, [
+    setPicture,
     getContext,
     getSize,
     redraw,
@@ -341,9 +391,6 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
   );
 
   const {
-    debug: _debug,
-    opaque: _opaque,
-    highBitDepth: _highBitDepth,
     ref: _ref,
     onLayout: _onLayout,
     nativeID: _nativeID,

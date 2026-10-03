@@ -42,18 +42,6 @@ public:
 
   sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) override;
 
-#if !defined(SK_GRAPHITE)
-  GrDirectContext *getDirectContext() override;
-
-  sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &textureInfo,
-                                            int width, int height,
-                                            bool mipMapped) override;
-
-  const TextureInfo getTexture(sk_sp<SkSurface> image) override;
-
-  const TextureInfo getTexture(sk_sp<SkImage> image) override;
-#endif
-
   uint64_t makeNativeBuffer(sk_sp<SkImage> image) override;
 
   uint64_t makeTestNativeBuffer(int width, int height) override;
@@ -78,8 +66,6 @@ public:
 
 private:
   ViewScreenshotService *_screenshotService;
-
-  SkColorType mtlPixelFormatToSkColorType(MTLPixelFormat pixelFormat);
 };
 
 } // namespace RNSkia

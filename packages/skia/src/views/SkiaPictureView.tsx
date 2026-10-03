@@ -1,19 +1,21 @@
 import React from "react";
 
 import type { SkRect } from "../skia/types";
-import SkiaPictureViewNativeComponent from "../specs/SkiaPictureViewNativeComponent";
+import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 
 import { SkiaViewApi } from "./api";
+import { androidNativeProps } from "./android";
 import type { SkiaPictureViewNativeProps } from "./types";
 import { SkiaViewNativeId } from "./SkiaViewNativeId";
 
-const NativeSkiaPictureView = SkiaPictureViewNativeComponent;
-
 interface SkiaPictureViewProps extends SkiaPictureViewNativeProps {
   mode?: "default" | "continuous";
-  androidWarmup?: boolean;
 }
 
+/**
+ * A view showing a picture. The picture is handed to the native view, which
+ * records it once (and again on every redraw) for its surface.
+ */
 export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
   private requestId = 0;
 
@@ -76,21 +78,20 @@ export class SkiaPictureView extends React.Component<SkiaPictureViewProps> {
 
   render() {
     const {
-      mode,
-      debug = false,
+      mode: _mode,
+      picture: _picture,
       opaque = false,
       highBitDepth = false,
-      androidWarmup = false,
+      android,
       ...viewProps
     } = this.props;
     return (
-      <NativeSkiaPictureView
+      <SkiaViewNativeComponent
         collapsable={false}
         nativeID={`${this._nativeId}`}
-        debug={debug}
         opaque={opaque}
         highBitDepth={highBitDepth}
-        androidWarmup={androidWarmup}
+        {...androidNativeProps(android)}
         {...viewProps}
       />
     );

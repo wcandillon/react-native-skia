@@ -106,7 +106,7 @@ export interface ImageFactory {
    * while the image is in use: destroy() releases the underlying GPU
    * resource regardless of reference counts.
    *
-   * Note: This method is only available when the Graphite backend is enabled.
+   * Native only.
    *
    * @param pointer - The WGPUTexture pointer (texture.nativePointer)
    * @returns An SkImage wrapping the texture, or throws if the texture is invalid
@@ -119,7 +119,7 @@ export interface ImageFactory {
    * returned pointer carries one reference and must be adopted exactly once
    * with react-native-webgpu's adoptTexture(), which owns it from then on.
    *
-   * Note: This method is only available when the Graphite backend is enabled.
+   * Native only.
    *
    * @param image - An SkImage to convert to a texture
    * @returns A WGPUTexture pointer for adoptTexture(), or throws on failure

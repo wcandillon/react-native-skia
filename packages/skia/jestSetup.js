@@ -21,7 +21,5 @@ jest.mock("react-native-skia", () => {
       useFonts: () => null,
     };
   });
-  return require("react-native-skia/lib/module/mock").Mock(
-    global.CanvasKit
-  );
+  return require("react-native-skia/lib/module/mock").Mock(global.CanvasKit);
 });

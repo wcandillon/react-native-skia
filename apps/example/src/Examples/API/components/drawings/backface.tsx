@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  Skia,
-  PaintStyle,
-  Group,
-  Path,
-  Rect,
-} from "react-native-skia";
+import { Skia, PaintStyle, Group, Path, Rect } from "react-native-skia";
 
 import { translate } from "../../../../components/Animations";
 

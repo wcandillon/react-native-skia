@@ -43,7 +43,7 @@ export interface SurfaceFactory {
    * surface exists. Calling destroy() on the GPUTexture still invalidates
    * the surface.
    *
-   * Note: This method is only available when the Graphite backend is enabled.
+   * Native only.
    *
    * @param pointer - The WGPUTexture pointer (texture.nativePointer)
    * @returns An SkSurface rendering into the texture, or throws if the texture is invalid
