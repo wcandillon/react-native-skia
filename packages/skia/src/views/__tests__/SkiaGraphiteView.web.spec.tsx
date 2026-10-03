@@ -8,8 +8,8 @@ import type { SkGraphiteContext } from "../../skia/types";
 import type { ISkiaViewApiWeb } from "../../specs/NativeSkiaModule.web";
 // Installs global.SkiaViewApi
 import "../../specs/NativeSkiaModule.web";
-import { SkiaGraphiteView } from "../SkiaGraphiteView.web";
-import type { SkiaGraphiteViewRef } from "../SkiaGraphiteView.web";
+import { SkiaGraphiteView } from "../SkiaGraphiteView";
+import type { SkiaGraphiteViewRef } from "../SkiaGraphiteView";
 
 import {
   installWebEnvironment,
@@ -22,26 +22,26 @@ import {
   canvasSize,
 } from "./web-setup";
 
-// Resolve the Platform module to its web implementation, as a web bundler
-// would (the native one imports react-native, which jest cannot parse).
+// Resolve the Platform module and the native component to their web
+// implementations, as a web bundler would (the native ones import
+// react-native, which jest cannot parse).
 jest.mock("../../Platform", () => require("../../Platform/Platform.web"));
+jest.mock("../../specs/SkiaViewNativeComponent", () =>
+  require("../../specs/SkiaViewNativeComponent.web")
+);
 
 beforeAll(installWebEnvironment);
 
 beforeEach(resetWebEnvironment);
 
-const mountView = (nativeID: string) => {
+const mountView = () => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
   act(() => {
     root.render(
-      <SkiaGraphiteView
-        ref={ref}
-        nativeID={nativeID}
-        style={{ width: 360, height: 520 }}
-      />
+      <SkiaGraphiteView ref={ref} style={{ width: 360, height: 520 }} />
     );
   });
   return {
@@ -63,13 +63,13 @@ const submitFrame = (ctx: SkGraphiteContext) => {
   return (recording as unknown as { picture: { ref: unknown } }).picture.ref;
 };
 
-describe("SkiaGraphiteView.web", () => {
+describe("SkiaGraphiteView on the web", () => {
   it("presents a submitted recording before the next frame", async () => {
     const { CanvasKitMock, rawCanvas, rawSurface } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("1");
+    const view = mountView();
     const ctx = view.ref.current!.getContext();
     expect(ctx.width).toBe(360);
     expect(ctx.height).toBe(520);
@@ -90,7 +90,7 @@ describe("SkiaGraphiteView.web", () => {
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("2");
+    const view = mountView();
     const ctx = view.ref.current!.getContext();
     const first = submitFrame(ctx);
     const second = submitFrame(ctx);
@@ -104,7 +104,7 @@ describe("SkiaGraphiteView.web", () => {
   it("keeps a recording submitted while unmeasured and presents it on first resize", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
 
-    const view = mountView("3");
+    const view = mountView();
     const ctx = view.ref.current!.getContext();
     expect(() => ctx.beginRecording()).toThrow("no size yet");
 
@@ -128,7 +128,7 @@ describe("SkiaGraphiteView.web", () => {
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("4");
+    const view = mountView();
     const picture = submitFrame(view.ref.current!.getContext());
     await flushMicrotasks();
     expect(rawCanvas.drawPicture).toHaveBeenCalledTimes(1);
@@ -154,7 +154,7 @@ describe("SkiaGraphiteView.web", () => {
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("5");
+    const view = mountView();
     const ctx = view.ref.current!.getContext();
     expect(() => ctx.finishRecording()).toThrow("no recording is open");
     ctx.beginRecording();
@@ -170,14 +170,15 @@ describe("SkiaGraphiteView.web", () => {
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("6");
+    const view = mountView();
+    const id = view.ref.current!.getNativeId();
     const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    const ctx = api.makeGraphiteContext(6, 0, 0, false, false);
+    const ctx = api.makeGraphiteContext(id, 0, 0, false, false);
     expect(ctx.width).toBe(360);
-    expect(api.size(6)).toEqual({ width: 360, height: 520 });
+    expect(api.size(id)).toEqual({ width: 360, height: 520 });
 
     await view.unmount();
-    expect(() => api.makeGraphiteContext(6, 0, 0, false, false)).toThrow(
+    expect(() => api.makeGraphiteContext(id, 0, 0, false, false)).toThrow(
       "is mounted"
     );
   });

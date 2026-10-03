@@ -1,5 +1,3 @@
-#ifdef SK_GRAPHITE
-
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -35,5 +33,3 @@ void applyCAMetalLayerColorSpace(void *nativeSurface,
 }
 
 } // namespace RNSkia
-
-#endif // SK_GRAPHITE

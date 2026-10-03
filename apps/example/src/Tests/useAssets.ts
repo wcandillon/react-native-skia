@@ -1,8 +1,4 @@
-import {
-  useImage,
-  useImageAsTexture,
-  useTypeface,
-} from "react-native-skia";
+import { useImage, useImageAsTexture, useTypeface } from "react-native-skia";
 import { useCallback, useState } from "react";
 import { Platform } from "react-native";
 

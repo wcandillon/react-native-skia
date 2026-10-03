@@ -1,10 +1,4 @@
-import {
-  Canvas,
-  Group,
-  LinearGradient,
-  Path,
-  vec,
-} from "react-native-skia";
+import { Canvas, Group, LinearGradient, Path, vec } from "react-native-skia";
 import React, { useMemo } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector, ScrollView } from "react-native-gesture-handler";

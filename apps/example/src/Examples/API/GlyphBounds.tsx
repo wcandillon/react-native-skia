@@ -6,12 +6,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import type {
-  Glyph,
-  SkFont,
-  SkPoint,
-  SkRect,
-} from "react-native-skia";
+import type { Glyph, SkFont, SkPoint, SkRect } from "react-native-skia";
 import {
   Canvas,
   Glyphs,

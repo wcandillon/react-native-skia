@@ -1,15 +1,13 @@
 // Everything that needs a complete Recorder lives here rather than in
 // RNSkGraphiteProducer.h (which the view headers include on their own).
-#if defined(SK_GRAPHITE)
-
 #include "RNSkGraphiteProducer.h"
 
 #include <memory>
 #include <utility>
 
-#include "RNSkGraphiteView.h"
-#include "RNSkPictureView.h"
+#include "RNSkGraphiteTarget.h"
 #include "RNSkThreadPool.h"
+#include "api/recorder/DrawingCtx.h"
 #include "api/recorder/RNRecorder.h"
 #include "utils/RNSkLog.h"
 
@@ -19,6 +17,21 @@
 namespace RNSkia {
 
 RNSkGraphiteProducer::~RNSkGraphiteProducer() = default;
+
+void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
+                                       const sk_sp<SkPicture> &picture,
+                                       float pixelDensity) {
+  canvas->clear(SK_ColorTRANSPARENT);
+  canvas->save();
+  canvas->scale(pixelDensity, pixelDensity);
+  if (recorder != nullptr) {
+    DrawingCtx ctx(canvas);
+    recorder->play(&ctx);
+  } else if (picture != nullptr) {
+    canvas->drawPicture(picture);
+  }
+  canvas->restore();
+}
 
 void RNSkGraphiteProducer::setTarget(
     std::shared_ptr<RNSkGraphiteTarget> target) {
@@ -67,6 +80,18 @@ bool RNSkGraphiteProducer::hasContent() {
   return _recorder != nullptr || _picture != nullptr;
 }
 
+bool RNSkGraphiteProducer::applyUpdatesTo(
+    const std::shared_ptr<Recorder> &recorder, jsi::Runtime &runtime,
+    double recorderId, const jsi::Array &values) {
+  if (recorder == nullptr || recorder->id != recorderId) {
+    return false;
+  }
+  // The values are written into the commands by the next replay, which the
+  // caller schedules: the mapper never waits for a draw.
+  recorder->readUpdates(runtime, values);
+  return true;
+}
+
 bool RNSkGraphiteProducer::applyUpdates(jsi::Runtime &runtime,
                                         double recorderId,
                                         const jsi::Array &values) {
@@ -75,13 +100,12 @@ bool RNSkGraphiteProducer::applyUpdates(jsi::Runtime &runtime,
     std::lock_guard<std::mutex> lock(_mutex);
     recorder = _recorder;
   }
-  if (recorder == nullptr || recorder->id != recorderId) {
-    return false;
-  }
   // Outside the lock: a commit replacing the recorder must not wait for the
   // read. Should it land while this runs, the values go into the retired
   // recorder and the commit's own frame draws the new one.
-  recorder->readUpdates(runtime, values);
+  if (!applyUpdatesTo(recorder, runtime, recorderId, values)) {
+    return false;
+  }
   std::lock_guard<std::mutex> lock(_mutex);
   _dirty = true;
   kickLocked();
@@ -142,14 +166,14 @@ void RNSkGraphiteProducer::produce() {
         // The deferred canvas already draws in points.
         drawContent(canvas, recorder.get(), picture, /* pixelDensity= */ 1.0f);
       } catch (const std::exception &e) {
-        RNSkLogger::logToConsole(
-            "GraphiteCanvas: replaying the scene failed: %s", e.what());
+        RNSkLogger::logToConsole("Canvas: replaying the scene failed: %s",
+                                 e.what());
       }
       try {
         recording = target->finishRecording();
       } catch (const std::exception &e) {
-        RNSkLogger::logToConsole(
-            "GraphiteCanvas: recording the frame failed: %s", e.what());
+        RNSkLogger::logToConsole("Canvas: recording the frame failed: %s",
+                                 e.what());
       }
     }
   }
@@ -185,5 +209,3 @@ void RNSkGraphiteProducer::renderInto(SkCanvas *canvas, float pixelDensity) {
 }
 
 } // namespace RNSkia
-
-#endif // SK_GRAPHITE

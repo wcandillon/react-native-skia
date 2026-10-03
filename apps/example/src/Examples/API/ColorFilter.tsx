@@ -138,7 +138,7 @@ export const ColorFilter = () => {
           </LinearToSRGBGamma>
         </Image>
       </Canvas>
-      <Canvas style={{ width: 256, height: 256 }} colorSpace="srgb">
+      <Canvas style={{ width: 256, height: 256 }}>
         <Fill color="green" />
       </Canvas>
       <View style={{ width: 256, height: 256, backgroundColor: "green" }} />

@@ -7,7 +7,7 @@ import type { GrDirectContext, WebGLContextHandle } from "canvaskit-wasm";
 import type { SkRect, SkPicture, SkImage } from "../skia/types";
 import { JsiSkSurface } from "../skia/web/JsiSkSurface";
 
-// The WebGL renderers behind the web views (SkiaPictureView, SkiaGraphiteView):
+// The WebGL renderers behind the web view (SkiaView.web):
 // a <canvas> element, its WebGL context and the CanvasKit surface built on
 // it, with the context-loss handling and the "destroy the context after each
 // draw" mode that keeps a page under the browser's live-context limit.

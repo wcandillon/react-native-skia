@@ -641,14 +641,6 @@ export const copyHeaders = () => {
     "./cpp/skia/src/core/SkTHash.h"
   );
 
-  console.log("   Copying Ganesh GPU files...");
-  // TODO: Remove this once migrated to Graphite
-  fileOps.mkdir("./cpp/skia/src/gpu/ganesh/gl");
-  fileOps.cp(
-    "../../externals/skia/src/gpu/ganesh/gl/GrGLDefines.h",
-    "./cpp/skia/src/gpu/ganesh/gl/GrGLDefines.h"
-  );
-
   fileOps.cp(
     "../../externals/skia/src/core/SkLRUCache.h",
     "./cpp/skia/src/core/SkLRUCache.h"

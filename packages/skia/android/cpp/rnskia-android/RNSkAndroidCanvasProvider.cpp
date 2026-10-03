@@ -1,55 +1,40 @@
-#include "RNSkOpenGLCanvasProvider.h"
+#include "RNSkAndroidCanvasProvider.h"
 
 #include <android/native_window_jni.h>
 #include <fbjni/fbjni.h>
 #include <jni.h>
 #include <memory>
 
-#include "RNSkLog.h"
-
-#if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
-#else
-#include "OpenGLContext.h"
-#endif
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdocumentation"
-
-#include "include/core/SkCanvas.h"
-#include "include/core/SkSurface.h"
-
-#pragma clang diagnostic pop
+#include "RNSkLog.h"
 
 namespace RNSkia {
 
-RNSkOpenGLCanvasProvider::RNSkOpenGLCanvasProvider(
-    std::function<void()> requestRedraw,
-    std::shared_ptr<RNSkia::RNSkPlatformContext> platformContext)
-    : RNSkCanvasProvider(std::move(requestRedraw)),
-      _platformContext(std::move(platformContext)) {}
+RNSkAndroidCanvasProvider::RNSkAndroidCanvasProvider(
+    std::shared_ptr<RNSkPlatformContext> platformContext)
+    : _platformContext(std::move(platformContext)) {}
 
-RNSkOpenGLCanvasProvider::~RNSkOpenGLCanvasProvider() {
+RNSkAndroidCanvasProvider::~RNSkAndroidCanvasProvider() {
   _surfaceHolder = nullptr;
   releaseWindow();
 }
 
-int RNSkOpenGLCanvasProvider::getWidth() {
+int RNSkAndroidCanvasProvider::getWidth() {
   if (_surfaceHolder) {
     return _surfaceHolder->getWidth();
   }
   return 0;
 }
 
-int RNSkOpenGLCanvasProvider::getHeight() {
+int RNSkAndroidCanvasProvider::getHeight() {
   if (_surfaceHolder) {
     return _surfaceHolder->getHeight();
   }
   return 0;
 }
 
-ANativeWindow *RNSkOpenGLCanvasProvider::acquireWindow(jobject surface,
-                                                       bool isSurface) {
+ANativeWindow *RNSkAndroidCanvasProvider::acquireWindow(jobject surface,
+                                                        bool isSurface) {
   JNIEnv *env = facebook::jni::Environment::current();
   jobject jSurface = surface;
   if (!isSurface) {
@@ -65,20 +50,13 @@ ANativeWindow *RNSkOpenGLCanvasProvider::acquireWindow(jobject surface,
     env->DeleteLocalRef(localSurface);
     env->DeleteLocalRef(surfaceClass);
     jSurface = _jSurface;
-#if !defined(SK_GRAPHITE)
-    _jSurfaceTexture = env->NewGlobalRef(surface);
-    jclass surfaceTextureClass = env->GetObjectClass(surface);
-    _updateTexImageMethod =
-        env->GetMethodID(surfaceTextureClass, "updateTexImage", "()V");
-    env->DeleteLocalRef(surfaceTextureClass);
-#endif
   }
   // Acquires a reference on the window, given back by releaseWindow().
   _window = ANativeWindow_fromSurface(env, jSurface);
   return _window;
 }
 
-void RNSkOpenGLCanvasProvider::releaseWindow() {
+void RNSkAndroidCanvasProvider::releaseWindow() {
   if (_window == nullptr && _jSurface == nullptr) {
     return;
   }
@@ -97,33 +75,9 @@ void RNSkOpenGLCanvasProvider::releaseWindow() {
     env->DeleteGlobalRef(_jSurface);
     _jSurface = nullptr;
   }
-#if !defined(SK_GRAPHITE)
-  if (_jSurfaceTexture != nullptr) {
-    env->DeleteGlobalRef(_jSurfaceTexture);
-    _jSurfaceTexture = nullptr;
-    _updateTexImageMethod = nullptr;
-  }
-#endif
 }
 
-#if !defined(SK_GRAPHITE)
-void RNSkOpenGLCanvasProvider::updateTexImage() {
-  if (_jSurfaceTexture) {
-    JNIEnv *env = facebook::jni::Environment::current();
-    env->CallVoidMethod(_jSurfaceTexture, _updateTexImageMethod);
-
-    // Check for exceptions
-    if (env->ExceptionCheck()) {
-      RNSkLogger::logToConsole("updateAndRelease() failed. The exception above "
-                               "can safely be ignored");
-      env->ExceptionClear();
-    }
-  }
-}
-#endif
-
-#if defined(SK_GRAPHITE)
-void RNSkOpenGLCanvasProvider::updateTargetInfo() {
+void RNSkAndroidCanvasProvider::updateTargetInfo() {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   if (_surfaceHolder == nullptr) {
     _hasTargetInfo = false;
@@ -137,8 +91,7 @@ void RNSkOpenGLCanvasProvider::updateTargetInfo() {
   _hasTargetInfo = true;
 }
 
-bool RNSkOpenGLCanvasProvider::getGraphiteTargetInfo(
-    RNSkGraphiteTargetInfo *info) {
+bool RNSkAndroidCanvasProvider::getTargetInfo(RNSkGraphiteTargetInfo *info) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   if (!_hasTargetInfo) {
     return false;
@@ -147,7 +100,7 @@ bool RNSkOpenGLCanvasProvider::getGraphiteTargetInfo(
   return true;
 }
 
-bool RNSkOpenGLCanvasProvider::presentRecordings(
+bool RNSkAndroidCanvasProvider::presentRecordings(
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   if (_surfaceHolder == nullptr) {
     return false;
@@ -155,33 +108,10 @@ bool RNSkOpenGLCanvasProvider::presentRecordings(
   return static_cast<DawnWindowContext *>(_surfaceHolder.get())
       ->presentRecordings(recordings);
 }
-#endif
 
-bool RNSkOpenGLCanvasProvider::renderToCanvas(
-    const std::function<void(SkCanvas *)> &cb) {
-  if (_surfaceHolder != nullptr && cb != nullptr) {
-    // Get the surface
-    auto surface = _surfaceHolder->getSurface();
-#if !defined(SK_GRAPHITE)
-    updateTexImage();
-#endif
-    if (surface) {
-      // Draw into canvas using callback
-      cb(surface->getCanvas());
-      // Swap buffers and show on screen
-      _surfaceHolder->present();
-      return true;
-    } else {
-      // the render context did not provide a surface
-      return false;
-    }
-  }
-  return false;
-}
-
-void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject surface, int width,
-                                                int height, bool isSurface,
-                                                bool highBitDepth) {
+void RNSkAndroidCanvasProvider::surfaceAvailable(jobject surface, int width,
+                                                 int height, bool isSurface,
+                                                 bool highBitDepth) {
   // Release the old surface and its window
   _surfaceHolder = nullptr;
   releaseWindow();
@@ -192,32 +122,25 @@ void RNSkOpenGLCanvasProvider::surfaceAvailable(jobject surface, int width,
     releaseWindow();
     return;
   }
-#if defined(SK_GRAPHITE)
   _surfaceHolder = DawnContext::getInstance().MakeWindow(window, width, height,
                                                          highBitDepth);
   updateTargetInfo();
-#else
-  _surfaceHolder =
-      OpenGLContext::getInstance().MakeWindow(window, highBitDepth);
-#endif
 
   // Post redraw request to ensure we paint in the next draw cycle.
-  _requestRedraw();
+  requestRedraw();
 }
 
-void RNSkOpenGLCanvasProvider::surfaceDestroyed() {
+void RNSkAndroidCanvasProvider::surfaceDestroyed() {
   // destroy the renderer (a unique pointer so the dtor will be called
   // immediately.)
   _surfaceHolder = nullptr;
-#if defined(SK_GRAPHITE)
   updateTargetInfo();
-#endif
   releaseWindow();
 }
 
-void RNSkOpenGLCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
-                                                  int height, bool isSurface,
-                                                  bool highBitDepth) {
+void RNSkAndroidCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
+                                                   int height, bool isSurface,
+                                                   bool highBitDepth) {
   if (width == 0 && height == 0) {
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.
@@ -228,12 +151,10 @@ void RNSkOpenGLCanvasProvider::surfaceSizeChanged(jobject jSurface, int width,
     surfaceAvailable(jSurface, width, height, isSurface, highBitDepth);
   } else {
     _surfaceHolder->resize(width, height);
-#if defined(SK_GRAPHITE)
     updateTargetInfo();
-#endif
   }
 
   // Redraw after size change
-  _requestRedraw();
+  requestRedraw();
 }
 } // namespace RNSkia

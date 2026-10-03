@@ -5,14 +5,9 @@ sidebar_label: Graphite View
 slug: /canvas/graphite
 ---
 
-`SkiaGraphiteView` is a canvas for the [Graphite backend](/docs/getting-started/installation#graphite) that you drive frame by frame from any JavaScript runtime.
-A frame is a Graphite recording: you record it on the thread you are on (the JS thread, the Reanimated UI runtime or a dedicated worklet runtime), and the view presents it on the next display frame.
-
-:::info
-
-On native the view requires the Graphite backend; with the default backend it renders nothing and `getContext()` throws. On the web, where Skia runs on WebGL, the same API is emulated: see [Web](#web) below.
-
-:::
+`SkiaGraphiteView` is a canvas that you drive frame by frame from any JavaScript runtime.
+A frame is a [Graphite](/docs/getting-started/installation#graphite) recording: you record it on the thread you are on (the JS thread, the Reanimated UI runtime or a dedicated worklet runtime), and the view presents it on the next display frame.
+On the web, where Skia runs on WebGL, the same API is emulated: see [Web](#web) below.
 
 ## Recording a frame
 
@@ -91,5 +86,5 @@ A few rules follow from this model:
 
 ## Web
 
-The web has no Graphite. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings onto its WebGL surface, using the same renderer as `SkiaPictureView` (context-loss recovery included, and `__destroyWebGLContextAfterRender` to stay under the browser's limit on live WebGL contexts).
+The web has no Graphite. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings onto its WebGL surface, using the same renderer as `Canvas` (context-loss recovery included, and `__destroyWebGLContextAfterRender` to stay under the browser's limit on live WebGL contexts).
 Frames are presented in submission order and never dropped, right before the browser paints. Two differences to keep in mind: the surface starts cleared on every frame, so a recording should draw the whole frame rather than a delta on top of the previous one; and a WebGL texture belongs to the context that created it, so an image snapshot taken from an offscreen surface must go through `makeNonTextureImage()` before another view can draw it.

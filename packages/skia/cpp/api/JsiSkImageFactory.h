@@ -13,9 +13,7 @@
 #include "JsiSkNativeObjects.h"
 #include "jsi/JsiPromises.h"
 
-#ifdef SK_GRAPHITE
 #include "rnskia/RNDawnContext.h"
-#endif
 
 namespace RNSkia {
 
@@ -109,7 +107,6 @@ public:
   // device: both packages link one Dawn and share one wgpu::Instance.
 
   JSI_HOST_FUNCTION(MakeImageFromNativeTexture) {
-#ifdef SK_GRAPHITE
     if (count < 1 || !arguments[0].isBigInt()) {
       throw std::runtime_error("MakeImageFromNativeTexture requires a "
                                "WGPUTexture pointer (BigInt), e.g. "
@@ -137,15 +134,9 @@ public:
     }
     return makeJsiObject(
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
-#else
-    throw std::runtime_error(
-        "MakeImageFromNativeTexture is only available with the Graphite "
-        "backend. Rebuild with SK_GRAPHITE enabled.");
-#endif
   }
 
   JSI_HOST_FUNCTION(MakeNativeTextureFromImage) {
-#ifdef SK_GRAPHITE
     if (count < 1) {
       throw std::runtime_error(
           "MakeNativeTextureFromImage requires an SkImage argument");
@@ -165,11 +156,6 @@ public:
     // releases it when the JS GPUTexture is destroyed.
     return jsi::BigInt::fromUint64(
         runtime, reinterpret_cast<uint64_t>(texture.MoveToCHandle()));
-#else
-    throw std::runtime_error(
-        "MakeNativeTextureFromImage is only available with the Graphite "
-        "backend. Rebuild with SK_GRAPHITE enabled.");
-#endif
   }
 
   size_t getMemoryPressure() override { return 1024; }

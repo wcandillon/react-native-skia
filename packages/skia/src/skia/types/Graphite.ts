@@ -2,13 +2,13 @@ import type { SkCanvas } from "./Canvas";
 import type { SkJSIInstance } from "./JsiInstance";
 
 /**
- * A frame recorded for a SkiaGraphiteView. Immutable once finished: submit it
- * to the view as many times as needed, from any runtime.
+ * A frame recorded for a view. Immutable once finished: submit it to the view
+ * as many times as needed, from any runtime.
  */
 export type SkGraphiteRecording = SkJSIInstance<"GraphiteRecording">;
 
 /**
- * The recording side of a SkiaGraphiteView, obtained from the view's ref.
+ * The recording side of a view, obtained from the ref of a SkiaGraphiteView.
  *
  * Frames are recorded on the calling thread and presented by the view on its
  * display link, so the context can be captured into a worklet and used from

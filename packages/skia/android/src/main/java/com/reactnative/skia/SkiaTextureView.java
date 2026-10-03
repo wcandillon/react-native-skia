@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
-import android.view.Surface;
 import android.view.TextureView;
 import androidx.annotation.NonNull;
 
@@ -14,21 +13,14 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
     private String tag = "SkiaTextureView";
 
     SkiaViewAPI mApi;
-    boolean mDebug;
 
-    public SkiaTextureView(Context context, SkiaViewAPI api, boolean debug, boolean opaque) {
+    public SkiaTextureView(Context context, SkiaViewAPI api, boolean opaque) {
         super(context);
         mApi = api;
-        mDebug = debug;
         // An opaque TextureView lets the UI toolkit skip blending it; it can be
         // toggled on a live view.
         setOpaque(opaque);
         setSurfaceTextureListener(this);
-    }
-
-    @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        super.onLayout(changed, left, top, right, bottom);
     }
 
     @Override
@@ -49,15 +41,7 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
         return true;
     }
 
-    private long _prevTimestamp = 0;
     @Override
     public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surface) {
-        if (!mDebug) {
-            return;
-        }
-        long timestamp = surface.getTimestamp();
-        long frameDuration = (timestamp - _prevTimestamp)/1000000;
-        Log.i("SkiaTextureView", "onSurfaceTextureUpdated "+frameDuration+"ms");
-        _prevTimestamp = timestamp;
     }
 }

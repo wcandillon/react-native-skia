@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  AlphaType,
-  Canvas,
-  ColorType,
-  Image,
-  Skia,
-} from "react-native-skia";
+import { AlphaType, Canvas, ColorType, Image, Skia } from "react-native-skia";
 import { PixelRatio } from "react-native";
 
 const pixels = new Uint8Array(256 * 256 * 4);

@@ -1,10 +1,5 @@
 import type { SkShader } from "react-native-skia";
-import {
-  BlendMode,
-  ColorChannel,
-  Skia,
-  TileMode,
-} from "react-native-skia";
+import { BlendMode, ColorChannel, Skia, TileMode } from "react-native-skia";
 import React from "react";
 
 import { Scene } from "./components/Scene";

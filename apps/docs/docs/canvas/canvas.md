@@ -12,12 +12,11 @@ Behind the scenes, it is using its own React renderer.
 | Name | Type     |  Description    |
 |:-----|:---------|:-----------------|
 | style?   | `ViewStyle` | View style |
-| ref?   | `Ref<SkiaView>` | Reference to the `SkiaView` object |
+| ref?   | `Ref<CanvasRef>` | Reference to the canvas (see [canvas size](#canvas-size) and [snapshots](#snapshots)) |
 | onSize? | `SharedValue<Size>` | Reanimated value to which the canvas size will be assigned  (see [canvas size](#canvas-size)) |
 | opaque? | `boolean` | Declares that the canvas covers every pixel of its bounds. Defaults to `false`. On Android it selects the cheapest backing view (see [Android rendering options](#android-rendering-options)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
-| androidWarmup? | `boolean` | Draw the first frame directly on the Android compositor. Use it for static icons or fully opaque drawings—animated or translucent canvases can misrender, so it remains opt-in. |
 
 ## Canvas size
 
@@ -178,8 +177,8 @@ const Demo = () => {
 
 :::warning
 
-On Android, `highBitDepth` requires the Graphite backend; with the default OpenGL backend the canvas falls back to 8-bit.
-It also requires an opaque `SurfaceView` (the default for `opaque`): the 10-bit format only has 2 bits of alpha, and a `TextureView` composites through an 8-bit pass anyway.
+On Android, `highBitDepth` requires an opaque `SurfaceView` (the default for `opaque`): the 10-bit format only has 2 bits of alpha, and a `TextureView` composites through an 8-bit pass anyway.
+When the surface does not support the 10-bit format, the canvas falls back to 8-bit.
 
 :::
 

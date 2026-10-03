@@ -10,18 +10,15 @@
 #include <utility>
 #include <vector>
 
-#include "RNSkPictureView.h"
+#include "RNSkGraphiteProducer.h"
+#include "RNSkGraphiteTarget.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkView.h"
+#include "api/JsiSkGraphiteContext.h"
 #include "api/JsiSkNativeObjects.h"
 #include "jsi/JsiPromises.h"
 #include "jsi/ViewProperty.h"
 #include <jsi/jsi.h>
-
-#if defined(SK_GRAPHITE)
-#include "RNSkGraphiteView.h"
-#include "api/JsiSkGraphiteContext.h"
-#endif
 
 namespace RNSkia {
 
@@ -223,8 +220,8 @@ public:
           // the values from recording time until the next change.
           auto it = info->props.find("recorder");
           if (it != info->props.end() && it->second.isRecorder()) {
-            RNSkPictureRenderer::applyUpdatesTo(it->second.getRecorder(),
-                                                runtime, recorderId, values);
+            RNSkGraphiteProducer::applyUpdatesTo(it->second.getRecorder(),
+                                                 runtime, recorderId, values);
           }
         });
     if (view == nullptr) {
@@ -355,13 +352,12 @@ public:
   }
 
   /**
-   Returns the recording side of a SkiaGraphiteView: (nativeId, width,
-   height, opaque, highBitDepth), the size in points as laid out and the
-   props the surface format follows from. The view may not exist yet; the
-   context binds to it by id when it does.
+   Returns the recording side of a view: (nativeId, width, height, opaque,
+   highBitDepth), the size in points as laid out and the props the surface
+   format follows from. The view may not exist yet; the context binds to it
+   by id when it does.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
-#if defined(SK_GRAPHITE)
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
         !arguments[2].isNumber()) {
       throw jsi::JSError(runtime, "makeGraphiteContext: expected (nativeId, "
@@ -378,11 +374,6 @@ public:
     target->setLayout(width, height, opaque, highBitDepth);
     return makeJsiObject(runtime, std::make_shared<JsiSkGraphiteContext>(
                                       _platformContext, std::move(target)));
-#else
-    throw jsi::JSError(runtime,
-                       "SkiaGraphiteView requires the Graphite backend. "
-                       "Rebuild with SK_GRAPHITE enabled.");
-#endif
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {

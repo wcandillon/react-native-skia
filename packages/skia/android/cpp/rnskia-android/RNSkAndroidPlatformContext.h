@@ -10,11 +10,7 @@
 #include <memory>
 #include <string>
 
-#if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
-#else
-#include "OpenGLContext.h"
-#endif
 
 #include "AHardwareBufferUtils.h"
 #include "JniPlatformContext.h"
@@ -54,49 +50,13 @@ public:
 
   sk_sp<SkSurface> makeOffscreenSurface(int width, int height,
                                         bool useP3ColorSpace = false) override {
-#if defined(SK_GRAPHITE)
     return DawnContext::getInstance().MakeOffscreen(width, height,
                                                     useP3ColorSpace);
-#else
-    return OpenGLContext::getInstance().MakeOffscreen(width, height,
-                                                      useP3ColorSpace);
-#endif
   }
 
   sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) override {
-#if defined(SK_GRAPHITE)
     return DawnContext::getInstance().MakeImageFromBuffer(buffer);
-#else
-    return OpenGLContext::getInstance().MakeImageFromBuffer(buffer);
-#endif
   }
-
-#if !defined(SK_GRAPHITE)
-  sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &texInfo,
-                                            int width, int height,
-                                            bool mipMapped) override {
-    GrGLTextureInfo textureInfo;
-    textureInfo.fTarget = (GrGLenum)texInfo.glTarget;
-    textureInfo.fID = (GrGLuint)texInfo.glID;
-    textureInfo.fFormat = (GrGLenum)texInfo.glFormat;
-    textureInfo.fProtected =
-        texInfo.glProtected ? skgpu::Protected::kYes : skgpu::Protected::kNo;
-
-    OpenGLContext::getInstance().makeCurrent();
-    if (glIsTexture(textureInfo.fID) == GL_FALSE) {
-      throw std::runtime_error("Invalid textureInfo");
-    }
-
-    GrBackendTexture backendTexture = GrBackendTextures::MakeGL(
-        width, height,
-        mipMapped ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo,
-        textureInfo);
-    return SkImages::BorrowTextureFrom(
-        OpenGLContext::getInstance().getDirectContext(), backendTexture,
-        kTopLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType,
-        nullptr);
-  }
-#endif
 
   std::shared_ptr<RNSkVideo> createVideo(const std::string &url) override {
     auto jniVideo = _jniPlatformContext->createVideo(url);
@@ -112,13 +72,11 @@ public:
 
   uint64_t makeNativeBuffer(sk_sp<SkImage> image) override {
 #if __ANDROID_API__ >= 26
-#if defined(SK_GRAPHITE)
     // A Graphite GPU texture can't be read with readPixels(nullptr); read it
     // back to a raster image first or the buffer ends up uninitialized/black.
     if (image && image->isTextureBacked()) {
       image = DawnContext::getInstance().MakeRasterImage(image);
     }
-#endif
     auto bytesPerPixel = image->imageInfo().bytesPerPixel();
     int bytesPerRow = image->width() * bytesPerPixel;
     auto buf = SkData::MakeUninitialized(image->width() * image->height() *
@@ -228,47 +186,6 @@ public:
     return 0;
 #endif
   }
-
-#if !defined(SK_GRAPHITE)
-  GrDirectContext *getDirectContext() override {
-    return OpenGLContext::getInstance().getDirectContext();
-  }
-
-  const TextureInfo getTexture(sk_sp<SkImage> image) override {
-    GrBackendTexture texture;
-    if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
-      throw std::runtime_error("Couldn't get backend texture from image.");
-    }
-    return getTextureInfo(texture);
-  }
-
-  const TextureInfo getTexture(sk_sp<SkSurface> surface) override {
-    GrBackendTexture texture = SkSurfaces::GetBackendTexture(
-        surface.get(), SkSurface::BackendHandleAccess::kFlushRead);
-    return getTextureInfo(texture);
-  }
-
-  static TextureInfo getTextureInfo(const GrBackendTexture &texture) {
-
-    if (!texture.isValid()) {
-      throw std::runtime_error("invalid backend texture");
-    }
-    GrGLTextureInfo textureInfo;
-    if (!GrBackendTextures::GetGLTextureInfo(texture, &textureInfo)) {
-      throw std::runtime_error("couldn't get OpenGL texture");
-    }
-
-    OpenGLContext::getInstance().makeCurrent();
-    glFlush();
-
-    TextureInfo texInfo;
-    texInfo.glProtected = textureInfo.isProtected();
-    texInfo.glID = textureInfo.fID;
-    texInfo.glFormat = textureInfo.fFormat;
-    texInfo.glTarget = textureInfo.fTarget;
-    return texInfo;
-  }
-#endif
 
   sk_sp<SkFontMgr> createFontMgr() override {
     return SkFontMgr_New_Android(nullptr, SkFontScanner_Make_FreeType());

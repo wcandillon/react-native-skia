@@ -7,11 +7,7 @@
 
 #include "RNSkLog.h"
 
-#if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
-#else
-#include "OpenGLContext.h"
-#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -59,11 +55,7 @@ sk_sp<SkImage> RNSkAndroidVideo::nextImage(double *timeStamp) {
   // Convert jobject to AHardwareBuffer
   AHardwareBuffer *buffer =
       AHardwareBuffer_fromHardwareBuffer(env, jHardwareBuffer);
-#if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeImageFromBuffer(buffer);
-#else
-  return OpenGLContext::getInstance().MakeImageFromBuffer(buffer);
-#endif
 #else
   return nullptr;
 #endif
