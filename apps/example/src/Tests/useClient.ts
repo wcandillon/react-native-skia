@@ -6,7 +6,10 @@ const { OS } = Platform;
 const ANDROID_WS_HOST = "localhost";
 const IOS_WS_HOST = "localhost";
 const HOST = OS === "android" ? ANDROID_WS_HOST : IOS_WS_HOST;
-const PORT = 4242;
+// E2E_PORT is inlined at bundle time (transform-inline-environment-variables),
+// so CI can run the test server on another port than other projects sharing
+// the machine. Metro must be started with --reset-cache for a change to apply.
+const PORT = Number(process.env.E2E_PORT ?? 4242);
 // Whether this Skia build runs the Graphite backend. Probed via
 // getNativeDevice(), which throws on Ganesh builds — checking navigator.gpu
 // would only tell us react-native-webgpu is installed, which can be true on
