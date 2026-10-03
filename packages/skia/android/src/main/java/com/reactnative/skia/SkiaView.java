@@ -146,6 +146,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        // The backing view gets this exact size, and so does its surface: tell
+        // the native side now, so that a frame recorded before the surface
+        // exists (the first one usually is) already has the right size.
+        setLayoutSize(right - left, bottom - top);
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
         }
@@ -231,6 +235,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private native void surfaceSizeChanged(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
 
     private native void surfaceDestroyed();
+
+    private native void setLayoutSize(int width, int height);
 
     native void registerView(int nativeId);
 

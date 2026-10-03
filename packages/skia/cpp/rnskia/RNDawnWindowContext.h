@@ -74,6 +74,10 @@ public:
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings);
 
+  // Draws an image at the origin of the current swapchain texture (on the
+  // window's own recorder) and presents it.
+  bool presentImage(const sk_sp<SkImage> &image);
+
   SkColorType getColorType() const { return _colorType; }
 
   // The texture description a deferred canvas must be recorded with to be

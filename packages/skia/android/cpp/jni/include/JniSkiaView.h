@@ -34,6 +34,7 @@ public:
          makeNativeMethod("surfaceDestroyed", JniSkiaView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
+         makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
          makeNativeMethod("registerView", JniSkiaView::registerView),
          makeNativeMethod("unregisterView", JniSkiaView::unregisterView),
          makeNativeMethod("presentFrame", JniSkiaView::presentFrame)});
@@ -63,6 +64,10 @@ protected:
   }
 
   void surfaceDestroyed() { _provider->surfaceDestroyed(); }
+
+  void setLayoutSize(int width, int height) {
+    _provider->setLayoutSize(width, height);
+  }
 
   void registerView(int nativeId) {
     auto manager = getSkiaManager();

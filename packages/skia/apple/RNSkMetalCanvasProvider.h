@@ -26,8 +26,12 @@ public:
 
   bool getTargetInfo(RNSkia::RNSkGraphiteTargetInfo *info) override;
 
+  bool getLayoutSize(int *width, int *height) override;
+
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
+
+  bool presentImage(const sk_sp<SkImage> &image) override;
 
   void setSize(int width, int height);
   void setHighBitDepth(bool highBitDepth);
@@ -46,4 +50,6 @@ private:
   std::mutex _targetInfoMutex;
   RNSkia::RNSkGraphiteTargetInfo _targetInfo;
   bool _hasTargetInfo = false;
+  int _layoutWidth = 0;
+  int _layoutHeight = 0;
 };

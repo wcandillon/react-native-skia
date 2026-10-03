@@ -3,6 +3,8 @@
 #import "RNDawnContext.h"
 #import "RNSkLog.h"
 
+#include <cmath>
+
 RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(
     std::shared_ptr<RNSkia::RNSkPlatformContext> context)
     : _context(std::move(context)) {
@@ -51,6 +53,16 @@ bool RNSkMetalCanvasProvider::getTargetInfo(
   return true;
 }
 
+bool RNSkMetalCanvasProvider::getLayoutSize(int *width, int *height) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  if (_layoutWidth <= 0 || _layoutHeight <= 0) {
+    return false;
+  }
+  *width = _layoutWidth;
+  *height = _layoutHeight;
+  return true;
+}
+
 bool RNSkMetalCanvasProvider::presentRecordings(
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   if (!_ctx || ![[NSThread currentThread] isMainThread]) {
@@ -64,15 +76,31 @@ bool RNSkMetalCanvasProvider::presentRecordings(
       ->presentRecordings(recordings);
 }
 
+bool RNSkMetalCanvasProvider::presentImage(const sk_sp<SkImage> &image) {
+  if (!_ctx || ![[NSThread currentThread] isMainThread]) {
+    return false;
+  }
+  if (appIsBackgrounded()) {
+    requestRedraw();
+    return false;
+  }
+  return static_cast<RNSkia::DawnWindowContext *>(_ctx.get())
+      ->presentImage(image);
+}
+
 void RNSkMetalCanvasProvider::setSize(int width, int height) {
   _layer.frame = CGRectMake(0, 0, width, height);
-  auto w = width * _context->getPixelDensity();
-  auto h = height * _context->getPixelDensity();
+  // The layout is on the pixel grid: round rather than truncate, so that a
+  // product like 1169.9999 gives the pixel size the layout means.
+  int w = static_cast<int>(std::lround(width * _context->getPixelDensity()));
+  int h = static_cast<int>(std::lround(height * _context->getPixelDensity()));
   _ctx = RNSkia::DawnContext::getInstance().MakeWindow((__bridge void *)_layer,
                                                        w, h, _highBitDepth);
   {
     auto *window = static_cast<RNSkia::DawnWindowContext *>(_ctx.get());
     std::lock_guard<std::mutex> lock(_targetInfoMutex);
+    _layoutWidth = w;
+    _layoutHeight = h;
     _targetInfo.width = window->getWidth();
     _targetInfo.height = window->getHeight();
     _targetInfo.colorType = window->getColorType();

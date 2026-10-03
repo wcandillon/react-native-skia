@@ -32,8 +32,19 @@ public:
 
   bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
+  bool getLayoutSize(int *width, int *height) override;
+
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
+
+  bool presentImage(const sk_sp<SkImage> &image) override;
+
+  /**
+   The pixel size the backing view was laid out with. The surface it gets
+   (SurfaceView or TextureView) has exactly this size, so a frame recorded
+   before the surface exists already matches it. Main thread.
+   */
+  void setLayoutSize(int width, int height);
 
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
                         bool highBitDepth);
@@ -64,5 +75,7 @@ private:
   std::mutex _targetInfoMutex;
   RNSkGraphiteTargetInfo _targetInfo;
   bool _hasTargetInfo = false;
+  int _layoutWidth = 0;
+  int _layoutHeight = 0;
 };
 } // namespace RNSkia

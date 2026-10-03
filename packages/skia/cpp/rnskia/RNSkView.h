@@ -64,7 +64,7 @@ public:
       target = std::move(_target);
     }
     if (target) {
-      target->detach();
+      target->detach(_canvasProvider);
     }
   }
 
@@ -90,7 +90,7 @@ public:
           nativeId, _platformContext);
     }
     if (previous) {
-      previous->detach();
+      previous->detach(_canvasProvider);
     }
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
     auto context = _platformContext;
@@ -184,10 +184,11 @@ public:
     }
     if (recordings.empty()) {
       // With a frame on its way, the layer keeps showing the last one until
-      // it lands: presenting it again would only cost a second present. The
-      // same holds after a resize, when the last frame has the old size.
-      if (frameComing || lastPresented == nullptr ||
-          !lastPresented->hasSizeOf(targetInfo)) {
+      // it lands: presenting it again would only cost a second present.
+      // Otherwise the last frame is presented again, also onto a surface of
+      // another size (the view was resized and nothing records for it): the
+      // frame then shows at its own size rather than nothing at all.
+      if (frameComing || lastPresented == nullptr) {
         return;
       }
       if (present(_canvasProvider, targetInfo, {lastPresented},
@@ -324,24 +325,28 @@ private:
   }
 
   /**
-   Replays the recordings onto the provider's target, and remembers the last
-   one for the next redraw when asked to (not for a snapshot). Returns false
-   when the provider could not present (no surface, app in the background),
-   in which case nothing was consumed and the caller keeps the recordings.
+   Replays the recordings onto the provider's target, in order, and remembers
+   the last one for the next redraw when asked to (not for a snapshot).
+   Returns false when the provider could not present (no surface, app in the
+   background), in which case the caller keeps the recordings.
    */
   bool
   present(const std::shared_ptr<RNSkCanvasProvider> &provider,
           const RNSkGraphiteTargetInfo &targetInfo,
           const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
           bool remember) {
-    std::vector<skgpu::graphite::Recording *> raw;
+    // Recordings of the target's size are replayed straight onto it, as one
+    // batch; one of another size goes through a texture of its own size.
+    std::vector<skgpu::graphite::Recording *> batch;
     std::shared_ptr<RNSkGraphiteRecording> last;
-    for (const auto &recording : recordings) {
-      // A recording made for the size the view had before a resize is
-      // dropped quietly: the next one is recorded for the new size.
-      if (!recording->hasSizeOf(targetInfo)) {
-        continue;
+    bool success = true;
+    auto flush = [&]() {
+      if (!batch.empty()) {
+        success = provider->presentRecordings(batch) && success;
+        batch.clear();
       }
+    };
+    for (const auto &recording : recordings) {
       // A recording made for another format (recorded before the surface
       // existed, with a bit depth the surface did not get) cannot be
       // replayed onto this one.
@@ -350,19 +355,61 @@ private:
                                  "different surface format");
         continue;
       }
-      raw.push_back(recording->get());
-      last = recording;
+      if (recording->hasSizeOf(targetInfo)) {
+        batch.push_back(recording->get());
+        last = recording;
+        continue;
+      }
+      flush();
+      if (presentResized(provider, recording)) {
+        last = recording;
+      } else {
+        success = false;
+      }
     }
-    if (raw.empty()) {
+    flush();
+    if (last == nullptr) {
       // Nothing presentable: the recordings are consumed, not kept.
       return true;
     }
-    bool success = provider->presentRecordings(raw);
     if (success && remember) {
       std::lock_guard<std::mutex> lock(_mutex);
       _lastPresented = last;
     }
     return success;
+  }
+
+  /**
+   Presents a recording made for another size than the target's: the size
+   JS measured before the surface existed can be a pixel off (the platform
+   rounds the layout to pixels on its own terms), and the view may have been
+   resized since. The recording is replayed into a texture of its own size
+   and that texture is drawn onto the target, so the frame shows rather than
+   being dropped; the copy only happens while the sizes differ.
+   */
+  bool presentResized(const std::shared_ptr<RNSkCanvasProvider> &provider,
+                      const std::shared_ptr<RNSkGraphiteRecording> &recording) {
+    const auto &size = recording->getTarget();
+    auto intermediate = std::make_shared<RNSkOffscreenCanvasProvider>(
+        _platformContext, size.width, size.height);
+    RNSkGraphiteTargetInfo info;
+    if (!intermediate->getTargetInfo(&info) ||
+        !recording->isCompatibleWith(info)) {
+      // No texture of that size and format: the frame is consumed.
+      RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, the "
+                               "surface is %dx%d",
+                               size.width, size.height, provider->getWidth(),
+                               provider->getHeight());
+      return true;
+    }
+    if (!intermediate->presentRecordings({recording->get()})) {
+      return false;
+    }
+    auto image = intermediate->makeImage();
+    if (image == nullptr) {
+      return false;
+    }
+    return provider->presentImage(image);
   }
 
   std::shared_ptr<RNSkPlatformContext> _platformContext;

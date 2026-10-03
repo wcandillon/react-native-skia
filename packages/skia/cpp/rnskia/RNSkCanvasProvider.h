@@ -58,6 +58,17 @@ public:
   virtual bool getTargetInfo(RNSkGraphiteTargetInfo *info) = 0;
 
   /**
+   The size in pixels the surface will have, known from the platform layout
+   before the surface itself exists (on Android the surface only appears a
+   frame after the view is laid out). Safe to call from any thread; returns
+   false until the view is laid out. A frame recorded against this size is
+   presented as is once the surface appears, where one recorded against a
+   size derived from the layout in points could be off by a pixel and would
+   not cover the surface.
+   */
+  virtual bool getLayoutSize(int *width, int *height) { return false; }
+
+  /**
    Replays the recordings, in order, onto the target texture and presents
    it. Called on the thread that owns the surface. Returns false when the
    surface cannot present right now (there is none, or the app is in the
@@ -65,6 +76,14 @@ public:
    */
   virtual bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
+
+  /**
+   Draws an image at the origin of the target texture and presents it. Same
+   thread and return value as presentRecordings(). Used for a recording whose
+   size differs from the target's: it is replayed into a texture of its own
+   size first (see RNSkView::present).
+   */
+  virtual bool presentImage(const sk_sp<SkImage> &image) = 0;
 
   /**
    Installed by the view owning the provider: asks it for a frame when the
@@ -100,6 +119,23 @@ public:
 
   /** The canvas of the surface, in pixels; nullptr without a surface. */
   SkCanvas *getCanvas() { return _surface ? _surface->getCanvas() : nullptr; }
+
+  /**
+   A GPU image of the surface, usable by any recorder of the context once
+   this returns; nullptr without a surface.
+   */
+  sk_sp<SkImage> makeImage() {
+    if (_surface == nullptr) {
+      return nullptr;
+    }
+    auto image = _surface->makeImageSnapshot();
+    // The snapshot is a copy task on the surface's recorder: submitted here,
+    // so that the image is complete for whoever draws it next.
+    if (auto *recorder = _surface->recorder()) {
+      DawnContext::getInstance().submitRecording(recorder->snap().get());
+    }
+    return image;
+  }
 
   /**
    Returns a snapshot of the current surface/canvas
@@ -149,11 +185,29 @@ public:
 
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings) override {
-    if (_surface == nullptr || _surface->recorder() == nullptr) {
+    auto *recorder = _surface ? _surface->recorder() : nullptr;
+    if (recorder == nullptr) {
       return false;
+    }
+    // A new surface clears itself in its first pass, which its own recorder
+    // only records when it next snaps. The recordings go straight to the
+    // context, so that clear would run after them and wipe them: record and
+    // submit it first (the explicit clear makes sure the pass is emitted).
+    if (!_cleared) {
+      _surface->getCanvas()->clear(SK_ColorTRANSPARENT);
+      DawnContext::getInstance().submitRecording(recorder->snap().get());
+      _cleared = true;
     }
     return DawnContext::getInstance().insertRecordings(recordings,
                                                        _surface.get());
+  }
+
+  bool presentImage(const sk_sp<SkImage> &image) override {
+    if (_surface == nullptr) {
+      return false;
+    }
+    _surface->getCanvas()->drawImage(image, 0, 0);
+    return true;
   }
 
 private:
@@ -161,6 +215,7 @@ private:
   int _height;
   float _pd;
   sk_sp<SkSurface> _surface;
+  bool _cleared = false;
 };
 
 } // namespace RNSkia

@@ -100,6 +100,22 @@ bool RNSkAndroidCanvasProvider::getTargetInfo(RNSkGraphiteTargetInfo *info) {
   return true;
 }
 
+void RNSkAndroidCanvasProvider::setLayoutSize(int width, int height) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _layoutWidth = width;
+  _layoutHeight = height;
+}
+
+bool RNSkAndroidCanvasProvider::getLayoutSize(int *width, int *height) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  if (_layoutWidth <= 0 || _layoutHeight <= 0) {
+    return false;
+  }
+  *width = _layoutWidth;
+  *height = _layoutHeight;
+  return true;
+}
+
 bool RNSkAndroidCanvasProvider::presentRecordings(
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   if (_surfaceHolder == nullptr) {
@@ -107,6 +123,14 @@ bool RNSkAndroidCanvasProvider::presentRecordings(
   }
   return static_cast<DawnWindowContext *>(_surfaceHolder.get())
       ->presentRecordings(recordings);
+}
+
+bool RNSkAndroidCanvasProvider::presentImage(const sk_sp<SkImage> &image) {
+  if (_surfaceHolder == nullptr) {
+    return false;
+  }
+  return static_cast<DawnWindowContext *>(_surfaceHolder.get())
+      ->presentImage(image);
 }
 
 void RNSkAndroidCanvasProvider::surfaceAvailable(jobject surface, int width,

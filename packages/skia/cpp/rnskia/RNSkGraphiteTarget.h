@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -55,15 +56,18 @@ public:
 
   /**
    Whether the recording was made for a texture of the given size. A deferred
-   canvas records against fixed dimensions: replaying it onto a texture of
-   another size makes Graphite copy and draw outside of it, which Dawn
-   rejects (the whole frame is then dropped). A view that was resized has
-   stale recordings in flight; they are skipped and the content is recorded
-   again for the new size.
+   canvas records against fixed dimensions: Graphite sizes the passes (and
+   their depth and stencil attachments) from them, so replaying it onto a
+   texture of another size is rejected by Dawn and draws nothing. A recording
+   of another size is replayed through a texture of its own size instead (see
+   RNSkView::present).
    */
   bool hasSizeOf(const RNSkGraphiteTargetInfo &target) const {
     return _target.width == target.width && _target.height == target.height;
   }
+
+  /** The target the recording was made for. */
+  const RNSkGraphiteTargetInfo &getTarget() const { return _target; }
 
   /**
    Whether the recording has the format of the given target, and the target
@@ -74,7 +78,7 @@ public:
            _target.textureInfo.canBeFulfilledBy(target.textureInfo);
   }
 
-  /** Whether the recording can be replayed onto the given target. */
+  /** Whether the recording can be replayed straight onto the given target. */
   bool isCompatibleWith(const RNSkGraphiteTargetInfo &target) const {
     return hasSizeOf(target) && hasFormatOf(target);
   }
@@ -215,9 +219,18 @@ public:
     _requestFrame = std::move(requestFrame);
   }
 
-  void detach() {
+  /**
+   Undoes attach(), for the view owning the given provider only. Native view
+   ids are reused across reloads and an Android view is only destroyed when
+   its Java object is finalized, so a view going away may find its target
+   already bound to its successor; that binding is left alone.
+   */
+  void detach(const std::shared_ptr<RNSkCanvasProvider> &provider) {
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
+      if (_provider.lock() != provider) {
+        return;
+      }
       _provider.reset();
     }
     std::lock_guard<std::mutex> lock(_queueMutex);
@@ -256,9 +269,10 @@ public:
 
 private:
   /**
-   The target to record against: the view's surface when it has one, else a
-   description derived from the layout size and the props, following the
-   rules the surface will be created with (see DawnWindowContext and
+   The target to record against: the view's surface when it has one, else
+   the pixel size the platform laid the view out with, else the layout size
+   JS measured; in the last two cases with the format the surface will be
+   created with, following the same rules (see DawnWindowContext and
    SkiaView.java).
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
@@ -288,9 +302,15 @@ private:
 #else
     (void)opaque;
 #endif
-    auto pd = _context->getPixelDensity();
-    info.width = static_cast<int>(width * pd);
-    info.height = static_cast<int>(height * pd);
+    if (!provider || !provider->getLayoutSize(&info.width, &info.height)) {
+      // Not laid out yet (JS gets its onLayout before the platform lays the
+      // view out): the size JS measured, in points. The layout is on the
+      // pixel grid, so the product is an integer up to rounding errors.
+      double pd = _context->getPixelDensity();
+      info.width = static_cast<int>(std::lround(width * pd));
+      info.height = static_cast<int>(std::lround(height * pd));
+    } else {
+    }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
