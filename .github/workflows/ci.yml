@@ -336,7 +336,12 @@ jobs:
             -derivedDataPath build \
             COMPILER_INDEX_STORE_ENABLE=NO \
             RCT_METRO_PORT=$METRO_PORT \
-            build | xcpretty
+            build | tee xcodebuild.log | xcpretty || {
+              # xcpretty drops some errors (e.g. project-level ones), so show
+              # them from the raw log.
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }
 
       - name: Install and launch app on simulator
         run: |

@@ -8,6 +8,10 @@ workspace 'example.xcworkspace'
 
 platform :osx, '14.0'
 
+# react-native-webgpu is filtered out of this target below, so it can't provide
+# Dawn here: have react-native-skia vendor its own libwebgpu_dawn instead.
+ENV['RNSKIA_VENDOR_DAWN'] = '1'
+
 # Some pods (e.g. RNSVG's RNSVGFilters subspec) still declare a 10.14
 # deployment target, which Xcode 27 rejects (it supports 12.0 and up). Raise
 # any pod below the app's own target to it.
