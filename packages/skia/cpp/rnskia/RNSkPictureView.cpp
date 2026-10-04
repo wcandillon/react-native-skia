@@ -10,7 +10,8 @@
 
 namespace RNSkia {
 
-void RNSkPictureRenderer::setRecorder(std::shared_ptr<Recorder> recorder) {
+void RNSkPictureRenderer::setRecorder(std::shared_ptr<Recorder> recorder,
+                                     bool requestRedraw) {
   sk_sp<SkPicture> picture;
   if (recorder != nullptr && recorder->variables.empty()) {
     picture = recorder->makePicture();
@@ -24,7 +25,9 @@ void RNSkPictureRenderer::setRecorder(std::shared_ptr<Recorder> recorder) {
     _picture = std::move(picture);
   }
   retired = nullptr;
-  _requestRedraw();
+  if (requestRedraw) {
+    _requestRedraw();
+  }
 }
 
 bool RNSkPictureRenderer::applyUpdatesTo(

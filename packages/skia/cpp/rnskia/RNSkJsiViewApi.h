@@ -31,6 +31,7 @@ using RNSkViewInfo = struct RNSkViewInfo {
   RNSkViewInfo() { view = nullptr; }
   std::shared_ptr<RNSkView> view;
   std::unordered_map<std::string, RNJsi::ViewProperty> props;
+  bool requestRecorderRedraw = true;
 };
 
 class ViewRegistry {
@@ -118,13 +119,19 @@ public:
   /**
    Sets a custom property on a view given a view id. The property name/value
    will be stored in a map alongside the id of the view and propagated to the
-   view when needed.
+   view when needed. An optional fourth boolean defers a recorder's initial
+   redraw until its shared values are applied.
    */
   JSI_HOST_FUNCTION(setJsiProperty) {
-    if (count != 3) {
+    if (count != 3 && count != 4) {
       _platformContext->raiseError(
-          std::string("setJsiProperty: Expected 3 arguments, got " +
+          std::string("setJsiProperty: Expected 3 or 4 arguments, got " +
                       std::to_string(count) + "."));
+      return jsi::Value::undefined();
+    }
+    if (count == 4 && !arguments[3].isBool()) {
+      _platformContext->raiseError(
+          "setJsiProperty: Fourth argument must be a boolean");
       return jsi::Value::undefined();
     }
 
@@ -142,6 +149,7 @@ public:
     }
 
     auto nativeId = arguments[0].asNumber();
+    auto requestRecorderRedraw = count != 4 || arguments[3].getBool();
 
     // Safely execute operations while holding the registry lock
     ViewRegistry::getInstance().withViewInfo(
@@ -149,12 +157,17 @@ public:
           auto name = arguments[1].asString(runtime).utf8(runtime);
           info->props.insert_or_assign(
               name, RNJsi::ViewProperty(runtime, arguments[2]));
+          if (name == "recorder") {
+            info->requestRecorderRedraw = requestRecorderRedraw;
+          }
           // Now let's see if we have a view that we can update
           if (info->view != nullptr) {
             // Update view!
             info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
+            info->view->setJsiProperties(info->props,
+                                         info->requestRecorderRedraw);
             info->props.clear();
+            info->requestRecorderRedraw = true;
           }
           return nullptr; // Return type for template deduction
         });
@@ -430,8 +443,10 @@ public:
           info->view = view;
           info->view->setNativeId(nativeId);
 
-          info->view->setJsiProperties(info->props);
+          info->view->setJsiProperties(info->props,
+                                       info->requestRecorderRedraw);
           info->props.clear();
+          info->requestRecorderRedraw = true;
 
           return nullptr;
         },
@@ -459,8 +474,10 @@ public:
           if (view != nullptr) {
             info->view = view;
             info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
+            info->view->setJsiProperties(info->props,
+                                         info->requestRecorderRedraw);
             info->props.clear();
+            info->requestRecorderRedraw = true;
           } else {
             info->view = view; // Set to nullptr
           }

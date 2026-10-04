@@ -92,7 +92,8 @@ describe("NativeReanimatedContainer", () => {
     expect(SkiaViewApi.setJsiProperty).toHaveBeenCalledWith(
       7,
       "recorder",
-      mockRecorders[0]
+      mockRecorders[0],
+      true
     );
     expect(mockStartMapper).not.toHaveBeenCalled();
   });
@@ -113,6 +114,12 @@ describe("NativeReanimatedContainer", () => {
     mockSharedValues = [sv];
     const { SkiaViewApi, container } = setup();
     container.redraw();
+    expect(SkiaViewApi.setJsiProperty).toHaveBeenCalledWith(
+      7,
+      "recorder",
+      mockRecorders[0],
+      false
+    );
     expect(mockStartMapper).toHaveBeenCalledTimes(1);
     const [mapper, deps] = mockStartMapper.mock.calls[0] as unknown as [
       () => void,
@@ -141,7 +148,8 @@ describe("NativeReanimatedContainer", () => {
     expect(SkiaViewApi.setJsiProperty).toHaveBeenLastCalledWith(
       7,
       "recorder",
-      mockRecorders[1]
+      mockRecorders[1],
+      false
     );
   });
 

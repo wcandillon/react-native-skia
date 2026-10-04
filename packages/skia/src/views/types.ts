@@ -32,7 +32,13 @@ export interface AndroidCanvasProps {
 
 export interface ISkiaViewApi {
   web?: boolean;
-  setJsiProperty: <T>(nativeId: number, name: string, value: T) => void;
+  /** Set a view property, optionally deferring a recorder's initial redraw. */
+  setJsiProperty: <T>(
+    nativeId: number,
+    name: string,
+    value: T,
+    requestRedraw?: boolean
+  ) => void;
   requestRedraw: (nativeId: number) => void;
   /**
    * Reads the shared values into the recording held for the view and

@@ -69,7 +69,13 @@ class NativeReanimatedContainer extends Container {
     // The view takes ownership of the recorder and draws the first frame. The
     // wrapper is disposed right away: it would otherwise co-own the recording
     // until the JS garbage collector finalizes it.
-    SkiaViewApi.setJsiProperty(nativeId, "recorder", nativeRecorder);
+    // Let the mapper produce the first frame after derived values update.
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "recorder",
+      nativeRecorder,
+      sharedValues.length === 0
+    );
     nativeRecorder.dispose();
     if (sharedValues.length > 0) {
       this.mapperId = Rea.startMapper(() => {

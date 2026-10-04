@@ -521,7 +521,8 @@ public:
 
   // No JSI properties: frames arrive through the target.
   void setJsiProperties(
-      std::unordered_map<std::string, RNJsi::ViewProperty> &props) override {}
+      std::unordered_map<std::string, RNJsi::ViewProperty> &props,
+      bool = true) override {}
 
   void setNativeId(size_t nativeId) override {
     RNSkView::setNativeId(nativeId);

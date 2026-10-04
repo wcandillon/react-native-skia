@@ -86,9 +86,11 @@ public:
    * The previous recorder (and the resources its commands reference) is
    * released here; Recorder's destructor moves the commands to the main
    * thread before destroying them so GPU-backed resources are freed on the
-   * thread that used them.
+   * thread that used them. The initial redraw can be deferred until the
+   * first shared-value update.
    */
-  void setRecorder(std::shared_ptr<Recorder> recorder);
+  void setRecorder(std::shared_ptr<Recorder> recorder,
+                   bool requestRedraw = true);
 
   /**
    * Drops the recorder and the picture without scheduling a redraw. Called
@@ -181,7 +183,8 @@ public:
                 std::bind(&RNSkPictureView::requestRedraw, this), context)) {}
 
   void setJsiProperties(
-      std::unordered_map<std::string, RNJsi::ViewProperty> &props) override {
+      std::unordered_map<std::string, RNJsi::ViewProperty> &props,
+      bool requestRecorderRedraw = true) override {
     auto renderer =
         std::static_pointer_cast<RNSkPictureRenderer>(getRenderer());
     for (auto &prop : props) {
@@ -190,7 +193,8 @@ public:
                                                      : nullptr);
       } else if (prop.first == "recorder") {
         renderer->setRecorder(
-            prop.second.isRecorder() ? prop.second.getRecorder() : nullptr);
+            prop.second.isRecorder() ? prop.second.getRecorder() : nullptr,
+            requestRecorderRedraw);
       }
     }
   }

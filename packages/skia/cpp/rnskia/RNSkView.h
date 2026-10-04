@@ -228,7 +228,8 @@ public:
   virtual ~RNSkView() {}
 
   virtual void setJsiProperties(
-      std::unordered_map<std::string, RNJsi::ViewProperty> &props) = 0;
+      std::unordered_map<std::string, RNJsi::ViewProperty> &props,
+      bool requestRecorderRedraw = true) = 0;
 
   void requestRedraw() {
     if (!_redrawRequested) {
