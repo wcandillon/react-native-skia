@@ -37,6 +37,7 @@ public:
 #endif
 
   void setSize(int width, int height);
+  void setOpaque(bool opaque);
   void setUseP3ColorSpace(bool useP3ColorSpace);
   void setHighBitDepth(bool highBitDepth);
   CALayer *getLayer();
@@ -50,6 +51,7 @@ private:
 #pragma clang diagnostic pop
   bool _useP3ColorSpace = true;
   bool _highBitDepth = false;
+  bool _opaque = false;
 #if defined(SK_GRAPHITE)
   // A copy of the window's target description, readable from any thread
   // while the window itself belongs to the main thread.

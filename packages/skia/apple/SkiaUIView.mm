@@ -47,6 +47,7 @@
         throw std::runtime_error(
             "Expected Skia view implementation, got nullptr.");
       }
+      _impl->setOpaque(_opaque);
       [self.layer addSublayer:_impl->getLayer()];
       if (_nativeId != 0) {
         _manager->setSkiaView(_nativeId, _impl->getDrawView());
@@ -131,6 +132,9 @@
 
 - (void)setOpaque:(bool)opaque {
   _opaque = opaque;
+  if (_impl != nullptr) {
+    _impl->setOpaque(opaque);
+  }
 }
 
 - (void)setNativeId:(size_t)nativeId {

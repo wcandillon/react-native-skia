@@ -29,6 +29,7 @@ RNSkMetalCanvasProvider::RNSkMetalCanvasProvider(
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
+  _layer.opaque = NO;
 #pragma clang diagnostic pop
 }
 
@@ -122,7 +123,8 @@ void RNSkMetalCanvasProvider::setSize(int width, int height) {
   auto h = height * _context->getPixelDensity();
 #if defined(SK_GRAPHITE)
   _ctx = RNSkia::DawnContext::getInstance().MakeWindow((__bridge void *)_layer,
-                                                       w, h, _highBitDepth);
+                                                       w, h, _highBitDepth,
+                                                       _opaque);
   {
     auto *window = static_cast<RNSkia::DawnWindowContext *>(_ctx.get());
     std::lock_guard<std::mutex> lock(_targetInfoMutex);
@@ -143,6 +145,20 @@ CALayer *RNSkMetalCanvasProvider::getLayer() { return _layer; }
 
 void RNSkMetalCanvasProvider::setUseP3ColorSpace(bool useP3ColorSpace) {
   _useP3ColorSpace = useP3ColorSpace;
+}
+
+void RNSkMetalCanvasProvider::setOpaque(bool opaque) {
+  if (_opaque == opaque) {
+    return;
+  }
+  _opaque = opaque;
+  _layer.opaque = opaque;
+#if defined(SK_GRAPHITE)
+  if (_ctx) {
+    // Dawn applies the surface alpha mode to the layer when configuring it.
+    setSize(_layer.frame.size.width, _layer.frame.size.height);
+  }
+#endif
 }
 
 void RNSkMetalCanvasProvider::setHighBitDepth(bool highBitDepth) {
