@@ -101,7 +101,7 @@ export const Demo = () => {
 ## Animations
 
 The Atlas component should usually be used with Reanimated.
-First, the [useTexture](/docs/animations/textures#usetexture) hook will enable you to create a texture on the UI thread directly without needing to make any copies.
+First, the [useTexture](/docs/animations/textures#usetexture) hook will enable you to create a texture off the JS thread without needing to make any copies.
 Secondly, we provide you with hooks such as [`useRectBuffer`](/docs/animations/hooks#userectbuffer) and [`useRSXformBuffer`](/docs/animations/hooks#usersxformbuffer) to efficiently animates on the sprites and transformations.
 
 The example below is identical to the one above but the position is an animation value bound to a gesture.

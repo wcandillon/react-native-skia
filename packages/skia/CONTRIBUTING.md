@@ -1,5 +1,16 @@
 # Contributing
 
+## Branches
+
+| Branch | Version | Skia backend | npm dist-tag | Documentation |
+|:--|:--|:--|:--|:--|
+| `main` | v3 | Graphite | `latest` | [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) |
+| `2.x` | v2 | Ganesh | `2.x` | [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/) |
+
+`main` is where v3 is developed: it only supports the [Graphite](https://skia.org/docs/user/graphite/) backend.
+`2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend and the platforms Graphite does not support (tvOS, Mac Catalyst).
+Open pull requests against `main`, unless the change only applies to v2.
+
 ## Library Development
 
 To develop react-native-skia, you can build the skia libraries on your computer. Alternatively, you can use the pre-built binaries.
@@ -124,7 +135,7 @@ Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native
 CocoaPods stays the default. `Package.swift` is additive: SwiftPM ignores the
 podspec, and CocoaPods ignores `Package.swift`.
 
-SwiftPM support requires **React Native 0.87 or newer** — earlier releases ship
+SwiftPM support requires **React Native 0.87 or newer**: earlier releases ship
 no `scripts/spm`. `apps/example` is on an older version, so it cannot exercise
 this path.
 
@@ -140,13 +151,18 @@ Skia's Apple sources still gate on `RCT_NEW_ARCH_ENABLED` and
 `RCT_REMOVE_LEGACY_ARCH`. CocoaPods forces both project-wide; the SwiftPM path
 defines neither, so `Package.swift` defines them itself.
 
+The library requires iOS 15.1 (see the podspec), but the platform floor of
+`Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`
+aggregate is hardcoded to iOS 15.0, and SwiftPM refuses to link a product whose
+floor is above the depending target's.
+
 #### Binaries
 
-The manifest links the `react-native-skia-apple-ios` npm package, the same one
-the CocoaPods build uses, so no network is needed once dependencies are
+The manifest links the `react-native-skia-graphite-apple-ios` npm package, the
+same one the CocoaPods build uses, so no network is needed once dependencies are
 installed. It is resolved by path, from either a sibling in `node_modules` or
 this monorepo's root, and the manifest fails with an explanatory message when
-neither exists — which is what an `--omit=optional` install looks like.
+neither exists, which is what an `--omit=optional` install looks like.
 
 Fetching the binaries from a released Swift package instead is future work; it
 becomes useful only once the binary npm packages are no longer dependencies. See
@@ -154,28 +170,35 @@ becomes useful only once the binary npm packages are no longer dependencies. See
 which hosts the remote SwiftPM manifest published from `packages/skia-binaries`.
 
 After changing which binaries a checkout uses, delete
-`ios/<App>.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
-— a stale pin silently keeps the previous source.
+`ios/<App>.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
+a stale pin silently keeps the previous source.
 
 ### Publishing
 
-- Run the commands in the [Building](#building) section
-- Build the Android binaries with `yarn build-skia-android`
-- Build the NPM package with `yarn build-npm`
+Releases are published from GitHub Actions by the **Create a release (react-native-skia)** workflow (`.github/workflows/build-npm-react-native-skia.yml`), which is triggered manually and runs [semantic-release](https://github.com/semantic-release/semantic-release):
 
-Publish the NPM package manually. The output is found in the `dist` folder.
+- On `main`, it publishes the next v3 version under the `latest` dist-tag.
+- On `2.x`, it publishes the next v2 version under the `2.x` dist-tag, so that `latest` stays on v3.
 
-- Install Cocoapods in the example/ios folder `cd example/ios && pod install && cd ..`
+The workflow takes two inputs:
+
+- `skip_npm_publish`: build the package and upload the tarball as a workflow artifact instead of publishing it.
+- `version`: release this exact version instead of letting semantic-release compute it from the commit messages.
+
+### Documentation
+
+The documentation website lives in [`apps/docs`](../../apps/docs). Run it locally with `yarn start` and type check its code samples with `yarn test`.
+The `main` branch holds the documentation of v3. The v2 documentation is a frozen build stored in the `docs-v2` branch and served under `/v2/`.
 
 ### Testing
 
 When making contributions to the project, an important part is testing.
-In the `package` folder, we have several scripts set up to help you maintain the quality of the codebase and test your changes:
+In the `packages/skia` folder, we have several scripts set up to help you maintain the quality of the codebase and test your changes:
 
-- `yarn lint` — Lints the code for potential errors and to ensure consistency with our coding standards.
-- `yarn tsc` — Runs the TypeScript compiler to check for typing issues.
-- `yarn test` — Executes the unit tests to ensure existing features work as expected after changes.
-- `yarn e2e` — Runs end-to-end tests. For these tests to run properly, you need to have the example app running. Use `yarn ios` or `yarn android` in the `example` folder and navigate to the Tests screen within the app.
+- `yarn lint`: lints the code for potential errors and to ensure consistency with our coding standards.
+- `yarn tsc`: runs the TypeScript compiler to check for typing issues.
+- `yarn test`: executes the unit tests to ensure existing features work as expected after changes.
+- `yarn e2e`: runs end-to-end tests. For these tests to run properly, you need to have the example app running. Use `yarn ios` or `yarn android` in the `apps/example` folder and navigate to the Tests screen within the app.
 
 ### Running End-to-End Tests
 
@@ -183,13 +206,13 @@ To ensure the best reliability, we encourage running end-to-end tests before sub
 
 1. Start the example app:
 ```sh
-cd example
+cd apps/example
 yarn ios # or yarn android for Android testing
 ```
 
 Once the app is open in your simulator or device, press the "Tests" item at the bottom of the list.
    
-2. With the example app running and the Tests screen open, run the following command in the `package` folder:
+2. With the example app running and the Tests screen open, run the following command in the `packages/skia` folder:
 ```sh
 yarn e2e
 ```
@@ -204,7 +227,7 @@ E2E=true yarn test -i e2e/Colors
 
 Contributing end-to-end tests to React Native Skia is extremely useful. Below you'll find guidelines for writing tests using the `eval`, `draw`, and `drawOffscreen` commands. 
 
-e2e tests are located in the `package/__tests__/e2e/` directory. You can create a file there or add a new test to an existing file depending on what is most sensible.
+e2e tests are located in the `packages/skia/src/renderer/__tests__/e2e/` directory. You can create a file there or add a new test to an existing file depending on what is most sensible.
 When looking to contribute a new test, you can refer to existing tests to see how these can be built.
 The `eval` command is used to test Skia's imperative API. It requires a pure function that invokes Skia operations and returns a serialized result.
 

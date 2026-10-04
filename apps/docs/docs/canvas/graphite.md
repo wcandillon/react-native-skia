@@ -6,7 +6,7 @@ slug: /canvas/graphite
 ---
 
 `SkiaGraphiteView` is a canvas that you drive frame by frame from any JavaScript runtime.
-A frame is a [Graphite](/docs/getting-started/installation#graphite) recording: you record it on the thread you are on (the JS thread, the Reanimated UI runtime or a dedicated worklet runtime), and the view presents it on the next display frame.
+A frame is a Graphite recording: you record it on the thread you are on (the JS thread, the Reanimated UI runtime or a dedicated worklet runtime), and the view presents it on the next display frame.
 On the web, where Skia runs on WebGL, the same API is emulated: see [Web](#web) below.
 
 ## Recording a frame
@@ -78,7 +78,7 @@ A few rules follow from this model:
 - One recording is open at a time per view. Finish it before starting the next one, on any runtime.
 - Recordings are presented in submission order and never dropped. A later frame may sample a texture an earlier frame uploaded, so when the main thread falls behind, the queued frames are replayed in order and only the last one stays visible. A recording made for another size than the surface has by the time it is presented (recorded before the view had a surface, or the view was resized since) still shows, at the cost of an extra copy for that frame.
 - The producer clears the canvas. A recording draws on top of what the view shows, which also lets you record only the parts that changed.
-- GPU-backed images (offscreen surface snapshots, native buffers, video frames) can be drawn from any runtime. Their content is uploaded when they are created, so create them before the frame that uses them.
+- GPU-backed images (offscreen surface snapshots, native buffers, video frames, [WebGPU textures](/docs/webgpu)) can be drawn from any runtime. Their content is uploaded when they are created, so create them before the frame that uses them.
 
 ## Snapshots
 

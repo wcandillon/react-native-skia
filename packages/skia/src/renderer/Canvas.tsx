@@ -99,7 +99,7 @@ const useCanvasRoot = ({
 }: Pick<CanvasProps, "children" | "onSize" | "ref" | "onLayout">) => {
   if (onLayout && Platform.OS !== "web") {
     console.error(
-      "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://shopify.github.io/react-native-skia/docs/canvas/overview/#getting-the-canvas-size"
+      "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://wcandillon.github.io/react-native-skia/docs/canvas/overview/#canvas-size"
     );
   }
   const viewRef = useCanvasRefPriv(null);

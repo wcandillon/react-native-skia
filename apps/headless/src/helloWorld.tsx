@@ -8,7 +8,7 @@ import {
 import { LoadSkiaWeb } from "react-native-skia/src/web/LoadSkiaWeb";
 import React from "react";
 
-// https://shopify.github.io/react-native-skia/docs/getting-started/headless/
+// https://wcandillon.github.io/react-native-skia/docs/getting-started/headless/
 (async () => {
 	const width = 256;
 	const height = 256;

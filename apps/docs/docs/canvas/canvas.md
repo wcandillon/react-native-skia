@@ -86,6 +86,21 @@ const Demo = () => {
 };
 ```
 
+## How frames are produced
+
+The children of a `Canvas` are rendered by Skia's own React renderer, and its frames are produced off the JS thread:
+
+1. On every React commit, the JS thread records the drawing into a native display list and hands it to the view.
+2. When a Reanimated value used by the drawing changes, the UI thread writes the new value into the display list. It does not draw anything.
+3. A dedicated native thread pool replays the display list into a Graphite frame whenever its content changed, at most once per presented frame.
+4. The view presents the frame on the next vsync.
+
+An animation frame costs no React render, no work on the JS thread, and no drawing on the UI thread.
+A canvas without animation values is drawn once, and the view keeps its frame.
+
+On the Web, the drawing is recorded into a picture on the JS thread and painted on a WebGL canvas.
+
+If you need to produce the frames yourself, from the thread of your choice, use the [Graphite View](/docs/canvas/graphite).
 
 ## Android rendering options
 
@@ -149,7 +164,7 @@ Pair it with `zOrderOnTop` to composite over React Native content, or keep the d
 
 :::
 
-A third backend that keeps `TextureView`'s compositing behavior without its extra copy, by drawing each frame's `AHardwareBuffer` inline (as React Native WebGPU's `HardwareBufferView` does), is planned for the Graphite backend.
+A third backend that keeps `TextureView`'s compositing behavior without its extra copy, by drawing each frame's `AHardwareBuffer` inline (as React Native WebGPU's `HardwareBufferView` does), is planned.
 
 ## High bit depth
 
@@ -182,12 +197,29 @@ When the surface does not support the 10-bit format, the canvas falls back to 8-
 
 :::
 
+## Color space
+
+On Apple devices with a wide color gamut display, the canvas renders in the Display P3 color space.
+On other devices, on Android, and on the Web, it renders in sRGB.
+
+Colors are managed: a color or an image looks the same in both color spaces.
+Display P3 adds the colors that sRGB cannot represent, for instance the ones of a photo with a Display P3 profile.
+
+:::info
+
+The colors returned by a [shader](/docs/shaders/overview) are not managed. They are interpreted in the color space of the canvas: the same values look more saturated in Display P3 than in sRGB.
+
+:::
+
+[Snapshots](#getting-a-canvas-snapshot) are always in sRGB.
+
 ## Getting a Canvas Snapshot
 
-You can save your drawings as an image by using the `makeImageSnapshotAsync` method. This method returns a promise that resolves to an [Image](/docs/images).
-It executes on the UI thread, ensuring access to the same Skia context as your on-screen canvases, including [textures](https://shopify.github.io/react-native-skia/docs/animations/textures).
+You can save your drawings as an image by using the `makeImageSnapshot` method, which returns an [Image](/docs/images).
+The drawing is rendered into an offscreen surface with its latest animation values, on the calling thread: the snapshot does not wait for the next frame.
+The `makeImageSnapshotAsync` method does the same on the main thread, and returns a promise.
 
-If your drawing does not contain textures, you may also use the synchronous `makeImageSnapshot` method for simplicity.
+Both methods support drawings that contain [textures](/docs/animations/textures).
 
 ### Example
 
@@ -222,4 +254,4 @@ export const Demo = () => {
 
 The Canvas component supports the same properties as a View component including its [accessibility properties](https://reactnative.dev/docs/accessibility#accessible).
 You can make elements inside the canvas accessible as well by overlaying views on top of your canvas.
-This is the same recipe used for [applying gestures on specific canvas elements](https://shopify.github.io/react-native-skia/docs/animations/gestures/#element-tracking).
+This is the same recipe used for [applying gestures on specific canvas elements](/docs/animations/gestures#element-tracking).

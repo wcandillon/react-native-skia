@@ -41,6 +41,7 @@ In immediate mode, you issue drawing commands directly to a canvas on every fram
 
 React Native Skia provides immediate mode through the [Picture API](/docs/shapes/pictures).
 This mode is extremely well-suited for scenes where the number of drawing commands changes on every animation frame. This is often the case for games, generative art, and particle systems where the scene changes unpredictably on each animation frame.
+If you want to drive a whole view in immediate mode, from the thread of your choice, have a look at the [Graphite View](/docs/canvas/graphite).
 
 ```tsx twoslash
 import { Canvas, Picture, Skia } from "react-native-skia";
