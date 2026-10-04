@@ -242,6 +242,23 @@ void RNSkApplePlatformContext::raiseError(const std::exception &err) {
   RCTFatal(RCTErrorWithMessage([NSString stringWithUTF8String:err.what()]));
 }
 
+bool RNSkApplePlatformContext::mainScreenSupportsP3() {
+  static bool supportsP3 = false;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+#if !TARGET_OS_OSX
+    supportsP3 =
+        [UIScreen mainScreen].traitCollection.displayGamut == UIDisplayGamutP3;
+#else
+    NSColorSpace *screenColorSpace = [NSScreen mainScreen].colorSpace;
+    supportsP3 =
+        screenColorSpace != nil &&
+        [screenColorSpace isEqual:[NSColorSpace displayP3ColorSpace]];
+#endif // !TARGET_OS_OSX
+  });
+  return supportsP3;
+}
+
 sk_sp<SkSurface>
 RNSkApplePlatformContext::makeOffscreenSurface(int width, int height,
                                                bool useP3ColorSpace) {

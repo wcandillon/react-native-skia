@@ -22,6 +22,7 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkColorSpace.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkRect.h"
 
@@ -208,19 +209,34 @@ public:
   /**
    Renders the view into an offscreen surface: declarative content is
    replayed on the calling thread with the latest values, so the snapshot
-   does not wait for a frame; otherwise the current frame is replayed.
+   does not wait for a frame; otherwise the current frame is replayed. A
+   snapshot is in sRGB whichever color space the view renders in: a frame
+   recorded in Display P3 is replayed into a surface in that color space and
+   the image is converted.
    */
   sk_sp<SkImage> makeImageSnapshot(SkRect *bounds) {
-    auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
-        _platformContext, getScaledWidth(), getScaledHeight());
     if (_producer->hasContent()) {
+      auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
+          _platformContext, getScaledWidth(), getScaledHeight());
       if (auto *canvas = provider->getCanvas()) {
         _producer->renderInto(canvas, _platformContext->getPixelDensity());
       }
-    } else {
-      renderLastFrame(provider);
+      return provider->makeSnapshot(bounds);
     }
-    return provider->makeSnapshot(bounds);
+    auto frame = getLastFrame();
+    const bool useP3ColorSpace =
+        frame != nullptr && frame->getTarget().useP3ColorSpace;
+    auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
+        _platformContext, getScaledWidth(), getScaledHeight(), useP3ColorSpace);
+    if (frame != nullptr) {
+      renderFrame(provider, frame);
+    }
+    auto image = provider->makeSnapshot(bounds);
+    if (image != nullptr && useP3ColorSpace) {
+      // A raster image: converted on the CPU, no recorder involved.
+      image = image->makeColorSpace(nullptr, SkColorSpace::MakeSRGB(), {});
+    }
+    return image;
   }
 
   /** Width of the surface, in pixels. */
@@ -297,11 +313,8 @@ private:
     return _target;
   }
 
-  /**
-   Replays the frame on screen, or the one about to be, onto another
-   provider (a snapshot surface). Any thread.
-   */
-  bool renderLastFrame(const std::shared_ptr<RNSkCanvasProvider> &provider) {
+  /** The frame on screen, or the one about to be, if any. Any thread. */
+  std::shared_ptr<RNSkGraphiteRecording> getLastFrame() {
     std::shared_ptr<RNSkGraphiteTarget> target;
     std::shared_ptr<RNSkGraphiteRecording> recording;
     {
@@ -314,9 +327,12 @@ private:
         recording = latest;
       }
     }
-    if (recording == nullptr) {
-      return false;
-    }
+    return recording;
+  }
+
+  /** Replays a frame onto another provider (a snapshot surface). Any thread. */
+  bool renderFrame(const std::shared_ptr<RNSkCanvasProvider> &provider,
+                   const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     RNSkGraphiteTargetInfo targetInfo;
     if (!provider->getTargetInfo(&targetInfo)) {
       return false;
@@ -335,8 +351,8 @@ private:
           const RNSkGraphiteTargetInfo &targetInfo,
           const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
           bool remember) {
-    // Recordings of the target's size are replayed straight onto it, as one
-    // batch; one of another size goes through a texture of its own size.
+    // Recordings of the target's size and color space are replayed straight
+    // onto it, as one batch; any other goes through a texture of its own.
     std::vector<skgpu::graphite::Recording *> batch;
     std::shared_ptr<RNSkGraphiteRecording> last;
     bool success = true;
@@ -355,13 +371,14 @@ private:
                                  "different surface format");
         continue;
       }
-      if (recording->hasSizeOf(targetInfo)) {
+      if (recording->hasSizeOf(targetInfo) &&
+          recording->hasColorSpaceOf(targetInfo)) {
         batch.push_back(recording->get());
         last = recording;
         continue;
       }
       flush();
-      if (presentResized(provider, recording)) {
+      if (presentThroughTexture(provider, recording)) {
         last = recording;
       } else {
         success = false;
@@ -385,13 +402,17 @@ private:
    rounds the layout to pixels on its own terms), and the view may have been
    resized since. The recording is replayed into a texture of its own size
    and that texture is drawn onto the target, so the frame shows rather than
-   being dropped; the copy only happens while the sizes differ.
+   being dropped; the copy only happens while the sizes differ. The same goes
+   for a recording made in another color space than the target's: the
+   texture is in the color space of the recording, and drawing it converts
+   the colors.
    */
-  bool presentResized(const std::shared_ptr<RNSkCanvasProvider> &provider,
-                      const std::shared_ptr<RNSkGraphiteRecording> &recording) {
+  bool presentThroughTexture(
+      const std::shared_ptr<RNSkCanvasProvider> &provider,
+      const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     const auto &size = recording->getTarget();
     auto intermediate = std::make_shared<RNSkOffscreenCanvasProvider>(
-        _platformContext, size.width, size.height);
+        _platformContext, size.width, size.height, size.useP3ColorSpace);
     RNSkGraphiteTargetInfo info;
     if (!intermediate->getTargetInfo(&info) ||
         !recording->isCompatibleWith(info)) {

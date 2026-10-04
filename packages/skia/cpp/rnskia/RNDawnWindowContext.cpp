@@ -29,7 +29,8 @@ bool DawnWindowContext::presentRecordings(
   auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
   SkSurfaceProps surfaceProps;
   auto surface = SkSurfaces::WrapBackendTexture(
-      _recorder, backendTex, SkColorSpace::MakeSRGB(), &surfaceProps);
+      _recorder, backendTex, DawnUtils::viewColorSpace(_useP3ColorSpace),
+      &surfaceProps);
   if (!surface) {
     return false;
   }

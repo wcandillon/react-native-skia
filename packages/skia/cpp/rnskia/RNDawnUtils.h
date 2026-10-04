@@ -8,6 +8,7 @@
 
 #include "dawn/native/DawnNative.h"
 
+#include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
 #include "utils/RNSkLog.h"
@@ -41,6 +42,17 @@ static const SkColorType HighBitDepthColorType = kRGBA_1010102_SkColorType;
 static const wgpu::TextureFormat HighBitDepthTextureFormat =
     wgpu::TextureFormat::RGB10A2Unorm;
 #endif
+
+// The color space a view renders in: Display P3 (with the sRGB transfer
+// function) where the platform prefers it (a wide gamut display on Apple
+// platforms, see RNSkPlatformContext::prefersP3ColorSpace), sRGB otherwise.
+// Colors are managed either way: content looks the same in both, Display P3
+// only adds the colors sRGB cannot represent.
+inline sk_sp<SkColorSpace> viewColorSpace(bool useP3ColorSpace) {
+  return useP3ColorSpace ? SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
+                                                 SkNamedGamut::kDisplayP3)
+                         : SkColorSpace::MakeSRGB();
+}
 
 // Usage requested for a window texture when the surface supports it (see
 // DawnWindowContext::supportedSurfaceUsage), and assumed for a Graphite

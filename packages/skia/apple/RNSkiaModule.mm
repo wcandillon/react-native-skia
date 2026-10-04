@@ -39,6 +39,16 @@ RCT_EXPORT_MODULE()
   return YES;
 }
 
+- (instancetype)init {
+  if (self = [super init]) {
+    // Created on the main queue (see requiresMainQueueSetup): the screen is
+    // asked for its color gamut here, where UIKit may be used. The platform
+    // context is created on the JS thread and only reads the answer.
+    RNSkia::RNSkApplePlatformContext::mainScreenSupportsP3();
+  }
+  return self;
+}
+
 - (void)
     installJSIBindingsWithRuntime:(facebook::jsi::Runtime &)runtime
                       callInvoker:

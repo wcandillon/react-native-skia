@@ -191,6 +191,14 @@ public:
    */
   float getPixelDensity() { return _pixelDensity; }
 
+  /**
+   * Whether views render in Display P3 rather than sRGB: true on Apple
+   * platforms when the main screen has a wide color gamut. The answer does
+   * not change over the lifetime of the context, so a frame can be recorded
+   * for a view before its surface exists.
+   */
+  virtual bool prefersP3ColorSpace() { return false; }
+
 private:
   float _pixelDensity;
   std::shared_ptr<react::CallInvoker> _callInvoker;

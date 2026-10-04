@@ -78,9 +78,21 @@ public:
            _target.textureInfo.canBeFulfilledBy(target.textureInfo);
   }
 
+  /**
+   Whether the recording was made in the color space of the given target. The
+   colors of a recording are converted when it is recorded: replayed onto a
+   target in another color space, they would be read in the wrong gamut. Such
+   a recording is replayed through a texture in its own color space instead,
+   which is then drawn, and converted, onto the target (see
+   RNSkView::present).
+   */
+  bool hasColorSpaceOf(const RNSkGraphiteTargetInfo &target) const {
+    return _target.useP3ColorSpace == target.useP3ColorSpace;
+  }
+
   /** Whether the recording can be replayed straight onto the given target. */
   bool isCompatibleWith(const RNSkGraphiteTargetInfo &target) const {
-    return hasSizeOf(target) && hasFormatOf(target);
+    return hasSizeOf(target) && hasFormatOf(target) && hasColorSpaceOf(target);
   }
 
 private:
@@ -153,9 +165,9 @@ public:
       }
       _recorder = std::move(recorder);
     }
-    auto imageInfo =
-        SkImageInfo::Make(target.width, target.height, target.colorType,
-                          kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
+    auto imageInfo = SkImageInfo::Make(
+        target.width, target.height, target.colorType, kPremul_SkAlphaType,
+        DawnUtils::viewColorSpace(target.useP3ColorSpace));
     auto *canvas =
         _recorder->recorder->makeDeferredCanvas(imageInfo, target.textureInfo);
     if (canvas == nullptr) {
@@ -271,9 +283,9 @@ private:
   /**
    The target to record against: the view's surface when it has one, else
    the pixel size the platform laid the view out with, else the layout size
-   JS measured; in the last two cases with the format the surface will be
-   created with, following the same rules (see DawnWindowContext and
-   SkiaView.java).
+   JS measured; in the last two cases with the format and the color space
+   the surface will be created with, following the same rules (see
+   DawnWindowContext and SkiaView.java).
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkCanvasProvider> provider;
@@ -313,6 +325,7 @@ private:
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
+    info.useP3ColorSpace = _context->prefersP3ColorSpace();
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,

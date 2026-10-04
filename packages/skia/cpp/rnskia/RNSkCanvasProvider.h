@@ -24,15 +24,19 @@
 namespace RNSkia {
 
 /**
- * Describes the texture a recording is replayed onto: the pixel size and the
- * format of a window (or offscreen) surface. A deferred canvas is recorded
- * against this description, so it can be created before the surface itself
- * exists.
+ * Describes the texture a recording is replayed onto: the pixel size, the
+ * format and the color space of a window (or offscreen) surface. A deferred
+ * canvas is recorded against this description, so it can be created before
+ * the surface itself exists.
  */
 struct RNSkGraphiteTargetInfo {
   int width = 0;
   int height = 0;
   SkColorType colorType = kUnknown_SkColorType;
+  // Display P3 rather than sRGB (see DawnUtils::viewColorSpace). The colors
+  // of a recording are converted to the color space of its target when it is
+  // recorded, not when it is replayed.
+  bool useP3ColorSpace = false;
   skgpu::graphite::TextureInfo textureInfo;
 };
 
@@ -80,8 +84,8 @@ public:
   /**
    Draws an image at the origin of the target texture and presents it. Same
    thread and return value as presentRecordings(). Used for a recording whose
-   size differs from the target's: it is replayed into a texture of its own
-   size first (see RNSkView::present).
+   size or color space differs from the target's: it is replayed into a
+   texture of its own first (see RNSkView::present).
    */
   virtual bool presentImage(const sk_sp<SkImage> &image) = 0;
 
@@ -106,14 +110,18 @@ private:
 
 /**
  * An offscreen surface the content of a view is replayed into for a snapshot.
+ * A recording is replayed as is, so the surface takes the color space of the
+ * recordings it is meant for.
  */
 class RNSkOffscreenCanvasProvider : public RNSkCanvasProvider {
 public:
   RNSkOffscreenCanvasProvider(
       const std::shared_ptr<RNSkPlatformContext> &context, int width,
-      int height)
+      int height, bool useP3ColorSpace = false)
       : _width(width), _height(height), _pd(context->getPixelDensity()),
-        _surface(context->makeOffscreenSurface(width, height)) {}
+        _useP3ColorSpace(useP3ColorSpace),
+        _surface(
+            context->makeOffscreenSurface(width, height, useP3ColorSpace)) {}
 
   virtual ~RNSkOffscreenCanvasProvider() = default;
 
@@ -175,6 +183,7 @@ public:
     info->width = _width;
     info->height = _height;
     info->colorType = colorType;
+    info->useP3ColorSpace = _useP3ColorSpace;
     info->textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,
@@ -214,6 +223,7 @@ private:
   int _width;
   int _height;
   float _pd;
+  bool _useP3ColorSpace;
   sk_sp<SkSurface> _surface;
   bool _cleared = false;
 };
