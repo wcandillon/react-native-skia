@@ -147,7 +147,7 @@ logger.warn("react-native-skia: buildDir: ${buildDir}")
 logger.warn("react-native-skia: node_modules: ${nodeModules}")
 
 android {
-    namespace "com.reactnative.skia"
+    namespace = "com.reactnative.skia"
 
     compileSdkVersion safeExtGet('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION)
     buildToolsVersion safeExtGet('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION)
@@ -155,10 +155,10 @@ android {
     // Used to override the NDK path/version on internal CI or by allowing
     // users to customize the NDK path/version from their root project.
     if (rootProject.hasProperty("ndkPath")) {
-        ndkPath rootProject.ext.ndkPath
+        ndkPath = rootProject.ext.ndkPath
     }
     if (rootProject.hasProperty("ndkVersion")) {
-        ndkVersion rootProject.ext.ndkVersion
+        ndkVersion = rootProject.ext.ndkVersion
     }
 
     defaultConfig {
@@ -182,7 +182,7 @@ android {
         }
     }
     lintOptions {
-        abortOnError false
+        abortOnError = false
     }
 
     publishing {
@@ -214,12 +214,12 @@ android {
     }
 
     buildFeatures {
-        prefab true
-        prefabPublishing true
+        prefab = true
+        prefabPublishing = true
     }
     prefab {
         rnskia {
-            headers "${project.buildDir}/headers/rnskia/"
+            headers = "${project.buildDir}/headers/rnskia/"
         }
     }
 }
