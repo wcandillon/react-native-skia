@@ -24,8 +24,9 @@ jobs:
       WORKING_DIRECTORY: ./
       REPOSITORY: wcandillon/react-native-skia
       # 2.x is the maintenance branch for the Ganesh v2 line: it publishes under
-      # the 2.x dist-tag so latest stays on main.
-      NPM_DIST_TAG: ${{ github.ref_name == '2.x' && '2.x' || 'latest' }}
+      # the release-2.x dist-tag so latest stays on main (npm rejects dist-tags
+      # that are a valid semver range, such as 2.x).
+      NPM_DIST_TAG: ${{ github.ref_name == '2.x' && 'release-2.x' || 'latest' }}
     concurrency:
       group: npm-react-native-skia-${{ github.ref }}
       cancel-in-progress: true
@@ -47,7 +48,8 @@ jobs:
         run: yarn build
 
       # Configure semantic-release for this repository.
-      # The 2.x branch is a maintenance branch (>=2.0.0 <3.0.0) on the 2.x channel.
+      # The 2.x branch is a maintenance branch (>=2.0.0 <3.0.0) on the release-2.x
+      # channel, which is also its npm dist-tag.
       # Commenting on released issues and PRs is off: the commit messages
       # reference Shopify/react-native-skia numbers that don't exist here.
       - name: Configure semantic-release
@@ -58,7 +60,7 @@ jobs:
             const fs = require('fs');
             const rc = JSON.parse(fs.readFileSync('.releaserc', 'utf8'));
             rc.repositoryUrl = 'https://github.com/' + process.env.REPOSITORY + '.git';
-            rc.branches.unshift({ name: '2.x', range: '2.x', channel: '2.x' });
+            rc.branches.unshift({ name: '2.x', range: '2.x', channel: 'release-2.x' });
             const exec = rc.plugins.find((p) => Array.isArray(p) && p[0] === '@semantic-release/exec');
             if (process.env.SKIP_NPM_PUBLISH === 'true') delete exec[1].publishCmd;
             const github = rc.plugins.find((p) => Array.isArray(p) && p[0] === '@semantic-release/github');
