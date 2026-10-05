@@ -30,9 +30,10 @@ class DawnWindowContext : public WindowContext {
 public:
   DawnWindowContext(skgpu::graphite::Recorder *recorder, wgpu::Device device,
                     wgpu::Surface surface, void *nativeSurface, int width,
-                    int height, bool highBitDepth = false)
+                    int height, bool highBitDepth = false, bool opaque = false)
       : _recorder(recorder), _device(device), _surface(surface),
-        _nativeSurface(nativeSurface), _width(width), _height(height) {
+        _nativeSurface(nativeSurface), _width(width), _height(height),
+        _opaque(opaque) {
     _format = DawnUtils::PreferredTextureFormat;
     _colorType = DawnUtils::PreferedColorType;
     if (highBitDepth) {
@@ -106,7 +107,8 @@ private:
     _usage = supportedSurfaceUsage();
     config.usage = _usage;
 #ifdef __APPLE__
-    config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
+    config.alphaMode = _opaque ? wgpu::CompositeAlphaMode::Opaque
+                              : wgpu::CompositeAlphaMode::Premultiplied;
 #endif
     _surface.Configure(&config);
 #ifdef __APPLE__
@@ -162,6 +164,7 @@ private:
   SkColorType _colorType;
   int _width;
   int _height;
+  [[maybe_unused]] bool _opaque;
 };
 
 } // namespace RNSkia

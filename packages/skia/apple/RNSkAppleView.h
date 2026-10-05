@@ -10,6 +10,7 @@ class RNSkBaseAppleView {
 public:
   virtual CALayer *getLayer() = 0;
   virtual void setSize(int width, int height) = 0;
+  virtual void setOpaque(bool opaque) = 0;
   virtual void setUseP3ColorSpace(bool useP3ColorSpace) = 0;
   virtual void setHighBitDepth(bool highBitDepth) = 0;
   virtual std::shared_ptr<RNSkia::RNSkView> getDrawView() = 0;
@@ -31,6 +32,11 @@ public:
   void setSize(int width, int height) override {
     std::static_pointer_cast<RNSkMetalCanvasProvider>(this->getCanvasProvider())
         ->setSize(width, height);
+  }
+
+  void setOpaque(bool opaque) override {
+    std::static_pointer_cast<RNSkMetalCanvasProvider>(this->getCanvasProvider())
+        ->setOpaque(opaque);
   }
 
   void setUseP3ColorSpace(bool useP3ColorSpace) override {

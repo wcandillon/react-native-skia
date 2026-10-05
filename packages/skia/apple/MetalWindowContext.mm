@@ -18,7 +18,6 @@ MetalWindowContext::MetalWindowContext(GrDirectContext *directContext,
 #pragma clang diagnostic pop
   _layer.framebufferOnly = NO;
   _layer.device = device;
-  _layer.opaque = false;
 #if !TARGET_OS_OSX
   _layer.contentsScale = [UIScreen mainScreen].scale;
 #else
