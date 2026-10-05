@@ -1,10 +1,6 @@
 import React from "react";
 import { Pressable, ScrollView, useWindowDimensions } from "react-native";
-import {
-  Canvas,
-  Image,
-  useAnimatedImageValue,
-} from "react-native-skia";
+import { Canvas, Image, useAnimatedImageValue } from "react-native-skia";
 import { useSharedValue } from "react-native-reanimated";
 
 export const AnimatedImages = () => {

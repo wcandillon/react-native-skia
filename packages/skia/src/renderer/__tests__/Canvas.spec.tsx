@@ -8,7 +8,6 @@ import type { SharedValue } from "react-native-reanimated";
 
 import type { SkSize } from "../../skia/types";
 import type { Canvas as CanvasComponent } from "../Canvas";
-import type { GraphiteCanvas as GraphiteCanvasComponent } from "../GraphiteCanvas";
 
 // Under a scaled ancestor, measure() reports the transformed box and the layout event the view's own size (#3836).
 const layoutUnderHalfScale = { x: 0, y: 0, width: 48, height: 89 };
@@ -29,12 +28,7 @@ const mockCaptureNativeProps = (props: typeof mockNativeProps) => {
   return null;
 };
 
-jest.doMock("../../specs/SkiaPictureViewNativeComponent", () => ({
-  __esModule: true,
-  default: mockCaptureNativeProps,
-}));
-
-jest.doMock("../../specs/SkiaGraphiteViewNativeComponent", () => ({
+jest.doMock("../../specs/SkiaViewNativeComponent", () => ({
   __esModule: true,
   default: mockCaptureNativeProps,
 }));
@@ -62,9 +56,6 @@ jest.doMock("../../sksg/Reconciler", () => ({
 }));
 
 const { Canvas } = require("../Canvas") as { Canvas: typeof CanvasComponent };
-const { GraphiteCanvas } = require("../GraphiteCanvas") as {
-  GraphiteCanvas: typeof GraphiteCanvasComponent;
-};
 
 type CanvasProps = React.ComponentProps<typeof CanvasComponent>;
 
@@ -98,13 +89,13 @@ const runRegisteredFrameCallback = () =>
     mockFrameCallback?.();
   });
 
-const mountCanvas = (Component: typeof CanvasComponent, props: CanvasProps) => {
+const mountCanvas = (props: CanvasProps) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const render = (nextProps: CanvasProps) =>
     act(() => {
-      root.render(<Component {...nextProps} />);
+      root.render(<Canvas {...nextProps} />);
     });
   render(props);
   return {
@@ -125,13 +116,10 @@ beforeEach(() => {
   mockFrameCallback = undefined;
 });
 
-describe.each([
-  { name: "Canvas", Component: Canvas },
-  { name: "GraphiteCanvas", Component: GraphiteCanvas },
-])("$name onSize", ({ Component }) => {
+describe("Canvas onSize", () => {
   it("reports the view's own layout size, not the transformed box", () => {
     const size = makeSizeValue();
-    const canvas = mountCanvas(Component, { onSize: asSharedValue(size) });
+    const canvas = mountCanvas({ onSize: asSharedValue(size) });
 
     layOut(layoutUnderHalfScale);
     runRegisteredFrameCallback();
@@ -141,7 +129,7 @@ describe.each([
   });
 
   it("gives an onSize passed after the layout the current size", () => {
-    const canvas = mountCanvas(Component, {});
+    const canvas = mountCanvas({});
     layOut(layoutUnderHalfScale);
 
     const size = makeSizeValue();
@@ -153,7 +141,7 @@ describe.each([
 
   it("writes onSize once per size change", () => {
     const size = makeSizeValue();
-    const canvas = mountCanvas(Component, { onSize: asSharedValue(size) });
+    const canvas = mountCanvas({ onSize: asSharedValue(size) });
 
     layOut(layoutUnderHalfScale);
     layOut(layoutUnderHalfScale);
@@ -171,7 +159,7 @@ describe.each([
       .mockImplementation(() => {});
     const onLayout = jest.fn();
     const size = makeSizeValue();
-    const canvas = mountCanvas(Component, {
+    const canvas = mountCanvas({
       onLayout,
       onSize: asSharedValue(size),
     });

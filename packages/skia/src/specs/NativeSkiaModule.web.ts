@@ -7,8 +7,12 @@ import type {
 } from "../skia/types";
 import type { ISkiaViewApi } from "../views/types";
 
-/** What every web view registers under its native id. */
+/** What the web view registers under its native id. */
 export interface SkiaWebViewHandle {
+  /** Shows a picture: the frame of a <Canvas> or a <SkiaPictureView>. */
+  setPicture(picture: SkPicture): void;
+  /** The recording side of the view, see SkiaGraphiteView. */
+  getContext(): SkGraphiteContext;
   getSize(): { width: number; height: number };
   redraw(): void;
   makeImageSnapshot(rect?: SkRect): SkImage | null;
@@ -27,20 +31,6 @@ export interface SkiaWebViewHandle {
   ): void;
 }
 
-export interface SkiaGraphiteViewHandle extends SkiaWebViewHandle {
-  getContext(): SkGraphiteContext;
-}
-
-interface PictureHandle extends SkiaWebViewHandle {
-  setPicture(picture: SkPicture): void;
-}
-
-const hasPicture = (view: SkiaWebViewHandle): view is PictureHandle =>
-  "setPicture" in view;
-
-const hasContext = (view: SkiaWebViewHandle): view is SkiaGraphiteViewHandle =>
-  "getContext" in view;
-
 export type ISkiaViewApiWeb = ISkiaViewApi & {
   views: Record<string, SkiaWebViewHandle>;
   deferedPictures: Record<string, SkPicture>;
@@ -58,7 +48,7 @@ global.SkiaViewApi = {
   registerView(nativeId: string, view: SkiaWebViewHandle) {
     this.unregisteredViews.delete(nativeId);
     // Maybe a picture for this view was already set
-    if (this.deferedPictures[nativeId] && hasPicture(view)) {
+    if (this.deferedPictures[nativeId]) {
       view.setPicture(this.deferedPictures[nativeId] as SkPicture);
       delete this.deferedPictures[nativeId];
     }
@@ -77,9 +67,7 @@ global.SkiaViewApi = {
       const id = `${nativeId}`;
       const view = this.views[id];
       if (view) {
-        if (hasPicture(view)) {
-          view.setPicture(value);
-        }
+        view.setPicture(value);
       } else if (!this.unregisteredViews.has(id)) {
         this.deferedPictures[id] = value;
       }
@@ -114,9 +102,9 @@ global.SkiaViewApi = {
   },
   makeGraphiteContext(nativeId: number) {
     const view = this.views[`${nativeId}`];
-    if (!view || !hasContext(view)) {
+    if (!view) {
       throw new Error(
-        `Cannot make a Graphite context: no SkiaGraphiteView with nativeID ${nativeId} is mounted`
+        `Cannot make a Graphite context: no view with nativeID ${nativeId} is mounted`
       );
     }
     return view.getContext();

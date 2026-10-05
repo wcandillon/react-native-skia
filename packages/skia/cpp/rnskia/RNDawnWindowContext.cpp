@@ -29,7 +29,8 @@ bool DawnWindowContext::presentRecordings(
   auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
   SkSurfaceProps surfaceProps;
   auto surface = SkSurfaces::WrapBackendTexture(
-      _recorder, backendTex, SkColorSpace::MakeSRGB(), &surfaceProps);
+      _recorder, backendTex, DawnUtils::viewColorSpace(_useP3ColorSpace),
+      &surfaceProps);
   if (!surface) {
     return false;
   }
@@ -40,6 +41,16 @@ bool DawnWindowContext::presentRecordings(
 #endif
   _surface.Present();
   return success;
+}
+
+bool DawnWindowContext::presentImage(const sk_sp<SkImage> &image) {
+  auto surface = getSurface();
+  if (!surface) {
+    return false;
+  }
+  surface->getCanvas()->drawImage(image, 0, 0);
+  present();
+  return true;
 }
 
 } // namespace RNSkia

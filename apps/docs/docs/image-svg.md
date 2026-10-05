@@ -295,7 +295,7 @@ The [SVG module from Skia](https://github.com/google/skia/tree/main/modules/svg)
 We expect most SVG files to render correctly out of the box, especially if they come from Figma or Illustrator.
 However, please be aware of some of the quirks below when using it.
 Text elements currently won't render and any external XML elements such as XLink or CSS won't render.
-If your SVG doesn't render correctly and you've considered all the items below, please file [an issue](https://github.com/Shopify/react-native-skia/issues/new).
+If your SVG doesn't render correctly and you've considered all the items below, please file [an issue](https://github.com/wcandillon/react-native-skia/issues/new).
 
 ### CSS Styles
 

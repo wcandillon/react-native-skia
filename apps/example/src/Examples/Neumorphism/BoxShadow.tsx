@@ -26,7 +26,7 @@ export const Neumorphism = () => {
   const dx = 10;
   const dy = 10;
   return (
-    <Canvas style={{ flex: 1 }} debug>
+    <Canvas style={{ flex: 1 }}>
       <Fill color="lightblue" />
       <Box box={rct} color="white">
         <BoxShadow dx={-dx} dy={-dy} blur={15} color="blue" />

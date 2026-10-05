@@ -2,13 +2,7 @@ import React, { createContext, useContext, useMemo } from "react";
 import { Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import type { SkPicture } from "react-native-skia";
-import {
-  Canvas,
-  Rect,
-  SkiaPictureView,
-  Skia,
-  useSVG,
-} from "react-native-skia";
+import { Canvas, Rect, SkiaPictureView, Skia, useSVG } from "react-native-skia";
 
 import { Octocat } from "./SvgIcons/OctocatIcon";
 import { StackExchange } from "./SvgIcons/StackExchangeIcon";
@@ -74,7 +68,7 @@ interface IconProps {
 const style = { width: 48, height: 48 };
 
 const Icon = ({ icon }: IconProps) => {
-  return <SkiaPictureView picture={icon} style={style} androidWarmup />;
+  return <SkiaPictureView picture={icon} style={style} />;
 };
 
 type Props = { color: string };
@@ -96,7 +90,7 @@ const Screen: React.FC<Props> = ({ color }) => {
         <Icon icon={stackExchange} />
         <Icon icon={overflow} />
         <Text>React Native Skia Canvas</Text>
-        <Canvas style={{ width: 50, height: 50 }} androidWarmup>
+        <Canvas style={{ width: 50, height: 50 }}>
           <Rect x={0} y={0} width={50} height={50} color={color} />
         </Canvas>
       </View>

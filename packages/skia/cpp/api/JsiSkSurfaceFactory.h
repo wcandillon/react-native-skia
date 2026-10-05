@@ -10,9 +10,7 @@
 
 #include "JsiSkSurface.h"
 
-#ifdef SK_GRAPHITE
 #include "rnskia/RNDawnContext.h"
-#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -68,7 +66,6 @@ public:
   // directly into a texture created on the shared device, so WebGPU can
   // sample what Skia drew without any copy.
   JSI_HOST_FUNCTION(MakeFromNativeTexture) {
-#ifdef SK_GRAPHITE
     if (count < 1 || !arguments[0].isBigInt()) {
       throw std::runtime_error("MakeFromNativeTexture requires a WGPUTexture "
                                "pointer (BigInt), e.g. texture.nativePointer");
@@ -91,11 +88,6 @@ public:
     }
     return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
                                       getContext(), std::move(surface)));
-#else
-    throw std::runtime_error(
-        "MakeFromNativeTexture is only available with the Graphite backend. "
-        "Rebuild with SK_GRAPHITE enabled.");
-#endif
   }
 
   size_t getMemoryPressure() override { return 2048; }

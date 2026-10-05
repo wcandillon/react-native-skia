@@ -5,9 +5,6 @@ declare global {
   var testServer: Server;
   var testClient: WebSocket;
   var testOS: "ios" | "android" | "web" | "node" | "macos";
-  // Whether the connected device is running the Graphite backend (Dawn/WebGPU).
-  // Older example-app builds don't send this field, so it defaults to false.
-  var testGraphite: boolean;
 }
 
 const isOS = (
@@ -21,7 +18,7 @@ const globalSetup = () => {
     if (process.env.E2E !== "true") {
       resolve();
     } else {
-      const port = 4242;
+      const port = Number(process.env.E2E_PORT ?? 4242);
       global.testServer = new WebSocketServer({ port });
       console.log(
         `\n\nTest server listening on port ${port} (waiting for the example app to open on E2E tests screen)`
@@ -30,15 +27,12 @@ const globalSetup = () => {
         global.testClient = client;
         client.once("message", (msg) => {
           const obj = JSON.parse(msg.toString("utf8"));
-          const { OS, graphite } = obj;
+          const { OS } = obj;
           if (!isOS(OS)) {
             throw new Error("Unknown testing platform: " + OS);
           }
           global.testOS = OS;
-          global.testGraphite = graphite === true;
-          console.log(
-            `${OS} device connected (graphite: ${global.testGraphite})`
-          );
+          console.log(`${OS} device connected`);
           resolve();
         });
       });

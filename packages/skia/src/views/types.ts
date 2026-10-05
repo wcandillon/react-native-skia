@@ -9,11 +9,6 @@ import type {
   SkSize,
 } from "../skia/types";
 
-export type NativeSkiaViewProps = ViewProps & {
-  debug?: boolean;
-  opaque?: boolean;
-};
-
 export type AndroidSurfaceType = "SurfaceView" | "TextureView";
 
 export interface AndroidCanvasProps {
@@ -50,8 +45,8 @@ export interface ISkiaViewApi {
   makeImageSnapshotAsync: (nativeId: number, rect?: SkRect) => Promise<SkImage>;
   size: (nativeId: number) => SkSize;
   /**
-   * The recording side of a SkiaGraphiteView: its native id, the layout size
-   * in points, and the props its surface format follows from. Graphite only.
+   * The recording side of a view: its native id, the layout size in points,
+   * and the props its surface format follows from.
    */
   makeGraphiteContext: (
     nativeId: number,
@@ -62,13 +57,8 @@ export interface ISkiaViewApi {
   ) => SkGraphiteContext;
 }
 
+/** The props every Skia view takes, whichever way it is drawn. */
 export interface SkiaBaseViewProps extends ViewProps {
-  /**
-   * When set to true the view will display information about the
-   * average time it takes to render.
-   */
-  debug?: boolean;
-
   /**
    * Declares that the canvas covers every pixel of its bounds. On Android an
    * opaque canvas is backed by a `SurfaceView` by default, the cheapest path
@@ -93,7 +83,6 @@ export interface SkiaBaseViewProps extends ViewProps {
 
 export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
   picture?: SkPicture;
-  androidWarmup?: boolean;
 }
 
 export type SkiaGraphiteViewNativeProps = SkiaBaseViewProps;

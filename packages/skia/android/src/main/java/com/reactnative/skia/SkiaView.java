@@ -3,17 +3,32 @@ package com.reactnative.skia;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 
+import com.facebook.jni.HybridData;
+import com.facebook.jni.annotations.DoNotStrip;
+import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.uimanager.PointerEvents;
 import com.facebook.react.views.view.ReactViewGroup;
 
-public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI {
+/**
+ * The Android view behind <Canvas>, <SkiaPictureView> and <SkiaGraphiteView>.
+ * It is backed by a SurfaceView or a TextureView (see updateView()) that the
+ * native side draws into with Graphite, presenting the queued recordings on
+ * the Choreographer.
+ */
+public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreographer.FrameCallback {
     // Backing view kinds, see updateView().
     private static final int KIND_SURFACE_VIEW = 0;
     private static final int KIND_TEXTURE_VIEW = 1;
+
+    private static final String TAG = "SkiaView";
+
+    @DoNotStrip
+    private HybridData mHybridData;
 
     private View mView;
 
@@ -28,11 +43,12 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
     private boolean mAppliedZOrderOnTop;
     private boolean mAppliedHighBitDepth;
 
-    private final boolean debug = false;
-    private final String tag = "SkiaView";
+    private boolean mFramePending = false;
 
-    public SkiaBaseView(Context context) {
+    public SkiaView(Context context) {
         super(context);
+        RNSkiaModule skiaModule = ((ReactContext) context).getNativeModule(RNSkiaModule.class);
+        mHybridData = initHybrid(skiaModule.getSkiaManager());
     }
 
     @Override
@@ -82,7 +98,7 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
             return false;
         }
         if (kind != KIND_SURFACE_VIEW || !mOpaque) {
-            Log.w(tag, "highBitDepth requires an opaque SurfaceView on Android, falling back to the 8-bit format");
+            Log.w(TAG, "highBitDepth requires an opaque SurfaceView on Android, falling back to the 8-bit format");
             return false;
         }
         return true;
@@ -107,8 +123,8 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
             mAppliedZOrderOnTop = zOrderOnTop;
             mAppliedHighBitDepth = highBitDepth;
             mView = kind == KIND_SURFACE_VIEW
-                    ? new SkiaSurfaceView(getContext(), this, debug, zOrderOnTop, mOpaque)
-                    : new SkiaTextureView(getContext(), this, debug, mOpaque);
+                    ? new SkiaSurfaceView(getContext(), this, zOrderOnTop, mOpaque)
+                    : new SkiaTextureView(getContext(), this, mOpaque);
             addView(mView);
             // React Native sizes native children explicitly through onLayout, so
             // the requestLayout triggered by addView is ignored; size the new
@@ -130,10 +146,51 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        // The backing view gets this exact size, and so does its surface: tell
+        // the native side now, so that a frame recorded before the surface
+        // exists (the first one usually is) already has the right size.
+        setLayoutSize(right - left, bottom - top);
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
         }
     }
+
+    // Frames --------------------------------------------------------------
+
+    /**
+     * Presents the queued recordings on the next vsync. Main thread; called
+     * from native when a recording is submitted.
+     */
+    @DoNotStrip
+    public void scheduleFrame() {
+        if (!mFramePending) {
+            mFramePending = true;
+            Choreographer.getInstance().postFrameCallback(this);
+        }
+    }
+
+    @Override
+    public void doFrame(long frameTimeNanos) {
+        mFramePending = false;
+        if (presentFrame()) {
+            scheduleFrame();
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        Choreographer.getInstance().removeFrameCallback(this);
+        mFramePending = false;
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        mHybridData.resetNative();
+    }
+
+    // Surfaces ------------------------------------------------------------
 
     // SurfaceView callbacks: the native side receives an android.view.Surface.
 
@@ -144,7 +201,7 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     @Override
     public void onSurfaceChanged(Surface surface, int width, int height) {
-        Log.i(tag, "onSurfaceChanged " + width + "/" + height);
+        Log.i(TAG, "onSurfaceChanged " + width + "/" + height);
         surfaceSizeChanged(surface, width, height, true, mAppliedHighBitDepth);
     }
 
@@ -158,7 +215,7 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     @Override
     public void onSurfaceTextureChanged(SurfaceTexture surface, int width, int height) {
-        Log.i(tag, "onSurfaceTextureSizeChanged " + width + "/" + height);
+        Log.i(TAG, "onSurfaceTextureSizeChanged " + width + "/" + height);
         surfaceSizeChanged(surface, width, height, false, false);
     }
 
@@ -167,19 +224,24 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
         surfaceDestroyed();
     }
 
+    // Native ---------------------------------------------------------------
+
+    private native HybridData initHybrid(SkiaManager skiaManager);
+
     // isSurface tells the native side whether `surface` is an
     // android.view.Surface (SurfaceView) or a SurfaceTexture (TextureView).
-    protected abstract void surfaceAvailable(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
+    private native void surfaceAvailable(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
 
-    protected abstract void surfaceSizeChanged(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
+    private native void surfaceSizeChanged(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
 
-    protected abstract void surfaceDestroyed();
+    private native void surfaceDestroyed();
 
-    protected abstract void setDebugMode(boolean show);
+    private native void setLayoutSize(int width, int height);
 
-    protected abstract void registerView(int nativeId);
+    native void registerView(int nativeId);
 
-    protected abstract void unregisterView();
+    private native void unregisterView();
 
-    protected abstract int[] getBitmap(int width, int height);
+    /** Choreographer tick: returns whether more recordings are waiting. */
+    private native boolean presentFrame();
 }

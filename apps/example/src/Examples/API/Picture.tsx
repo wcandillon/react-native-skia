@@ -1,12 +1,6 @@
 import React, { useMemo } from "react";
 import { StyleSheet } from "react-native";
-import {
-  createPicture,
-  Canvas,
-  Picture,
-  Skia,
-  Group,
-} from "react-native-skia";
+import { createPicture, Canvas, Picture, Skia, Group } from "react-native-skia";
 
 // Create picture
 const picture = createPicture(

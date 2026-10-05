@@ -23,7 +23,6 @@ export const Mock = (CanvasKit: CanvasKit) => {
     ...require("../dom/types"),
     ...require("../dom/nodes"),
     Canvas: require("react-native").View,
-    GraphiteCanvas: require("react-native").View,
     getPreferredHighBitDepthCanvasFormat: () => "rgba16float",
     SkiaPictureView: require("react-native").View,
     SkiaGraphiteView: require("react-native").View,

@@ -406,7 +406,8 @@ public:
 
   // Create onscreen surface with window
   std::unique_ptr<WindowContext> MakeWindow(void *window, int width, int height,
-                                            bool highBitDepth = false) {
+                                            bool highBitDepth = false,
+                                            bool useP3ColorSpace = false) {
     // 1. Create Surface
     wgpu::SurfaceDescriptor surfaceDescriptor;
 #ifdef __APPLE__
@@ -422,7 +423,7 @@ public:
         wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
     return std::make_unique<DawnWindowContext>(
         getRecorder(), backendContext.fDevice, surface, window, width, height,
-        highBitDepth);
+        highBitDepth, useP3ColorSpace);
   }
 
   skgpu::graphite::Recorder *getRecorder() {

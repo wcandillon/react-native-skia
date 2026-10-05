@@ -15,15 +15,12 @@
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
 
-#if defined(SK_GRAPHITE)
 #include "rnskia/RNDawnContext.h"
-#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkSurface.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
 
 #pragma clang diagnostic pop
 
@@ -87,7 +84,6 @@ public:
     // submitted work. Required before a native consumer on a different command
     // queue reads this surface's texture via getNativeTextureUnstable(). #3916
     bool sync = syncParam.has_value() && *syncParam;
-#if defined(SK_GRAPHITE)
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
     // only Graphite-backed surfaces need to snap and submit a recording.
     if (auto *recorder = surface->recorder()) {
@@ -96,11 +92,6 @@ public:
           recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
                                 : skgpu::graphite::SyncToCpu::kNo);
     }
-#else
-    if (auto dContext = GrAsDirectContext(surface->recordingContext())) {
-      dContext->flushAndSubmit(sync ? GrSyncCpu::kYes : GrSyncCpu::kNo);
-    }
-#endif
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -113,14 +104,12 @@ public:
     } else {
       image = surface->makeImageSnapshot();
     }
-#if defined(SK_GRAPHITE)
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.
     if (auto *recorder = surface->recorder()) {
       auto recording = recorder->snap();
       DawnContext::getInstance().submitRecording(recording.get());
     }
-#endif
     if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
       jsiImage->setObject(image);
@@ -173,11 +162,8 @@ public:
     size_t estimated = pixelBytes;
 
     auto canvas = surface->getCanvas();
-    const bool isGpuBacked =
-        surface->recordingContext() != nullptr ||
-        surface->recorder() != nullptr ||
-        (canvas && (canvas->recordingContext() != nullptr ||
-                    canvas->recorder() != nullptr));
+    const bool isGpuBacked = surface->recorder() != nullptr ||
+                             (canvas && canvas->recorder() != nullptr);
 
     if (isGpuBacked) {
       // Account for a resolved texture and depth/stencil attachments.

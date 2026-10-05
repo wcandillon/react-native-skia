@@ -176,7 +176,6 @@ android {
                           "-DREACT_NATIVE_DIR=${defaultDir}",
                           "-DNODE_MODULES_DIR=${nodeModules}",
                           "-DSKIA_LIBS_PATH=${skiaLibsPath}",
-                          "-DSK_GRAPHITE=ON",
                           "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 
             }

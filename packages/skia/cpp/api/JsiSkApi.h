@@ -6,9 +6,7 @@
 
 #include "JsiSkNativeObjects.h"
 
-#ifdef SK_GRAPHITE
 #include "rnskia/RNDawnContext.h"
-#endif
 
 #include "JsiNativeBuffer.h"
 #include "JsiSkAnimatedImage.h"
@@ -167,19 +165,12 @@ public:
     return JsiSkColor::createCtor()(runtime, thisValue, arguments, count);
   }
   JSI_HOST_FUNCTION(getNativeDevice) {
-#ifdef SK_GRAPHITE
     // Raw WGPUDevice pointer of the Graphite device, as a BigInt. Consumed by
     // react-native-webgpu's importDevice(), which AddRefs it; the pointer
     // stays owned by DawnContext and is valid for the process lifetime.
     auto &dawnContext = DawnContext::getInstance();
     return jsi::BigInt::fromUint64(
-        runtime,
-        reinterpret_cast<uint64_t>(dawnContext.getWGPUDevice().Get()));
-#else
-    throw jsi::JSError(runtime,
-                       "getNativeDevice() is only available with the Graphite "
-                       "backend. Rebuild with SK_GRAPHITE enabled.");
-#endif
+        runtime, reinterpret_cast<uint64_t>(dawnContext.getWGPUDevice().Get()));
   }
 
   JSI_HOST_FUNCTION(Recorder) {
@@ -191,9 +182,7 @@ public:
   // property access returns a fresh JS wrapper around the shared factory
   // instance.
   std::shared_ptr<JsiSkSVGFactory> getSVGFactory() { return _svgFactory; }
-  std::shared_ptr<JsiSkImageFactory> getImageFactory() {
-    return _imageFactory;
-  }
+  std::shared_ptr<JsiSkImageFactory> getImageFactory() { return _imageFactory; }
   std::shared_ptr<JsiSkAnimatedImageFactory> getAnimatedImageFactory() {
     return _animatedImageFactory;
   }

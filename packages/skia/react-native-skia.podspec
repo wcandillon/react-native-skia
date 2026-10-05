@@ -84,8 +84,11 @@ framework_names = ['libskia', 'libsvg', 'libskshaper', 'libskparagraph',
 # vendoring the framework here as well would fail CocoaPods'
 # duplicate-framework-name check, so Skia only vendors it when alone. The
 # skia pod's dawn::native references resolve from webgpu's copy at app link.
+# An app that installs react-native-webgpu but keeps it out of a platform's
+# Pods (e.g. a macOS target that filters it out of autolinking) sets
+# RNSKIA_VENDOR_DAWN=1 before `pod install` so Skia vendors Dawn itself there.
 webgpu_pkg_dir = resolve_node_package.call('react-native-webgpu', __dir__)
-has_webgpu_pkg = !webgpu_pkg_dir.nil?
+has_webgpu_pkg = !webgpu_pkg_dir.nil? && ENV['RNSKIA_VENDOR_DAWN'] != '1'
 if has_webgpu_pkg
   Pod::UI.puts 'react-native-skia: react-native-webgpu detected, Dawn is provided by its libwebgpu_dawn'
 
@@ -160,7 +163,7 @@ Pod::Spec.new do |s|
     "Christian Falch" => "christian.falch@gmail.com",
     "William Candillon" => "wcandillon@gmail.com"
   }
-  s.platforms    = { :ios => "14.0", :osx => "11" }
+  s.platforms    = { :ios => "15.1", :osx => "11" }
   s.source       = { :git => "https://github.com/wcandillon/react-native-skia.git", :tag => "#{s.version}" }
 
   s.requires_arc = true

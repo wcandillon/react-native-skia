@@ -1,7 +1,5 @@
 #pragma once
 
-#if defined(SK_GRAPHITE)
-
 #include <memory>
 #include <mutex>
 
@@ -20,9 +18,9 @@ class Recorder;
 class RNSkGraphiteTarget;
 
 /**
- * Records the declarative content of a SkiaGraphiteView (a Recorder handed
- * over by <GraphiteCanvas>, or a picture) into Graphite recordings, on the
- * render thread pool.
+ * Records the declarative content of a view (a Recorder handed over by
+ * <Canvas>, or a picture) into Graphite recordings, on the render thread
+ * pool.
  *
  * Three threads meet here. The JS thread hands over the content. A Reanimated
  * mapper, on the UI runtime, reads the shared values into the recorder's
@@ -50,7 +48,11 @@ public:
   /**
    Takes ownership of the recorder (or releases it with nullptr). A recording
    without shared values is played once into a picture: nothing will ever
-   update it, and drawing a picture is cheaper than replaying commands.
+   update it, and drawing a picture is cheaper than replaying commands. The
+   recorder is owned here rather than by a JS wrapper: its commands hold
+   every native resource the canvas draws (images, pictures, paths), and
+   tying their lifetime to the garbage collector of a runtime that rarely
+   allocates (the UI runtime) kept them resident long after unmount.
    */
   void setRecorder(std::shared_ptr<Recorder> recorder);
 
@@ -74,6 +76,14 @@ public:
                     const jsi::Array &values);
 
   /**
+   Same as applyUpdates(), for a recording that no view owns yet (one queued
+   in the view registry until its view registers).
+   */
+  static bool applyUpdatesTo(const std::shared_ptr<Recorder> &recorder,
+                             jsi::Runtime &runtime, double recorderId,
+                             const jsi::Array &values);
+
+  /**
    Marks the content dirty and schedules a frame if one can start. Returns
    whether a frame is coming at all: there is content and a target to record
    it into.
@@ -90,6 +100,13 @@ public:
   void renderInto(SkCanvas *canvas, float pixelDensity);
 
 private:
+  /**
+   Replays declarative content, a recorder if there is one, else a picture,
+   into a canvas: clears it and applies the density.
+   */
+  static void drawContent(SkCanvas *canvas, Recorder *recorder,
+                          const sk_sp<SkPicture> &picture, float pixelDensity);
+
   /**
    Swaps the content under the lock and releases the previous one outside of
    it: the recorder's destructor hands the commands to the main thread, and a
@@ -112,5 +129,3 @@ private:
 };
 
 } // namespace RNSkia
-
-#endif // SK_GRAPHITE

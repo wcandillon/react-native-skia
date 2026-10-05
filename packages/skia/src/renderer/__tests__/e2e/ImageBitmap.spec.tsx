@@ -1,11 +1,12 @@
-import { surface, itRunsWithGraphite, images, resolveFile } from "../setup";
+import { itRunsE2eOnly } from "../../../__tests__/setup";
+import { surface, images, resolveFile } from "../setup";
 
 // Ported from react-native-webgpu (PR #354). Covers ImageBitmap.close(), which
 // releases the decoded pixels and zeroes width/height (idempotent).
 //
 // createImageBitmap is a native-only binding; until it is installed in
 // RNSkManager each test self-skips (with a warning) rather than vacuously
-// running. WebGPU is only available on Graphite (Dawn) builds.
+// running. WebGPU is a native-only API.
 const PNG_URI = "skia/__tests__/assets/skia_logo.png";
 const pngBytes = Array.from(resolveFile(PNG_URI));
 
@@ -13,7 +14,7 @@ const isCreateImageBitmapBound = () =>
   surface.eval(() => typeof createImageBitmap === "function");
 
 describe("ImageBitmap", () => {
-  itRunsWithGraphite("close() zeroes width and height", async () => {
+  itRunsE2eOnly("close() zeroes width and height", async () => {
     if (!(await isCreateImageBitmapBound())) {
       console.warn("createImageBitmap is not bound — skipping");
       return;
@@ -39,7 +40,7 @@ describe("ImageBitmap", () => {
     expect(result.after.height).toBe(0);
   });
 
-  itRunsWithGraphite("close() is idempotent", async () => {
+  itRunsE2eOnly("close() is idempotent", async () => {
     if (!(await isCreateImageBitmapBound())) {
       console.warn("createImageBitmap is not bound — skipping");
       return;
@@ -62,7 +63,7 @@ describe("ImageBitmap", () => {
     expect(result.height).toBe(0);
   });
 
-  itRunsWithGraphite("exposes close as a function", async () => {
+  itRunsE2eOnly("exposes close as a function", async () => {
     if (!(await isCreateImageBitmapBound())) {
       console.warn("createImageBitmap is not bound — skipping");
       return;

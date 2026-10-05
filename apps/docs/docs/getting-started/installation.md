@@ -8,14 +8,14 @@ slug: /getting-started/installation
 React Native Skia brings the [Skia Graphics Library](https://skia.org/) to React Native.
 Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox, Firefox OS, and many other products.
 
-**Version compatibility:**
-`react-native@>=0.79` and `react@>=19` are required. <br />
-In addition you should make sure you're on at least `iOS 14` and `Android API level 26` or above (`minSdkVersion = 26`). <br />
-To use React Native Skia with Reanimated on native platforms, `react-native-reanimated@>=4.0.0` (with `react-native-worklets@>=0.7.0`) is required.
+:::info[React Native Skia v3]
 
-For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
+This is the documentation of React Native Skia v3, which renders with Skia Graphite and is published on npm as `react-native-skia`.
 
-macOS and macOS Catalyst are also supported platforms (tvOS is only supported by the Ganesh backend on the v2.x line).
+- Upgrading from v2 or from `@shopify/react-native-skia`? Follow the [migration guide](/docs/getting-started/migration).
+- v2 is still maintained. Its documentation is available at [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/).
+
+:::
 
 ```sh
 yarn add react-native-skia
@@ -23,35 +23,39 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android` and `react-native-skia-graphite-apple-*`) and are resolved automatically by the native build systems (CocoaPods on iOS/macOS/tvOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure — `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
+The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android` and `react-native-skia-graphite-apple-*`) and are resolved automatically by the native build systems (CocoaPods on iOS and macOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
 
-## Using Expo
+## Requirements
 
-Expo provides a `with-skia` template, which you can use to create a new project.
+| | Minimum version |
+|:--|:--|
+| React Native | `0.79`, with the New Architecture |
+| React | `19` |
+| iOS | `15.1` |
+| Android | API level 26 (`minSdkVersion = 26`) |
+| Reanimated (optional) | `react-native-reanimated@>=4.0.0` with `react-native-worklets@>=0.7.0` |
 
-```bash
-yarn create expo-app my-app -e with-skia
-# or
-npx create-expo-app my-app -e with-skia
-```
+React Native Skia runs on iOS, Android, macOS, and [the Web](/docs/getting-started/web).
 
-<video width="61%" autoPlay loop muted playsInline>
-  <source src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/expo-template2.mp4?alt=media&token=cdc13f16-9c5a-488a-b5d6-19d11f3e1842" type="video/mp4" />
-</video>
-
-### Bundle Size
-
-Below is the app size increase to be expected when adding React Native Skia to your project ([learn more](bundle-size)).
-
-| iOS  | Android | Web    |
-| ---- | ------- | ------ |
-| 6 MB | 4 MB    | 2.9 MB |
+tvOS, Android TV, and Mac Catalyst are not supported by v3. They remain supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation).
+For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
 
 ## iOS
 
 Run `pod install` on the `ios/` directory.
 
 ## Android
+
+React Native Skia requires Android API level 26 or above and renders with Vulkan.
+React Native projects default to a lower `minSdkVersion`, so raise it in `android/build.gradle`:
+
+```groovy
+buildscript {
+    ext {
+        minSdkVersion = 26
+    }
+}
+```
 
 Currently, you will need Android NDK to be installed.
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
@@ -76,24 +80,36 @@ For error **_CMake 'X.X.X' was not found in SDK, PATH, or by cmake.dir property.
 open _Tools > SDK Manager_, switch to the _SDK Tools_ tab.
 Find `CMake` and click _Show Package Details_ and download compatiable version **'X.X.X'**, and apply to install.
 
+## Expo
+
+React Native Skia v3 requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/).
+It does not run in Expo Go, which bundles the native code of v2.
+
+```sh
+npx expo install react-native-skia expo-build-properties
+```
+
+Use [expo-build-properties](https://docs.expo.dev/versions/latest/sdk/build-properties/) to set the Android `minSdkVersion` in your app config:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-build-properties", { "android": { "minSdkVersion": 26 } }]
+    ]
+  }
+}
+```
+
+Then create the development build with `npx expo run:ios` and `npx expo run:android`.
+
 ## Web
 
 To use this library in the browser, see [these instructions](/docs/getting-started/web).
 
-## TV
-
-Starting from version [1.9.0](https://github.com/Shopify/react-native-skia/releases/tag/v1.9.0) React Native Skia supports running on TV devices using [React Native TVOS](https://github.com/react-native-tvos/react-native-tvos).
-Currently both Android TV and Apple TV are supported.
-
-:::info
-
-Not all features have been tested yet, so please [report](https://github.com/Shopify/react-native-skia/issues) any issues you encounter when using React Native Skia on TV devices.
-
-:::
-
 ## Debugging
 
-We recommend using React Native DevTools to debug your JS code — see the [React Native docs](https://reactnative.dev/docs/debugging). Alternatively, you can debug both JS and platform code in VS Code and via native IDEs. If using VS Code, we recommend [Expo Tools](https://github.com/expo/vscode-expo), [Radon IDE](https://ide.swmansion.com/), or Microsoft's [React Native Tools](https://marketplace.visualstudio.com/items?itemName=msjsdiag.vscode-react-native#debugging-react-native-applications).
+We recommend using React Native DevTools to debug your JS code: see the [React Native docs](https://reactnative.dev/docs/debugging). Alternatively, you can debug both JS and platform code in VS Code and via native IDEs. If using VS Code, we recommend [Expo Tools](https://github.com/expo/vscode-expo), [Radon IDE](https://ide.swmansion.com/), or Microsoft's [React Native Tools](https://marketplace.visualstudio.com/items?itemName=msjsdiag.vscode-react-native#debugging-react-native-applications).
 
 ## Testing with Jest
 
@@ -119,47 +135,10 @@ module.exports = {
 };
 ```
 
-The `jestEnv.js` will load CanvasKit for you and `jestEnv.js` mocks React Native Skia.
-You can also have a look at the [example app](https://github.com/Shopify/react-native-skia/tree/main/apps/example) to see how Jest tests are enabled there.
-
-
-## Graphite
-
-Skia has two backends: Ganesh and Graphite. Starting with v3, Graphite is the default backend. The Ganesh backend remains available on the v2.x line (`react-native-skia@2`).
-
-Graphite runs on [Dawn](https://dawn.googlesource.com/dawn), Google's WebGPU implementation. This is an internal implementation detail: React Native Skia does not expose a WebGPU API itself. To use WebGPU in your app, install [react-native-webgpu](https://github.com/wcandillon/react-native-webgpu) alongside it.
-
-When both packages are installed, they share a single Dawn instance, which enables zero-copy interop between Skia and WebGPU on the shared device:
-
-```tsx
-import { Skia } from "react-native-skia";
-import { importDevice, adoptTexture } from "react-native-webgpu";
-
-// A WebGPU device backed by Skia's Graphite device
-const device = importDevice(Skia.getNativeDevice());
-
-// Use an SkImage as a WebGPU texture
-const texture = adoptTexture(Skia.Image.MakeNativeTextureFromImage(image));
-
-// Use a WebGPU texture as an SkImage
-const skImage = Skia.Image.MakeImageFromNativeTexture(texture.nativePointer);
-
-// Draw with Skia directly into a WebGPU texture (zero-copy): create the
-// texture on the shared device with RENDER_ATTACHMENT usage (and
-// TEXTURE_BINDING to sample it), wrap it once, then draw and flush per frame.
-const target = device.createTexture({
-  size: [width, height],
-  format: navigator.gpu.getPreferredCanvasFormat(),
-  usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-});
-const skSurface = Skia.Surface.MakeFromNativeTexture(target.nativePointer);
-skSurface.getCanvas().drawCircle(width / 2, height / 2, 100, paint);
-skSurface.flush();
-```
-
-Both packages must link the exact same Dawn build so that only one copy of Dawn exists in the app — the native build verifies this and fails with a version-mismatch error if the two packages were built against different Dawn releases. If you see that error, align the `react-native-skia` and `react-native-webgpu` versions.
+The `jestEnv.js` will load CanvasKit for you and `jestSetup.js` mocks React Native Skia.
+You can also have a look at the [example app](https://github.com/wcandillon/react-native-skia/tree/main/apps/example) to see how Jest tests are enabled there.
 
 ## Playground
 
-We have example projects you can play with [here](https://github.com/Shopify/react-native-skia/tree/main/apps).
-It would require you first to [build Skia locally](https://github.com/shopify/react-native-skia?tab=readme-ov-file#library-development) first.
+We have example projects you can play with [here](https://github.com/wcandillon/react-native-skia/tree/main/apps).
+To run them, follow the [contributing guide](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md).

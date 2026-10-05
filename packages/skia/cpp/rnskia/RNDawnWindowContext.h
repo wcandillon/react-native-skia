@@ -30,9 +30,11 @@ class DawnWindowContext : public WindowContext {
 public:
   DawnWindowContext(skgpu::graphite::Recorder *recorder, wgpu::Device device,
                     wgpu::Surface surface, void *nativeSurface, int width,
-                    int height, bool highBitDepth = false)
+                    int height, bool highBitDepth = false,
+                    bool useP3ColorSpace = false)
       : _recorder(recorder), _device(device), _surface(surface),
-        _nativeSurface(nativeSurface), _width(width), _height(height) {
+        _nativeSurface(nativeSurface), _useP3ColorSpace(useP3ColorSpace),
+        _width(width), _height(height) {
     _format = DawnUtils::PreferredTextureFormat;
     _colorType = DawnUtils::PreferedColorType;
     if (highBitDepth) {
@@ -59,10 +61,10 @@ public:
         skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo, _format,
         texture.GetUsage(), wgpu::TextureAspect::All);
     auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-    sk_sp<SkColorSpace> colorSpace = SkColorSpace::MakeSRGB();
     SkSurfaceProps surfaceProps;
     auto surface = SkSurfaces::WrapBackendTexture(
-        _recorder, backendTex, _colorType, colorSpace, &surfaceProps);
+        _recorder, backendTex, _colorType,
+        DawnUtils::viewColorSpace(_useP3ColorSpace), &surfaceProps);
     return surface;
   }
 
@@ -74,7 +76,15 @@ public:
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings);
 
+  // Draws an image at the origin of the current swapchain texture (on the
+  // window's own recorder) and presents it.
+  bool presentImage(const sk_sp<SkImage> &image);
+
   SkColorType getColorType() const { return _colorType; }
+
+  // Whether the window is in Display P3 rather than sRGB: a deferred canvas
+  // must be recorded in the color space of the window it is replayed onto.
+  bool usesP3ColorSpace() const { return _useP3ColorSpace; }
 
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
@@ -110,9 +120,10 @@ private:
 #endif
     _surface.Configure(&config);
 #ifdef __APPLE__
-    // Float formats need the layer tagged as (gamma-encoded) extended sRGB so
-    // the sRGB-encoded values display identically to the 8-bit path.
-    applyCAMetalLayerColorSpace(_nativeSurface, _format);
+    // The layer is tagged with the gamut the window renders in; float formats
+    // need the (gamma-encoded) extended variant so the values display
+    // identically to the 8-bit path.
+    applyCAMetalLayerColorSpace(_nativeSurface, _format, _useP3ColorSpace);
 #endif
   }
 
@@ -157,6 +168,7 @@ private:
   wgpu::Device _device;
   wgpu::Surface _surface;
   [[maybe_unused]] void *_nativeSurface;
+  bool _useP3ColorSpace;
   wgpu::TextureFormat _format;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
   SkColorType _colorType;

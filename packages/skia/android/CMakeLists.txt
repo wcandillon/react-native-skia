@@ -29,9 +29,10 @@ endif()
 add_library(skia STATIC IMPORTED)
 set_property(TARGET skia PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskia.a")
 
-# SK_GRAPHITE is passed from Gradle
 message("-- SKIA_LIBS_PATH: ${SKIA_LIBS_PATH}")
-message("-- SK_GRAPHITE: ${SK_GRAPHITE}")
+
+# Skia's public headers only declare the Graphite API with SK_GRAPHITE set.
+add_definitions(-DSK_GRAPHITE)
 
 string(APPEND CMAKE_CXX_FLAGS " -DSK_BUILD_FOR_ANDROID -DSK_DISABLE_LEGACY_SHAPER_FACTORY -DSK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 
@@ -51,21 +52,6 @@ message("-- ABI     : " ${ANDROID_ABI})
 
 link_directories(${SKIA_LIBS_PATH}/)
 
-if(SK_GRAPHITE)
-    add_definitions(-DSK_GRAPHITE)
-    set(BACKEND_SOURCES
-    #TODO: is this source needed to be added?
-        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnWindowContext.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnInterop.cpp"
-    )
-else()
-    add_definitions(-DSK_GL -DSK_GANESH)
-    set(BACKEND_SOURCES
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/OpenGLWindowContext.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/GrAHardwareBufferUtils.cpp"
-    )
-endif()
-
 add_library(
         ${PACKAGE_NAME}
         SHARED
@@ -73,8 +59,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaManager.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/gl/Error.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkAndroidCanvasProvider.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/AHardwareBufferUtils.cpp"
         "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkAndroidVideo.cpp"
 
@@ -84,15 +69,15 @@ add_library(
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/ViewProperty.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkManager.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkPictureView.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkGraphiteProducer.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnWindowContext.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnInterop.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/CSSColorParser.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/base64.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/SkottieUtils.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/api/JsiSkDispatcher.cpp"
-        ${BACKEND_SOURCES}
 )
 
 
@@ -155,12 +140,10 @@ set_property(TARGET pathops PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libpat
 add_library(jsonreader STATIC IMPORTED)
 set_property(TARGET jsonreader PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libjsonreader.a")
 
-if(SK_GRAPHITE)
-    # Dawn is a shared library, the same artifact react-native-webgpu links, so
-    # an app that installs both packages loads exactly one Dawn copy.
-    add_library(webgpu_dawn SHARED IMPORTED)
-    set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libwebgpu_dawn.so")
-endif()
+# Dawn is a shared library, the same artifact react-native-webgpu links, so
+# an app that installs both packages loads exactly one Dawn copy.
+add_library(webgpu_dawn SHARED IMPORTED)
+set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libwebgpu_dawn.so")
 
 find_library(
         LOG_LIB
@@ -182,7 +165,7 @@ else()
 endif()
 
 # Link
-set(COMMON_LIBS
+target_link_libraries(${PACKAGE_NAME}
     ${LOG_LIB}
     ReactAndroid::reactnative
     fbjni::fbjni
@@ -196,22 +179,10 @@ set(COMMON_LIBS
     ${SKIA_SKSG_LIB}
     ${SKIA_JSONREADER_LIB}
     ${SKIA_LIB}
+    webgpu_dawn
     -ljnigraphics
-    -lGLESv2
-    -lEGL
     -landroid
 )
-
-if(SK_GRAPHITE)
-    target_link_libraries(${PACKAGE_NAME}
-        ${COMMON_LIBS}
-        webgpu_dawn
-    )
-else()
-    target_link_libraries(${PACKAGE_NAME}
-        ${COMMON_LIBS}
-    )
-endif()
 
 # Enable Android 16kb native library alignment
 if(CMAKE_ANDROID_NDK_VERSION VERSION_LESS "27")

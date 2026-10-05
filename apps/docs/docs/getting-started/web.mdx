@@ -10,6 +10,7 @@ import {Snack} from '@site/src/components/Snack';
 React Native Skia runs in the browser via [CanvasKit](https://skia.org/docs/user/modules/canvaskit/), a WebAssembly (WASM) build of Skia.
 The CanvasKit WASM file, which is 2.9MB when gzipped, is loaded asynchronously.
 Despite its considerable size, it offers flexibility in determining when and how Skia loads, giving you full control over the user experience.
+On the Web, Skia renders with WebGL: Graphite and the [WebGPU interop](/docs/webgpu) are only available on native platforms.
 
 We support direct integration with [Expo](#expo) and [Remotion](#remotion).
 Additionally, you'll find manual installation steps for any webpack projects.
@@ -29,6 +30,13 @@ npx create-expo-app my-app -e with-skia
 ```
 
 This template includes the proper configuration for web support out of the box, so you don't need to manually configure loading methods.
+
+:::info
+
+The template currently installs React Native Skia v2 (`@shopify/react-native-skia`).
+To move the project to v3, follow the [migration guide](/docs/getting-started/migration).
+
+:::
 
 <video width="61%" autoPlay loop muted playsInline>
   <source src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/expo-template2.mp4?alt=media&token=cdc13f16-9c5a-488a-b5d6-19d11f3e1842" type="video/mp4" />
@@ -192,7 +200,7 @@ export default function App() {
 ## Unsupported Features
 
 The following React Native Skia APIs are currently unsupported on React Native Web.
-To request these features, please submit [a feature request on GitHub](https://github.com/Shopify/react-native-skia/issues/new/choose).
+To request these features, please submit [a feature request on GitHub](https://github.com/wcandillon/react-native-skia/issues/new/choose).
 
 **Unsupported**
 

@@ -6,35 +6,45 @@
 #include <mutex>
 #include <vector>
 
-#include "RNSkView.h"
+#include "RNSkCanvasProvider.h"
+#include "RNSkPlatformContext.h"
 #include "RNWindowContext.h"
 
 #include <android/native_window.h>
 
 namespace RNSkia {
 
-class RNSkOpenGLCanvasProvider
-    : public RNSkia::RNSkCanvasProvider,
-      public std::enable_shared_from_this<RNSkOpenGLCanvasProvider> {
+/**
+ * The ANativeWindow a SkiaView presents into: the Surface of a SurfaceView or
+ * a Surface created over the SurfaceTexture of a TextureView, configured as a
+ * Dawn surface (see DawnWindowContext).
+ */
+class RNSkAndroidCanvasProvider : public RNSkCanvasProvider {
 public:
-  RNSkOpenGLCanvasProvider(
-      std::function<void()> requestRedraw,
-      std::shared_ptr<RNSkia::RNSkPlatformContext> platformContext);
+  explicit RNSkAndroidCanvasProvider(
+      std::shared_ptr<RNSkPlatformContext> platformContext);
 
-  virtual ~RNSkOpenGLCanvasProvider();
+  virtual ~RNSkAndroidCanvasProvider();
 
   int getWidth() override;
 
   int getHeight() override;
 
-  bool renderToCanvas(const std::function<void(SkCanvas *)> &cb) override;
+  bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
-#if defined(SK_GRAPHITE)
-  bool getGraphiteTargetInfo(RNSkGraphiteTargetInfo *info) override;
+  bool getLayoutSize(int *width, int *height) override;
 
   bool presentRecordings(
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
-#endif
+
+  bool presentImage(const sk_sp<SkImage> &image) override;
+
+  /**
+   The pixel size the backing view was laid out with. The surface it gets
+   (SurfaceView or TextureView) has exactly this size, so a frame recorded
+   before the surface exists already matches it. Main thread.
+   */
+  void setLayoutSize(int width, int height);
 
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
                         bool highBitDepth);
@@ -52,13 +62,8 @@ private:
   // Gives back what acquireWindow() took. Call after the window context that
   // draws into the window is gone.
   void releaseWindow();
-#if !defined(SK_GRAPHITE)
-  // Lets the SurfaceTexture of a TextureView consume the previous frame.
-  void updateTexImage();
-#else
   // Copies the window's target description where any thread can read it.
   void updateTargetInfo();
-#endif
 
   std::unique_ptr<WindowContext> _surfaceHolder = nullptr;
   std::shared_ptr<RNSkPlatformContext> _platformContext;
@@ -67,13 +72,10 @@ private:
   // as the window and is released with it (a SurfaceView's Surface is owned by
   // the view).
   jobject _jSurface = nullptr;
-#if !defined(SK_GRAPHITE)
-  jobject _jSurfaceTexture = nullptr;
-  jmethodID _updateTexImageMethod = nullptr;
-#else
   std::mutex _targetInfoMutex;
   RNSkGraphiteTargetInfo _targetInfo;
   bool _hasTargetInfo = false;
-#endif
+  int _layoutWidth = 0;
+  int _layoutHeight = 0;
 };
 } // namespace RNSkia

@@ -1,18 +1,13 @@
 #import "RNSkApplePlatformContext.h"
 
 #import <CoreMedia/CMSampleBuffer.h>
-#include <Metal/Metal.h>
 #import <React/RCTUtils.h>
 #include <algorithm>
 #include <set>
 #include <thread>
 #include <utility>
 
-#if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
-#else
-#include "MetalContext.h"
-#endif
 #include "RNSkAppleVideo.h"
 
 #pragma clang diagnostic push
@@ -83,15 +78,12 @@ void RNSkApplePlatformContext::releaseNativeBuffer(uint64_t pointer) {
 }
 
 uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
-#if defined(SK_GRAPHITE)
   // A Graphite GPU texture can't be read with readPixels(nullptr) (and can't be
-  // drawn onto a raster surface) — both yield uninitialized/black pixels. Read
-  // it back to a raster image first. (JsiNativeBuffer calls the Ganesh-only
-  // SkImage::makeNonTextureImage(), which is a no-op on Graphite.)
+  // drawn onto a raster surface): both yield uninitialized/black pixels. Read
+  // it back to a raster image first.
   if (image && image->isTextureBacked()) {
     image = DawnContext::getInstance().MakeRasterImage(image);
   }
-#endif
   // 0. If Image is not in BGRA, convert to BGRA as only BGRA is supported.
   if (image->colorType() != kBGRA_8888_SkColorType) {
     const SkImageInfo bgraInfo =
@@ -241,67 +233,6 @@ uint64_t RNSkApplePlatformContext::makeTestNativeBuffer(int width, int height) {
   return reinterpret_cast<uint64_t>(pixelBuffer);
 }
 
-#if !defined(SK_GRAPHITE)
-GrDirectContext *RNSkApplePlatformContext::getDirectContext() {
-  return MetalContext::getInstance().getDirectContext();
-}
-
-const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
-  TextureInfo result;
-  GrBackendTexture texture;
-  if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
-    throw std::runtime_error("Couldn't get backend texture");
-  }
-  if (!texture.isValid()) {
-    throw std::runtime_error("Invalid backend texture");
-  }
-  GrMtlTextureInfo textureInfo;
-  if (!GrBackendTextures::GetMtlTextureInfo(texture, &textureInfo)) {
-    throw std::runtime_error("Couldn't get Metal texture info");
-  }
-  result.mtlTexture = textureInfo.fTexture.get();
-  return result;
-}
-
-const TextureInfo
-RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
-  TextureInfo result;
-  GrBackendTexture texture = SkSurfaces::GetBackendTexture(
-      surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
-  if (!texture.isValid()) {
-    throw std::runtime_error("Invalid backend texture");
-  }
-  GrMtlTextureInfo textureInfo;
-  if (!GrBackendTextures::GetMtlTextureInfo(texture, &textureInfo)) {
-    throw std::runtime_error("Couldn't get Metal texture info");
-  }
-  result.mtlTexture = textureInfo.fTexture.get();
-  return result;
-}
-
-sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
-    const TextureInfo &texInfo, int width, int height, bool mipMapped) {
-  id<MTLTexture> mtlTexture = (__bridge id<MTLTexture>)(texInfo.mtlTexture);
-
-  SkColorType colorType = mtlPixelFormatToSkColorType(mtlTexture.pixelFormat);
-  if (colorType == SkColorType::kUnknown_SkColorType) {
-    throw std::runtime_error("Unsupported pixelFormat");
-  }
-
-  GrMtlTextureInfo textureInfo;
-  textureInfo.fTexture.retain((__bridge const void *)mtlTexture);
-
-  GrBackendTexture texture = GrBackendTextures::MakeMtl(
-      width, height, mipMapped ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo,
-      textureInfo);
-
-  return SkImages::BorrowTextureFrom(getDirectContext(), texture,
-                                     kTopLeft_GrSurfaceOrigin, colorType,
-                                     kPremul_SkAlphaType, nullptr);
-  return nullptr;
-}
-#endif
-
 std::shared_ptr<RNSkVideo>
 RNSkApplePlatformContext::createVideo(const std::string &url) {
   return std::make_shared<RNSkAppleVideo>(url, this);
@@ -311,57 +242,33 @@ void RNSkApplePlatformContext::raiseError(const std::exception &err) {
   RCTFatal(RCTErrorWithMessage([NSString stringWithUTF8String:err.what()]));
 }
 
+bool RNSkApplePlatformContext::mainScreenSupportsP3() {
+  static bool supportsP3 = false;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+#if !TARGET_OS_OSX
+    supportsP3 =
+        [UIScreen mainScreen].traitCollection.displayGamut == UIDisplayGamutP3;
+#else
+    NSColorSpace *screenColorSpace = [NSScreen mainScreen].colorSpace;
+    supportsP3 =
+        screenColorSpace != nil &&
+        [screenColorSpace isEqual:[NSColorSpace displayP3ColorSpace]];
+#endif // !TARGET_OS_OSX
+  });
+  return supportsP3;
+}
+
 sk_sp<SkSurface>
 RNSkApplePlatformContext::makeOffscreenSurface(int width, int height,
                                                bool useP3ColorSpace) {
-#if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeOffscreen(width, height,
                                                   useP3ColorSpace);
-#else
-  return MetalContext::getInstance().MakeOffscreen(width, height,
-                                                   useP3ColorSpace);
-#endif
 }
 
 sk_sp<SkImage>
 RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer) {
-#if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeImageFromBuffer(buffer);
-#else
-  return MetalContext::getInstance().MakeImageFromBuffer(buffer);
-#endif
-}
-
-SkColorType RNSkApplePlatformContext::mtlPixelFormatToSkColorType(
-    MTLPixelFormat pixelFormat) {
-  switch (pixelFormat) {
-  case MTLPixelFormatRGBA8Unorm:
-    return kRGBA_8888_SkColorType;
-  case MTLPixelFormatBGRA8Unorm:
-    return kBGRA_8888_SkColorType;
-  case MTLPixelFormatRGB10A2Unorm:
-    return kRGBA_1010102_SkColorType;
-  case MTLPixelFormatR8Unorm:
-    return kGray_8_SkColorType;
-  case MTLPixelFormatRGBA16Float:
-    return kRGBA_F16_SkColorType;
-  case MTLPixelFormatRG8Unorm:
-    return kR8G8_unorm_SkColorType;
-  case MTLPixelFormatR16Float:
-    return kA16_float_SkColorType;
-  case MTLPixelFormatRG16Float:
-    return kR16G16_float_SkColorType;
-  case MTLPixelFormatR16Unorm:
-    return kA16_unorm_SkColorType;
-  case MTLPixelFormatRG16Unorm:
-    return kR16G16_unorm_SkColorType;
-  case MTLPixelFormatRGBA16Unorm:
-    return kR16G16B16A16_unorm_SkColorType;
-  case MTLPixelFormatRGBA8Unorm_sRGB:
-    return kSRGBA_8888_SkColorType;
-  default:
-    return kUnknown_SkColorType;
-  }
 }
 
 sk_sp<SkFontMgr> RNSkApplePlatformContext::createFontMgr() {
