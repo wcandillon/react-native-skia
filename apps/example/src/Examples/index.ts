@@ -32,3 +32,4 @@ export * from "./Pictures";
 export * from "./WebGPU";
 export * from "./HighBitDepth";
 export * from "./AndroidViews";
+export * from "./ZIndexDrawer";

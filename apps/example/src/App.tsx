@@ -37,6 +37,7 @@ import {
   WebGPU,
   HighBitDepth,
   AndroidViews,
+  ZIndexDrawer,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -83,6 +84,7 @@ const linking: LinkingOptions<StackParamList> = {
       WebGPU: "webgpu",
       HighBitDepth: "high-bit-depth",
       AndroidViews: "android-views",
+      ZIndexDrawer: "zindex-drawer",
     },
   },
   prefixes: ["rnskia://"],
@@ -254,6 +256,7 @@ const App = () => {
             />
             <Stack.Screen name="HighBitDepth" component={HighBitDepth} />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
+            <Stack.Screen name="ZIndexDrawer" component={ZIndexDrawer} />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

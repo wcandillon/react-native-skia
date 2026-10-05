@@ -38,4 +38,5 @@ export type StackParamList = {
   WebGPU: undefined;
   HighBitDepth: undefined;
   AndroidViews: undefined;
+  ZIndexDrawer: undefined;
 };

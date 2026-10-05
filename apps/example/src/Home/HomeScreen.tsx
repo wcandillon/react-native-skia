@@ -9,8 +9,7 @@ import "react-native-webgpu";
 import { HomeScreenButton } from "./HomeScreenButton";
 
 export const HomeScreen = () => {
-  const hasWebGPU =
-    typeof navigator !== "undefined" && navigator.gpu != null;
+  const hasWebGPU = typeof navigator !== "undefined" && navigator.gpu != null;
   return (
     <ScrollView>
       <HomeScreenButton
@@ -150,6 +149,11 @@ export const HomeScreen = () => {
         title="🤖 Android Views"
         description="SurfaceView vs TextureView"
         route="AndroidViews"
+      />
+      <HomeScreenButton
+        title="🚪 ZIndex Drawer"
+        description="Repro for #3713, canvas blanks out while a drawer-like overlay animates its zIndex"
+        route="ZIndexDrawer"
       />
     </ScrollView>
   );
