@@ -250,8 +250,8 @@ public:
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface
-   can show a new frame: on its display link, or for an Android TextureView
-   once its window has drawn the previous frame. Main thread. Without one,
+   can show a new frame: on the display link on iOS, straight away on macOS,
+   and on Android as its FrameScheduler decides. Main thread. Without one,
    frames are presented as soon as the main thread gets to them.
    */
   void setFrameScheduler(std::function<void()> scheduler) {
@@ -268,7 +268,7 @@ public:
   }
 
   /**
-   Presents the queued recordings, when the frame scheduler says so. Returns
+   Presents the queued recordings (see setFrameScheduler for when). Returns
    whether more are waiting, so that the platform view asks again: also when
    the present failed (the app is in the background), so that the recordings
    are tried again on the next frame rather than left waiting for a redraw.

@@ -253,6 +253,6 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private native void unregisterView();
 
-    /** Choreographer tick: returns whether more recordings are waiting. */
+    /** Presents the queued recordings, returning whether any are left. */
     private native boolean presentFrame();
 }
