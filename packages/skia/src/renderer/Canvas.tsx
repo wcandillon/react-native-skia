@@ -1,4 +1,4 @@
-import type { FC, RefObject } from "react";
+import type { RefObject } from "react";
 import React, {
   useCallback,
   useEffect,
@@ -17,7 +17,6 @@ import type {
 } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import Rea from "../external/reanimated/ReanimatedProxy";
 import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
 import { androidNativeProps } from "../views/android";
 import type { AndroidCanvasProps } from "../views/types";
@@ -25,35 +24,27 @@ import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import type { SkImage, SkRect, SkSize } from "../skia/types";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 import { Skia } from "../skia";
-import { HAS_REANIMATED_3 } from "../external";
 
-export interface CanvasRef extends FC<CanvasProps> {
+type LayoutSizeListener = (size: SkSize) => void;
+
+export interface CanvasRef {
   makeImageSnapshot(rect?: SkRect): SkImage;
   makeImageSnapshotAsync(rect?: SkRect): Promise<SkImage>;
   redraw(): void;
   getNativeId(): number;
   measure(callback: MeasureOnSuccessCallback): void;
   measureInWindow(callback: MeasureInWindowOnSuccessCallback): void;
+  /** Untransformed layout size: now if laid out, then once per change. Returns the remover. */
+  addLayoutSizeListener(listener: LayoutSizeListener): () => void;
 }
 
 export const useCanvasRef = () => useRef<CanvasRef>(null);
-
-const useCanvasRefPriv: typeof useRef<View> = !HAS_REANIMATED_3
-  ? useRef
-  : Rea.useAnimatedRef;
 
 export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
   const ourRef = useCanvasRef();
   const ref = userRef ?? ourRef;
   const [size, setSize] = useState<SkSize>({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    if (ref.current) {
-      ref.current.measure((_x, _y, width, height) => {
-        setSize({ width, height });
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useLayoutEffect(() => ref.current?.addLayoutSizeListener(setSize), [ref]);
   return { ref, size };
 };
 
@@ -92,7 +83,7 @@ const useCanvasRoot = ({
   ref,
   onLayout,
 }: Pick<CanvasProps, "children" | "onSize" | "ref" | "onLayout">) => {
-  const viewRef = useCanvasRefPriv(null);
+  const viewRef = useRef<View>(null);
   // Native ID
   const nativeId = useMemo(() => {
     return SkiaViewNativeId.current++;
@@ -103,6 +94,7 @@ const useCanvasRoot = ({
 
   // The size comes from the view's own layout event: a per-frame measure outlives the view until its effect cleanup and reports the transformed box.
   const layoutSize = useRef<SkSize | null>(null);
+  const [layoutSizeListeners] = useState(() => new Set<LayoutSizeListener>());
   useLayoutEffect(() => {
     if (onSize && layoutSize.current) {
       onSize.value = layoutSize.current;
@@ -121,30 +113,35 @@ const useCanvasRoot = ({
   }, [root]);
 
   // Component methods
-  useImperativeHandle(
-    ref,
-    () =>
-      ({
-        makeImageSnapshot: (rect?: SkRect) => {
-          return SkiaViewApi.makeImageSnapshot(nativeId, rect);
-        },
-        makeImageSnapshotAsync: (rect?: SkRect) => {
-          return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
-        },
-        redraw: () => {
-          SkiaViewApi.requestRedraw(nativeId);
-        },
-        getNativeId: () => {
-          return nativeId;
-        },
-        measure: (callback) => {
-          viewRef.current?.measure(callback);
-        },
-        measureInWindow: (callback) => {
-          viewRef.current?.measureInWindow(callback);
-        },
-      }) as CanvasRef
-  );
+  useImperativeHandle(ref, (): CanvasRef => ({
+    makeImageSnapshot: (rect?: SkRect) => {
+      return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+    },
+    makeImageSnapshotAsync: (rect?: SkRect) => {
+      return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
+    },
+    redraw: () => {
+      SkiaViewApi.requestRedraw(nativeId);
+    },
+    getNativeId: () => {
+      return nativeId;
+    },
+    measure: (callback) => {
+      viewRef.current?.measure(callback);
+    },
+    measureInWindow: (callback) => {
+      viewRef.current?.measureInWindow(callback);
+    },
+    addLayoutSizeListener: (listener) => {
+      layoutSizeListeners.add(listener);
+      if (layoutSize.current) {
+        listener(layoutSize.current);
+      }
+      return () => {
+        layoutSizeListeners.delete(listener);
+      };
+    },
+  }));
 
   const onLayoutWithSize = useCallback(
     (e: LayoutChangeEvent) => {
@@ -156,12 +153,14 @@ const useCanvasRoot = ({
       if (previous && previous.width === width && previous.height === height) {
         return;
       }
-      layoutSize.current = { width, height };
+      const size = { width, height };
+      layoutSize.current = size;
       if (onSize) {
-        onSize.value = { width, height };
+        onSize.value = size;
       }
+      layoutSizeListeners.forEach((listener) => listener(size));
     },
-    [onLayout, onSize]
+    [onLayout, onSize, layoutSizeListeners]
   );
   return { nativeId, viewRef, onLayoutWithSize };
 };
