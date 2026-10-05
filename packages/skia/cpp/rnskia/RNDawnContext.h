@@ -351,7 +351,14 @@ public:
 
   // Create a WebGPU texture from an SkImage
   // Returns a texture with CopySrc and TextureBinding usage
-  wgpu::Texture MakeTextureFromImage(sk_sp<SkImage> image) {
+  // Draws `image` into a new wgpu::Texture on the shared device. The draw is
+  // submitted to the shared wgpu::Queue before this returns, so a WebGPU
+  // command buffer submitted afterwards on that queue sees the finished
+  // texture: Dawn executes command buffers in submission order. `sync` blocks
+  // the calling thread until the GPU has finished the draw; only needed when
+  // the texture is consumed on a different queue (e.g. a secondary device) or
+  // read back on the CPU.
+  wgpu::Texture MakeTextureFromImage(sk_sp<SkImage> image, bool sync = false) {
     if (!image) {
       return nullptr;
     }
@@ -395,10 +402,12 @@ public:
     SkCanvas *canvas = surface->getCanvas();
     canvas->drawImage(image, 0, 0);
 
-    // Flush the surface to ensure the image is rendered
+    // Submit the draw. Waiting for the GPU here would stall the calling thread
+    // (while holding _mutex) for a full GPU round trip on every call.
     auto recording = getRecorder()->snap();
     if (recording) {
-      submitRecording(recording.get(), skgpu::graphite::SyncToCpu::kYes);
+      submitRecording(recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
+                                            : skgpu::graphite::SyncToCpu::kNo);
     }
 
     return texture;

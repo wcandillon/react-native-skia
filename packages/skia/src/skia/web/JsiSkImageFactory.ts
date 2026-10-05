@@ -106,7 +106,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return throwNotImplementedOnRNWeb<SkImage>();
   }
 
-  MakeNativeTextureFromImage(_image: SkImage): bigint {
+  MakeNativeTextureFromImage(_image: SkImage, _sync?: boolean): bigint {
     return throwNotImplementedOnRNWeb<bigint>();
   }
 }

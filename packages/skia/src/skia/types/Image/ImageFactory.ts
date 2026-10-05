@@ -122,7 +122,12 @@ export interface ImageFactory {
    * Native only.
    *
    * @param image - An SkImage to convert to a texture
+   * @param sync - When true, block until the GPU has finished drawing the
+   * image into the texture. Not needed for react-native-webgpu on the shared
+   * device (both submit to the same queue, which executes in submission
+   * order). Use it before consuming the texture on a different queue, such as
+   * a secondary device, or reading it back on the CPU. Defaults to false.
    * @returns A WGPUTexture pointer for adoptTexture(), or throws on failure
    */
-  MakeNativeTextureFromImage(image: SkImage): bigint;
+  MakeNativeTextureFromImage(image: SkImage, sync?: boolean): bigint;
 }

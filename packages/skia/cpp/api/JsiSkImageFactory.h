@@ -145,8 +145,13 @@ public:
     if (!image) {
       throw std::runtime_error("Invalid SkImage object");
     }
+    // When `sync` is true, block until the GPU has finished drawing the image
+    // into the texture. Not needed for react-native-webgpu on the shared
+    // device: it submits to the same queue, and Dawn executes command buffers
+    // in submission order.
+    bool sync = count > 1 && arguments[1].isBool() && arguments[1].getBool();
     auto &dawnContext = DawnContext::getInstance();
-    wgpu::Texture texture = dawnContext.MakeTextureFromImage(image);
+    wgpu::Texture texture = dawnContext.MakeTextureFromImage(image, sync);
     if (!texture) {
       throw std::runtime_error(
           "MakeNativeTextureFromImage: failed to create the texture");
