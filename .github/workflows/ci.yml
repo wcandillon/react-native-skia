@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         with:
           name: web-example-screenshots
           path: apps/example/e2e/screenshots/
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         with:
           name: web-example-test-results
           path: apps/example/test-results/
@@ -200,7 +200,7 @@ jobs:
           yarn turbo run build:android --concurrency 1
 
       - name: Upload Android APK artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         with:
           name: android-example-apk
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
@@ -243,13 +243,13 @@ jobs:
             # themselves where NativeBuffer/createImageBitmap are unavailable.
             cd packages/skia && CI=true yarn test -i "e2e/(Path|ArrayBuffer|ComputeShader|ErrorScope|ImageBitmapBounds|DawnToggles|ExternalTexture|ImportExternalTexture|SharedTextureMemory)" --testPathIgnorePatterns Paragraphs
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         if: failure()
         with:
           path: packages/skia/src/__tests__/snapshots/
           name: tests-snapshots-screenshots
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         if: failure()
         with:
           path: apps/docs/static/
