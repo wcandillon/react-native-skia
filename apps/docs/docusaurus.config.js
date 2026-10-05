@@ -74,6 +74,9 @@ const config = {
         indexName: "react-native-skia",
         contextualSearch: false,
       },
+      metadata: [
+        { name: "algolia-site-verification", content: "120C18B37B56CF72" },
+      ],
       announcementBar: {
         id: "v3",
         content:
