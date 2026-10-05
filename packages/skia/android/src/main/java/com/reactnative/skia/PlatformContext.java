@@ -2,7 +2,6 @@ package com.reactnative.skia;
 
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 
 import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
@@ -121,10 +120,7 @@ public class PlatformContext {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             notifyTaskReadyNative();
         } else {
-            // Asynchronous, so a pending traversal's sync barrier cannot hold a frame request past the next vsync.
-            Message message = Message.obtain(mainHandler, this::notifyTaskReadyNative);
-            message.setAsynchronous(true);
-            mainHandler.sendMessage(message);
+            mainHandler.post(this::notifyTaskReadyNative);
         }
     }
 
