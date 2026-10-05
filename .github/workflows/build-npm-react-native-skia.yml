@@ -29,9 +29,10 @@ jobs:
       PACKAGE_NAME: react-native-skia
       REPOSITORY: wcandillon/react-native-skia
       # 2.x is the maintenance branch for the Ganesh v2 line: it never ships
-      # Graphite and publishes under the 2.x dist-tag so latest stays on main.
+      # Graphite and publishes under the release-2.x dist-tag so latest stays on
+      # main (npm rejects dist-tags that are a valid semver range, such as 2.x).
       GRAPHITE: ${{ inputs.graphite && github.ref_name != '2.x' }}
-      NPM_DIST_TAG: ${{ github.ref_name == '2.x' && '2.x' || 'latest' }}
+      NPM_DIST_TAG: ${{ github.ref_name == '2.x' && 'release-2.x' || 'latest' }}
     concurrency:
       group: npm-react-native-skia-${{ github.ref }}
       cancel-in-progress: true
@@ -75,7 +76,8 @@ jobs:
       # @shopify/react-native-skia name (the apps depend on it), so the packed
       # tarball is renamed to react-native-skia right after semantic-release-yarn
       # writes it to dist/, before it is published and attached to the release.
-      # The 2.x branch is a maintenance branch (>=2.0.0 <3.0.0) on the 2.x channel.
+      # The 2.x branch is a maintenance branch (>=2.0.0 <3.0.0) on the release-2.x
+      # channel, which is also its npm dist-tag.
       # Commenting on released issues and PRs is off: the commit messages
       # reference Shopify/react-native-skia numbers that don't exist here.
       - name: Configure semantic-release
@@ -86,7 +88,7 @@ jobs:
             const fs = require('fs');
             const rc = JSON.parse(fs.readFileSync('.releaserc', 'utf8'));
             rc.repositoryUrl = 'https://github.com/' + process.env.REPOSITORY + '.git';
-            rc.branches.unshift({ name: '2.x', range: '2.x', channel: '2.x' });
+            rc.branches.unshift({ name: '2.x', range: '2.x', channel: 'release-2.x' });
             const exec = rc.plugins.find((p) => Array.isArray(p) && p[0] === '@semantic-release/exec');
             exec[1].prepareCmd = 'bash ../../.github/scripts/rename-package-tarball.sh dist';
             if (process.env.SKIP_NPM_PUBLISH === 'true') delete exec[1].publishCmd;
@@ -109,6 +111,14 @@ jobs:
           YARN_NPM_AUTH_TOKEN: ''
           NPM_TOKEN: ''
           NPM_CONFIG_PROVENANCE: true
+
+      # semantic-release publishes its GitHub releases as the latest one. After
+      # a 2.x release, hand that back to the version npm serves as latest.
+      - name: Keep the latest GitHub release on main
+        if: ${{ inputs.version == '' && github.ref_name == '2.x' }}
+        run: gh release edit "v$(npm view "$PACKAGE_NAME" dist-tags.latest)" --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Bootstrap path: release an exact version and push the matching vX.Y.Z
       # tag so that semantic-release picks up from it on the next regular run.
