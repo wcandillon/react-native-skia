@@ -2,7 +2,7 @@
 // into without an onscreen canvas. Instead of a swapchain, getCurrentTexture()
 // always returns one persistent texture created on the given device, so the
 // renderer's output can be sampled by whoever owns that device (e.g. wrapped
-// into an SkImage with Skia.Image.MakeImageFromNativeTexture when `device` is
+// into an SkImage with Skia.Image.MakeImageFromGPUTexture when `device` is
 // Skia's Graphite device).
 // Carries the device alongside the context so it can be handed directly to
 // makeWebGPURenderer().

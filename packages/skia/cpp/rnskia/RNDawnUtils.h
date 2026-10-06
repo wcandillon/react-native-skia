@@ -4,6 +4,8 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <optional>
+
 #include "webgpu/webgpu_cpp.h"
 
 #include "dawn/native/DawnNative.h"
@@ -76,6 +78,28 @@ inline wgpu::TextureFormat textureFormatForColorType(SkColorType colorType) {
     return wgpu::TextureFormat::RGB10A2Unorm;
   default:
     return PreferredTextureFormat;
+  }
+}
+
+// The color type Skia samples a texture of the given format with, or none
+// when Skia cannot sample the format: multi-planar YUV (the biplanar
+// 4:2:0 formats of an NV12 IOSurface, OpaqueYCbCrAndroid), depth/stencil and
+// compressed formats.
+inline std::optional<SkColorType>
+colorTypeForTextureFormat(wgpu::TextureFormat format) {
+  switch (format) {
+  case wgpu::TextureFormat::RGBA8Unorm:
+    return kRGBA_8888_SkColorType;
+  case wgpu::TextureFormat::BGRA8Unorm:
+    return kBGRA_8888_SkColorType;
+  case wgpu::TextureFormat::RGBA16Float:
+    return kRGBA_F16_SkColorType;
+  case wgpu::TextureFormat::RGB10A2Unorm:
+    return kRGBA_1010102_SkColorType;
+  case wgpu::TextureFormat::R8Unorm:
+    return kGray_8_SkColorType;
+  default:
+    return std::nullopt;
   }
 }
 
@@ -294,6 +318,15 @@ createDawnBackendContext(dawn::native::Instance *instance) {
       // Vulkan equivalent of the above: EndAccess exports a sync-fd fence.
       wgpu::FeatureName::SharedFenceSyncFD,
       wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
+      // Video and camera frames are YUV AHardwareBuffers. Dawn imports them
+      // as OpaqueYCbCrAndroid textures, a format it only accepts on a device
+      // with one of its two YCbCr features, and react-native-webgpu samples
+      // them as external textures (importExternalTexture,
+      // copyExternalImageToTexture), which needs this one in particular.
+      // Without it, importing a frame on the shared device fails with
+      // "Unsupported texture format TextureFormat::OpaqueYCbCrAndroid".
+      // Experimental in Dawn, hence the allow_unsafe_apis instance toggle.
+      wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
 

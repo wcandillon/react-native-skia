@@ -38,7 +38,8 @@ namespace jsi = facebook::jsi;
  * (SkiaViewApi.makeGraphiteContext), or <Canvas> hands over a recorder (or a
  * picture) that the render thread pool records for the view. Either way the
  * recordings are queued on the target; the view presents them onto its canvas
- * provider on the main thread, aligned with the platform's display link.
+ * provider on the main thread, once the platform view's surface can show a new
+ * frame (see setFrameScheduler).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
@@ -248,8 +249,10 @@ public:
   // Platform view side -------------------------------------------------------
 
   /**
-   Installed by the platform view: arms its display link. Main thread. Without
-   one, frames are presented as soon as the main thread gets to them.
+   Installed by the platform view, which calls presentFrame() once its surface
+   can show a new frame: on the display link on iOS, straight away on macOS,
+   and on Android as its FrameScheduler decides. Main thread. Without one,
+   frames are presented as soon as the main thread gets to them.
    */
   void setFrameScheduler(std::function<void()> scheduler) {
     _frameScheduler = std::move(scheduler);
@@ -265,10 +268,10 @@ public:
   }
 
   /**
-   Display link tick: presents the queued recordings. Returns whether more
-   are waiting, so that the caller keeps its display link armed: also when the
-   present failed (the app is in the background), so that the recordings are
-   tried again on the next frame rather than left waiting for a redraw.
+   Presents the queued recordings (see setFrameScheduler for when). Returns
+   whether more are waiting, so that the platform view asks again: also when
+   the present failed (the app is in the background), so that the recordings
+   are tried again on the next frame rather than left waiting for a redraw.
    Without a surface the queue is left alone: the surface presents it when
    it appears.
    */

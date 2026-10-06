@@ -199,6 +199,12 @@ jobs:
         run: |
           yarn turbo run build:android --concurrency 1
 
+      - name: Unit test the Android library
+        working-directory: apps/example/android
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
+        run: ./gradlew :react-native-skia:testDebugUnitTest
+
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         with:
@@ -255,18 +261,20 @@ jobs:
           path: apps/docs/static/
           name: tests-docs-screenshots
 
-  # The iOS and macOS jobs run on the self-hosted Mac that also serves the
-  # react-native-webgpu and redraw CI. Fork PRs skip them so outside code never
-  # runs on that machine; the merge queue still runs them before anything lands.
   build-test-ios:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 90
     env:
-      # The other projects on the machine use Metro on 8081 and a test server
-      # on 4242, so this job runs on its own ports and its own simulator and
-      # can run concurrently with them. RCT_METRO_PORT is compiled into the
-      # app by xcodebuild; E2E_PORT is inlined into the JS bundle.
+      # Three repositories share this self-hosted machine. Each job runs on its
+      # own Metro port, test server port and simulator so they can run
+      # concurrently:
+      #   Metro  test server  simulator
+      #   8081   4242         (React Native defaults, used by redraw)
+      #   8082   4243         skia-ci     (this job)
+      #   8083   4244         webgpu-ci   (react-native-webgpu)
+      # RCT_METRO_PORT is compiled into the app by xcodebuild; E2E_PORT is
+      # inlined into the JS bundle (useClient) and read by the jest
+      # globalSetup, so the app and the test server agree on the port.
       METRO_PORT: 8082
       E2E_PORT: 4243
       IOS_SIMULATOR: skia-ci
@@ -306,10 +314,14 @@ jobs:
           UDID=$(xcrun simctl list devices available --json | jq -r --arg name "$IOS_SIMULATOR" '
             .devices[] | .[] | select(.name == $name) | .udid' | head -n 1)
           if [ -z "$UDID" ]; then
+            # Sorted numerically: the version is a string and simctl lists
+            # device types newest first, so a plain `last` is not the newest.
             RUNTIME=$(xcrun simctl list runtimes available --json | jq -r '
-              .runtimes | map(select(.platform == "iOS")) | sort_by(.version) | last | .identifier')
+              .runtimes | map(select(.platform == "iOS"))
+              | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
             DEVICE_TYPE=$(xcrun simctl list devicetypes --json | jq -r '
-              .devicetypes | map(select(.name | test("^iPhone [0-9]+ Pro$"))) | last | .identifier')
+              .devicetypes | map(select(.name | test("^iPhone [0-9]+ Pro$")))
+              | sort_by(.name | capture("^iPhone (?<n>[0-9]+) Pro$").n | tonumber) | last | .identifier')
             echo "Creating $IOS_SIMULATOR ($DEVICE_TYPE, $RUNTIME)"
             UDID=$(xcrun simctl create "$IOS_SIMULATOR" "$DEVICE_TYPE" "$RUNTIME")
           fi
@@ -364,7 +376,6 @@ jobs:
           fi
 
   build-test-macos:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     steps:

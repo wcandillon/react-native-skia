@@ -13,6 +13,7 @@ Textures created on that device can be used by both libraries without any copy:
 
 - **From WebGPU to Skia:** draw the output of a WebGPU pipeline or of a [three.js](#threejs) scene in a Skia canvas, and compose it with anything Skia can draw.
 - **From Skia to WebGPU:** draw text, paths, or any Skia drawing straight into a texture that a WebGPU pipeline samples.
+- **Camera and video frames:** draw the frames that React Native WebGPU decodes or wraps in a Skia canvas.
 
 :::info
 
@@ -75,15 +76,18 @@ The interop surface is small:
 | API | Direction | Description |
 |:--|:--|:--|
 | `Skia.getNativeDevice()` | | Pointer to Skia's device, for `importDevice()` |
-| `Skia.Image.MakeImageFromNativeTexture(pointer)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
-| `Skia.Surface.MakeFromNativeTexture(pointer)` | Skia to WebGPU | Creates an `SkSurface` that draws into a `GPUTexture`, without copy |
-| `Skia.Image.MakeNativeTextureFromImage(image)` | Skia to WebGPU | Draws an `SkImage` into a new texture, for `adoptTexture()` |
+| `Skia.Image.MakeImageFromGPUTexture(texture)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
+| `Skia.Surface.MakeFromGPUTexture(texture)` | Skia to WebGPU | Creates an `SkSurface` that draws into a `GPUTexture`, without copy |
+| `Skia.Image.MakeGPUTextureFromImage(image)` | Skia to WebGPU | Draws an `SkImage` into a new texture, for `adoptTexture()` |
 
-Textures cross the package boundary as pointers: `texture.nativePointer` is an extension of `GPUTexture` provided by React Native WebGPU.
+The two functions that take a texture read its `nativePointer`, an extension of `GPUTexture` provided by React Native WebGPU.
+`MakeGPUTextureFromImage()` returns such a pointer, which `adoptTexture()` turns into a `GPUTexture`: only React Native WebGPU can build the typed object, the same way `importDevice()` builds the `GPUDevice`.
+A raw `WGPUTexture` pointer (a `BigInt`) is accepted wherever a texture is, for libraries that export textures without React Native WebGPU.
+[Camera and video frames](#native-buffers) go through a texture as well.
 
 ## From WebGPU to Skia
 
-`Skia.Image.MakeImageFromNativeTexture()` wraps a WebGPU texture into an `SkImage`.
+`Skia.Image.MakeImageFromGPUTexture()` wraps a WebGPU texture into an `SkImage`.
 The image references the texture, so wrapping it is free.
 The texture must be created on the shared device with the `TEXTURE_BINDING` usage.
 
@@ -160,7 +164,7 @@ export const TriangleInSkia = () => {
     device.queue.submit([encoder.finish()]);
 
     // 4. Wrap the texture into an SkImage, without any copy
-    image.value = Skia.Image.MakeImageFromNativeTexture(texture.nativePointer);
+    image.value = Skia.Image.MakeImageFromGPUTexture(texture);
 
     return () => {
       // Drop the image before the texture it samples
@@ -195,7 +199,7 @@ The new object is what makes the canvas redraw:
 const render = () => {
   // ...encode and submit the WebGPU commands for this frame
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromNativeTexture(texture.nativePointer);
+  image.value = Skia.Image.MakeImageFromGPUTexture(texture);
   previous?.dispose();
   frame = requestAnimationFrame(render);
 };
@@ -205,7 +209,7 @@ const render = () => {
 
 ### Drawing into a texture
 
-`Skia.Surface.MakeFromNativeTexture()` creates a surface that draws directly into a WebGPU texture.
+`Skia.Surface.MakeFromGPUTexture()` creates a surface that draws directly into a WebGPU texture.
 Create the texture on the shared device with the `RENDER_ATTACHMENT` usage, and add `TEXTURE_BINDING` to sample the result from WebGPU.
 
 ```tsx
@@ -222,7 +226,7 @@ const texture = device.createTexture({
 });
 
 // Wrap the texture once
-const surface = Skia.Surface.MakeFromNativeTexture(texture.nativePointer);
+const surface = Skia.Surface.MakeFromGPUTexture(texture);
 const canvas = surface.getCanvas();
 const paint = Skia.Paint();
 paint.setColor(Skia.Color("cyan"));
@@ -247,7 +251,7 @@ texture.destroy();
 
 ### Exporting an image
 
-`Skia.Image.MakeNativeTextureFromImage()` turns any `SkImage` into a WebGPU texture.
+`Skia.Image.MakeGPUTextureFromImage()` turns any `SkImage` into a WebGPU texture.
 It creates a new texture on the shared device and draws the image into it once.
 The returned pointer must be adopted exactly once with `adoptTexture()`, which owns the texture from then on.
 
@@ -257,8 +261,116 @@ import { Skia } from "react-native-skia";
 import { adoptTexture } from "react-native-webgpu";
 
 const toTexture = (image: SkImage): GPUTexture =>
-  adoptTexture(Skia.Image.MakeNativeTextureFromImage(image));
+  adoptTexture(Skia.Image.MakeGPUTextureFromImage(image));
 ```
+
+## Native buffers
+
+Camera and video frames live in native buffers: an `IOSurface` (usually wrapped in a `CVPixelBuffer`) on Apple platforms, an `AHardwareBuffer` on Android.
+Skia does not import them. React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, ties their lifetime to a [`NativeVideoFrame`](https://wcandillon.github.io/react-native-webgpu/api/video-player#nativevideoframe) object, and renders a frame into a texture of the shared device with [`queue.copyExternalImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/gpu-device-extensions#copyexternalimagetotexture-with-a-native-frame), converting YUV to RGB and applying the rotation of the video or the camera on the GPU.
+`Skia.Image.MakeImageFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
+There is one path on both platforms, whatever the format of the frame. It needs React Native WebGPU 0.11.1 or above.
+
+### Playing a video
+
+[`createVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
+`copyLatestFrame()` returns the most recently decoded frame, or `null` when no new frame was decoded since the last call.
+Copy each new frame into a texture, wrap the texture into an image, and publish the image through a shared value:
+
+```tsx
+import React, { useEffect } from "react";
+import { useSharedValue } from "react-native-reanimated";
+import type { SkImage } from "react-native-skia";
+import { Canvas, Image, Skia, useCanvasSize } from "react-native-skia";
+import { createVideoPlayer, importDevice } from "react-native-webgpu";
+
+export const Video = ({ url }: { url: string }) => {
+  const { ref, size } = useCanvasSize();
+  const image = useSharedValue<SkImage | null>(null);
+
+  useEffect(() => {
+    const device = importDevice(Skia.getNativeDevice());
+    const player = createVideoPlayer(url);
+    let texture: GPUTexture | null = null;
+    let raf = 0;
+    const render = () => {
+      const frame = player.copyLatestFrame();
+      if (frame) {
+        // The frame is upright once rotated; a 90 or 270 degree rotation
+        // swaps its width and height
+        const rotated = player.rotation === 90 || player.rotation === 270;
+        const width = rotated ? frame.height : frame.width;
+        const height = rotated ? frame.width : frame.height;
+        if (!texture || texture.width !== width || texture.height !== height) {
+          const previous = image.value;
+          image.value = null;
+          previous?.dispose();
+          texture?.destroy();
+          texture = device.createTexture({
+            size: [width, height],
+            format: navigator.gpu.getPreferredCanvasFormat(),
+            usage:
+              GPUTextureUsage.RENDER_ATTACHMENT |
+              GPUTextureUsage.TEXTURE_BINDING,
+          });
+        }
+        // Convert and rotate the frame into the texture on the GPU
+        device.queue.copyExternalImageToTexture(
+          { source: frame, rotation: player.rotation },
+          { texture },
+          [width, height]
+        );
+        frame.release();
+        // A new image is what makes the canvas redraw
+        const previous = image.value;
+        image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+        previous?.dispose();
+      }
+      raf = requestAnimationFrame(render);
+    };
+    player.play();
+    raf = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(raf);
+      player.release();
+      const last = image.value;
+      image.value = null;
+      last?.dispose();
+      texture?.destroy();
+    };
+  }, [url, image]);
+
+  return (
+    <Canvas ref={ref} style={{ flex: 1 }}>
+      <Image
+        image={image}
+        x={0}
+        y={0}
+        width={size.width}
+        height={size.height}
+        fit="cover"
+      />
+    </Canvas>
+  );
+};
+```
+
+The result is a regular Skia image: use it in an `Image`, an `ImageShader`, or as the input of an image filter.
+The copy and the Skia drawing are submitted on the same queue, in order, so the image is complete by the time Skia samples it.
+
+### Camera frames
+
+A camera library that exposes its frames as native buffers works the same way.
+[`createVideoFrameFromNativeBuffer(pointer)`](https://wcandillon.github.io/react-native-webgpu/api/video-player#other-sources) from React Native WebGPU wraps the `CVPixelBufferRef` or `AHardwareBuffer*` the library hands out (for instance VisionCamera's `frame.getNativeBuffer().pointer`) into a `NativeVideoFrame`, which `copyExternalImageToTexture()` then renders into a texture.
+Pass the frame's orientation as `rotation` and `mirrored`, and release the frame once the copy is issued.
+
+### Lifetime
+
+- **Release frames early.** The texture holds the pixels once the copy is issued: release the frame right after, so the video player or the camera gets its buffer back.
+- **Reuse the texture.** Create a new one only when the frame size changes, and dispose the images that sample it before destroying it.
+- **Any runtime.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
+
+On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeImageFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
 
 ## Three.js
 
@@ -373,9 +485,7 @@ await renderer.init();
 renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromNativeTexture(
-    target.texture.nativePointer
-  );
+  image.value = Skia.Image.MakeImageFromGPUTexture(target.texture);
   previous?.dispose();
 });
 ```
@@ -404,7 +514,8 @@ Sharing a texture means sharing its lifetime. A few rules apply:
 - **Use the shared device.** Only textures created on `importDevice(Skia.getNativeDevice())` can be shared.
 - **Dispose Skia objects before destroying the texture.** An `SkImage` or `SkSurface` wrapping a texture holds its own reference to it, so the texture stays valid even if the JavaScript `GPUTexture` is garbage collected. Calling `texture.destroy()` releases the GPU resource regardless of references: dispose the image or surface first.
 - **Flush before sampling.** After drawing into a texture with Skia, call `surface.flush()` before the WebGPU commands that sample it.
-- **Adopt exported textures exactly once.** The pointer returned by `MakeNativeTextureFromImage()` carries one reference, which `adoptTexture()` takes over.
+- **Adopt exported textures exactly once.** The pointer returned by `MakeGPUTextureFromImage()` carries one reference, which `adoptTexture()` takes over.
+- **Keep native buffers alive.** An `SkImage` created with `MakeImageFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
 
 ## Examples
 
@@ -418,3 +529,4 @@ The React Native WebGPU documentation also has a page on [React Native Skia](htt
 | [Cube](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cube.tsx) | Three.js on a WebGPU canvas |
 | [Helmet](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Helmet.tsx) | A three.js scene drawn in a Skia canvas |
 | [Cloth](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cloth.tsx) | A Skia drawing used as a three.js texture |
+| [Video](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Video.tsx) | A video decoded by WebGPU, drawn by a Skia canvas through color filters, image filters and runtime shaders |

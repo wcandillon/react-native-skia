@@ -14,7 +14,6 @@
 #include "JsiSkShader.h"
 #include "api/third_party/base64.h"
 
-#include "JsiTextureInfo.h"
 #include "utils/RNSkTypedArray.h"
 
 #include "include/gpu/graphite/Context.h"
@@ -314,15 +313,6 @@ public:
     return std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
   }
 
-  JSI_HOST_FUNCTION(getNativeTextureUnstable) {
-    auto image = getObject();
-    if (!image->isTextureBacked()) {
-      return jsi::Value::null();
-    }
-    auto texInfo = getContext()->getTexture(image);
-    return JsiTextureInfo::toValue(runtime, texInfo);
-  }
-
   bool isTextureBacked() { return getObject()->isTextureBacked(); }
 
   /**
@@ -351,8 +341,6 @@ public:
                       &JsiSkImage::readPixels);
     installMethod(runtime, prototype, "makeNonTextureImage",
                   &JsiSkImage::makeNonTextureImage);
-    installHostMethod(runtime, prototype, "getNativeTextureUnstable",
-                      &JsiSkImage::getNativeTextureUnstable);
     installMethod(runtime, prototype, "isTextureBacked",
                   &JsiSkImage::isTextureBacked);
   }

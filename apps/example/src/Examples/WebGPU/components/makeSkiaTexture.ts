@@ -13,7 +13,7 @@ export interface SkiaTexture {
 // A three.js texture whose content is drawn by Skia, without any copy: the
 // GPUTexture is created on Skia's Graphite device (which `device` must be,
 // see importDevice(Skia.getNativeDevice())), Skia renders straight into it
-// through Skia.Surface.MakeFromNativeTexture, and three wraps the same
+// through Skia.Surface.MakeFromGPUTexture, and three wraps the same
 // texture in a THREE.ExternalTexture. Requires a Graphite build.
 export const makeSkiaTexture = (
   device: GPUDevice,
@@ -26,7 +26,7 @@ export const makeSkiaTexture = (
     format: navigator.gpu.getPreferredCanvasFormat(),
     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
   });
-  const surface = Skia.Surface.MakeFromNativeTexture(gpuTexture.nativePointer);
+  const surface = Skia.Surface.MakeFromGPUTexture(gpuTexture);
   const canvas = surface.getCanvas();
 
   const texture = new THREE.ExternalTexture(gpuTexture);
