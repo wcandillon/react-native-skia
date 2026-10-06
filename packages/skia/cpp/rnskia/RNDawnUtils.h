@@ -57,7 +57,7 @@ inline sk_sp<SkColorSpace> viewColorSpace(bool useP3ColorSpace) {
 }
 
 // Usage requested for a window texture when the surface supports it (see
-// DawnWindowContext::supportedSurfaceUsage), and assumed for a Graphite
+// RNSkWindowSurface::supportedSurfaceUsage), and assumed for a Graphite
 // recording made before its window exists: TextureBinding lets a render pass
 // reload the existing contents, CopySrc serves copy tasks.
 static const wgpu::TextureUsage DefaultTargetUsage =

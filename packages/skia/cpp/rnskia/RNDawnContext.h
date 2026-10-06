@@ -4,7 +4,6 @@
 #include <mutex>
 
 #include "RNDawnUtils.h"
-#include "RNDawnWindowContext.h"
 #include "RNImageProvider.h"
 #include "utils/RNSkLog.h"
 
@@ -296,11 +295,9 @@ public:
     return texture;
   }
 
-  // Create onscreen surface with window
-  std::unique_ptr<WindowContext> MakeWindow(void *window, int width, int height,
-                                            bool highBitDepth = false,
-                                            bool useP3ColorSpace = false) {
-    // 1. Create Surface
+  // The Dawn surface over a native window: a CAMetalLayer on Apple
+  // platforms, an ANativeWindow on Android (see RNSkWindowSurface).
+  wgpu::Surface MakeWGPUSurface(void *window) {
     wgpu::SurfaceDescriptor surfaceDescriptor;
 #ifdef __APPLE__
     wgpu::SurfaceSourceMetalLayer metalSurfaceDesc;
@@ -311,11 +308,7 @@ public:
     androidSurfaceDesc.window = window;
     surfaceDescriptor.nextInChain = &androidSurfaceDesc;
 #endif
-    auto surface =
-        wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
-    return std::make_unique<DawnWindowContext>(
-        getRecorder(), backendContext.fDevice, surface, window, width, height,
-        highBitDepth, useP3ColorSpace);
+    return wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
   }
 
   skgpu::graphite::Recorder *getRecorder() {

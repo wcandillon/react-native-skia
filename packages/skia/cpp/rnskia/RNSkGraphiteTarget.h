@@ -12,8 +12,9 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
-#include "RNSkCanvasProvider.h"
+#include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkWindowSurface.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -218,32 +219,32 @@ public:
   // View side ----------------------------------------------------------------
 
   /**
-   Binds the target to the view's surface: the provider describes the target
-   texture, requestFrame asks the view to present the queue.
+   Binds the target to the view's surface, which describes the target
+   texture; requestFrame asks the view to present the queue.
    */
-  void attach(std::weak_ptr<RNSkCanvasProvider> provider,
+  void attach(std::weak_ptr<RNSkWindowSurface> surface,
               std::function<void()> requestFrame) {
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
-      _provider = std::move(provider);
+      _surface = std::move(surface);
     }
     std::lock_guard<std::mutex> lock(_queueMutex);
     _requestFrame = std::move(requestFrame);
   }
 
   /**
-   Undoes attach(), for the view owning the given provider only. Native view
+   Undoes attach(), for the view owning the given surface only. Native view
    ids are reused across reloads and an Android view is only destroyed when
    its Java object is finalized, so a view going away may find its target
    already bound to its successor; that binding is left alone.
    */
-  void detach(const std::shared_ptr<RNSkCanvasProvider> &provider) {
+  void detach(const std::shared_ptr<RNSkWindowSurface> &surface) {
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
-      if (_provider.lock() != provider) {
+      if (_surface.lock() != surface) {
         return;
       }
-      _provider.reset();
+      _surface.reset();
     }
     std::lock_guard<std::mutex> lock(_queueMutex);
     _requestFrame = nullptr;
@@ -285,24 +286,24 @@ private:
    the pixel size the platform laid the view out with, else the layout size
    JS measured; in the last two cases with the format and the color space
    the surface will be created with, following the same rules (see
-   DawnWindowContext and SkiaView.java).
+   RNSkWindowSurface and SkiaView.java).
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
-    std::shared_ptr<RNSkCanvasProvider> provider;
+    std::shared_ptr<RNSkWindowSurface> surface;
     float width;
     float height;
     bool opaque;
     bool highBitDepth;
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
-      provider = _provider.lock();
+      surface = _surface.lock();
       width = _layoutWidth;
       height = _layoutHeight;
       opaque = _opaque;
       highBitDepth = _highBitDepth;
     }
     RNSkGraphiteTargetInfo info;
-    if (provider && provider->getTargetInfo(&info)) {
+    if (surface && surface->getTargetInfo(&info)) {
       return info;
     }
 #if defined(__ANDROID__)
@@ -314,7 +315,7 @@ private:
 #else
     (void)opaque;
 #endif
-    if (!provider || !provider->getLayoutSize(&info.width, &info.height)) {
+    if (!surface || !surface->getLayoutSize(&info.width, &info.height)) {
       // Not laid out yet (JS gets its onLayout before the platform lays the
       // view out): the size JS measured, in points. The layout is on the
       // pixel grid, so the product is an integer up to rounding errors.
@@ -342,7 +343,7 @@ private:
   std::shared_ptr<RNSkGraphiteRecorder> _recorder;
   bool _recording = false;
   RNSkGraphiteTargetInfo _recordingTarget;
-  std::weak_ptr<RNSkCanvasProvider> _provider;
+  std::weak_ptr<RNSkWindowSurface> _surface;
   float _layoutWidth = 0;
   float _layoutHeight = 0;
   bool _opaque = false;

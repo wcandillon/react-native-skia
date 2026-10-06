@@ -10,8 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "RNWindowContext.h"
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 

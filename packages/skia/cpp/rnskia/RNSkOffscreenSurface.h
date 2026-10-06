@@ -1,13 +1,12 @@
 #pragma once
 
-#include <functional>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkSurface.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -24,106 +23,21 @@
 namespace RNSkia {
 
 /**
- * Describes the texture a recording is replayed onto: the pixel size, the
- * format and the color space of a window (or offscreen) surface. A deferred
- * canvas is recorded against this description, so it can be created before
- * the surface itself exists.
- */
-struct RNSkGraphiteTargetInfo {
-  int width = 0;
-  int height = 0;
-  SkColorType colorType = kUnknown_SkColorType;
-  // Display P3 rather than sRGB (see DawnUtils::viewColorSpace). The colors
-  // of a recording are converted to the color space of its target when it is
-  // recorded, not when it is replayed.
-  bool useP3ColorSpace = false;
-  skgpu::graphite::TextureInfo textureInfo;
-};
-
-/**
- * The surface a view presents into: a platform window (a CAMetalLayer, an
- * ANativeWindow) or an offscreen surface. It describes its target texture to
- * whoever records for the view and replays their recordings onto it.
- */
-class RNSkCanvasProvider {
-public:
-  virtual ~RNSkCanvasProvider() = default;
-
-  /** Width of the surface, in pixels. */
-  virtual int getWidth() = 0;
-
-  /** Height of the surface, in pixels. */
-  virtual int getHeight() = 0;
-
-  /**
-   Describes the current target texture. Safe to call from any thread;
-   returns false while there is no surface to describe.
-   */
-  virtual bool getTargetInfo(RNSkGraphiteTargetInfo *info) = 0;
-
-  /**
-   The size in pixels the surface will have, known from the platform layout
-   before the surface itself exists (on Android the surface only appears a
-   frame after the view is laid out). Safe to call from any thread; returns
-   false until the view is laid out. A frame recorded against this size is
-   presented as is once the surface appears, where one recorded against a
-   size derived from the layout in points could be off by a pixel and would
-   not cover the surface.
-   */
-  virtual bool getLayoutSize(int *width, int *height) { return false; }
-
-  /**
-   Replays the recordings, in order, onto the target texture and presents
-   it. Called on the thread that owns the surface. Returns false when the
-   surface cannot present right now (there is none, or the app is in the
-   background): nothing was consumed.
-   */
-  virtual bool presentRecordings(
-      const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
-
-  /**
-   Draws an image at the origin of the target texture and presents it. Same
-   thread and return value as presentRecordings(). Used for a recording whose
-   size or color space differs from the target's: it is replayed into a
-   texture of its own first (see RNSkView::present).
-   */
-  virtual bool presentImage(const sk_sp<SkImage> &image) = 0;
-
-  /**
-   Installed by the view owning the provider: asks it for a frame when the
-   surface appears or changes size.
-   */
-  void setRequestRedraw(std::function<void()> requestRedraw) {
-    _requestRedraw = std::move(requestRedraw);
-  }
-
-protected:
-  void requestRedraw() {
-    if (_requestRedraw) {
-      _requestRedraw();
-    }
-  }
-
-private:
-  std::function<void()> _requestRedraw;
-};
-
-/**
- * An offscreen surface the content of a view is replayed into for a snapshot.
- * A recording is replayed as is, so the surface takes the color space of the
+ * An offscreen surface the content of a view is replayed into for a snapshot,
+ * or a recording made for another size or color space than the window's. A
+ * recording is replayed as is, so the surface takes the color space of the
  * recordings it is meant for.
  */
-class RNSkOffscreenCanvasProvider : public RNSkCanvasProvider {
+class RNSkOffscreenSurface final : public RNSkSurface {
 public:
-  RNSkOffscreenCanvasProvider(
-      const std::shared_ptr<RNSkPlatformContext> &context, int width,
-      int height, bool useP3ColorSpace = false)
+  RNSkOffscreenSurface(const std::shared_ptr<RNSkPlatformContext> &context,
+                       int width, int height, bool useP3ColorSpace = false)
       : _width(width), _height(height), _pd(context->getPixelDensity()),
         _useP3ColorSpace(useP3ColorSpace),
         _surface(
             context->makeOffscreenSurface(width, height, useP3ColorSpace)) {}
 
-  virtual ~RNSkOffscreenCanvasProvider() = default;
+  ~RNSkOffscreenSurface() override = default;
 
   /** The canvas of the surface, in pixels; nullptr without a surface. */
   SkCanvas *getCanvas() { return _surface ? _surface->getCanvas() : nullptr; }
