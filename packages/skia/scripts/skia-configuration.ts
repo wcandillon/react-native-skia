@@ -111,12 +111,15 @@ export type Target = {
   args?: Arg[];
   cpu: string;
   platform?: string;
-  output?: string;
   options?: Arg[];
 };
 
-export type Platform = {
-  targets: { [key: string]: Target };
+type AndroidTarget = Target & {
+  output: string;
+};
+
+export type Platform<PlatformTarget extends Target = Target> = {
+  targets: { [key: string]: PlatformTarget };
   args: Arg[];
   outputRoot: string;
   outputNames: string[];
@@ -259,7 +262,10 @@ const appleOutputNames = [
   ...DawnOutputApple,
 ];
 
-export const configurations: Record<PlatformName, Platform> = {
+export const configurations: { android: Platform<AndroidTarget> } & Record<
+  ApplePlatformName,
+  Platform
+> = {
   "android": {
     targets: {
       arm: {
@@ -294,6 +300,9 @@ export const configurations: Record<PlatformName, Platform> = {
         "extra_cflags",
         `["-DSKIA_C_DLL", "-DHAVE_SYSCALL_GETRANDOM", "-DXML_DEV_URANDOM"]`,
       ],
+      // Without RTTI, clang gives SkRawCodec, built with exceptions, its own
+      // copies of the C++ runtime's exception typeinfo.
+      ["extra_cflags_cc", `["-frtti"]`],
       ...ParagraphArgsAndroid,
     ],
     outputRoot: "libs/android",
