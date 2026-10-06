@@ -199,6 +199,12 @@ jobs:
         run: |
           yarn turbo run build:android --concurrency 1
 
+      - name: Unit test the Android library
+        working-directory: apps/example/android
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
+        run: ./gradlew :react-native-skia:testDebugUnitTest
+
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
         with:
