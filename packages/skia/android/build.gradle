@@ -181,6 +181,13 @@ android {
             }
         }
     }
+    // The Java sources use switch expressions (Java 14+). React Native's Gradle
+    // plugin aligns every module on 17 from the app's plugin block, but a host
+    // that opts out of that alignment must still compile this library.
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     lintOptions {
         abortOnError = false
     }

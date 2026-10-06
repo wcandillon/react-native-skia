@@ -86,6 +86,23 @@ public class FrameSchedulerTest {
     }
 
     @Test
+    public void textureViewRequestWhileARetryIsOutstandingWaitsForThatVsync() {
+        mHost.leftOverAfterPresent.add(true);
+        mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
+        mScheduler.onPosted();
+        assertEquals(
+                Arrays.asList(Call.POST_BEHIND_PENDING_DRAW, Call.PRESENT, Call.POST_FRAME_CALLBACK),
+                mHost.takeCalls());
+
+        mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
+        assertEquals(Arrays.asList(), mHost.takeCalls());
+
+        mScheduler.onFrame(BackingViewKind.TEXTURE_VIEW);
+        mScheduler.onPosted();
+        assertEquals(Arrays.asList(Call.POST_BEHIND_PENDING_DRAW, Call.PRESENT), mHost.takeCalls());
+    }
+
+    @Test
     public void surfaceViewLeftoverIsPresentedOnTheNextVsync() {
         mHost.leftOverAfterPresent.add(true);
         mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
@@ -100,12 +117,13 @@ public class FrameSchedulerTest {
 
     @Test
     public void requestsWaitingForTheSameFrameArePostedOnce() {
-        for (BackingViewKind kind : BackingViewKind.values()) {
-            mScheduler.requestFrame(kind);
-            mScheduler.requestFrame(kind);
-        }
+        mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
+        mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
+        mScheduler.onFrame(BackingViewKind.SURFACE_VIEW);
+        mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
+        mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
         assertEquals(
-                Arrays.asList(Call.POST_FRAME_CALLBACK, Call.POST_BEHIND_PENDING_DRAW),
+                Arrays.asList(Call.POST_FRAME_CALLBACK, Call.PRESENT, Call.POST_BEHIND_PENDING_DRAW),
                 mHost.takeCalls());
     }
 
@@ -113,18 +131,32 @@ public class FrameSchedulerTest {
     public void requestAfterTheFrameRanIsPostedAgain() {
         mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
         mScheduler.onFrame(BackingViewKind.SURFACE_VIEW);
+        mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
+        mScheduler.onFrame(BackingViewKind.SURFACE_VIEW);
         mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
         mScheduler.onPosted();
-        mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
         mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
         assertEquals(
                 Arrays.asList(
                         Call.POST_FRAME_CALLBACK,
                         Call.PRESENT,
+                        Call.POST_FRAME_CALLBACK,
+                        Call.PRESENT,
                         Call.POST_BEHIND_PENDING_DRAW,
                         Call.PRESENT,
-                        Call.POST_FRAME_CALLBACK,
                         Call.POST_BEHIND_PENDING_DRAW),
+                mHost.takeCalls());
+    }
+
+    @Test
+    public void kindSwitchWhileAFrameCallbackIsOutstandingPresentsBehindThePendingDraw() {
+        mScheduler.requestFrame(BackingViewKind.SURFACE_VIEW);
+        // updateView() replaced the SurfaceView with a TextureView meanwhile.
+        mScheduler.requestFrame(BackingViewKind.TEXTURE_VIEW);
+        mScheduler.onFrame(BackingViewKind.TEXTURE_VIEW);
+        mScheduler.onPosted();
+        assertEquals(
+                Arrays.asList(Call.POST_FRAME_CALLBACK, Call.POST_BEHIND_PENDING_DRAW, Call.PRESENT),
                 mHost.takeCalls());
     }
 
@@ -139,16 +171,15 @@ public class FrameSchedulerTest {
     public void cancelDropsOutstandingRequests() {
         for (BackingViewKind kind : BackingViewKind.values()) {
             mScheduler.requestFrame(kind);
-        }
-        mScheduler.cancel();
-        for (BackingViewKind kind : BackingViewKind.values()) {
+            mScheduler.cancel();
             mScheduler.requestFrame(kind);
+            mScheduler.cancel();
         }
         assertEquals(
                 Arrays.asList(
                         Call.POST_FRAME_CALLBACK,
-                        Call.POST_BEHIND_PENDING_DRAW,
                         Call.POST_FRAME_CALLBACK,
+                        Call.POST_BEHIND_PENDING_DRAW,
                         Call.POST_BEHIND_PENDING_DRAW),
                 mHost.takeCalls());
     }

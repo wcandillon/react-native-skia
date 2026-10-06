@@ -34,6 +34,11 @@ final class FrameScheduler {
         if (kind == null) {
             return;
         }
+        // A frame callback still outstanding (a retry, see presentOrRetry) presents
+        // the new recording along with the leftovers on that vsync.
+        if (mFrameCallbackPosted) {
+            return;
+        }
         if (presentsOnVsync(kind)) {
             postFrameCallback();
         } else {
