@@ -73,30 +73,6 @@ TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
   return makeCxxInstance(jThis, pixelDensity);
 }
 
-jni::global_ref<jobject>
-JniPlatformContext::createVideo(const std::string &url) {
-  jni::Environment::ensureCurrentThreadIsAttached();
-
-  jni::ThreadScope ts; // Manages JNI thread attachment/detachment
-
-  // Get the JNI environment
-  JNIEnv *env = facebook::jni::Environment::current();
-
-  // Convert std::string to jstring
-  jstring jUrl = env->NewStringUTF(url.c_str());
-
-  static auto method =
-      javaPart_->getClass()->getMethod<jobject(jstring)>("createVideo");
-
-  // Call the method and receive a local reference to the video object
-  auto videoObject = method(javaPart_.get(), jUrl);
-  env->DeleteLocalRef(jUrl);
-
-  // Clean up the jstring local reference
-  auto result = jni::make_global(videoObject);
-  return result;
-}
-
 sk_sp<SkImage> JniPlatformContext::takeScreenshotFromViewTag(size_t tag) {
   // Call the java method for creating a view screenshot as a bitmap:
   auto env = jni::Environment::current();

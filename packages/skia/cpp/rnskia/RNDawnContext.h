@@ -25,23 +25,11 @@
 
 #include "src/gpu/graphite/ContextOptionsPriv.h"
 
-#ifdef __APPLE__
-#include <CoreVideo/CVPixelBuffer.h>
-#else
-#include <android/hardware_buffer.h>
-#include <android/hardware_buffer_jni.h>
-#endif
-
 namespace RNSkia {
 
 struct AsyncContext {
   bool fCalled = false;
   std::unique_ptr<const SkSurface::AsyncReadResult> fResult;
-};
-
-struct SharedTextureContext {
-  wgpu::SharedTextureMemory sharedTextureMemory;
-  wgpu::Texture texture;
 };
 
 static void
@@ -54,9 +42,6 @@ async_callback(void *c,
 
 class DawnContext {
 public:
-  // TODO: remove
-  friend class RNSkApplePlatformContext;
-
   DawnContext(const DawnContext &) = delete;
   DawnContext &operator=(const DawnContext &) = delete;
 
@@ -143,84 +128,6 @@ public:
     fGraphiteContext->submit(syncToCpu);
   }
 
-  sk_sp<SkImage> MakeImageFromBuffer(void *buffer) {
-#if defined(__ANDROID__) && __ANDROID_API__ < 26
-    // AHardwareBuffer is only available from API 26
-    (void)buffer;
-    return nullptr;
-#else
-#ifdef __APPLE__
-    wgpu::SharedTextureMemoryIOSurfaceDescriptor platformDesc;
-    auto ioSurface = CVPixelBufferGetIOSurface((CVPixelBufferRef)buffer);
-    platformDesc.ioSurface = ioSurface;
-    int width = static_cast<int>(IOSurfaceGetWidth(ioSurface));
-    int height = static_cast<int>(IOSurfaceGetHeight(ioSurface));
-#else
-    wgpu::SharedTextureMemoryAHardwareBufferDescriptor platformDesc;
-    auto ahb = reinterpret_cast<AHardwareBuffer *>(buffer);
-    platformDesc.handle = ahb;
-    AHardwareBuffer_Desc adesc;
-    AHardwareBuffer_describe(ahb, &adesc);
-    int width = adesc.width;
-    int height = adesc.height;
-#endif
-
-    wgpu::SharedTextureMemoryDescriptor desc = {};
-    desc.nextInChain = &platformDesc;
-    wgpu::SharedTextureMemory memory =
-        backendContext.fDevice.ImportSharedTextureMemory(&desc);
-
-    wgpu::TextureDescriptor textureDesc;
-    textureDesc.format = DawnUtils::PreferredTextureFormat;
-    textureDesc.dimension = wgpu::TextureDimension::e2D;
-    textureDesc.usage =
-        wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc;
-    textureDesc.size = {static_cast<uint32_t>(width),
-                        static_cast<uint32_t>(height), 1};
-
-    wgpu::Texture texture = memory.CreateTexture(&textureDesc);
-
-    wgpu::SharedTextureMemoryBeginAccessDescriptor beginAccessDesc;
-    beginAccessDesc.initialized = true;
-    beginAccessDesc.fenceCount = 0;
-#if defined(__ANDROID__)
-    // Dawn's Vulkan backend requires the acquired VkImageLayout to be chained.
-    // UNDEFINED (= 0) on both ends is the canonical "no prior GPU producer"
-    // pattern (matches GPUSharedTextureMemory::beginAccess).
-    wgpu::SharedTextureMemoryVkImageLayoutBeginState vkBegin = {};
-    vkBegin.oldLayout = 0;
-    vkBegin.newLayout = 0;
-    beginAccessDesc.nextInChain = &vkBegin;
-#endif
-    bool success =
-        memory.BeginAccess(texture, &beginAccessDesc) == wgpu::Status::Success;
-
-    if (success) {
-      skgpu::graphite::BackendTexture betFromView =
-          skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-      auto result = SkImages::WrapTexture(
-          getRecorder(), betFromView, DawnUtils::PreferedColorType,
-          kPremul_SkAlphaType, nullptr,
-          [](void *context) {
-            auto ctx = static_cast<SharedTextureContext *>(context);
-            wgpu::SharedTextureMemoryEndAccessState endState = {};
-#if defined(__ANDROID__)
-            wgpu::SharedTextureMemoryVkImageLayoutEndState vkEnd = {};
-            endState.nextInChain = &vkEnd;
-#endif
-            ctx->sharedTextureMemory.EndAccess(ctx->texture, &endState);
-            delete ctx;
-          },
-          new SharedTextureContext{memory, texture});
-      return result;
-    }
-    if (!success) {
-      return nullptr;
-    }
-    return nullptr;
-#endif
-  }
-
   // Create offscreen surface
   sk_sp<SkSurface> MakeOffscreen(int width, int height,
                                  bool useP3ColorSpace = false) {
@@ -276,26 +183,11 @@ public:
       return nullptr;
     }
 
-    // Map WebGPU format to Skia color type
-    SkColorType colorType;
-    switch (format) {
-    case wgpu::TextureFormat::RGBA8Unorm:
-      colorType = kRGBA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::BGRA8Unorm:
-      colorType = kBGRA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::RGBA16Float:
-      colorType = kRGBA_F16_SkColorType;
-      break;
-    case wgpu::TextureFormat::R8Unorm:
-      colorType = kGray_8_SkColorType;
-      break;
-    default:
-      // Use preferred color type for unsupported formats
-      colorType = DawnUtils::PreferedColorType;
-      break;
-    }
+    // Map the WebGPU format to a Skia color type; fall back to the preferred
+    // color type for formats Skia does not sample.
+    SkColorType colorType =
+        DawnUtils::colorTypeForTextureFormat(format).value_or(
+            DawnUtils::PreferedColorType);
 
     skgpu::graphite::BackendTexture backendTexture =
         skgpu::graphite::BackendTextures::MakeDawn(texture.Get());

@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "RNSkVideo.h"
 #include "RNWindowContext.h"
 
 #pragma clang diagnostic push
@@ -29,14 +28,6 @@
 namespace RNSkia {
 
 namespace react = facebook::react;
-
-struct TextureInfo {
-  const void *mtlTexture = nullptr;
-  unsigned int glTarget = 0;
-  unsigned int glID = 0;
-  unsigned int glFormat = 0;
-  bool glProtected = false;
-};
 
 class RNSkPlatformContext {
 public:
@@ -95,51 +86,6 @@ public:
    */
   virtual sk_sp<SkSurface>
   makeOffscreenSurface(int width, int height, bool useP3ColorSpace = false) = 0;
-
-  /**
-   * Creates an image from a native buffer.
-   * - On iOS, this is a `CVPixelBufferRef`
-   * - On Android, this is a `AHardwareBuffer*`
-   * @param buffer The native buffer.
-   * @return sk_sp<SkImage>
-   */
-  virtual sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) = 0;
-
-  // The handle-based texture interop of the Ganesh era (Metal and OpenGL
-  // texture handles). Graphite textures cross the package boundary as
-  // WGPUTexture pointers instead (see JsiSkImageFactory).
-  sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &textureInfo,
-                                            int width, int height,
-                                            bool mipMapped) {
-    throw std::runtime_error(
-        "makeImageFromNativeTexture is not available on Graphite, use "
-        "Skia.Image.MakeImageFromNativeTexture(pointer)");
-  }
-
-  const TextureInfo getTexture(sk_sp<SkSurface> image) {
-    throw std::runtime_error(
-        "getTexture(surface) is not available on Graphite, use "
-        "Skia.Surface.MakeFromNativeTexture(pointer)");
-  }
-
-  const TextureInfo getTexture(sk_sp<SkImage> image) {
-    throw std::runtime_error(
-        "getTexture(image) is not available on Graphite, use "
-        "Skia.Image.MakeNativeTextureFromImage(image)");
-  }
-
-  virtual void releaseNativeBuffer(uint64_t pointer) = 0;
-
-  virtual uint64_t makeNativeBuffer(sk_sp<SkImage> image) = 0;
-
-  // Allocate a platform native buffer (IOSurface on Apple, AHardwareBuffer on
-  // Android) of the given size filled with a procedural test pattern (RGB
-  // gradient + diagonal stripes), entirely on the CPU. Intended for examples
-  // and tests that need a buffer to feed into importExternalTexture without a
-  // camera/video source. Release it with releaseNativeBuffer().
-  virtual uint64_t makeTestNativeBuffer(int width, int height) = 0;
-
-  virtual std::shared_ptr<RNSkVideo> createVideo(const std::string &url) = 0;
 
   /**
    * Return the Platform specific font manager

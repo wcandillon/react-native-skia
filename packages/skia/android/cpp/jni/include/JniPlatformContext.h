@@ -44,8 +44,6 @@ public:
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag);
 
-  jni::global_ref<jobject> createVideo(const std::string &url);
-
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;

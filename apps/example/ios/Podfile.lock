@@ -2009,7 +2009,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-webgpu (0.10.0):
+  - react-native-webgpu (0.11.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -3002,7 +3002,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../../../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../../../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - react-native-safe-area-context (from `../../../node_modules/react-native-safe-area-context`)
-  - "react-native-skia (from `../../../node_modules/react-native-skia`)"
+  - react-native-skia (from `../../../node_modules/react-native-skia`)
   - react-native-webgpu (from `../../../node_modules/react-native-webgpu`)
   - React-NativeModulesApple (from `../../../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../../../node_modules/react-native/ReactCommon/react/networking`)
@@ -3238,7 +3238,7 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 11b010917f5f15150b2c015abddef1573d2bb05d
+  hermes-engine: ad676c360175e5b8af471b8ce1389e6cf4f9e1ee
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: a41bbdd9af30bf2e5715796b313e44ec43eefff1
   RCTRequired: 7be34aabb0b77c3cefe644528df0fa0afad4e4d0
@@ -3276,8 +3276,8 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 7b72a669e94662359dad4f42b5af005eb24b4e83
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
   react-native-safe-area-context: 735c8ebacdececeb034ce0524f80ef1a484f67fe
-  react-native-skia: 398d81d07392758762cf114280cceb24ebc9b6f3
-  react-native-webgpu: 64a2e7f8241cdb08c0e43c7e51fbb9619109aa41
+  react-native-skia: 6d3bc59f7f98a17c8db54eafd6e5036d3c5ac9b4
+  react-native-webgpu: ef9f98e0c027e7304dfbde04822fbc75e8bd6c24
   React-NativeModulesApple: a2c3d2cbec893956a5b3e4060322db2984fff75b
   React-networking: 3f98bd96893a294376e7e03730947a08d474c380
   React-oscompat: 80166b66da22e7af7fad94474e9997bd52d4c8c6
@@ -3322,6 +3322,6 @@ SPEC CHECKSUMS:
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: d3796f1f719a0788265d1cd391be0a04200ce6cd
+PODFILE CHECKSUM: a285c128b0213e1375b018eda17d2144c2609172
 
 COCOAPODS: 1.16.2

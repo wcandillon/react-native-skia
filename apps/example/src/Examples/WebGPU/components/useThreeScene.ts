@@ -90,9 +90,7 @@ export const useThreeScene = (
       // SkImage only references the texture) and a new object is what makes
       // the Skia Canvas redraw with this frame's contents.
       const previous = image.value;
-      image.value = Skia.Image.MakeImageFromNativeTexture(
-        target.texture.nativePointer
-      );
+      image.value = Skia.Image.MakeImageFromGPUTexture(target.texture);
       previous?.dispose();
     };
     // Initialize the backend up front so the first published frame is a
