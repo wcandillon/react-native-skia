@@ -82,7 +82,7 @@ public:
     // When `sync` is true, block until the GPU has finished executing the
     // submitted work. Required before a consumer on a different command queue
     // (a secondary Dawn device, for instance) reads the texture this surface
-    // draws into (see Surface.MakeFromNativeTexture). #3916
+    // draws into (see Surface.MakeFromGPUTexture). #3916
     bool sync = syncParam.has_value() && *syncParam;
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
     // only Graphite-backed surfaces need to snap and submit a recording.

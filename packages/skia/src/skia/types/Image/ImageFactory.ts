@@ -1,21 +1,8 @@
 import type { SkData } from "../Data";
+import type { GPUTextureHandle } from "../GPUTexture";
 
 import type { ColorType } from "./ColorType";
 import type { SkImage } from "./Image";
-
-/**
- * A native buffer, as accepted by `MakeImageFromNativeBuffer`.
- *
- * On native platforms it is a raw pointer encoded as a BigInt: an
- * `IOSurfaceRef` or a `CVPixelBufferRef` on Apple platforms, an
- * `AHardwareBuffer*` on Android. This is the shape of
- * `NativeVideoFrame.handle` in React Native WebGPU and of
- * `frame.getNativeBuffer().pointer` in VisionCamera.
- *
- * On Web it is any `CanvasImageSource` (an `HTMLVideoElement`, an
- * `ImageBitmap`, a canvas...).
- */
-export type NativeBuffer = bigint | CanvasImageSource;
 
 export enum AlphaType {
   Unknown,
@@ -48,26 +35,17 @@ export interface ImageFactory {
   MakeImageFromEncoded: (encoded: SkData) => SkImage | null;
 
   /**
-   * Wraps a native buffer (a camera or video frame) into an image, without
-   * copying its pixels. On native platforms the buffer is imported into Dawn
-   * as shared texture memory, so the image samples the buffer directly.
+   * Web only. Creates an image from a `CanvasImageSource`: an
+   * `HTMLVideoElement`, an `ImageBitmap`, a canvas, an `HTMLImageElement`...
    *
-   * The buffer is typically obtained from React Native WebGPU
-   * (`NativeVideoFrame.handle`, from `createVideoPlayer()` or
-   * `createVideoFrameFromNativeBuffer()`) or from VisionCamera
-   * (`frame.getNativeBuffer().pointer`).
+   * On native platforms, camera and video frames are rendered into a texture
+   * of the shared device by React Native WebGPU
+   * (`queue.copyExternalImageToTexture()`), and the texture is wrapped with
+   * {@link MakeImageFromGPUTexture}. Calling this method there throws.
    *
-   * The caller keeps ownership of the buffer: keep it alive for as long as the
-   * image is in use, and dispose the image before releasing it.
-   *
-   * The buffer must be in a format Skia can sample (BGRA or RGBA 8 bits, F16,
-   * or 10 bits per channel); YUV frames are not supported yet. On Android the
-   * buffer must have been allocated with the `GPU_SAMPLED_IMAGE` usage.
-   *
-   * @param nativeBuffer The native buffer (see {@link NativeBuffer})
-   * @throws Throws an error when the buffer cannot be wrapped, with the reason
+   * @param source The image source
    */
-  MakeImageFromNativeBuffer: (nativeBuffer: NativeBuffer) => SkImage;
+  MakeImageFromNativeBuffer: (source: CanvasImageSource) => SkImage;
 
   /**
    * Returns an image that will be a screenshot of the view represented by
@@ -90,33 +68,31 @@ export interface ImageFactory {
   MakeImage(info: ImageInfo, data: SkData, bytesPerRow: number): SkImage | null;
 
   /**
-   * Creates an SkImage from a WebGPU texture.
-   * This allows using textures rendered by WebGPU in Skia drawings. The
-   * texture crosses the package boundary as a raw pointer: pass
-   * `texture.nativePointer` from a react-native-webgpu GPUTexture created on
-   * the shared device (importDevice(Skia.getNativeDevice())). The native side
-   * takes its own reference, so the handle stays valid even if the JS
-   * GPUTexture is garbage collected — but do not call texture.destroy()
-   * while the image is in use: destroy() releases the underlying GPU
-   * resource regardless of reference counts.
+   * Creates an SkImage from a WebGPU texture, without copying it.
+   * The texture must be created with React Native WebGPU on the shared
+   * device (importDevice(Skia.getNativeDevice())) with the TEXTURE_BINDING
+   * usage. The image takes its own reference to the texture, so it stays
+   * valid even if the JS GPUTexture is garbage collected; do not call
+   * texture.destroy() while the image is in use, as destroy() releases the
+   * GPU resource regardless of references.
    *
    * Native only.
    *
-   * @param pointer - The WGPUTexture pointer (texture.nativePointer)
-   * @returns An SkImage wrapping the texture, or throws if the texture is invalid
+   * @param texture - The GPUTexture (see {@link GPUTextureHandle})
+   * @returns An SkImage sampling the texture, or throws if the texture is invalid
    */
-  MakeImageFromNativeTexture(pointer: bigint): SkImage;
+  MakeImageFromGPUTexture(texture: GPUTextureHandle): SkImage;
 
   /**
-   * Creates a WebGPU texture from an SkImage.
-   * This allows using Skia images in WebGPU rendering pipelines. The
-   * returned pointer carries one reference and must be adopted exactly once
-   * with react-native-webgpu's adoptTexture(), which owns it from then on.
+   * Draws an SkImage into a new WebGPU texture on the shared device.
+   * The returned pointer carries one reference and must be adopted exactly
+   * once with React Native WebGPU's adoptTexture(), which builds the
+   * GPUTexture and owns the reference from then on.
    *
    * Native only.
    *
-   * @param image - An SkImage to convert to a texture
+   * @param image - The SkImage to draw into the texture
    * @returns A WGPUTexture pointer for adoptTexture(), or throws on failure
    */
-  MakeNativeTextureFromImage(image: SkImage): bigint;
+  MakeGPUTextureFromImage(image: SkImage): bigint;
 }

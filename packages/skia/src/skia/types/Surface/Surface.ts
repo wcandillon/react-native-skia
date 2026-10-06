@@ -30,7 +30,7 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
    * @param sync - When true, block until the GPU has finished executing the
    * submitted work. Use this before a consumer on a different command queue
    * reads the texture this surface draws into (see
-   * `Skia.Surface.MakeFromNativeTexture`). Defaults to false.
+   * `Skia.Surface.MakeFromGPUTexture`). Defaults to false.
    */
   flush(sync?: boolean): void;
 

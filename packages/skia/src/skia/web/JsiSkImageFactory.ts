@@ -4,8 +4,8 @@ import type {
   SkData,
   ImageInfo,
   SkImage,
-  NativeBuffer,
   ImageFactory,
+  GPUTextureHandle,
 } from "../types";
 
 import { Host, getEnum, throwNotImplementedOnRNWeb } from "./Host";
@@ -13,11 +13,8 @@ import { JsiSkImage } from "./JsiSkImage";
 import { JsiSkData } from "./JsiSkData";
 import type { JsiSkSurface } from "./JsiSkSurface";
 
-// On Web a native buffer is any CanvasImageSource (the video element of a
-// playing video, an ImageBitmap, a canvas...).
-const isCanvasImageSource = (
-  buffer: NativeBuffer
-): buffer is CanvasImageSource =>
+// The video element of a playing video, an ImageBitmap, a canvas...
+const isCanvasImageSource = (buffer: unknown): buffer is CanvasImageSource =>
   buffer instanceof HTMLVideoElement ||
   buffer instanceof HTMLCanvasElement ||
   buffer instanceof ImageBitmap ||
@@ -43,12 +40,12 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
   }
 
   MakeImageFromNativeBuffer(
-    buffer: NativeBuffer,
+    buffer: CanvasImageSource,
     surface?: JsiSkSurface,
     image?: JsiSkImage
   ) {
     if (!isCanvasImageSource(buffer)) {
-      throw new Error("Invalid NativeBuffer");
+      throw new Error("MakeImageFromNativeBuffer expects a CanvasImageSource");
     }
     if (!surface) {
       let img: Image;
@@ -105,11 +102,11 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeImageFromNativeTexture(_pointer: bigint): SkImage {
+  MakeImageFromGPUTexture(_texture: GPUTextureHandle): SkImage {
     return throwNotImplementedOnRNWeb<SkImage>();
   }
 
-  MakeNativeTextureFromImage(_image: SkImage): bigint {
+  MakeGPUTextureFromImage(_image: SkImage): bigint {
     return throwNotImplementedOnRNWeb<bigint>();
   }
 }

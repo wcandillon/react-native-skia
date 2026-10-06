@@ -144,15 +144,13 @@ The following APIs were removed in favor of it:
 
 | Removed | Replacement |
 |:--|:--|
-| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createVideoPlayer()`, whose frames are drawn with `Skia.Image.MakeImageFromNativeBuffer()`. See [native buffers](/docs/webgpu#native-buffers). |
-| `Skia.NativeBuffer.MakeFromImage()` | Export the image as a WebGPU texture with `Skia.Image.MakeNativeTextureFromImage()`. See [exporting an image](/docs/webgpu#exporting-an-image). |
+| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createVideoPlayer()`, whose frames are copied into a texture that Skia draws. See [native buffers](/docs/webgpu#native-buffers). |
+| `Skia.NativeBuffer.MakeFromImage()` | Export the image as a WebGPU texture with `Skia.Image.MakeGPUTextureFromImage()`. See [exporting an image](/docs/webgpu#exporting-an-image). |
 | `Skia.NativeBuffer.MakeTestBuffer()` | React Native WebGPU's `createTestVideoFrame()`. |
 | `Skia.NativeBuffer.Release()` | `NativeVideoFrame.release()`: React Native WebGPU owns the buffers it hands out. |
-| `Skia.Image.MakeImageFromNativeTextureUnstable()` | `Skia.Image.MakeImageFromNativeTexture(pointer)`, which takes a WebGPU texture. See [WebGPU](/docs/webgpu). |
-| `image.getNativeTextureUnstable()` and `surface.getNativeTextureUnstable()` | `Skia.Image.MakeNativeTextureFromImage()` and `Skia.Surface.MakeFromNativeTexture()`: textures are shared as WebGPU textures. |
-
-`Skia.Image.MakeImageFromNativeBuffer()` keeps its signature. It takes the same `CVPixelBufferRef` or `AHardwareBuffer*` pointer as before, and also accepts the `IOSurfaceRef` held by a `NativeVideoFrame`.
-YUV buffers are not supported yet: request BGRA or RGBA frames from the producer.
+| `Skia.Image.MakeImageFromNativeTextureUnstable()` | `Skia.Image.MakeImageFromGPUTexture(texture)`, which takes a WebGPU texture. See [WebGPU](/docs/webgpu). |
+| `image.getNativeTextureUnstable()` and `surface.getNativeTextureUnstable()` | `Skia.Image.MakeGPUTextureFromImage()` and `Skia.Surface.MakeFromGPUTexture()`: textures are shared as WebGPU textures. |
+| `Skia.Image.MakeImageFromNativeBuffer(pointer)` on native platforms | React Native WebGPU's `copyExternalImageToTexture()` renders the frame into a texture, which `Skia.Image.MakeImageFromGPUTexture()` wraps. See [native buffers](/docs/webgpu#native-buffers). The method remains on Web, where it takes a `CanvasImageSource`. |
 
 ## What is new
 

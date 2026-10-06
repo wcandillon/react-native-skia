@@ -4,8 +4,8 @@ import { surface } from "../setup";
 
 // Covers the pointer-based interop surface with react-native-webgpu:
 // Skia.getNativeDevice(), the
-// MakeNativeTextureFromImage / MakeImageFromNativeTexture round trip, and
-// Surface.MakeFromNativeTexture drawing into a shared texture.
+// MakeGPUTextureFromImage / MakeImageFromGPUTexture round trip, and
+// Surface.MakeFromGPUTexture drawing into a shared texture.
 // The pointers never cross the eval boundary (BigInt is not JSON
 // serializable); everything runs on-device and only plain data comes back.
 describe("Texture interop (Graphite)", () => {
@@ -45,11 +45,11 @@ describe("Texture interop (Graphite)", () => {
         // carries the reference normally adopted by react-native-webgpu's
         // adoptTexture(); the wrap below only borrows it, so this spec leaks
         // one 64x64 texture per run — acceptable in a test.
-        const pointer = Skia.Image.MakeNativeTextureFromImage(original);
+        const pointer = Skia.Image.MakeGPUTextureFromImage(original);
         if (typeof pointer !== "bigint" || pointer === BigInt(0)) {
-          return "MakeNativeTextureFromImage did not return a pointer";
+          return "MakeGPUTextureFromImage did not return a pointer";
         }
-        const roundTripped = Skia.Image.MakeImageFromNativeTexture(pointer);
+        const roundTripped = Skia.Image.MakeImageFromGPUTexture(pointer);
         if (roundTripped.width() !== size || roundTripped.height() !== size) {
           return `unexpected size ${roundTripped.width()}x${roundTripped.height()}`;
         }
@@ -82,7 +82,7 @@ describe("Texture interop (Graphite)", () => {
   });
 
   itRunsE2eOnly(
-    "draws into a native texture through Surface.MakeFromNativeTexture",
+    "draws into a native texture through Surface.MakeFromGPUTexture",
     async () => {
       const result = await surface.eval(
         (Skia, ctx) => {
@@ -95,13 +95,13 @@ describe("Texture interop (Graphite)", () => {
           }
           seed.getCanvas().clear(Skia.Color("black"));
           seed.flush();
-          const pointer = Skia.Image.MakeNativeTextureFromImage(
+          const pointer = Skia.Image.MakeGPUTextureFromImage(
             seed.makeImageSnapshot()
           );
 
           // Draw into the texture through a wrapping surface, twice, so a
           // second frame overwrites the first in place.
-          const target = Skia.Surface.MakeFromNativeTexture(pointer);
+          const target = Skia.Surface.MakeFromGPUTexture(pointer);
           if (target.width() !== size || target.height() !== size) {
             return `unexpected size ${target.width()}x${target.height()}`;
           }
@@ -117,7 +117,7 @@ describe("Texture interop (Graphite)", () => {
 
           // Read the texture back as an image, like a WebGPU consumer would
           // sample it, and check both halves.
-          const image = Skia.Image.MakeImageFromNativeTexture(pointer);
+          const image = Skia.Image.MakeImageFromGPUTexture(pointer);
           const dst = Skia.Surface.MakeOffscreen(size, size);
           if (!dst) {
             return "could not create the destination surface";

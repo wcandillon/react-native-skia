@@ -32,3 +32,4 @@ export * from "./Matrix4";
 export * from "./Recorder";
 export * from "./Skottie";
 export * from "./Graphite";
+export * from "./GPUTexture";
