@@ -267,13 +267,13 @@ const toTexture = (image: SkImage): GPUTexture =>
 ## Native buffers
 
 Camera and video frames live in native buffers: an `IOSurface` (usually wrapped in a `CVPixelBuffer`) on Apple platforms, an `AHardwareBuffer` on Android.
-Skia does not import them. React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, ties their lifetime to a `NativeVideoFrame` object, and renders a frame into a texture of the shared device with `queue.copyExternalImageToTexture()`, converting YUV to RGB and applying the rotation of the video or the camera on the GPU.
+Skia does not import them. React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, ties their lifetime to a [`NativeVideoFrame`](https://wcandillon.github.io/react-native-webgpu/api/video-player#nativevideoframe) object, and renders a frame into a texture of the shared device with [`queue.copyExternalImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/gpu-device-extensions#copyexternalimagetotexture-with-a-native-frame), converting YUV to RGB and applying the rotation of the video or the camera on the GPU.
 `Skia.Image.MakeImageFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
-There is one path on both platforms, whatever the format of the frame.
+There is one path on both platforms, whatever the format of the frame. It needs React Native WebGPU 0.11.1 or above.
 
 ### Playing a video
 
-`createVideoPlayer()` from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
+[`createVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
 `copyLatestFrame()` returns the most recently decoded frame, or `null` when no new frame was decoded since the last call.
 Copy each new frame into a texture, wrap the texture into an image, and publish the image through a shared value:
 
@@ -361,7 +361,7 @@ The copy and the Skia drawing are submitted on the same queue, in order, so the 
 ### Camera frames
 
 A camera library that exposes its frames as native buffers works the same way.
-`createVideoFrameFromNativeBuffer(pointer)` from React Native WebGPU wraps the `CVPixelBufferRef` or `AHardwareBuffer*` the library hands out (for instance VisionCamera's `frame.getNativeBuffer().pointer`) into a `NativeVideoFrame`, which `copyExternalImageToTexture()` then renders into a texture.
+[`createVideoFrameFromNativeBuffer(pointer)`](https://wcandillon.github.io/react-native-webgpu/api/video-player#other-sources) from React Native WebGPU wraps the `CVPixelBufferRef` or `AHardwareBuffer*` the library hands out (for instance VisionCamera's `frame.getNativeBuffer().pointer`) into a `NativeVideoFrame`, which `copyExternalImageToTexture()` then renders into a texture.
 Pass the frame's orientation as `rotation` and `mirrored`, and release the frame once the copy is issued.
 
 ### Lifetime
@@ -529,3 +529,4 @@ The React Native WebGPU documentation also has a page on [React Native Skia](htt
 | [Cube](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cube.tsx) | Three.js on a WebGPU canvas |
 | [Helmet](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Helmet.tsx) | A three.js scene drawn in a Skia canvas |
 | [Cloth](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cloth.tsx) | A Skia drawing used as a three.js texture |
+| [Video](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Video.tsx) | A video decoded by WebGPU and drawn by a Skia canvas |

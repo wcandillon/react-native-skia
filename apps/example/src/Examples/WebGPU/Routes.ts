@@ -4,4 +4,5 @@ export type Routes = {
   Cube: undefined;
   Helmet: undefined;
   Cloth: undefined;
+  Video: undefined;
 };
