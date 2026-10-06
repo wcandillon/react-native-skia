@@ -1,13 +1,41 @@
 /* eslint-disable import/no-anonymous-default-export */
-import type { SkPicture, SkRect } from "../skia/types";
+import type {
+  SkGraphiteContext,
+  SkImage,
+  SkPicture,
+  SkRect,
+} from "../skia/types";
 import type { ISkiaViewApi } from "../views/types";
-import type { SkiaPictureViewHandle } from "../views/SkiaPictureView.web";
+
+/** What the web view registers under its native id. */
+export interface SkiaWebViewHandle {
+  /** Shows a picture: the frame of a <Canvas> or a <SkiaPictureView>. */
+  setPicture(picture: SkPicture): void;
+  /** The recording side of the view, see SkiaGraphiteView. */
+  getContext(): SkGraphiteContext;
+  getSize(): { width: number; height: number };
+  redraw(): void;
+  makeImageSnapshot(rect?: SkRect): SkImage | null;
+  measure(
+    callback: (
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      pageX: number,
+      pageY: number
+    ) => void
+  ): void;
+  measureInWindow(
+    callback: (x: number, y: number, width: number, height: number) => void
+  ): void;
+}
 
 export type ISkiaViewApiWeb = ISkiaViewApi & {
-  views: Record<string, SkiaPictureViewHandle>;
+  views: Record<string, SkiaWebViewHandle>;
   deferedPictures: Record<string, SkPicture>;
   unregisteredViews: Set<string>;
-  registerView(nativeId: string, view: SkiaPictureViewHandle): void;
+  registerView(nativeId: string, view: SkiaWebViewHandle): void;
   unregisterView(nativeId: string): void;
 };
 
@@ -17,7 +45,7 @@ global.SkiaViewApi = {
   unregisteredViews: new Set<string>(),
   deferedOnSize: {},
   web: true,
-  registerView(nativeId: string, view: SkiaPictureViewHandle) {
+  registerView(nativeId: string, view: SkiaWebViewHandle) {
     this.unregisteredViews.delete(nativeId);
     // Maybe a picture for this view was already set
     if (this.deferedPictures[nativeId]) {
@@ -37,8 +65,9 @@ global.SkiaViewApi = {
   setJsiProperty(nativeId: number, name: string, value: any) {
     if (name === "picture") {
       const id = `${nativeId}`;
-      if (this.views[id]) {
-        this.views[id].setPicture(value);
+      const view = this.views[id];
+      if (view) {
+        view.setPicture(value);
       } else if (!this.unregisteredViews.has(id)) {
         this.deferedPictures[id] = value;
       }
@@ -58,6 +87,10 @@ global.SkiaViewApi = {
     // The view may already have unmounted (e.g. a trailing animation frame).
     this.views[`${nativeId}`]?.redraw();
   },
+  applyUpdates() {
+    // Web canvases are driven from JS (see Container.web.ts); there is no
+    // view-owned recorder to update.
+  },
   makeImageSnapshot(nativeId: number, rect?: SkRect) {
     const view = this.views[`${nativeId}`];
     if (!view) {
@@ -66,6 +99,15 @@ global.SkiaViewApi = {
       );
     }
     return view.makeImageSnapshot(rect);
+  },
+  makeGraphiteContext(nativeId: number) {
+    const view = this.views[`${nativeId}`];
+    if (!view) {
+      throw new Error(
+        `Cannot make a Graphite context: no view with nativeID ${nativeId} is mounted`
+      );
+    }
+    return view.getContext();
   },
   makeImageSnapshotAsync(nativeId: number, rect?: SkRect) {
     return new Promise((resolve, reject) => {

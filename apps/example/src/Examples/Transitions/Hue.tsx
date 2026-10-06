@@ -1,12 +1,6 @@
 import React from "react";
 import { Dimensions } from "react-native";
-import {
-  Canvas,
-  Fill,
-  ImageShader,
-  rect,
-  useImage,
-} from "@shopify/react-native-skia";
+import { Canvas, Fill, ImageShader, rect, useImage } from "react-native-skia";
 
 import { HueRotation } from "./HueRotation";
 

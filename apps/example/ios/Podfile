@@ -28,8 +28,23 @@ end
 # Xcode's all-target headermap would let one pod's include resolve into the
 # other pod's file, so disable headermaps for both; each then resolves
 # includes only through its own HEADER_SEARCH_PATHS.
+# Some pods (e.g. RNSVG's RNSVGFilters resource bundle) still declare a 12.4
+# deployment target, which Xcode 27 rejects. Raise any pod below the app's own
+# target to it.
+raise_pod_deployment_targets = ->(installer) do
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+      next if current.nil? || Gem::Version.new(current) >= Gem::Version.new('15.1')
+
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+    end
+  end
+end
+
 example_post_install = ->(installer) do
   fix_fmt_consteval.call(installer)
+  raise_pod_deployment_targets.call(installer)
   installer.pods_project.targets.each do |target|
     next unless ['react-native-skia', 'react-native-webgpu'].include?(target.name)
 

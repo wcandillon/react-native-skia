@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  Box,
-  BoxShadow,
-  Canvas,
-  Fill,
-  rect,
-  rrect,
-} from "@shopify/react-native-skia";
+import { Box, BoxShadow, Canvas, Fill, rect, rrect } from "react-native-skia";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 
 export const Boxes = () => {

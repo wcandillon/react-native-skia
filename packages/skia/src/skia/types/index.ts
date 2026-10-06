@@ -33,3 +33,4 @@ export * from "./NativeBuffer";
 export * from "./Recorder";
 export * from "./Video";
 export * from "./Skottie";
+export * from "./Graphite";

@@ -9,7 +9,7 @@ import {
   Paint,
   Text,
   useFont,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useMemo } from "react";
 import { View, useWindowDimensions, StyleSheet } from "react-native";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";

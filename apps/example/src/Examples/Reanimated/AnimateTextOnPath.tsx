@@ -1,12 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { StyleSheet, useWindowDimensions } from "react-native";
-import {
-  Canvas,
-  Fill,
-  TextPath,
-  useFont,
-  Skia,
-} from "@shopify/react-native-skia";
+import { Canvas, Fill, TextPath, useFont, Skia } from "react-native-skia";
 import {
   useSharedValue,
   Easing,

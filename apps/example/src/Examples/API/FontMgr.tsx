@@ -6,7 +6,7 @@ import {
   listFontFamilies,
   matchFont,
   useFonts,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const PADDING = 16;
 

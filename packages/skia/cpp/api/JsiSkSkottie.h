@@ -34,7 +34,7 @@
 namespace RNSkia {
 namespace jsi = facebook::jsi;
 
-std::unique_ptr<SkCodec> DecodeImageData(sk_sp<SkData> data) {
+inline std::unique_ptr<SkCodec> DecodeImageData(sk_sp<SkData> data) {
   if (data == nullptr) {
     return nullptr;
   }
@@ -342,8 +342,7 @@ public:
     if (!slotID.has_value() || !scalar.has_value()) {
       return false;
     }
-    return getObject()->_slotManager->setScalarSlot(SkString(*slotID),
-                                                    *scalar);
+    return getObject()->_slotManager->setScalarSlot(SkString(*slotID), *scalar);
   }
 
   bool setVec2Slot(JsiOptional<std::string> slotID,

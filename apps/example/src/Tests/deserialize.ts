@@ -1,4 +1,4 @@
-import { Skia, TileMode } from "@shopify/react-native-skia";
+import { Skia, TileMode } from "react-native-skia";
 import React from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

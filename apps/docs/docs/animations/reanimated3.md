@@ -12,7 +12,7 @@ React Native Skia supports the direct usage of Reanimated's shared and derived v
 
 ```tsx twoslash
 import {useEffect} from "react";
-import {Canvas, Circle, Group} from "@shopify/react-native-skia";
+import {Canvas, Circle, Group} from "react-native-skia";
 import {
   useDerivedValue,
   useSharedValue,
@@ -51,7 +51,7 @@ We offer some [Skia specific animation hooks](/docs/animations/hooks), especiall
 `select` lets a single shared value, whose value is an object, drive multiple props by binding each prop to one key of that object.
 
 ```tsx
-import { Canvas, Circle, select } from "@shopify/react-native-skia";
+import { Canvas, Circle, select } from "react-native-skia";
 import { useSharedValue, useFrameCallback } from "react-native-reanimated";
 
 export const Grouped = () => {
@@ -96,7 +96,7 @@ import {
   // Use this function instead of interpolateColor from Reanimated
   interpolateColors,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useEffect } from "react";
 import { useWindowDimensions } from "react-native";
 import {

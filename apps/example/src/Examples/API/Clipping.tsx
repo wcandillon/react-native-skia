@@ -10,7 +10,7 @@ import {
   Mask,
   useImage,
   mix,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 import { useLoop } from "../../components/Animations";

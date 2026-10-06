@@ -1892,7 +1892,7 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - SocketRocket
-  - react-native-safe-area-context (5.6.2):
+  - react-native-safe-area-context (5.10.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -1910,8 +1910,8 @@ PODS:
     - React-graphics
     - React-ImageManager
     - React-jsi
-    - react-native-safe-area-context/common (= 5.6.2)
-    - react-native-safe-area-context/fabric (= 5.6.2)
+    - react-native-safe-area-context/common (= 5.10.1)
+    - react-native-safe-area-context/fabric (= 5.10.1)
     - React-NativeModulesApple
     - React-RCTFabric
     - React-renderercss
@@ -1922,7 +1922,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-safe-area-context/common (5.6.2):
+  - react-native-safe-area-context/common (5.10.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -1950,7 +1950,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-safe-area-context/fabric (5.6.2):
+  - react-native-safe-area-context/fabric (5.10.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -2594,7 +2594,7 @@ PODS:
     - React-perflogger (= 0.83.1)
     - React-utils (= 0.83.1)
     - SocketRocket
-  - ReactNativeHost (0.5.16):
+  - ReactNativeHost (0.5.21):
     - boost
     - DoubleConversion
     - fast_float
@@ -2628,7 +2628,7 @@ PODS:
     - React-Core
     - React-jsi
   - ReactTestApp-Resources (1.0.0-dev)
-  - RNGestureHandler (2.30.0):
+  - RNGestureHandler (2.33.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -3002,7 +3002,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../../../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../../../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - react-native-safe-area-context (from `../../../node_modules/react-native-safe-area-context`)
-  - "react-native-skia (from `../../../node_modules/@shopify/react-native-skia`)"
+  - "react-native-skia (from `../../../node_modules/react-native-skia`)"
   - react-native-webgpu (from `../../../node_modules/react-native-webgpu`)
   - React-NativeModulesApple (from `../../../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../../../node_modules/react-native/ReactCommon/react/networking`)
@@ -3143,7 +3143,7 @@ EXTERNAL SOURCES:
   react-native-safe-area-context:
     :path: "../../../node_modules/react-native-safe-area-context"
   react-native-skia:
-    :path: "../../../node_modules/@shopify/react-native-skia"
+    :path: "../../../node_modules/react-native-skia"
   react-native-webgpu:
     :path: "../../../node_modules/react-native-webgpu"
   React-NativeModulesApple:
@@ -3275,7 +3275,7 @@ SPEC CHECKSUMS:
   React-logger: b8483fa08e0d62e430c76d864309d90576ca2f68
   React-Mapbuffer: 7b72a669e94662359dad4f42b5af005eb24b4e83
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
-  react-native-safe-area-context: c00143b4823773bba23f2f19f85663ae89ceb460
+  react-native-safe-area-context: 735c8ebacdececeb034ce0524f80ef1a484f67fe
   react-native-skia: 398d81d07392758762cf114280cceb24ebc9b6f3
   react-native-webgpu: 64a2e7f8241cdb08c0e43c7e51fbb9619109aa41
   React-NativeModulesApple: a2c3d2cbec893956a5b3e4060322db2984fff75b
@@ -3311,10 +3311,10 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 0eb286cc274abb059ee601b862ebddac2e681d01
   ReactCodegen: b8e56b780fffe6edd6405be0af4a1e3049a937f7
   ReactCommon: ac934cb340aee91282ecd6f273a26d24d4c55cae
-  ReactNativeHost: eef98ec49b55d88ad4cabf5a4378a12b42b551ee
+  ReactNativeHost: 8905f498e450cfb0fe2d9efdb7f1fd6c7e9091ed
   ReactTestApp-DevSupport: ea18f446cff64b6c9a3e28788600c82ecf51bde6
   ReactTestApp-Resources: 1bd9ff10e4c24f2ad87101a32023721ae923bccf
-  RNGestureHandler: cd4be101cfa17ea6bbd438710caa02e286a84381
+  RNGestureHandler: 60575158d8bd27a198bb7caf1a42ca1011d6e6b0
   RNReanimated: c26dfcd831add485c2ed93de9d7bfb90b035eeaa
   RNScreens: 714e10b6b554f7dc7ad9f78dcf36dc8e3fc73415
   RNSVG: 11354d28dd6cb71a59570b68c91ba6772a2d781d

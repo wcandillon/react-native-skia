@@ -17,7 +17,7 @@ Draws a rectangle.
 | height | `number` | Height of the rectangle. |
 
 ```tsx twoslash
-import { Canvas, Rect } from "@shopify/react-native-skia";
+import { Canvas, Rect } from "react-native-skia";
 
 const RectDemo = () => {
   return (
@@ -41,7 +41,7 @@ Draws a rounded rectangle.
 | r?    | `number` or `Vector` | Corner radius. Defaults to `ry` if specified or 0. |
 
 ```tsx twoslash
-import { Canvas, RoundedRect } from "@shopify/react-native-skia";
+import { Canvas, RoundedRect } from "react-native-skia";
 
 const RectDemo = () => {
   return (
@@ -66,7 +66,7 @@ const RectDemo = () => {
 You can set a different corner radius for each corner.
 
 ```tsx twoslash
-import { Canvas, RoundedRect } from "@shopify/react-native-skia";
+import { Canvas, RoundedRect } from "react-native-skia";
 
 const RectDemo = () => {
   const size = 256;
@@ -101,7 +101,7 @@ Draws the difference between two rectangles.
 | inner | `RectOrRRect` | Inner rectangle. |
 
 ```tsx twoslash
-import { Canvas, DiffRect, rect, rrect } from "@shopify/react-native-skia";
+import { Canvas, DiffRect, rect, rrect } from "react-native-skia";
 
 const DRectDemo = () => {
   const outer = rrect(rect(0, 0, 256, 256), 25, 25);
@@ -126,7 +126,7 @@ Draws a line between two points.
 | p2   | `Point` | End point.   |
 
 ```tsx twoslash
-import { Canvas, Line, vec } from "@shopify/react-native-skia";
+import { Canvas, Line, vec } from "react-native-skia";
 
 const LineDemo = () => {
   return (
@@ -155,7 +155,7 @@ Draws points and optionally draws the connection between them.
 | mode   | `PointMode` | How should the points be connected. Can be `points` (no connection), `lines` (connect pairs of points), or `polygon` (connect lines). Default is `points`. |
 
 ```tsx twoslash
-import { Canvas, Points, vec } from "@shopify/react-native-skia";
+import { Canvas, Points, vec } from "react-native-skia";
 
 const PointsDemo = () => {
   const points = [

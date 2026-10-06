@@ -5,7 +5,7 @@ import {
   useClock,
   Group,
   Skottie as SkSkottie,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 import lego from "./lego_loader.json";

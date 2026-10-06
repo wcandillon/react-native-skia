@@ -8,8 +8,37 @@ const assetRegistryPath = path.resolve(
   root,
   "node_modules/react-native-web/dist/modules/AssetRegistry/index",
 );
+const threePackagePath = path.resolve(root, "node_modules/three");
 
-const metroConfig = makeMetroConfig({
+// three.js ships several builds; always use the WebGPU one so that both
+// `three` and `three/webgpu` resolve to the same module instance, and map the
+// `three/addons/*` alias (which relies on package exports) to examples/jsm.
+function resolveThree(moduleName) {
+  if (moduleName.startsWith("three/addons/")) {
+    return {
+      filePath: path.resolve(
+        threePackagePath,
+        "examples/jsm/" + moduleName.replace("three/addons/", "") + ".js",
+      ),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "three" || moduleName === "three/webgpu") {
+    return {
+      filePath: path.resolve(threePackagePath, "build/three.webgpu.js"),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "three/tsl") {
+    return {
+      filePath: path.resolve(threePackagePath, "build/three.tsl.js"),
+      type: "sourceFile",
+    };
+  }
+  return null;
+}
+
+const baseConfig = makeMetroConfig({
   transformer: {
     getTransformOptions: async () => ({
       transform: {
@@ -19,6 +48,28 @@ const metroConfig = makeMetroConfig({
     }),
   },
 });
+
+const baseResolveRequest =
+  baseConfig.resolver.resolveRequest ??
+  ((context, moduleName, platform) =>
+    defaultResolve(context, moduleName, platform));
+
+const metroConfig = {
+  ...baseConfig,
+  resolver: {
+    ...baseConfig.resolver,
+    assetExts: [
+      ...baseConfig.resolver.assetExts,
+      "glb",
+      "gltf",
+      "bin",
+      "hdr",
+    ],
+    resolveRequest: (context, moduleName, platform) =>
+      resolveThree(moduleName) ??
+      baseResolveRequest(context, moduleName, platform),
+  },
+};
 
 // Serve index.html for navigation requests like /api/shapes so that
 // react-navigation deep links work on web (history API fallback).

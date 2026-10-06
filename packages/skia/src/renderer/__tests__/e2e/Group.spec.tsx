@@ -58,12 +58,11 @@ describe("Group", () => {
   });
   it("Should use a path as a clip", async () => {
     const { oslo } = images;
-    const { processTransform2d, Skia } = importSkia();
+    const { Skia } = importSkia();
     const star = Skia.Path.MakeFromSVGString(
       "M 128 0 L 168 80 L 256 93 L 192 155 L 207 244 L 128 202 L 49 244 L 64 155 L 0 93 L 88 80 L 128 0 Z"
     )!;
     expect(star).toBeTruthy();
-    star.transform(processTransform2d([{ scale: 1 }]));
     const size = surface.width;
     const img = await surface.draw(
       <Group clip={star}>
@@ -83,12 +82,11 @@ describe("Group", () => {
     const { oslo } = images;
     const { width } = surface;
     const size = width;
-    const { processTransform2d, Skia } = importSkia();
+    const { Skia } = importSkia();
     const star = Skia.Path.MakeFromSVGString(
       "M 128 0 L 168 80 L 256 93 L 192 155 L 207 244 L 128 202 L 49 244 L 64 155 L 0 93 L 88 80 L 128 0 Z"
     )!;
     expect(star).toBeTruthy();
-    star.transform(processTransform2d([{ scale: 1 }]));
     const img = await surface.draw(
       <Group clip={star} invertClip>
         <Image

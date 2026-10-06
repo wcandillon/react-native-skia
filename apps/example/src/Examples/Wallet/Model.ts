@@ -1,4 +1,4 @@
-import type { SkPath } from "@shopify/react-native-skia";
+import type { SkPath } from "react-native-skia";
 
 import data from "./data.json";
 import { curveLines } from "./Math";

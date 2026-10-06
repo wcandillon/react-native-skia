@@ -4,9 +4,9 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Routes } from "./Routes";
 import { List } from "./List";
 import { Triangle } from "./Triangle";
-import { Wireframes } from "./Wireframes";
-import { TexturedCube } from "./TexturedCube";
-import { ImportExternalTexture } from "./ImportExternalTexture";
+import { Cube } from "./Cube";
+import { Helmet } from "./Helmet";
+import { Cloth } from "./Cloth";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -17,8 +17,7 @@ export const WebGPU = () => {
         name="List"
         component={List}
         options={{
-          title: "WebGPU",
-          header: () => null,
+          title: "🔺 WebGPU",
         }}
       />
       <Stack.Screen
@@ -29,25 +28,24 @@ export const WebGPU = () => {
         }}
       />
       <Stack.Screen
-        name="Wireframes"
-        component={Wireframes}
+        name="Cube"
+        component={Cube}
         options={{
-          title: "Wireframes",
-          header: () => null,
+          title: "Three.js Cube",
         }}
       />
       <Stack.Screen
-        name="TexturedCube"
-        component={TexturedCube}
+        name="Helmet"
+        component={Helmet}
         options={{
-          title: "Textured Cube",
+          title: "Three.js Helmet",
         }}
       />
       <Stack.Screen
-        name="ImportExternalTexture"
-        component={ImportExternalTexture}
+        name="Cloth"
+        component={Cloth}
         options={{
-          title: "Import External Texture",
+          title: "Three.js Cloth",
         }}
       />
     </Stack.Navigator>

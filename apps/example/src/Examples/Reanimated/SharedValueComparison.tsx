@@ -12,7 +12,7 @@ import {
   useFrameCallback,
   useSharedValue,
 } from "react-native-reanimated";
-import { Canvas, Circle, Fill, select } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill, select } from "react-native-skia";
 
 import { AnimationDemo } from "./Components";
 

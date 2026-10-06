@@ -467,11 +467,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
   $(`rm -rf ${PackageRoot}/libs`);
 
-  if (GRAPHITE) {
-    $(`mkdir -p ${PackageRoot}/libs`);
-    fs.writeFileSync(`${PackageRoot}/libs/.graphite`, "");
-  }
-
   // Build specified platforms and targets
   for (const buildTarget of buildTargets) {
     const { platform, targets } = buildTarget;

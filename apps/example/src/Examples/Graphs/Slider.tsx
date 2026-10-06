@@ -1,4 +1,4 @@
-import type { SkPath } from "@shopify/react-native-skia";
+import type { SkPath } from "react-native-skia";
 import {
   useFont,
   Group,
@@ -10,7 +10,7 @@ import {
   Path,
   Text as SkiaText,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";

@@ -1,25 +1,31 @@
 # Contributing
 
+## Branches
+
+| Branch | Version | Skia backend | npm dist-tag | Documentation |
+|:--|:--|:--|:--|:--|
+| `main` | v3 | Graphite | `latest` | [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) |
+| `2.x` | v2 | Ganesh | `2.x` | [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/) |
+
+`main` is where v3 is developed: it only supports the [Graphite](https://skia.org/docs/user/graphite/) backend.
+`2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend and the platforms Graphite does not support (tvOS, Mac Catalyst).
+Open pull requests against `main`, unless the change only applies to v2.
+
 ## Library Development
 
 To develop react-native-skia, you can build the skia libraries on your computer. Alternatively, you can use the pre-built binaries.
 
 ### Using pre-built binaries
 
-The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia-android`, `react-native-skia-apple-*`). The native build systems (Gradle, CocoaPods) automatically resolve these packages — there is no `postinstall` step.
+The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*`). They ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, together with the shared Dawn (`libwebgpu_dawn`). The native build systems (Gradle, CocoaPods) automatically resolve these packages; there is no `postinstall` step.
 
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
-- Set up the standard build: `cd packages/skia && yarn install-skia`
+- Copy the headers: `cd packages/skia && yarn copy-skia-headers`
 
-`yarn install-skia` copies the Skia headers needed to compile against the prebuilt binaries. The binaries themselves are not copied: Gradle reads them in place from `node_modules`, and the podspec copies them in at `pod install` time.
+`yarn copy-skia-headers` copies the Skia headers from the submodule and the Graphite and Dawn headers from the `react-native-skia-graphite-headers` package. The binaries themselves are not copied: Gradle reads them in place from `node_modules`, and the podspec copies them in at `pod install` time.
 
-#### Switching between the standard and Graphite builds
-
-- Standard (Ganesh) build: `yarn install-skia`
-- [Graphite](https://skia.org/docs/user/graphite/) build: `yarn install-skia-graphite` (downloads the Graphite binaries into `libs/` and writes a `libs/.graphite` marker)
-
-Run `yarn install-skia` to switch back from Graphite to the standard build (it removes the `libs/.graphite` marker). After switching, run `pod install` again in the example app so CocoaPods picks up the matching frameworks.
+The binary packages are generated and published from [`packages/skia-binaries`](../skia-binaries).
 
 ### Building
 
@@ -32,12 +38,12 @@ And then the _SDK Location_ section. It will show you the NDK path, or the optio
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
 - Go to the package folder: `cd packages/skia`
-- Build the Skia libraries: `yarn build-skia` (this can take a while)
+- Build the Skia libraries: `SK_GRAPHITE=1 yarn build-skia` (this can take a while). Locally built binaries in `libs/` take precedence over the npm packages; delete `libs/` to go back to the prebuilt ones.
 - Copy Skia headers: `yarn copy-skia-headers`
 
 ### Upgrading Skia
 
-Upgrading to a new Skia milestone (for example `chrome/m147` to `chrome/m150`) is a multi-stage process: bump the submodule, build locally and fix the C++ API churn, test the example app against the freshly built binaries, publish the prebuilt binaries from CI, and finally release them through the binaries repo. The steps below use `m150` as the running example; substitute the milestone you are upgrading to.
+Upgrading to a new Skia milestone (for example `chrome/m147` to `chrome/m150`) is a multi-stage process: bump the submodule, build locally and fix the C++ API churn, test the example app against the freshly built binaries, publish the prebuilt binaries from CI, and finally publish the binary npm packages from `packages/skia-binaries`. The steps below use `m150` as the running example; substitute the milestone you are upgrading to.
 
 #### 1. Update the Skia submodule
 
@@ -76,22 +82,19 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Important gotcha: in the standard (Ganesh) build the example app links against the prebuilt binaries from the npm packages (`react-native-skia-android`, `react-native-skia-apple-*`), not the libs you just built in `packages/skia/libs/`. Until those packages are republished (steps 4 to 6), the app compiles against the new `m150` headers but links the old binaries, which surfaces as link errors such as `undefined symbol: vtable for SkFontMgr`. Point the local build at your fresh binaries first:
+Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios` and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). `yarn build-skia` bundles the static `libdawn_combined`, while the native builds link the shared Dawn (`libwebgpu_dawn`, the same artifact react-native-webgpu links), so copy it in from the npm packages next to your build:
 
-- Android: overwrite the static libs in the npm package with the ones you built:
-  ```sh
-  for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-    cp packages/skia/libs/android/$abi/*.a node_modules/react-native-skia-android/libs/$abi/
-  done
-  ```
-- iOS: `pod install` copies the npm package's xcframeworks into `libs/ios`, skipping only when `libs/ios/.version` matches the npm package version. After `yarn build-skia apple-ios` rewrites `libs/ios` with your build, stamp the marker with the current npm version so `pod install` leaves your binaries in place:
-  ```sh
-  printf "$(node -p "require('react-native-skia-apple-ios/package.json').version")" \
-    > packages/skia/libs/ios/.version
-  cd apps/example/ios && pod install && cd -
-  ```
+```sh
+for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+  cp node_modules/react-native-skia-graphite-android/libs/$abi/libwebgpu_dawn.so packages/skia/libs/android/$abi/
+done
+for platform in ios macos; do
+  cp -R node_modules/react-native-skia-graphite-apple-$platform/libs/libwebgpu_dawn.xcframework packages/skia/libs/$platform/
+done
+cd apps/example/ios && pod install && cd -
+```
 
-These `node_modules` and `.version` edits are throwaway; `yarn install` restores the published binaries.
+Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
 Then build both platforms:
 
@@ -111,30 +114,28 @@ Then build both platforms:
 
 #### 4. Publish the prebuilt binaries (GitHub Actions)
 
-With the submodule bump merged (the workflows detect the Skia branch from the checked-in submodule), build and upload the prebuilt binaries from the Actions tab. Both workflows are `workflow_dispatch` only and share two inputs:
+With the submodule bump merged (the workflow detects the Skia branch from the checked-in submodule), build and upload the prebuilt binaries from the Actions tab with **Build SKIA** (`.github/workflows/build-skia.yml`, `SK_GRAPHITE=1`). It is `workflow_dispatch` only and takes these inputs:
 
-- `tag_suffix`: appended to the tag (for example `a` produces `skia-m150a`) for re-spins of the same milestone.
+- `skia_branch`: build a Skia branch other than the submodule default.
+- `tag_suffix`: appended to the tag (for example `a` produces `skia-graphite-m150a`) for re-spins of the same milestone.
 - `dry_run`: build and upload as workflow artifacts only, skipping the GitHub release. Use this to validate the build before cutting a real release.
 
-Run them:
+It builds iOS, macOS and the four Android ABIs (no tvOS/maccatalyst), creates a prerelease tagged `skia-graphite-m150`, and uploads the binaries and the Graphite headers tarball. The Ganesh binaries for the v2.x line are built from the `2.x` branch.
 
-- Standard (Ganesh): **Build SKIA** (`.github/workflows/build-skia.yml`). Builds apple-ios, apple-tvos, apple-macos and the four Android ABIs, creates a prerelease tagged `skia-m150`, and uploads one tarball per target.
-- Graphite: **Build SKIA Graphite** (`.github/workflows/build-skia-graphite.yml`, `SK_GRAPHITE=1`). Builds iOS, macOS and Android (no tvOS/maccatalyst), tags `skia-graphite-m150`, and additionally uploads the Graphite headers tarball. It also accepts an optional `skia_branch` input to build a branch other than the submodule default.
+#### 5. Publish the binary npm packages
 
-#### 5. Release the binaries through react-native-skia-binaries
-
-The npm packages this library consumes (`react-native-skia-android`, `react-native-skia-apple-ios`, `react-native-skia-apple-macos`, `react-native-skia-apple-tvos`, and the Graphite headers package) are produced from the release tarballs in [wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries). Update that repo to consume the new `skia-m150` and `skia-graphite-m150` release assets, bump the package versions, and publish them to npm.
+The npm packages this library consumes (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-macos`, `react-native-skia-graphite-headers`, and the Ganesh `react-native-skia-*` packages used by the v2.x line) are produced from the release assets by [`packages/skia-binaries`](../skia-binaries). Update `packages/skia-binaries/skia-config.json` with the new `skia-graphite-m150` version and checksums (and remove the `repo` field, which points m154 at the shopify/react-native-skia releases; new builds are released in this repository), and with the matching `dawn` release (the same Dawn react-native-webgpu links), then run **Publish Skia Binary Packages** (`.github/workflows/publish-skia-binaries.yml`).
 
 #### 6. Point the library at the new binaries
 
-Back in this repo, bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-android` and `react-native-skia-apple-*`) to the versions you just published, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. Drop the throwaway `node_modules` and `libs/ios/.version` edits from step 3.
+Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-*`) to the versions you just published, delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries.
 
 ### Swift Package Manager (preview)
 
 CocoaPods stays the default. `Package.swift` is additive: SwiftPM ignores the
 podspec, and CocoaPods ignores `Package.swift`.
 
-SwiftPM support requires **React Native 0.87 or newer** — earlier releases ship
+SwiftPM support requires **React Native 0.87 or newer**: earlier releases ship
 no `scripts/spm`. `apps/example` is on an older version, so it cannot exercise
 this path.
 
@@ -150,41 +151,54 @@ Skia's Apple sources still gate on `RCT_NEW_ARCH_ENABLED` and
 `RCT_REMOVE_LEGACY_ARCH`. CocoaPods forces both project-wide; the SwiftPM path
 defines neither, so `Package.swift` defines them itself.
 
+The library requires iOS 15.1 (see the podspec), but the platform floor of
+`Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`
+aggregate is hardcoded to iOS 15.0, and SwiftPM refuses to link a product whose
+floor is above the depending target's.
+
 #### Binaries
 
-The manifest links the `react-native-skia-apple-ios` npm package, the same one
-the CocoaPods build uses, so no network is needed once dependencies are
+The manifest links the `react-native-skia-graphite-apple-ios` npm package, the
+same one the CocoaPods build uses, so no network is needed once dependencies are
 installed. It is resolved by path, from either a sibling in `node_modules` or
 this monorepo's root, and the manifest fails with an explanatory message when
-neither exists — which is what an `--omit=optional` install looks like.
+neither exists, which is what an `--omit=optional` install looks like.
 
 Fetching the binaries from a released Swift package instead is future work; it
 becomes useful only once the binary npm packages are no longer dependencies. See
-[wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries).
+[wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries),
+which hosts the remote SwiftPM manifest published from `packages/skia-binaries`.
 
 After changing which binaries a checkout uses, delete
-`ios/<App>.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
-— a stale pin silently keeps the previous source.
+`ios/<App>.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
+a stale pin silently keeps the previous source.
 
 ### Publishing
 
-- Run the commands in the [Building](#building) section
-- Build the Android binaries with `yarn build-skia-android`
-- Build the NPM package with `yarn build-npm`
+Releases are published from GitHub Actions by the **Create a release (react-native-skia)** workflow (`.github/workflows/build-npm-react-native-skia.yml`), which is triggered manually and runs [semantic-release](https://github.com/semantic-release/semantic-release):
 
-Publish the NPM package manually. The output is found in the `dist` folder.
+- On `main`, it publishes the next v3 version under the `latest` dist-tag.
+- On `2.x`, it publishes the next v2 version under the `2.x` dist-tag, so that `latest` stays on v3.
 
-- Install Cocoapods in the example/ios folder `cd example/ios && pod install && cd ..`
+The workflow takes two inputs:
+
+- `skip_npm_publish`: build the package and upload the tarball as a workflow artifact instead of publishing it.
+- `version`: release this exact version instead of letting semantic-release compute it from the commit messages.
+
+### Documentation
+
+The documentation website lives in [`apps/docs`](../../apps/docs). Run it locally with `yarn start` and type check its code samples with `yarn test`.
+The `main` branch holds the documentation of v3. The v2 documentation is a frozen build stored in the `docs-v2` branch and served under `/v2/`.
 
 ### Testing
 
 When making contributions to the project, an important part is testing.
-In the `package` folder, we have several scripts set up to help you maintain the quality of the codebase and test your changes:
+In the `packages/skia` folder, we have several scripts set up to help you maintain the quality of the codebase and test your changes:
 
-- `yarn lint` — Lints the code for potential errors and to ensure consistency with our coding standards.
-- `yarn tsc` — Runs the TypeScript compiler to check for typing issues.
-- `yarn test` — Executes the unit tests to ensure existing features work as expected after changes.
-- `yarn e2e` — Runs end-to-end tests. For these tests to run properly, you need to have the example app running. Use `yarn ios` or `yarn android` in the `example` folder and navigate to the Tests screen within the app.
+- `yarn lint`: lints the code for potential errors and to ensure consistency with our coding standards.
+- `yarn tsc`: runs the TypeScript compiler to check for typing issues.
+- `yarn test`: executes the unit tests to ensure existing features work as expected after changes.
+- `yarn e2e`: runs end-to-end tests. For these tests to run properly, you need to have the example app running. Use `yarn ios` or `yarn android` in the `apps/example` folder and navigate to the Tests screen within the app.
 
 ### Running End-to-End Tests
 
@@ -192,13 +206,13 @@ To ensure the best reliability, we encourage running end-to-end tests before sub
 
 1. Start the example app:
 ```sh
-cd example
+cd apps/example
 yarn ios # or yarn android for Android testing
 ```
 
 Once the app is open in your simulator or device, press the "Tests" item at the bottom of the list.
    
-2. With the example app running and the Tests screen open, run the following command in the `package` folder:
+2. With the example app running and the Tests screen open, run the following command in the `packages/skia` folder:
 ```sh
 yarn e2e
 ```
@@ -213,7 +227,7 @@ E2E=true yarn test -i e2e/Colors
 
 Contributing end-to-end tests to React Native Skia is extremely useful. Below you'll find guidelines for writing tests using the `eval`, `draw`, and `drawOffscreen` commands. 
 
-e2e tests are located in the `package/__tests__/e2e/` directory. You can create a file there or add a new test to an existing file depending on what is most sensible.
+e2e tests are located in the `packages/skia/src/renderer/__tests__/e2e/` directory. You can create a file there or add a new test to an existing file depending on what is most sensible.
 When looking to contribute a new test, you can refer to existing tests to see how these can be built.
 The `eval` command is used to test Skia's imperative API. It requires a pure function that invokes Skia operations and returns a serialized result.
 

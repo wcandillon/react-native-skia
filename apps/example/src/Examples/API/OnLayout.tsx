@@ -1,6 +1,6 @@
 import React from "react";
 import { Text } from "react-native";
-import { Canvas, Fill, useCanvasSize } from "@shopify/react-native-skia";
+import { Canvas, Fill, useCanvasSize } from "react-native-skia";
 
 export const OnLayoutDemo = () => {
   const { ref, size } = useCanvasSize();

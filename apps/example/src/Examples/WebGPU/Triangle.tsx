@@ -2,9 +2,11 @@ import React, { useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import type { CanvasRef } from "react-native-webgpu";
 import { Canvas, importDevice } from "react-native-webgpu";
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 
-const triangleShader = `
+const sampleCount = 4;
+
+const triangleShader = /* wgsl */ `
 @vertex
 fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4f {
   var pos = array<vec2f, 3>(
@@ -27,6 +29,7 @@ export function Triangle() {
   useEffect(() => {
     let running = true;
     let frame = 0;
+    let msaaTexture: GPUTexture | null = null;
 
     (async () => {
       // Shared-device interop: adopt Skia's Graphite device so WebGPU work and
@@ -82,7 +85,30 @@ export function Triangle() {
         primitive: {
           topology: "triangle-list",
         },
+        multisample: {
+          count: sampleCount,
+        },
       });
+
+      // The multisampled color target is resolved into the swapchain texture
+      // at the end of the render pass. Recreate it whenever the canvas size
+      // changes.
+      const getMsaaView = (texture: GPUTexture) => {
+        if (
+          !msaaTexture ||
+          msaaTexture.width !== texture.width ||
+          msaaTexture.height !== texture.height
+        ) {
+          msaaTexture?.destroy();
+          msaaTexture = device.createTexture({
+            size: [texture.width, texture.height],
+            sampleCount,
+            format,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+          });
+        }
+        return msaaTexture.createView();
+      };
 
       console.log("[webgpu-coexistence] pipeline ready, rendering triangle");
 
@@ -95,10 +121,11 @@ export function Triangle() {
         const renderPassDescriptor: GPURenderPassDescriptor = {
           colorAttachments: [
             {
-              view: texture.createView(),
+              view: getMsaaView(texture),
+              resolveTarget: texture.createView(),
               clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
               loadOp: "clear",
-              storeOp: "store",
+              storeOp: "discard",
             },
           ],
         };
@@ -122,6 +149,8 @@ export function Triangle() {
     return () => {
       running = false;
       cancelAnimationFrame(frame);
+      msaaTexture?.destroy();
+      msaaTexture = null;
     };
   }, []);
 

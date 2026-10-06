@@ -1,8 +1,8 @@
 import type { CanvasKit, Surface } from "canvaskit-wasm";
 
-import type { SurfaceFactory } from "../types";
+import type { SkSurface, SurfaceFactory } from "../types";
 
-import { Host } from "./Host";
+import { Host, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkSurface } from "./JsiSkSurface";
 
 export class JsiSkSurfaceFactory extends Host implements SurfaceFactory {
@@ -37,5 +37,9 @@ export class JsiSkSurfaceFactory extends Host implements SurfaceFactory {
       return null;
     }
     return new JsiSkSurface(this.CanvasKit, surface);
+  }
+
+  MakeFromNativeTexture(_pointer: bigint): SkSurface {
+    return throwNotImplementedOnRNWeb<SkSurface>();
   }
 }

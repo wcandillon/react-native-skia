@@ -17,12 +17,8 @@
 #include "JsiTextureInfo.h"
 #include "utils/RNSkTypedArray.h"
 
-#if defined(SK_GRAPHITE)
 #include "include/gpu/graphite/Context.h"
 #include "rnskia/RNDawnContext.h"
-#else
-#include "include/gpu/ganesh/GrDirectContext.h"
-#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -187,18 +183,7 @@ public:
                       ? static_cast<SkEncodedImageFormat>(*formatParam)
                       : SkEncodedImageFormat::kPNG;
     auto quality = qualityParam.has_value() ? *qualityParam : 100.0;
-    auto image = getObject();
-#if defined(SK_GRAPHITE)
-    image = DawnContext::getInstance().MakeRasterImage(image);
-#else
-    if (image->isTextureBacked()) {
-      auto grContext = getContext()->getDirectContext();
-      image = image->makeRasterImage(grContext);
-      if (!image) {
-        return nullptr;
-      }
-    }
-#endif
+    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
     sk_sp<SkData> data;
 
     if (format == SkEncodedImageFormat::kJPEG) {
@@ -236,10 +221,10 @@ public:
         count >= 1 && !arguments[0].isUndefined() && !arguments[0].isNull()
             ? JsiOptional<double>(arguments[0].asNumber())
             : JsiOptional<double>();
-    JsiOptional<double> quality = count >= 2 && arguments[1].isNumber()
-                                      ? JsiOptional<double>(
-                                            arguments[1].asNumber())
-                                      : JsiOptional<double>();
+    JsiOptional<double> quality =
+        count >= 2 && arguments[1].isNumber()
+            ? JsiOptional<double>(arguments[1].asNumber())
+            : JsiOptional<double>();
     auto data = encodeImageData(format, quality);
     if (!data) {
       return jsi::Value::null();
@@ -310,38 +295,19 @@ public:
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
 
-#if defined(SK_GRAPHITE)
-    // Graphite offers no synchronous GPU readback, so fall back to a CPU raster
-    // copy of the image (a no-op when the image is already raster) and read the
-    // pixels from that. This matches the Ganesh behaviour for non-texture and
-    // texture-backed images alike.
+    // Graphite offers no synchronous GPU readback, so read from a CPU raster
+    // copy of the image (a no-op when the image is already raster).
     auto image = DawnContext::getInstance().MakeRasterImage(getObject());
     if (!image ||
         !image->readPixels(nullptr, info, bfrPtr, bytesPerRow, srcX, srcY)) {
       return jsi::Value::null();
     }
-#else
-    auto grContext = getContext()->getDirectContext();
-    if (!getObject()->readPixels(grContext, info, bfrPtr, bytesPerRow, srcX,
-                                 srcY)) {
-      return jsi::Value::null();
-    }
-#endif
     return dest;
   }
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
   makeNonTextureImage() {
-#if defined(SK_GRAPHITE)
     auto rasterImage = DawnContext::getInstance().MakeRasterImage(getObject());
-#else
-    auto grContext = getContext()->getDirectContext();
-    auto image = getObject();
-    if (!grContext) {
-      throw std::runtime_error("No GPU context available.");
-    }
-    auto rasterImage = image->makeRasterImage(grContext);
-#endif
     if (!rasterImage) {
       return nullptr;
     }

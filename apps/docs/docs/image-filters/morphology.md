@@ -18,7 +18,7 @@ Its usefulness lies primarily in fattening or thinning effects.
 ## Example
 
 ```tsx twoslash
-import {Canvas, Text, Morphology, useFont} from "@shopify/react-native-skia";
+import {Canvas, Text, Morphology, useFont} from "react-native-skia";
 
 export const MorphologyDemo = () => {
   const font = useFont(require("./SF-Pro.ttf"), 24);

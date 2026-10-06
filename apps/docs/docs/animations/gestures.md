@@ -11,7 +11,7 @@ We've prepared a few [tutorials](/docs/tutorials#-gestures) that showcase the us
 
 ```tsx twoslash
 import { useWindowDimensions } from "react-native";
-import { Canvas, Circle, Fill } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill } from "react-native-skia";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useSharedValue, withDecay } from "react-native-reanimated";
 
@@ -50,7 +50,7 @@ In the example below, each circle is tracked separately by two gesture handlers.
 
 ```tsx twoslash
 import { View } from "react-native";
-import { Canvas, Circle, Fill } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill } from "react-native-skia";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle } from "react-native-reanimated";
 

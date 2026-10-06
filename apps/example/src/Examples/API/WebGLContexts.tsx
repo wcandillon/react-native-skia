@@ -1,6 +1,6 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Canvas, Fill } from "@shopify/react-native-skia";
+import { Canvas, Fill } from "react-native-skia";
 
 // Renders more canvases than the browser allows concurrent WebGL contexts
 // (typically 16) to exercise

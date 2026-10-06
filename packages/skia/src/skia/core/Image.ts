@@ -33,8 +33,7 @@ export const makeImageFromView = <
 >(
   viewRef: React.RefObject<T>,
   callback:
-    | null
-    | ((viewRef: React.RefObject<T>) => Promise<SkImage | null>) = null
+    null | ((viewRef: React.RefObject<T>) => Promise<SkImage | null>) = null
 ) => {
   // In web implementation we just delegate the work to the provided callback
   if (Platform.OS === "web") {

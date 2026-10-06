@@ -13,7 +13,7 @@ import {
   vec,
   fitRects,
   rect2rect,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 
 import { useLoop } from "../../../components/Animations";

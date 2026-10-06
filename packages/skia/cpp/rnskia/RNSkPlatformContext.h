@@ -105,34 +105,28 @@ public:
    */
   virtual sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) = 0;
 
-#if !defined(SK_GRAPHITE)
-  virtual sk_sp<SkImage>
-  makeImageFromNativeTexture(const TextureInfo &textureInfo, int width,
-                             int height, bool mipMapped) = 0;
-
-  virtual const TextureInfo getTexture(sk_sp<SkSurface> image) = 0;
-
-  virtual const TextureInfo getTexture(sk_sp<SkImage> image) = 0;
-
-  virtual GrDirectContext *getDirectContext() = 0;
-#else
+  // The handle-based texture interop of the Ganesh era (Metal and OpenGL
+  // texture handles). Graphite textures cross the package boundary as
+  // WGPUTexture pointers instead (see JsiSkImageFactory).
   sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &textureInfo,
                                             int width, int height,
                                             bool mipMapped) {
     throw std::runtime_error(
-        "makeImageFromNativeTexture not implemented yet on Graphite");
+        "makeImageFromNativeTexture is not available on Graphite, use "
+        "Skia.Image.MakeImageFromNativeTexture(pointer)");
   }
 
   const TextureInfo getTexture(sk_sp<SkSurface> image) {
     throw std::runtime_error(
-        "getTexture(surface) not implemented yet on Graphite");
+        "getTexture(surface) is not available on Graphite, use "
+        "Skia.Surface.MakeFromNativeTexture(pointer)");
   }
 
   const TextureInfo getTexture(sk_sp<SkImage> image) {
     throw std::runtime_error(
-        "getTexture(image) not implemented yet on Graphite");
+        "getTexture(image) is not available on Graphite, use "
+        "Skia.Image.MakeNativeTextureFromImage(image)");
   }
-#endif
 
   virtual void releaseNativeBuffer(uint64_t pointer) = 0;
 
@@ -196,6 +190,14 @@ public:
    * @return Current scale factor for pixels
    */
   float getPixelDensity() { return _pixelDensity; }
+
+  /**
+   * Whether views render in Display P3 rather than sRGB: true on Apple
+   * platforms when the main screen has a wide color gamut. The answer does
+   * not change over the lifetime of the context, so a frame can be recorded
+   * for a view before its surface exists.
+   */
+  virtual bool prefersP3ColorSpace() { return false; }
 
 private:
   float _pixelDensity;

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, StyleSheet, Text, TouchableWithoutFeedback } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Canvas, Path } from "@shopify/react-native-skia";
+import { Canvas, Path } from "react-native-skia";
 
 const styles = StyleSheet.create({
   container: {

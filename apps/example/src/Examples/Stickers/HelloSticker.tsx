@@ -1,4 +1,4 @@
-import type { Matrix4 } from "@shopify/react-native-skia";
+import type { Matrix4 } from "react-native-skia";
 import {
   fitbox,
   Group,
@@ -6,7 +6,7 @@ import {
   Path,
   rect,
   Skia,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";
 

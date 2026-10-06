@@ -4,11 +4,8 @@ export abstract class CanvasKitWebGLBuffer {}
 
 export type NativeBuffer<
   T extends
-    | bigint
-    | ArrayBuffer
-    | CanvasImageSource
-    | CanvasKitWebGLBuffer
-    | unknown = unknown,
+    bigint | ArrayBuffer | CanvasImageSource | CanvasKitWebGLBuffer | unknown =
+    unknown,
 > = T;
 
 export type NativeBufferAddr = NativeBuffer<bigint>;

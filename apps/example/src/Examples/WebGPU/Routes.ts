@@ -1,7 +1,7 @@
 export type Routes = {
   List: undefined;
-  Wireframes: undefined;
   Triangle: undefined;
-  TexturedCube: undefined;
-  ImportExternalTexture: undefined;
+  Cube: undefined;
+  Helmet: undefined;
+  Cloth: undefined;
 };

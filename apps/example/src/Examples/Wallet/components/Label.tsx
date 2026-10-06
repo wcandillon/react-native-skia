@@ -1,4 +1,4 @@
-import { useFont, Text } from "@shopify/react-native-skia";
+import { useFont, Text } from "react-native-skia";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";
 import { interpolate, useDerivedValue } from "react-native-reanimated";

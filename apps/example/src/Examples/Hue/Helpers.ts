@@ -1,4 +1,4 @@
-import { mix } from "@shopify/react-native-skia";
+import { mix } from "react-native-skia";
 
 const TAU = Math.PI * 2;
 

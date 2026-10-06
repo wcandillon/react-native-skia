@@ -1,33 +1,39 @@
 #pragma once
 
+#import "RNSkCanvasProvider.h"
 #import "RNSkPlatformContext.h"
-#import "RNSkView.h"
 
 #import <MetalKit/MetalKit.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdocumentation"
+#include <memory>
+#include <mutex>
+#include <vector>
 
-#import <include/gpu/ganesh/GrDirectContext.h>
-
-#pragma clang diagnostic pop
-
+/**
+ * The CAMetalLayer a SkiaView presents into. The layer is configured as a
+ * Dawn surface (see DawnWindowContext) when the view gets a size.
+ */
 class RNSkMetalCanvasProvider : public RNSkia::RNSkCanvasProvider {
 public:
-  RNSkMetalCanvasProvider(std::function<void()> requestRedraw,
-                          std::shared_ptr<RNSkia::RNSkPlatformContext> context,
-                          bool useP3ColorSpace = true);
+  explicit RNSkMetalCanvasProvider(
+      std::shared_ptr<RNSkia::RNSkPlatformContext> context);
 
   ~RNSkMetalCanvasProvider();
 
   int getWidth() override;
   int getHeight() override;
 
-  bool renderToCanvas(const std::function<void(SkCanvas *)> &cb) override;
+  bool getTargetInfo(RNSkia::RNSkGraphiteTargetInfo *info) override;
+
+  bool getLayoutSize(int *width, int *height) override;
+
+  bool presentRecordings(
+      const std::vector<skgpu::graphite::Recording *> &recordings) override;
+
+  bool presentImage(const sk_sp<SkImage> &image) override;
 
   void setSize(int width, int height);
-  void setUseP3ColorSpace(bool useP3ColorSpace);
   void setHighBitDepth(bool highBitDepth);
   CALayer *getLayer();
 
@@ -38,6 +44,12 @@ private:
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
-  bool _useP3ColorSpace = true;
   bool _highBitDepth = false;
+  // A copy of the window's target description, readable from any thread
+  // while the window itself belongs to the main thread.
+  std::mutex _targetInfoMutex;
+  RNSkia::RNSkGraphiteTargetInfo _targetInfo;
+  bool _hasTargetInfo = false;
+  int _layoutWidth = 0;
+  int _layoutHeight = 0;
 };

@@ -1,13 +1,19 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include <jsi/jsi.h>
+
+#include "include/core/SkPictureRecorder.h"
 
 #include "ColorFilters.h"
 #include "Command.h"
@@ -26,6 +32,11 @@ class Recorder {
 private:
   using CommandList = std::vector<std::unique_ptr<Command>>;
 
+  static double nextId() {
+    static std::atomic<uint64_t> counter{0};
+    return static_cast<double>(++counter);
+  }
+
   struct PendingGroup {
     GroupCommand *group;
     float zIndex;
@@ -34,6 +45,51 @@ private:
 
   CommandList commands;
   std::vector<CommandList *> commandStack;
+
+  // Once a view owns the recording, the Reanimated mapper reads the shared
+  // values into pending writes (readUpdates, UI thread) and whoever replays
+  // the commands writes them into the commands first (play, under this
+  // lock). Nothing else holds this lock, so it never nests with a view's
+  // lock.
+  std::mutex _commandsMutex;
+
+  // The pending writes, one slot per conversion function: a value read
+  // several times between two replays is written once (the last read wins),
+  // and the memory stays bounded whatever the ratio of updates to replays.
+  // The slots are assigned on the first read, once the recording, and thus
+  // `variables`, is complete.
+  std::mutex _pendingMutex;
+  std::vector<PendingWrite> _pendingWrites;
+  std::map<std::string, size_t> _slotBase;
+  bool _hasPendingWrites = false;
+
+  size_t slotBase(const std::string &name) {
+    std::lock_guard<std::mutex> lock(_pendingMutex);
+    if (_slotBase.empty()) {
+      size_t count = 0;
+      for (const auto &entry : variables) {
+        _slotBase[entry.first] = count;
+        count += entry.second.size();
+      }
+      _pendingWrites.resize(count);
+    }
+    return _slotBase.at(name);
+  }
+
+  /** Writes the pending values into the commands. Under _commandsMutex. */
+  void flushPendingWritesLocked() {
+    std::lock_guard<std::mutex> lock(_pendingMutex);
+    if (!_hasPendingWrites) {
+      return;
+    }
+    for (auto &write : _pendingWrites) {
+      if (write) {
+        write();
+        write = nullptr;
+      }
+    }
+    _hasPendingWrites = false;
+  }
 
   CommandList &currentCommands() { return *commandStack.back(); }
 
@@ -93,6 +149,11 @@ private:
 public:
   std::shared_ptr<RNSkPlatformContext> _context;
   Variables variables;
+
+  // Unique per recording. The Reanimated mapper tags its updates with it so a
+  // mapper that outlives its recording (stopMapper() is asynchronous) cannot
+  // write into the recording that replaced it.
+  const double id = nextId();
 
   Recorder() { commandStack.push_back(&commands); }
   ~Recorder() {
@@ -382,9 +443,61 @@ public:
   }
 
   void play(DrawingCtx *ctx) {
+    std::lock_guard<std::mutex> lock(_commandsMutex);
+    flushPendingWritesLocked();
     for (const auto &cmd : commands) {
       playCommand(ctx, cmd.get());
     }
+  }
+
+  /**
+   * Plays the recording into a picture. The cull rect is deliberately huge:
+   * a recording is not tied to a view size.
+   */
+  sk_sp<SkPicture> makePicture() {
+    SkPictureRecorder pictureRecorder;
+    SkISize size = SkISize::Make(2'000'000, 2'000'000);
+    SkRect rect = SkRect::Make(size);
+    auto canvas = pictureRecorder.beginRecording(rect, nullptr);
+    DrawingCtx ctx(canvas);
+    play(&ctx);
+    return pictureRecorder.finishRecordingAsPicture();
+  }
+
+  /**
+   * Reads the current value of each shared value (in the order they were
+   * registered as variable0, variable1, ...) on the calling runtime into the
+   * pending writes. The writes do not need the runtime: the next replay
+   * (play, on whichever thread owns the commands) writes them into the
+   * commands first, so the caller never waits for a replay.
+   */
+  void readUpdates(jsi::Runtime &runtime, const jsi::Array &values) {
+    auto size = values.size(runtime);
+    for (size_t i = 0; i < size; i++) {
+      auto sharedValue = values.getValueAtIndex(runtime, i).asObject(runtime);
+      auto name = "variable" + std::to_string(i);
+      auto it = variables.find(name);
+      if (it == variables.end()) {
+        continue;
+      }
+      auto base = slotBase(name);
+      for (size_t j = 0; j < it->second.size(); j++) {
+        if (auto write = it->second[j](runtime, sharedValue)) {
+          std::lock_guard<std::mutex> lock(_pendingMutex);
+          _pendingWrites[base + j] = std::move(write);
+          _hasPendingWrites = true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Reads the shared values and writes them into the commands right away.
+   */
+  void applyUpdates(jsi::Runtime &runtime, const jsi::Array &values) {
+    readUpdates(runtime, values);
+    std::lock_guard<std::mutex> lock(_commandsMutex);
+    flushPendingWritesLocked();
   }
 };
 

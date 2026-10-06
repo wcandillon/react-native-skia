@@ -1,5 +1,3 @@
-#ifdef SK_GRAPHITE
-
 #include "RNDawnContext.h"
 
 // Runtime discovery surface for react-native-webgpu.
@@ -15,5 +13,3 @@ extern "C" __attribute__((visibility("default"))) WGPUInstance
 rnskia_getWGPUInstance() {
   return RNSkia::DawnContext::getInstance().getWGPUInstance().Get();
 }
-
-#endif

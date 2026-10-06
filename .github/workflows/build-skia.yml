@@ -1,9 +1,16 @@
 name: Build SKIA
+# Builds the Graphite binaries (the default backend since v3). Release tags keep
+# the skia-graphite- prefix that packages/skia-binaries consumes. The Ganesh
+# binaries for the v2.x line are built from the 2.x branch.
 on:
   workflow_dispatch:
     inputs:
+      skia_branch:
+        description: 'Skia branch to build (e.g., chrome/m144). Leave empty to use default submodule branch.'
+        required: false
+        default: ''
       tag_suffix:
-        description: 'Optional suffix to append to tag (e.g., "a" for skia-m144a)'
+        description: 'Optional suffix to append to tag (e.g., "a" for skia-graphite-m144a)'
         required: false
         default: ''
       dry_run:
@@ -25,6 +32,16 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Checkout custom Skia branch
+        if: ${{ github.event.inputs.skia_branch != '' }}
+        working-directory: externals/skia
+        run: |
+          echo "Checking out Skia branch: ${{ github.event.inputs.skia_branch }}"
+          git fetch origin ${{ github.event.inputs.skia_branch }}
+          git checkout FETCH_HEAD
+          echo "Current Skia commit: $(git rev-parse HEAD)"
+
       - name: Determine Skia branch
         id: skia_meta
         run: |
@@ -33,24 +50,32 @@ jobs:
             echo "::error::externals/skia not found."
             exit 1
           fi
-          branch=$(git -C externals/skia branch --show-current || true)
-          if [ -z "$branch" ]; then
-            branch=$(git -C externals/skia describe --all --exact-match 2>/dev/null || true)
+          # Use input branch if provided, otherwise detect from git
+          if [ -n "$INPUT_SKIA_BRANCH" ]; then
+            branch="$INPUT_SKIA_BRANCH"
+          else
+            branch=$(git -C externals/skia branch --show-current || true)
+            if [ -z "$branch" ]; then
+              branch=$(git -C externals/skia describe --all --exact-match 2>/dev/null || true)
+            fi
+            if [ -z "$branch" ]; then
+              branch=$(git -C externals/skia rev-parse --short HEAD)
+            fi
           fi
-          if [ -z "$branch" ]; then
-            branch=$(git -C externals/skia rev-parse --short HEAD)
-          fi
-          # Strip remotes/origin/chrome/ prefix if present
+          # Strip remotes/origin/chrome/ or chrome/ prefix if present
           branch=${branch#remotes/origin/chrome/}
+          branch=${branch#chrome/}
           slug=${branch//\//-}
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "branch_slug=$slug" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_SKIA_BRANCH: ${{ github.event.inputs.skia_branch }}
       - name: Compute release metadata
         id: release_meta
         run: |
-          tag="skia-${SKIA_BRANCH_SLUG}${TAG_SUFFIX}"
+          tag="skia-graphite-${SKIA_BRANCH_SLUG}${TAG_SUFFIX}"
           echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
-          echo "release_name=Skia ${SKIA_BRANCH}${TAG_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Skia Graphite ${SKIA_BRANCH}${TAG_SUFFIX}" >> "$GITHUB_OUTPUT"
         env:
           SKIA_BRANCH: ${{ steps.skia_meta.outputs.branch }}
           SKIA_BRANCH_SLUG: ${{ steps.skia_meta.outputs.branch_slug }}
@@ -64,7 +89,7 @@ jobs:
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           name: ${{ steps.release_meta.outputs.release_name }}
-          body: "Skia prebuilt binaries for version ${{ steps.skia_meta.outputs.branch }}"
+          body: "Skia Graphite prebuilt binaries for version ${{ steps.skia_meta.outputs.branch }}"
           draft: false
           prerelease: true
           generate_release_notes: false
@@ -75,26 +100,25 @@ jobs:
       matrix:
         include:
           - target: "apple-ios"
-            artifact_name: "skia-apple-ios-xcframeworks"
+            artifact_name: "skia-graphite-apple-ios-xcframeworks"
             package_root: "./packages/skia/libs/ios"
-          - target: "apple-tvos"
-            artifact_name: "skia-apple-tvos-xcframeworks"
-            package_root: "./packages/skia/libs/tvos"
           - target: "apple-macos"
-            artifact_name: "skia-apple-macos-xcframeworks"
+            artifact_name: "skia-graphite-apple-macos-xcframeworks"
             package_root: "./packages/skia/libs/macos"
+          # Note: No apple-tvos (not supported with Graphite)
+          # Note: No apple-maccatalyst (not available with Graphite)
           - target: "android-arm"
-            artifact_name: "skia-android-arm"
-            package_root: "./packages/skia/libs/android/armeabi-v7a"
+            artifact_name: "skia-graphite-android-arm"
+            package_root: "./externals/skia/out/android/arm"
           - target: "android-arm64"
-            artifact_name: "skia-android-arm-64"
-            package_root: "./packages/skia/libs/android/arm64-v8a"
+            artifact_name: "skia-graphite-android-arm-64"
+            package_root: "./externals/skia/out/android/arm64"
           - target: "android-x86"
-            artifact_name: "skia-android-arm-x86"
-            package_root: "./packages/skia/libs/android/x86"
+            artifact_name: "skia-graphite-android-arm-x86"
+            package_root: "./externals/skia/out/android/x86"
           - target: "android-x64"
-            artifact_name: "skia-android-arm-x64"
-            package_root: "./packages/skia/libs/android/x86_64"
+            artifact_name: "skia-graphite-android-arm-x64"
+            package_root: "./externals/skia/out/android/x64"
       fail-fast: false
     steps:
       - name: checkout
@@ -102,12 +126,25 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout custom Skia branch
+        if: ${{ github.event.inputs.skia_branch != '' }}
+        working-directory: externals/skia
+        run: |
+          echo "Checking out Skia branch: ${{ github.event.inputs.skia_branch }}"
+          git fetch origin ${{ github.event.inputs.skia_branch }}
+          git checkout FETCH_HEAD
+          echo "Current Skia commit: $(git rev-parse HEAD)"
+
       - name: Setup Android NDK
         id: setup-ndk
         if: startsWith(matrix.target, 'android')
         uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         with:
-          ndk-version: r27c
+          ndk-version: r27d
+
+      - name: Set ANDROID_NDK
+        if: startsWith(matrix.target, 'android')
+        run: echo "ANDROID_NDK=$ANDROID_HOME/ndk-bundle" >> $GITHUB_ENV
 
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
@@ -121,14 +158,29 @@ jobs:
         working-directory: ./externals/depot_tools
         run: ./update_depot_tools
 
-      - name: Build Skia - ${{ matrix.target }}
+      - name: Apply Dawn patch
+        run: |
+          DAWN_GNI_FILE="./externals/skia/build_overrides/dawn.gni"
+          if [ -f "$DAWN_GNI_FILE" ]; then
+            echo "Applying patch to dawn.gni..."
+            # Remove the specified lines from the end of the file
+            sed -i.bak '/# PartitionAlloc is an optional dependency:/,$d' "$DAWN_GNI_FILE"
+            echo "Patch applied successfully."
+            echo "Modified dawn.gni content:"
+            cat "$DAWN_GNI_FILE"
+          else
+            echo "Warning: dawn.gni file not found at $DAWN_GNI_FILE"
+          fi
+
+      - name: Build Skia with Graphite - ${{ matrix.target }}
         working-directory: ./packages/skia
         env:
           ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
           GIT_SYNC_DEPS_SKIP_EMSDK: 'true'
           ZERO_AR_DATE: 1
+          SK_GRAPHITE: 1
         run: yarn build-skia ${{ matrix.target }}
-      
+
       - name: Package Apple xcframeworks (per-framework zips) - ${{ matrix.artifact_name }}
         if: startsWith(matrix.target, 'apple')
         run: |
@@ -201,8 +253,53 @@ jobs:
 
       - name: Upload binaries as workflow artifact (dry run) - ${{ matrix.artifact_name }}
         if: ${{ github.event.inputs.dry_run == 'true' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact_name }}
           path: release-assets/
+          retention-days: 7
+
+      - name: Package Graphite Headers
+        if: matrix.target == 'apple-ios'
+        id: package_headers
+        run: |
+          set -eo pipefail
+          TAG="${DISPATCH_TAG}"
+          if [ -z "$TAG" ]; then
+            TAG="${SKIA_BRANCH_SLUG}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF_NAME:-}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_SHA}"
+          fi
+          ARCHIVE="skia-graphite-headers-${TAG}.tar.gz"
+          mkdir -p release-assets
+          tar -czf "release-assets/$ARCHIVE" \
+            ./packages/skia/cpp/dawn/include \
+            ./packages/skia/cpp/skia/src/gpu/graphite
+          echo "asset_path=release-assets/$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "asset_name=$ARCHIVE" >> "$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          SKIA_BRANCH_SLUG: ${{ needs.prepare-release.outputs.skia_branch_slug }}
+
+      - name: Upload Graphite Headers to GitHub release
+        if: ${{ matrix.target == 'apple-ios' && github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag_name }}
+          files: ${{ steps.package_headers.outputs.asset_path }}
+          prerelease: true
+
+      - name: Upload Graphite Headers as workflow artifact (dry run)
+        if: ${{ matrix.target == 'apple-ios' && github.event.inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: skia-graphite-headers
+          path: ${{ steps.package_headers.outputs.asset_path }}
           retention-days: 7

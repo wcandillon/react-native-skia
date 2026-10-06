@@ -19,7 +19,7 @@ Draws vertices.
 ## Using texture mapping
 
 ```tsx twoslash
-import { Canvas, Group, ImageShader, Vertices, vec, useImage } from "@shopify/react-native-skia";
+import { Canvas, Group, ImageShader, Vertices, vec, useImage } from "react-native-skia";
 
 const VerticesDemo = () => {
   const image = useImage(require("./assets/squares.png"));
@@ -60,7 +60,7 @@ Then we use the indices property to define the two triangles we would like to dr
 * Second triangle: `0, 2, 3` (top-left, bottom-right, bottom-left).
 
 ```tsx twoslash
-import { Canvas, Vertices, vec } from "@shopify/react-native-skia";
+import { Canvas, Vertices, vec } from "react-native-skia";
 
 const IndicesDemo = () => {
   const vertices = [vec(0, 0), vec(256, 0), vec(256, 256), vec(0, 256)];

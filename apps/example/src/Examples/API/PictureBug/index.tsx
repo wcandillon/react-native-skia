@@ -14,7 +14,7 @@ import {
   Picture,
   Skia,
   type SkImage,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const LINE_ORIGINAL_WIDTH = 3000;
 const LINE_ORIGINAL_HEIGHT = 15;
@@ -91,6 +91,7 @@ class SkiaImageCache {
 
 const skiaImageCache = new SkiaImageCache();
 
+// eslint-disable-next-line @typescript-eslint/no-shadow
 const ButtonBackground = memo(function ButtonBackground({
   width,
   height,

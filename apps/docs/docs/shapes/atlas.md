@@ -24,7 +24,7 @@ Atlas transforms can be animated with near-zero cost using worklets. This makes 
 The RSXform object used by the altas API is the compression of the following matrix: `[fSCos -fSSin fTx, fSSin fSCos fTy, 0, 0, 1]`. Below are few transformations that you will find useful:
 
 ```tsx twoslash
-import {Skia} from "@shopify/react-native-skia";
+import {Skia} from "react-native-skia";
 
 // 1. Identity (doesn't do anything)
 let rsxForm = Skia.RSXform(1, 0, 0, 0);
@@ -49,7 +49,7 @@ In the example below, we draw in simple rectangle as an image.
 Then we display that rectangle 150 times with a simple transformation applied to each rectangle.
 
 ```tsx
-import {Skia, drawAsImage, Group, Rect, Canvas, Atlas, rect} from "@shopify/react-native-skia";
+import {Skia, drawAsImage, Group, Rect, Canvas, Atlas, rect} from "react-native-skia";
 
 const size = { width: 25, height: 11.25 };
 const strokeWidth = 2;
@@ -101,14 +101,14 @@ export const Demo = () => {
 ## Animations
 
 The Atlas component should usually be used with Reanimated.
-First, the [useTexture](/docs/animations/textures#usetexture) hook will enable you to create a texture on the UI thread directly without needing to make any copies.
+First, the [useTexture](/docs/animations/textures#usetexture) hook will enable you to create a texture off the JS thread without needing to make any copies.
 Secondly, we provide you with hooks such as [`useRectBuffer`](/docs/animations/hooks#userectbuffer) and [`useRSXformBuffer`](/docs/animations/hooks#usersxformbuffer) to efficiently animates on the sprites and transformations.
 
 The example below is identical to the one above but the position is an animation value bound to a gesture.
 
 
 ```tsx twoslash
-import {Skia, drawAsImage, Group, Rect, Canvas, Atlas, rect, useTexture, useRSXformBuffer} from "@shopify/react-native-skia";
+import {Skia, drawAsImage, Group, Rect, Canvas, Atlas, rect, useTexture, useRSXformBuffer} from "react-native-skia";
 import {useSharedValue, useDerivedValue} from "react-native-reanimated";
 import {GestureDetector, Gesture} from "react-native-gesture-handler";
 

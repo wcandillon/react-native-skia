@@ -16,7 +16,7 @@ React Native Skia provides a `Skottie` component for easy integration:
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, Group, Skottie, Skia } from "@shopify/react-native-skia";
+import { Canvas, Group, Skottie, Skia } from "react-native-skia";
 
 const legoAnimationJSON = require("./assets/lego_loader.json");
 const animation = Skia.Skottie.Make(JSON.stringify(legoAnimationJSON));
@@ -44,7 +44,7 @@ import {
   useClock,
   Group,
   Skottie,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 const legoAnimationJSON = require("./assets/lego_loader.json");
@@ -73,7 +73,7 @@ const AnimatedSkottieExample = () => {
 ### Basic Rendering
 
 ```tsx twoslash
-import { Skia, Canvas } from "@shopify/react-native-skia";
+import { Skia, Canvas } from "react-native-skia";
 const animation = {} as any;
 // ---cut---
 const surface = Skia.Surface.MakeOffscreen(800, 600);
@@ -97,7 +97,7 @@ const image = surface.makeImageSnapshot();
 To create a Skottie animation, use `Skia.Skottie.Make()` with your Lottie JSON data:
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 
 const legoAnimationJSON = require("./assets/lego_loader.json");
 
@@ -109,7 +109,7 @@ const animation = Skia.Skottie.Make(JSON.stringify(legoAnimationJSON));
 Many Lottie animations include external assets like fonts and images. You can provide these when creating the animation:
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 
 const basicSlotsJSON = require("./assets/basic_slots.json");
 
@@ -131,7 +131,7 @@ In the example below, for instance we apply a blur filter to a Skottie animation
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, Skottie, Skia, Group, Paint, Blur } from "@shopify/react-native-skia";
+import { Canvas, Skottie, Skia, Group, Paint, Blur } from "react-native-skia";
 
 const legoAnimationJSON = require("./assets/lego_loader.json");
 const animation = Skia.Skottie.Make(JSON.stringify(legoAnimationJSON));
@@ -154,7 +154,7 @@ export const SVG = () => {
 Get basic information about your animation:
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 const animation = {} as any;
 // ---cut---
 // Duration in seconds
@@ -184,7 +184,7 @@ import {
   useClock,
   Group,
   Skottie
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 const animationJSON = require("./assets/fingerprint.json");
@@ -254,7 +254,7 @@ const slotInfo = animation.getSlotInfo();
 ### Setting Color Slots
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 const animation = {} as any;
 // ---cut---
 animation.setColorSlot("FillsGroup", Skia.Color("cyan"));
@@ -268,7 +268,7 @@ Beyond slots, Skottie provides powerful introspection capabilities that allow yo
 ### Color Properties
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 const animation = {} as any;
 // ---cut---
 // Get all color properties

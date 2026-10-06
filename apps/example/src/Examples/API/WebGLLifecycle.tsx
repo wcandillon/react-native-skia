@@ -14,7 +14,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Canvas, Circle, Fill } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill } from "react-native-skia";
 import {
   Easing,
   useDerivedValue,

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { Color } from "@shopify/react-native-skia";
+import type { Color } from "react-native-skia";
 import {
   Canvas,
   Circle,
@@ -11,7 +11,7 @@ import {
   canvas2Polar,
   polar2Canvas,
   Shader,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";

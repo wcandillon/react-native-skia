@@ -12,19 +12,19 @@ export const examples = [
     description: "Basic WebGPU Canvas rendering",
   },
   {
-    screen: "Wireframes",
-    title: "Wireframes",
-    description: "3D wireframe models with offscreen rendering",
+    screen: "Cube",
+    title: "Three.js Cube",
+    description: "Spinning cube rendered with the three.js WebGPURenderer",
   },
   {
-    screen: "TexturedCube",
-    title: "Textured Cube",
-    description: "Rotating 3D cube with texture mapping",
+    screen: "Helmet",
+    title: "Three.js Helmet",
+    description: "glTF model with HDR environment lighting",
   },
   {
-    screen: "ImportExternalTexture",
-    title: "Import External Texture",
-    description: "Import a Skia NativeBuffer as a GPUExternalTexture",
+    screen: "Cloth",
+    title: "Three.js Cloth",
+    description: "Verlet cloth simulation running in compute shaders",
   },
 ] as const;
 

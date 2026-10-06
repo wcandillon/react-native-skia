@@ -33,7 +33,7 @@ import {
   Canvas,
   ImageSVG,
   useSVG
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const ImageSVGDemo = () => {
   // Alternatively, you can pass an SVG URL directly
@@ -57,7 +57,7 @@ You can also use an inlined string as SVG (using `Skia.SVG.MakeFromString`):
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia } from "react-native-skia";
 
 const svg = Skia.SVG.MakeFromString(
   `<svg viewBox='0 0 290 500' xmlns='http://www.w3.org/2000/svg'>
@@ -87,7 +87,7 @@ This works similarly to the [Paragraph API](/docs/text/paragraph) where you can 
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia, useFonts } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia, useFonts } from "react-native-skia";
 
 const SVGWithCustomFonts = () => {
   const fontMgr = useFonts({
@@ -136,7 +136,7 @@ You can reference images either through base64 data URIs or by providing a resou
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia, useData } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia, useData } from "react-native-skia";
 
 const SVGWithImages = () => {
   // Load an image asset
@@ -192,7 +192,7 @@ In the example below we scale the SVG to the canvas width and height.
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia, rect, fitbox, Group } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia, rect, fitbox, Group } from "react-native-skia";
 
 const svg = Skia.SVG.MakeFromString(
   `<svg viewBox='0 0 20 20' width="20" height="20" xmlns='http://www.w3.org/2000/svg'>
@@ -230,7 +230,7 @@ In the example below we apply an opacity effect via the `ColorMatrix` component.
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia, rect, fitbox, useSVG, Group, Paint, OpacityMatrix, ColorMatrix } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia, rect, fitbox, useSVG, Group, Paint, OpacityMatrix, ColorMatrix } from "react-native-skia";
 
 const width = 256;
 const height = 256;
@@ -263,7 +263,7 @@ In the example below we apply a blur image filter to the SVG.
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, ImageSVG, Skia, rect, fitbox, useSVG, Group, Paint, Blur } from "@shopify/react-native-skia";
+import { Canvas, ImageSVG, Skia, rect, fitbox, useSVG, Group, Paint, Blur } from "react-native-skia";
 
 const width = 256;
 const height = 256;
@@ -295,7 +295,7 @@ The [SVG module from Skia](https://github.com/google/skia/tree/main/modules/svg)
 We expect most SVG files to render correctly out of the box, especially if they come from Figma or Illustrator.
 However, please be aware of some of the quirks below when using it.
 Text elements currently won't render and any external XML elements such as XLink or CSS won't render.
-If your SVG doesn't render correctly and you've considered all the items below, please file [an issue](https://github.com/Shopify/react-native-skia/issues/new).
+If your SVG doesn't render correctly and you've considered all the items below, please file [an issue](https://github.com/wcandillon/react-native-skia/issues/new).
 
 ### CSS Styles
 

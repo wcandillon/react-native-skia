@@ -7,7 +7,7 @@
 #import <Appkit/Appkit.h>
 #endif // !TARGET_OS_OSX
 
-#import <React/RCTUIManager.h>
+#import <React/RCTBridgeModule.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -19,7 +19,7 @@
 @interface ViewScreenshotService : NSObject {
 }
 
-- (instancetype)initWithUiManager:(RCTUIManager *)uiManager;
+- (instancetype)initWithViewRegistry:(RCTViewRegistry *)viewRegistry;
 - (sk_sp<SkImage>)screenshotOfViewWithTag:(NSNumber *)viewTag;
 
 @end

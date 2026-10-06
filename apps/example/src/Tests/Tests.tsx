@@ -5,7 +5,7 @@ import {
   makeImageFromView,
   Skia,
   useCanvasRef,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { RefObject } from "react";
 import React, { useEffect, useRef, useState } from "react";
 import { PixelRatio, Text, View } from "react-native";

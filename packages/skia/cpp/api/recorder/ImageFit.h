@@ -18,14 +18,14 @@ struct FitRects {
   SkRect dst;
 };
 
-SkRect inscribe(SkSize size, SkRect rect) {
+inline SkRect inscribe(SkSize size, SkRect rect) {
   auto halfWidthDelta = (rect.width() - size.width()) / 2.0;
   auto halfHeightDelta = (rect.height() - size.height()) / 2.0;
   return SkRect::MakeXYWH(rect.x() + halfWidthDelta, rect.y() + halfHeightDelta,
                           size.width(), size.height());
 }
 
-SkMatrix rect2rect(SkRect src, SkRect dst) {
+inline SkMatrix rect2rect(SkRect src, SkRect dst) {
   auto sx = dst.width() / src.width();
   auto sy = dst.height() / src.height();
   auto tx = dst.x() - src.x() * sx;
@@ -36,9 +36,12 @@ SkMatrix rect2rect(SkRect src, SkRect dst) {
   return m3;
 }
 
-SkSize size(double width, double height) { return SkSize::Make(width, height); }
+inline SkSize size(double width, double height) {
+  return SkSize::Make(width, height);
+}
 
-FitSizes applyBoxFit(const std::string fit, SkSize input, SkSize output) {
+inline FitSizes applyBoxFit(const std::string fit, SkSize input,
+                            SkSize output) {
   SkSize src = size(0, 0);
   SkSize dst = size(0, 0);
 
@@ -96,7 +99,7 @@ FitSizes applyBoxFit(const std::string fit, SkSize input, SkSize output) {
   return {.src = src, .dst = dst};
 }
 
-FitRects fitRects(const std::string &fit, SkRect rect, SkRect rect2) {
+inline FitRects fitRects(const std::string &fit, SkRect rect, SkRect rect2) {
   auto sizes = applyBoxFit(fit, size(rect.width(), rect.height()),
                            size(rect2.width(), rect2.height()));
 

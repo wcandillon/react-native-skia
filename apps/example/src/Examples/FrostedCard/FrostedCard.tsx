@@ -7,7 +7,7 @@ import {
   BackdropFilter,
   Fill,
   usePathValue,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 import { Dimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -77,7 +77,9 @@ export const FrostedCard = () => {
     roundedRectPath,
     (path) => {
       "worklet";
-      return path.transform(matrix.value);
+      return Skia.PathBuilder.MakeFromPath(path)
+        .transform(matrix.value)
+        .build();
     }
   );
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Platform, ScrollView, useWindowDimensions } from "react-native";
-import type { DataModule } from "@shopify/react-native-skia";
+import type { DataModule } from "react-native-skia";
 import {
   Canvas,
   Group,
@@ -10,7 +10,7 @@ import {
   Skia,
   mix,
   useFonts,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import {
   useSharedValue,
   useDerivedValue,

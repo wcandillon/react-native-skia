@@ -1,4 +1,4 @@
-import { Canvas, RoundedRect } from "@shopify/react-native-skia";
+import { Canvas, RoundedRect } from "react-native-skia";
 import React from "react";
 import { View } from "react-native";
 
