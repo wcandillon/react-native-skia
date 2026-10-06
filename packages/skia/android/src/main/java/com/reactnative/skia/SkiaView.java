@@ -8,6 +8,8 @@ import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 
+import androidx.annotation.Nullable;
+
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
 import com.facebook.react.bridge.ReactContext;
@@ -17,14 +19,10 @@ import com.facebook.react.views.view.ReactViewGroup;
 /**
  * The Android view behind <Canvas>, <SkiaPictureView> and <SkiaGraphiteView>.
  * It is backed by a SurfaceView or a TextureView (see updateView()) that the
- * native side draws into with Graphite, presenting the queued recordings on
- * the Choreographer.
+ * native side draws into with Graphite, presenting the queued recordings when
+ * the backing view can show them (see FrameScheduler).
  */
 public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreographer.FrameCallback {
-    // Backing view kinds, see updateView().
-    private static final int KIND_SURFACE_VIEW = 0;
-    private static final int KIND_TEXTURE_VIEW = 1;
-
     private static final String TAG = "SkiaView";
 
     @DoNotStrip
@@ -32,18 +30,36 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private View mView;
 
-    // Props, applied together in updateView().
+    // Props, applied together in updateView(). A null kind is "auto".
     private boolean mOpaque = false;
-    private String mSurfaceType = "auto";
+    @Nullable
+    private BackingViewKind mRequestedKind = null;
     private boolean mZOrderOnTop = false;
     private boolean mHighBitDepth = false;
 
-    // What the current backing view was created with.
-    private int mAppliedKind = -1;
+    // What the current backing view was created with; no kind before the first one.
+    @Nullable
+    private BackingViewKind mAppliedKind = null;
     private boolean mAppliedZOrderOnTop;
     private boolean mAppliedHighBitDepth;
 
-    private boolean mFramePending = false;
+    private final Runnable mPostedPresent = this::onPostedPresent;
+    private final FrameScheduler mFrameScheduler = new FrameScheduler(new FrameScheduler.Host() {
+        @Override
+        public void postFrameCallback() {
+            Choreographer.getInstance().postFrameCallback(SkiaView.this);
+        }
+
+        @Override
+        public void postBehindPendingDraw() {
+            post(mPostedPresent);
+        }
+
+        @Override
+        public boolean presentFrame() {
+            return SkiaView.this.presentFrame();
+        }
+    });
 
     public SkiaView(Context context) {
         super(context);
@@ -65,8 +81,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mOpaque = value;
     }
 
-    public void setSurfaceType(String value) {
-        mSurfaceType = value == null ? "auto" : value;
+    public void setSurfaceType(@Nullable String value) {
+        mRequestedKind = BackingViewKind.fromSurfaceType(value);
     }
 
     public void setZOrderOnTop(boolean value) {
@@ -79,25 +95,22 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     // Resolve the backing view from the props. "auto" picks SurfaceView for an
     // opaque canvas and TextureView for a non-opaque one.
-    private int resolveKind() {
-        if ("SurfaceView".equals(mSurfaceType)) {
-            return KIND_SURFACE_VIEW;
+    private BackingViewKind resolveKind() {
+        if (mRequestedKind != null) {
+            return mRequestedKind;
         }
-        if ("TextureView".equals(mSurfaceType)) {
-            return KIND_TEXTURE_VIEW;
-        }
-        return mOpaque ? KIND_SURFACE_VIEW : KIND_TEXTURE_VIEW;
+        return mOpaque ? BackingViewKind.SURFACE_VIEW : BackingViewKind.TEXTURE_VIEW;
     }
 
     // The 10-bit buffer format only has 2 bits of alpha, which would visibly
     // break translucency, and the extra precision would be lost in the 8-bit
     // composition pass of a TextureView anyway. So the flag only applies to an
     // opaque SurfaceView.
-    private boolean resolveHighBitDepth(int kind) {
+    private boolean resolveHighBitDepth(BackingViewKind kind) {
         if (!mHighBitDepth) {
             return false;
         }
-        if (kind != KIND_SURFACE_VIEW || !mOpaque) {
+        if (kind != BackingViewKind.SURFACE_VIEW || !mOpaque) {
             Log.w(TAG, "highBitDepth requires an opaque SurfaceView on Android, falling back to the 8-bit format");
             return false;
         }
@@ -109,8 +122,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // it attaches (zOrderOnTop, the buffer format), replaces the child; opacity
     // is applied in place.
     void updateView() {
-        int kind = resolveKind();
-        boolean zOrderOnTop = kind == KIND_SURFACE_VIEW && mZOrderOnTop;
+        BackingViewKind kind = resolveKind();
+        boolean zOrderOnTop = kind == BackingViewKind.SURFACE_VIEW && mZOrderOnTop;
         boolean highBitDepth = resolveHighBitDepth(kind);
         if (mView == null
                 || kind != mAppliedKind
@@ -122,9 +135,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             mAppliedKind = kind;
             mAppliedZOrderOnTop = zOrderOnTop;
             mAppliedHighBitDepth = highBitDepth;
-            mView = kind == KIND_SURFACE_VIEW
-                    ? new SkiaSurfaceView(getContext(), this, zOrderOnTop, mOpaque)
-                    : new SkiaTextureView(getContext(), this, mOpaque);
+            mView = switch (kind) {
+                case SURFACE_VIEW -> new SkiaSurfaceView(getContext(), this, zOrderOnTop, mOpaque);
+                case TEXTURE_VIEW -> new SkiaTextureView(getContext(), this, mOpaque);
+            };
             addView(mView);
             // React Native sizes native children explicitly through onLayout, so
             // the requestLayout triggered by addView is ignored; size the new
@@ -132,10 +146,11 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             if (getWidth() > 0 || getHeight() > 0) {
                 mView.layout(0, 0, getWidth(), getHeight());
             }
-        } else if (kind == KIND_SURFACE_VIEW) {
-            ((SkiaSurfaceView) mView).setOpaque(mOpaque);
         } else {
-            ((SkiaTextureView) mView).setOpaque(mOpaque);
+            switch (kind) {
+                case SURFACE_VIEW -> ((SkiaSurfaceView) mView).setOpaque(mOpaque);
+                case TEXTURE_VIEW -> ((SkiaTextureView) mView).setOpaque(mOpaque);
+            }
         }
     }
 
@@ -157,31 +172,27 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     // Frames --------------------------------------------------------------
 
-    /**
-     * Presents the queued recordings on the next vsync. Main thread; called
-     * from native when a recording is submitted.
-     */
+    /** A recording was submitted. Main thread; called from native. */
     @DoNotStrip
     public void scheduleFrame() {
-        if (!mFramePending) {
-            mFramePending = true;
-            Choreographer.getInstance().postFrameCallback(this);
-        }
+        mFrameScheduler.requestFrame(mAppliedKind);
     }
 
     @Override
     public void doFrame(long frameTimeNanos) {
-        mFramePending = false;
-        if (presentFrame()) {
-            scheduleFrame();
-        }
+        mFrameScheduler.onFrame(mAppliedKind);
+    }
+
+    private void onPostedPresent() {
+        mFrameScheduler.onPosted();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         Choreographer.getInstance().removeFrameCallback(this);
-        mFramePending = false;
+        removeCallbacks(mPostedPresent);
+        mFrameScheduler.cancel();
     }
 
     @Override
@@ -242,6 +253,6 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private native void unregisterView();
 
-    /** Choreographer tick: returns whether more recordings are waiting. */
+    /** Presents the queued recordings, returning whether any are left. */
     private native boolean presentFrame();
 }
