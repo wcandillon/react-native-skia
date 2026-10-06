@@ -256,10 +256,14 @@ jobs:
           name: tests-docs-screenshots
 
   # The iOS and macOS jobs run on the self-hosted Mac that also serves the
-  # react-native-webgpu and redraw CI. Fork PRs skip them so outside code never
-  # runs on that machine; the merge queue still runs them before anything lands.
+  # react-native-webgpu and redraw CI. They run for branches of this repo and
+  # for fork PRs whose author already has a commit here (GitHub's CONTRIBUTOR
+  # association). A first-time contributor's fork PR skips them, so unknown
+  # code never reaches that machine; push the branch to this repo to run them.
+  # Fork runs still wait for the approval configured in the Actions settings.
+  # merge_group is kept for the day the repo can use a merge queue.
   build-test-ios:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name == github.repository || contains(fromJSON('["OWNER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.pull_request.author_association))) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 90
     env:
@@ -364,7 +368,7 @@ jobs:
           fi
 
   build-test-macos:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name == github.repository || contains(fromJSON('["OWNER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.pull_request.author_association))) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     steps:
