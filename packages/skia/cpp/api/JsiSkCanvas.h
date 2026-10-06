@@ -7,6 +7,7 @@
 
 #include "CustomBlendModes.h"
 #include "JsiSkConverters.h"
+#include "JsiSkDispatcher.h"
 #include "JsiSkFont.h"
 #include "JsiSkImage.h"
 #include "JsiSkImageInfo.h"
@@ -602,16 +603,31 @@ public:
     setCanvas(canvas);
   }
 
+  ~JsiSkCanvas() override {
+    // This destructor can run on any thread (GC), and a surface must be
+    // released on the thread it was created on.
+    if (_surface && _dispatcher) {
+      _dispatcher->run([surface = std::move(_surface)]() {});
+    }
+  }
+
   void setCanvas(SkCanvas *canvas) { _canvas = canvas; }
   SkCanvas *getCanvas() { return _canvas; }
 
   // Optionally associate the canvas with its owning surface. This lets
   // readPixels fall back to a surface snapshot on Graphite, which has no
   // synchronous canvas readback.
-  void setSurface(sk_sp<SkSurface> surface) { _surface = std::move(surface); }
+  void setSurface(sk_sp<SkSurface> surface) {
+    _surface = std::move(surface);
+    // Called on the thread that owns the surface: keep its dispatcher, and
+    // drain it as the JsiSkImage constructor does.
+    _dispatcher = Dispatcher::getDispatcher();
+    _dispatcher->processQueue();
+  }
 
 private:
   SkCanvas *_canvas;
   sk_sp<SkSurface> _surface;
+  std::shared_ptr<Dispatcher> _dispatcher;
 };
 } // namespace RNSkia
