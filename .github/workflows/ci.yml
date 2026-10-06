@@ -261,11 +261,7 @@ jobs:
           path: apps/docs/static/
           name: tests-docs-screenshots
 
-  # The iOS and macOS jobs run on the self-hosted Mac that also serves the
-  # react-native-webgpu and redraw CI. Fork PRs skip them so outside code never
-  # runs on that machine; the merge queue still runs them before anything lands.
   build-test-ios:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 90
     env:
@@ -370,7 +366,6 @@ jobs:
           fi
 
   build-test-macos:
-    if: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     steps:
