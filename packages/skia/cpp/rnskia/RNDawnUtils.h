@@ -318,6 +318,15 @@ createDawnBackendContext(dawn::native::Instance *instance) {
       // Vulkan equivalent of the above: EndAccess exports a sync-fd fence.
       wgpu::FeatureName::SharedFenceSyncFD,
       wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
+      // Video and camera frames are YUV AHardwareBuffers. Dawn imports them
+      // as OpaqueYCbCrAndroid textures, a format it only accepts on a device
+      // with one of its two YCbCr features, and react-native-webgpu samples
+      // them as external textures (importExternalTexture,
+      // copyExternalImageToTexture), which needs this one in particular.
+      // Without it, importing a frame on the shared device fails with
+      // "Unsupported texture format TextureFormat::OpaqueYCbCrAndroid".
+      // Experimental in Dawn, hence the allow_unsafe_apis instance toggle.
+      wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
 

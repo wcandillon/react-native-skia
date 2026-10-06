@@ -529,4 +529,4 @@ The React Native WebGPU documentation also has a page on [React Native Skia](htt
 | [Cube](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cube.tsx) | Three.js on a WebGPU canvas |
 | [Helmet](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Helmet.tsx) | A three.js scene drawn in a Skia canvas |
 | [Cloth](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Cloth.tsx) | A Skia drawing used as a three.js texture |
-| [Video](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Video.tsx) | A video decoded by WebGPU and drawn by a Skia canvas |
+| [Video](https://github.com/wcandillon/react-native-skia/blob/main/apps/example/src/Examples/WebGPU/Video.tsx) | A video decoded by WebGPU, drawn by a Skia canvas through color filters, image filters and runtime shaders |
