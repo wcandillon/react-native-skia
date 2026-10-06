@@ -27,9 +27,9 @@
 
 #ifdef __APPLE__
 #include <CoreVideo/CVPixelBuffer.h>
+#include <IOSurface/IOSurfaceRef.h>
 #else
 #include <android/hardware_buffer.h>
-#include <android/hardware_buffer_jni.h>
 #endif
 
 namespace RNSkia {
@@ -54,9 +54,6 @@ async_callback(void *c,
 
 class DawnContext {
 public:
-  // TODO: remove
-  friend class RNSkApplePlatformContext;
-
   DawnContext(const DawnContext &) = delete;
   DawnContext &operator=(const DawnContext &) = delete;
 
@@ -143,44 +140,96 @@ public:
     fGraphiteContext->submit(syncToCpu);
   }
 
+  // Wraps a native buffer into an SkImage without copying its pixels: an
+  // IOSurface or CVPixelBuffer on Apple platforms, an AHardwareBuffer on
+  // Android. The buffer is imported as Dawn shared texture memory, and the
+  // access window stays open for the lifetime of the image (EndAccess runs
+  // from the image's release proc). The caller keeps ownership of the buffer
+  // and keeps it alive while the image is in use.
+  //
+  // Only formats Skia can sample are accepted (see
+  // DawnUtils::colorTypeForTextureFormat): YUV buffers are not supported yet.
+  // Throws with the reason when the buffer cannot be wrapped.
   sk_sp<SkImage> MakeImageFromBuffer(void *buffer) {
-#if defined(__ANDROID__) && __ANDROID_API__ < 26
-    // AHardwareBuffer is only available from API 26
-    (void)buffer;
-    return nullptr;
-#else
-#ifdef __APPLE__
-    wgpu::SharedTextureMemoryIOSurfaceDescriptor platformDesc;
-    auto ioSurface = CVPixelBufferGetIOSurface((CVPixelBufferRef)buffer);
-    platformDesc.ioSurface = ioSurface;
-    int width = static_cast<int>(IOSurfaceGetWidth(ioSurface));
-    int height = static_cast<int>(IOSurfaceGetHeight(ioSurface));
-#else
-    wgpu::SharedTextureMemoryAHardwareBufferDescriptor platformDesc;
-    auto ahb = reinterpret_cast<AHardwareBuffer *>(buffer);
-    platformDesc.handle = ahb;
-    AHardwareBuffer_Desc adesc;
-    AHardwareBuffer_describe(ahb, &adesc);
-    int width = adesc.width;
-    int height = adesc.height;
-#endif
-
+    if (buffer == nullptr) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: the buffer pointer is null");
+    }
     wgpu::SharedTextureMemoryDescriptor desc = {};
+#ifdef __APPLE__
+    // Both the CVPixelBuffer that AVFoundation and VisionCamera hand out and
+    // the IOSurface behind it (react-native-webgpu's NativeVideoFrame.handle)
+    // are accepted; Dawn imports the IOSurface.
+    auto ref = static_cast<CFTypeRef>(buffer);
+    IOSurfaceRef ioSurface = nullptr;
+    if (CFGetTypeID(ref) == CVPixelBufferGetTypeID()) {
+      ioSurface =
+          CVPixelBufferGetIOSurface(static_cast<CVPixelBufferRef>(buffer));
+      if (ioSurface == nullptr) {
+        throw std::runtime_error(
+            "MakeImageFromNativeBuffer: the CVPixelBuffer is not backed by an "
+            "IOSurface (allocate it with "
+            "kCVPixelBufferIOSurfacePropertiesKey)");
+      }
+    } else if (CFGetTypeID(ref) == IOSurfaceGetTypeID()) {
+      ioSurface = static_cast<IOSurfaceRef>(buffer);
+    } else {
+      throw std::runtime_error("MakeImageFromNativeBuffer: expected a "
+                               "CVPixelBufferRef or an IOSurfaceRef");
+    }
+    wgpu::SharedTextureMemoryIOSurfaceDescriptor platformDesc = {};
+    platformDesc.ioSurface = ioSurface;
+    // The image only samples the texture. Allowing storage binding would make
+    // Dawn validate the surface format against storage capabilities, which
+    // bgra8unorm (the usual CVPixelBuffer format) does not need to pass.
+    platformDesc.allowStorageBinding = false;
+#else
+    auto *ahb = static_cast<AHardwareBuffer *>(buffer);
+    AHardwareBuffer_Desc ahbDesc = {};
+    AHardwareBuffer_describe(ahb, &ahbDesc);
+    // Dawn derives the texture usage from the buffer's usage bits: without
+    // GPU_SAMPLED_IMAGE the texture gets no TextureBinding and the import
+    // fails deep inside Dawn with an opaque validation error. Name the real
+    // cause instead.
+    if ((ahbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) == 0) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: the AHardwareBuffer was allocated "
+          "without AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE, so the GPU cannot "
+          "sample it");
+    }
+    wgpu::SharedTextureMemoryAHardwareBufferDescriptor platformDesc = {};
+    platformDesc.handle = ahb;
+#endif
     desc.nextInChain = &platformDesc;
     wgpu::SharedTextureMemory memory =
         backendContext.fDevice.ImportSharedTextureMemory(&desc);
+    if (memory == nullptr) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: Dawn could not import the buffer");
+    }
 
-    wgpu::TextureDescriptor textureDesc;
-    textureDesc.format = DawnUtils::PreferredTextureFormat;
-    textureDesc.dimension = wgpu::TextureDimension::e2D;
-    textureDesc.usage =
-        wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc;
-    textureDesc.size = {static_cast<uint32_t>(width),
-                        static_cast<uint32_t>(height), 1};
+    // Dawn describes the texture the buffer can back (format, size, usage);
+    // the texture is created from that description rather than from a format
+    // we would guess, and Skia samples it with the matching color type.
+    wgpu::SharedTextureMemoryProperties properties = {};
+    if (memory.GetProperties(&properties) != wgpu::Status::Success) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: could not read the buffer properties");
+    }
+    auto colorType = DawnUtils::colorTypeForTextureFormat(properties.format);
+    if (!colorType.has_value()) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: unsupported pixel format (YUV buffers "
+          "are not supported yet, request BGRA or RGBA frames)");
+    }
+    wgpu::Texture texture = memory.CreateTexture();
+    if (texture == nullptr) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: could not create a texture for the "
+          "buffer");
+    }
 
-    wgpu::Texture texture = memory.CreateTexture(&textureDesc);
-
-    wgpu::SharedTextureMemoryBeginAccessDescriptor beginAccessDesc;
+    wgpu::SharedTextureMemoryBeginAccessDescriptor beginAccessDesc = {};
     beginAccessDesc.initialized = true;
     beginAccessDesc.fenceCount = 0;
 #if defined(__ANDROID__)
@@ -192,33 +241,30 @@ public:
     vkBegin.newLayout = 0;
     beginAccessDesc.nextInChain = &vkBegin;
 #endif
-    bool success =
-        memory.BeginAccess(texture, &beginAccessDesc) == wgpu::Status::Success;
+    if (memory.BeginAccess(texture, &beginAccessDesc) !=
+        wgpu::Status::Success) {
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: Dawn could not begin accessing the "
+          "buffer");
+    }
 
-    if (success) {
-      skgpu::graphite::BackendTexture betFromView =
-          skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-      auto result = SkImages::WrapTexture(
-          getRecorder(), betFromView, DawnUtils::PreferedColorType,
-          kPremul_SkAlphaType, nullptr,
-          [](void *context) {
-            auto ctx = static_cast<SharedTextureContext *>(context);
-            wgpu::SharedTextureMemoryEndAccessState endState = {};
+    // The release proc runs when the image is done with the texture, and also
+    // when WrapTexture fails, so the access always ends exactly once.
+    auto backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkImages::WrapTexture(
+        getRecorder(), backendTexture, *colorType, kPremul_SkAlphaType, nullptr,
+        [](void *context) {
+          auto ctx = static_cast<SharedTextureContext *>(context);
+          wgpu::SharedTextureMemoryEndAccessState endState = {};
 #if defined(__ANDROID__)
-            wgpu::SharedTextureMemoryVkImageLayoutEndState vkEnd = {};
-            endState.nextInChain = &vkEnd;
+          wgpu::SharedTextureMemoryVkImageLayoutEndState vkEnd = {};
+          endState.nextInChain = &vkEnd;
 #endif
-            ctx->sharedTextureMemory.EndAccess(ctx->texture, &endState);
-            delete ctx;
-          },
-          new SharedTextureContext{memory, texture});
-      return result;
-    }
-    if (!success) {
-      return nullptr;
-    }
-    return nullptr;
-#endif
+          ctx->sharedTextureMemory.EndAccess(ctx->texture, &endState);
+          delete ctx;
+        },
+        new SharedTextureContext{memory, texture});
   }
 
   // Create offscreen surface
@@ -276,26 +322,11 @@ public:
       return nullptr;
     }
 
-    // Map WebGPU format to Skia color type
-    SkColorType colorType;
-    switch (format) {
-    case wgpu::TextureFormat::RGBA8Unorm:
-      colorType = kRGBA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::BGRA8Unorm:
-      colorType = kBGRA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::RGBA16Float:
-      colorType = kRGBA_F16_SkColorType;
-      break;
-    case wgpu::TextureFormat::R8Unorm:
-      colorType = kGray_8_SkColorType;
-      break;
-    default:
-      // Use preferred color type for unsupported formats
-      colorType = DawnUtils::PreferedColorType;
-      break;
-    }
+    // Map the WebGPU format to a Skia color type; fall back to the preferred
+    // color type for formats Skia does not sample.
+    SkColorType colorType =
+        DawnUtils::colorTypeForTextureFormat(format).value_or(
+            DawnUtils::PreferedColorType);
 
     skgpu::graphite::BackendTexture backendTexture =
         skgpu::graphite::BackendTextures::MakeDawn(texture.Get());

@@ -36,10 +36,18 @@ public:
     return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
 
+  // A native buffer crosses the package boundary as a raw pointer (BigInt):
+  // an IOSurfaceRef or CVPixelBufferRef on Apple platforms, an AHardwareBuffer*
+  // on Android. That is what react-native-webgpu's NativeVideoFrame.handle and
+  // VisionCamera's frame.getNativeBuffer().pointer hold. Dawn imports the
+  // buffer as shared texture memory and the image samples it without a copy;
+  // the caller keeps ownership of the buffer and keeps it alive while the
+  // image is in use (see DawnContext::MakeImageFromBuffer).
   std::shared_ptr<JsiSkImage> MakeImageFromNativeBuffer(void *rawPointer) {
-    auto image = getContext()->makeImageFromNativeBuffer(rawPointer);
+    auto image = DawnContext::getInstance().MakeImageFromBuffer(rawPointer);
     if (image == nullptr) {
-      throw std::runtime_error("Failed to convert NativeBuffer to SkImage!");
+      throw std::runtime_error(
+          "MakeImageFromNativeBuffer: failed to wrap the buffer");
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
@@ -79,25 +87,6 @@ public:
                 });
               });
         });
-  }
-
-  JSI_HOST_FUNCTION(MakeImageFromNativeTextureUnstable) {
-    auto texInfo = JsiTextureInfo::fromValue(runtime, arguments[0]);
-    auto image = getContext()->makeImageFromNativeTexture(
-        texInfo, arguments[1].asNumber(), arguments[2].asNumber(),
-        count > 3 && arguments[3].asBool());
-    if (image == nullptr) {
-      throw std::runtime_error("Failed to convert native texture to SkImage!");
-    }
-    if (count > 4) {
-      auto jsiImage = tryGetJsiObject<JsiSkImage>(runtime, arguments[4]);
-      if (jsiImage) {
-        jsiImage->setObject(image);
-        return jsi::Value(runtime, arguments[4]);
-      }
-    }
-    return makeJsiObject(
-        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }
 
   // Pointer-based texture interop with react-native-webgpu. The GPUTexture
@@ -167,8 +156,6 @@ public:
                       &JsiSkImageFactory::MakeImageFromViewTag);
     installMethod(runtime, prototype, "MakeImageFromNativeBuffer",
                   &JsiSkImageFactory::MakeImageFromNativeBuffer);
-    installHostMethod(runtime, prototype, "MakeImageFromNativeTextureUnstable",
-                      &JsiSkImageFactory::MakeImageFromNativeTextureUnstable);
     installMethod(runtime, prototype, "MakeImage",
                   &JsiSkImageFactory::MakeImage);
     installMethod(runtime, prototype, "MakeNull", &JsiSkImageFactory::MakeNull);

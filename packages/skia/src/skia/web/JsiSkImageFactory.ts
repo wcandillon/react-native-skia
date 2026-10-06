@@ -1,6 +1,5 @@
 import type { CanvasKit, Image } from "canvaskit-wasm";
 
-import { CanvasKitWebGLBuffer, isNativeBufferWeb } from "../types";
 import type {
   SkData,
   ImageInfo,
@@ -13,7 +12,19 @@ import { Host, getEnum, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkImage } from "./JsiSkImage";
 import { JsiSkData } from "./JsiSkData";
 import type { JsiSkSurface } from "./JsiSkSurface";
-import type { CanvasKitWebGLBufferImpl } from "./CanvasKitWebGLBufferImpl";
+
+// On Web a native buffer is any CanvasImageSource (the video element of a
+// playing video, an ImageBitmap, a canvas...).
+const isCanvasImageSource = (
+  buffer: NativeBuffer
+): buffer is CanvasImageSource =>
+  buffer instanceof HTMLVideoElement ||
+  buffer instanceof HTMLCanvasElement ||
+  buffer instanceof ImageBitmap ||
+  buffer instanceof OffscreenCanvas ||
+  (typeof VideoFrame !== "undefined" && buffer instanceof VideoFrame) ||
+  buffer instanceof HTMLImageElement ||
+  buffer instanceof SVGImageElement;
 
 export class JsiSkImageFactory extends Host implements ImageFactory {
   constructor(CanvasKit: CanvasKit) {
@@ -36,7 +47,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     surface?: JsiSkSurface,
     image?: JsiSkImage
   ) {
-    if (!isNativeBufferWeb(buffer)) {
+    if (!isCanvasImageSource(buffer)) {
       throw new Error("Invalid NativeBuffer");
     }
     if (!surface) {
@@ -47,10 +58,6 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
         buffer instanceof ImageBitmap
       ) {
         img = this.CanvasKit.MakeLazyImageFromTextureSource(buffer);
-      } else if (buffer instanceof CanvasKitWebGLBuffer) {
-        img = (
-          buffer as CanvasKitWebGLBuffer as CanvasKitWebGLBufferImpl
-        ).toImage();
       } else {
         img = this.CanvasKit.MakeImageFromCanvasImageSource(buffer);
       }
@@ -77,10 +84,6 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
       return null;
     }
     return new JsiSkImage(this.CanvasKit, image);
-  }
-
-  MakeImageFromNativeTextureUnstable() {
-    return throwNotImplementedOnRNWeb<SkImage>();
   }
 
   MakeImage(info: ImageInfo, data: SkData, bytesPerRow: number) {

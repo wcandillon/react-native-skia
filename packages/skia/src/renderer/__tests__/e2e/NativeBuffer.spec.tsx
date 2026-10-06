@@ -1,154 +1,93 @@
-import { checkImage } from "../../../__tests__/setup";
-import type { NativeBufferAddr } from "../../../skia/types";
+import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
 import { setupSkia } from "../../../skia/__tests__/setup";
 import { surface } from "../setup";
 
-const shouldNativeBufferTestRun = () => {
-  // Skip outside iOS and Android
-  if (surface.OS !== "ios" && surface.OS !== "android") {
-    return false;
-  }
-  return true;
+// Native buffers (IOSurface / CVPixelBuffer on Apple platforms, AHardwareBuffer
+// on Android) are allocated and owned by react-native-webgpu; Skia only wraps
+// them. The example app installs react-native-webgpu, so its RNWebGPU global
+// is available to code evaluated on the device. Pointers never cross the eval
+// boundary (BigInt is not JSON serializable): everything runs on-device and
+// only plain data comes back.
+declare const RNWebGPU: {
+  createTestVideoFrame: (
+    width: number,
+    height: number
+  ) => {
+    readonly handle: bigint;
+    readonly width: number;
+    readonly height: number;
+    release(): void;
+  };
 };
 
-const rgbaPixels = new Array(256 * 256 * 4).fill(0);
-rgbaPixels.fill(255);
-let i = 0;
-for (let x = 0; x < 256 * 4; x++) {
-  for (let y = 0; y < 256 * 4; y++) {
-    rgbaPixels[i++] = (x * y) % 255;
-  }
-}
-
-const bgraPixels = new Array(256 * 256 * 4).fill(0);
-bgraPixels.fill(255);
-// Conversion from RGBA to BGRA
-for (let j = 0; j < rgbaPixels.length; j += 4) {
-  const r = rgbaPixels[j];
-  const g = rgbaPixels[j + 1];
-  const b = rgbaPixels[j + 2];
-  const a = rgbaPixels[j + 3];
-
-  // In BGRA, the blue and red channels are swapped
-  bgraPixels[j] = b; // Blue
-  bgraPixels[j + 1] = g; // Green remains the same
-  bgraPixels[j + 2] = r; // Red
-  bgraPixels[j + 3] = a; // Alpha remains the same
-}
-
 describe("Native Buffers", () => {
-  it("On non supported platforms MakeImageFromNativeBuffer() should throw", async () => {
-    const { Skia: Sk } = setupSkia();
-    if (!shouldNativeBufferTestRun()) {
-      return;
-    }
-    const result = await surface.eval((Skia) => {
-      const sur = Skia.Surface.Make(256, 256)!;
-      const canvas = sur.getCanvas();
-      canvas.drawColor(Skia.Color("cyan"));
-      const nativeBuffer = Skia.NativeBuffer.MakeFromImage(
-        sur.makeImageSnapshot()
-      );
-      return (nativeBuffer as NativeBufferAddr).toString();
-    });
-    const pointer = BigInt(result);
-    expect(pointer).not.toBe(BigInt(0));
-    const t = () => {
-      Sk.Image.MakeImageFromNativeBuffer(pointer);
-    };
-    expect(t).toThrow(Error);
-    // Now we need to release the native buffer
-    const success = await surface.eval(
-      (Skia, ctx) => {
-        Skia.NativeBuffer.Release(BigInt(ctx.pointer));
-        return true;
-      },
-      { pointer: pointer.toString() }
+  it("rejects a pointer on Web and Node", () => {
+    const { Skia } = setupSkia();
+    expect(() => Skia.Image.MakeImageFromNativeBuffer(BigInt(1))).toThrow(
+      Error
     );
-    expect(success).toBe(true);
   });
 
-  it("creates a native buffer from an image", async () => {
-    if (!shouldNativeBufferTestRun()) {
-      return;
-    }
-    const result = await surface.eval((Skia) => {
-      const sur = Skia.Surface.Make(256, 256)!;
-      const canvas = sur.getCanvas();
-      const paint = Skia.Paint();
-      paint.setColor(Skia.Color("cyan"));
-      canvas.drawCircle(128, 128, 128, paint);
-      const nativeBuffer = Skia.NativeBuffer.MakeFromImage(
-        sur.makeImageSnapshot()
-      );
-      const r = (nativeBuffer as NativeBufferAddr).toString();
-      Skia.NativeBuffer.Release(nativeBuffer);
-      return r;
-    });
-    expect(BigInt(result)).not.toBe(BigInt(0));
-  });
-  it("creates an image from a native buffer", async () => {
-    const { Skia: Sk } = setupSkia();
-    // Skip outside iOS and Android
-    if (!shouldNativeBufferTestRun()) {
-      return;
-    }
-    const result = await surface.eval((Skia) => {
-      const sur = Skia.Surface.Make(256, 256)!;
-      const canvas = sur.getCanvas();
-      canvas.drawColor(Skia.Color("cyan"));
-      const nativeBuffer = Skia.NativeBuffer.MakeFromImage(
-        sur.makeImageSnapshot()
-      );
-      const image = Skia.Image.MakeImageFromNativeBuffer(nativeBuffer);
-      Skia.NativeBuffer.Release(nativeBuffer);
-      return Array.from(image.encodeToBytes());
-    });
-    const image = Sk.Image.MakeImageFromEncoded(
-      Sk.Data.fromBytes(new Uint8Array(result))
-    )!;
-    expect(image).not.toBeNull();
-    checkImage(image, "snapshots/cyan-buffer.png");
-  });
-
-  it("creates an image from native color type", async () => {
-    const { Skia: Sk } = setupSkia();
-    // Skip outside iOS and Android
-    if (!shouldNativeBufferTestRun()) {
-      return;
-    }
+  itRunsE2eOnly("wraps a native buffer into an image", async () => {
     const result = await surface.eval(
-      (Skia, { alphaType, colorType, ...ctx }) => {
-        const pixels = new Uint8Array(ctx.originalPixels);
-        const data = Skia.Data.fromBytes(pixels);
-        const img = Skia.Image.MakeImage(
-          {
-            width: 256,
-            height: 256,
-            alphaType,
-            colorType,
-          },
-          data,
-          256 * 4
-        )!;
-
-        const nativeBuffer = Skia.NativeBuffer.MakeFromImage(img);
-        const image = Skia.Image.MakeImageFromNativeBuffer(nativeBuffer);
-        Skia.NativeBuffer.Release(nativeBuffer);
-        return Array.from(image.encodeToBytes());
+      (Skia, ctx) => {
+        const size = 64;
+        // A BGRA (Apple) / RGBA (Android) surface filled on the CPU with a
+        // red/green gradient and diagonal stripes in the blue channel.
+        const frame = RNWebGPU.createTestVideoFrame(size, size);
+        try {
+          const image = Skia.Image.MakeImageFromNativeBuffer(frame.handle);
+          if (image.width() !== size || image.height() !== size) {
+            return `unexpected size ${image.width()}x${image.height()}`;
+          }
+          // Draw the image so the buffer is actually sampled, then read the
+          // result back through the canvas.
+          const dst = Skia.Surface.MakeOffscreen(size, size);
+          if (!dst) {
+            return "could not create the destination surface";
+          }
+          dst.getCanvas().drawImage(image, 0, 0);
+          dst.flush();
+          const pixels = dst.getCanvas().readPixels(0, 0, {
+            width: size,
+            height: size,
+            colorType: ctx.colorType,
+            alphaType: ctx.alphaType,
+          });
+          image.dispose();
+          if (!pixels) {
+            return "readPixels returned null";
+          }
+          const px = (x: number, y: number) =>
+            Array.from(
+              pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+            );
+          return [...px(0, 0), ...px(63, 0), ...px(0, 63), ...px(63, 63)];
+        } finally {
+          frame.release();
+        }
       },
-      {
-        alphaType: AlphaType.Unpremul,
-        colorType:
-          surface.OS === "android" ? ColorType.RGBA_8888 : ColorType.BGRA_8888,
-        originalPixels: surface.OS === "android" ? rgbaPixels : bgraPixels,
-      }
+      { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
     );
-    const image = Sk.Image.MakeImageFromEncoded(
-      Sk.Data.fromBytes(new Uint8Array(result))
-    )!;
-    expect(image).not.toBeNull();
-    checkImage(image, "snapshots/platform-buffer.png", { overwrite: true });
+    // r = x * 255 / 63, g = y * 255 / 63, b = (x + y) & 0x20 ? 220 : 30
+    expect(result).toEqual([
+      ...[0, 0, 30, 255],
+      ...[255, 0, 220, 255],
+      ...[0, 255, 220, 255],
+      ...[255, 255, 220, 255],
+    ]);
+  });
+
+  itRunsE2eOnly("reports an invalid pointer", async () => {
+    const result = await surface.eval((Skia) => {
+      try {
+        Skia.Image.MakeImageFromNativeBuffer(BigInt(0));
+        return "did not throw";
+      } catch (e) {
+        return (e as Error).message;
+      }
+    });
+    expect(result).toContain("null");
   });
 });

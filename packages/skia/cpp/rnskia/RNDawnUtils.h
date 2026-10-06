@@ -4,6 +4,8 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <optional>
+
 #include "webgpu/webgpu_cpp.h"
 
 #include "dawn/native/DawnNative.h"
@@ -76,6 +78,28 @@ inline wgpu::TextureFormat textureFormatForColorType(SkColorType colorType) {
     return wgpu::TextureFormat::RGB10A2Unorm;
   default:
     return PreferredTextureFormat;
+  }
+}
+
+// The color type Skia samples a texture of the given format with, or none
+// when Skia cannot sample the format: multi-planar YUV (the biplanar
+// 4:2:0 formats of an NV12 IOSurface, OpaqueYCbCrAndroid), depth/stencil and
+// compressed formats.
+inline std::optional<SkColorType>
+colorTypeForTextureFormat(wgpu::TextureFormat format) {
+  switch (format) {
+  case wgpu::TextureFormat::RGBA8Unorm:
+    return kRGBA_8888_SkColorType;
+  case wgpu::TextureFormat::BGRA8Unorm:
+    return kBGRA_8888_SkColorType;
+  case wgpu::TextureFormat::RGBA16Float:
+    return kRGBA_F16_SkColorType;
+  case wgpu::TextureFormat::RGB10A2Unorm:
+    return kRGBA_1010102_SkColorType;
+  case wgpu::TextureFormat::R8Unorm:
+    return kGray_8_SkColorType;
+  default:
+    return std::nullopt;
   }
 }
 

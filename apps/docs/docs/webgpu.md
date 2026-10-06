@@ -13,6 +13,7 @@ Textures created on that device can be used by both libraries without any copy:
 
 - **From WebGPU to Skia:** draw the output of a WebGPU pipeline or of a [three.js](#threejs) scene in a Skia canvas, and compose it with anything Skia can draw.
 - **From Skia to WebGPU:** draw text, paths, or any Skia drawing straight into a texture that a WebGPU pipeline samples.
+- **Camera and video frames:** draw the native buffers that React Native WebGPU decodes or wraps in a Skia canvas, without copying them.
 
 :::info
 
@@ -78,8 +79,10 @@ The interop surface is small:
 | `Skia.Image.MakeImageFromNativeTexture(pointer)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
 | `Skia.Surface.MakeFromNativeTexture(pointer)` | Skia to WebGPU | Creates an `SkSurface` that draws into a `GPUTexture`, without copy |
 | `Skia.Image.MakeNativeTextureFromImage(image)` | Skia to WebGPU | Draws an `SkImage` into a new texture, for `adoptTexture()` |
+| `Skia.Image.MakeImageFromNativeBuffer(pointer)` | Native buffer to Skia | Wraps an `IOSurface`, `CVPixelBuffer`, or `AHardwareBuffer` into an `SkImage`, without copy |
 
 Textures cross the package boundary as pointers: `texture.nativePointer` is an extension of `GPUTexture` provided by React Native WebGPU.
+[Native buffers](#native-buffers) cross it the same way, as the `handle` of a `NativeVideoFrame`.
 
 ## From WebGPU to Skia
 
@@ -260,6 +263,99 @@ const toTexture = (image: SkImage): GPUTexture =>
   adoptTexture(Skia.Image.MakeNativeTextureFromImage(image));
 ```
 
+## Native buffers
+
+Camera and video frames live in native buffers: an `IOSurface` (usually wrapped in a `CVPixelBuffer`) on Apple platforms, an `AHardwareBuffer` on Android.
+React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, and ties their lifetime to a `NativeVideoFrame` object.
+`Skia.Image.MakeImageFromNativeBuffer()` wraps such a buffer into an `SkImage` without copying its pixels: the buffer is imported into Dawn as shared texture memory, and the image samples it in place.
+
+The function takes the buffer as a pointer: the `handle` of a `NativeVideoFrame`, or the `CVPixelBufferRef` or `AHardwareBuffer*` that a library such as [VisionCamera](https://react-native-vision-camera.com/) hands out (`frame.getNativeBuffer().pointer`).
+
+### Playing a video
+
+`createVideoPlayer()` from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
+`copyLatestFrame()` returns the most recently decoded frame, or `null` when no new frame was decoded since the last call.
+Wrap each new frame into an image and publish it through a shared value.
+Release a frame only once the image that samples it is disposed:
+
+```tsx
+import React, { useEffect } from "react";
+import { useSharedValue } from "react-native-reanimated";
+import type { SkImage } from "react-native-skia";
+import { Canvas, Image, Skia, useCanvasSize } from "react-native-skia";
+import type { NativeVideoFrame } from "react-native-webgpu";
+import { createVideoPlayer } from "react-native-webgpu";
+
+export const Video = ({ url }: { url: string }) => {
+  const { ref, size } = useCanvasSize();
+  const image = useSharedValue<SkImage | null>(null);
+
+  useEffect(() => {
+    const player = createVideoPlayer(url);
+    let frame: NativeVideoFrame | null = null;
+    let raf = 0;
+    const render = () => {
+      const next = player.copyLatestFrame();
+      if (next) {
+        const previous = image.value;
+        // The new image is what makes the canvas redraw
+        image.value = Skia.Image.MakeImageFromNativeBuffer(next.handle);
+        // Dispose the previous image before releasing the frame it samples
+        previous?.dispose();
+        frame?.release();
+        frame = next;
+      }
+      raf = requestAnimationFrame(render);
+    };
+    player.play();
+    raf = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(raf);
+      player.release();
+      const last = image.value;
+      image.value = null;
+      last?.dispose();
+      frame?.release();
+    };
+  }, [url, image]);
+
+  return (
+    <Canvas ref={ref} style={{ flex: 1 }}>
+      <Image
+        image={image}
+        x={0}
+        y={0}
+        width={size.width}
+        height={size.height}
+        fit="cover"
+      />
+    </Canvas>
+  );
+};
+```
+
+The result is a regular Skia image: use it in an `Image`, an `ImageShader`, or as the input of an image filter, exactly like a [WebGPU texture](#from-webgpu-to-skia).
+The player's `rotation` tells whether the frames need to be rotated for display, and its `videoWidth` and `videoHeight` give their size once the metadata has loaded.
+
+:::info
+
+On iOS the player decodes BGRA frames, which Skia samples directly. On Android it decodes into the YUV layout of the device's decoder, which `MakeImageFromNativeBuffer()` does not accept yet: draw those frames with React Native WebGPU's `importExternalTexture()` for now.
+
+:::
+
+### Camera frames
+
+A camera library that exposes its frames as native buffers works the same way: pass the pointer of the frame's `CVPixelBuffer` or `AHardwareBuffer` to `MakeImageFromNativeBuffer()`, draw the image, then dispose it before the library reclaims the frame.
+`createVideoFrameFromNativeBuffer(pointer)` from React Native WebGPU wraps such a pointer into a `NativeVideoFrame` when you need to keep the frame alive beyond the callback that delivered it.
+
+### Requirements
+
+- **Pixel format.** The buffer must hold a format Skia can sample: BGRA or RGBA with 8 bits per channel, 16-bit float, or 10 bits per channel. YUV frames, the default format of most cameras, are not supported yet: request BGRA or RGBA frames from the producer. `MakeImageFromNativeBuffer()` throws otherwise.
+- **Android usage flags.** The `AHardwareBuffer` must have been allocated with `AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE`, otherwise the GPU cannot sample it. CPU-only buffers, such as the ones a default `ImageReader` allocates, are rejected with an explicit error.
+- **Apple surfaces.** A `CVPixelBuffer` must be backed by an `IOSurface`. AVFoundation and the camera allocate their buffers this way; allocate yours with `kCVPixelBufferIOSurfacePropertiesKey`.
+- **Lifetime.** The image samples the buffer in place. Keep the buffer alive for as long as the image is in use, and dispose the image before releasing it.
+- **Threads.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
+
 ## Three.js
 
 [Three.js](https://threejs.org/) runs on React Native WebGPU through its `WebGPURenderer`.
@@ -405,6 +501,7 @@ Sharing a texture means sharing its lifetime. A few rules apply:
 - **Dispose Skia objects before destroying the texture.** An `SkImage` or `SkSurface` wrapping a texture holds its own reference to it, so the texture stays valid even if the JavaScript `GPUTexture` is garbage collected. Calling `texture.destroy()` releases the GPU resource regardless of references: dispose the image or surface first.
 - **Flush before sampling.** After drawing into a texture with Skia, call `surface.flush()` before the WebGPU commands that sample it.
 - **Adopt exported textures exactly once.** The pointer returned by `MakeNativeTextureFromImage()` carries one reference, which `adoptTexture()` takes over.
+- **Keep native buffers alive.** An `SkImage` created with `MakeImageFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
 
 ## Examples
 

@@ -17,12 +17,6 @@ const NotoColorEmojiSrc =
     ? require("./assets/Roboto-Medium.ttf")
     : require("./assets/NotoColorEmoji.ttf");
 
-// on Web because of CORS we need to use a local video
-const videoURL =
-  Platform.OS === "web"
-    ? require("./assets/BigBuckBunny.mp4").default
-    : "https://bit.ly/skia-video-short";
-
 export const useAssets = () => {
   const [error, setError] = useState<Error | null>(null);
   const errorHandler = useCallback((e: Error) => setError(e), []);
@@ -69,7 +63,6 @@ export const useAssets = () => {
     return null;
   }
   return {
-    localAssets: [videoURL],
     RobotoMedium,
     NotoColorEmoji,
     NotoSansSCRegular,

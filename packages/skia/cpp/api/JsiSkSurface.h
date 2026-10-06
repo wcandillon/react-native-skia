@@ -10,7 +10,6 @@
 #include "JsiSkConverters.h"
 #include "JsiSkDispatcher.h"
 #include "JsiSkNativeObjects.h"
-#include "JsiTextureInfo.h"
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
@@ -81,8 +80,9 @@ public:
   void flush(JsiOptional<bool> syncParam) {
     auto surface = getObject();
     // When `sync` is true, block until the GPU has finished executing the
-    // submitted work. Required before a native consumer on a different command
-    // queue reads this surface's texture via getNativeTextureUnstable(). #3916
+    // submitted work. Required before a consumer on a different command queue
+    // (a secondary Dawn device, for instance) reads the texture this surface
+    // draws into (see Surface.MakeFromNativeTexture). #3916
     bool sync = syncParam.has_value() && *syncParam;
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
     // only Graphite-backed surfaces need to snap and submit a recording.
@@ -117,11 +117,6 @@ public:
     }
     return makeJsiObject(
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
-  }
-
-  JSI_HOST_FUNCTION(getNativeTextureUnstable) {
-    auto texInfo = getContext()->getTexture(getObject());
-    return JsiTextureInfo::toValue(runtime, texInfo);
   }
 
   size_t getMemoryPressure() override {
@@ -185,8 +180,6 @@ public:
     installHostMethod(runtime, prototype, "makeImageSnapshot",
                       &JsiSkSurface::makeImageSnapshot);
     installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
-    installHostMethod(runtime, prototype, "getNativeTextureUnstable",
-                      &JsiSkSurface::getNativeTextureUnstable);
   }
 };
 

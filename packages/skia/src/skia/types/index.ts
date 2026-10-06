@@ -29,8 +29,6 @@ export * from "./TextBlob";
 export * from "./Size";
 export * from "./Paragraph";
 export * from "./Matrix4";
-export * from "./NativeBuffer";
 export * from "./Recorder";
-export * from "./Video";
 export * from "./Skottie";
 export * from "./Graphite";

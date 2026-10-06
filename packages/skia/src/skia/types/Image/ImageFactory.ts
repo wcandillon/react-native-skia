@@ -1,8 +1,21 @@
 import type { SkData } from "../Data";
-import type { NativeBuffer } from "../NativeBuffer";
 
 import type { ColorType } from "./ColorType";
 import type { SkImage } from "./Image";
+
+/**
+ * A native buffer, as accepted by `MakeImageFromNativeBuffer`.
+ *
+ * On native platforms it is a raw pointer encoded as a BigInt: an
+ * `IOSurfaceRef` or a `CVPixelBufferRef` on Apple platforms, an
+ * `AHardwareBuffer*` on Android. This is the shape of
+ * `NativeVideoFrame.handle` in React Native WebGPU and of
+ * `frame.getNativeBuffer().pointer` in VisionCamera.
+ *
+ * On Web it is any `CanvasImageSource` (an `HTMLVideoElement`, an
+ * `ImageBitmap`, a canvas...).
+ */
+export type NativeBuffer = bigint | CanvasImageSource;
 
 export enum AlphaType {
   Unknown,
@@ -35,45 +48,26 @@ export interface ImageFactory {
   MakeImageFromEncoded: (encoded: SkData) => SkImage | null;
 
   /**
-   * Return an Image backed by a given native buffer.
-   * The native buffer must be a valid owning reference.
+   * Wraps a native buffer (a camera or video frame) into an image, without
+   * copying its pixels. On native platforms the buffer is imported into Dawn
+   * as shared texture memory, so the image samples the buffer directly.
    *
-   * For instance, this API is used by
-   * [react-native-vision-camera](https://github.com/mrousavy/react-native-vision-camera)
-   * to render a Skia Camera preview.
+   * The buffer is typically obtained from React Native WebGPU
+   * (`NativeVideoFrame.handle`, from `createVideoPlayer()` or
+   * `createVideoFrameFromNativeBuffer()`) or from VisionCamera
+   * (`frame.getNativeBuffer().pointer`).
    *
-   * - On Android; This is an `AHardwareBuffer*`
-   * - On iOS, this is a `CVPixelBufferRef`
-   * @param nativeBuffer A strong `uintptr_t` pointer to the native buffer
-   * @throws Throws an error if the Image could not be created, for example when the given
-   * native buffer is invalid.
+   * The caller keeps ownership of the buffer: keep it alive for as long as the
+   * image is in use, and dispose the image before releasing it.
+   *
+   * The buffer must be in a format Skia can sample (BGRA or RGBA 8 bits, F16,
+   * or 10 bits per channel); YUV frames are not supported yet. On Android the
+   * buffer must have been allocated with the `GPU_SAMPLED_IMAGE` usage.
+   *
+   * @param nativeBuffer The native buffer (see {@link NativeBuffer})
+   * @throws Throws an error when the buffer cannot be wrapped, with the reason
    */
   MakeImageFromNativeBuffer: (nativeBuffer: NativeBuffer) => SkImage;
-
-  /**
-   *
-   * Return an Image backed by a given native texture.
-   *
-   * The native texture must be a valid owning reference.
-   *
-   * This API might be used to integrate with other libraries using gpu textures,
-   * or to transfer images between different threads.
-   *
-   * @param texture A native texture handle
-   * @param width The width of the texture
-   * @param height The height of the texture
-   * @param mipmapped Whether the texture is mipmapped
-   * @throws Throws an error if the Image could not be created, for example when the given native texture is invalid.
-   *
-   * @returns Returns a valid SkImage, if the texture is invalid, an error is thrown.
-   */
-  MakeImageFromNativeTextureUnstable: (
-    texture: unknown,
-    width: number,
-    height: number,
-    mipmapped?: boolean,
-    outputImage?: SkImage
-  ) => SkImage;
 
   /**
    * Returns an image that will be a screenshot of the view represented by

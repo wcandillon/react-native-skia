@@ -80,11 +80,6 @@ const sidebars = {
     },
     {
       type: "doc",
-      label: "Video",
-      id: "video",
-    },
-    {
-      type: "doc",
       label: "Skottie",
       id: "skottie",
     },
