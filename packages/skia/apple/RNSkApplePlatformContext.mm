@@ -162,6 +162,7 @@ uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
   CVPixelBufferRef pixelBuffer = nullptr;
   CVReturn result =
       CVPixelBufferCreateWithIOSurface(nil, surface, nil, &pixelBuffer);
+  CFRelease(surface);
   if (result != kCVReturnSuccess) {
     throw std::runtime_error(
         "Failed to create CVPixelBuffer from SkImage! Return value: " +
