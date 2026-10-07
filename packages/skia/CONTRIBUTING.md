@@ -130,7 +130,7 @@ The npm packages this library consumes (`react-native-skia-graphite-android`, `r
 - Refresh the `checksums` from the release: in `packages/skia-binaries`, `yarn download --skia-version=m154_8037_58a --graphite` then `yarn verify --graphite` prints the actual values.
 - Set `dawn` to the react-native-webgpu Dawn release these packages bundle, with the SHA256 of its `dawn-android-*.tar.gz` and `dawn-apple-*.xcframework.zip` assets. It must be the release the react-native-webgpu version users install declares in its package.json `dawn` field (`chrome-m154a` means `dawn-chrome-m154a`): the podspec and Gradle refuse an app whose two packages link different Dawn builds.
 
-Then run **Publish Skia Binary Packages** (`.github/workflows/publish-skia-binaries.yml`) with `variant` set to `graphite` (the Ganesh versions are already on npm, and a republish fails), first as a dry run.
+Then run **Publish Skia Binary Packages** (`.github/workflows/publish-skia-binaries.yml`) with `variant` set to `graphite` (the Ganesh versions are already on npm, and a republish fails), first as a dry run. The real run publishes the npm packages and attaches the SwiftPM xcframework zips to a `swiftpm-<version>` prerelease of this repository. Finish the SwiftPM release by copying `dist/spm/Package.swift` from the run's `skia-packages` artifact to the root of [wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries), committing it and tagging that commit `<version>`.
 
 #### 6. Point the library at the new binaries
 
