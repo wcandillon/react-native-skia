@@ -72,7 +72,11 @@ const DawnOutputApple = GRAPHITE ? ["libdawn_combined.a"] : [];
 const DawnOutputAndroid = GRAPHITE ? ["libdawn_combined.a"] : [];
 
 export const commonArgs = [
-  ["skia_use_piex", true],
+  // No RAW codec: React Native apps do not decode camera RAW files through
+  // Skia, CanvasKit never shipped it, and SkRawCodec was the one Skia source
+  // built with exceptions.
+  ["skia_use_dng_sdk", false],
+  ["skia_use_piex", false],
   ["skia_use_system_expat", false],
   ["skia_use_system_libjpeg_turbo", false],
   ["skia_use_system_libpng", false],
@@ -111,12 +115,15 @@ export type Target = {
   args?: Arg[];
   cpu: string;
   platform?: string;
-  output?: string;
   options?: Arg[];
 };
 
-export type Platform = {
-  targets: { [key: string]: Target };
+type AndroidTarget = Target & {
+  output: string;
+};
+
+export type Platform<PlatformTarget extends Target = Target> = {
+  targets: { [key: string]: PlatformTarget };
   args: Arg[];
   outputRoot: string;
   outputNames: string[];
@@ -259,7 +266,10 @@ const appleOutputNames = [
   ...DawnOutputApple,
 ];
 
-export const configurations: Record<PlatformName, Platform> = {
+export const configurations: { android: Platform<AndroidTarget> } & Record<
+  ApplePlatformName,
+  Platform
+> = {
   "android": {
     targets: {
       arm: {
@@ -294,6 +304,11 @@ export const configurations: Record<PlatformName, Platform> = {
         "extra_cflags",
         `["-DSKIA_C_DLL", "-DHAVE_SYSCALL_GETRANDOM", "-DXML_DEV_URANDOM"]`,
       ],
+      // RTTI, as on the Apple targets. Without it, a source built with
+      // exceptions gets its own copies of the C++ runtime's exception typeinfo
+      // (SkRawCodec did, before the RAW codec was dropped); build-skia.ts
+      // rejects an archive that defines one.
+      ["extra_cflags_cc", `["-frtti"]`],
       ...ParagraphArgsAndroid,
     ],
     outputRoot: "libs/android",
