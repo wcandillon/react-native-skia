@@ -102,25 +102,30 @@ jobs:
           SKIA_BRANCH: ${{ steps.skia.outputs.branch }}
           RESPIN: ${{ inputs.respin }}
 
-      # npm never lets a version be republished, so fail here rather than
-      # after the builds. A dry run only warns: it is how a version is
-      # rebuilt for inspection.
-      - name: Check that the version is not on npm yet
+      # npm never lets a version be republished. A package already on npm at
+      # this version is skipped by the publish step (a rerun after a partial
+      # publish, or a first version published by hand), so only a version
+      # that exists for every package fails here, before the builds. A dry
+      # run only warns: it is how a version is rebuilt for inspection.
+      - name: Check which packages are already on npm
         run: |
           set -eo pipefail
+          packages="react-native-skia-graphite-android react-native-skia-graphite-apple-ios react-native-skia-graphite-apple-macos react-native-webgpu-dawn"
           published=""
-          for pkg in react-native-skia-graphite-android react-native-skia-graphite-apple-ios react-native-skia-graphite-apple-macos react-native-webgpu-dawn; do
+          missing=""
+          for pkg in $packages; do
             if npm view "$pkg@$NPM_VERSION" version > /dev/null 2>&1; then
               published="$published $pkg"
+            else
+              missing="$missing $pkg"
             fi
           done
           if [ -n "$published" ]; then
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "::warning::Version $NPM_VERSION is already published for:$published. Bump the respin letter before the real run."
-            else
-              echo "::error::Version $NPM_VERSION is already published for:$published. Bump the respin letter."
+            if [ -z "$missing" ] && [ "$DRY_RUN" != "true" ]; then
+              echo "::error::Version $NPM_VERSION is already published for every package. Bump the respin letter."
               exit 1
             fi
+            echo "::warning::Version $NPM_VERSION is already published for:$published. The publish step skips them; this run publishes:$missing"
           fi
         env:
           NPM_VERSION: ${{ steps.version.outputs.npm_version }}
@@ -223,16 +228,16 @@ jobs:
             runner: ubuntu-latest
             output: packages/skia/libs/dawn/android/x86_64
           - target: ios-arm64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-arm64
           - target: ios-simulator-arm64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-simulator-arm64
           - target: ios-simulator-x86_64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
           - target: macos-universal
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/macos-universal
     name: dawn-${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -304,7 +309,7 @@ jobs:
 
   package:
     needs: [prepare, build-skia, build-dawn]
-    runs-on: macos-latest
+    runs-on: macos-latest-xlarge
     permissions:
       contents: read
       # npm trusted publishing (OIDC) and provenance
@@ -367,12 +372,21 @@ jobs:
         if: ${{ !inputs.dry_run }}
         run: npm install -g npm@latest
 
+      # A package already on npm at this version is left alone: npm would
+      # reject it, and failing here would block the packages still missing.
       - name: Publish to npm
         if: ${{ !inputs.dry_run && github.repository == 'wcandillon/react-native-skia' && github.ref == 'refs/heads/main' }}
         working-directory: packages/skia/build/binaries
         run: |
+          set -eo pipefail
           for pkg in */; do
-            echo "::group::$pkg"
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+            if npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "::notice::$name@$version is already on npm, skipped"
+              continue
+            fi
+            echo "::group::$name@$version"
             (cd "$pkg" && npm publish --access public --provenance)
             echo "::endgroup::"
           done
