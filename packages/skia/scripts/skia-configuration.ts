@@ -68,9 +68,6 @@ const ParagraphOutputsAndroid = BUILD_WITH_PARAGRAPH
   ? ["libskparagraph.a", "libskunicode_core.a", "libskunicode_icu.a"]
   : [];
 
-const DawnOutputApple = GRAPHITE ? ["libdawn_combined.a"] : [];
-const DawnOutputAndroid = GRAPHITE ? ["libdawn_combined.a"] : [];
-
 export const commonArgs = [
   // No RAW codec: React Native apps do not decode camera RAW files through
   // Skia, CanvasKit never shipped it, and SkRawCodec was the one Skia source
@@ -263,7 +260,6 @@ const appleOutputNames = [
   "libskottie.a",
   "libsksg.a",
   ...ParagraphApple,
-  ...DawnOutputApple,
 ];
 
 export const configurations: { android: Platform<AndroidTarget> } & Record<
@@ -320,7 +316,6 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       "libsksg.a",
       "libjsonreader.a",
       ...ParagraphOutputsAndroid,
-      ...DawnOutputAndroid,
     ],
   },
   "apple-ios": {

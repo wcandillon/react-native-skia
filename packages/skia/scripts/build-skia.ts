@@ -1,7 +1,6 @@
 import { execSync } from "child_process";
 import { exit } from "process";
 import fs from "fs";
-import path from "path";
 
 import type {
   ApplePlatformName,
@@ -324,21 +323,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     console.log("Applying Graphite patches...");
     $(`git reset --hard HEAD`);
 
-    // Apply arm64e simulator patch
-    const arm64ePatchFile = path.join(__dirname, "dawn-arm64e-simulator.patch");
-    $(`cd ${SkiaSrc} && git apply ${arm64ePatchFile}`);
-
     // Remove arm64e arch flags (not available on simulator)
     {
       const filePath = `${SkiaSrc}/gn/skia/BUILD.gn`;
       const search = [
+        `        "-arch",`,
+        `        "arm64e",`,
         `      ]`,
-        `      if (!ios_use_simulator) {`,
-        `        _arch_flags += [`,
-        `          "-arch",`,
-        `          "arm64e",`,
-        `        ]`,
-        `      }`,
         `    } else if (current_cpu == "x86") {`,
       ].join("\n");
       const replace = [
@@ -360,18 +351,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         content.replace(
           `cflags_cc += [ "-std=c++17" ]`,
           `cflags_cc += [ "-std=c++20" ]`
-        )
-      );
-    }
-    // Fix Dawn ShaderModuleMTL.mm uint32 typo (should be uint32_t)
-    {
-      const filePath = `${SkiaSrc}/third_party/externals/dawn/src/dawn/native/metal/ShaderModuleMTL.mm`;
-      const content = fs.readFileSync(filePath, "utf-8");
-      fs.writeFileSync(
-        filePath,
-        content.replace(
-          /uint32\(bindingInfo\.binding\)/g,
-          "uint32_t(bindingInfo.binding)"
         )
       );
     }

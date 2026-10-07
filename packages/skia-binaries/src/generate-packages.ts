@@ -652,7 +652,6 @@ const addSharedDawn = async (pkg: PackageConfig, libsDir: string): Promise<void>
         if (!fs.existsSync(src)) {
           throw new Error(`Missing libwebgpu_dawn.so for ${arch} in ${dawn.releaseTag}`);
         }
-        fs.rmSync(path.join(libsDir, arch, "libdawn_combined.a"), { force: true });
         fs.copyFileSync(src, path.join(libsDir, arch, "libwebgpu_dawn.so"));
       }
     } else if (pkg.platform === "apple") {
@@ -666,10 +665,6 @@ const addSharedDawn = async (pkg: PackageConfig, libsDir: string): Promise<void>
       if (!fs.existsSync(src)) {
         throw new Error(`Missing dawn-apple.xcframework in ${dawn.releaseTag}`);
       }
-      fs.rmSync(path.join(libsDir, "libdawn_combined.xcframework"), {
-        recursive: true,
-        force: true,
-      });
       const dest = path.join(libsDir, "libwebgpu_dawn.xcframework");
       fs.rmSync(dest, { recursive: true, force: true });
       copyDir(src, dest);
