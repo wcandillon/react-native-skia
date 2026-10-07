@@ -17,13 +17,13 @@ To develop react-native-skia, you can build the skia libraries on your computer.
 
 ### Using pre-built binaries
 
-The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*`). They ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, together with the shared Dawn (`libwebgpu_dawn`). The native build systems (Gradle, CocoaPods) automatically resolve these packages; there is no `postinstall` step.
+The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*`). They ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3. Dawn, the WebGPU implementation Graphite renders with, comes from the `react-native-webgpu-dawn` package, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. The native build systems (Gradle, CocoaPods) automatically resolve these packages; there is no `postinstall` step.
 
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
 - Copy the headers: `cd packages/skia && yarn copy-skia-headers`
 
-`yarn copy-skia-headers` copies the Skia headers from the submodule and the Graphite and Dawn headers from the `react-native-skia-graphite-headers` package. The binaries themselves are not copied: Gradle reads them in place from `node_modules`, and the podspec copies them in at `pod install` time.
+`yarn copy-skia-headers` copies the Skia and Graphite headers from the submodule and the Dawn headers from the `react-native-webgpu-dawn` package. The binaries themselves are not copied: Gradle reads them in place from `node_modules`, and the podspec copies them in at `pod install` time.
 
 The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
@@ -39,7 +39,7 @@ And then the _SDK Location_ section. It will show you the NDK path, or the optio
 - Install dependencies: `yarn`
 - Go to the package folder: `cd packages/skia`
 - Build the Skia libraries: `yarn build-skia` (this can take a while). Locally built binaries in `libs/` take precedence over the npm packages; delete `libs/` to go back to the prebuilt ones.
-- Optionally build Dawn: `yarn build-dawn` builds the monolithic `libwebgpu_dawn` that ships as the `react-native-webgpu-dawn` package into `libs/dawn`, from the Dawn checkout Skia pins. Developing the library does not need it: the Dawn from the npm packages is used (see below).
+- Optionally build Dawn: `yarn build-dawn` builds the monolithic `libwebgpu_dawn` that ships as the `react-native-webgpu-dawn` package into `libs/dawn`, from the Dawn checkout Skia pins. A local build there takes precedence over the package for the headers and the native builds; delete `libs/dawn` to go back to it. Developing the library does not need it.
 - Copy Skia headers: `yarn copy-skia-headers`
 
 ### Upgrading Skia
@@ -83,15 +83,9 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios` and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). `yarn build-skia` builds Skia only, while the native builds link the shared Dawn (`libwebgpu_dawn`, the same artifact react-native-webgpu links), so copy it in from the npm packages next to your build:
+Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios` and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked. Then run `pod install` in the example app:
 
 ```sh
-for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-  cp node_modules/react-native-skia-graphite-android/libs/$abi/libwebgpu_dawn.so packages/skia/libs/android/$abi/
-done
-for platform in ios macos; do
-  cp -R node_modules/react-native-skia-graphite-apple-$platform/libs/libwebgpu_dawn.xcframework packages/skia/libs/$platform/
-done
 cd apps/example/ios && pod install && cd -
 ```
 
@@ -138,7 +132,9 @@ The same packages can be generated locally from a full `yarn build-skia` and `ya
 
 #### 5. Point the library at the new binaries
 
-Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-*`) to the version you just published, delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries.
+Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-*` and `react-native-webgpu-dawn`) to the version you just published, delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. react-native-webgpu depends on the same `react-native-webgpu-dawn` version; the podspec and Gradle refuse an app whose two packages resolve different ones.
+
+Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md`, and to the reference copy in react-native-webgpu's documentation (`apps/docs/content/docs/integrations/react-native-skia.mdx` there), so users can pair the two libraries.
 
 ### Swift Package Manager (preview)
 
@@ -168,11 +164,12 @@ floor is above the depending target's.
 
 #### Binaries
 
-The manifest links the `react-native-skia-graphite-apple-ios` npm package, the
-same one the CocoaPods build uses, so no network is needed once dependencies are
-installed. It is resolved by path, from either a sibling in `node_modules` or
-this monorepo's root, and the manifest fails with an explanatory message when
-neither exists, which is what an `--omit=optional` install looks like.
+The manifest links the `react-native-skia-graphite-apple-ios` and
+`react-native-webgpu-dawn` npm packages, the same ones the CocoaPods build
+uses, so no network is needed once dependencies are installed. They are
+resolved by path, from either a sibling in `node_modules` or this monorepo's
+root, and the manifest fails with an explanatory message when one is missing,
+which is what an `--omit=optional` install looks like.
 
 A remote Swift package with the binaries as `url` targets was tried and dropped: the
 path-based manifest covers React Native's SwiftPM autolinking, and hosting the
