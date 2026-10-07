@@ -354,68 +354,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         )
       );
     }
-    // Add iOS support to Dawn cmake_utils.py
-    {
-      const filePath = `${SkiaSrc}/third_party/dawn/cmake_utils.py`;
-      let content = fs.readFileSync(filePath, "utf-8");
-      // Add --ios_use_simulator argument
-      content = content.replace(
-        `parser.add_argument(
-      "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")`,
-        `parser.add_argument(
-      "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")
-  parser.add_argument(
-      "--ios_use_simulator", action=argparse.BooleanOptionalAction, help="Build for iOS simulator.")`
-      );
-      // Add iOS OS/CPU mapping
-      content = content.replace(
-        `if os == "mac":
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "Darwin", target_cpu_map[cpu]
-
-  if os == "win":`,
-        `if os == "mac":
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "Darwin", target_cpu_map[cpu]
-
-  if os == "ios":
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "iOS", target_cpu_map[cpu]
-
-  if os == "win":`
-      );
-      fs.writeFileSync(filePath, content);
-    }
-    // Add iOS support to Dawn build_dawn.py
-    {
-      const filePath = `${SkiaSrc}/third_party/dawn/build_dawn.py`;
-      let content = fs.readFileSync(filePath, "utf-8");
-      content = content.replace(
-        `if target_os == "Darwin" or target_os == "iOS":
-    configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={target_cpu}")
-
-  env = os.environ.copy()`,
-        `if target_os == "Darwin" or target_os == "iOS":
-    configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={target_cpu}")
-
-  if target_os == "iOS":
-    configure_cmd.append("-DTINT_BUILD_CMD_TOOLS=OFF")
-    if args.ios_use_simulator:
-      configure_cmd.append("-DCMAKE_OSX_SYSROOT=iphonesimulator")
-
-  env = os.environ.copy()`
-      );
-      fs.writeFileSync(filePath, content);
-    }
     // Fix Dawn BUILD.gn for iOS (Cocoa.framework is macOS only)
     {
       const filePath = `${SkiaSrc}/third_party/dawn/BUILD.gn`;
@@ -436,28 +374,61 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
 }`
       );
-      // Add ios_use_simulator argument passing
-      content = content.replace(
-        `if (is_android) {
-    args += [
-      "--android_ndk_path=" + ndk,
-      "--android_platform=android-" + ndk_api,
-    ]
-  }
+      // The app links published libwebgpu_dawn; Skia only needs Dawn headers.
+      const dawnBuild =
+        /sanitizer_args = \[\][\s\S]*?(?=config\("dawn_defines"\))/;
+      if (!dawnBuild.test(content)) {
+        throw new Error(`Patch target not found in ${filePath}`);
+      }
+      content = content
+        .replace(/  _dawn_lib_name = "[^"]+"\n/g, "")
+        .replace('    ldflags = [ "/WHOLEARCHIVE:dawn_combined.lib" ]\n', "")
+        .replace('  libs += [ "$root_out_dir/$_dawn_lib_name" ]\n', "")
+        .replace(
+          'public_deps = [ ":dawn_cmake" ]',
+          'public_deps = [ ":dawn_headers" ]'
+        )
+        .replace(
+          dawnBuild,
+          `action("dawn_headers") {
+  _dawn_root = "../externals/dawn"
+  script = "$_dawn_root/generator/dawn_json_generator.py"
+  sources = [ "$_dawn_root/src/dawn/dawn.json" ]
+  outputs = [
+    "$target_gen_dir/dawn_headers.json",
+    "$target_gen_dir/include/dawn/dawn_proc_table.h",
+    "$target_gen_dir/include/dawn/webgpu.h",
+    "$target_gen_dir/include/dawn/webgpu_cpp.h",
+    "$target_gen_dir/include/dawn/webgpu_cpp_print.h",
+    "$target_gen_dir/include/dawn/wire/client/webgpu.h",
+    "$target_gen_dir/include/dawn/wire/client/webgpu_cpp.h",
+    "$target_gen_dir/include/dawn/wire/client/webgpu_cpp_print.h",
+    "$target_gen_dir/include/webgpu/webgpu_cpp_chained_struct.h",
+  ]
+  depfile = "$target_gen_dir/dawn_headers.d"
+  args = [
+    "--dawn-json",
+    rebase_path(sources[0], root_build_dir),
+    "--targets=headers,cpp_headers",
+    "--template-dir",
+    rebase_path("$_dawn_root/generator/templates", root_build_dir),
+    "--jinja2-path",
+    rebase_path("../externals/jinja2", root_build_dir),
+    "--markupsafe-path",
+    rebase_path("../externals/markupsafe", root_build_dir),
+    "--root-dir",
+    rebase_path("../externals", root_build_dir),
+    "--output-dir",
+    rebase_path(target_gen_dir, root_build_dir),
+    "--output-json-tarball",
+    rebase_path(outputs[0], root_build_dir),
+    "--depfile",
+    rebase_path(depfile, root_build_dir),
+  ]
+}
 
-  if (dawn_enable_d3d11) {`,
-        `if (is_android) {
-    args += [
-      "--android_ndk_path=" + ndk,
-      "--android_platform=android-" + ndk_api,
-    ]
-  }
-  if (is_ios && ios_use_simulator) {
-    args += [ "--ios_use_simulator" ]
-  }
-
-  if (dawn_enable_d3d11) {`
-      );
+`
+        );
       fs.writeFileSync(filePath, content);
     }
     console.log("Patches applied successfully");

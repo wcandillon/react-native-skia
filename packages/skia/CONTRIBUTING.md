@@ -82,7 +82,7 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios` and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). `yarn build-skia` copies the Skia libraries, while the native builds link the published Dawn (`libwebgpu_dawn`, the same artifact react-native-webgpu links), so copy it in from the npm packages next to your build:
+Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios` and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). `yarn build-skia` generates Dawn headers without compiling Dawn and copies the Skia libraries. Native builds link the published Dawn (`libwebgpu_dawn`, the same artifact react-native-webgpu links), so copy it in from the npm packages next to your build:
 
 ```sh
 for abi in armeabi-v7a arm64-v8a x86 x86_64; do

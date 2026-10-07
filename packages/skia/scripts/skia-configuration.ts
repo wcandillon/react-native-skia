@@ -413,11 +413,16 @@ const getFirstAvailableTarget = () => {
 
     for (const targetName of targetNames) {
       const targetPath = `${platformName}/${targetName}`;
-      // Check both CMake-based Dawn builds and GN-based Dawn builds
+      // Check headers-only builds, then legacy CMake/GN builds.
+      const dawnHeadersPath = `${OutFolder}/${targetPath}/gen/third_party/dawn/include/dawn`;
       const cmakeDawnPath = `../../externals/skia/out/${targetPath}/cmake_dawn/gen/include/dawn`;
       const gnDawnPath = `../../externals/skia/out/${targetPath}/gen/third_party/externals/dawn`;
 
-      if (fs.existsSync(cmakeDawnPath) || fs.existsSync(gnDawnPath)) {
+      if (
+        fs.existsSync(dawnHeadersPath) ||
+        fs.existsSync(cmakeDawnPath) ||
+        fs.existsSync(gnDawnPath)
+      ) {
         return targetPath;
       }
     }
@@ -436,10 +441,13 @@ export const copyHeaders = () => {
   let dawnIncludeSrc = "";
   try {
     const targetPath = getFirstAvailableTarget();
-    // Check CMake-based Dawn build first, then GN-based
+    // Prefer headers-only output over legacy CMake/GN builds.
+    const headersPath = `${OutFolder}/${targetPath}/gen/third_party/dawn/include`;
     const cmakePath = `../../externals/skia/out/${targetPath}/cmake_dawn/gen/include`;
     const gnPath = `../../externals/skia/out/${targetPath}/gen/third_party/externals/dawn/include`;
-    if (fs.existsSync(cmakePath)) {
+    if (fs.existsSync(headersPath)) {
+      dawnIncludeSrc = headersPath;
+    } else if (fs.existsSync(cmakePath)) {
       dawnIncludeSrc = cmakePath;
     } else {
       dawnIncludeSrc = gnPath;
