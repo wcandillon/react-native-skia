@@ -143,9 +143,26 @@ public:
    Releases the content the view draws without scheduling a frame: the host
    view is torn down. On Android the native view outlives the Java view
    until it is finalized, so the resources go away here rather than with the
-   garbage collector.
+   garbage collector: the content, and the target with its recorder, whose
+   GPU resource cache can hold up to the recorder's whole budget. A view
+   registered again (a recycled view) gets a new target from setNativeId().
    */
-  void releaseContent() { _producer->clear(); }
+  void releaseContent() {
+    _producer->clear();
+    _producer->setTarget(nullptr);
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      target = std::move(_target);
+      _lastPresented = nullptr;
+    }
+    if (target) {
+      target->detach(_surface);
+      // A JS object may still hold the target (SkiaViewApi
+      // makeGraphiteContext): drop what it keeps for the view.
+      target->releaseRecorder();
+    }
+  }
 
   /** Schedules redraw() on the main thread, once. */
   void requestRedraw() {

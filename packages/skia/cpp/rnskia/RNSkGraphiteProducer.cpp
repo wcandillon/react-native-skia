@@ -37,6 +37,8 @@ void RNSkGraphiteProducer::setTarget(
     std::shared_ptr<RNSkGraphiteTarget> target) {
   std::lock_guard<std::mutex> lock(_mutex);
   _target = std::move(target);
+  // A frame presented on the previous target says nothing about this one.
+  _presentPending = false;
   _dirty = true;
   kickLocked();
 }
@@ -179,6 +181,13 @@ void RNSkGraphiteProducer::produce() {
   }
   std::lock_guard<std::mutex> lock(_mutex);
   _inFlight = false;
+  if (recording != nullptr && target != _target) {
+    // The target was replaced or released while recording: the frame was
+    // recorded for a view that is gone. Record the content again for the
+    // current target, if any.
+    recording = nullptr;
+    _dirty = true;
+  }
   if (recording != nullptr) {
     // The next job starts when this frame is on screen. Submitted under the
     // lock: a frame presented in between (a redraw replaying the last one)

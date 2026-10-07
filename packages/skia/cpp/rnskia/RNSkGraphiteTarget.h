@@ -250,6 +250,27 @@ public:
     _requestFrame = nullptr;
   }
 
+  /**
+   Releases the recorder, with its GPU resource cache, and the recordings
+   waiting to be presented: the view is gone. A recording still open keeps
+   the recorder; the next beginRecording() creates a new one.
+   */
+  void releaseRecorder() {
+    std::deque<std::shared_ptr<RNSkGraphiteRecording>> queue;
+    std::shared_ptr<RNSkGraphiteRecorder> recorder;
+    {
+      std::lock_guard<std::mutex> lock(_stateMutex);
+      if (!_recording) {
+        recorder = std::move(_recorder);
+      }
+    }
+    {
+      std::lock_guard<std::mutex> lock(_queueMutex);
+      queue.swap(_queue);
+    }
+    // Both are released here, outside the locks.
+  }
+
   /** Takes every recording submitted since the last call, in order. */
   std::vector<std::shared_ptr<RNSkGraphiteRecording>> takeQueued() {
     std::lock_guard<std::mutex> lock(_queueMutex);
