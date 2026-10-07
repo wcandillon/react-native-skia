@@ -115,9 +115,9 @@ Use [expo-build-properties](https://docs.expo.dev/versions/latest/sdk/build-prop
 }
 ```
 
-### TV and Mac Catalyst
+### TV
 
-tvOS, Android TV, and Mac Catalyst are not available with Graphite. These platforms remain supported on v2.
+tvOS and Android TV are not available with Graphite. These platforms remain supported on v2.
 
 ### React Native WebGPU
 

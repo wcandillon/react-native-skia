@@ -14,7 +14,7 @@ export const DawnOut = path.join(OutFolder, "dawn");
 export const DawnLibs = path.join(PackageRoot, "libs", "dawn");
 export const DawnLib = "libwebgpu_dawn";
 export const DawnPatches = path.join(__dirname, "dawn-patches");
-// The Tint patch and any other upstream change the pinned Dawn lacks.
+// Fixes missing from the pinned Dawn, including Tint and Catalyst Metal feature checks.
 export const DawnAppleXcframework = path.join(
   DawnLibs,
   "apple",
@@ -79,20 +79,20 @@ const android = (abi: string): DawnTarget => ({
 });
 
 const apple = (
-  system: "iOS" | "Darwin",
+  platform: "iOS" | "Darwin" | "Catalyst",
   architectures: string,
   sysroot: string,
   minTarget: string,
   output: string
-): DawnTarget => ({
-  os: "apple",
-  output,
-  args: {
+): DawnTarget => {
+  const isCatalyst = platform === "Catalyst";
+  const args: Record<string, string> = {
     ...commonArgs,
-    CMAKE_SYSTEM_NAME: system,
+    CMAKE_SYSTEM_NAME: isCatalyst ? "Darwin" : platform,
     CMAKE_OSX_ARCHITECTURES: architectures,
     CMAKE_OSX_SYSROOT: sysroot,
-    CMAKE_OSX_DEPLOYMENT_TARGET: minTarget,
+    // Catalyst's iOS deployment target is encoded in the macabi triple.
+    CMAKE_OSX_DEPLOYMENT_TARGET: isCatalyst ? "" : minTarget,
     DAWN_BUILD_MONOLITHIC_LIBRARY: "STATIC",
     DAWN_ENABLE_METAL: "ON",
     DAWN_ENABLE_VULKAN: "OFF",
@@ -101,8 +101,19 @@ const apple = (
     CMAKE_C_VISIBILITY_PRESET: "hidden",
     CMAKE_CXX_VISIBILITY_PRESET: "hidden",
     CMAKE_VISIBILITY_INLINES_HIDDEN: "ON",
-  },
-});
+  };
+  if (isCatalyst) {
+    args.DAWN_TARGET_MACOS = "OFF";
+    for (const lang of ["C", "CXX", "ASM"]) {
+      // CMake resolves the SDK; Clang resolves these paths against its sysroot.
+      args[`CMAKE_${lang}_COMPILER_TARGET`] = `apple-ios${minTarget}-macabi`;
+      args[`CMAKE_${lang}_FLAGS`] =
+        "-iwithsysroot /System/iOSSupport/usr/include " +
+        "-iframeworkwithsysroot /System/iOSSupport/System/Library/Frameworks";
+    }
+  }
+  return { os: "apple", output, args };
+};
 
 export const dawnTargets: Record<string, DawnTarget> = {
   "android-armeabi-v7a": android("armeabi-v7a"),
@@ -123,6 +134,13 @@ export const dawnTargets: Record<string, DawnTarget> = {
     "iphonesimulator",
     iosMinTarget,
     "ios-simulator-x86_64"
+  ),
+  "maccatalyst-universal": apple(
+    "Catalyst",
+    "arm64;x86_64",
+    "macosx",
+    iosMinTarget,
+    "maccatalyst-universal"
   ),
   "macos-universal": apple(
     "Darwin",
@@ -175,7 +193,7 @@ export const syncDawnDeps = () =>
 
 /**
  * Applies the patches in scripts/dawn-patches to the Dawn checkout. Each one
- * is an upstream change the pinned Dawn does not carry yet. A patch the
+ * fixes code the pinned Dawn does not handle yet. A patch the
  * checkout already contains is skipped; one that no longer applies fails the
  * build so it gets dropped or refreshed with the Dawn bump that broke it.
  */
@@ -397,6 +415,7 @@ export const createDawnXcframework = () => {
       "xcodebuild -create-xcframework",
       `-library ${slice("ios-arm64")} -headers ${include}`,
       `-library ${simulatorLib} -headers ${include}`,
+      `-library ${slice("maccatalyst-universal")} -headers ${include}`,
       `-library ${slice("macos-universal")} -headers ${include}`,
       `-output ${DawnAppleXcframework}`,
     ].join(" ")

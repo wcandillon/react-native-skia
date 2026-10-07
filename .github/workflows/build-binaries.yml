@@ -236,6 +236,9 @@ jobs:
           - target: ios-simulator-x86_64
             runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
+          - target: maccatalyst-universal
+            runner: macos-latest-xlarge
+            output: packages/skia/libs/dawn/apple/maccatalyst-universal
           - target: macos-universal
             runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/macos-universal
