@@ -47,6 +47,7 @@ The `skia-config.json` file contains the current Skia versions and checksums:
 {
   "skia": {
     "version": "m144c",
+    "repo": "shopify/react-native-skia",
     "checksums": {
       "android-armeabi-v7a": "...",
       "apple-ios-xcframeworks": "...",
@@ -54,23 +55,28 @@ The `skia-config.json` file contains the current Skia versions and checksums:
     }
   },
   "skia-graphite": {
-    "version": "m142b",
+    "version": "m154_8037_58a",
     "checksums": { ... }
+  },
+  "dawn": {
+    "releaseTag": "dawn-chrome-m154a",
+    "checksums": { "android": "...", "apple": "..." }
   }
 }
 ```
+
+`version` is the Build SKIA release tag without its `skia-` or `skia-graphite-` prefix. Build SKIA names the release after the Skia branch the submodule commit is on, so it is a milestone (`m144`), a milestone with a re-spin suffix (`m144c`), or a Chromium release branch with an optional suffix (`m154_8037_58a`) once `chrome/m154` has moved past the pinned commit. The npm version is derived from it: the milestone is the major and the suffix letter the minor (`m144c` → 144.3.0, `m154_8037_58a` → 154.1.0; the branch digits do not affect it). `repo` points an entry at another repository's releases; leave it out for releases of this repository. The `checksums` are the ones `yarn verify` computes over a `yarn download` of that version.
 
 ## Publishing New Versions
 
 ### Via GitHub Actions
 
-1. Go to **Actions** > **Publish Skia Binary Packages**
-2. Click **Run workflow**
+1. Update `skia-config.json` and merge it to `main`
+2. Go to **Actions** > **Publish Skia Binary Packages** and click **Run workflow**
 3. Fill in:
-   - **Skia version**: e.g., `m144c`
-   - **NPM version**: (optional) derived automatically: `m144c` → `144.3.0`
-   - **Graphite**: Check for Graphite packages
-   - **Dry run**: Uncheck to actually publish
+   - **variant**: `graphite`, `ganesh` or `all` (a version already on npm cannot be republished)
+   - **patch_version**: the patch of the npm version, `0` unless the same Skia version is repackaged (`m154_8037_58a` + `1` → `154.1.1`)
+   - **Dry run**: uncheck to actually publish
 
 ### Local Development
 
@@ -93,8 +99,9 @@ yarn tsx src/generate-packages.ts --skia-version=m142b --graphite
 # Override npm version if needed
 yarn tsx src/generate-packages.ts --skia-version=m144c --npm-version=144.3.1
 
-# Verify checksums against skia-config.json
-yarn tsx src/verify-checksums.ts --config=skia-config.json
+# Download a release into libs/ and verify it against skia-config.json
+yarn download --skia-version=m154_8037_58a --graphite
+yarn verify --graphite
 
 # Publish (from generated package directory)
 cd dist/react-native-skia-apple-ios
