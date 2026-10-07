@@ -33,6 +33,20 @@ Both packages depend on the same `react-native-webgpu-dawn` package, which ships
 The native build verifies that the two resolve the same version of it and fails with a `Dawn version mismatch` error otherwise.
 If you see that error, upgrade `react-native-skia` and `react-native-webgpu` together.
 
+## Compatibility
+
+Both packages follow Chrome/Skia milestones. Pick one row and install versions from it; the [React Native WebGPU documentation](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia) keeps the reference copy of this table.
+
+| Milestone | react-native-skia | Dawn | react-native-webgpu |
+| --- | --- | --- | --- |
+| m154a | 3.0.9 and later | `react-native-webgpu-dawn` 154.2.0 | 0.12.2 and later, or 0.12.1 |
+| m154a | 3.0.6 to 3.0.8 | `dawn-chrome-m154a`, vendored | 0.12.1, or 0.12.2 and later with react-native-skia 3.0.8 |
+| m154 | 3.0.0 to 3.0.5 | `dawn-chrome-m154`, vendored | 0.10.0 to 0.11.2 |
+
+From react-native-skia 3.0.9 and react-native-webgpu 0.12.2 both libraries depend on `react-native-webgpu-dawn`, and the native build checks that they resolve the same version of it.
+The mixed rows work because the older release vendors the same Dawn commit: react-native-skia 3.0.9 accepts a react-native-webgpu 0.12.1 whose `dawnCommit` matches, and react-native-skia 3.0.8 defers to react-native-webgpu's Dawn.
+On Android, react-native-skia 3.0.6 and 3.0.7 cannot pair with react-native-webgpu 0.12.2 and later: they still package their own `libwebgpu_dawn.so` next to the one from the package and the build fails merging the two.
+
 ## Sharing the device
 
 `Skia.getNativeDevice()` returns a pointer to the device Skia renders with.

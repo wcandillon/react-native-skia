@@ -134,6 +134,8 @@ The same packages can be generated locally from a full `yarn build-skia` and `ya
 
 Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-*` and `react-native-webgpu-dawn`) to the version you just published, delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. react-native-webgpu depends on the same `react-native-webgpu-dawn` version; the podspec and Gradle refuse an app whose two packages resolve different ones.
 
+Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md`, and to the reference copy in react-native-webgpu's documentation (`apps/docs/content/docs/integrations/react-native-skia.mdx` there), so users can pair the two libraries.
+
 ### Swift Package Manager (preview)
 
 CocoaPods stays the default. `Package.swift` is additive: SwiftPM ignores the
