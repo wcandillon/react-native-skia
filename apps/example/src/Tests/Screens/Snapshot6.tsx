@@ -1,6 +1,6 @@
 import React from "react";
 import { SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { Canvas, RoundedRect } from "@shopify/react-native-skia";
+import { Canvas, RoundedRect } from "react-native-skia";
 
 function SkiaRoundedButton() {
   const width = 96;

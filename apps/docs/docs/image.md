@@ -14,7 +14,7 @@ Images are loaded using the `useImage` hook. This hook returns an `SkImage` inst
 Images can be loaded using require statements or by passing a network URL directly. It is also possible to load images from the app bundle using named images.
 
 ```tsx twoslash
-import { useImage } from "@shopify/react-native-skia";
+import { useImage } from "react-native-skia";
 // Loads an image from the JavaScript bundle
 const image1 = useImage(require("./assets/oslo"));
 // Loads an image from the network
@@ -32,7 +32,7 @@ The hook also provides an optional error handler as a second parameter.
 You can also create image instances manually using `MakeImageFromEncoded`.
 
 ```tsx twoslash
-import { Skia } from "@shopify/react-native-skia";
+import { Skia } from "react-native-skia";
 
 // A sample base64-encoded pixel
 const data = Skia.Data.fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==");
@@ -44,7 +44,7 @@ const image = Skia.Image.MakeImageFromEncoded(data);
 `MakeImage` allows you to create an image by providing pixel data and specifying the format.
 
 ```tsx twoslash
-import { Skia, AlphaType, ColorType } from "@shopify/react-native-skia";
+import { Skia, AlphaType, ColorType } from "react-native-skia";
 
 const pixels = new Uint8Array(256 * 256 * 4);
 pixels.fill(255);
@@ -90,7 +90,7 @@ Images can be drawn by specifying the output rectangle and how the image should 
 ### Example
 
 ```tsx twoslash
-import { Canvas, Image, useImage } from "@shopify/react-native-skia";
+import { Canvas, Image, useImage } from "react-native-skia";
 
 const ImageDemo = () => {
   const image = useImage(require("./assets/oslo.jpg"));
@@ -107,10 +107,10 @@ const ImageDemo = () => {
 The `sampling` prop allows you to control how the image is sampled when it is drawn.
 Use cubic sampling for best quality: you can use the default `sampling={CubicSampling}` (defaults to `{ B: 0, C: 0 }`) or any value you would like: `sampling={{ B: 0, C: 0.5 }}`.
 
-You can also use filter modes (`nearest` or `linear`) and mimap modes (`none`, `nearest`, or `linear`). Default is `nearest`.
+You can also use filter modes (`nearest` or `linear`) and mipmap modes (`none`, `nearest`, or `linear`). The defaults are `linear` filtering and `none` mipmapping.
 
 ```tsx twoslash
-import { Canvas, Image, useImage, CubicSampling, FilterMode, MipmapMode } from "@shopify/react-native-skia";
+import { Canvas, Image, useImage, CubicSampling, FilterMode, MipmapMode } from "react-native-skia";
 
 const ImageDemo = () => {
   const image = useImage(require("./assets/oslo.jpg"));

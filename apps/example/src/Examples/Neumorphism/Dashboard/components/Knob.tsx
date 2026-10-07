@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  RoundedRect,
-  Group,
-  LinearGradient,
-  vec,
-} from "@shopify/react-native-skia";
+import { RoundedRect, Group, LinearGradient, vec } from "react-native-skia";
 
 export const Knob = () => {
   return (

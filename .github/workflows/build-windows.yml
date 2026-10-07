@@ -1,0 +1,23 @@
+name: Build on Windows
+# This only exercises the JS build of the package and the docs on Windows
+# (path handling in the build scripts); there is no native Windows code.
+# Run it by hand when touching the build scripts or when a Windows
+# contributor reports a problem.
+on: workflow_dispatch
+
+jobs:
+  build-windows-library:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build package
+        run: yarn build

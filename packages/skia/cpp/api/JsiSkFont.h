@@ -135,8 +135,9 @@ public:
   bool isEmbolden() { return getObject()->isEmbolden(); }
 
   std::shared_ptr<JsiSkTypeface> getTypeface() {
-    return std::make_shared<JsiSkTypeface>(
-        getContext(), sk_sp<SkTypeface>(getObject()->getTypeface()));
+    // refTypeface(), not getTypeface(): the wrapper owns what it is handed.
+    return std::make_shared<JsiSkTypeface>(getContext(),
+                                           getObject()->refTypeface());
   }
 
   void setEdging(double edging) {

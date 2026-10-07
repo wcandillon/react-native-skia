@@ -55,9 +55,6 @@ packages/skia/libs
 packages/skia/cpp/skia
 packages/skia/cpp/dawn
 
-# Remotion
-apps/remotion/stills
-
 # BUCK
 buck-out/
 \.buckd/

@@ -47,7 +47,7 @@ public:
                   &JsiSkParagraphBuilderFactory::Make);
   }
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   explicit JsiSkParagraphBuilderFactory(
       std::shared_ptr<RNSkPlatformContext> context)

@@ -39,7 +39,7 @@ import {
   Fill,
   RoundedRect,
   Canvas
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const Neumorphism = () => {
   return (
@@ -66,7 +66,7 @@ import {
   Fill,
   RoundedRect,
   Canvas
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const Neumorphism = () => {
   return (

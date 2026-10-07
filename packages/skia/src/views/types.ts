@@ -1,35 +1,69 @@
 import type { ViewProps } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import type { Node } from "../dom/types";
-import type { SkImage, SkPicture, SkRect, SkSize } from "../skia/types";
+import type {
+  SkGraphiteContext,
+  SkImage,
+  SkPicture,
+  SkRect,
+  SkSize,
+} from "../skia/types";
 
-export type NativeSkiaViewProps = ViewProps & {
-  debug?: boolean;
-  opaque?: boolean;
-};
+export type AndroidSurfaceType = "SurfaceView" | "TextureView";
+
+export interface AndroidCanvasProps {
+  /**
+   * Backing view. Defaults to `SurfaceView` when the canvas is `opaque` and to
+   * `TextureView` otherwise; both composite correctly in React Native stacking
+   * order without further flags.
+   */
+  surfaceType?: AndroidSurfaceType;
+  /**
+   * SurfaceView only: composite above every React Native view in the window,
+   * ignoring `zIndex`. Ignored for TextureView. Defaults to false.
+   */
+  zOrderOnTop?: boolean;
+}
 
 export interface ISkiaViewApi {
   web?: boolean;
   setJsiProperty: <T>(nativeId: number, name: string, value: T) => void;
   requestRedraw: (nativeId: number) => void;
+  /**
+   * Reads the shared values into the recording held for the view and
+   * schedules a redraw. Native only; called from a worklet on every frame.
+   * Until the view registers, the recording is queued for it and kept
+   * current all the same. Ignored when the recording `recorderId` is neither
+   * held by the view nor queued for it.
+   */
+  applyUpdates: (
+    nativeId: number,
+    recorderId: number,
+    values: SharedValue<unknown>[]
+  ) => void;
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
   makeImageSnapshotAsync: (nativeId: number, rect?: SkRect) => Promise<SkImage>;
   size: (nativeId: number) => SkSize;
+  /**
+   * The recording side of a view: its native id, the layout size in points,
+   * and the props its surface format follows from.
+   */
+  makeGraphiteContext: (
+    nativeId: number,
+    width: number,
+    height: number,
+    opaque: boolean,
+    highBitDepth: boolean
+  ) => SkGraphiteContext;
 }
 
+/** The props every Skia view takes, whichever way it is drawn. */
 export interface SkiaBaseViewProps extends ViewProps {
   /**
-   * When set to true the view will display information about the
-   * average time it takes to render.
+   * Declares that the canvas covers every pixel of its bounds. On Android an
+   * opaque canvas is backed by a `SurfaceView` by default, the cheapest path
+   * (see `android.surfaceType`). Defaults to false.
    */
-  debug?: boolean;
-  /**
-   * Pass an animated value to the onSize property to get updates when
-   * the Skia view is resized.
-   */
-  onSize?: SharedValue<SkSize>;
-
   opaque?: boolean;
 
   /**
@@ -39,6 +73,9 @@ export interface SkiaBaseViewProps extends ViewProps {
    */
   highBitDepth?: boolean;
 
+  /** Android-only rendering options. Ignored on iOS and web. */
+  android?: AndroidCanvasProps;
+
   // On web, only 16 WebGL contextes are allowed. If the drawing is non-animated, set
   // __destroyWebGLContextAfterRender to true to release the context after each draw.
   __destroyWebGLContextAfterRender?: boolean;
@@ -46,9 +83,6 @@ export interface SkiaBaseViewProps extends ViewProps {
 
 export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
   picture?: SkPicture;
-  androidWarmup?: boolean;
 }
 
-export interface SkiaDomViewNativeProps extends SkiaBaseViewProps {
-  root?: Node<unknown>;
-}
+export type SkiaGraphiteViewNativeProps = SkiaBaseViewProps;

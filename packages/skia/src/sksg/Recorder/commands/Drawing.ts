@@ -297,7 +297,8 @@ export const drawImageSVG = (ctx: DrawingContext, props: ImageSVGProps) => {
     return;
   }
   canvas.save();
-  if (x && y) {
+  // An offset of 0 is a valid position, so it must not be read as "unset".
+  if (x !== undefined && y !== undefined) {
     canvas.translate(x, y);
   }
   canvas.drawSvg(svg, width, height);

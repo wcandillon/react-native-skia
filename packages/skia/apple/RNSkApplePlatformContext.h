@@ -1,7 +1,6 @@
 #pragma once
 
-#import <React/RCTBridge+Private.h>
-#import <React/RCTBridge.h>
+#import <React/RCTBridgeModule.h>
 
 #include <functional>
 #include <memory>
@@ -21,7 +20,7 @@ namespace RNSkia {
 class RNSkApplePlatformContext : public RNSkPlatformContext {
 public:
   RNSkApplePlatformContext(
-      RCTBridge *bridge,
+      RCTViewRegistry *viewRegistry,
       std::shared_ptr<facebook::react::CallInvoker> jsCallInvoker)
 #if !TARGET_OS_OSX
       : RNSkPlatformContext(jsCallInvoker, [[UIScreen mainScreen] scale]) {
@@ -32,36 +31,25 @@ public:
 
     // Create screenshot manager
     _screenshotService =
-        [[ViewScreenshotService alloc] initWithUiManager:bridge.uiManager];
+        [[ViewScreenshotService alloc] initWithViewRegistry:viewRegistry];
+    _prefersP3ColorSpace = mainScreenSupportsP3();
   }
 
   ~RNSkApplePlatformContext() = default;
 
+  /**
+   Whether the main screen has a wide color gamut (Display P3). The screen is
+   asked once and the answer is kept: RNSkiaModule asks first, on the main
+   queue it is created on, so that the context (created on the JS thread)
+   only reads the answer.
+   */
+  static bool mainScreenSupportsP3();
+
+  bool prefersP3ColorSpace() override { return _prefersP3ColorSpace; }
+
   void runOnMainThread(std::function<void()>) override;
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override;
-
-  sk_sp<SkImage> makeImageFromNativeBuffer(void *buffer) override;
-
-#if !defined(SK_GRAPHITE)
-  GrDirectContext *getDirectContext() override;
-
-  sk_sp<SkImage> makeImageFromNativeTexture(const TextureInfo &textureInfo,
-                                            int width, int height,
-                                            bool mipMapped) override;
-
-  const TextureInfo getTexture(sk_sp<SkSurface> image) override;
-
-  const TextureInfo getTexture(sk_sp<SkImage> image) override;
-#endif
-
-  uint64_t makeNativeBuffer(sk_sp<SkImage> image) override;
-
-  uint64_t makeTestNativeBuffer(int width, int height) override;
-
-  void releaseNativeBuffer(uint64_t pointer) override;
-
-  std::shared_ptr<RNSkVideo> createVideo(const std::string &url) override;
 
   virtual void performStreamOperation(
       const std::string &sourceUri,
@@ -79,8 +67,7 @@ public:
 
 private:
   ViewScreenshotService *_screenshotService;
-
-  SkColorType mtlPixelFormatToSkColorType(MTLPixelFormat pixelFormat);
+  bool _prefersP3ColorSpace = false;
 };
 
 } // namespace RNSkia

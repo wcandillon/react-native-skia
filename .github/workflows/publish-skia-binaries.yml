@@ -1,0 +1,219 @@
+name: Publish Skia Binary Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Which packages to publish'
+        type: choice
+        options:
+          - all
+          - ganesh
+          - graphite
+        default: all
+      patch_version:
+        description: 'Patch version (e.g., 1 for 147.1.1)'
+        type: string
+        default: '0'
+      dry_run:
+        description: 'Dry run (skip npm publish)'
+        type: boolean
+        default: true
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::warning::Publishing is only allowed from the main branch. Current branch: ${{ github.ref }}"
+            echo "The workflow will generate and verify packages but skip publishing."
+          fi
+
+  publish:
+    if: ${{ github.repository == 'wcandillon/react-native-skia' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/skia-binaries
+    permissions:
+      # write: the SwiftPM release below is created on this repository
+      contents: write
+      # npm trusted publishing (OIDC) and provenance
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Generate all packages from config
+        id: generate
+        run: yarn tsx src/generate-packages.ts --config=skia-config.json --variant=${{ inputs.variant }} --patch=${{ inputs.patch_version }}
+
+      - name: Validate SwiftPM manifests
+        run: yarn validate-spm
+
+      - name: Verify packages
+        run: |
+          echo "Generated packages:"
+          ls -la dist/
+
+          for pkg_dir in dist/react-native-skia-*/; do
+            echo ""
+            echo "=== $pkg_dir ==="
+
+            if [ ! -f "$pkg_dir/package.json" ]; then
+              echo "ERROR: package.json not found in $pkg_dir"
+              exit 1
+            fi
+
+            echo "package.json:"
+            cat "$pkg_dir/package.json"
+
+            if [ ! -d "$pkg_dir/libs" ] || [ -z "$(ls -A $pkg_dir/libs)" ]; then
+              echo "ERROR: libs/ directory is empty in $pkg_dir"
+              exit 1
+            fi
+
+            echo ""
+            echo "libs/ contents:"
+            find "$pkg_dir/libs" -type f | head -10
+          done
+
+      # SwiftPM resolves the remote package from the root Package.swift and the
+      # version tags of wcandillon/react-native-skia-binaries, but a binaryTarget
+      # url can point anywhere: the xcframework zips are attached to the
+      # swiftpm-<version> prerelease of this repository, which the job's own
+      # token can create (GITHUB_TOKEN cannot write to another repository).
+      # Copying dist/spm/Package.swift to the root of react-native-skia-binaries,
+      # committing it and tagging that commit <version> stays a manual step.
+      #
+      # Deliberately placed before the npm publish steps below: re-running
+      # this workflow for an already-published npm version makes "Publish to
+      # npm" fail, and steps after a failed step are skipped by default. This
+      # step does not depend on npm publishing succeeding, so it runs first.
+      # An existing swiftpm-<version> release is left alone: the zips are not
+      # byte-reproducible, so replacing them would break the checksums of a
+      # manifest that may already be committed.
+      - name: Create GitHub release for the remote SwiftPM package
+        if: ${{ github.ref == 'refs/heads/main' && inputs.dry_run == false && steps.generate.outputs.spm_release_tag != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.generate.outputs.spm_release_tag }}"
+          VERSION="${{ steps.generate.outputs.graphite_npm_version }}"
+          if [ ! -d dist/spm ] || [ -z "$(ls -A dist/spm/*.zip 2>/dev/null)" ]; then
+            echo "No dist/spm zips were generated (Ganesh-only run) - nothing to release."
+            exit 0
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::Release $TAG already exists on $GITHUB_REPOSITORY. Delete it to cut it again, then commit the new dist/spm/Package.swift: its checksums change with every build."
+            exit 1
+          fi
+          gh release create "$TAG" dist/spm/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Skia Graphite SwiftPM $VERSION" \
+            --notes "Binary targets of the remote SwiftPM package (Graphite iOS) for the react-native-skia-graphite-apple-ios $VERSION npm package, generated by packages/skia-binaries. To release it: copy dist/spm/Package.swift from this run's skia-packages artifact to the root of wcandillon/react-native-skia-binaries, commit it, and tag that commit $VERSION." \
+            --prerelease
+
+      - name: Publish to npm (dry run)
+        if: ${{ github.ref == 'refs/heads/main' && inputs.dry_run == true }}
+        run: |
+          for pkg_dir in dist/react-native-skia-*/; do
+            echo "Publishing (dry run): $pkg_dir"
+            cd "$pkg_dir"
+            npm publish --access public --dry-run
+            cd - > /dev/null
+          done
+
+      - name: Publish to npm
+        if: ${{ github.ref == 'refs/heads/main' && inputs.dry_run == false }}
+        run: |
+          for pkg_dir in dist/react-native-skia-*/; do
+            echo "Publishing: $pkg_dir"
+            cd "$pkg_dir"
+            npm publish --access public --provenance
+            cd - > /dev/null
+          done
+
+      - name: Skip publish (not on main)
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::warning::Skipping publish - workflow must be run from main branch"
+          echo "Current ref: ${{ github.ref }}"
+
+      - name: Upload packages as artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: skia-packages
+          path: packages/skia-binaries/dist/
+          retention-days: 7
+
+  summary:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: always()
+    defaults:
+      run:
+        working-directory: packages/skia-binaries
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      - name: Summary
+        run: |
+          echo "## Skia Binary Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | ${{ inputs.dry_run }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "> **Warning**: Publishing skipped - workflow must be run from the main branch." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "> **Note**: This was a dry run. No packages were published to npm." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Packages published successfully to npm!" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Packages (from skia-config.json)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Read versions from config
+          SKIA_VERSION=$(jq -r '.skia.version // "N/A"' skia-config.json)
+          GRAPHITE_VERSION=$(jq -r '.["skia-graphite"].version // "N/A"' skia-config.json)
+
+          echo "#### Ganesh (Skia $SKIA_VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|" >> $GITHUB_STEP_SUMMARY
+          for pkg in android apple-ios apple-tvos apple-macos; do
+            echo "| \`react-native-skia-$pkg\` |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Graphite (Skia $GRAPHITE_VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|" >> $GITHUB_STEP_SUMMARY
+          for pkg in android apple-ios apple-macos headers; do
+            echo "| \`react-native-skia-graphite-$pkg\` |" >> $GITHUB_STEP_SUMMARY
+          done

@@ -6,8 +6,13 @@ import { processRadius } from "./Radius";
 
 export const isEdge = (pos: Vector, b: SkRect) => {
   "worklet";
+  const right = b.x + b.width;
+  const bottom = b.y + b.height;
+  const withinX = pos.x >= b.x && pos.x <= right;
+  const withinY = pos.y >= b.y && pos.y <= bottom;
   return (
-    pos.x === b.x || pos.y === b.y || pos.x === b.width || pos.y === b.height
+    (withinY && (pos.x === b.x || pos.x === right)) ||
+    (withinX && (pos.y === b.y || pos.y === bottom))
   );
 };
 

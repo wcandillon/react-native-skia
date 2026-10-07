@@ -1,11 +1,4 @@
-import {
-  Canvas,
-  Circle,
-  Fill,
-  Line,
-  Rect,
-  vec,
-} from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill, Line, Rect, vec } from "react-native-skia";
 import React, { useEffect, useState } from "react";
 import {
   Platform,

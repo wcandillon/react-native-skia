@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { ScrollView, useWindowDimensions } from "react-native";
-import { Atlas, Canvas, Skia, rect } from "@shopify/react-native-skia";
+import { Atlas, Canvas, Skia, rect } from "react-native-skia";
 
 import { Title } from "./components/Title";
 

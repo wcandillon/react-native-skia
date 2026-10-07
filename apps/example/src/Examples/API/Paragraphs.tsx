@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { Platform, ScrollView, useWindowDimensions } from "react-native";
-import type { DataModule, SkTextStyle } from "@shopify/react-native-skia";
+import type { DataModule, SkTextStyle } from "react-native-skia";
 import {
   Canvas,
   FontSlant,
@@ -14,7 +14,7 @@ import {
   TextDecorationStyle,
   mix,
   useFonts,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import {
   useSharedValue,
   useDerivedValue,

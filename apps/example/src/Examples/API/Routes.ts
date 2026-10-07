@@ -42,5 +42,6 @@ export type Routes = {
   Web: undefined;
   WebLayout: undefined;
   WebGLContexts: undefined;
+  WebGLLifecycle: undefined;
   WebMemory: undefined;
 };

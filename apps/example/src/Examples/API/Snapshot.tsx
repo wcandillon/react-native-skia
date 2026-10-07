@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import Svg, { Circle, Rect } from "react-native-svg";
-import type { SkImage } from "@shopify/react-native-skia";
+import type { SkImage } from "react-native-skia";
 import {
   Canvas,
   Fill,
@@ -21,7 +21,7 @@ import {
   ImageShader,
   useImage,
   Image,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { Switch } from "react-native-gesture-handler";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 

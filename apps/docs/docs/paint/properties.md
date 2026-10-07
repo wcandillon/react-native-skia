@@ -20,7 +20,7 @@ The color is a string or a number.
 Any valid [CSS color](https://www.w3.org/TR/css-color-3/) value is supported. 
 
 ```tsx twoslash
-import {Group, Circle, vec} from "@shopify/react-native-skia";
+import {Group, Circle, vec} from "react-native-skia";
 
 <>
   <Group color="red">
@@ -43,7 +43,7 @@ Replaces alpha, leaving RGBA unchanged. 0 means fully transparent, 1.0 means opa
 When setting opacity in a Group component, the alpha component of all descending colors will inherit that value.
 
 ```tsx twoslash
-import {Canvas, Circle, Group, Paint, vec} from "@shopify/react-native-skia";
+import {Canvas, Circle, Group, Paint, vec} from "react-native-skia";
 
 const width = 256;
 const height = 256;

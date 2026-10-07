@@ -15,6 +15,10 @@ const examples = [
     title: "🔥 WebGL Contexts",
   },
   {
+    screen: "WebGLLifecycle",
+    title: "♻️ WebGL Lifecycle",
+  },
+  {
     screen: "WebMemory",
     title: "💧 WASM Memory",
   },

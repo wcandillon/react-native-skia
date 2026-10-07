@@ -72,7 +72,11 @@ const DawnOutputApple = GRAPHITE ? ["libdawn_combined.a"] : [];
 const DawnOutputAndroid = GRAPHITE ? ["libdawn_combined.a"] : [];
 
 export const commonArgs = [
-  ["skia_use_piex", true],
+  // No RAW codec: React Native apps do not decode camera RAW files through
+  // Skia, CanvasKit never shipped it, and SkRawCodec was the one Skia source
+  // built with exceptions.
+  ["skia_use_dng_sdk", false],
+  ["skia_use_piex", false],
   ["skia_use_system_expat", false],
   ["skia_use_system_libjpeg_turbo", false],
   ["skia_use_system_libpng", false],
@@ -98,11 +102,7 @@ export const commonArgs = [
 ];
 
 export type PlatformName =
-  | "apple-ios"
-  | "apple-tvos"
-  | "apple-macos"
-  | "apple-maccatalyst"
-  | "android";
+  "apple-ios" | "apple-tvos" | "apple-macos" | "apple-maccatalyst" | "android";
 
 export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
 
@@ -115,12 +115,15 @@ export type Target = {
   args?: Arg[];
   cpu: string;
   platform?: string;
-  output?: string;
   options?: Arg[];
 };
 
-export type Platform = {
-  targets: { [key: string]: Target };
+type AndroidTarget = Target & {
+  output: string;
+};
+
+export type Platform<PlatformTarget extends Target = Target> = {
+  targets: { [key: string]: PlatformTarget };
   args: Arg[];
   outputRoot: string;
   outputNames: string[];
@@ -263,7 +266,10 @@ const appleOutputNames = [
   ...DawnOutputApple,
 ];
 
-export const configurations: Record<PlatformName, Platform> = {
+export const configurations: { android: Platform<AndroidTarget> } & Record<
+  ApplePlatformName,
+  Platform
+> = {
   "android": {
     targets: {
       arm: {
@@ -298,6 +304,11 @@ export const configurations: Record<PlatformName, Platform> = {
         "extra_cflags",
         `["-DSKIA_C_DLL", "-DHAVE_SYSCALL_GETRANDOM", "-DXML_DEV_URANDOM"]`,
       ],
+      // RTTI, as on the Apple targets. Without it, a source built with
+      // exceptions gets its own copies of the C++ runtime's exception typeinfo
+      // (SkRawCodec did, before the RAW codec was dropped); build-skia.ts
+      // rejects an archive that defines one.
+      ["extra_cflags_cc", `["-frtti"]`],
       ...ParagraphArgsAndroid,
     ],
     outputRoot: "libs/android",
@@ -460,8 +471,10 @@ export const copyHeaders = () => {
   fileOps.mkdir("./cpp/skia/modules");
   fileOps.mkdir("./cpp/skia/src");
 
-  // Graphite-specific setup
-  if (GRAPHITE) {
+  // Graphite and Dawn headers. Graphite is the default backend, so these are
+  // copied for every build: from a local Skia build when there is one,
+  // otherwise from the react-native-skia-graphite-headers package.
+  {
     console.log("   Checking for Graphite build source...");
 
     // Try to find graphite headers from npm package
@@ -502,6 +515,12 @@ export const copyHeaders = () => {
         "../../externals/skia/third_party/externals/dawn/include",
         "./cpp/dawn/include"
       );
+      // Dawn's cmake build (as of the Dawn revision pinned at chrome/m154)
+      // also generates a webgpu_upstream/ copy of webgpu_cpp.h and friends
+      // under its own path. Nothing in this repo or react-native-webgpu
+      // includes from webgpu_upstream/, and leaving it in trips the
+      // duplicate-header check below (same basenames as dawn/ and webgpu/).
+      fileOps.rm("./cpp/dawn/include/webgpu_upstream");
 
       console.log("      - Fixing WebGPU header references...");
       // Fix WebGPU header references
@@ -536,6 +555,18 @@ export const copyHeaders = () => {
         "cpp/skia/src/gpu/graphite"
       );
 
+      // The headers package ships them under libs/skia/cpp/.
+      const legacyRoot = path.join(graphiteHeadersPath, "libs/skia/cpp");
+      if (!fs.existsSync(dawnSrc) && fs.existsSync(legacyRoot)) {
+        fileOps.cp(path.join(legacyRoot, "dawn/include"), "./cpp/dawn/include");
+        if (fs.existsSync(path.join(legacyRoot, "skia/src/gpu/graphite"))) {
+          fileOps.cp(
+            path.join(legacyRoot, "skia/src/gpu/graphite"),
+            "./cpp/skia/src/gpu/graphite"
+          );
+        }
+      }
+
       if (fs.existsSync(dawnSrc)) {
         console.log("      - Copying Dawn headers from npm package...");
         fileOps.cp(dawnSrc, "./cpp/dawn/include");
@@ -550,8 +581,8 @@ export const copyHeaders = () => {
 
       console.log("      ✓ Graphite headers copied from npm package");
     } else {
-      console.log(
-        "   ⚠️  No Graphite headers source found (no local build or npm package)"
+      throw new Error(
+        "No Graphite headers source found: build Skia locally or install react-native-skia-graphite-headers"
       );
     }
   }
@@ -623,14 +654,6 @@ export const copyHeaders = () => {
   fileOps.cp(
     "../../externals/skia/src/core/SkTHash.h",
     "./cpp/skia/src/core/SkTHash.h"
-  );
-
-  console.log("   Copying Ganesh GPU files...");
-  // TODO: Remove this once migrated to Graphite
-  fileOps.mkdir("./cpp/skia/src/gpu/ganesh/gl");
-  fileOps.cp(
-    "../../externals/skia/src/gpu/ganesh/gl/GrGLDefines.h",
-    "./cpp/skia/src/gpu/ganesh/gl/GrGLDefines.h"
   );
 
   fileOps.cp(

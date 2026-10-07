@@ -277,7 +277,8 @@ public:
                       &JsiSkParagraph::extendedVisit);
   }
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  // Shaped glyph runs and line metrics; there is no exact API for this.
+  size_t getMemoryPressure() override { return 16 * 1024; }
 
   explicit JsiSkParagraph(std::shared_ptr<RNSkPlatformContext> context,
                           para::ParagraphBuilder *paragraphBuilder)

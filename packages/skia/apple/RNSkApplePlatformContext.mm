@@ -1,30 +1,16 @@
 #import "RNSkApplePlatformContext.h"
 
-#import <CoreMedia/CMSampleBuffer.h>
-#include <Metal/Metal.h>
 #import <React/RCTUtils.h>
-#include <algorithm>
 #include <set>
 #include <thread>
 #include <utility>
 
-#if defined(SK_GRAPHITE)
 #include "RNDawnContext.h"
-#else
-#include "MetalContext.h"
-#endif
-#include "RNSkAppleVideo.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
-#include "include/core/SkBlendMode.h"
-#include "include/core/SkCanvas.h"
-#include "include/core/SkColor.h"
-#import "include/core/SkColorSpace.h"
 #include "include/core/SkFontMgr.h"
-#include "include/core/SkPaint.h"
-#include "include/core/SkSamplingOptions.h"
 #include "include/core/SkSurface.h"
 
 #include "include/ports/SkFontMgr_mac_ct.h"
@@ -75,293 +61,32 @@ void RNSkApplePlatformContext::performStreamOperation(
   std::thread(loader).detach();
 }
 
-void RNSkApplePlatformContext::releaseNativeBuffer(uint64_t pointer) {
-  CVPixelBufferRef pixelBuffer = reinterpret_cast<CVPixelBufferRef>(pointer);
-  if (pixelBuffer) {
-    CFRelease(pixelBuffer);
-  }
-}
-
-uint64_t RNSkApplePlatformContext::makeNativeBuffer(sk_sp<SkImage> image) {
-#if defined(SK_GRAPHITE)
-  // A Graphite GPU texture can't be read with readPixels(nullptr) (and can't be
-  // drawn onto a raster surface) — both yield uninitialized/black pixels. Read
-  // it back to a raster image first. (JsiNativeBuffer calls the Ganesh-only
-  // SkImage::makeNonTextureImage(), which is a no-op on Graphite.)
-  if (image && image->isTextureBacked()) {
-    image = DawnContext::getInstance().MakeRasterImage(image);
-  }
-#endif
-  // 0. If Image is not in BGRA, convert to BGRA as only BGRA is supported.
-  if (image->colorType() != kBGRA_8888_SkColorType) {
-    const SkImageInfo bgraInfo =
-        SkImageInfo::Make(image->dimensions(), kBGRA_8888_SkColorType,
-                          kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
-    auto surface = SkSurfaces::Raster(bgraInfo);
-    if (!surface) {
-      throw std::runtime_error(
-          "Failed to allocate raster surface for BGRA conversion");
-    }
-    SkCanvas *canvas = surface->getCanvas();
-    canvas->clear(SK_ColorTRANSPARENT);
-    SkPaint paint;
-    paint.setBlendMode(SkBlendMode::kSrc);
-    canvas->drawImage(image.get(), 0.0f, 0.0f, SkSamplingOptions(), &paint);
-    auto bgraImage = surface->makeImageSnapshot();
-    if (bgraImage == nullptr) {
-      throw std::runtime_error(
-          "Failed to convert image to BGRA_8888 colortype! Only BGRA_8888 "
-          "NativeBuffers are supported.");
-    }
-    image = std::move(bgraImage);
-  }
-
-  // 1. Get image info
-  auto bytesPerPixel = image->imageInfo().bytesPerPixel();
-  int bytesPerRow = image->width() * bytesPerPixel;
-  auto buf = SkData::MakeUninitialized(image->width() * image->height() *
-                                       bytesPerPixel);
-  SkImageInfo info = SkImageInfo::Make(image->width(), image->height(),
-                                       image->colorType(), image->alphaType());
-  // 2. Copy pixels into our buffer
-  image->readPixels(nullptr, info, const_cast<void *>(buf->data()), bytesPerRow,
-                    0, 0);
-
-  // 3. Create an IOSurface (GPU + CPU memory)
-  CFMutableDictionaryRef dict = CFDictionaryCreateMutable(
-      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks,
-      &kCFTypeDictionaryValueCallBacks);
-  int width = image->width();
-  int height = image->height();
-  int pitch = width * bytesPerPixel;
-  int size = width * height * bytesPerPixel;
-  OSType pixelFormat = kCVPixelFormatType_32BGRA;
-  CFDictionarySetValue(
-      dict, kIOSurfaceBytesPerRow,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &pitch));
-  CFDictionarySetValue(
-      dict, kIOSurfaceBytesPerElement,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &bytesPerPixel));
-  CFDictionarySetValue(
-      dict, kIOSurfaceWidth,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &width));
-  CFDictionarySetValue(
-      dict, kIOSurfaceHeight,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &height));
-  CFDictionarySetValue(
-      dict, kIOSurfacePixelFormat,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &pixelFormat));
-  CFDictionarySetValue(
-      dict, kIOSurfaceAllocSize,
-      CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &size));
-  IOSurfaceRef surface = IOSurfaceCreate(dict);
-  if (surface == nil) {
-    throw std::runtime_error("Failed to create " + std::to_string(width) + "x" +
-                             std::to_string(height) + " IOSurface!");
-  }
-
-  // 4. Copy over the memory from the pixels into the IOSurface
-  IOSurfaceLock(surface, 0, nil);
-  void *base = IOSurfaceGetBaseAddress(surface);
-  memcpy(base, buf->data(), buf->size());
-  IOSurfaceUnlock(surface, 0, nil);
-
-  // 5. Create a CVPixelBuffer from the IOSurface
-  CVPixelBufferRef pixelBuffer = nullptr;
-  CVReturn result =
-      CVPixelBufferCreateWithIOSurface(nil, surface, nil, &pixelBuffer);
-  if (result != kCVReturnSuccess) {
-    throw std::runtime_error(
-        "Failed to create CVPixelBuffer from SkImage! Return value: " +
-        std::to_string(result));
-  }
-
-  // 8. Return CVPixelBuffer casted to uint64_t
-  return reinterpret_cast<uint64_t>(pixelBuffer);
-}
-
-uint64_t RNSkApplePlatformContext::makeTestNativeBuffer(int width, int height) {
-  // Allocate a BGRA IOSurface and fill it with a procedural test pattern (RGB
-  // gradient + diagonal stripes), entirely on the CPU. No GPU / SkImage round
-  // trip, so this works the same on every backend.
-  const int bytesPerElement = 4;
-  const int pitch = width * bytesPerElement;
-  const int allocSize = width * height * bytesPerElement;
-  OSType pixelFormat = kCVPixelFormatType_32BGRA;
-  CFMutableDictionaryRef dict = CFDictionaryCreateMutable(
-      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks,
-      &kCFTypeDictionaryValueCallBacks);
-  auto setInt = [&](CFStringRef key, int value) {
-    CFNumberRef num =
-        CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &value);
-    CFDictionarySetValue(dict, key, num);
-    CFRelease(num);
-  };
-  setInt(kIOSurfaceWidth, width);
-  setInt(kIOSurfaceHeight, height);
-  setInt(kIOSurfaceBytesPerRow, pitch);
-  setInt(kIOSurfaceBytesPerElement, bytesPerElement);
-  setInt(kIOSurfacePixelFormat, static_cast<int>(pixelFormat));
-  setInt(kIOSurfaceAllocSize, allocSize);
-  IOSurfaceRef surface = IOSurfaceCreate(dict);
-  CFRelease(dict);
-  if (surface == nil) {
-    throw std::runtime_error("Failed to create " + std::to_string(width) + "x" +
-                             std::to_string(height) + " test IOSurface!");
-  }
-
-  IOSurfaceLock(surface, 0, nil);
-  auto *base = static_cast<uint8_t *>(IOSurfaceGetBaseAddress(surface));
-  const size_t rowBytes = IOSurfaceGetBytesPerRow(surface);
-  for (int y = 0; y < height; ++y) {
-    uint8_t *row = base + y * rowBytes;
-    for (int x = 0; x < width; ++x) {
-      uint8_t r = static_cast<uint8_t>((x * 255) / std::max(width - 1, 1));
-      uint8_t g = static_cast<uint8_t>((y * 255) / std::max(height - 1, 1));
-      uint8_t b = static_cast<uint8_t>(((x + y) & 0x20) ? 220 : 30);
-      row[x * 4 + 0] = b; // BGRA byte order
-      row[x * 4 + 1] = g;
-      row[x * 4 + 2] = r;
-      row[x * 4 + 3] = 0xFF;
-    }
-  }
-  IOSurfaceUnlock(surface, 0, nil);
-
-  CVPixelBufferRef pixelBuffer = nullptr;
-  CVReturn result =
-      CVPixelBufferCreateWithIOSurface(nil, surface, nil, &pixelBuffer);
-  // The CVPixelBuffer retains the IOSurface; drop our reference so the
-  // CVPixelBuffer is its sole owner (freed by releaseNativeBuffer).
-  CFRelease(surface);
-  if (result != kCVReturnSuccess) {
-    throw std::runtime_error("Failed to create CVPixelBuffer for test native "
-                             "buffer! Return value: " +
-                             std::to_string(result));
-  }
-  return reinterpret_cast<uint64_t>(pixelBuffer);
-}
-
-#if !defined(SK_GRAPHITE)
-GrDirectContext *RNSkApplePlatformContext::getDirectContext() {
-  return MetalContext::getInstance().getDirectContext();
-}
-
-const TextureInfo RNSkApplePlatformContext::getTexture(sk_sp<SkImage> image) {
-  TextureInfo result;
-  GrBackendTexture texture;
-  if (!SkImages::GetBackendTextureFromImage(image, &texture, true)) {
-    throw std::runtime_error("Couldn't get backend texture");
-  }
-  if (!texture.isValid()) {
-    throw std::runtime_error("Invalid backend texture");
-  }
-  GrMtlTextureInfo textureInfo;
-  if (!GrBackendTextures::GetMtlTextureInfo(texture, &textureInfo)) {
-    throw std::runtime_error("Couldn't get Metal texture info");
-  }
-  result.mtlTexture = textureInfo.fTexture.get();
-  return result;
-}
-
-const TextureInfo
-RNSkApplePlatformContext::getTexture(sk_sp<SkSurface> surface) {
-  TextureInfo result;
-  GrBackendTexture texture = SkSurfaces::GetBackendTexture(
-      surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
-  if (!texture.isValid()) {
-    throw std::runtime_error("Invalid backend texture");
-  }
-  GrMtlTextureInfo textureInfo;
-  if (!GrBackendTextures::GetMtlTextureInfo(texture, &textureInfo)) {
-    throw std::runtime_error("Couldn't get Metal texture info");
-  }
-  result.mtlTexture = textureInfo.fTexture.get();
-  return result;
-}
-
-sk_sp<SkImage> RNSkApplePlatformContext::makeImageFromNativeTexture(
-    const TextureInfo &texInfo, int width, int height, bool mipMapped) {
-  id<MTLTexture> mtlTexture = (__bridge id<MTLTexture>)(texInfo.mtlTexture);
-
-  SkColorType colorType = mtlPixelFormatToSkColorType(mtlTexture.pixelFormat);
-  if (colorType == SkColorType::kUnknown_SkColorType) {
-    throw std::runtime_error("Unsupported pixelFormat");
-  }
-
-  GrMtlTextureInfo textureInfo;
-  textureInfo.fTexture.retain((__bridge const void *)mtlTexture);
-
-  GrBackendTexture texture = GrBackendTextures::MakeMtl(
-      width, height, mipMapped ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo,
-      textureInfo);
-
-  return SkImages::BorrowTextureFrom(getDirectContext(), texture,
-                                     kTopLeft_GrSurfaceOrigin, colorType,
-                                     kPremul_SkAlphaType, nullptr);
-  return nullptr;
-}
-#endif
-
-std::shared_ptr<RNSkVideo>
-RNSkApplePlatformContext::createVideo(const std::string &url) {
-  return std::make_shared<RNSkAppleVideo>(url, this);
-}
-
 void RNSkApplePlatformContext::raiseError(const std::exception &err) {
   RCTFatal(RCTErrorWithMessage([NSString stringWithUTF8String:err.what()]));
+}
+
+bool RNSkApplePlatformContext::mainScreenSupportsP3() {
+  static bool supportsP3 = false;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+#if !TARGET_OS_OSX
+    supportsP3 =
+        [UIScreen mainScreen].traitCollection.displayGamut == UIDisplayGamutP3;
+#else
+    NSColorSpace *screenColorSpace = [NSScreen mainScreen].colorSpace;
+    supportsP3 =
+        screenColorSpace != nil &&
+        [screenColorSpace isEqual:[NSColorSpace displayP3ColorSpace]];
+#endif // !TARGET_OS_OSX
+  });
+  return supportsP3;
 }
 
 sk_sp<SkSurface>
 RNSkApplePlatformContext::makeOffscreenSurface(int width, int height,
                                                bool useP3ColorSpace) {
-#if defined(SK_GRAPHITE)
   return DawnContext::getInstance().MakeOffscreen(width, height,
                                                   useP3ColorSpace);
-#else
-  return MetalContext::getInstance().MakeOffscreen(width, height,
-                                                   useP3ColorSpace);
-#endif
-}
-
-sk_sp<SkImage>
-RNSkApplePlatformContext::makeImageFromNativeBuffer(void *buffer) {
-#if defined(SK_GRAPHITE)
-  return DawnContext::getInstance().MakeImageFromBuffer(buffer);
-#else
-  return MetalContext::getInstance().MakeImageFromBuffer(buffer);
-#endif
-}
-
-SkColorType RNSkApplePlatformContext::mtlPixelFormatToSkColorType(
-    MTLPixelFormat pixelFormat) {
-  switch (pixelFormat) {
-  case MTLPixelFormatRGBA8Unorm:
-    return kRGBA_8888_SkColorType;
-  case MTLPixelFormatBGRA8Unorm:
-    return kBGRA_8888_SkColorType;
-  case MTLPixelFormatRGB10A2Unorm:
-    return kRGBA_1010102_SkColorType;
-  case MTLPixelFormatR8Unorm:
-    return kGray_8_SkColorType;
-  case MTLPixelFormatRGBA16Float:
-    return kRGBA_F16_SkColorType;
-  case MTLPixelFormatRG8Unorm:
-    return kR8G8_unorm_SkColorType;
-  case MTLPixelFormatR16Float:
-    return kA16_float_SkColorType;
-  case MTLPixelFormatRG16Float:
-    return kR16G16_float_SkColorType;
-  case MTLPixelFormatR16Unorm:
-    return kA16_unorm_SkColorType;
-  case MTLPixelFormatRG16Unorm:
-    return kR16G16_unorm_SkColorType;
-  case MTLPixelFormatRGBA16Unorm:
-    return kR16G16B16A16_unorm_SkColorType;
-  case MTLPixelFormatRGBA8Unorm_sRGB:
-    return kSRGBA_8888_SkColorType;
-  default:
-    return kUnknown_SkColorType;
-  }
 }
 
 sk_sp<SkFontMgr> RNSkApplePlatformContext::createFontMgr() {

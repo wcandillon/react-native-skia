@@ -1,0 +1,397 @@
+name: Build and publish binaries
+# Builds Skia Graphite and the Dawn it pins, packages them into the
+# react-native-skia-graphite-* and react-native-webgpu-dawn npm packages, and
+# publishes them, all in one run. There is no intermediate GitHub release: a
+# dry run (the default) uploads the generated packages as a workflow artifact
+# instead of publishing them.
+#
+# Every package of a run carries the same version, derived from the Skia
+# branch the submodule commit is on (see scripts/package-binaries.ts): m154 is
+# 154.0.0, and the re-spin letter is the minor (m154_8037_58b is 154.2.0).
+on:
+  workflow_dispatch:
+    inputs:
+      skia_branch:
+        description: 'Skia branch to build (e.g. chrome/m154). Leave empty to build the checked-in submodule commit.'
+        required: false
+        default: ''
+      respin:
+        description: 'Re-spin letter for another build of the same Skia branch: "a" makes the version 154.1.0, "b" 154.2.0. Leave empty for 154.0.0.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run: build and package, upload the packages as a workflow artifact, skip npm publish'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      skia_branch: ${{ steps.skia.outputs.branch }}
+      skia_version: ${{ steps.version.outputs.skia_version }}
+      npm_version: ${{ steps.version.outputs.npm_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout custom Skia branch
+        if: ${{ inputs.skia_branch != '' }}
+        working-directory: externals/skia
+        run: |
+          git fetch origin "$SKIA_BRANCH"
+          git checkout FETCH_HEAD
+          echo "Skia commit: $(git rev-parse HEAD)"
+        env:
+          SKIA_BRANCH: ${{ inputs.skia_branch }}
+
+      # The branch the submodule commit is on, without its chrome/ prefix:
+      # m154 right after a milestone bump, or the Chromium release branch
+      # (m154_8037_58) once chrome/m154 has moved past the pinned commit.
+      - name: Determine Skia branch
+        id: skia
+        run: |
+          set -eo pipefail
+          if [ -n "$INPUT_SKIA_BRANCH" ]; then
+            branch="$INPUT_SKIA_BRANCH"
+          else
+            branch=$(git -C externals/skia branch --show-current || true)
+            if [ -z "$branch" ]; then
+              branch=$(git -C externals/skia describe --all --exact-match 2>/dev/null || true)
+            fi
+          fi
+          branch=${branch#remotes/origin/chrome/}
+          branch=${branch#chrome/}
+          if [ -z "$branch" ]; then
+            echo "::error::Could not determine the Skia branch of externals/skia"
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_SKIA_BRANCH: ${{ inputs.skia_branch }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Compute the package version
+        id: version
+        working-directory: packages/skia
+        run: |
+          set -eo pipefail
+          skia_version="${SKIA_BRANCH//\//-}${RESPIN}"
+          npm_version=$(yarn tsx scripts/package-binaries.ts --skia-version="$skia_version" --print-version | tail -n 1)
+          echo "Skia $skia_version → npm $npm_version"
+          echo "skia_version=$skia_version" >> "$GITHUB_OUTPUT"
+          echo "npm_version=$npm_version" >> "$GITHUB_OUTPUT"
+        env:
+          SKIA_BRANCH: ${{ steps.skia.outputs.branch }}
+          RESPIN: ${{ inputs.respin }}
+
+      # npm never lets a version be republished, so fail here rather than
+      # after the builds. A dry run only warns: it is how a version is
+      # rebuilt for inspection.
+      - name: Check that the version is not on npm yet
+        run: |
+          set -eo pipefail
+          published=""
+          for pkg in react-native-skia-graphite-android react-native-skia-graphite-apple-ios react-native-skia-graphite-apple-macos react-native-webgpu-dawn; do
+            if npm view "$pkg@$NPM_VERSION" version > /dev/null 2>&1; then
+              published="$published $pkg"
+            fi
+          done
+          if [ -n "$published" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "::warning::Version $NPM_VERSION is already published for:$published. Bump the respin letter before the real run."
+            else
+              echo "::error::Version $NPM_VERSION is already published for:$published. Bump the respin letter."
+              exit 1
+            fi
+          fi
+        env:
+          NPM_VERSION: ${{ steps.version.outputs.npm_version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+
+  build-skia:
+    needs: prepare
+    runs-on: macos-latest-xlarge
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - apple-ios
+          - apple-macos
+          - android-arm
+          - android-arm64
+          - android-x86
+          - android-x64
+        include:
+          - target: apple-ios
+            output: packages/skia/libs/ios
+          - target: apple-macos
+            output: packages/skia/libs/macos
+          - target: android-arm
+            output: packages/skia/libs/android/armeabi-v7a
+          - target: android-arm64
+            output: packages/skia/libs/android/arm64-v8a
+          - target: android-x86
+            output: packages/skia/libs/android/x86
+          - target: android-x64
+            output: packages/skia/libs/android/x86_64
+    name: skia-${{ matrix.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Checkout custom Skia branch
+        if: ${{ inputs.skia_branch != '' }}
+        working-directory: externals/skia
+        run: |
+          git fetch origin "$SKIA_BRANCH"
+          git checkout FETCH_HEAD
+          echo "Skia commit: $(git rev-parse HEAD)"
+        env:
+          SKIA_BRANCH: ${{ inputs.skia_branch }}
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        if: startsWith(matrix.target, 'android')
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        with:
+          ndk-version: r27d
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update depot_tools
+        working-directory: externals/depot_tools
+        run: ./update_depot_tools
+
+      - name: Build Skia (${{ matrix.target }})
+        working-directory: packages/skia
+        run: yarn build-skia ${{ matrix.target }}
+        env:
+          ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
+          GIT_SYNC_DEPS_SKIP_EMSDK: 'true'
+          ZERO_AR_DATE: 1
+
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: skia-${{ matrix.target }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-dawn:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: android-armeabi-v7a
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/armeabi-v7a
+          - target: android-arm64-v8a
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/arm64-v8a
+          - target: android-x86
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/x86
+          - target: android-x86_64
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/x86_64
+          - target: ios-arm64
+            runner: macos-latest
+            output: packages/skia/libs/dawn/apple/ios-arm64
+          - target: ios-simulator-arm64
+            runner: macos-latest
+            output: packages/skia/libs/dawn/apple/ios-simulator-arm64
+          - target: ios-simulator-x86_64
+            runner: macos-latest
+            output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
+          - target: macos-universal
+            runner: macos-latest
+            output: packages/skia/libs/dawn/apple/macos-universal
+    name: dawn-${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      # Dawn and its dependencies are checked out by build-dawn at the commits
+      # Skia's DEPS pins, so the Skia checkout is needed for its DEPS and
+      # tools/git-sync-deps.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Checkout custom Skia branch
+        if: ${{ inputs.skia_branch != '' }}
+        working-directory: externals/skia
+        run: |
+          git fetch origin "$SKIA_BRANCH"
+          git checkout FETCH_HEAD
+          echo "Skia commit: $(git rev-parse HEAD)"
+        env:
+          SKIA_BRANCH: ${{ inputs.skia_branch }}
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        if: startsWith(matrix.target, 'android')
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        with:
+          ndk-version: r27d
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build Dawn (${{ matrix.target }})
+        working-directory: packages/skia
+        run: yarn build-dawn ${{ matrix.target }}
+        env:
+          ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: dawn-${{ matrix.target }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 7
+
+      # The headers are the same for every target; one job ships them.
+      - name: Upload headers
+        if: matrix.target == 'ios-arm64'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: dawn-headers
+          path: |
+            packages/skia/libs/dawn/include
+            packages/skia/libs/dawn/metadata.json
+            packages/skia/libs/dawn/LICENSE
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    needs: [prepare, build-skia, build-dawn]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      # npm trusted publishing (OIDC) and provenance
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # One directory per artifact under artifacts/, which package-binaries
+      # stages back into packages/skia/libs.
+      - name: Download the Skia artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: skia-*
+          path: artifacts
+
+      - name: Download the Dawn artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dawn-*
+          path: artifacts
+
+      - name: Package
+        working-directory: packages/skia
+        run: yarn package-binaries --skia-version="$SKIA_VERSION" --artifacts=../../artifacts
+        env:
+          SKIA_VERSION: ${{ needs.prepare.outputs.skia_version }}
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: npm-packages
+          path: packages/skia/build/binaries
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish to npm (dry run)
+        if: ${{ inputs.dry_run }}
+        working-directory: packages/skia/build/binaries
+        run: |
+          for pkg in */; do
+            echo "::group::$pkg"
+            (cd "$pkg" && npm publish --access public --dry-run)
+            echo "::endgroup::"
+          done
+
+      # Trusted publishing needs npm >= 11.5.1
+      - name: Upgrade npm
+        if: ${{ !inputs.dry_run }}
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run && github.repository == 'wcandillon/react-native-skia' && github.ref == 'refs/heads/main' }}
+        working-directory: packages/skia/build/binaries
+        run: |
+          for pkg in */; do
+            echo "::group::$pkg"
+            (cd "$pkg" && npm publish --access public --provenance)
+            echo "::endgroup::"
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Binaries"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Skia | ${{ needs.prepare.outputs.skia_branch }} (${{ needs.prepare.outputs.skia_version }}) |"
+            echo "| npm version | ${{ needs.prepare.outputs.npm_version }} |"
+            echo "| Dry run | ${{ inputs.dry_run }} |"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "> Dry run: nothing was published. The packages are in the \`npm-packages\` artifact of this run."
+            else
+              echo "Published react-native-skia-graphite-android, react-native-skia-graphite-apple-ios, react-native-skia-graphite-apple-macos and react-native-webgpu-dawn at ${{ needs.prepare.outputs.npm_version }}."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

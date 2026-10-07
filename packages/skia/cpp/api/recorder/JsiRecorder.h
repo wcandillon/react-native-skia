@@ -24,7 +24,7 @@ class JsiRecorder
 public:
   static constexpr const char *CLASS_NAME = "Recorder";
 
-  JsiRecorder(std::shared_ptr<RNSkPlatformContext> context)
+  explicit JsiRecorder(std::shared_ptr<RNSkPlatformContext> context)
       : JsiSkWrappingSharedPtrNativeObject<JsiRecorder, Recorder>(
             std::move(context), std::make_shared<Recorder>()) {
     getObject()->_context = getContext();
@@ -70,18 +70,7 @@ public:
       throw jsi::JSError(runtime, "Invalid Picture object provided to play()");
     }
 
-    // Create a new picture recorder to record into
-    SkPictureRecorder pictureRecorder;
-    SkISize size = SkISize::Make(2'000'000, 2'000'000);
-    SkRect rect = SkRect::Make(size);
-    auto canvas = pictureRecorder.beginRecording(rect, nullptr);
-
-    // Play the recorded commands into the canvas
-    DrawingCtx ctx(canvas);
-    getObject()->play(&ctx);
-
-    // Finish recording and get the new picture
-    auto newPicture = pictureRecorder.finishRecordingAsPicture();
+    auto newPicture = getObject()->makePicture();
 
     // Update the existing JsiSkPicture object with the new SkPicture
     // This reuses the existing JavaScript object instead of creating a new one
@@ -95,23 +84,11 @@ public:
 
   JSI_HOST_FUNCTION(applyUpdates) {
     auto values = arguments[0].asObject(runtime).asArray(runtime);
-    auto size = values.size(runtime);
-    auto recorder = getObject();
-    for (int i = 0; i < size; i++) {
-      auto sharedValue = values.getValueAtIndex(runtime, i).asObject(runtime);
-      auto name = "variable" + std::to_string(i);
-      // Look up the conversion functions for this name
-      auto it = recorder->variables.find(name);
-      if (it != recorder->variables.end()) {
-        // Execute each conversion function in the vector
-        const auto &conversionFunctions = it->second;
-        for (const auto &conversionFunc : conversionFunctions) {
-          conversionFunc(runtime, sharedValue);
-        }
-      }
-    }
+    getObject()->applyUpdates(runtime, values);
     return jsi::Value::undefined();
   }
+
+  JSI_HOST_FUNCTION(getId) { return jsi::Value(getObject()->id); }
 
   JSI_HOST_FUNCTION(saveGroup) {
     const jsi::Value *value = count > 0 ? &arguments[0] : nullptr;
@@ -377,11 +354,17 @@ public:
     installHostMethod(runtime, prototype, "applyUpdates",
                       &JsiRecorder::applyUpdates);
     installHostMethod(runtime, prototype, "reset", &JsiRecorder::reset);
+    installHostMethod(runtime, prototype, "getId", &JsiRecorder::getId);
   }
 
-  // This has no basis in reality but since since these are private long-lived
-  // objects, we think it is more than fine.
-  size_t getMemoryPressure() override { return 5 * 1024 * 1024; }
+  // The recorder itself is a small command list. The resources it references
+  // (images, pictures, paths) report their own size through their wrappers
+  // and the pictures produced by play() report theirs. Do not put a made-up
+  // number here: a new recorder is created on every React commit, and the
+  // wrapper is disposed as soon as the view takes ownership of the recording
+  // (see NativeReanimatedContainer), so the charge would never drive a
+  // collection anyway.
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   static const jsi::HostFunctionType
   createCtor(std::shared_ptr<RNSkPlatformContext> context) {

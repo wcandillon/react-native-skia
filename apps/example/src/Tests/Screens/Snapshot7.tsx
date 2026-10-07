@@ -1,6 +1,6 @@
 import React from "react";
 import { SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { Canvas, Circle } from "@shopify/react-native-skia";
+import { Canvas, Circle } from "react-native-skia";
 
 function SkiaCircle() {
   const r = 64;

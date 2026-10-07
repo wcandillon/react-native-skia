@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <include/core/SkColorFilter.h>
+#include <include/effects/SkLumaColorFilter.h>
 
 #include "Command.h"
 #include "Convertor.h"

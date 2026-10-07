@@ -78,3 +78,69 @@ for (const name of screens) {
     ).toEqual([]);
   });
 }
+
+// The WebGL context behind a <Canvas> belongs to the <canvas> element, the
+// renderer to a layout effect, and the two lifetimes don't line up (#3976,
+// #3349). The WebGLLifecycle screen exercises every way they can diverge;
+// the reference canvas on it must keep a healthy context throughout.
+test("WebGLLifecycle: context lifetime", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  // Chrome reports evictions as a browser-generated console warning:
+  // "WARNING: Too many active WebGL contexts. Oldest context will be lost."
+  const evictions: string[] = [];
+  page.on("console", (message) => {
+    if (/WebGL contexts/i.test(message.text())) {
+      evictions.push(message.text());
+    }
+  });
+  await page.goto("/api/webgl-lifecycle");
+  const status = page.getByTestId("status");
+  const reference = page.getByTestId("reference").locator("canvas");
+  await expect(reference).toBeVisible({ timeout: 60_000 });
+  await expect(status).toContainText("reference: ok");
+
+  // Mounting and unmounting a canvas more times than the browser's context
+  // limit: each unmounted canvas must release its context right away, or the
+  // browser evicts the oldest live one, which is the reference canvas.
+  await page.getByTestId("remount").click();
+  await expect(status).toContainText("cycles 20/20", { timeout: 30_000 });
+  // Chrome's eviction runs on a timer after the context count is exceeded.
+  await page.waitForTimeout(500);
+  await expect(status).toContainText("reference: ok");
+  expect(evictions).toEqual([]);
+
+  // StrictMode re-runs the renderer's layout effect on the same element.
+  await page.getByTestId("strict").click();
+  await expect(status).toContainText("strict: on");
+  await expect(reference).toBeVisible();
+  await expect(status).toContainText("reference: ok");
+
+  // The browser can take the context away and hand it back; the renderer
+  // must pick it up again.
+  await page.getByTestId("lose").click();
+  await expect(status).toContainText("reference: LOST");
+  await page.getByTestId("restore").click();
+  await expect(status).toContainText("reference: ok");
+  expect(
+    await reference.evaluate((canvas: HTMLCanvasElement) => {
+      // A restored context has a fresh drawing buffer: the renderer must have
+      // resized it (and hence rebuilt its surface) rather than left it empty.
+      return canvas.width > 0 && canvas.height > 0;
+    })
+  ).toBe(true);
+
+  // Live -> static -> live: each renderer kind needs its own element.
+  await page.getByTestId("renderer").click();
+  await expect(status).toContainText("renderer: static");
+  await expect(reference).toBeVisible();
+  await page.getByTestId("renderer").click();
+  await expect(status).toContainText("renderer: live");
+  await expect(status).toContainText("reference: ok");
+
+  await page.screenshot({
+    path: path.join(screenshotsDir, "WebGLLifecycle-actions.png"),
+  });
+  await expect(status).not.toContainText("error:");
+  expect(errors, errors.join("\n")).toEqual([]);
+});

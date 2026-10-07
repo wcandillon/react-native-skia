@@ -16,7 +16,7 @@ This offset filter is identical to its [SVG counterpart](https://developer.mozil
 ## Example
 
 ```tsx twoslash
-import { Canvas, Image, Offset, useImage, Fill } from "@shopify/react-native-skia";
+import { Canvas, Image, Offset, useImage, Fill } from "react-native-skia";
 
 const Filter = () => {
   const image = useImage(require("./assets/oslo.jpg"));

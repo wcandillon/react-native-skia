@@ -1,19 +1,27 @@
 import type { CanvasKit, Image } from "canvaskit-wasm";
 
-import { CanvasKitWebGLBuffer, isNativeBufferWeb } from "../types";
 import type {
   SkData,
   ImageInfo,
   SkImage,
-  NativeBuffer,
   ImageFactory,
+  GPUTextureHandle,
 } from "../types";
 
 import { Host, getEnum, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkImage } from "./JsiSkImage";
 import { JsiSkData } from "./JsiSkData";
 import type { JsiSkSurface } from "./JsiSkSurface";
-import type { CanvasKitWebGLBufferImpl } from "./CanvasKitWebGLBufferImpl";
+
+// The video element of a playing video, an ImageBitmap, a canvas...
+const isCanvasImageSource = (buffer: unknown): buffer is CanvasImageSource =>
+  buffer instanceof HTMLVideoElement ||
+  buffer instanceof HTMLCanvasElement ||
+  buffer instanceof ImageBitmap ||
+  buffer instanceof OffscreenCanvas ||
+  (typeof VideoFrame !== "undefined" && buffer instanceof VideoFrame) ||
+  buffer instanceof HTMLImageElement ||
+  buffer instanceof SVGImageElement;
 
 export class JsiSkImageFactory extends Host implements ImageFactory {
   constructor(CanvasKit: CanvasKit) {
@@ -32,12 +40,12 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
   }
 
   MakeImageFromNativeBuffer(
-    buffer: NativeBuffer,
+    buffer: CanvasImageSource,
     surface?: JsiSkSurface,
     image?: JsiSkImage
   ) {
-    if (!isNativeBufferWeb(buffer)) {
-      throw new Error("Invalid NativeBuffer");
+    if (!isCanvasImageSource(buffer)) {
+      throw new Error("MakeImageFromNativeBuffer expects a CanvasImageSource");
     }
     if (!surface) {
       let img: Image;
@@ -47,10 +55,6 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
         buffer instanceof ImageBitmap
       ) {
         img = this.CanvasKit.MakeLazyImageFromTextureSource(buffer);
-      } else if (buffer instanceof CanvasKitWebGLBuffer) {
-        img = (
-          buffer as CanvasKitWebGLBuffer as CanvasKitWebGLBufferImpl
-        ).toImage();
       } else {
         img = this.CanvasKit.MakeImageFromCanvasImageSource(buffer);
       }
@@ -79,10 +83,6 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeImageFromNativeTextureUnstable() {
-    return throwNotImplementedOnRNWeb<SkImage>();
-  }
-
   MakeImage(info: ImageInfo, data: SkData, bytesPerRow: number) {
     // see toSkImageInfo() from canvaskit
     const image = this.CanvasKit.MakeImage(
@@ -102,11 +102,11 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeImageFromNativeTexture(_pointer: bigint): SkImage {
+  MakeImageFromGPUTexture(_texture: GPUTextureHandle): SkImage {
     return throwNotImplementedOnRNWeb<SkImage>();
   }
 
-  MakeNativeTextureFromImage(_image: SkImage): bigint {
+  MakeGPUTextureFromImage(_image: SkImage): bigint {
     return throwNotImplementedOnRNWeb<bigint>();
   }
 }

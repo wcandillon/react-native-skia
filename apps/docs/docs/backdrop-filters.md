@@ -24,7 +24,7 @@ import {
   Image,
   ColorMatrix,
   useImage,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 // https://kazzkiq.github.io/svg-color-filter/
 const BLACK_AND_WHITE = [
@@ -65,7 +65,7 @@ import {
   Image,
   BackdropBlur,
   useImage,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const Filter = () => {
   const image = useImage(require("./assets/oslo.jpg"));

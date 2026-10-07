@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import { exit } from "process";
 import fs from "fs";
 import path from "path";
@@ -102,6 +103,23 @@ export const buildPlatform = async (
     command,
     `${platform === "android" ? "🤖" : "🍏"} ${targetName}`
   );
+};
+
+// A Skia archive that defines a typeinfo of the C++ runtime makes librnskia.so
+// export that copy and bind its catch clauses to it instead of libc++_shared's.
+const assertNoRuntimeTypeinfo = (libPath: string) => {
+  const copies = execSync(
+    `$ANDROID_NDK/toolchains/llvm/prebuilt/*/bin/llvm-nm --defined-only --just-symbol-name ${libPath}`,
+    { maxBuffer: Infinity }
+  )
+    .toString()
+    .split("\n")
+    .filter((symbol) => /^_ZT[IS]St/.test(symbol));
+  if (copies.length > 0) {
+    throw new Error(
+      `${libPath} defines typeinfo the C++ runtime owns: ${copies.join(", ")}`
+    );
+  }
 };
 
 export const copyLib = (
@@ -467,11 +485,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
   $(`rm -rf ${PackageRoot}/libs`);
 
-  if (GRAPHITE) {
-    $(`mkdir -p ${PackageRoot}/libs`);
-    fs.writeFileSync(`${PackageRoot}/libs/.graphite`, "");
-  }
-
   // Build specified platforms and targets
   for (const buildTarget of buildTargets) {
     const { platform, targets } = buildTarget;
@@ -486,12 +499,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       await buildPlatform(platform, target);
       process.chdir(ProjectRoot);
       if (platform === "android") {
+        configuration.outputNames.forEach((name) =>
+          assertNoRuntimeTypeinfo(`${getOutDir(platform, target)}/${name}`)
+        );
         copyLib(
           platform,
           target,
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          configuration.targets[target].output,
+          configurations.android.targets[target].output,
           configuration.outputNames
         );
       }

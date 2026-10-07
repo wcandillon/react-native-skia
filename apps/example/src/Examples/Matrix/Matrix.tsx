@@ -5,7 +5,7 @@ import {
   Group,
   useClock,
   useFont,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 import { useWindowDimensions } from "react-native";
 

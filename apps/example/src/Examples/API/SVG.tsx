@@ -1,6 +1,6 @@
 import React from "react";
 import { useWindowDimensions, View } from "react-native";
-import type { DataModule } from "@shopify/react-native-skia";
+import type { DataModule } from "react-native-skia";
 import {
   Canvas,
   ImageSVG,
@@ -8,7 +8,7 @@ import {
   useData,
   useFonts,
   useSVG,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const fonts: Record<string, DataModule[]> = {
   Roboto: [

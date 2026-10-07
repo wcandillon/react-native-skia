@@ -18,9 +18,9 @@ struct TransformProps {
 };
 
 // TODO: can we avoid a copy here?
-SkMatrix processTransform(std::optional<SkMatrix> &matrix,
-                          std::optional<SkM44> &transform,
-                          std::optional<SkPoint> &origin) {
+inline SkMatrix processTransform(std::optional<SkMatrix> &matrix,
+                                 std::optional<SkM44> &transform,
+                                 std::optional<SkPoint> &origin) {
   SkMatrix m3;
   if (matrix.has_value()) {
     m3 = matrix.value();

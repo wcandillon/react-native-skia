@@ -1,10 +1,4 @@
-import {
-  Canvas,
-  Fill,
-  Group,
-  useClock,
-  useFont,
-} from "@shopify/react-native-skia";
+import { Canvas, Fill, Group, useClock, useFont } from "react-native-skia";
 import React from "react";
 import { useWindowDimensions, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";

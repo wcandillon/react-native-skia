@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stdexcept>
+#include <string>
+
 #include "include/core/SkBlender.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkString.h"
@@ -92,6 +95,20 @@ inline void applyBlendMode(SkPaint &paint, int blendModeValue) {
   } else {
     paint.setBlendMode(static_cast<SkBlendMode>(blendModeValue));
   }
+}
+
+// Converts a JS blend mode value to an SkBlendMode for the Skia entry points
+// that take a plain SkBlendMode rather than a paint (drawPatch, drawVertices,
+// drawAtlas, drawColor). The custom blend modes above are implemented as
+// blenders on an SkPaint and have no SkBlendMode equivalent, so they - and any
+// other out of range value - are rejected instead of being cast blindly.
+inline SkBlendMode toBlendMode(double blendModeValue) {
+  auto value = static_cast<int>(blendModeValue);
+  if (value < 0 || value > static_cast<int>(SkBlendMode::kLastMode)) {
+    throw std::invalid_argument("Unsupported blend mode: " +
+                                std::to_string(value));
+  }
+  return static_cast<SkBlendMode>(value);
 }
 
 } // namespace RNSkia

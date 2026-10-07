@@ -433,7 +433,7 @@ describe("Paragraph glyph-level APIs", () => {
           paragraph.layout(ctx.width);
           // Draw only the first half of the text outline.
           const path = paragraph.getPath(0)!;
-          const segment = path.trim(0, 0.5, false)!;
+          const segment = Skia.Path.Trim(path, 0, 0.5, false)!;
           const paint = Skia.Paint();
           paint.setColor(Skia.Color("black"));
           paint.setStyle(ctx.Stroke);

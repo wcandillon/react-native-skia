@@ -15,12 +15,12 @@ Creates a blur mask filter.
 |:------------|:------------|:------------------------------------------------------|
 | blur        | `number`    | Standard deviation of the Gaussian blur. Must be > 0. |
 | style?      | `BlurStyle` | Can be `normal`, `solid`, `outer`, or `inner` (default is `normal`).        |
-| respectCTM? | `boolean`   | if true the blur's sigma is modified by the CTM (default is `false`).      |
+| respectCTM? | `boolean`   | if true the blur's sigma is modified by the CTM (default is `true`).      |
 
 ### Example
 
 ```tsx twoslash
-import {Canvas, Fill, Circle, BlurMask, vec} from "@shopify/react-native-skia";
+import {Canvas, Fill, Circle, BlurMask, vec} from "react-native-skia";
 
 const MaskFilterDemo = () => {
   return (

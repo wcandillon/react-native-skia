@@ -9,7 +9,7 @@ import {
   mix,
   BackdropFilter,
   Blur,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useMemo } from "react";
 import { useWindowDimensions } from "react-native";
 import { useDerivedValue } from "react-native-reanimated";

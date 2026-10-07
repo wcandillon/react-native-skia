@@ -6,8 +6,8 @@ import {
   ScrollView,
   StyleSheet,
 } from "react-native";
-import type { SkImage, SkSurface } from "@shopify/react-native-skia";
-import { Canvas, Image, Skia } from "@shopify/react-native-skia";
+import type { SkImage, SkSurface } from "react-native-skia";
+import { Canvas, Image, Skia } from "react-native-skia";
 import { runOnUI, useSharedValue, withTiming } from "react-native-reanimated";
 
 export const StressTest = () => {

@@ -32,9 +32,10 @@ export type StackParamList = {
   Stickers: undefined;
   FrostedCard: undefined;
   SpeedTest: undefined;
-  Video: undefined;
-  Chat: undefined;
   Pictures: undefined;
   WebGPU: undefined;
   HighBitDepth: undefined;
+  Graphite: undefined;
+  GraphiteCanvas: undefined;
+  AndroidViews: undefined;
 };

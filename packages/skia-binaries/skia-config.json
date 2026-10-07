@@ -1,0 +1,33 @@
+{
+  "skia": {
+    "version": "m154",
+    "repo": "shopify/react-native-skia",
+    "checksums": {
+      "android-armeabi-v7a": "ffad2b4a7b36ec67eadb23ebf4bc49dc0ced7139dbed476d2a26fd76c6fd02f9",
+      "android-arm64-v8a": "ba803e7ff4b8c0bc577f91870d699aff814d727adcd803e6961dcc2882eadad8",
+      "android-x86": "8903f28ab40292696479c5824b17f8ab5aa7cebf84acb06a6f093edf248ea90c",
+      "android-x86_64": "f8ff46117eba7ba8e9162f76a5d08eef76cdf98596407318d4bd5a5dbecf45a5",
+      "apple-ios-xcframeworks": "14ca6d3d6f9fd27345155372ab60f94197464daba1fe229ff065cb9fad2c6cb6",
+      "apple-tvos-xcframeworks": "eed33f9501fc07a6614ac57b06bf20ce2d8d5bff353705822d066ab6293255d5",
+      "apple-macos-xcframeworks": "19bc7c3cde66e551e150e92bd65dac0e899b8c80dfc0276f05bb92cb93dcd3ff"
+    }
+  },
+  "skia-graphite": {
+    "version": "m154_8037_58a",
+    "checksums": {
+      "android-armeabi-v7a": "123c6a34dbb490b1cd0b7a7d19d4a0c8a9c65742e62cc021911b2eefa57e7ed0",
+      "android-arm64-v8a": "3cdbedbf4239ead8740ce3a90d68e1f1bfe5c73e62f8a597084cba4fde363dad",
+      "android-x86": "a6acad7a66700a495ed6529652791ef78bae788ec5781f0a8e48a7ad968ff1c1",
+      "android-x86_64": "6b45e5523990f04a80cdf7d5a611c1daec64b6ed2595cec716be76e46b48f99a",
+      "apple-ios-xcframeworks": "c0cac0ea6bbeee32afcacc252095e1eccf868191db896b2950021f2a745d04c8",
+      "apple-macos-xcframeworks": "428470824d3b41abfb336bd42fc9f093c5406300ed6e4d2205696c1ce7c8f58e"
+    }
+  },
+  "dawn": {
+    "releaseTag": "dawn-chrome-m154a",
+    "checksums": {
+      "android": "df73526944541e880c4ec37dc73003935c6d1adbe01834df0d5ab900a5b809de",
+      "apple": "ec06936cca08bca5177e41d78a1b190a22d62980e11df8a4c4ca5868de17c36c"
+    }
+  }
+}

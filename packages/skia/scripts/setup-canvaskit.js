@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * A script to automate the setup of `@shopify/react-native-skia` for web.
+ * A script to automate the setup of `react-native-skia` for web.
  * The only requirement is that your project supports a 'static' folder (often named '/public').
  * In `@expo/webpack-config` this is `./web` (default for now).
  *
@@ -10,7 +10,7 @@
  * 1. Resolve the public path relative to wherever the script is being run.
  * 2. Log out some useful info about the web setup, just in case anything goes wrong.
  * 3. Resolve the installed wasm file `canvaskit-wasm/bin/full/canvaskit.wasm`
- *  from `@shopify/react-native-skia -> canvaskit`.
+ *  from `react-native-skia -> canvaskit`.
  * 4. Recursively ensure the path exists and copy the file into the desired location.
  *
  *
@@ -68,7 +68,7 @@ function getWasmFilePath() {
   } catch (error) {
     console.error(
       `Could not find 'canvaskit-wasm'.
-Please install '@shopify/react-native-skia' and ensure it can be resolved from your project: ${process.cwd()}`
+Please install 'react-native-skia' and ensure it can be resolved from your project: ${process.cwd()}`
     );
     process.exit(1);
   }

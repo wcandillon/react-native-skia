@@ -1,6 +1,6 @@
 import { interpolatePaths } from "../../animation/functions/interpolatePaths";
-import type { Skia, SkPath } from "../types";
-import { FillType, PathOp, PathVerb } from "../types";
+import type { Skia, SkImage, SkPath } from "../types";
+import { AlphaType, ColorType, FillType, PathOp, PathVerb } from "../types";
 import { processResult } from "../../__tests__/setup";
 import { PaintStyle } from "../types/Paint/Paint";
 
@@ -8,6 +8,16 @@ import { setupSkia } from "./setup";
 
 const roundtrip = (Skia: Skia, path: SkPath) =>
   Skia.Path.MakeFromCmds(path.toCmds())!;
+
+const readPixel = (image: SkImage, x: number, y: number) =>
+  Array.from(
+    image.readPixels(x, y, {
+      width: 1,
+      height: 1,
+      colorType: ColorType.RGBA_8888,
+      alphaType: AlphaType.Unpremul,
+    })!
+  );
 
 // Helper to create a path with moveTo and lineTo
 const makePath = (
@@ -348,11 +358,85 @@ describe("Path", () => {
     const p4 = interpolatePaths(1.1, [0, 1], [p1, p2], "clamp");
     expect(p4.toCmds()).toEqual(p2.toCmds());
   });
+  describe("interpolatePaths() degenerate inputs", () => {
+    const setup = () => {
+      const { Skia } = setupSkia();
+      const p1 = makePath(Skia, (b) => b.moveTo(0, 0).lineTo(100, 100));
+      const p2 = makePath(Skia, (b) => b.moveTo(0, 100).lineTo(100, 0));
+      return { p1, p2 };
+    };
+    it("throws on NaN", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(NaN, [0, 1], [p1, p2])).toThrow(
+        "interpolatePaths() received NaN as value"
+      );
+    });
+    it("throws on empty input", () => {
+      expect(() => interpolatePaths(0, [], [])).toThrow(/interpolatePaths\(\)/);
+    });
+    it("throws on mismatched lengths", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(0, [0, 0.5, 1], [p1, p2])).toThrow(
+        /same length/
+      );
+    });
+    it("returns the end path for zero-width input", () => {
+      const { p1, p2 } = setup();
+      const path = interpolatePaths(0, [0, 0], [p1, p2]);
+      expect(path.toCmds()).toEqual(p2.toCmds());
+      const extended = interpolatePaths(1, [0, 0], [p1, p2]);
+      expect(extended.toCmds()).toEqual(p2.toCmds());
+    });
+    it("clamps Infinity", () => {
+      const { p1, p2 } = setup();
+      expect(
+        interpolatePaths(Infinity, [0, 1], [p1, p2], "clamp").toCmds()
+      ).toEqual(p2.toCmds());
+      expect(
+        interpolatePaths(-Infinity, [0, 1], [p1, p2], "clamp").toCmds()
+      ).toEqual(p1.toCmds());
+    });
+    it("throws on Infinity with extend", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(Infinity, [0, 1], [p1, p2])).toThrow(
+        /infinite/
+      );
+      expect(() =>
+        interpolatePaths(-Infinity, [0, 1], [p1, p2], "extend")
+      ).toThrow(/infinite/);
+    });
+  });
   it("should be possible to call dispose on a path", () => {
     const { Skia } = setupSkia();
     using path = makePath(Skia, (b) =>
       b.moveTo(20, 20).lineTo(20, 40).lineTo(40, 20)
     );
     expect(path).toBeTruthy();
+  });
+  // The non-zero winding rule reads the contour direction, so isCCW is what
+  // turns an inner contour into a hole rather than more of the same fill.
+  it("should add a circle in the direction given by isCCW", () => {
+    const { surface, canvas, Skia } = setupSkia(64, 64);
+    const donut = (isCCW: boolean) =>
+      Skia.PathBuilder.Make()
+        .setFillType(FillType.Winding)
+        .addRect(Skia.XYWHRect(0, 0, 64, 64), false)
+        .addCircle(32, 32, 20, isCCW)
+        .build();
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("red"));
+
+    canvas.drawPath(donut(true), paint);
+    surface.flush();
+    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+      0, 0, 0, 0,
+    ]);
+
+    canvas.clear(Float32Array.of(0, 0, 0, 0));
+    canvas.drawPath(donut(false), paint);
+    surface.flush();
+    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+      255, 0, 0, 255,
+    ]);
   });
 });

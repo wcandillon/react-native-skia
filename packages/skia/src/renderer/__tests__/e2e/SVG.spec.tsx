@@ -63,6 +63,24 @@ describe("Displays SVGs", () => {
       expect(height).toBe(20);
     }
   );
+
+  itRunsE2eOnly("should return null for malformed SVG strings", async () => {
+    const isNull = await surface.eval((Skia) => {
+      return Skia.SVG.MakeFromString("<not-svg>") === null;
+    });
+    expect(isNull).toBe(true);
+  });
+
+  itRunsE2eOnly("should return null for malformed SVG data", async () => {
+    const isNull = await surface.eval((Skia) => {
+      const data = Skia.Data.fromBytes(
+        new Uint8Array([60, 110, 111, 116, 45, 115, 118, 103, 62])
+      );
+      return Skia.SVG.MakeFromData(data) === null;
+    });
+    expect(isNull).toBe(true);
+  });
+
   itRunsE2eOnly("should render the SVG scaled properly", async () => {
     const { rect } = importSkia();
     const { width, height } = surface;

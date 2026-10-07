@@ -58,7 +58,8 @@ public:
                   &JsiSkPictureRecorder::finishRecordingAsPicture);
   }
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  // The recorded picture reports its own size once finished.
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   static const jsi::HostFunctionType
   createCtor(std::shared_ptr<RNSkPlatformContext> context) {

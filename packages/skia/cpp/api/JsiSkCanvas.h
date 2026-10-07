@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "CustomBlendModes.h"
 #include "JsiSkConverters.h"
 #include "JsiSkFont.h"
 #include "JsiSkImage.h"
@@ -23,9 +24,7 @@
 
 #include "utils/RNSkTypedArray.h"
 
-#if defined(SK_GRAPHITE)
 #include "rnskia/RNDawnContext.h"
-#endif
 
 #include <jsi/jsi.h>
 
@@ -41,10 +40,6 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTypeface.h"
 
-#if !defined(SK_GRAPHITE)
-#include "include/gpu/ganesh/GrDirectContext.h"
-#endif
-
 #pragma clang diagnostic pop
 
 namespace RNSkia {
@@ -55,9 +50,7 @@ class JsiSkCanvas : public JsiSkNativeObject<JsiSkCanvas> {
 public:
   static constexpr const char *CLASS_NAME = "Canvas";
 
-  void drawPaint(std::shared_ptr<SkPaint> paint) {
-    _canvas->drawPaint(*paint);
-  }
+  void drawPaint(std::shared_ptr<SkPaint> paint) { _canvas->drawPaint(*paint); }
 
   void drawLine(double x1, double y1, double x2, double y2,
                 std::shared_ptr<SkPaint> paint) {
@@ -226,8 +219,7 @@ public:
 
   void drawVertices(sk_sp<SkVertices> vertices, double blendMode,
                     std::shared_ptr<SkPaint> paint) {
-    _canvas->drawVertices(vertices, static_cast<SkBlendMode>(blendMode),
-                          *paint);
+    _canvas->drawVertices(vertices, toBlendMode(blendMode), *paint);
   }
 
   JSI_HOST_FUNCTION(drawPatch) {
@@ -287,11 +279,19 @@ public:
       }
     }
 
-    auto paint =
-        count >= 4 ? JsiSkPaint::fromValue(runtime, arguments[4]) : nullptr;
-    auto blendMode = static_cast<SkBlendMode>(arguments[3].asNumber());
+    auto blendMode =
+        count >= 4 && !arguments[3].isNull() && !arguments[3].isUndefined()
+            ? toBlendMode(arguments[3].asNumber())
+            : SkBlendMode::kModulate;
+
+    std::shared_ptr<SkPaint> paint;
+    if (count >= 5 && !arguments[4].isNull() && !arguments[4].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[4]);
+    }
+    SkPaint defaultPaint;
     _canvas->drawPatch(cubics.data(), colors.empty() ? nullptr : colors.data(),
-                       texs.empty() ? nullptr : texs.data(), blendMode, *paint);
+                       texs.empty() ? nullptr : texs.data(), blendMode,
+                       paint ? *paint : defaultPaint);
     return jsi::Value::undefined();
   }
 
@@ -347,8 +347,7 @@ public:
 
   void clipPath(std::shared_ptr<SkPathBuilder> path, double op,
                 bool doAntiAlias) {
-    _canvas->clipPath(path->snapshot(), static_cast<SkClipOp>(op),
-                      doAntiAlias);
+    _canvas->clipPath(path->snapshot(), static_cast<SkClipOp>(op), doAntiAlias);
   }
 
   void clipRect(std::shared_ptr<SkRect> rect, double op, bool doAntiAlias) {
@@ -392,7 +391,7 @@ public:
 
   void drawColor(JsiColor cl, JsiOptional<double> mode) {
     if (mode.has_value()) {
-      _canvas->drawColor(cl, static_cast<SkBlendMode>(*mode));
+      _canvas->drawColor(cl, toBlendMode(*mode));
     } else {
       _canvas->drawColor(cl);
     }
@@ -402,18 +401,17 @@ public:
 
   void concat(std::shared_ptr<SkMatrix> matrix) { _canvas->concat(*matrix); }
 
-  void drawPicture(sk_sp<SkPicture> picture) {
-    _canvas->drawPicture(picture);
-  }
+  void drawPicture(sk_sp<SkPicture> picture) { _canvas->drawPicture(picture); }
 
   JSI_HOST_FUNCTION(drawAtlas) {
     auto atlas = JsiSkImage::fromValue(runtime, arguments[0]);
     auto rects = arguments[1].asObject(runtime).asArray(runtime);
     auto transforms = arguments[2].asObject(runtime).asArray(runtime);
     auto paint = JsiSkPaint::fromValue(runtime, arguments[3]);
-    auto blendMode = count > 5 && !arguments[4].isUndefined()
-                         ? static_cast<SkBlendMode>(arguments[4].asNumber())
-                         : SkBlendMode::kDstOver;
+    auto blendMode =
+        count > 4 && !arguments[4].isNull() && !arguments[4].isUndefined()
+            ? toBlendMode(arguments[4].asNumber())
+            : SkBlendMode::kDstOver;
 
     std::vector<SkRSXform> xforms;
     int xformsSize = static_cast<int>(transforms.size(runtime));
@@ -509,7 +507,6 @@ public:
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
 
-#if defined(SK_GRAPHITE)
     // Graphite records draws lazily and offers no synchronous GPU readback. If
     // this canvas belongs to a surface, snap & submit its recording, snapshot
     // it to a CPU raster image and read from that (mirroring
@@ -531,7 +528,6 @@ public:
       }
       return dest;
     }
-#endif
 
     if (!_canvas->readPixels(*info, bfrPtr, bytesPerRow, srcX, srcY)) {
       return jsi::Value::null();
@@ -590,8 +586,7 @@ public:
     installMethod(runtime, prototype, "drawColor", &JsiSkCanvas::drawColor);
     installMethod(runtime, prototype, "clear", &JsiSkCanvas::clear);
     installMethod(runtime, prototype, "concat", &JsiSkCanvas::concat);
-    installMethod(runtime, prototype, "drawPicture",
-                  &JsiSkCanvas::drawPicture);
+    installMethod(runtime, prototype, "drawPicture", &JsiSkCanvas::drawPicture);
     installHostMethod(runtime, prototype, "drawAtlas", &JsiSkCanvas::drawAtlas);
     installHostMethod(runtime, prototype, "readPixels",
                       &JsiSkCanvas::readPixels);

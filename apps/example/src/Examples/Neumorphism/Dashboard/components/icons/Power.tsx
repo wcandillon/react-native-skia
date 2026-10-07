@@ -1,5 +1,5 @@
 import React from "react";
-import { Path, Line, Group, vec } from "@shopify/react-native-skia";
+import { Path, Line, Group, vec } from "react-native-skia";
 
 export const Power = () => {
   return (

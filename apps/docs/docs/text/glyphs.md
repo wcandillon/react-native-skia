@@ -17,7 +17,7 @@ This component draws a run of glyphs, at corresponding positions, in a given fon
 ## Draw text vertically
 
 ```tsx twoslash
-import {Canvas, Glyphs, vec, useFont} from "@shopify/react-native-skia";
+import {Canvas, Glyphs, vec, useFont} from "react-native-skia";
 
 export const HelloWorld = () => {
   const fontSize = 32;

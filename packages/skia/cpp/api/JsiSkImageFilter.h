@@ -28,7 +28,9 @@ public:
       : JsiSkWrappingSkPtrNativeObject<JsiSkImageFilter, SkImageFilter>(
             std::move(context), std::move(imageFilter)) {}
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  // A image filter node is a few hundred bytes; the images it may reference
+  // are reported by their own wrappers.
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installCommon(runtime, prototype);

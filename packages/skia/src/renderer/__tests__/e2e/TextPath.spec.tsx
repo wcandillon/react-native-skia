@@ -21,16 +21,20 @@ describe("Text Paths", () => {
     )!;
     const font = fonts.UberMoveMediumMono;
     const dst = rect(16, 16, surface.width - 32, surface.height - 32);
-    const transformedCirclePath = circlePath.transform(
-      processTransform2d(
-        fitbox("contain", circlePath.computeTightBounds(), dst)
+    const transformedCirclePath = Skia.PathBuilder.MakeFromPath(circlePath)
+      .transform(
+        processTransform2d(
+          fitbox("contain", circlePath.computeTightBounds(), dst)
+        )
       )
-    );
-    const transformedReversedPath = reversedPath.transform(
-      processTransform2d(
-        fitbox("contain", reversedPath.computeTightBounds(), dst)
+      .build();
+    const transformedReversedPath = Skia.PathBuilder.MakeFromPath(reversedPath)
+      .transform(
+        processTransform2d(
+          fitbox("contain", reversedPath.computeTightBounds(), dst)
+        )
       )
-    );
+      .build();
     const image = await surface.draw(
       <>
         <Fill color="white" />

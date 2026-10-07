@@ -22,7 +22,9 @@ describe("Paths", () => {
   it("can transform a path from a matrix array (1)", async () => {
     const result = await surface.eval((Skia) => {
       const path = Skia.PathBuilder.Make().lineTo(30, 30).build();
-      const transformed = path.transform([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+      const transformed = Skia.PathBuilder.MakeFromPath(path)
+        .transform([1, 0, 0, 0, 1, 0, 0, 0, 1])
+        .build();
       const cmds = transformed.toCmds();
       return cmds;
     });
@@ -34,7 +36,9 @@ describe("Paths", () => {
   it("can transform a path from a matrix array (2)", async () => {
     const result = await surface.eval((Skia) => {
       const path = Skia.PathBuilder.Make().lineTo(30, 30).build();
-      const transformed = path.transform([2, 0, 0, 0, 2, 0, 0, 0, 1]);
+      const transformed = Skia.PathBuilder.MakeFromPath(path)
+        .transform([2, 0, 0, 0, 2, 0, 0, 0, 1])
+        .build();
       const cmds = transformed.toCmds();
       return cmds;
     });

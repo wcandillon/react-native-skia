@@ -1,5 +1,5 @@
 import React from "react";
-import type { Matrix4, SkFont } from "@shopify/react-native-skia";
+import type { Matrix4, SkFont } from "react-native-skia";
 import {
   Skia,
   vec,
@@ -10,7 +10,7 @@ import {
   Path,
   rect,
   Text,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 
 const x = 32;

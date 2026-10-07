@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { ScrollView, useWindowDimensions } from "react-native";
-import type { Vector } from "@shopify/react-native-skia";
+import type { Vector } from "react-native-skia";
 import {
   Rect,
   transformOrigin,
@@ -19,7 +19,7 @@ import {
   Line2DPathEffect,
   Group,
   processTransform2d,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 import { translate } from "../../components/Animations";
 

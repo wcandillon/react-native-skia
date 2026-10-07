@@ -5,7 +5,6 @@
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 #include <memory>
-#include <react/jni/JRuntimeExecutor.h>
 
 #include "JniPlatformContext.h"
 #include "RNSkAndroidPlatformContext.h"
@@ -23,13 +22,13 @@ using JavaPlatformContext = jni::alias_ref<JniPlatformContext::javaobject>;
 class JniSkiaManager : public jni::HybridClass<JniSkiaManager> {
 public:
   static auto constexpr kJavaDescriptor =
-      "Lcom/shopify/reactnative/skia/SkiaManager;";
+      "Lcom/reactnative/skia/SkiaManager;";
   static auto constexpr TAG = "ReactNativeSkia";
 
   static jni::local_ref<jni::HybridClass<JniSkiaManager>::jhybriddata>
   initHybrid(jni::alias_ref<jhybridobject> jThis, jlong jsContext,
-             jni::alias_ref<facebook::react::JRuntimeExecutor::javaobject>
-                 jRuntimeExecutor,
+             jni::alias_ref<facebook::react::CallInvokerHolder::javaobject>
+                 jsCallInvokerHolder,
              JavaPlatformContext platformContext);
 
   static void registerNatives();

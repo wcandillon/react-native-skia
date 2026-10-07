@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Canvas, Fill } from "@shopify/react-native-skia";
+import { Canvas, Fill } from "react-native-skia";
 import {
   useSharedValue,
   withRepeat,

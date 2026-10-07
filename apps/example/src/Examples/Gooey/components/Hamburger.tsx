@@ -1,4 +1,4 @@
-import { Circle, vec, Line } from "@shopify/react-native-skia";
+import { Circle, vec, Line } from "react-native-skia";
 import React from "react";
 
 import { FG } from "./Theme";

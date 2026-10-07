@@ -93,7 +93,7 @@ public:
                            &JsiSkParagraphBuilder::pop);
   }
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   explicit JsiSkParagraphBuilder(std::shared_ptr<RNSkPlatformContext> context,
                                  para::ParagraphStyle paragraphStyle,

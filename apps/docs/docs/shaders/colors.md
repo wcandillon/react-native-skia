@@ -27,7 +27,7 @@ import {
   RadialGradient,
   Blend,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const BlendDemo = () => {
   return (
@@ -65,7 +65,7 @@ import {
   Skia,
   Fill,
   ColorShader
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const BlendDemo = () => {
   return (

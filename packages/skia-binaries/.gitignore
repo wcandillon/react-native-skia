@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Generated packages
+dist/
+
+# Downloaded binaries
+libs/
+
+# Build output
+build/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+.tmp/
+*.tmp
+tmp/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# NPM/Yarn
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/install-state.gz
+.pnp.*
