@@ -29,8 +29,8 @@ yarn add react-native-webgpu
 
 Follow the [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) of React Native WebGPU for the rest of the setup.
 
-Both packages must link the exact same Dawn build so that only one copy of Dawn exists in the app.
-The native build verifies this and fails with a `Dawn version mismatch` error if the two packages were built against different Dawn releases.
+Both packages depend on the same `react-native-webgpu-dawn` package, which ships the Dawn build they link, so that only one copy of Dawn exists in the app.
+The native build verifies that the two resolve the same version of it and fails with a `Dawn version mismatch` error otherwise.
 If you see that error, upgrade `react-native-skia` and `react-native-webgpu` together.
 
 ## Sharing the device
