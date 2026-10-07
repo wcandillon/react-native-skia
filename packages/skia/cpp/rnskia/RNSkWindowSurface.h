@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <mutex>
 #include <utility>
@@ -150,6 +151,7 @@ private:
   // presentImage() draws on it, presentRecordings() only wraps the swapchain
   // texture for it.
   skgpu::graphite::Recorder *_recorder = nullptr;
+  std::chrono::steady_clock::time_point _lastRecorderCleanup;
   void *_nativeHandle = nullptr;
   Releaser _releaser;
   int _width = 0;

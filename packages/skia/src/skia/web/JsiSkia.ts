@@ -138,4 +138,7 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   getNativeDevice: () => {
     return throwNotImplementedOnRNWeb<bigint>();
   },
+  setResourceCacheLimits: () => {
+    // CanvasKit manages its own WebGL resource cache.
+  },
 });

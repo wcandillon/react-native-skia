@@ -105,4 +105,15 @@ export interface Skia {
    * device (zero-copy interop). Native only.
    */
   getNativeDevice(): bigint;
+  /**
+   * Sets the GPU resource cache budgets, in bytes: `recorderBytes` for the
+   * cache of each canvas (each has its own Graphite recorder), `contextBytes`
+   * for the cache shared by all of them. Resources unused for a few seconds
+   * are purged regardless of the budgets. Defaults: 32 MB per recorder,
+   * 64 MB for the context. Native only.
+   */
+  setResourceCacheLimits(limits: {
+    recorderBytes?: number;
+    contextBytes?: number;
+  }): void;
 }

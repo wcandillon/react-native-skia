@@ -165,6 +165,32 @@ public:
         runtime, reinterpret_cast<uint64_t>(dawnContext.getWGPUDevice().Get()));
   }
 
+  JSI_HOST_FUNCTION(setResourceCacheLimits) {
+    // { recorderBytes?: number, contextBytes?: number }: a missing value keeps
+    // the current budget.
+    auto &dawnContext = DawnContext::getInstance();
+    auto limits = arguments[0].asObject(runtime);
+    auto readBytes = [&](const char *name, size_t current) -> size_t {
+      auto value = limits.getProperty(runtime, name);
+      if (value.isUndefined()) {
+        return current;
+      }
+      auto bytes = value.asNumber();
+      if (!(bytes >= 0)) {
+        throw jsi::JSError(runtime, std::string("setResourceCacheLimits: ") +
+                                        name +
+                                        " must be a non-negative number");
+      }
+      return static_cast<size_t>(bytes);
+    };
+    auto recorderBytes =
+        readBytes("recorderBytes", dawnContext.getRecorderBudget());
+    auto contextBytes =
+        readBytes("contextBytes", dawnContext.getContextBudget());
+    dawnContext.setResourceCacheLimits(recorderBytes, contextBytes);
+    return jsi::Value::undefined();
+  }
+
   JSI_HOST_FUNCTION(Recorder) {
     return JsiRecorder::createCtor(getContext())(runtime, thisValue, arguments,
                                                  count);
@@ -230,6 +256,8 @@ public:
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
+    installHostMethod(runtime, prototype, "setResourceCacheLimits",
+                      &JsiSkApi::setResourceCacheLimits);
     installHostMethod(runtime, prototype, "Font", &JsiSkApi::Font);
     installHostMethod(runtime, prototype, "Paint", &JsiSkApi::Paint);
     installHostMethod(runtime, prototype, "RSXform", &JsiSkApi::RSXform);
