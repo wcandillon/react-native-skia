@@ -94,6 +94,10 @@ try {
 } catch (Exception ignored) {
     // react-native-webgpu not installed: nothing to check
 }
+// Set once the check below passes: react-native-webgpu then ships the Dawn
+// the app packages and this module leaves its own copy out (see
+// packagingOptions below).
+def dawnShippedByWebgpu = false
 if (dawnMarker.exists() && webgpuDir != null) {
     def skiaDawn = dawnMarker.text.trim()
     def webgpuJson = new groovy.json.JsonSlurper().parse(file("${webgpuDir}/package.json"))
@@ -113,6 +117,7 @@ if (dawnMarker.exists() && webgpuDir != null) {
             "Align the two packages so the app contains exactly one Dawn.")
     }
     logger.warn("react-native-skia: Dawn versions match (${skiaDawn})")
+    dawnShippedByWebgpu = true
 }
 
 logger.warn("react-native-skia: Skia libs: ${skiaLibsPath}")
@@ -218,6 +223,13 @@ android {
              "**/libreactnative.so",
              "META-INF/**"
         ]
+        // The Android Gradle plugin only merges duplicate native libraries
+        // when they are byte-identical, which a locally built or re-released
+        // Dawn is not. Once the Dawn release tags match, let react-native-webgpu
+        // be the one package that ships libwebgpu_dawn.so.
+        if (dawnShippedByWebgpu) {
+            excludes += "**/libwebgpu_dawn.so"
+        }
     }
 
     buildFeatures {
