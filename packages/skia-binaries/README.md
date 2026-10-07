@@ -2,7 +2,7 @@
 
 This workspace generates and publishes prebuilt Skia binary packages for [React Native Skia](https://github.com/wcandillon/react-native-skia).
 
-The remote SwiftPM manifest (`dist/spm/Package.swift`) and its release zips are published to [wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries), since SwiftPM resolves a package from a repository root.
+The remote SwiftPM manifest (`dist/spm/Package.swift`) is committed to the root of [wcandillon/react-native-skia-binaries](https://github.com/wcandillon/react-native-skia-binaries) and tagged with the npm version there, since SwiftPM resolves a package from a repository root and its tags. The xcframework zips it points at are the assets of the `swiftpm-<version>` prerelease that the publish workflow creates on this repository.
 
 Graphite packages bundle the shared Dawn (`libwebgpu_dawn`, the same artifact react-native-webgpu links) instead of the static `libdawn_combined`, pinned by the `dawn` section of `skia-config.json`. The release tag is written to `libs/.dawn-version` in each package, which react-native-skia checks against react-native-webgpu's own Dawn.
 
@@ -47,6 +47,7 @@ The `skia-config.json` file contains the current Skia versions and checksums:
 {
   "skia": {
     "version": "m144c",
+    "repo": "shopify/react-native-skia",
     "checksums": {
       "android-armeabi-v7a": "...",
       "apple-ios-xcframeworks": "...",
@@ -54,23 +55,29 @@ The `skia-config.json` file contains the current Skia versions and checksums:
     }
   },
   "skia-graphite": {
-    "version": "m142b",
+    "version": "m154_8037_58a",
     "checksums": { ... }
+  },
+  "dawn": {
+    "releaseTag": "dawn-chrome-m154a",
+    "checksums": { "android": "...", "apple": "..." }
   }
 }
 ```
+
+`version` is the Build SKIA release tag without its `skia-` or `skia-graphite-` prefix. Build SKIA names the release after the Skia branch the submodule commit is on, so it is a milestone (`m144`), a milestone with a re-spin suffix (`m144c`), or a Chromium release branch with an optional suffix (`m154_8037_58a`) once `chrome/m154` has moved past the pinned commit. The npm version is derived from it: the milestone is the major and the suffix letter the minor (`m144c` → 144.3.0, `m154_8037_58a` → 154.1.0; the branch digits do not affect it). `repo` points an entry at another repository's releases; leave it out for releases of this repository. The `checksums` are the ones `yarn verify` computes over a `yarn download` of that version.
 
 ## Publishing New Versions
 
 ### Via GitHub Actions
 
-1. Go to **Actions** > **Publish Skia Binary Packages**
-2. Click **Run workflow**
+1. Update `skia-config.json` and merge it to `main`
+2. Go to **Actions** > **Publish Skia Binary Packages** and click **Run workflow**
 3. Fill in:
-   - **Skia version**: e.g., `m144c`
-   - **NPM version**: (optional) derived automatically: `m144c` → `144.3.0`
-   - **Graphite**: Check for Graphite packages
-   - **Dry run**: Uncheck to actually publish
+   - **variant**: `graphite`, `ganesh` or `all` (a version already on npm cannot be republished)
+   - **patch_version**: the patch of the npm version, `0` unless the same Skia version is repackaged (`m154_8037_58a` + `1` → `154.1.1`)
+   - **Dry run**: uncheck to actually publish
+4. Finish the SwiftPM release: copy `dist/spm/Package.swift` from the run's `skia-packages` artifact to the root of react-native-skia-binaries, commit it, and tag that commit with the version (`154.1.0`). The run has already attached the zips it points at to the `swiftpm-154.1.0` prerelease of this repository.
 
 ### Local Development
 
@@ -93,8 +100,9 @@ yarn tsx src/generate-packages.ts --skia-version=m142b --graphite
 # Override npm version if needed
 yarn tsx src/generate-packages.ts --skia-version=m144c --npm-version=144.3.1
 
-# Verify checksums against skia-config.json
-yarn tsx src/verify-checksums.ts --config=skia-config.json
+# Download a release into libs/ and verify it against skia-config.json
+yarn download --skia-version=m154_8037_58a --graphite
+yarn verify --graphite
 
 # Publish (from generated package directory)
 cd dist/react-native-skia-apple-ios

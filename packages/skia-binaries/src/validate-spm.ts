@@ -28,6 +28,8 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 
+import { spmReleaseTag, spmVersionFromTag } from "./spm-release.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..");
 
@@ -226,8 +228,9 @@ const validatePackage = (pkgDir: string, errors: string[]): boolean => {
 /**
  * Validates the root manifest in dist/spm/, which SwiftPM resolves over the
  * network: its binaryTargets must match the archives that will be uploaded as
- * release assets, and the release tag in every url must be the version the npm
- * packages were generated with. Returns false when there is nothing to validate.
+ * release assets, and the release tag in every url must be the swiftpm-<version>
+ * release of the version the npm packages were generated with. Returns false
+ * when there is nothing to validate.
  */
 const validateRemoteSpmPackage = (distDir: string, errors: string[]): boolean => {
   const spmDir = path.join(distDir, REMOTE_SPM_DIR);
@@ -243,15 +246,17 @@ const validateRemoteSpmPackage = (distDir: string, errors: string[]): boolean =>
 
   const manifest = fs.readFileSync(manifestPath, "utf8");
 
-  // 1. The release tag in the urls is the version the npm packages carry.
+  // 1. The release tag in the urls is the one for the version the npm packages carry.
   const pkgJsonPath = path.join(
     distDir,
     REMOTE_SPM_SOURCE_PACKAGE,
     "package.json"
   );
-  let expectedVersion: string | null = null;
+  let expectedTag: string | null = null;
   if (fs.existsSync(pkgJsonPath)) {
-    expectedVersion = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")).version;
+    expectedTag = spmReleaseTag(
+      JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")).version
+    );
   } else {
     fail(
       `${REMOTE_SPM_SOURCE_PACKAGE}/package.json not found, cannot check the release version`
@@ -264,9 +269,9 @@ const validateRemoteSpmPackage = (distDir: string, errors: string[]): boolean =>
   }
 
   for (const target of targets) {
-    if (expectedVersion && !target.url.includes(`/download/${expectedVersion}/`)) {
+    if (expectedTag && !target.url.includes(`/download/${expectedTag}/`)) {
       fail(
-        `binaryTarget "${target.name}" url does not point at version ${expectedVersion}: ${target.url}`
+        `binaryTarget "${target.name}" url does not point at release ${expectedTag}: ${target.url}`
       );
     }
 
@@ -343,7 +348,8 @@ const validateRootSpmPackage = (distDir: string, errors: string[]): boolean => {
 
   // 1. Every url pins the same release tag, and that tag belongs to the Skia
   //    milestone in skia-config.json. Only the major version is compared, so a
-  //    patch release of the same milestone is not drift.
+  //    patch release of the same milestone is not drift. Releases cut before
+  //    the zips moved to wcandillon/react-native-skia carry no swiftpm- prefix.
   const tags = new Set<string>();
   for (const target of targets) {
     const tag = parseReleaseTag(target.url);
@@ -360,9 +366,9 @@ const validateRootSpmPackage = (distDir: string, errors: string[]): boolean => {
   const milestone = readGraphiteMilestone(fail);
   if (milestone !== null) {
     for (const tag of tags) {
-      if (tag.split(".")[0] !== milestone) {
+      if (spmVersionFromTag(tag).split(".")[0] !== milestone) {
         fail(
-          `release tag ${tag} does not match ${SKIA_CONFIG_FILE} skia-graphite m${milestone}: expected ${milestone}.x.y`
+          `release tag ${tag} does not match ${SKIA_CONFIG_FILE} skia-graphite m${milestone}: expected ${spmReleaseTag(`${milestone}.x.y`)}`
         );
       }
     }
@@ -378,9 +384,12 @@ const validateRootSpmPackage = (distDir: string, errors: string[]): boolean => {
   const generatedVersion = fs.existsSync(pkgJsonPath)
     ? (JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")).version as string)
     : null;
-  if (generatedVersion !== null && !tags.has(generatedVersion)) {
+  const pinsGeneratedVersion = [...tags].some(
+    (tag) => spmVersionFromTag(tag) === generatedVersion
+  );
+  if (generatedVersion !== null && !pinsGeneratedVersion) {
     console.log(
-      `  Root ${ROOT_MANIFEST} pins ${[...tags].join(", ")}, not ${generatedVersion}: skipped archive checks (commit dist/${REMOTE_SPM_DIR}/${ROOT_MANIFEST} after this release)`
+      `  Root ${ROOT_MANIFEST} pins ${[...tags].join(", ")}, not ${spmReleaseTag(generatedVersion)}: skipped archive checks (commit dist/${REMOTE_SPM_DIR}/${ROOT_MANIFEST} after this release)`
     );
   } else if (fs.existsSync(spmDir)) {
     for (const target of targets) {
