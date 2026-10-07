@@ -8451,15 +8451,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.0.0":
-  version: 20.19.43
-  resolution: "@types/node@npm:20.19.43"
-  dependencies:
-    undici-types: ~6.21.0
-  checksum: c959b5d256b073da95aa1892acb071b487c2f652f98b2cb75e92657d51b99bd691aa811023fb13acd6752bc1bcb75dc579db02190a4da70926cf6f372011bc4e
-  languageName: node
-  linkType: hard
-
 "@types/node@npm:^22.13.9":
   version: 22.20.4
   resolution: "@types/node@npm:22.20.4"
@@ -25111,16 +25102,6 @@ __metadata:
   checksum: 7fcecd7d710708476ecb431b0e33efce7fa950d2731ef8f3fa2cbb6c57cd3adeffe1b1d4b29e9449cb72e4bc8b72e57498c9c6286b49e66665ca11ff853381fd
   languageName: node
   linkType: hard
-
-"react-native-skia-binaries@workspace:packages/skia-binaries":
-  version: 0.0.0-use.local
-  resolution: "react-native-skia-binaries@workspace:packages/skia-binaries"
-  dependencies:
-    "@types/node": ^20.0.0
-    tsx: ^4.21.0
-    typescript: ^5.2.2
-  languageName: unknown
-  linkType: soft
 
 "react-native-skia-graphite-android@npm:154.1.0":
   version: 154.1.0

@@ -1,11 +1,8 @@
 import path from "path";
-import { spawnSync } from "child_process";
 
 import { $, fileOps } from "./utils";
 
 const DEBUG = false;
-export const GRAPHITE = !!process.env.SK_GRAPHITE;
-export const MACCATALYST = false;
 const BUILD_WITH_PARAGRAPH = true;
 
 export const SkiaSrc = path.join(__dirname, "../../../externals/skia");
@@ -14,20 +11,6 @@ export const PackageRoot = path.join(__dirname, "..");
 export const OutFolder = path.join(SkiaSrc, DEBUG ? "debug" : "out");
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
-
-// Get macOS SDK root for Catalyst builds
-const getAppleSdkRoot = () => {
-  try {
-    const result = spawnSync("xcrun", ["--sdk", "macosx", "--show-sdk-path"], {
-      encoding: "utf8",
-    });
-    return result.stdout.trim();
-  } catch (e) {
-    return "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
-  }
-};
-
-const appleSdkRoot = getAppleSdkRoot();
 
 const NoParagraphArgs = [
   ["skia_use_harfbuzz", false],
@@ -68,8 +51,10 @@ const ParagraphOutputsAndroid = BUILD_WITH_PARAGRAPH
   ? ["libskparagraph.a", "libskunicode_core.a", "libskunicode_icu.a"]
   : [];
 
-const DawnOutputApple = GRAPHITE ? ["libdawn_combined.a"] : [];
-const DawnOutputAndroid = GRAPHITE ? ["libdawn_combined.a"] : [];
+// Dawn is not taken from the GN build: skia_use_dawn makes it build Dawn's
+// non-monolithic libdawn_combined.a as a dependency of the Graphite sources,
+// but what ships is the monolithic libwebgpu_dawn that build-dawn.ts builds
+// from the same checkout.
 
 export const commonArgs = [
   // No RAW codec: React Native apps do not decode camera RAW files through
@@ -89,9 +74,8 @@ export const commonArgs = [
   ["skia_enable_pdf", false],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
-  //["skia_enable_ganesh", !GRAPHITE],
-  ["skia_enable_graphite", GRAPHITE],
-  ["skia_use_dawn", GRAPHITE],
+  ["skia_enable_graphite", true],
+  ["skia_use_dawn", true],
   // m152 turns PartitionAlloc on by default for clang builds, which leaves
   // raw_ptr/PartitionAddressSpace symbols undefined when linking against the
   // prebuilt libskia.a (the allocator lives in its own target we don't ship).
@@ -101,8 +85,7 @@ export const commonArgs = [
   // Passed via extra_cflags_cc per-target instead of skia_use_cpp20 (not available in all Skia versions)
 ];
 
-export type PlatformName =
-  "apple-ios" | "apple-tvos" | "apple-macos" | "apple-maccatalyst" | "android";
+export type PlatformName = "apple-ios" | "apple-macos" | "android";
 
 export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
 
@@ -130,121 +113,9 @@ export type Platform<PlatformTarget extends Target = Target> = {
   options?: Arg[];
 };
 
-const appleMinTarget = GRAPHITE ? "15.1" : "14.0";
+// The deployment target of the podspec (s.platforms).
+const appleMinTarget = "15.1";
 const appleSimulatorMinTarget = appleMinTarget;
-
-// Define tvOS targets separately so they can be conditionally included
-const tvosTargets: { [key: string]: Target } = GRAPHITE
-  ? {}
-  : {
-      "arm64-tvos": {
-        cpu: "arm64",
-        platform: "tvos",
-        args: [
-          [
-            "extra_cflags_cc",
-            `["-fexceptions", "-frtti", "-target", "arm64-apple-tvos", "-mappletvos-version-min=${appleMinTarget}"]`,
-          ],
-          [
-            "extra_asmflags",
-            `["-target", "arm64-apple-tvos", "-mappletvos-version-min=${appleMinTarget}"]`,
-          ],
-          [
-            "extra_ldflags",
-            `["-target", "arm64-apple-tvos", "-mappletvos-version-min=${appleMinTarget}"]`,
-          ],
-        ],
-      },
-      "arm64-tvsimulator": {
-        cpu: "arm64",
-        platform: "tvos",
-        args: [
-          ["ios_use_simulator", true],
-          [
-            "extra_cflags_cc",
-            `["-fexceptions", "-frtti", "-target", "arm64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-          [
-            "extra_asmflags",
-            `["-target", "arm64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-          [
-            "extra_ldflags",
-            `["-target", "arm64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-        ],
-      },
-      "x64-tvsimulator": {
-        cpu: "x64",
-        platform: "tvos",
-        args: [
-          ["ios_use_simulator", true],
-          [
-            "extra_cflags_cc",
-            `["-fexceptions", "-frtti", "-target", "x86_64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-          [
-            "extra_asmflags",
-            `["-target", "x86_64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-          [
-            "extra_ldflags",
-            `["-target", "x86_64-apple-tvos-simulator", "-mappletvsimulator-version-min=${appleSimulatorMinTarget}"]`,
-          ],
-        ],
-      },
-    };
-
-// Define macCatalyst targets separately so they can be conditionally included
-const maccatalystTargets: { [key: string]: Target } = MACCATALYST
-  ? {
-      "arm64-maccatalyst": {
-        cpu: "arm64",
-        platform: "mac",
-        args: [
-          //["skia_enable_gpu", true],
-          ["target_os", `"mac"`],
-          ["target_cpu", `"arm64"`],
-          [
-            "extra_cflags_cc",
-            `["-fexceptions","-frtti","-target","arm64-apple-ios14.0-macabi",` +
-              `"-isysroot","${appleSdkRoot}",` +
-              `"-isystem","${appleSdkRoot}/System/iOSSupport/usr/include",` +
-              `"-iframework","${appleSdkRoot}/System/iOSSupport/System/Library/Frameworks"]`,
-          ],
-          [
-            "extra_ldflags",
-            `["-isysroot","${appleSdkRoot}",` +
-              `"-iframework","${appleSdkRoot}/System/iOSSupport/System/Library/Frameworks"]`,
-          ],
-          ["cc", '"clang"'],
-          ["cxx", '"clang++"'],
-        ],
-      },
-      "x64-maccatalyst": {
-        cpu: "x64",
-        platform: "mac",
-        args: [
-          ["target_os", `"mac"`],
-          ["target_cpu", `"x64"`],
-          [
-            "extra_cflags_cc",
-            `["-fexceptions","-frtti","-target","x86_64-apple-ios14.0-macabi",` +
-              `"-isysroot","${appleSdkRoot}",` +
-              `"-isystem","${appleSdkRoot}/System/iOSSupport/usr/include",` +
-              `"-iframework","${appleSdkRoot}/System/iOSSupport/System/Library/Frameworks"]`,
-          ],
-          [
-            "extra_ldflags",
-            `["-isysroot","${appleSdkRoot}",` +
-              `"-iframework","${appleSdkRoot}/System/iOSSupport/System/Library/Frameworks"]`,
-          ],
-          ["cc", '"clang"'],
-          ["cxx", '"clang++"'],
-        ],
-      },
-    }
-  : {};
 
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [
@@ -263,7 +134,6 @@ const appleOutputNames = [
   "libskottie.a",
   "libsksg.a",
   ...ParagraphApple,
-  ...DawnOutputApple,
 ];
 
 export const configurations: { android: Platform<AndroidTarget> } & Record<
@@ -294,10 +164,10 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       },
     },
     args: [
-      ...(GRAPHITE ? [["ndk_api", 26]] : []),
+      ["ndk_api", 26],
       ["ndk", `"${NdkDir}"`],
       ["skia_use_system_freetype2", false],
-      ["skia_use_gl", !GRAPHITE],
+      ["skia_use_gl", false],
       ["cc", '"clang"'],
       ["cxx", '"clang++"'],
       [
@@ -320,7 +190,6 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       "libsksg.a",
       "libjsonreader.a",
       ...ParagraphOutputsAndroid,
-      ...DawnOutputAndroid,
     ],
   },
   "apple-ios": {
@@ -355,19 +224,6 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
     outputRoot: "libs/ios",
     outputNames: appleOutputNames,
   },
-  "apple-tvos": GRAPHITE
-    ? {
-        targets: {},
-        args: [],
-        outputRoot: "libs/tvos",
-        outputNames: [],
-      }
-    : {
-        targets: tvosTargets,
-        args: appleCommonArgs,
-        outputRoot: "libs/tvos",
-        outputNames: appleOutputNames,
-      },
   "apple-macos": {
     targets: {
       "arm64-macosx": {
@@ -385,19 +241,6 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
     outputRoot: "libs/macos",
     outputNames: appleOutputNames,
   },
-  "apple-maccatalyst": MACCATALYST
-    ? {
-        targets: maccatalystTargets,
-        args: appleCommonArgs,
-        outputRoot: "libs/maccatalyst",
-        outputNames: appleOutputNames,
-      }
-    : {
-        targets: {},
-        args: [],
-        outputRoot: "libs/maccatalyst",
-        outputNames: [],
-      },
 };
 
 const copyModule = (module: string) => {
@@ -709,8 +552,6 @@ export const copyHeaders = () => {
   ).toString();
   if (duplicateHeaders.trim()) {
     console.warn("⚠️  WARNING: Found duplicate header names:");
-    let hasNonGraphiteDuplicates = false;
-
     duplicateHeaders
       .split("\n")
       .filter(Boolean)
@@ -718,34 +559,18 @@ export const copyHeaders = () => {
         const fullPaths = $(
           `find ./cpp -name "${filename}" -type f`
         ).toString();
-        const paths = fullPaths.split("\n").filter(Boolean);
-
-        // Check if any of the paths contain 'graphite'
-        const hasGraphitePath = paths.some((filePath: string) =>
-          filePath.includes("graphite")
-        );
-
         console.warn(`   ${filename}:`);
-        paths.forEach((filePath: string) => {
-          console.warn(`     ${filePath}`);
-        });
-
-        // If it's a Graphite-related duplicate and GRAPHITE is false, don't count it as an error
-        if (!hasGraphitePath || GRAPHITE) {
-          hasNonGraphiteDuplicates = true;
-        } else {
-          console.warn(
-            `     (Graphite-related duplicate - ignoring since GRAPHITE=${GRAPHITE})`
-          );
-        }
+        fullPaths
+          .split("\n")
+          .filter(Boolean)
+          .forEach((filePath: string) => {
+            console.warn(`     ${filePath}`);
+          });
       });
-
-    if (hasNonGraphiteDuplicates) {
-      console.error(
-        "❌ ERROR: Duplicate headers found that will cause iOS build conflicts!"
-      );
-      process.exit(1);
-    }
+    console.error(
+      "❌ ERROR: Duplicate headers found that will cause iOS build conflicts!"
+    );
+    process.exit(1);
   }
   console.log("✅ Skia headers copied to ./cpp/skia");
 };
