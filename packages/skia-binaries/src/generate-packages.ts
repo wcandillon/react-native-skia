@@ -22,8 +22,10 @@
  *   --package       Generate only a specific package (optional, generates all if omitted)
  *   --graphite      Generate Graphite packages instead of Ganesh
  *   --output-dir    Output directory (default: ./dist)
- *   --repo          owner/name of the GitHub repository hosting the SwiftPM
- *                   release assets (default: wcandillon/react-native-skia-binaries)
+ *   --repo          owner/name of the GitHub repository whose swiftpm-<version>
+ *                   release hosts the SwiftPM binary targets (default:
+ *                   wcandillon/react-native-skia, the repository the publish
+ *                   workflow runs in, so its own token can create the release)
  */
 
 import fs from "fs";
@@ -45,6 +47,7 @@ import {
   DEFAULT_RELEASES_REPO,
   setReleasesRepo,
 } from "./release-assets.js";
+import { DEFAULT_SPM_REPO, spmReleaseTag } from "./spm-release.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..");
@@ -424,9 +427,6 @@ ${binaryTargets}
 
 // --- Remote SwiftPM package ---
 
-// The repository the release assets are published to, unless --repo overrides it.
-const DEFAULT_SPM_REPO = "wcandillon/react-native-skia-binaries";
-
 const REMOTE_SPM_DIR = "spm";
 const REMOTE_SPM_PACKAGE_NAME = "react-native-skia-binaries";
 const REMOTE_SPM_PRODUCT_NAME = "SkiaBinaries";
@@ -492,7 +492,7 @@ const generateRemoteSpmManifest = (
       (t) =>
         `        .binaryTarget(\n` +
         `            name: "${t.name}",\n` +
-        `            url: "https://github.com/${repo}/releases/download/${npmVersion}/${t.archiveName}",\n` +
+        `            url: "https://github.com/${repo}/releases/download/${spmReleaseTag(npmVersion)}/${t.archiveName}",\n` +
         `            checksum: "${t.checksum}"\n` +
         `        ),`
     )
@@ -528,9 +528,11 @@ ${binaryTargets}
  * release assets for this version. Consumers depend on it with
  * .package(url:from:) instead of needing the npm package on disk.
  *
- * The zips are uploaded to the GitHub release tagged <npmVersion> and the
- * manifest is copied to the repository root, both by hand; validate-spm.ts
- * checks that the committed root manifest still matches skia-config.json.
+ * The publish workflow attaches the zips to the swiftpm-<npmVersion> release
+ * of `repo`. The manifest is copied to the root of
+ * wcandillon/react-native-skia-binaries (the repository SwiftPM resolves the
+ * package from) and tagged <npmVersion> there by hand; validate-spm.ts checks
+ * that the committed root manifest still matches skia-config.json.
  */
 const generateRemoteSpmPackage = async (
   outputDir: string,
@@ -542,7 +544,7 @@ const generateRemoteSpmPackage = async (
 
   console.log("Generating remote SwiftPM package...");
   console.log(`  Repository: ${repo}`);
-  console.log(`  Release tag: ${npmVersion}`);
+  console.log(`  Release tag: ${spmReleaseTag(npmVersion)}`);
 
   const pkg = GRAPHITE_PACKAGES.find((p) => p.name === REMOTE_SPM_SOURCE_PACKAGE);
   if (!pkg) {
@@ -886,6 +888,7 @@ const generateAllFromConfig = async (
 
     await generateRemoteSpmPackage(outputDir, npmVersion, spmRepo);
     writeGithubOutput("graphite_npm_version", npmVersion);
+    writeGithubOutput("spm_release_tag", spmReleaseTag(npmVersion));
     console.log("");
   }
 
