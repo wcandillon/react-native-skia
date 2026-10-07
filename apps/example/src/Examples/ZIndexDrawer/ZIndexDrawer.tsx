@@ -1,4 +1,4 @@
-import type { AndroidSurfaceType } from "@shopify/react-native-skia";
+import type { AndroidSurfaceType } from "react-native-skia";
 import {
   Canvas,
   Fill,
@@ -6,7 +6,7 @@ import {
   Text as SkiaText,
   useFont,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
