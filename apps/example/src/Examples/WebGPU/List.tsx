@@ -26,6 +26,11 @@ export const examples = [
     title: "Three.js Cloth",
     description: "Verlet cloth simulation running in compute shaders",
   },
+  {
+    screen: "Video",
+    title: "Video",
+    description: "Video frames decoded by WebGPU and drawn by a Skia Canvas",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

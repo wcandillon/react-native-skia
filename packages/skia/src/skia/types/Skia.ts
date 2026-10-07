@@ -30,8 +30,6 @@ import type { Color, SkColor } from "./Color";
 import type { TypefaceFontProviderFactory } from "./Paragraph/TypefaceFontProviderFactory";
 import type { AnimatedImageFactory } from "./AnimatedImage";
 import type { ParagraphBuilderFactory } from "./Paragraph/ParagraphBuilder";
-import type { Video } from "./Video";
-import type { NativeBufferFactory } from "./NativeBuffer";
 import type { JsiRecorder } from "./Recorder";
 import type { SkottieFactory } from "./Skottie";
 
@@ -100,8 +98,6 @@ export interface Skia {
   Surface: SurfaceFactory;
   ParagraphBuilder: ParagraphBuilderFactory;
   Skottie: SkottieFactory;
-  Video: (url: string) => Promise<Video> | Video;
-  NativeBuffer: NativeBufferFactory;
   Recorder(): JsiRecorder;
   /**
    * Raw WGPUDevice pointer of Skia's Graphite device, as a BigInt. Pass it to
