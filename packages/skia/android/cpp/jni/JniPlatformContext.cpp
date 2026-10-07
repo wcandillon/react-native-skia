@@ -69,8 +69,9 @@ void JniPlatformContext::registerNatives() {
 }
 
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
-                                     float pixelDensity) {
-  return makeCxxInstance(jThis, pixelDensity);
+                                     float pixelDensity,
+                                     std::string cacheDirectory) {
+  return makeCxxInstance(jThis, pixelDensity, std::move(cacheDirectory));
 }
 
 sk_sp<SkImage> JniPlatformContext::takeScreenshotFromViewTag(size_t tag) {

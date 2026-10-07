@@ -161,6 +161,18 @@ RNSkApplePlatformContext::resolveFontFamily(const std::string &familyName) {
   return familyName;
 }
 
+std::string RNSkApplePlatformContext::getCacheDirectory() {
+  NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
+      NSCachesDirectory, NSUserDomainMask, YES);
+  NSString *directory = paths.firstObject;
+  if (directory == nil) {
+    RNSkLogger::logToConsole("The app has no caches directory. Pipelines will "
+                             "not be cached on disk.");
+    return "";
+  }
+  return std::string([directory UTF8String]);
+}
+
 void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();

@@ -5,6 +5,7 @@
 
 #include <jsi/jsi.h>
 
+#include "RNDawnContext.h"
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
@@ -19,6 +20,7 @@ RNSkManager::RNSkManager(
     : _jsRuntime(jsRuntime), _platformContext(platformContext),
       _jsCallInvoker(jsCallInvoker),
       _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
+  DawnContext::setPipelineCacheDirectory(platformContext->getCacheDirectory());
   // Install bindings
   installBindings();
 }

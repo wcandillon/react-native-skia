@@ -145,6 +145,8 @@ public:
    */
   virtual bool prefersP3ColorSpace() { return false; }
 
+  virtual std::string getCacheDirectory() = 0;
+
 private:
   float _pixelDensity;
   std::shared_ptr<react::CallInvoker> _callInvoker;
