@@ -120,11 +120,17 @@ With the submodule bump merged (the workflow detects the Skia branch from the ch
 - `tag_suffix`: appended to the tag (for example `a` produces `skia-graphite-m150a`) for re-spins of the same milestone.
 - `dry_run`: build and upload as workflow artifacts only, skipping the GitHub release. Use this to validate the build before cutting a real release.
 
-It builds iOS, macOS and the four Android ABIs (no tvOS/maccatalyst), creates a prerelease tagged `skia-graphite-m150`, and uploads the binaries and the Graphite headers tarball. The Ganesh binaries for the v2.x line are built from the `2.x` branch.
+It builds iOS, macOS and the four Android ABIs (no tvOS/maccatalyst), creates a prerelease tagged `skia-graphite-<branch><suffix>`, and uploads the binaries and the Graphite headers tarball. `<branch>` is the Skia branch the submodule commit is on, without its `chrome/` prefix: `m150` right after a milestone bump, but once `chrome/m154` has moved past the pinned commit it is the Chromium release branch that still ends there, for example `m154_8037_58` (Chrome 154.0.8037.58), so a re-spin with `tag_suffix` `a` is tagged `skia-graphite-m154_8037_58a`. The Ganesh binaries for the v2.x line are built from the `2.x` branch.
 
 #### 5. Publish the binary npm packages
 
-The npm packages this library consumes (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-macos`, `react-native-skia-graphite-headers`, and the Ganesh `react-native-skia-*` packages used by the v2.x line) are produced from the release assets by [`packages/skia-binaries`](../skia-binaries). Update `packages/skia-binaries/skia-config.json` with the new `skia-graphite-m150` version and checksums (and remove the `repo` field, which points m154 at the shopify/react-native-skia releases; new builds are released in this repository), and with the matching `dawn` release (the same Dawn react-native-webgpu links), then run **Publish Skia Binary Packages** (`.github/workflows/publish-skia-binaries.yml`).
+The npm packages this library consumes (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-macos`, `react-native-skia-graphite-headers`, and the Ganesh `react-native-skia-*` packages used by the v2.x line) are produced from the release assets by [`packages/skia-binaries`](../skia-binaries). In `packages/skia-binaries/skia-config.json`:
+
+- Set `skia-graphite.version` to the release tag without its `skia-graphite-` prefix, for example `m154_8037_58a`. It derives the npm version: the milestone is the major, the suffix letter the minor (`m154` is 154.0.0, `m154_8037_58a` is 154.1.0; the Chromium branch digits do not affect it) and the workflow's `patch_version` the patch. Leave out the `repo` field: it pins an entry to another repository's releases (the Ganesh `m154` entry still points at shopify/react-native-skia), and new builds are released in this repository.
+- Refresh the `checksums` from the release: in `packages/skia-binaries`, `yarn download --skia-version=m154_8037_58a --graphite` then `yarn verify --graphite` prints the actual values.
+- Set `dawn` to the react-native-webgpu Dawn release these packages bundle, with the SHA256 of its `dawn-android-*.tar.gz` and `dawn-apple-*.xcframework.zip` assets. It must be the release the react-native-webgpu version users install declares in its package.json `dawn` field (`chrome-m154a` means `dawn-chrome-m154a`): the podspec and Gradle refuse an app whose two packages link different Dawn builds.
+
+Then run **Publish Skia Binary Packages** (`.github/workflows/publish-skia-binaries.yml`) with `variant` set to `graphite` (the Ganesh versions are already on npm, and a republish fails), first as a dry run.
 
 #### 6. Point the library at the new binaries
 

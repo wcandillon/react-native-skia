@@ -13,9 +13,12 @@
  *   --config        Config file path (generates all packages for both backends)
  *   --variant       Which packages to generate: all, ganesh, or graphite (default: all)
  *   --patch         Patch version number (default: 0). e.g., m147a + --patch=1 → 147.1.1
- *   --skia-version  Skia milestone version (e.g., m144c)
+ *   --skia-version  Build SKIA release tag without its skia-/skia-graphite- prefix:
+ *                   a milestone (m144), a milestone with a re-spin suffix (m144c), or
+ *                   a Chromium release branch with an optional suffix (m154_8037_58a)
  *   --npm-version   NPM package version (optional, derived from skia-version)
- *                   m144 → 144.0.0, m144a → 144.1.0, m144b → 144.2.0, m144c → 144.3.0
+ *                   m144 → 144.0.0, m144a → 144.1.0, m144b → 144.2.0, m144c → 144.3.0,
+ *                   m154_8037_58a → 154.1.0 (the branch digits do not affect it)
  *   --package       Generate only a specific package (optional, generates all if omitted)
  *   --graphite      Generate Graphite packages instead of Ganesh
  *   --output-dir    Output directory (default: ./dist)
@@ -157,14 +160,21 @@ const parseArgs = (): Args => {
  * m144b → 144.2.0
  * m144c → 144.3.0
  *
+ * Build SKIA names its release after the Skia branch the submodule commit is
+ * on. When chrome/m154 has moved past that commit, that is a Chromium release
+ * branch such as chrome/m154_8037_58, so the version carries the branch digits.
+ * They identify the build but do not change the npm version:
+ * m154_8037_58 → 154.0.0
+ * m154_8037_58a → 154.1.0
+ *
  * With patch version:
  * m147a + patch=1 → 147.1.1
  */
 const deriveNpmVersion = (skiaVersion: string, patch = 0): string => {
-  const match = skiaVersion.match(/^m(\d+)([a-z])?$/);
+  const match = skiaVersion.match(/^m(\d+)(?:_\d+)*([a-z])?$/);
   if (!match) {
     throw new Error(
-      `Invalid skia version format: ${skiaVersion}. Expected format: m144 or m144a`
+      `Invalid skia version format: ${skiaVersion}. Expected format: m144, m144a or m154_8037_58a`
     );
   }
 

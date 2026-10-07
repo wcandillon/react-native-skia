@@ -123,11 +123,17 @@ const verifyChecksums = (
     });
   }
 
-  // Apple platforms
+  // Apple platforms. download-binaries.ts writes them to libs/apple-<platform>;
+  // libs/apple/<platform> is the layout of the libraries' own libs folder.
   const applePlatforms = graphite ? ["ios", "macos"] : ["ios", "tvos", "macos"];
 
   for (const platform of applePlatforms) {
-    const platformDir = path.join(libsDir, "apple", platform);
+    const candidates = [
+      path.join(libsDir, `apple-${platform}`),
+      path.join(libsDir, "apple", platform),
+    ];
+    const platformDir =
+      candidates.find((dir) => fs.existsSync(dir)) ?? candidates[0];
     const checksumKey = `apple-${platform}-xcframeworks`;
     const expected = expectedChecksums[checksumKey];
     const actual = calculateDirectoryChecksum(platformDir);
