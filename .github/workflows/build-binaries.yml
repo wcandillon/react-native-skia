@@ -223,16 +223,16 @@ jobs:
             runner: ubuntu-latest
             output: packages/skia/libs/dawn/android/x86_64
           - target: ios-arm64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-arm64
           - target: ios-simulator-arm64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-simulator-arm64
           - target: ios-simulator-x86_64
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
           - target: macos-universal
-            runner: macos-latest
+            runner: macos-latest-xlarge
             output: packages/skia/libs/dawn/apple/macos-universal
     name: dawn-${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -304,7 +304,7 @@ jobs:
 
   package:
     needs: [prepare, build-skia, build-dawn]
-    runs-on: macos-latest
+    runs-on: macos-latest-xlarge
     permissions:
       contents: read
       # npm trusted publishing (OIDC) and provenance
