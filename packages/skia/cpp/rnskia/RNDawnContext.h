@@ -25,6 +25,13 @@
 
 #include "src/gpu/graphite/ContextOptionsPriv.h"
 
+#ifdef __APPLE__
+#include "dawn/dawn_proc.h"
+
+extern "C" void dawnProcSetProcs(const DawnProcTable *procs)
+    __attribute__((weak_import));
+#endif
+
 namespace RNSkia {
 
 struct AsyncContext {
@@ -339,9 +346,12 @@ private:
   std::mutex _mutex;
 
   DawnContext() {
-    // No dawnProcSetProcs() here: the monolithic libwebgpu_dawn (shared with
-    // react-native-webgpu) exposes the real wgpu* C entry points directly
-    // rather than the settable dawn_proc trampoline, which it does not ship.
+#ifdef __APPLE__
+    if (dawnProcSetProcs != nullptr) {
+      dawnProcSetProcs(&dawn::native::GetProcs());
+    }
+#endif
+
     static const auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
 
     wgpu::InstanceDescriptor instanceDesc{.requiredFeatureCount = 1,
