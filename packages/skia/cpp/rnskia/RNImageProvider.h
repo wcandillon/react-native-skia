@@ -1,5 +1,8 @@
 #pragma once
 
+#include <chrono>
+#include <vector>
+
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImage.h"
 
@@ -26,6 +29,7 @@ public:
   sk_sp<SkImage>
   findOrCreate(skgpu::graphite::Recorder *recorder, const SkImage *image,
                SkImage::RequiredProperties requiredProps) override {
+    purgeReleasedImages();
     if (!requiredProps.fMipmapped) {
       // If no mipmaps are required, check to see if we have a mipmapped version
       // anyway - since it can be used in that case.
@@ -35,7 +39,7 @@ public:
       ImageKey mipMappedKey(image, /* mipmapped= */ true);
       auto result = fCache.find(mipMappedKey);
       if (result) {
-        return *result;
+        return result->texture;
       }
     }
 
@@ -43,7 +47,7 @@ public:
 
     auto result = fCache.find(key);
     if (result) {
-      return *result;
+      return result->texture;
     }
 
     sk_sp<SkImage> newImage =
@@ -52,14 +56,46 @@ public:
       return nullptr;
     }
 
-    result = fCache.insert(key, std::move(newImage));
+    result = fCache.insert(key, Entry{sk_ref_sp(image), std::move(newImage)});
     SkASSERT(result);
 
-    return *result;
+    return result->texture;
   }
 
 private:
   static constexpr int kDefaultNumCachedImages = 256;
+  static constexpr std::chrono::milliseconds kPurgeInterval{1000};
+
+  // The cache holds a reference to the source image next to its upload, so
+  // that it can tell when nothing else uses the source anymore.
+  struct Entry {
+    sk_sp<const SkImage> source;
+    sk_sp<SkImage> texture;
+  };
+
+  // Drops the uploads of images that only this cache still references: JS
+  // released them and no recording draws them. Without this, the uploads of
+  // up to kDefaultNumCachedImages images stay on the GPU for as long as the
+  // recorder lives, long after the images themselves are gone. Runs on the
+  // recorder's thread (from findOrCreate), at most once per kPurgeInterval.
+  void purgeReleasedImages() {
+    auto now = std::chrono::steady_clock::now();
+    if (now - fLastPurge < kPurgeInterval) {
+      return;
+    }
+    fLastPurge = now;
+    std::vector<ImageKey> released;
+    fCache.foreach ([&](const ImageKey *key, Entry *entry) {
+      if (entry->source->unique()) {
+        released.push_back(*key);
+      }
+    });
+    for (const auto &key : released) {
+      fCache.remove(key);
+    }
+  }
+
+  std::chrono::steady_clock::time_point fLastPurge;
 
   class ImageKey {
   public:
@@ -94,7 +130,7 @@ private:
     size_t operator()(const ImageKey &key) const { return key.hash(); }
   };
 
-  SkLRUCache<ImageKey, sk_sp<SkImage>, ImageHash> fCache;
+  SkLRUCache<ImageKey, Entry, ImageHash> fCache;
 };
 
 } // namespace RNSkia
