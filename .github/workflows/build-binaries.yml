@@ -133,21 +133,23 @@ jobs:
 
   # The repository is public, so the standard GitHub-hosted runners are free
   # and only the larger ones (macos-latest-xlarge) are billed. The Android
-  # targets only need the NDK toolchain and build on ubuntu-latest; the Apple
-  # targets build on the standard macOS runner, slower than the larger one but
-  # free. Switch a target back to macos-latest-xlarge if the standard macOS
-  # pool cannot be acquired or the build does not fit in its memory or disk.
+  # targets only need the NDK toolchain and build on ubuntu-latest. The Apple
+  # targets build on the self-hosted Mac (an M1 Max with 64GB, shared with the
+  # CI of this and two other repositories), which is both free and faster
+  # than the hosted runners; the standard macos-latest runner (3 cores, 7GB)
+  # is the free fallback if the machine is unavailable.
   build-skia:
     needs: prepare
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: apple-ios
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/ios
           - target: apple-macos
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/macos
           - target: android-arm
             runner: ubuntu-latest
@@ -214,8 +216,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Same split as build-skia: Android on ubuntu-latest, Apple on the
+  # self-hosted Mac.
   build-dawn:
     needs: prepare
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -233,16 +238,16 @@ jobs:
             runner: ubuntu-latest
             output: packages/skia/libs/dawn/android/x86_64
           - target: ios-arm64
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/ios-arm64
           - target: ios-simulator-arm64
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/ios-simulator-arm64
           - target: ios-simulator-x86_64
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
           - target: macos-universal
-            runner: macos-latest
+            runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/macos-universal
     name: dawn-${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -313,7 +318,8 @@ jobs:
           retention-days: 7
 
   # macOS: assembling the Dawn xcframework needs lipo and xcodebuild. The
-  # standard runner is enough for the few minutes this takes.
+  # free standard runner is enough for the few minutes this takes, and it
+  # publishes from a clean image rather than from the shared machine.
   package:
     needs: [prepare, build-skia, build-dawn]
     runs-on: macos-latest
