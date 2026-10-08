@@ -55,6 +55,10 @@ export const examples = [
     title: "📺 View Snapshot",
   },
   {
+    screen: "SnapshotBeforeLayout",
+    title: "🫥 Snapshot Before Layout",
+  },
+  {
     screen: "PathEffect",
     title: "⭐️ Path Effect",
   },

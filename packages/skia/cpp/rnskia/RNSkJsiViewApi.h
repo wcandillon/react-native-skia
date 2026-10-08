@@ -301,8 +301,13 @@ public:
           context->runOnMainThread([&runtime, view = std::move(view),
                                     promise = std::move(promise),
                                     context = std::move(context), bounds]() {
-            auto image = view->makeImageSnapshot(
-                bounds == nullptr ? nullptr : bounds.get());
+            // The view may not exist (yet, or anymore): the native view is
+            // only registered once it has a superview, and it is removed on
+            // unmount. Mirror the sync variant instead of dereferencing null.
+            auto image = view != nullptr
+                             ? view->makeImageSnapshot(
+                                   bounds == nullptr ? nullptr : bounds.get())
+                             : nullptr;
             context->runOnJavascriptThread(
                 [&runtime, context = std::move(context),
                  promise = std::move(promise), image = std::move(image)]() {

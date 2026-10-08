@@ -217,9 +217,19 @@ public:
    the image is converted.
    */
   sk_sp<SkImage> makeImageSnapshot(SkRect *bounds) {
+    // A view without a window (not laid out yet, or already released)
+    // reports a size of 0. An offscreen surface of that size cannot be
+    // created and MakeOffscreen throws on the main thread. Returning nullptr
+    // degrades this to the existing "Failed to make snapshot from view."
+    // rejection.
+    const int width = getScaledWidth();
+    const int height = getScaledHeight();
+    if (width <= 0 || height <= 0) {
+      return nullptr;
+    }
+
     if (_producer->hasContent()) {
-      RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
-                                   getScaledHeight());
+      RNSkOffscreenSurface surface(_platformContext, width, height);
       if (auto *canvas = surface.getCanvas()) {
         _producer->renderInto(canvas, _platformContext->getPixelDensity());
       }
@@ -228,8 +238,8 @@ public:
     auto frame = getLastFrame();
     const bool useP3ColorSpace =
         frame != nullptr && frame->getTarget().useP3ColorSpace;
-    RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
-                                 getScaledHeight(), useP3ColorSpace);
+    RNSkOffscreenSurface surface(_platformContext, width, height,
+                                 useP3ColorSpace);
     if (frame != nullptr) {
       renderFrame(surface, frame);
     }

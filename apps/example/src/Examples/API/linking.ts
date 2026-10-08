@@ -17,6 +17,7 @@ export const apiScreenPaths: Record<keyof Routes, string> = {
   Clipping: "clipping",
   Touch: "touch",
   Snapshot: "snapshot",
+  SnapshotBeforeLayout: "snapshot-before-layout",
   PathEffect: "path-effect",
   IconsExample: "icons",
   Transform: "transform",
