@@ -40,16 +40,7 @@ describe("Vertices", () => {
   it("Billinear gradient from a Float32Array", () => {
     const { surface, canvas, width, Skia } = setupSkia();
     // Interleaved x, y pairs
-    const vertices = new Float32Array([
-      0,
-      0,
-      width,
-      0,
-      width,
-      width,
-      0,
-      width,
-    ]);
+    const vertices = new Float32Array([0, 0, width, 0, width, width, 0, width]);
     const colors = ["#61DAFB", "#fb61da", "#dafb61", "#61fbcf"].map((c) =>
       Skia.Color(c)
     );
