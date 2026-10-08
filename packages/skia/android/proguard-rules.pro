@@ -1,1 +1,1 @@
--keep class com.shopify.reactnative.skia.** { *; }
+-keep class com.reactnative.skia.** { *; }
