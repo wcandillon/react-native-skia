@@ -215,7 +215,7 @@ To enable React Native Skia on Web using webpack, three key actions are required
 
 - Ensure the `canvaskit.wasm` file is accessible to the build system.
 - Configure the build system to resolve the `fs` and `path` node modules, achievable via the [node polyfill plugin](https://www.npmjs.com/package/node-polyfill-webpack-plugin).
-- Update aliases for `react-native-reanimated` and `react-native/Libraries/Image/AssetRegistry` so webpack can do the bundle.
+- Update aliases for `react-native-reanimated` and the React Native asset registry (`react-native/asset-registry` and `react-native/Libraries/Image/AssetRegistry`) so webpack can do the bundle.
 
 Here is an example webpack v5 configuration accommodating React Native Skia:
 
@@ -260,6 +260,8 @@ const newConfiguration = {
       "react-native-reanimated/package.json"
     ),
     "react-native-reanimated": require.resolve("react-native-reanimated"),
+    // 4. Skip the React Native asset registry, which only Metro populates
+    "react-native/asset-registry": false,
     "react-native/Libraries/Image/AssetRegistry": false,
   },
 }
