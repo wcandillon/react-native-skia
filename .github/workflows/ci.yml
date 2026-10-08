@@ -391,3 +391,57 @@ jobs:
 
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
+
+  build-test-ios-spm:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      # Installs the workspace and copies the Skia, Graphite and Dawn headers.
+      # packages/skia/Package.swift resolves the prebuilt binaries
+      # (react-native-skia-graphite-apple-ios, react-native-webgpu-dawn) from
+      # the workspace's node_modules, not from spm-example's.
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # spm-example sits outside the yarn workspace so its React Native can
+      # differ from the one apps/example pins. It ships no lockfile; react and
+      # react-native are pinned exactly in its package.json.
+      - name: Install spm-example dependencies
+        working-directory: spm-example
+        run: npm install
+
+      # The .xcodeproj is committed already injected, so this refreshes the
+      # injection, runs codegen and downloads the React Native artifacts. It
+      # exits 2 if a linked library ships no Package.swift.
+      - name: Set up Swift Package Manager
+        working-directory: spm-example/ios
+        run: npx react-native spm update
+
+      # No simulator is booted: a generic destination is enough to prove the
+      # package compiles and links, and keeps this job off the skia-ci device
+      # build-test-ios uses.
+      - name: Build spm-example for iOS
+        working-directory: spm-example/ios
+        run: |
+          set -o pipefail && xcodebuild \
+            -project SpmExample.xcodeproj \
+            -scheme SpmExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee xcodebuild.log | xcpretty || {
+              # xcpretty drops some errors (e.g. project-level ones), so show
+              # them from the raw log.
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }

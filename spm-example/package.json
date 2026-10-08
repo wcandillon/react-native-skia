@@ -1,0 +1,34 @@
+{
+  "name": "SpmExample",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "ios": "react-native run-ios",
+    "lint": "eslint .",
+    "start": "react-native start"
+  },
+  "dependencies": {
+    "react-native-skia": "file:../packages/skia",
+    "react": "19.2.3",
+    "react-native": "0.87.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-ios": "20.2.0",
+    "@react-native/babel-preset": "0.87.1",
+    "@react-native/eslint-config": "0.87.1",
+    "@react-native/metro-config": "0.87.1",
+    "@react-native/typescript-config": "0.87.1",
+    "@types/react": "^19.2.0",
+    "eslint": "^8.19.0",
+    "prettier": "2.8.8",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
+  }
+}
