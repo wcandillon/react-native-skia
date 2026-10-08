@@ -22,6 +22,7 @@
     "README.md",
     "LICENSE.md",
     "android/build.gradle",
+    "android/proguard-rules.pro",
     "android/CMakeLists.txt",
     "android/cpp/**",
     "android/src/**",
