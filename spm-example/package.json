@@ -8,7 +8,7 @@
     "start": "react-native start"
   },
   "dependencies": {
-    "@shopify/react-native-skia": "file:../packages/skia",
+    "react-native-skia": "file:../packages/skia",
     "react": "19.2.3",
     "react-native": "0.87.1"
   },

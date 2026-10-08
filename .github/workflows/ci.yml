@@ -394,12 +394,17 @@ jobs:
 
   build-test-ios-spm:
     runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
 
+      # Installs the workspace and copies the Skia, Graphite and Dawn headers.
+      # packages/skia/Package.swift resolves the prebuilt binaries
+      # (react-native-skia-graphite-apple-ios, react-native-webgpu-dawn) from
+      # the workspace's node_modules, not from spm-example's.
       - name: Setup
         uses: ./.github/actions/setup
         with:
@@ -419,10 +424,24 @@ jobs:
         working-directory: spm-example/ios
         run: npx react-native spm update
 
+      # No simulator is booted: a generic destination is enough to prove the
+      # package compiles and links, and keeps this job off the skia-ci device
+      # build-test-ios uses.
       - name: Build spm-example for iOS
         working-directory: spm-example/ios
         run: |
-          xcodebuild -project SpmExample.xcodeproj -scheme SpmExample \
-            -configuration Debug -sdk iphonesimulator \
+          set -o pipefail && xcodebuild \
+            -project SpmExample.xcodeproj \
+            -scheme SpmExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath build \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee xcodebuild.log | xcpretty || {
+              # xcpretty drops some errors (e.g. project-level ones), so show
+              # them from the raw log.
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }

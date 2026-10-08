@@ -1,7 +1,7 @@
 const path = require('path');
 const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
 
-// @shopify/react-native-skia is symlinked to ../packages/skia, so Metro must
+// react-native-skia is symlinked to ../packages/skia, so Metro must
 // watch the monorepo root. React and React Native have to be forced to this
 // app's copies: the workspace root carries different versions, and two React
 // instances make hooks resolve against a null module inside Skia's components.

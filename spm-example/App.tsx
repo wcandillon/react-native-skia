@@ -1,6 +1,6 @@
 import React from 'react';
 import {StyleSheet, View} from 'react-native';
-import {Canvas, Circle, Fill} from '@shopify/react-native-skia';
+import {Canvas, Circle, Fill} from 'react-native-skia';
 
 export default function App() {
   return (

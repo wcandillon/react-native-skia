@@ -165,9 +165,11 @@ every standard app. The target name is pinned in `react-native.config.js`;
 without it a future React Native release would derive it from the podspec
 instead and change the header import prefix.
 
-Skia's Apple sources still gate on `RCT_NEW_ARCH_ENABLED` and
-`RCT_REMOVE_LEGACY_ARCH`. CocoaPods forces both project-wide; the SwiftPM path
-defines neither, so `Package.swift` defines them itself.
+CocoaPods defines `RCT_NEW_ARCH_ENABLED` and `RCT_REMOVE_LEGACY_ARCH`
+project-wide for a New Architecture app; the SwiftPM path defines neither.
+Skia's own sources no longer gate on them, but React's headers do
+(`RCT_REMOVE_LEGACY_ARCH` hides the legacy bridge API), so `Package.swift`
+defines both itself.
 
 The library requires iOS 15.1 (see the podspec), but the platform floor of
 `Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`

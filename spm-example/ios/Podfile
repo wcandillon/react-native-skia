@@ -4,7 +4,7 @@
 # `react-native spm` and the Xcode autolinking phase both fail with
 # "CLI config did not provide project.ios.sourceDir".
 #
-# Nothing ever installs it — only CocoaPods evaluates this file, so the raise
+# Nothing ever installs it: only CocoaPods evaluates this file, so the raise
 # below turns an accidental `pod install` into a clear message instead of
 # silently re-integrating CocoaPods and breaking the Swift package graph.
 raise 'SpmExample builds with Swift Package Manager. Do not run `pod install` ' \
