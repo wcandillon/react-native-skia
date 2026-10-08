@@ -40,6 +40,36 @@ describe("Platform.resolveAsset", () => {
     it("resolves a module id via the asset registry", () => {
       expect(WebPlatform.resolveAsset(42)).toBe("/assets/font-42.ttf");
     });
+    it("prefers react-native/asset-registry (React Native 0.87+)", () => {
+      jest.isolateModules(() => {
+        jest.doMock(
+          "react-native/asset-registry",
+          () => ({
+            getAssetByID: (id: number) => ({
+              httpServerLocation: "/registry",
+              name: `font-${id}`,
+              type: "otf",
+            }),
+          }),
+          { virtual: true }
+        );
+        const { Platform } = require("../Platform.web");
+        expect(Platform.resolveAsset(42)).toBe("/registry/font-42.otf");
+      });
+    });
+    it("falls back to Libraries/Image/AssetRegistry (React Native < 0.87)", () => {
+      jest.isolateModules(() => {
+        jest.doMock(
+          "react-native/asset-registry",
+          () => {
+            throw new Error("Cannot find module 'react-native/asset-registry'");
+          },
+          { virtual: true }
+        );
+        const { Platform } = require("../Platform.web");
+        expect(Platform.resolveAsset(42)).toBe("/assets/font-42.ttf");
+      });
+    });
     it("resolves an ES module with a string default export", () => {
       expect(
         WebPlatform.resolveAsset({
