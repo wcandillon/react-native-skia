@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -47,8 +48,11 @@ public:
   DawnContext &operator=(const DawnContext &) = delete;
 
   static DawnContext &getInstance() {
-    static DawnContext instance;
-    return instance;
+    // Never destroyed: the readback poller is a detached thread using the
+    // context, which the process takes down at exit instead of a static
+    // destructor tearing the context down under it.
+    static auto *instance = new DawnContext();
+    return *instance;
   }
 
   // Readbacks ----------------------------------------------------------------
@@ -154,8 +158,8 @@ public:
   }
 
   /**
-   A Graphite image of `image`: uploaded on the recorder of this thread and
-   submitted, so that any recorder can draw it once this returns. The image
+   A Graphite image of `image`: uploaded on an upload recorder of this thread
+   and submitted, so that any recorder can draw it once this returns. The image
    itself when it already is one (with mipmaps when asked for). An encoded
    image is decoded on the calling thread first. nullptr when the upload
    failed.
@@ -164,7 +168,10 @@ public:
     if (image->isTextureBacked() && (!mipmapped || image->hasMipmaps())) {
       return image;
     }
-    auto *recorder = getRecorder();
+    // A recorder of its own: snapping the recorder of this thread would also
+    // submit what the offscreen surfaces of this thread recorded so far.
+    static thread_local auto uploadRecorder = makeRecorder();
+    auto *recorder = uploadRecorder.get();
     auto texture =
         SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
     if (texture == nullptr) {
@@ -460,13 +467,21 @@ private:
           return _pendingReadbacks.load(std::memory_order_acquire) > 0;
         });
       }
+      // Polls every millisecond at first, then backs off: a short readback
+      // is delivered quickly, a long one does not take the context lock a
+      // thousand times a second.
+      auto interval = std::chrono::milliseconds(1);
       while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
-        {
-          std::lock_guard<std::mutex> lock(_mutex);
+        // A busy context is a view rendering: skip this round rather than
+        // hold up its frame.
+        std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+        if (lock.owns_lock()) {
           tick();
           fGraphiteContext->checkAsyncWorkCompletion();
+          lock.unlock();
+          interval = std::min(interval * 2, std::chrono::milliseconds(4));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(interval);
       }
     }
   }

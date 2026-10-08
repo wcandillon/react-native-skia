@@ -164,8 +164,9 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
   makeRasterImage(): Promise<SkImage> {
     // CanvasKit reads back synchronously; the pixels are copied into a new
     // image so that it can be drawn by any canvas (a WebGL texture belongs to
-    // the context that created it).
-    return Promise.resolve(this.makeNonTextureImage());
+    // the context that created it). Run inside the promise so that a failure
+    // rejects it rather than throwing.
+    return new Promise((resolve) => resolve(this.makeNonTextureImage()));
   }
 
   makeNonTextureImage(): SkImage {

@@ -19,7 +19,12 @@ const createTextureFromImage = (
   image: SkImage
 ) => {
   "worklet";
-  texture.value = image.makeTextureImage();
+  try {
+    texture.value = image.makeTextureImage();
+  } catch {
+    // Too large for a texture, or out of GPU memory.
+    texture.value = null;
+  }
 };
 
 const createTexture = (

@@ -47,6 +47,45 @@ describe("Readback", () => {
     }
   );
 
+  itRunsE2eOnly(
+    "readPixels clips a rectangle partly outside a GPU image",
+    async () => {
+      const result = await surface.eval((Skia, ctx) => {
+        const offscreen = Skia.Surface.MakeOffscreen(8, 8)!;
+        const canvas = offscreen.getCanvas();
+        canvas.drawColor(Skia.Color("cyan"));
+        const paint = Skia.Paint();
+        paint.setColor(Skia.Color("red"));
+        canvas.drawRect(Skia.XYWHRect(4, 4, 4, 4), paint);
+        offscreen.flush();
+        const snapshot = offscreen.makeImageSnapshot();
+        const raster = snapshot.makeNonTextureImage()!;
+        const read = (image: typeof snapshot, x: number, y: number) =>
+          Array.from(
+            image.readPixels(x, y, { width: 4, height: 2, ...ctx }) ?? []
+          );
+        return {
+          gpu: [read(snapshot, -2, 6), read(snapshot, 6, 7)],
+          cpu: [read(raster, -2, 6), read(raster, 6, 7)],
+          outside: snapshot.readPixels(8, 0, { width: 1, height: 1, ...ctx }),
+        };
+      }, pixelInfo);
+      const cyan = [0, 255, 255, 255];
+      const red = [255, 0, 0, 255];
+      const none = [0, 0, 0, 0];
+      // The pixels outside of the image are left untouched.
+      expect(result.gpu[0]).toEqual(
+        [none, none, cyan, cyan, none, none, cyan, cyan].flat()
+      );
+      expect(result.gpu[1]).toEqual(
+        [red, red, none, none, none, none, none, none].flat()
+      );
+      // Same as a CPU image.
+      expect(result.gpu).toEqual(result.cpu);
+      expect(result.outside).toBe(null);
+    }
+  );
+
   itRunsE2eOnly("a raster image resolves to itself", async () => {
     const result = await surface.eval((Skia, ctx) => {
       const data = Skia.Data.fromBytes(new Uint8Array([0, 0, 255, 255]));

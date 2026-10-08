@@ -26,8 +26,8 @@ const image3 = useImage("Logo");
 Loading an image is an asynchronous operation, so the `useImage` hook will return null until the image is fully loaded. You can use this behavior to conditionally render the `Image` component, as shown in the [example below](#example).
 The image is also decoded before the hook returns it, off the JS thread: the canvas that draws it never decodes on its first frame (see [GPU and CPU images](#gpu-and-cpu-images)).
 
-The hook also provides an optional error handler as a second parameter.
-`loadImage(source)` does the same outside of React and returns a promise.
+The hook also provides an optional error handler as a second parameter, called when the image cannot be loaded or decoded (the hook then returns null).
+`loadImage(source)` does the same outside of React: it returns a promise that rejects on failure.
 
 ### MakeImageFromEncoded
 

@@ -38,21 +38,40 @@ export const loadData = <T>(
   }
 };
 
+const reportError = (err: unknown, onError?: (err: Error) => void) => {
+  const error = err instanceof Error ? err : new Error(String(err));
+  if (onError) {
+    onError(error);
+  } else {
+    console.warn(error);
+  }
+};
+
 export const useLoading = <T extends SkJSIInstance<string>>(
   source: DataSourceParam,
-  loader: () => Promise<T | null>
+  loader: () => Promise<T | null>,
+  onError?: (err: Error) => void
 ) => {
   const mounted = useRef(false);
   const [data, setData] = useState<T | null>(null);
   const dataRef = useRef<T | null>(null);
   useEffect(() => {
     mounted.current = true;
-    loader().then((value) => {
-      if (mounted.current) {
-        setData(value);
-        dataRef.current = value;
+    loader().then(
+      (value) => {
+        if (mounted.current) {
+          setData(value);
+          dataRef.current = value;
+        }
+      },
+      (err) => {
+        if (mounted.current) {
+          setData(null);
+          dataRef.current = null;
+        }
+        reportError(err, onError);
       }
-    });
+    );
     return () => {
       mounted.current = false;
     };
@@ -71,13 +90,16 @@ export const useCollectionLoading = <T extends SkJSIInstance<string>>(
 
   useEffect(() => {
     mounted.current = true;
-    loader().then((result) => {
-      const value = result.filter((r) => r !== null) as T[];
-      if (mounted.current) {
-        setData(value);
-        dataRef.current = value;
-      }
-    });
+    loader().then(
+      (result) => {
+        const value = result.filter((r) => r !== null) as T[];
+        if (mounted.current) {
+          setData(value);
+          dataRef.current = value;
+        }
+      },
+      (err) => reportError(err)
+    );
 
     return () => {
       mounted.current = false;
@@ -93,7 +115,7 @@ export const useRawData = <T extends SkJSIInstance<string>>(
   source: DataSourceParam,
   factory: (data: SkData) => T | null,
   onError?: (err: Error) => void
-) => useLoading(source, () => loadData<T>(source, factory, onError));
+) => useLoading(source, () => loadData<T>(source, factory, onError), onError);
 
 const identity = (data: SkData) => data;
 

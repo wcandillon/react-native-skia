@@ -88,13 +88,16 @@ public:
   std::shared_ptr<JsiSkImage> asImage() {
     _dispatcher->processQueue();
     auto surface = getObject();
-    auto image = surface->recorder() != nullptr ? SkSurfaces::AsImage(surface)
-                                                : surface->makeImageSnapshot();
+    auto sharesTexture = surface->recorder() != nullptr;
+    auto image = sharesTexture ? SkSurfaces::AsImage(surface)
+                               : surface->makeImageSnapshot();
     if (image == nullptr) {
       throw std::runtime_error(
           "asImage: the texture of the surface cannot be sampled");
     }
-    return std::make_shared<JsiSkImage>(getContext(), std::move(image));
+    // The surface already reports the texture as its memory.
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image),
+                                        sharesTexture);
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {

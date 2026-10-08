@@ -311,9 +311,17 @@ public:
     if (!image->isTextureBacked()) {
       return image->readPixels(nullptr, dstInfo, dst, rowBytes, srcX, srcY);
     }
+    // Like SkImage::readPixels(), only the part of the rectangle inside the
+    // image is read, into the matching part of `dst`.
     auto srcRect =
         SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
-    if (!image->bounds().contains(srcRect)) {
+    if (!srcRect.intersect(image->bounds())) {
+      return false;
+    }
+    SkPixmap dstPixels(dstInfo, dst, rowBytes);
+    SkPixmap dstSubset;
+    if (!dstPixels.extractSubset(&dstSubset,
+                                 srcRect.makeOffset(-srcX, -srcY))) {
       return false;
     }
     auto result = DawnContext::getInstance().readPixelsSync(image, srcRect);
@@ -322,7 +330,7 @@ public:
     }
     SkPixmap pixels(image->imageInfo().makeDimensions(srcRect.size()),
                     result->data(0), result->rowBytes(0));
-    return pixels.readPixels(dstInfo, dst, rowBytes);
+    return pixels.readPixels(dstSubset);
   }
 
   // A GPU image: uploaded now, on the calling thread, and drawn by every
@@ -375,9 +383,12 @@ public:
             promise->resolve(jsi::Value(runtime, thisValue));
             return;
           }
-          auto deliver = [&runtime, context, promise](sk_sp<SkImage> raster) {
+          // The runtime is the one handed to the job, not this one: a
+          // reload may destroy this one before the result is ready.
+          auto deliver = [context, promise](sk_sp<SkImage> raster) {
             context->runOnJavascriptThread(
-                [&runtime, context, promise, raster = std::move(raster)]() {
+                [context, promise,
+                 raster = std::move(raster)](jsi::Runtime &runtime) {
                   if (raster == nullptr) {
                     promise->reject(
                         "makeRasterImage: reading the image back failed");
@@ -437,9 +448,15 @@ public:
                   &JsiSkImage::isTextureBacked);
   }
 
-  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image)
+  /**
+   `sharesTexture`: the image is a view of a texture someone else owns (see
+   surface.asImage()), which that owner already reports as its memory.
+   */
+  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image,
+             bool sharesTexture = false)
       : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
-                                                            std::move(image)) {}
+                                                            std::move(image)),
+        _sharesTexture(sharesTexture) {}
 
   size_t getMemoryPressure() override {
     if (isDisposed()) {
@@ -448,7 +465,7 @@ public:
     auto image = getObjectUnchecked();
     if (image) {
       if (image->isTextureBacked()) {
-        return image->textureSize();
+        return _sharesTexture ? 0 : image->textureSize();
       }
       if (image->isLazyGenerated()) {
         // Still encoded: what it holds is the file, not the decoded pixels.
@@ -460,6 +477,9 @@ public:
     }
     return 0;
   }
+
+private:
+  bool _sharesTexture;
 };
 
 } // namespace RNSkia
