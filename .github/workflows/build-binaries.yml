@@ -370,12 +370,22 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # npm refuses a dry run of a version already on the registry too, so a
+      # package already published at this version is skipped here as well:
+      # a dry run is how a published version is rebuilt for inspection.
       - name: Publish to npm (dry run)
         if: ${{ inputs.dry_run }}
         working-directory: packages/skia/build/binaries
         run: |
+          set -eo pipefail
           for pkg in */; do
-            echo "::group::$pkg"
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+            if npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "::notice::$name@$version is already on npm, dry run skipped"
+              continue
+            fi
+            echo "::group::$name@$version"
             (cd "$pkg" && npm publish --access public --dry-run)
             echo "::endgroup::"
           done
