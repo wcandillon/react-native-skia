@@ -26,6 +26,19 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
   makeImageSnapshot(bounds?: SkRect, outputImage?: SkImage): SkImage;
 
   /**
+   * Returns an image sharing the texture of the surface, without a copy: a
+   * canvas drawing it shows what the surface holds by the time the drawing
+   * reaches the GPU. Call `flush()` on the surface after drawing into it and
+   * before the frame that samples the image, and never draw the image onto
+   * its own surface (use a second surface for a feedback loop).
+   * `makeImageSnapshot()` makes a copy instead.
+   *
+   * On the Web, and for a CPU surface (`Skia.Surface.Make`), this is a
+   * snapshot taken at call time.
+   */
+  asImage(): SkImage;
+
+  /**
    * Make sure any queued draws are sent to the screen or the GPU.
    * @param sync - When true, block until the GPU has finished executing the
    * submitted work. Use this before a consumer on a different command queue

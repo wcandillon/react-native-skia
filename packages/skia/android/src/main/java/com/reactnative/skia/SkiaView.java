@@ -57,7 +57,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
         @Override
         public boolean presentFrame() {
-            return SkiaView.this.presentFrame();
+            return hasNativeView() && SkiaView.this.presentFrame();
         }
     });
 
@@ -154,8 +154,26 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         }
     }
 
+    // React drops the view for good: it is never recycled (ReactViewManager
+    // only sets up recycling for its exact class). The native view behind it
+    // would otherwise live on until this object is finalized, which the
+    // garbage collector may never get to: the GPU memory the view holds (its
+    // Graphite recorder and resource cache, the queued and last presented
+    // recordings, the swapchain) is invisible to it. Destroy it now, its
+    // destructors release all of that. The backing view may still call back
+    // after this, it leaves the window around the same time: see hasNativeView().
     void dropInstance() {
+        if (!hasNativeView()) {
+            return;
+        }
         unregisterView();
+        mHybridData.resetNative();
+    }
+
+    // Whether the native view still exists. It is destroyed in dropInstance(),
+    // and no native method may be called after that.
+    private boolean hasNativeView() {
+        return mHybridData.isValid();
     }
 
     @Override
@@ -164,7 +182,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         // The backing view gets this exact size, and so does its surface: tell
         // the native side now, so that a frame recorded before the surface
         // exists (the first one usually is) already has the right size.
-        setLayoutSize(right - left, bottom - top);
+        if (hasNativeView()) {
+            setLayoutSize(right - left, bottom - top);
+        }
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
         }
@@ -195,6 +215,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mFrameScheduler.cancel();
     }
 
+    // A no-op for a dropped view (see dropInstance), which every mounted view
+    // is eventually.
     @Override
     protected void finalize() throws Throwable {
         super.finalize();
@@ -207,12 +229,18 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     @Override
     public void onSurfaceCreated(Surface surface, int width, int height) {
+        if (!hasNativeView()) {
+            return;
+        }
         surfaceAvailable(surface, width, height, true, mAppliedHighBitDepth);
     }
 
     @Override
     public void onSurfaceChanged(Surface surface, int width, int height) {
         Log.i(TAG, "onSurfaceChanged " + width + "/" + height);
+        if (!hasNativeView()) {
+            return;
+        }
         surfaceSizeChanged(surface, width, height, true, mAppliedHighBitDepth);
     }
 
@@ -221,17 +249,26 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     @Override
     public void onSurfaceTextureCreated(SurfaceTexture surface, int width, int height) {
+        if (!hasNativeView()) {
+            return;
+        }
         surfaceAvailable(surface, width, height, false, false);
     }
 
     @Override
     public void onSurfaceTextureChanged(SurfaceTexture surface, int width, int height) {
         Log.i(TAG, "onSurfaceTextureSizeChanged " + width + "/" + height);
+        if (!hasNativeView()) {
+            return;
+        }
         surfaceSizeChanged(surface, width, height, false, false);
     }
 
     @Override
     public void onSurfaceDestroyed() {
+        if (!hasNativeView()) {
+            return;
+        }
         surfaceDestroyed();
     }
 

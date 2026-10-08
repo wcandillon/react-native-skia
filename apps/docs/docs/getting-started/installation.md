@@ -23,7 +23,7 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android` and `react-native-skia-graphite-apple-*`) and are resolved automatically by the native build systems (CocoaPods on iOS and macOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
+The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with) and are resolved automatically by the native build systems (CocoaPods on iOS and macOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
 
 ## Requirements
 
@@ -64,14 +64,6 @@ If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
 If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_
 
 And then the _SDK Location_ section. It will show you the NDK path, or the option to download it if you don't have it installed.
-
-### Proguard
-
-If you're using Proguard, make sure to add the following rule at `proguard-rules.pro`:
-
-```
--keep class com.reactnative.skia.** { *; }
-```
 
 ### TroubleShooting
 

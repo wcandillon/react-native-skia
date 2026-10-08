@@ -2009,7 +2009,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-webgpu (0.11.1):
+  - react-native-webgpu (0.12.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -3238,7 +3238,7 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: ad676c360175e5b8af471b8ce1389e6cf4f9e1ee
+  hermes-engine: 11b010917f5f15150b2c015abddef1573d2bb05d
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: a41bbdd9af30bf2e5715796b313e44ec43eefff1
   RCTRequired: 7be34aabb0b77c3cefe644528df0fa0afad4e4d0
@@ -3277,7 +3277,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
   react-native-safe-area-context: 735c8ebacdececeb034ce0524f80ef1a484f67fe
   react-native-skia: 6d3bc59f7f98a17c8db54eafd6e5036d3c5ac9b4
-  react-native-webgpu: ef9f98e0c027e7304dfbde04822fbc75e8bd6c24
+  react-native-webgpu: 71eef3a2812d7809c50d5329ec759bba132ead8b
   React-NativeModulesApple: a2c3d2cbec893956a5b3e4060322db2984fff75b
   React-networking: 3f98bd96893a294376e7e03730947a08d474c380
   React-oscompat: 80166b66da22e7af7fad94474e9997bd52d4c8c6

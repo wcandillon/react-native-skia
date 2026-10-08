@@ -11,10 +11,13 @@
 
 #include <jsi/jsi.h>
 
-#include "RNSkCanvasProvider.h"
 #include "RNSkGraphiteProducer.h"
 #include "RNSkGraphiteTarget.h"
+#include "RNSkGraphiteTargetInfo.h"
+#include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkSurface.h"
+#include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
 #include "utils/RNSkLog.h"
 
@@ -22,7 +25,7 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkCanvas.h"
-#include "include/core/SkColorSpace.h"
+
 #include "include/core/SkImage.h"
 #include "include/core/SkRect.h"
 
@@ -37,8 +40,8 @@ namespace jsi = facebook::jsi;
  * records them itself through the view's target
  * (SkiaViewApi.makeGraphiteContext), or <Canvas> hands over a recorder (or a
  * picture) that the render thread pool records for the view. Either way the
- * recordings are queued on the target; the view presents them onto its canvas
- * provider on the main thread, once the platform view's surface can show a new
+ * recordings are queued on the target; the view presents them onto its window
+ * surface on the main thread, once the platform view's surface can show a new
  * frame (see setFrameScheduler).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
@@ -48,25 +51,24 @@ namespace jsi = facebook::jsi;
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
   RNSkView(std::shared_ptr<RNSkPlatformContext> context,
-           std::shared_ptr<RNSkCanvasProvider> canvasProvider)
-      : _platformContext(std::move(context)),
-        _canvasProvider(std::move(canvasProvider)),
+           std::shared_ptr<RNSkWindowSurface> surface)
+      : _platformContext(std::move(context)), _surface(std::move(surface)),
         _producer(std::make_shared<RNSkGraphiteProducer>()) {
-    // A new surface or a new size: present again. The platform view owns
-    // the provider together with this view, and the destructor clears the
+    // A new window or a new size: present again. The platform view owns
+    // the surface together with this view, and the destructor clears the
     // callback, so a raw capture is safe.
-    _canvasProvider->setRequestRedraw([this]() { requestRedraw(); });
+    _surface->setRequestRedraw([this]() { requestRedraw(); });
   }
 
   ~RNSkView() {
-    _canvasProvider->setRequestRedraw(nullptr);
+    _surface->setRequestRedraw(nullptr);
     std::shared_ptr<RNSkGraphiteTarget> target;
     {
       std::lock_guard<std::mutex> lock(_mutex);
       target = std::move(_target);
     }
     if (target) {
-      target->detach(_canvasProvider);
+      target->detach(_surface);
     }
   }
 
@@ -92,7 +94,7 @@ public:
           nativeId, _platformContext);
     }
     if (previous) {
-      previous->detach(_canvasProvider);
+      previous->detach(_surface);
     }
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
     auto context = _platformContext;
@@ -104,7 +106,7 @@ public:
       });
     };
     auto target = getTarget();
-    target->attach(_canvasProvider, scheduleOnMainThread);
+    target->attach(_surface, scheduleOnMainThread);
     _producer->setTarget(target);
     if (target->hasQueued()) {
       scheduleOnMainThread();
@@ -137,14 +139,6 @@ public:
     return _producer->applyUpdates(runtime, recorderId, values);
   }
 
-  /**
-   Releases the content the view draws without scheduling a frame: the host
-   view is torn down. On Android the native view outlives the Java view
-   until it is finalized, so the resources go away here rather than with the
-   garbage collector.
-   */
-  void releaseContent() { _producer->clear(); }
-
   /** Schedules redraw() on the main thread, once. */
   void requestRedraw() {
     if (_redrawRequested.exchange(true)) {
@@ -169,7 +163,7 @@ public:
   void redraw() {
     _redrawRequested = false;
     RNSkGraphiteTargetInfo targetInfo;
-    if (!_canvasProvider->getTargetInfo(&targetInfo)) {
+    if (!_surface->getTargetInfo(&targetInfo)) {
       return;
     }
     // Declarative content is recorded again for the surface as it is now.
@@ -193,14 +187,13 @@ public:
       if (frameComing || lastPresented == nullptr) {
         return;
       }
-      if (present(_canvasProvider, targetInfo, {lastPresented},
+      if (present(*_surface, targetInfo, {lastPresented},
                   /* remember= */ true)) {
         _producer->onFramePresented();
       }
       return;
     }
-    if (present(_canvasProvider, targetInfo, recordings,
-                /* remember= */ true)) {
+    if (present(*_surface, targetInfo, recordings, /* remember= */ true)) {
       _producer->onFramePresented();
     } else if (target) {
       target->requeue(recordings);
@@ -208,43 +201,39 @@ public:
   }
 
   /**
-   Renders the view into an offscreen surface: declarative content is
-   replayed on the calling thread with the latest values, so the snapshot
-   does not wait for a frame; otherwise the current frame is replayed. A
-   snapshot is in sRGB whichever color space the view renders in: a frame
-   recorded in Display P3 is replayed into a surface in that color space and
-   the image is converted.
+   Renders the view into an offscreen surface and returns a GPU image of it,
+   usable by any canvas: declarative content is replayed on the calling
+   thread with the latest values, so the snapshot does not wait for a frame;
+   otherwise the current frame is replayed. A snapshot is in sRGB whichever
+   color space the view renders in: a frame recorded in Display P3 is
+   replayed into a surface in that color space and converted on the GPU (see
+   RNSkOffscreenSurface::makeSnapshot).
    */
   sk_sp<SkImage> makeImageSnapshot(SkRect *bounds) {
     if (_producer->hasContent()) {
-      auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
-          _platformContext, getScaledWidth(), getScaledHeight());
-      if (auto *canvas = provider->getCanvas()) {
+      RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
+                                   getScaledHeight());
+      if (auto *canvas = surface.getCanvas()) {
         _producer->renderInto(canvas, _platformContext->getPixelDensity());
       }
-      return provider->makeSnapshot(bounds);
+      return surface.makeSnapshot(bounds);
     }
     auto frame = getLastFrame();
     const bool useP3ColorSpace =
         frame != nullptr && frame->getTarget().useP3ColorSpace;
-    auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
-        _platformContext, getScaledWidth(), getScaledHeight(), useP3ColorSpace);
+    RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
+                                 getScaledHeight(), useP3ColorSpace);
     if (frame != nullptr) {
-      renderFrame(provider, frame);
+      renderFrame(surface, frame);
     }
-    auto image = provider->makeSnapshot(bounds);
-    if (image != nullptr && useP3ColorSpace) {
-      // A raster image: converted on the CPU, no recorder involved.
-      image = image->makeColorSpace(nullptr, SkColorSpace::MakeSRGB(), {});
-    }
-    return image;
+    return surface.makeSnapshot(bounds);
   }
 
   /** Width of the surface, in pixels. */
-  int getScaledWidth() { return _canvasProvider->getWidth(); }
+  int getScaledWidth() { return _surface->getWidth(); }
 
   /** Height of the surface, in pixels. */
-  int getScaledHeight() { return _canvasProvider->getHeight(); }
+  int getScaledHeight() { return _surface->getHeight(); }
 
   // Platform view side -------------------------------------------------------
 
@@ -281,15 +270,14 @@ public:
       return false;
     }
     RNSkGraphiteTargetInfo targetInfo;
-    if (!_canvasProvider->getTargetInfo(&targetInfo)) {
+    if (!_surface->getTargetInfo(&targetInfo)) {
       return false;
     }
     auto recordings = target->takeQueued();
     if (recordings.empty()) {
       return false;
     }
-    if (!present(_canvasProvider, targetInfo, recordings,
-                 /* remember= */ true)) {
+    if (!present(*_surface, targetInfo, recordings, /* remember= */ true)) {
       target->requeue(recordings);
       return true;
     }
@@ -300,10 +288,6 @@ public:
   bool hasQueuedRecordings() {
     auto target = getTarget();
     return target && target->hasQueued();
-  }
-
-  std::shared_ptr<RNSkCanvasProvider> getCanvasProvider() {
-    return _canvasProvider;
   }
 
   std::shared_ptr<RNSkPlatformContext> getPlatformContext() {
@@ -333,25 +317,24 @@ private:
     return recording;
   }
 
-  /** Replays a frame onto another provider (a snapshot surface). Any thread. */
-  bool renderFrame(const std::shared_ptr<RNSkCanvasProvider> &provider,
+  /** Replays a frame onto another surface (a snapshot surface). Any thread. */
+  bool renderFrame(RNSkSurface &surface,
                    const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     RNSkGraphiteTargetInfo targetInfo;
-    if (!provider->getTargetInfo(&targetInfo)) {
+    if (!surface.getTargetInfo(&targetInfo)) {
       return false;
     }
-    return present(provider, targetInfo, {recording}, /* remember= */ false);
+    return present(surface, targetInfo, {recording}, /* remember= */ false);
   }
 
   /**
-   Replays the recordings onto the provider's target, in order, and remembers
+   Replays the recordings onto the surface's target, in order, and remembers
    the last one for the next redraw when asked to (not for a snapshot).
-   Returns false when the provider could not present (no surface, app in the
+   Returns false when the surface could not present (no window, app in the
    background), in which case the caller keeps the recordings.
    */
   bool
-  present(const std::shared_ptr<RNSkCanvasProvider> &provider,
-          const RNSkGraphiteTargetInfo &targetInfo,
+  present(RNSkSurface &surface, const RNSkGraphiteTargetInfo &targetInfo,
           const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
           bool remember) {
     // Recordings of the target's size and color space are replayed straight
@@ -361,7 +344,7 @@ private:
     bool success = true;
     auto flush = [&]() {
       if (!batch.empty()) {
-        success = provider->presentRecordings(batch) && success;
+        success = surface.presentRecordings(batch) && success;
         batch.clear();
       }
     };
@@ -381,7 +364,7 @@ private:
         continue;
       }
       flush();
-      if (presentThroughTexture(provider, recording)) {
+      if (presentThroughTexture(surface, recording)) {
         last = recording;
       } else {
         success = false;
@@ -411,33 +394,33 @@ private:
    the colors.
    */
   bool presentThroughTexture(
-      const std::shared_ptr<RNSkCanvasProvider> &provider,
+      RNSkSurface &surface,
       const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     const auto &size = recording->getTarget();
-    auto intermediate = std::make_shared<RNSkOffscreenCanvasProvider>(
-        _platformContext, size.width, size.height, size.useP3ColorSpace);
+    RNSkOffscreenSurface intermediate(_platformContext, size.width, size.height,
+                                      size.useP3ColorSpace);
     RNSkGraphiteTargetInfo info;
-    if (!intermediate->getTargetInfo(&info) ||
+    if (!intermediate.getTargetInfo(&info) ||
         !recording->isCompatibleWith(info)) {
       // No texture of that size and format: the frame is consumed.
       RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, the "
                                "surface is %dx%d",
-                               size.width, size.height, provider->getWidth(),
-                               provider->getHeight());
+                               size.width, size.height, surface.getWidth(),
+                               surface.getHeight());
       return true;
     }
-    if (!intermediate->presentRecordings({recording->get()})) {
+    if (!intermediate.presentRecordings({recording->get()})) {
       return false;
     }
-    auto image = intermediate->makeImage();
+    auto image = intermediate.makeImage();
     if (image == nullptr) {
       return false;
     }
-    return provider->presentImage(image);
+    return surface.presentImage(image);
   }
 
   std::shared_ptr<RNSkPlatformContext> _platformContext;
-  std::shared_ptr<RNSkCanvasProvider> _canvasProvider;
+  std::shared_ptr<RNSkWindowSurface> _surface;
   std::shared_ptr<RNSkGraphiteProducer> _producer;
   size_t _nativeId = 0;
   std::function<void()> _frameScheduler;

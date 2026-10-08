@@ -33,14 +33,6 @@ install_apple_skia_libs = lambda do |base_dir, packages|
     src = File.join(pkg_dir, 'libs')
     next unless Dir.exist?(src) && !Dir.glob(File.join(src, '*.xcframework')).empty?
 
-    # Graphite packages carry the Dawn release tag they ship (libs/.dawn-version),
-    # used below for the react-native-webgpu version check.
-    dawn_version = File.join(src, '.dawn-version')
-    if File.exist?(dawn_version)
-      FileUtils.mkdir_p(File.join(base_dir, 'libs'))
-      FileUtils.cp(dawn_version, File.join(base_dir, 'libs', '.dawn-version'))
-    end
-
     version = JSON.parse(File.read(File.join(pkg_dir, 'package.json')))['version'].to_s
     dest = File.join(base_dir, 'libs', platform)
     marker = File.join(dest, '.version')
@@ -64,7 +56,7 @@ install_apple_skia_libs = lambda do |base_dir, packages|
 end
 
 # The Graphite binaries ship in the react-native-skia-graphite-apple-* npm
-# packages (no tvOS), together with the shared Dawn (libwebgpu_dawn.xcframework).
+# packages (no tvOS).
 apple_skia_packages = {
   'ios' => 'react-native-skia-graphite-apple-ios',
   'macos' => 'react-native-skia-graphite-apple-macos'
@@ -78,10 +70,35 @@ framework_names = ['libskia', 'libsvg', 'libskshaper', 'libskparagraph',
                    'libskunicode_core', 'libskunicode_libgrapheme',
                    'libskottie', 'libsksg']
 
-# Add Dawn library for Graphite builds (contains dawn::native symbols).
-# libwebgpu_dawn is the same artifact react-native-webgpu vendors. When
-# react-native-webgpu is installed, it provides Dawn for the whole app and
-# vendoring the framework here as well would fail CocoaPods'
+# Dawn, the WebGPU implementation Graphite renders with, ships in the
+# react-native-webgpu-dawn npm package: the one react-native-webgpu depends on
+# too, built from the Dawn commit this Skia release pins. A Dawn built locally
+# with `yarn build-dawn` (libs/dawn/apple/libwebgpu_dawn.xcframework, no
+# .version stamp) takes precedence over the package.
+dawn_pkg_dir = resolve_node_package.call('react-native-webgpu-dawn', __dir__)
+if dawn_pkg_dir.nil?
+  raise "react-native-skia: the react-native-webgpu-dawn package was not found. " \
+        "It ships the Dawn library this Graphite build links against; make sure " \
+        "dependencies are installed (yarn install / npm install), then run `pod install` again."
+end
+dawn_pkg = JSON.parse(File.read(File.join(dawn_pkg_dir, 'package.json')))
+dawn_version = dawn_pkg['version'].to_s
+dawn_commit = dawn_pkg.dig('dawn', 'commit').to_s
+dawn_libs = File.join(__dir__, 'libs', 'dawn', 'apple')
+dawn_framework = File.join(dawn_libs, 'libwebgpu_dawn.xcframework')
+dawn_marker = File.join(dawn_libs, '.version')
+if !File.exist?(dawn_marker) && Dir.exist?(dawn_framework)
+  Pod::UI.puts 'react-native-skia: using locally built Dawn (libs/dawn)'
+elsif !File.exist?(dawn_marker) || File.read(dawn_marker).strip != dawn_version
+  Pod::UI.puts "react-native-skia: installing Dawn (react-native-webgpu-dawn #{dawn_version})"
+  FileUtils.rm_rf(dawn_libs)
+  FileUtils.mkdir_p(dawn_libs)
+  FileUtils.cp_r(File.join(dawn_pkg_dir, 'libs', 'apple', 'libwebgpu_dawn.xcframework'), dawn_libs)
+  File.write(dawn_marker, dawn_version)
+end
+
+# When react-native-webgpu is installed, it provides Dawn for the whole app
+# and vendoring the framework here as well would fail CocoaPods'
 # duplicate-framework-name check, so Skia only vendors it when alone. The
 # skia pod's dawn::native references resolve from webgpu's copy at app link.
 # An app that installs react-native-webgpu but keeps it out of a platform's
@@ -92,44 +109,35 @@ has_webgpu_pkg = !webgpu_pkg_dir.nil? && ENV['RNSKIA_VENDOR_DAWN'] != '1'
 if has_webgpu_pkg
   Pod::UI.puts 'react-native-skia: react-native-webgpu detected, Dawn is provided by its libwebgpu_dawn'
 
-  # Both packages must link the exact same Dawn artifact. Compare the release
-  # tag the Skia binaries were packaged with (libs/.dawn-version, copied in from
-  # the binary package above) against the tag react-native-webgpu declares in
-  # its package.json `dawn` field.
-  dawn_marker = File.join(__dir__, 'libs', '.dawn-version')
-  if File.exist?(dawn_marker)
-    skia_dawn = File.read(dawn_marker).strip
-    webgpu_pkg = JSON.parse(File.read(File.join(webgpu_pkg_dir, 'package.json')))
-    webgpu_dawn_field = webgpu_pkg['dawn'].to_s
-    if webgpu_dawn_field.empty?
-      raise "react-native-skia: the installed react-native-webgpu " \
-            "(#{webgpu_pkg['version']}) does not declare a `dawn` field in its " \
-            "package.json, so it predates shared-Dawn support and cannot be " \
-            "paired with this Graphite build (which links #{skia_dawn}). " \
-            "Upgrade react-native-webgpu."
+  # Both packages must link the exact same Dawn. react-native-webgpu depends on
+  # react-native-webgpu-dawn too: the version it resolves must be the one this
+  # package resolves. Older releases vendor their own Dawn and record the Dawn
+  # commit it was built from (`dawnCommit`), which must then be the commit this
+  # Graphite build's Dawn package was built from.
+  webgpu_pkg = JSON.parse(File.read(File.join(webgpu_pkg_dir, 'package.json')))
+  if webgpu_pkg.dig('dependencies', 'react-native-webgpu-dawn')
+    webgpu_dawn_dir = resolve_node_package.call('react-native-webgpu-dawn', webgpu_pkg_dir)
+    webgpu_dawn_version = webgpu_dawn_dir.nil? ? nil : JSON.parse(File.read(File.join(webgpu_dawn_dir, 'package.json')))['version'].to_s
+    unless webgpu_dawn_version == dawn_version
+      raise "react-native-skia: Dawn version mismatch. This Graphite build links " \
+            "react-native-webgpu-dawn #{dawn_version} but react-native-webgpu resolves " \
+            "#{webgpu_dawn_version || 'none'}. Align the two packages so the app contains exactly one Dawn."
     end
-    webgpu_dawn = "dawn-#{webgpu_dawn_field.tr('/', '-')}"
-    unless skia_dawn == webgpu_dawn
-      raise "react-native-skia: Dawn version mismatch. This Graphite build " \
-            "links #{skia_dawn} but react-native-webgpu links #{webgpu_dawn}. " \
-            "Align the two packages so the app contains exactly one Dawn."
-    end
-    Pod::UI.puts "react-native-skia: Dawn versions match (#{skia_dawn})"
+    Pod::UI.puts "react-native-skia: Dawn versions match (react-native-webgpu-dawn #{dawn_version})"
+  elsif webgpu_pkg['dawnCommit'].to_s.empty?
+    raise "react-native-skia: the installed react-native-webgpu (#{webgpu_pkg['version']}) " \
+          "neither depends on react-native-webgpu-dawn nor declares the Dawn commit it " \
+          "vendors, so it cannot be paired with this Graphite build. Upgrade react-native-webgpu."
+  elsif webgpu_pkg['dawnCommit'] != dawn_commit
+    raise "react-native-skia: Dawn version mismatch. This Graphite build links Dawn " \
+          "#{dawn_commit[0, 10]} (react-native-webgpu-dawn #{dawn_version}) but react-native-webgpu " \
+          "#{webgpu_pkg['version']} vendors Dawn #{webgpu_pkg['dawnCommit'][0, 10]}. " \
+          "Align the two packages so the app contains exactly one Dawn."
+  else
+    Pod::UI.puts "react-native-skia: Dawn versions match (commit #{dawn_commit[0, 10]})"
   end
 end
-unless has_webgpu_pkg
-  # CocoaPods silently skips missing vendored frameworks, which would surface
-  # later as undefined dawn::native symbols at link time. Fail early instead.
-  %w[ios macos].each do |platform|
-    platform_dir = File.join(__dir__, 'libs', platform)
-    # A missing libs/<platform> is reported by the prebuilt binaries check below.
-    next if !Dir.exist?(platform_dir) || Dir.exist?(File.join(platform_dir, 'libwebgpu_dawn.xcframework'))
-    raise "react-native-skia: libwebgpu_dawn.xcframework not found in libs/#{platform}. " \
-          "The installed #{apple_skia_packages[platform]} package does not ship the shared " \
-          "Dawn library this Graphite build links against. Upgrade it, then run `pod install` again."
-  end
-  framework_names += ['libwebgpu_dawn']
-end
+dawn_frameworks = has_webgpu_pkg ? [] : ['libs/dawn/apple/libwebgpu_dawn.xcframework']
 
 # Verify that the prebuilt binaries are available (copied in above from the npm
 # packages, or built locally with `yarn build-skia`).
@@ -146,8 +154,8 @@ end
 
 # Build platform-specific framework paths (relative to pod's libs directory)
 # xcframeworks are copied into libs/ by install_apple_skia_libs above.
-ios_frameworks = framework_names.map { |f| "libs/ios/#{f}.xcframework" }
-osx_frameworks = framework_names.map { |f| "libs/macos/#{f}.xcframework" }
+ios_frameworks = framework_names.map { |f| "libs/ios/#{f}.xcframework" } + dawn_frameworks
+osx_frameworks = framework_names.map { |f| "libs/macos/#{f}.xcframework" } + dawn_frameworks
 
 Pod::Spec.new do |s|
   s.name         = "react-native-skia"

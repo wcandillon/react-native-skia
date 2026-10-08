@@ -7,6 +7,7 @@
 
 #include "CustomBlendModes.h"
 #include "JsiSkConverters.h"
+#include "JsiSkDispatcher.h"
 #include "JsiSkFont.h"
 #include "JsiSkImage.h"
 #include "JsiSkImageInfo.h"
@@ -507,23 +508,18 @@ public:
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
 
-    // Graphite records draws lazily and offers no synchronous GPU readback. If
-    // this canvas belongs to a surface, snap & submit its recording, snapshot
-    // it to a CPU raster image and read from that (mirroring
-    // makeImageSnapshot). A canvas without an owning surface (e.g. a
-    // picture-recording canvas) has no texture to read back, so fall through to
-    // the raster canvas read below.
+    // A Graphite canvas has no readback of its own: the canvas of a surface
+    // reads from a snapshot of the surface (a copy task on its recorder,
+    // submitted so that the texture can be read back). A canvas without an
+    // owning surface (a picture-recording canvas) falls through to the raster
+    // read below.
     if (_surface) {
-      // Snapshot first: makeImageSnapshot records a copy task into the recorder
-      // that must be submitted before the texture can be read back (this is the
-      // same ordering used by JsiSkSurface::makeImageSnapshot and RNSkView).
       auto snapshot = _surface->makeImageSnapshot();
       if (auto *recorder = _surface->recorder()) {
         DawnContext::getInstance().submitRecording(recorder->snap().get());
       }
-      auto raster = DawnContext::getInstance().MakeRasterImage(snapshot);
-      if (!raster || !raster->readPixels(nullptr, *info, bfrPtr, bytesPerRow,
-                                         srcX, srcY)) {
+      if (!JsiSkImage::readPixelsInto(snapshot, *info, bfrPtr, bytesPerRow,
+                                      srcX, srcY)) {
         return jsi::Value::null();
       }
       return dest;
@@ -602,16 +598,31 @@ public:
     setCanvas(canvas);
   }
 
+  ~JsiSkCanvas() override {
+    // The canvas may hold the last reference to its surface, and the GC may
+    // finalize it on any thread: a Graphite surface has to be destroyed on
+    // the thread of its recorder (see Dispatcher).
+    if (_dispatcher) {
+      _dispatcher->release(std::move(_surface));
+    }
+  }
+
   void setCanvas(SkCanvas *canvas) { _canvas = canvas; }
   SkCanvas *getCanvas() { return _canvas; }
 
-  // Optionally associate the canvas with its owning surface. This lets
-  // readPixels fall back to a surface snapshot on Graphite, which has no
-  // synchronous canvas readback.
-  void setSurface(sk_sp<SkSurface> surface) { _surface = std::move(surface); }
+  // Optionally associate the canvas with its owning surface, keeping it alive
+  // as long as the canvas. This lets readPixels fall back to a surface
+  // snapshot on Graphite, which has no synchronous canvas readback. The
+  // dispatcher is the one of the thread the surface was created on.
+  void setSurface(sk_sp<SkSurface> surface,
+                  std::shared_ptr<Dispatcher> dispatcher) {
+    _surface = std::move(surface);
+    _dispatcher = std::move(dispatcher);
+  }
 
 private:
   SkCanvas *_canvas;
   sk_sp<SkSurface> _surface;
+  std::shared_ptr<Dispatcher> _dispatcher;
 };
 } // namespace RNSkia

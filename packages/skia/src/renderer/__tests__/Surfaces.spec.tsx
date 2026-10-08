@@ -3,10 +3,28 @@ import React from "react";
 import { Circle, Group } from "../components";
 import { processResult } from "../../__tests__/setup";
 import { setupSkia } from "../../skia/__tests__/setup";
+import { AlphaType, ColorType } from "../../skia/types";
 
 import { drawOnNode } from "./setup";
 
 describe("Surface", () => {
+  it("asImage() draws the content of the surface", () => {
+    const { Skia } = setupSkia();
+    const source = Skia.Surface.MakeOffscreen(2, 2)!;
+    source.getCanvas().drawColor(Skia.Color("cyan"));
+    source.flush();
+    const image = source.asImage();
+    const target = Skia.Surface.MakeOffscreen(2, 2)!;
+    target.getCanvas().drawImage(image, 0, 0);
+    target.flush();
+    const pixels = target.makeImageSnapshot().readPixels(0, 0, {
+      width: 1,
+      height: 1,
+      colorType: ColorType.RGBA_8888,
+      alphaType: AlphaType.Unpremul,
+    });
+    expect(Array.from(pixels!)).toEqual([0, 255, 255, 255]);
+  });
   it("MakeNonImageTexture on a CPU surface shouldn't leak", () => {
     const { Skia } = setupSkia();
     // When leaking, the WASM memory limit will be reached quite quickly

@@ -69,20 +69,21 @@ public:
             jsi::Runtime &runtime,
             std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
           context->makeViewScreenshot(
-              viewTag, [&runtime, context = std::move(context),
+              viewTag, [context = std::move(context),
                         promise = std::move(promise)](sk_sp<SkImage> image) {
-                context->runOnJavascriptThread([&runtime,
-                                                context = std::move(context),
-                                                promise = std::move(promise),
-                                                result = std::move(image)]() {
-                  if (result == nullptr) {
-                    promise->reject("Failed to create image from view tag");
-                    return;
-                  }
-                  promise->resolve(
-                      makeJsiObject(runtime, std::make_shared<JsiSkImage>(
-                                                 context, std::move(result))));
-                });
+                // The runtime the result is delivered on, not the one the
+                // screenshot started on: a reload may have destroyed it.
+                context->runOnJavascriptThread(
+                    [context = std::move(context), promise = std::move(promise),
+                     result = std::move(image)](jsi::Runtime &runtime) {
+                      if (result == nullptr) {
+                        promise->reject("Failed to create image from view tag");
+                        return;
+                      }
+                      promise->resolve(makeJsiObject(
+                          runtime, std::make_shared<JsiSkImage>(
+                                       context, std::move(result))));
+                    });
               });
         });
   }

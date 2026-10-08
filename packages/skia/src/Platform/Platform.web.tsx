@@ -36,6 +36,27 @@ const View = (({ children, style: rawStyle }: ViewProps) => {
   return <div style={cssStyles}>{children}</div>;
 }) as unknown as typeof ViewComponent;
 
+interface AssetRegistry {
+  getAssetByID(id: number): {
+    httpServerLocation: string;
+    name: string;
+    type: string;
+  };
+}
+
+// React Native 0.87 replaced Libraries/Image/AssetRegistry with the
+// react-native/asset-registry export. Each require must stay directly inside
+// its own try block so that bundlers treat it as an optional dependency.
+const requireAssetRegistry = (): AssetRegistry | null => {
+  try {
+    return require("react-native/asset-registry");
+  } catch {}
+  try {
+    return require("react-native/Libraries/Image/AssetRegistry");
+  } catch {}
+  return null;
+};
+
 export const Platform: IPlatform = {
   OS: "web",
   PixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1, // window is not defined on node
@@ -45,11 +66,10 @@ export const Platform: IPlatform = {
       return asset;
     }
     if (isRNModule(asset)) {
-      if (typeof require === "function") {
-        const {
-          getAssetByID,
-        } = require("react-native/Libraries/Image/AssetRegistry");
-        const { httpServerLocation, name, type } = getAssetByID(asset);
+      const registry =
+        typeof require === "function" ? requireAssetRegistry() : null;
+      if (registry) {
+        const { httpServerLocation, name, type } = registry.getAssetByID(asset);
         const uri = `${httpServerLocation}/${name}.${type}`;
         return uri;
       }

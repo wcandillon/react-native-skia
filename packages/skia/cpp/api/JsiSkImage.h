@@ -7,23 +7,25 @@
 #include <variant>
 
 #include "JsiSkConverters.h"
-#include "JsiSkDispatcher.h"
 #include "JsiSkImageInfo.h"
 #include "JsiSkMatrix.h"
 #include "JsiSkNativeObjects.h"
 #include "JsiSkShader.h"
 #include "api/third_party/base64.h"
+#include "jsi/JsiPromises.h"
 
 #include "utils/RNSkTypedArray.h"
 
 #include "include/gpu/graphite/Context.h"
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkWorker.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/codec/SkEncodedImageFormat.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkStream.h"
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
@@ -139,9 +141,6 @@ inline SkSamplingOptions SamplingOptionsFromValue(jsi::Runtime &runtime,
 }
 
 class JsiSkImage : public JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage> {
-private:
-  std::shared_ptr<Dispatcher> _dispatcher;
-
 public:
   static constexpr const char *CLASS_NAME = "Image";
 
@@ -293,15 +292,69 @@ public:
             .asObject(runtime)
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
-
-    // Graphite offers no synchronous GPU readback, so read from a CPU raster
-    // copy of the image (a no-op when the image is already raster).
-    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
-    if (!image ||
-        !image->readPixels(nullptr, info, bfrPtr, bytesPerRow, srcX, srcY)) {
+    if (!readPixelsInto(getObject(), info, bfrPtr, bytesPerRow, srcX, srcY)) {
       return jsi::Value::null();
     }
     return dest;
+  }
+
+  /**
+   Reads the pixels of `image` under `dstInfo` at (srcX, srcY) into `dst`,
+   converting them to the requested color and alpha types. A raster or lazy
+   image is read on the CPU (decoded if needed). A Graphite image is read
+   back from the GPU, only the requested rectangle, and the caller waits for
+   the GPU; see makeRasterImage() to read back without waiting.
+   */
+  static bool readPixelsInto(const sk_sp<SkImage> &image,
+                             const SkImageInfo &dstInfo, void *dst,
+                             size_t rowBytes, int srcX, int srcY) {
+    if (!image->isTextureBacked()) {
+      return image->readPixels(nullptr, dstInfo, dst, rowBytes, srcX, srcY);
+    }
+    // Like SkImage::readPixels(), only the part of the rectangle inside the
+    // image is read, into the matching part of `dst`.
+    auto srcRect =
+        SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
+    if (!srcRect.intersect(image->bounds())) {
+      return false;
+    }
+    SkPixmap dstPixels(dstInfo, dst, rowBytes);
+    SkPixmap dstSubset;
+    if (!dstPixels.extractSubset(&dstSubset,
+                                 srcRect.makeOffset(-srcX, -srcY))) {
+      return false;
+    }
+    auto result = DawnContext::getInstance().readPixelsSync(image, srcRect);
+    if (result == nullptr) {
+      return false;
+    }
+    SkPixmap pixels(image->imageInfo().makeDimensions(srcRect.size()),
+                    result->data(0), result->rowBytes(0));
+    return pixels.readPixels(dstSubset);
+  }
+
+  // A GPU image: uploaded now, on the calling thread, and drawn by every
+  // canvas afterwards without the upload per canvas a raster image gets.
+  // Options: { mipmapped?: boolean }.
+  JSI_HOST_FUNCTION(makeTextureImage) {
+    bool mipmapped = false;
+    if (count > 0 && arguments[0].isObject()) {
+      auto value =
+          arguments[0].asObject(runtime).getProperty(runtime, "mipmapped");
+      mipmapped = value.isBool() && value.getBool();
+    }
+    auto image = getObject();
+    auto texture =
+        DawnContext::getInstance().MakeTextureImage(image, mipmapped);
+    if (texture == nullptr) {
+      throw jsi::JSError(runtime,
+                         "makeTextureImage: uploading the image failed");
+    }
+    if (texture == image) {
+      return jsi::Value(runtime, thisValue);
+    }
+    return makeJsiObject(runtime, std::make_shared<JsiSkImage>(
+                                      getContext(), std::move(texture)));
   }
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
@@ -311,6 +364,52 @@ public:
       return nullptr;
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
+  }
+
+  // A CPU image, resolved without blocking: a Graphite image is read back
+  // from the GPU and the result delivered by the readback poller, an encoded
+  // image is decoded on the worker thread. The promise resolves on the JS
+  // thread, so this is for the JS thread; a worklet uses
+  // makeNonTextureImage().
+  JSI_HOST_FUNCTION(makeRasterImage) {
+    auto image = getObject();
+    auto context = getContext();
+    return RNJsi::JsiPromises::createPromiseAsJSIValue(
+        runtime, [&thisValue, image, context = std::move(context)](
+                     jsi::Runtime &runtime,
+                     std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+          if (!image->isTextureBacked() && !image->isLazyGenerated()) {
+            // The executor runs synchronously: thisValue is still valid.
+            promise->resolve(jsi::Value(runtime, thisValue));
+            return;
+          }
+          // The runtime is the one handed to the job, not this one: a
+          // reload may destroy this one before the result is ready.
+          auto deliver = [context, promise](sk_sp<SkImage> raster) {
+            context->runOnJavascriptThread(
+                [context, promise,
+                 raster = std::move(raster)](jsi::Runtime &runtime) {
+                  if (raster == nullptr) {
+                    promise->reject(
+                        "makeRasterImage: reading the image back failed");
+                    return;
+                  }
+                  promise->resolve(makeJsiObject(
+                      runtime, std::make_shared<JsiSkImage>(context, raster)));
+                });
+          };
+          if (image->isTextureBacked()) {
+            DawnContext::getInstance().readPixels(
+                image, image->bounds(), [image, deliver](ReadResult result) {
+                  deliver(DawnContext::MakeRasterImage(image->imageInfo(),
+                                                       std::move(result)));
+                });
+          } else {
+            RNSkWorker::getInstance().post([image, deliver]() {
+              deliver(image->makeRasterImage(nullptr));
+            });
+          }
+        });
   }
 
   bool isTextureBacked() { return getObject()->isTextureBacked(); }
@@ -341,37 +440,23 @@ public:
                       &JsiSkImage::readPixels);
     installMethod(runtime, prototype, "makeNonTextureImage",
                   &JsiSkImage::makeNonTextureImage);
+    installHostMethod(runtime, prototype, "makeRasterImage",
+                      &JsiSkImage::makeRasterImage);
+    installHostMethod(runtime, prototype, "makeTextureImage",
+                      &JsiSkImage::makeTextureImage);
     installMethod(runtime, prototype, "isTextureBacked",
                   &JsiSkImage::isTextureBacked);
   }
 
-  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context,
-             const sk_sp<SkImage> image)
+  /**
+   `sharesTexture`: the image is a view of a texture someone else owns (see
+   surface.asImage()), which that owner already reports as its memory.
+   */
+  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image,
+             bool sharesTexture = false)
       : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
-                                                            std::move(image)) {
-    // Get the dispatcher for the current thread
-    _dispatcher = Dispatcher::getDispatcher();
-    // Process any pending operations (e.g. deletions of previous resources)
-    _dispatcher->processQueue();
-  }
-
-public:
-  ~JsiSkImage() override {
-    if (!isDisposed()) {
-      // This JSI Object is being deleted from a GC, which might happen
-      // on a separate Thread. GPU resources (like SkImage) must be deleted
-      // on the same Thread they were created on, so in this case we schedule
-      // deletion to run on the Thread this Object was created on.
-      auto image = getObjectUnchecked();
-      if (image && _dispatcher) {
-        _dispatcher->run([image]() {
-          // Image will be deleted when this lambda is destroyed, on the
-          // original Thread.
-        });
-      }
-      releaseResources();
-    }
-  }
+                                                            std::move(image)),
+        _sharesTexture(sharesTexture) {}
 
   size_t getMemoryPressure() override {
     if (isDisposed()) {
@@ -380,13 +465,21 @@ public:
     auto image = getObjectUnchecked();
     if (image) {
       if (image->isTextureBacked()) {
-        return image->textureSize();
-      } else {
-        return image->imageInfo().computeMinByteSize();
+        return _sharesTexture ? 0 : image->textureSize();
       }
+      if (image->isLazyGenerated()) {
+        // Still encoded: what it holds is the file, not the decoded pixels.
+        if (auto encoded = image->refEncodedData()) {
+          return encoded->size();
+        }
+      }
+      return image->imageInfo().computeMinByteSize();
     }
     return 0;
   }
+
+private:
+  bool _sharesTexture;
 };
 
 } // namespace RNSkia

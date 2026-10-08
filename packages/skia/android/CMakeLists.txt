@@ -59,7 +59,6 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaManager.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
-        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/RNSkAndroidCanvasProvider.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JSICache.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiPromises.cpp"
@@ -68,14 +67,12 @@ add_library(
 
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkManager.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkGraphiteProducer.cpp"
-        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnWindowContext.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkWindowSurface.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnInterop.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/CSSColorParser.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/base64.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/SkottieUtils.cpp"
-
-        "${PROJECT_SOURCE_DIR}/../cpp/api/JsiSkDispatcher.cpp"
 )
 
 
@@ -132,16 +129,22 @@ set_property(TARGET skunicode_core PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}
 add_library(skunicode_icu STATIC IMPORTED)
 set_property(TARGET skunicode_icu PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libskunicode_icu.a")
 
-add_library(pathops STATIC IMPORTED)
-set_property(TARGET pathops PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libpathops.a")
-
 add_library(jsonreader STATIC IMPORTED)
 set_property(TARGET jsonreader PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libjsonreader.a")
 
-# Dawn is a shared library, the same artifact react-native-webgpu links, so
-# an app that installs both packages loads exactly one Dawn copy.
+# Dawn is a shared library from the react-native-webgpu-dawn package (or a
+# local build under libs/dawn), the same one react-native-webgpu links, so an
+# app that installs both packages loads exactly one Dawn copy. DAWN_LIBS_PATH is
+# passed from Gradle.
+if(NOT DAWN_LIBS_PATH)
+    message(FATAL_ERROR "react-native-skia: DAWN_LIBS_PATH is not set")
+endif()
+set (DAWN_LIB "${DAWN_LIBS_PATH}/${ANDROID_ABI}/libwebgpu_dawn.so")
+if(NOT EXISTS "${DAWN_LIB}")
+    message(FATAL_ERROR "react-native-skia: ${DAWN_LIB} not found. Reinstall dependencies (yarn install / npm install).")
+endif()
 add_library(webgpu_dawn SHARED IMPORTED)
-set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libwebgpu_dawn.so")
+set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${DAWN_LIB}")
 
 find_library(
         LOG_LIB

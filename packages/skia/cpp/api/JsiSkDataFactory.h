@@ -32,20 +32,20 @@ public:
           // separate thread
           context->performStreamOperation(
               localUri,
-              [&runtime, context = std::move(context),
-               promise = std::move(promise)](
+              [context = std::move(context), promise = std::move(promise)](
                   std::unique_ptr<SkStreamAsset> stream) -> void {
-                // Schedule drawCallback on the Javascript thread
+                // Schedule drawCallback on the Javascript thread, with the
+                // runtime it runs on: a reload may have destroyed the one
+                // this load started on.
                 auto result =
                     SkData::MakeFromStream(stream.get(), stream->getLength());
-                context->runOnJavascriptThread([&runtime,
-                                                context = std::move(context),
-                                                promise = std::move(promise),
-                                                result = std::move(result)]() {
-                  promise->resolve(makeJsiObject(
-                      runtime,
-                      std::make_shared<JsiSkData>(context, std::move(result))));
-                });
+                context->runOnJavascriptThread(
+                    [context = std::move(context), promise = std::move(promise),
+                     result = std::move(result)](jsi::Runtime &runtime) {
+                      promise->resolve(makeJsiObject(
+                          runtime, std::make_shared<JsiSkData>(
+                                       context, std::move(result))));
+                    });
               });
         });
   };

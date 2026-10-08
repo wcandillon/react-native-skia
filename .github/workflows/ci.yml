@@ -191,13 +191,45 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      # Compiler cache for the C++ builds (this library, React Native and the
+      # other native modules). CMake reads the launcher from the environment,
+      # which Gradle passes on to it, so build.gradle needs no change. Most
+      # pull requests touch little C++, and a hit turns the compile into a
+      # copy. The key is unique per run: the cache is a rolling one, always
+      # saved, and restored from the most recent run. The compiler check is on
+      # the binary's content rather than its mtime because the NDK is
+      # reinstalled on every run.
+      - name: Install ccache
+        run: sudo apt-get install -y ccache
+
+      - name: Restore ccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-android-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-android-
+
       - name: Build example for Android
         env:
           JAVA_OPTS: "-XX:MaxHeapSize=6g"
           # Only the emulator ABI is tested below, so skip the other three.
           ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_MAXSIZE: 2G
+          CCACHE_COMPILERCHECK: content
         run: |
+          ccache --zero-stats
           yarn turbo run build:android --concurrency 1
+          ccache --show-stats
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-android-${{ github.sha }}
 
       - name: Unit test the Android library
         working-directory: apps/example/android
@@ -278,6 +310,9 @@ jobs:
       METRO_PORT: 8082
       E2E_PORT: 4243
       IOS_SIMULATOR: skia-ci
+      # Xcode's derived data, outside the workspace so it survives between
+      # runs (see the build step). One folder per job on the machine.
+      DERIVED_DATA: ${{ github.workspace }}/../derived-data/skia-ci-ios
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
@@ -336,6 +371,9 @@ jobs:
       # Simulator.app from the Xcode bundle, which Xcode 27 no longer ships
       # there, and a headless booted simulator is all the tests need.
       # RCT_METRO_PORT feeds React-Core's GCC_PREPROCESSOR_DEFINITIONS.
+      # The derived data lives outside the workspace, which the checkout
+      # cleans on every run: kept there, the build is incremental and only
+      # the sources that changed since the previous run are compiled.
       - name: Build example for iOS
         working-directory: apps/example/ios
         run: |
@@ -345,7 +383,7 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination "id=$IOS_SIMULATOR_UDID" \
-            -derivedDataPath build \
+            -derivedDataPath "$DERIVED_DATA" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             RCT_METRO_PORT=$METRO_PORT \
             build | tee xcodebuild.log | xcpretty || {
@@ -357,7 +395,7 @@ jobs:
 
       - name: Install and launch app on simulator
         run: |
-          xcrun simctl install "$IOS_SIMULATOR_UDID" apps/example/ios/build/Build/Products/Debug-iphonesimulator/ReactTestApp.app
+          xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
           xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp
 
       - name: Run e2e tests
@@ -391,3 +429,58 @@ jobs:
 
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
+
+  build-test-ios-spm:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      # Installs the workspace and copies the Skia, Graphite and Dawn headers.
+      # packages/skia/Package.swift resolves the prebuilt binaries
+      # (react-native-skia-graphite-apple-ios, react-native-webgpu-dawn) from
+      # the workspace's node_modules, not from spm-example's.
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # spm-example sits outside the yarn workspace so its React Native can
+      # differ from the one apps/example pins. It ships no lockfile; react and
+      # react-native are pinned exactly in its package.json.
+      - name: Install spm-example dependencies
+        working-directory: spm-example
+        run: npm install
+
+      # The .xcodeproj is committed already injected, so this refreshes the
+      # injection, runs codegen and downloads the React Native artifacts. It
+      # exits 2 if a linked library ships no Package.swift.
+      - name: Set up Swift Package Manager
+        working-directory: spm-example/ios
+        run: npx react-native spm update
+
+      # No simulator is booted: a generic destination is enough to prove the
+      # package compiles and links, and keeps this job off the skia-ci device
+      # build-test-ios uses. The derived data is kept outside the workspace,
+      # as in build-test-ios, so the build is incremental between runs.
+      - name: Build spm-example for iOS
+        working-directory: spm-example/ios
+        run: |
+          set -o pipefail && xcodebuild \
+            -project SpmExample.xcodeproj \
+            -scheme SpmExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$GITHUB_WORKSPACE/../derived-data/skia-ci-spm" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee xcodebuild.log | xcpretty || {
+              # xcpretty drops some errors (e.g. project-level ones), so show
+              # them from the raw log.
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }
