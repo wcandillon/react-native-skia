@@ -17,6 +17,7 @@
 #include <modules/skparagraph/include/ParagraphStyle.h>
 
 #include "../CustomBlendModes.h"
+#include "api/JsiSkPoint.h"
 #include "api/JsiSkFont.h"
 #include "api/JsiSkImage.h"
 #include "api/JsiSkImageFilter.h"
@@ -1166,17 +1167,9 @@ inline std::vector<SkRSXform> getPropertyValue(jsi::Runtime &runtime,
 template <>
 inline std::vector<SkPoint> getPropertyValue(jsi::Runtime &runtime,
                                              const jsi::Value &value) {
+  // Accepts an array of points or a Float32Array of interleaved x, y pairs.
   std::vector<SkPoint> result;
-  if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
-    auto array = value.asObject(runtime).asArray(runtime);
-    size_t size = array.size(runtime);
-    result.reserve(size);
-
-    for (size_t i = 0; i < size; i++) {
-      auto point = processPoint(runtime, array.getValueAtIndex(runtime, i));
-      result.push_back(point);
-    }
-  }
+  JsiSkPoint::readPoints(runtime, value, result);
   return result;
 }
 

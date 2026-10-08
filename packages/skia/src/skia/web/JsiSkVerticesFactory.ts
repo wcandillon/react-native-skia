@@ -19,11 +19,16 @@ const concat = (...arrays: Float32Array[]) => {
   return result;
 };
 
+const flatten = (points: SkPoint[] | Float32Array) =>
+  points instanceof Float32Array
+    ? points
+    : points.flatMap(({ x, y }) => [x, y]);
+
 export const MakeVertices = (
   CanvasKit: CanvasKit,
   mode: VertexMode,
-  positions: SkPoint[],
-  textureCoordinates?: SkPoint[] | null,
+  positions: SkPoint[] | Float32Array,
+  textureCoordinates?: SkPoint[] | Float32Array | null,
   colors?: SkColor[],
   indices?: number[] | null,
   isVolatile?: boolean
@@ -32,8 +37,8 @@ export const MakeVertices = (
     CanvasKit,
     CanvasKit.MakeVertices(
       getEnum(CanvasKit, "VertexMode", mode),
-      positions.map(({ x, y }) => [x, y]).flat(),
-      (textureCoordinates || []).map(({ x, y }) => [x, y]).flat(),
+      flatten(positions),
+      flatten(textureCoordinates || []),
       !colors ? null : colors.reduce((a, c) => concat(a, c)),
       indices,
       isVolatile

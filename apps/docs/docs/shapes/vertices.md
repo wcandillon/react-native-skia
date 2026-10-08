@@ -9,10 +9,10 @@ Draws vertices.
 
 | Name       | Type         | Description              |
 | :--------- | :----------- | :----------------------- |
-| vertices   | `Point[]`    | Vertices to draw |
+| vertices   | `Point[] \| Float32Array` | Vertices to draw, as points or as a `Float32Array` of interleaved x, y pairs |
 | mode?      | `VertexMode` | Can be `triangles`, `triangleStrip` or `triangleFan`. Default is `triangles` |
 | indices?   | `number[]`   | Indices of the vertices that form the triangles. If not provided, the order of the vertices will be taken. Using this property enables you not to duplicate vertices. |
-| textures   | `Point[]`   | [Texture mapping](https://en.wikipedia.org/wiki/Texture_mapping). The texture is the shader provided by the paint. |
+| textures   | `Point[] \| Float32Array` | [Texture mapping](https://en.wikipedia.org/wiki/Texture_mapping), in the same form as `vertices`. The texture is the shader provided by the paint. |
 | colors?    | `string[]`   | Optional colors to be associated to each vertex |
 | blendMode? | `BlendMode`  | If `colors` is provided, colors are blended with the paint using the blend mode. Default is `dstOver` if colors are provided, `srcOver` if not. |
 
@@ -77,3 +77,36 @@ const IndicesDemo = () => {
 ```
 
 ![Indices](assets/vertices/indices.png)
+
+## Large meshes
+
+A list of point objects is read one point at a time when it crosses into native code.
+For a mesh with thousands of vertices that is rebuilt on every frame, this can cost more than drawing it.
+Instead, pass the positions (and texture coordinates) as a `Float32Array` of interleaved x, y pairs.
+The array is copied in a single operation, and the same `Float32Array` can be mutated in place from frame to frame.
+`Skia.MakeVertices` accepts the same form.
+
+```tsx twoslash
+import { useDerivedValue, useSharedValue } from "react-native-reanimated";
+import { Canvas, Vertices } from "react-native-skia";
+
+const COLUMNS = 64;
+const ROWS = 24;
+
+const MeshDemo = () => {
+  const progress = useSharedValue(0);
+  const vertices = useDerivedValue(() => {
+    const points = new Float32Array(COLUMNS * ROWS * 2);
+    for (let i = 0; i < COLUMNS * ROWS; i++) {
+      points[2 * i] = (i % COLUMNS) * 5 + progress.value;
+      points[2 * i + 1] = Math.floor(i / COLUMNS) * 5;
+    }
+    return points;
+  });
+  return (
+    <Canvas style={{ flex: 1 }}>
+      <Vertices vertices={vertices} mode="triangleStrip" />
+    </Canvas>
+  );
+};
+```
