@@ -96,4 +96,14 @@ export interface JsiRecorder extends BaseRecorder {
   play(picture: SkPicture): void;
   applyUpdates(variables: SharedValue<unknown>[]): void;
   reset(): void;
+  /**
+   * Unique id of the native recording, used to tag the updates sent to the
+   * view that owns it.
+   */
+  getId(): number;
+  /**
+   * Releases the wrapper's reference to the native recorder. A recording
+   * that a view owns stays alive until the view replaces it or is torn down.
+   */
+  dispose(): void;
 }

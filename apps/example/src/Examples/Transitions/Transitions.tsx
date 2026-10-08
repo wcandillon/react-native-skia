@@ -7,13 +7,7 @@ import {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import {
-  Canvas,
-  Fill,
-  ImageShader,
-  Shader,
-  clamp,
-} from "@shopify/react-native-skia";
+import { Canvas, Fill, ImageShader, Shader, clamp } from "react-native-skia";
 
 import { snapPoint } from "./Math";
 import {

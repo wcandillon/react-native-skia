@@ -6,7 +6,7 @@ import {
   Circle,
   RadialGradient,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import {
   Easing,
   useDerivedValue,

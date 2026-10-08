@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import React, { useState, useRef, useEffect } from "react";
 import { Button, ScrollView, StyleSheet } from "react-native";
-import type { SkImage, SkPicture, SkSize } from "@shopify/react-native-skia";
-import { Canvas, Image, Skia } from "@shopify/react-native-skia";
+import type { SkImage, SkPicture, SkSize } from "react-native-skia";
+import { Canvas, Image, Skia } from "react-native-skia";
 import {
   configureReanimatedLogger,
   ReanimatedLogLevel,

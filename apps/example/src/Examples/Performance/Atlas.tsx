@@ -6,7 +6,7 @@ import {
   rect,
   Rect,
   useRSXformBuffer,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useMemo, useState } from "react";
 import {
   StyleSheet,

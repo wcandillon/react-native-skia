@@ -1,5 +1,5 @@
-import type { PatchProps } from "@shopify/react-native-skia";
-import { Path, Skia } from "@shopify/react-native-skia";
+import type { PatchProps } from "react-native-skia";
+import { Path, Skia } from "react-native-skia";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";

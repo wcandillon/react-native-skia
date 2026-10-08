@@ -1,5 +1,5 @@
 import React from "react";
-import { Group, Points, vec } from "@shopify/react-native-skia";
+import { Group, Points, vec } from "react-native-skia";
 
 export const ChervronLeft = () => {
   return (

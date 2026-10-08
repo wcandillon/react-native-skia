@@ -21,7 +21,7 @@ namespace jni = facebook::jni;
 class JniPlatformContext : public jni::HybridClass<JniPlatformContext> {
 public:
   static auto constexpr kJavaDescriptor =
-      "Lcom/shopify/reactnative/skia/PlatformContext;";
+      "Lcom/reactnative/skia/PlatformContext;";
 
   static jni::local_ref<jhybriddata>
   initHybrid(jni::alias_ref<jhybridobject> jThis, const float);
@@ -43,8 +43,6 @@ public:
   float getPixelDensity() { return _pixelDensity; }
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag);
-
-  jni::global_ref<jobject> createVideo(const std::string &url);
 
 private:
   friend HybridBase;

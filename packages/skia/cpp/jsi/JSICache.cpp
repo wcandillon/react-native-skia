@@ -1,5 +1,6 @@
 #include "JSICache.h"
 
+#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
@@ -94,6 +95,28 @@ jsi::Object &JSICache::setPrototype(PrototypeKey key, jsi::Object prototype) {
   auto [it, inserted] = _prototypes.insert_or_assign(key, std::move(prototype));
   (void)inserted;
   return it->second;
+}
+
+jsi::Value JSICache::lockWrapper(jsi::Runtime &runtime,
+                                 const void *nativeObject) {
+  auto it = _wrappers.find(nativeObject);
+  if (it == _wrappers.end()) {
+    return jsi::Value::undefined();
+  }
+  return it->second.lock(runtime);
+}
+
+void JSICache::setWrapper(jsi::Runtime &runtime, const void *nativeObject,
+                          const jsi::Object &wrapper) {
+  _wrappers.insert_or_assign(nativeObject, jsi::WeakObject(runtime, wrapper));
+  if (_wrappers.size() < _pruneWrappersAt) {
+    return;
+  }
+  for (auto it = _wrappers.begin(); it != _wrappers.end();) {
+    it = it->second.lock(runtime).isUndefined() ? _wrappers.erase(it)
+                                                : std::next(it);
+  }
+  _pruneWrappersAt = std::max(kMinPruneWrappersAt, _wrappers.size() * 2);
 }
 
 } // namespace RNJsi

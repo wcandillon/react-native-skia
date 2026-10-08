@@ -6,7 +6,7 @@ import {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { Canvas, Fill, Rect } from "@shopify/react-native-skia";
+import { Canvas, Fill, Rect } from "react-native-skia";
 
 import { AnimationDemo, Size } from "./Components";
 

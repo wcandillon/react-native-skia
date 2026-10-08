@@ -2,7 +2,7 @@ import type {
   SkImageFilter,
   SkRuntimeEffect,
   SkShader,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import {
   BackdropFilter,
   Canvas,
@@ -13,7 +13,7 @@ import {
   Skia,
   TileMode,
   useCanvasSize,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 import {
   ReduceMotion,

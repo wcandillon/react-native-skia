@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, useWindowDimensions } from "react-native";
-import { Canvas, Circle, Fill, Line } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill, Line } from "react-native-skia";
 import {
   useDerivedValue,
   useSharedValue,

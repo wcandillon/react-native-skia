@@ -1,6 +1,10 @@
 #pragma once
 
+#include <algorithm>
+#include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "Command.h"
 #include "Convertor.h"
@@ -8,6 +12,7 @@
 #include "ImageFit.h"
 #include "rnskia/RNSkPlatformContext.h"
 
+#include "include/core/SkContourMeasure.h"
 #include "include/core/SkPathBuilder.h"
 #include "include/core/SkStrokeRec.h"
 

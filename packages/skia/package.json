@@ -1,5 +1,5 @@
 {
-  "name": "@shopify/react-native-skia",
+  "name": "react-native-skia",
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -35,8 +35,7 @@
     "Package.swift",
     "include/**",
     "react-native.config.js",
-    "dist/**",
-    "libs/.graphite"
+    "dist/**"
   ],
   "scripts": {
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache --fix",
@@ -47,9 +46,9 @@
     "build": "bob build && merge-dirs lib/typescript/src lib/commonjs && merge-dirs lib/typescript/src lib/module",
     "clean-skia": "yarn rimraf ./libs && yarn rimraf ../../externals/skia/out",
     "build-skia": "tsx ./scripts/build-skia.ts",
+    "build-dawn": "tsx ./scripts/build-dawn.ts",
+    "package-binaries": "tsx ./scripts/package-binaries.ts",
     "copy-skia-headers": "tsx ./scripts/copy-skia-headers.ts",
-    "install-skia": "tsx ./scripts/install-skia.ts",
-    "install-skia-graphite": "tsx ./scripts/install-skia-graphite.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
     "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-android": "find android/cpp/ -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' | xargs clang-format -i",
@@ -58,13 +57,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Shopify/react-native-skia.git",
-    "baseUrl": "https://github.com/Shopify/react-native-skia"
+    "url": "git+https://github.com/wcandillon/react-native-skia.git",
+    "baseUrl": "https://github.com/wcandillon/react-native-skia"
   },
   "keywords": [
     "react-native"
   ],
-  "author": "Shopify Inc.",
+  "author": "William Candillon",
   "contributors": [
     {
       "name": "Christian Falch",
@@ -115,7 +114,7 @@
     "@types/react-reconciler": "0.28.9",
     "@types/ws": "8.5.3",
     "eslint": "9.36.0",
-    "eslint-config-react-native-wcandillon": "4.0.1",
+    "eslint-config-react-native-wcandillon": "5.0.0",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "extract-zip": "^2.0.1",
@@ -142,16 +141,11 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.0",
-    "react-native-skia-android": "154.0.0",
-    "react-native-skia-apple-ios": "154.0.0",
-    "react-native-skia-apple-macos": "154.0.0",
-    "react-native-skia-apple-tvos": "154.0.0",
+    "react-native-skia-graphite-android": "154.2.0",
+    "react-native-skia-graphite-apple-ios": "154.2.0",
+    "react-native-skia-graphite-apple-macos": "154.2.0",
+    "react-native-webgpu-dawn": "154.2.0",
     "react-reconciler": "0.31.0"
-  },
-  "graphiteDependencies": {
-    "react-native-skia-graphite-android": "154.0.0",
-    "react-native-skia-graphite-apple-ios": "154.0.0",
-    "react-native-skia-graphite-apple-macos": "154.0.0"
   },
   "eslintIgnore": [
     "node_modules/",
@@ -162,11 +156,11 @@
     "type": "all",
     "jsSrcsDir": "src/specs",
     "android": {
-      "javaPackageName": "com.shopify.reactnative.skia"
+      "javaPackageName": "com.reactnative.skia"
     },
     "ios": {
       "componentProvider": {
-        "SkiaPictureView": "SkiaPictureView"
+        "SkiaView": "SkiaView"
       }
     }
   },

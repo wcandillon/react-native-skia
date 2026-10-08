@@ -1,6 +1,6 @@
 import React from "react";
-import type { SkRect, Color } from "@shopify/react-native-skia";
-import { Shader, Skia } from "@shopify/react-native-skia";
+import type { SkRect, Color } from "react-native-skia";
+import { Shader, Skia } from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 uniform vec4 position;

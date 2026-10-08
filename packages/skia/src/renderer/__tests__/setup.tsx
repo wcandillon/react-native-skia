@@ -27,7 +27,6 @@ declare global {
   var testServer: Server;
   var testClient: WebSocket;
   var testOS: TestOS;
-  var testGraphite: boolean;
 }
 export let surface: TestingSurface;
 const assets = new Map<SkImage | SkFont, string>();
@@ -127,29 +126,6 @@ const parseErrorResponse = (raw: Buffer): string | null => {
     // Not a JSON object; treat as a normal payload.
   }
   return null;
-};
-
-// Registers a test that only runs against a device using the Graphite backend
-// (Dawn/WebGPU). The backend is only known after the websocket handshake, so —
-// like itSkipsOnWeb in react-native-webgpu — the guard is a runtime early
-// return rather than it.skip at collection time. This also keeps the Graphite
-// specs inert in Node/Local mode and on Ganesh builds, where
-// Skia.getNativeDevice() would throw.
-export const itRunsWithGraphite = (
-  name: string,
-  fn: () => Promise<void>,
-  timeout?: number
-) => {
-  it(
-    name,
-    async () => {
-      if (!E2E || !surface.graphite) {
-        return;
-      }
-      await fn();
-    },
-    timeout
-  );
 };
 
 export const resolveFile = (uri: string) =>
@@ -419,11 +395,6 @@ interface TestingSurface {
   height: number;
   fontSize: number;
   OS: TestOS;
-  arch: "paper" | "fabric";
-  // True when the connected device runs the Graphite backend, i.e.
-  // Skia.getNativeDevice() is available (see useClient.ts in the example
-  // app). Always false in Node (LocalSurface) and on Ganesh builds.
-  graphite: boolean;
 }
 
 class LocalSurface implements TestingSurface {
@@ -431,8 +402,6 @@ class LocalSurface implements TestingSurface {
   readonly height = 256;
   readonly fontSize = 32;
   readonly OS = "node";
-  readonly arch = "paper";
-  readonly graphite = false;
 
   eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => R,
@@ -479,8 +448,6 @@ class RemoteSurface implements TestingSurface {
   readonly height = 256;
   readonly fontSize = 32;
   readonly OS = global.testOS;
-  readonly arch = global.testArch;
-  readonly graphite = global.testGraphite ?? false;
 
   eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => any,

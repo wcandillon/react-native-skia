@@ -210,12 +210,12 @@ public:
             if (instance == nullptr) {
               throw jsi::JSError(rt, "Invalid boxed native object state");
             }
-            // Unboxing creates a *view* of the object on the target runtime.
-            // Keep the runtime the object was originally created on: async
-            // native code (e.g. GPUDevice error/lost events) delivers into
-            // the creation runtime, and rebinding it to a worklet runtime
-            // would invoke main-runtime jsi::Functions on the wrong runtime
-            // and thread.
+            // Unboxing hands back the wrapper cached for the target runtime,
+            // creating it on first use. Keep the runtime the object was
+            // originally created on: async native code (e.g. GPUDevice
+            // error/lost events) delivers into the creation runtime, and
+            // rebinding it to a worklet runtime would invoke main-runtime
+            // jsi::Functions on the wrong runtime and thread.
             auto *originalRuntime = instance->getCreationRuntime();
             auto value = Derived::create(rt, instance);
             if (originalRuntime != nullptr) {
@@ -262,10 +262,37 @@ public:
   }
 
   /**
-   * Create a JS object with native state attached.
+   * Returns the JS wrapper of `instance` on `runtime`, creating it on first
+   * use.
+   *
+   * A native object has at most one live wrapper per runtime. The wrapper is
+   * cached (weakly, so it stays collectable) in the runtime's JSICache, and
+   * converting the same object again (returning it from another native
+   * call, unboxing it in a worklet on every frame, ...) hands back that
+   * wrapper instead of a new one. Each wrapper reports the native memory the
+   * object owns to the GC of its runtime through setExternalMemoryPressure,
+   * so the memory is charged exactly once per runtime that can reach the
+   * object, however often it is converted; charging every conversion used
+   * to multiply the amount by the number of captures in a worklet until
+   * Hermes hit its max heap size. The hint is refreshed on every round trip
+   * for objects whose size changes after creation (path and paragraph
+   * builders).
    */
   static jsi::Value create(jsi::Runtime &runtime,
                            std::shared_ptr<Derived> instance) {
+    auto &cache = JSICache::get(runtime);
+    const void *key = instance.get();
+
+    auto existing = cache.lockWrapper(runtime, key);
+    if (existing.isObject()) {
+      auto pressure = instance->getMemoryPressure();
+      if (pressure > 0) {
+        existing.getObject(runtime).setExternalMemoryPressure(runtime,
+                                                              pressure);
+      }
+      return existing;
+    }
+
     // Store creation runtime for logging etc.
     instance->setCreationRuntime(&runtime);
 
@@ -290,9 +317,11 @@ public:
       obj.setExternalMemoryPressure(runtime, pressure);
     }
 
+    cache.setWrapper(runtime, key, obj);
     return std::move(obj);
   }
 
+public:
   /**
    * Get the native state from a JS value.
    * Throws if the value doesn't have the expected native state.

@@ -10,12 +10,25 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkPoint.h>
+#include <include/effects/Sk1DPathEffect.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <modules/skparagraph/include/Paragraph.h>
 #include <modules/skparagraph/include/ParagraphBuilder.h>
 #include <modules/skparagraph/include/ParagraphStyle.h>
 
 #include "../CustomBlendModes.h"
+#include "api/JsiSkFont.h"
+#include "api/JsiSkImage.h"
+#include "api/JsiSkImageFilter.h"
+#include "api/JsiSkMatrix.h"
+#include "api/JsiSkPaint.h"
+#include "api/JsiSkParagraph.h"
+#include "api/JsiSkPicture.h"
+#include "api/JsiSkRSXform.h"
+#include "api/JsiSkRuntimeEffect.h"
+#include "api/JsiSkSVG.h"
+#include "api/JsiSkSkottie.h"
+#include "api/JsiSkTextBlob.h"
 #include "api/third_party/CSSColorParser.h"
 
 #include "DataTypes.h"
@@ -29,8 +42,13 @@ struct Radius {
   float rY;
 };
 
-using ConversionFunction =
-    std::function<void(jsi::Runtime &runtime, const jsi::Object &object)>;
+// A value read from a shared value, waiting to be written into a command
+// property. Reading needs the runtime the shared value lives on; writing does
+// not, so the thread that replays the commands writes it right before.
+// Empty when there is nothing to write.
+using PendingWrite = std::function<void()>;
+using ConversionFunction = std::function<PendingWrite(
+    jsi::Runtime &runtime, const jsi::Object &object)>;
 using Variables = std::map<std::string, std::vector<ConversionFunction>>;
 
 using Patch = std::array<SkPoint, 12>;
@@ -40,7 +58,7 @@ struct GlyphData {
   std::vector<SkPoint> positions;
 };
 
-bool isSharedValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline bool isSharedValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return value.isObject() &&
          value.asObject(runtime).hasProperty(runtime,
                                              "_isReanimatedSharedValue") &&
@@ -91,26 +109,32 @@ bool convertSelectorProperty(jsi::Runtime &runtime, const jsi::Value &prop,
       sharedValue.getProperty(runtime, "name").asString(runtime).utf8(runtime);
 
   auto conv = [target = &target, key](jsi::Runtime &runtime,
-                                      const jsi::Object &val) {
+                                      const jsi::Object &val) -> PendingWrite {
     auto value = val.getProperty(runtime, "value");
     if (!value.isObject()) {
-      return;
+      return nullptr;
     }
     auto values = value.asObject(runtime);
     if (!values.hasProperty(runtime, key.c_str())) {
-      return;
+      return nullptr;
     }
 
     auto selected = values.getProperty(runtime, key.c_str());
     if (selected.isUndefined() || selected.isNull() ||
-        (selected.isObject() && selected.asObject(runtime).isFunction(runtime))) {
-      return;
+        (selected.isObject() &&
+         selected.asObject(runtime).isFunction(runtime))) {
+      return nullptr;
     }
-    *target = getPropertyValue<T>(runtime, selected);
+    return
+        [target, converted = getPropertyValue<T>(runtime, selected)]() mutable {
+          *target = std::move(converted);
+        };
   };
 
   variables[name].push_back(conv);
-  conv(runtime, sharedValue);
+  if (auto write = conv(runtime, sharedValue)) {
+    write();
+  }
   return true;
 }
 
@@ -130,15 +154,21 @@ void convertPropertyImpl(jsi::Runtime &runtime, const jsi::Object &object,
 
   if (isSharedValue(runtime, prop)) {
     auto sharedValue = prop.asObject(runtime);
-    auto name =
-        sharedValue.getProperty(runtime, "name").asString(runtime).utf8(runtime);
+    auto name = sharedValue.getProperty(runtime, "name")
+                    .asString(runtime)
+                    .utf8(runtime);
     auto conv = [target = &target](jsi::Runtime &runtime,
-                                   const jsi::Object &val) {
+                                   const jsi::Object &val) -> PendingWrite {
       auto value = val.getProperty(runtime, "value");
-      *target = getPropertyValue<T>(runtime, value);
+      return
+          [target, converted = getPropertyValue<T>(runtime, value)]() mutable {
+            *target = std::move(converted);
+          };
     };
     variables[name].push_back(conv);
-    conv(runtime, sharedValue);
+    if (auto write = conv(runtime, sharedValue)) {
+      write();
+    }
     return;
   }
 
@@ -155,7 +185,7 @@ void convertProperty(jsi::Runtime &runtime, const jsi::Object &object,
 
 // Base property value getter implementations
 template <>
-float getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline float getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isNumber()) {
     return static_cast<float>(value.asNumber());
   }
@@ -163,7 +193,7 @@ float getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-int getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline int getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isNumber()) {
     return static_cast<int>(value.asNumber());
   }
@@ -171,7 +201,8 @@ int getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-std::string getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline std::string getPropertyValue(jsi::Runtime &runtime,
+                                    const jsi::Value &value) {
   if (value.isString()) {
     return value.asString(runtime).utf8(runtime);
   }
@@ -179,7 +210,8 @@ std::string getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkPoint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkPoint getPropertyValue(jsi::Runtime &runtime,
+                                const jsi::Value &value) {
   if (value.isObject()) {
     auto x = value.asObject(runtime).getProperty(runtime, "x").asNumber();
     auto y = value.asObject(runtime).getProperty(runtime, "y").asNumber();
@@ -189,7 +221,8 @@ SkPoint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkColor getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkColor getPropertyValue(jsi::Runtime &runtime,
+                                const jsi::Value &value) {
   if (value.isNumber()) {
     return static_cast<SkColor>(value.asNumber());
   } else if (value.isString()) {
@@ -241,8 +274,8 @@ SkColor getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-std::vector<SkColor> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::vector<SkColor> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   std::vector<SkColor> result;
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
@@ -258,7 +291,8 @@ std::vector<SkColor> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkTileMode getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkTileMode getPropertyValue(jsi::Runtime &runtime,
+                                   const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "clamp") {
@@ -275,7 +309,8 @@ SkTileMode getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 }
 
 template <>
-SkColorChannel getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkColorChannel getPropertyValue(jsi::Runtime &runtime,
+                                       const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "r") {
@@ -292,8 +327,8 @@ SkColorChannel getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 }
 
 template <>
-SkVertices::VertexMode getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &val) {
+inline SkVertices::VertexMode getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "triangles") {
@@ -308,7 +343,7 @@ SkVertices::VertexMode getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
     // Get array of property names
@@ -416,8 +451,8 @@ SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkSamplingOptions getPropertyValue(jsi::Runtime &runtime,
-                                   const jsi::Value &value) {
+inline SkSamplingOptions getPropertyValue(jsi::Runtime &runtime,
+                                          const jsi::Value &value) {
   if (value.isObject()) {
     SkSamplingOptions samplingOptions(SkFilterMode::kLinear);
     auto object = value.asObject(runtime);
@@ -443,7 +478,7 @@ SkSamplingOptions getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkFont getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkFont getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto font = getJsiObject<JsiSkFont>(runtime, value)->getObject();
     return SkFont(*font);
@@ -452,7 +487,8 @@ SkFont getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-GlyphData getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline GlyphData getPropertyValue(jsi::Runtime &runtime,
+                                  const jsi::Value &value) {
   GlyphData result;
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
@@ -475,7 +511,8 @@ GlyphData getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkRSXform getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkRSXform getPropertyValue(jsi::Runtime &runtime,
+                                  const jsi::Value &value) {
   if (value.isObject()) {
     auto form = getJsiObject<JsiSkRSXform>(runtime, value)->getObject();
     return SkRSXform::Make(form->fSCos, form->fSSin, form->fTx, form->fTy);
@@ -484,8 +521,8 @@ SkRSXform getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-sk_sp<SkSVGDOM> getPropertyValue(jsi::Runtime &runtime,
-                                 const jsi::Value &value) {
+inline sk_sp<SkSVGDOM> getPropertyValue(jsi::Runtime &runtime,
+                                        const jsi::Value &value) {
   auto ptr = tryGetJsiObject<JsiSkSVG>(runtime, value);
   if (ptr != nullptr) {
     return ptr->getObject();
@@ -498,8 +535,8 @@ sk_sp<SkSVGDOM> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-sk_sp<skottie::Animation> getPropertyValue(jsi::Runtime &runtime,
-                                           const jsi::Value &value) {
+inline sk_sp<skottie::Animation> getPropertyValue(jsi::Runtime &runtime,
+                                                  const jsi::Value &value) {
   auto ptr = tryGetJsiObject<JsiSkSkottie>(runtime, value);
   if (ptr != nullptr) {
     return ptr->getObject()->_animation;
@@ -512,8 +549,8 @@ sk_sp<skottie::Animation> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-sk_sp<SkImageFilter> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline sk_sp<SkImageFilter> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   auto ptr = tryGetJsiObject<JsiSkImageFilter>(runtime, value);
   if (ptr != nullptr) {
     return ptr->getObject();
@@ -526,8 +563,8 @@ sk_sp<SkImageFilter> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-sk_sp<SkPicture> getPropertyValue(jsi::Runtime &runtime,
-                                  const jsi::Value &value) {
+inline sk_sp<SkPicture> getPropertyValue(jsi::Runtime &runtime,
+                                         const jsi::Value &value) {
   if (value.isObject()) {
     auto picture = getJsiObject<JsiSkPicture>(runtime, value)->getObject();
     return picture;
@@ -536,7 +573,8 @@ sk_sp<SkPicture> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkPaint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkPaint getPropertyValue(jsi::Runtime &runtime,
+                                const jsi::Value &value) {
   if (value.isObject()) {
     auto paint = getJsiObject<JsiSkPaint>(runtime, value)->getObject();
     return SkPaint(*paint);
@@ -545,15 +583,15 @@ SkPaint getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-std::shared_ptr<JsiSkParagraph> getPropertyValue(jsi::Runtime &runtime,
-                                                 const jsi::Value &value) {
+inline std::shared_ptr<JsiSkParagraph>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   // Return a shared_ptr instead of raw pointer
   return tryGetJsiObject<JsiSkParagraph>(runtime, value);
 }
 
 template <>
-sk_sp<SkTextBlob> getPropertyValue(jsi::Runtime &runtime,
-                                   const jsi::Value &value) {
+inline sk_sp<SkTextBlob> getPropertyValue(jsi::Runtime &runtime,
+                                          const jsi::Value &value) {
   if (value.isObject()) {
     auto blob = getJsiObject<JsiSkTextBlob>(runtime, value)->getObject();
     return blob;
@@ -562,8 +600,8 @@ sk_sp<SkTextBlob> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-sk_sp<SkRuntimeEffect> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline sk_sp<SkRuntimeEffect> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   if (value.isObject()) {
     auto effect = getJsiObject<JsiSkRuntimeEffect>(runtime, value)->getObject();
     return effect;
@@ -572,8 +610,8 @@ sk_sp<SkRuntimeEffect> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-sk_sp<SkImage> getPropertyValue(jsi::Runtime &runtime,
-                                const jsi::Value &value) {
+inline sk_sp<SkImage> getPropertyValue(jsi::Runtime &runtime,
+                                       const jsi::Value &value) {
 
   if (value.isObject()) {
     auto effect = getJsiObject<JsiSkImage>(runtime, value)->getObject();
@@ -585,7 +623,8 @@ sk_sp<SkImage> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkMatrix getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkMatrix getPropertyValue(jsi::Runtime &runtime,
+                                 const jsi::Value &value) {
   if (value.isObject()) {
     auto ptr = tryGetJsiObject<JsiSkMatrix>(runtime, value);
     if (ptr != nullptr) {
@@ -599,7 +638,7 @@ SkMatrix getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-Radius getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline Radius getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
     auto rX = static_cast<float>(object.getProperty(runtime, "x").asNumber());
@@ -613,8 +652,8 @@ Radius getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkCanvas::PointMode getPropertyValue(jsi::Runtime &runtime,
-                                     const jsi::Value &val) {
+inline SkCanvas::PointMode getPropertyValue(jsi::Runtime &runtime,
+                                            const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "points") {
@@ -630,7 +669,8 @@ SkCanvas::PointMode getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkPaint::Style getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkPaint::Style getPropertyValue(jsi::Runtime &runtime,
+                                       const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "fill") {
@@ -643,7 +683,8 @@ SkPaint::Style getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 }
 
 template <>
-SkPaint::Join getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkPaint::Join getPropertyValue(jsi::Runtime &runtime,
+                                      const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "miter") {
@@ -658,7 +699,8 @@ SkPaint::Join getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 }
 
 template <>
-SkPaint::Cap getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkPaint::Cap getPropertyValue(jsi::Runtime &runtime,
+                                     const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "butt") {
@@ -673,8 +715,8 @@ SkPaint::Cap getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 }
 
 template <>
-SkPath1DPathEffect::Style getPropertyValue(jsi::Runtime &runtime,
-                                           const jsi::Value &val) {
+inline SkPath1DPathEffect::Style getPropertyValue(jsi::Runtime &runtime,
+                                                  const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "translate") {
@@ -692,12 +734,13 @@ SkPath1DPathEffect::Style getPropertyValue(jsi::Runtime &runtime,
 // specialization
 struct BlendModeValue {
   int value;
-  BlendModeValue(int v = 0) : value(v) {}
+  explicit BlendModeValue(int v = 0) : value(v) {}
   operator int() const { return value; }
 };
 
 template <>
-BlendModeValue getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline BlendModeValue getPropertyValue(jsi::Runtime &runtime,
+                                       const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "clear") {
@@ -770,7 +813,8 @@ BlendModeValue getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
 // Keep SkBlendMode specialization for other usages (Shaders, ImageFilters,
 // ColorFilters, Drawings)
 template <>
-SkBlendMode getPropertyValue(jsi::Runtime &runtime, const jsi::Value &val) {
+inline SkBlendMode getPropertyValue(jsi::Runtime &runtime,
+                                    const jsi::Value &val) {
   if (val.isString()) {
     auto value = val.asString(runtime).utf8(runtime);
     if (value == "clear") {
@@ -840,7 +884,8 @@ using ClipDef = std::variant<SkPath, SkRRect, SkRect, std::string>;
 using Layer = std::variant<SkPaint, bool>;
 
 template <>
-Uniforms getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline Uniforms getPropertyValue(jsi::Runtime &runtime,
+                                 const jsi::Value &value) {
   if (value.isObject()) {
     Uniforms result;
     auto obj = value.asObject(runtime);
@@ -886,7 +931,8 @@ Uniforms getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkBlurStyle getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkBlurStyle getPropertyValue(jsi::Runtime &runtime,
+                                    const jsi::Value &value) {
   if (value.isString()) {
     auto valueStr = value.asString(runtime).utf8(runtime);
     if (valueStr == "normal") {
@@ -903,8 +949,8 @@ SkBlurStyle getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkPathFillType getPropertyValue(jsi::Runtime &runtime,
-                                const jsi::Value &value) {
+inline SkPathFillType getPropertyValue(jsi::Runtime &runtime,
+                                       const jsi::Value &value) {
   if (value.isString()) {
     auto valueStr = value.asString(runtime).utf8(runtime);
     if (valueStr == "winding") {
@@ -929,7 +975,8 @@ struct StrokeOpts {
 };
 
 template <>
-StrokeOpts getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline StrokeOpts getPropertyValue(jsi::Runtime &runtime,
+                                   const jsi::Value &value) {
   if (value.isObject()) {
     StrokeOpts opts;
     auto object = value.asObject(runtime);
@@ -956,7 +1003,8 @@ StrokeOpts getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkRRect getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkRRect getPropertyValue(jsi::Runtime &runtime,
+                                const jsi::Value &value) {
   if (value.isObject()) {
     auto rect = processRRect(runtime, value);
     if (!rect) {
@@ -968,7 +1016,7 @@ SkRRect getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-SkRect getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkRect getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto rect = processRect(runtime, value);
     if (!rect) {
@@ -980,8 +1028,8 @@ SkRect getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-std::variant<SkRect, SkRRect> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::variant<SkRect, SkRRect> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   if (value.isObject()) {
     auto rect = processRect(runtime, value);
     if (rect) {
@@ -996,7 +1044,7 @@ std::variant<SkRect, SkRRect> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-SkPath getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkPath getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   auto path = processPath(runtime, value);
   if (!path) {
     throw std::runtime_error("Invalid prop value for SkPath received");
@@ -1005,7 +1053,8 @@ SkPath getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-ClipDef getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline ClipDef getPropertyValue(jsi::Runtime &runtime,
+                                const jsi::Value &value) {
   auto path = processPath(runtime, value);
   if (path) {
     ClipDef def = SkPath(*path);
@@ -1025,7 +1074,7 @@ ClipDef getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-Layer getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline Layer getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isBool()) {
     Layer layer = value.asBool();
     return layer;
@@ -1040,7 +1089,7 @@ Layer getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-Patch getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline Patch getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
     if (array.size(runtime) != 4) {
@@ -1098,8 +1147,8 @@ Patch getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 template <>
-std::vector<SkRSXform> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::vector<SkRSXform> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   std::vector<SkRSXform> result;
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
@@ -1115,8 +1164,8 @@ std::vector<SkRSXform> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-std::vector<SkPoint> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::vector<SkPoint> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   std::vector<SkPoint> result;
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
@@ -1132,8 +1181,8 @@ std::vector<SkPoint> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-std::vector<SkRect> getPropertyValue(jsi::Runtime &runtime,
-                                     const jsi::Value &value) {
+inline std::vector<SkRect> getPropertyValue(jsi::Runtime &runtime,
+                                            const jsi::Value &value) {
   std::vector<SkRect> result;
   if (value.isObject() && value.asObject(runtime).isArray(runtime)) {
     auto array = value.asObject(runtime).asArray(runtime);
@@ -1154,8 +1203,8 @@ std::vector<SkRect> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-std::vector<float> getPropertyValue(jsi::Runtime &runtime,
-                                    const jsi::Value &value) {
+inline std::vector<float> getPropertyValue(jsi::Runtime &runtime,
+                                           const jsi::Value &value) {
   std::vector<float> result;
 
   if (value.isNumber()) {
@@ -1187,8 +1236,8 @@ std::vector<float> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-std::vector<uint16_t> getPropertyValue(jsi::Runtime &runtime,
-                                       const jsi::Value &value) {
+inline std::vector<uint16_t> getPropertyValue(jsi::Runtime &runtime,
+                                              const jsi::Value &value) {
   std::vector<uint16_t> result;
 
   if (value.isNumber()) {
@@ -1220,7 +1269,7 @@ std::vector<uint16_t> getPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-bool getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
+inline bool getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isBool()) {
     return value.asBool();
   }
@@ -1242,176 +1291,176 @@ std::optional<T> makeOptionalPropertyValue(jsi::Runtime &runtime,
 }
 
 template <>
-std::optional<float> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::optional<float> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   return makeOptionalPropertyValue<float>(runtime, value);
 }
 
 template <>
-std::optional<SkPoint> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::optional<SkPoint> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPoint>(runtime, value);
 }
 
 template <>
-std::optional<SkColor> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::optional<SkColor> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   return makeOptionalPropertyValue<SkColor>(runtime, value);
 }
 
 template <>
-std::optional<BlendModeValue> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::optional<BlendModeValue> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   return makeOptionalPropertyValue<BlendModeValue>(runtime, value);
 }
 
 template <>
-std::optional<SkBlendMode> getPropertyValue(jsi::Runtime &runtime,
-                                            const jsi::Value &value) {
+inline std::optional<SkBlendMode> getPropertyValue(jsi::Runtime &runtime,
+                                                   const jsi::Value &value) {
   return makeOptionalPropertyValue<SkBlendMode>(runtime, value);
 }
 
 template <>
-std::optional<SkMatrix> getPropertyValue(jsi::Runtime &runtime,
-                                         const jsi::Value &value) {
+inline std::optional<SkMatrix> getPropertyValue(jsi::Runtime &runtime,
+                                                const jsi::Value &value) {
   return makeOptionalPropertyValue<SkMatrix>(runtime, value);
 }
 
 template <>
-std::optional<SkM44> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::optional<SkM44> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   return makeOptionalPropertyValue<SkM44>(runtime, value);
 }
 
 template <>
-std::optional<bool> getPropertyValue(jsi::Runtime &runtime,
-                                     const jsi::Value &value) {
+inline std::optional<bool> getPropertyValue(jsi::Runtime &runtime,
+                                            const jsi::Value &value) {
   return makeOptionalPropertyValue<bool>(runtime, value);
 }
 
 template <>
-std::optional<ClipDef> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::optional<ClipDef> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   return makeOptionalPropertyValue<ClipDef>(runtime, value);
 }
 
 template <>
-std::optional<Layer> getPropertyValue(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::optional<Layer> getPropertyValue(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   return makeOptionalPropertyValue<Layer>(runtime, value);
 }
 
 template <>
-std::optional<SkFont> getPropertyValue(jsi::Runtime &runtime,
-                                       const jsi::Value &value) {
+inline std::optional<SkFont> getPropertyValue(jsi::Runtime &runtime,
+                                              const jsi::Value &value) {
   return makeOptionalPropertyValue<SkFont>(runtime, value);
 }
 
 template <>
-std::optional<SkPaint::Style> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::optional<SkPaint::Style> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPaint::Style>(runtime, value);
 }
 
 template <>
-std::optional<SkPaint::Join> getPropertyValue(jsi::Runtime &runtime,
-                                              const jsi::Value &value) {
+inline std::optional<SkPaint::Join> getPropertyValue(jsi::Runtime &runtime,
+                                                     const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPaint::Join>(runtime, value);
 }
 
 template <>
-std::optional<SkPaint::Cap> getPropertyValue(jsi::Runtime &runtime,
-                                             const jsi::Value &value) {
+inline std::optional<SkPaint::Cap> getPropertyValue(jsi::Runtime &runtime,
+                                                    const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPaint::Cap>(runtime, value);
 }
 
 template <>
-std::optional<SkRect> getPropertyValue(jsi::Runtime &runtime,
-                                       const jsi::Value &value) {
+inline std::optional<SkRect> getPropertyValue(jsi::Runtime &runtime,
+                                              const jsi::Value &value) {
   return makeOptionalPropertyValue<SkRect>(runtime, value);
 }
 
 template <>
-std::optional<sk_sp<SkImage>> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::optional<sk_sp<SkImage>> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   return makeOptionalPropertyValue<sk_sp<SkImage>>(runtime, value);
 }
 
 template <>
-std::optional<SkSamplingOptions> getPropertyValue(jsi::Runtime &runtime,
-                                                  const jsi::Value &value) {
+inline std::optional<SkSamplingOptions>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return makeOptionalPropertyValue<SkSamplingOptions>(runtime, value);
 }
 
 template <>
-std::optional<StrokeOpts> getPropertyValue(jsi::Runtime &runtime,
-                                           const jsi::Value &value) {
+inline std::optional<StrokeOpts> getPropertyValue(jsi::Runtime &runtime,
+                                                  const jsi::Value &value) {
   return makeOptionalPropertyValue<StrokeOpts>(runtime, value);
 }
 
 template <>
-std::optional<std::vector<SkColor>> getPropertyValue(jsi::Runtime &runtime,
-                                                     const jsi::Value &value) {
+inline std::optional<std::vector<SkColor>>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return makeOptionalPropertyValue<std::vector<SkColor>>(runtime, value);
 }
 
 template <>
-std::optional<std::vector<float>> getPropertyValue(jsi::Runtime &runtime,
-                                                   const jsi::Value &value) {
+inline std::optional<std::vector<float>>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return makeOptionalPropertyValue<std::vector<float>>(runtime, value);
 }
 
 template <>
-std::optional<SkTileMode> getPropertyValue(jsi::Runtime &runtime,
-                                           const jsi::Value &value) {
+inline std::optional<SkTileMode> getPropertyValue(jsi::Runtime &runtime,
+                                                  const jsi::Value &value) {
   return makeOptionalPropertyValue<SkTileMode>(runtime, value);
 }
 
 template <>
-std::optional<SkPathFillType> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::optional<SkPathFillType> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPathFillType>(runtime, value);
 }
 
 template <>
-std::optional<SkColorChannel> getPropertyValue(jsi::Runtime &runtime,
-                                               const jsi::Value &value) {
+inline std::optional<SkColorChannel> getPropertyValue(jsi::Runtime &runtime,
+                                                      const jsi::Value &value) {
   return makeOptionalPropertyValue<SkColorChannel>(runtime, value);
 }
 
 template <>
-std::optional<Uniforms> getPropertyValue(jsi::Runtime &runtime,
-                                         const jsi::Value &value) {
+inline std::optional<Uniforms> getPropertyValue(jsi::Runtime &runtime,
+                                                const jsi::Value &value) {
   return makeOptionalPropertyValue<Uniforms>(runtime, value);
 }
 
 template <>
-std::optional<Radius> getPropertyValue(jsi::Runtime &runtime,
-                                       const jsi::Value &value) {
+inline std::optional<Radius> getPropertyValue(jsi::Runtime &runtime,
+                                              const jsi::Value &value) {
   return makeOptionalPropertyValue<Radius>(runtime, value);
 }
 
 template <>
-std::optional<SkRRect> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::optional<SkRRect> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   return makeOptionalPropertyValue<SkRRect>(runtime, value);
 }
 
 template <>
-std::optional<SkPaint> getPropertyValue(jsi::Runtime &runtime,
-                                        const jsi::Value &value) {
+inline std::optional<SkPaint> getPropertyValue(jsi::Runtime &runtime,
+                                               const jsi::Value &value) {
   return makeOptionalPropertyValue<SkPaint>(runtime, value);
 }
 
 template <>
-std::optional<std::vector<SkPoint>> getPropertyValue(jsi::Runtime &runtime,
-                                                     const jsi::Value &value) {
+inline std::optional<std::vector<SkPoint>>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return makeOptionalPropertyValue<std::vector<SkPoint>>(runtime, value);
 }
 
 template <>
-std::optional<std::vector<uint16_t>> getPropertyValue(jsi::Runtime &runtime,
-                                                      const jsi::Value &value) {
+inline std::optional<std::vector<uint16_t>>
+getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   return makeOptionalPropertyValue<std::vector<uint16_t>>(runtime, value);
 }
 

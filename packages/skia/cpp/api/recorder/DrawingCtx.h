@@ -1,7 +1,21 @@
 #pragma once
 
+#include <algorithm>
+#include <functional>
 #include <memory>
+#include <numeric>
+#include <stdexcept>
+#include <utility>
 #include <vector>
+
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPathEffect.h"
+#include "include/core/SkShader.h"
+#include "include/effects/SkImageFilters.h"
 
 namespace RNSkia {
 
@@ -52,7 +66,7 @@ struct Composers {
 
 class DrawingCtx {
 public:
-  DrawingCtx(SkCanvas *canvas) : canvas(canvas) {
+  explicit DrawingCtx(SkCanvas *canvas) : canvas(canvas) {
     SkPaint paint;
     paint.setAntiAlias(true);
     paints.push_back(paint);

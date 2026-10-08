@@ -32,7 +32,7 @@ The `Box` component accepts `BoxShadow` components as children.
 ## Example
 
 ```tsx twoslash
-import {Canvas, Box, BoxShadow, Fill, rrect, rect} from "@shopify/react-native-skia";
+import {Canvas, Box, BoxShadow, Fill, rrect, rect} from "react-native-skia";
 
 export const Demo = () => (
   <Canvas style={{ width: 256, height: 256 }}>

@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import { exit } from "process";
 import fs from "fs";
 import path from "path";
@@ -11,9 +12,7 @@ import {
   commonArgs,
   configurations,
   copyHeaders,
-  GRAPHITE,
   isApplePlatform,
-  MACCATALYST,
   OutFolder,
   PackageRoot,
   ProjectRoot,
@@ -104,6 +103,23 @@ export const buildPlatform = async (
   );
 };
 
+// A Skia archive that defines a typeinfo of the C++ runtime makes librnskia.so
+// export that copy and bind its catch clauses to it instead of libc++_shared's.
+const assertNoRuntimeTypeinfo = (libPath: string) => {
+  const copies = execSync(
+    `$ANDROID_NDK/toolchains/llvm/prebuilt/*/bin/llvm-nm --defined-only --just-symbol-name ${libPath}`,
+    { maxBuffer: Infinity }
+  )
+    .toString()
+    .split("\n")
+    .filter((symbol) => /^_ZT[IS]St/.test(symbol));
+  if (copies.length > 0) {
+    throw new Error(
+      `${libPath} defines typeinfo the C++ runtime owns: ${copies.join(", ")}`
+    );
+  }
+};
+
 export const copyLib = (
   os: PlatformName,
   cpu: string,
@@ -120,6 +136,13 @@ export const copyLib = (
       console.log(`Copying ${libPath} to ${dstPath}`);
       console.log(`cp ${libPath} ${dstPath}`);
       $(`cp ${libPath} ${dstPath}`);
+      if (os === "android") {
+        // The archives ship as they are: drop the debug info, which is most
+        // of their size.
+        $(
+          `$ANDROID_NDK/toolchains/llvm/prebuilt/*/bin/llvm-strip --strip-debug ${dstPath}/${path.basename(libPath)}`
+        );
+      }
     });
 };
 
@@ -127,29 +150,16 @@ export const copyLib = (
  * Builds an XCFramework for a specific Apple platform.
  * Each platform produces its own XCFramework:
  * - apple-ios: arm64-iphoneos + lipo'd iphonesimulator (arm64 + x64)
- * - apple-tvos: arm64-tvos + lipo'd tvsimulator (arm64 + x64)
  * - apple-macos: lipo'd macosx (arm64 + x64)
- * - apple-maccatalyst: lipo'd maccatalyst (arm64 + x64)
  */
 const buildXCFramework = (platformName: ApplePlatformName) => {
   const config = configurations[platformName];
-
-  // Skip if no targets configured (e.g., tvos when GRAPHITE)
-  if (Object.keys(config.targets).length === 0) {
-    console.log(`⏭️  Skipping ${platformName} - no targets configured`);
-    return;
-  }
-
   const { outputNames } = config;
-  if (outputNames.length === 0) {
-    console.log(`⏭️  Skipping ${platformName} - no outputs configured`);
-    return;
-  }
 
   process.chdir(SkiaSrc);
   const prefix = `${OutFolder}/${platformName}`;
 
-  // Get the short platform name (ios, tvos, macos)
+  // Get the short platform name (ios, macos)
   const shortPlatform = platformName.replace("apple-", "");
 
   // Create output directory
@@ -170,15 +180,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       );
       xcframeworkCmd += `-library ${prefix}/arm64-iphoneos/${name} `;
       xcframeworkCmd += `-library ${prefix}/iphonesimulator/${name} `;
-    } else if (shortPlatform === "tvos") {
-      // tvOS: device + lipo'd simulator (arm64 + x64)
-      $(`mkdir -p ${prefix}/tvsimulator`);
-      $(`rm -rf ${prefix}/tvsimulator/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-tvsimulator/${name} ${prefix}/arm64-tvsimulator/${name} -output ${prefix}/tvsimulator/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/arm64-tvos/${name} `;
-      xcframeworkCmd += `-library ${prefix}/tvsimulator/${name} `;
     } else if (shortPlatform === "macos") {
       // macOS: lipo arm64 + x64
       $(`mkdir -p ${prefix}/macosx`);
@@ -187,14 +188,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         `lipo -create ${prefix}/x64-macosx/${name} ${prefix}/arm64-macosx/${name} -output ${prefix}/macosx/${name}`
       );
       xcframeworkCmd += `-library ${prefix}/macosx/${name} `;
-    } else if (shortPlatform === "maccatalyst") {
-      // Mac Catalyst: lipo arm64 + x64
-      $(`mkdir -p ${prefix}/maccatalyst`);
-      $(`rm -rf ${prefix}/maccatalyst/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-maccatalyst/${name} ${prefix}/arm64-maccatalyst/${name} -output ${prefix}/maccatalyst/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/maccatalyst/${name} `;
     }
 
     const [lib] = name.split(".");
@@ -264,23 +257,7 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
 
   console.log(`🎯 Building targets: ${targetSpecs.join(", ")}`);
-
-  if (GRAPHITE) {
-    console.log("🪨 Skia Graphite");
-    console.log(
-      "⚠️  Apple TV (tvOS) and MacCatalyst builds are skipped when GRAPHITE is enabled"
-    );
-  } else {
-    console.log("🐘 Skia Ganesh");
-  }
-
-  if (MACCATALYST) {
-    console.log("✅ macCatalyst builds are enabled");
-  } else {
-    console.log(
-      "⚠️  macCatalyst builds are disabled (set SK_MACCATALYST=1 to enable)"
-    );
-  }
+  console.log("🪨 Skia Graphite");
 
   // Check Android environment variables if android is in target platforms
   const hasAndroid = buildTargets.some((bt) => bt.platform === "android");
@@ -302,9 +279,23 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   process.chdir(SkiaSrc);
   $("PATH=../depot_tools/:$PATH python3 tools/git-sync-deps");
   console.log("gclient sync done");
-  if (GRAPHITE) {
+  {
     console.log("Applying Graphite patches...");
     $(`git reset --hard HEAD`);
+
+    // PartitionAlloc is a Chromium dependency Dawn's GN rules can pull in;
+    // the Skia tree does not have it and skia_use_partition_alloc is off.
+    {
+      const filePath = `${SkiaSrc}/build_overrides/dawn.gni`;
+      const marker = "# PartitionAlloc is an optional dependency:";
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const index = content.indexOf(marker);
+        if (index !== -1) {
+          fs.writeFileSync(filePath, content.slice(0, index));
+        }
+      }
+    }
 
     // Apply arm64e simulator patch
     const arm64ePatchFile = path.join(__dirname, "dawn-arm64e-simulator.patch");
@@ -467,11 +458,6 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
   $(`rm -rf ${PackageRoot}/libs`);
 
-  if (GRAPHITE) {
-    $(`mkdir -p ${PackageRoot}/libs`);
-    fs.writeFileSync(`${PackageRoot}/libs/.graphite`, "");
-  }
-
   // Build specified platforms and targets
   for (const buildTarget of buildTargets) {
     const { platform, targets } = buildTarget;
@@ -486,12 +472,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       await buildPlatform(platform, target);
       process.chdir(ProjectRoot);
       if (platform === "android") {
+        configuration.outputNames.forEach((name) =>
+          assertNoRuntimeTypeinfo(`${getOutDir(platform, target)}/${name}`)
+        );
         copyLib(
           platform,
           target,
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          configuration.targets[target].output,
+          configurations.android.targets[target].output,
           configuration.outputNames
         );
       }

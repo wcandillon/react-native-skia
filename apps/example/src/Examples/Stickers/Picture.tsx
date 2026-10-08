@@ -1,5 +1,5 @@
-import type { SkImage, Matrix4 } from "@shopify/react-native-skia";
-import { Group, Image, rect } from "@shopify/react-native-skia";
+import type { SkImage, Matrix4 } from "react-native-skia";
+import { Group, Image, rect } from "react-native-skia";
 import React from "react";
 import { Dimensions } from "react-native";
 import type { SharedValue } from "react-native-reanimated";

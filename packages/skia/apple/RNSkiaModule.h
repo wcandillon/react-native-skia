@@ -1,20 +1,19 @@
 #pragma once
 
-#ifdef RCT_NEW_ARCH_ENABLED
+#import <ReactCommon/RCTTurboModuleWithJSIBindings.h>
 #import <rnskia/rnskia.h>
-#else
-#import <React/RCTBridgeModule.h>
-#endif
 
-#include "SkiaManager.h"
+#include <memory>
 
-@interface RNSkiaModule : NSObject
-#ifdef RCT_NEW_ARCH_ENABLED
-                          <NativeSkiaModuleSpec>
-#else
-                          <RCTBridgeModule>
-#endif
+#include "RNSkManager.h"
 
-- (SkiaManager *)manager;
+@interface RNSkiaModule
+    : NSObject <NativeSkiaModuleSpec, RCTTurboModuleWithJSIBindings>
+
+- (std::shared_ptr<RNSkia::RNSkManager>)skManager;
+
+// Fabric components do not have a better way to interact with TurboModules.
+// Workaround to get the SkManager instance from singleton.
++ (std::shared_ptr<RNSkia::RNSkManager>)latestActiveSkManager;
 
 @end

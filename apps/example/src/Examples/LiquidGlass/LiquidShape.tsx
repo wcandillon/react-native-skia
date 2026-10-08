@@ -1,5 +1,5 @@
-import type { SkShader } from "@shopify/react-native-skia";
-import { BlendMode, Skia, TileMode } from "@shopify/react-native-skia";
+import type { SkShader } from "react-native-skia";
+import { BlendMode, Skia, TileMode } from "react-native-skia";
 import React from "react";
 
 import { Scene } from "./components/Scene";

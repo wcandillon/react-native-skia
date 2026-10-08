@@ -1,6 +1,6 @@
 // swift-tools-version: 6.0
 //
-// SwiftPM manifest for @shopify/react-native-skia. iOS, Ganesh.
+// SwiftPM manifest for react-native-skia. iOS, Graphite.
 // Additive: the CocoaPods podspec remains the supported default.
 //
 // React Native 0.87+ references a library that ships its own Package.swift
@@ -12,28 +12,39 @@ import Foundation
 import PackageDescription
 
 // Skia's xcframeworks are ~200MB and are not carried in this package. They come
-// from the react-native-skia-apple-ios npm package, which @shopify/react-native-skia
-// depends on, so a checkout that has installed its dependencies builds offline.
+// from the react-native-skia-graphite-apple-ios npm package, which
+// react-native-skia depends on, so a checkout that has installed its
+// dependencies builds offline. Dawn, the WebGPU implementation Graphite runs
+// on, comes from the react-native-webgpu-dawn package the same way: the one
+// react-native-webgpu depends on too, so an app with both links one Dawn.
 // Xcode passes the symlink as the package directory, hence resolvingSymlinks.
 let packageRoot = URL(fileURLWithPath: Context.packageDirectory)
   .resolvingSymlinksInPath().path
 
-let binariesPath = [
-  "../../react-native-skia-apple-ios", // consumer: sibling in node_modules
-  "../../node_modules/react-native-skia-apple-ios", // this monorepo
-]
-.map { "\(packageRoot)/\($0)" }
-.first { FileManager.default.fileExists(atPath: "\($0)/Package.swift") }
+// A node package next to this one: a sibling in the consumer's node_modules,
+// or under this monorepo's root.
+let nodePackage = { (name: String) -> String? in
+  ["../../\(name)", "../../node_modules/\(name)"]
+    .map { "\(packageRoot)/\($0)" }
+    .first { FileManager.default.fileExists(atPath: "\($0)/Package.swift") }
+}
 
-guard let binariesPath else {
+guard let binariesPath = nodePackage("react-native-skia-graphite-apple-ios") else {
   // Reached when the package was skipped at install time (`--omit=optional`,
   // or a non-Apple `os` filter), which SwiftPM would otherwise report as an
   // unresolvable dependency path.
   fatalError(
     """
-    react-native-skia-apple-ios was not found next to @shopify/react-native-skia. \
+    react-native-skia-graphite-apple-ios was not found next to react-native-skia. \
     It ships the prebuilt Skia binaries this package links against. Reinstall \
     dependencies without --omit=optional, on macOS.
+    """)
+}
+guard let dawnPath = nodePackage("react-native-webgpu-dawn") else {
+  fatalError(
+    """
+    react-native-webgpu-dawn was not found next to react-native-skia. It ships the \
+    Dawn library this package links against. Reinstall dependencies.
     """)
 }
 
@@ -48,6 +59,7 @@ let package = Package(
     .package(name: "React-GeneratedCode", path: "../../../ios"),
     .package(name: "ReactNative", path: "../../../../xcframeworks"),
     .package(path: binariesPath),
+    .package(path: dawnPath),
   ],
   targets: [
     .target(
@@ -57,15 +69,14 @@ let package = Package(
         .product(name: "ReactNativeHeaders", package: "ReactNative"),
         .product(name: "ReactNativeDependenciesHeaders", package: "ReactNative"),
         .product(name: "ReactAppHeaders", package: "React-GeneratedCode"),
-        .product(name: "react-native-skia-apple-ios", package: "react-native-skia-apple-ios"),
+        .product(
+          name: "react-native-skia-graphite-apple-ios",
+          package: "react-native-skia-graphite-apple-ios"),
+        .product(name: "react-native-webgpu-dawn", package: "react-native-webgpu-dawn"),
       ],
       // apple/ and cpp/ have no common ancestor below the package root, and
       // .headerSearchPath cannot escape the target path.
       path: ".",
-      exclude: [
-        "cpp/rnskia/RNDawnWindowContext.cpp", // Graphite only
-        "cpp/rnskia/RNDawnInterop.cpp", // Graphite only
-      ],
       // Explicit, so SwiftPM never walks node_modules, lib, android, or the
       // headers-only cpp/skia — which carries x86 AVX skcms sources that
       // cannot build for arm64.
@@ -83,18 +94,19 @@ let package = Package(
         // Replaces the podspec's recursive cpp/** glob, which expands to 90.
         .headerSearchPath("cpp"), // "api/…", "jsi/…", "utils/…"
         .headerSearchPath("cpp/skia"), // "include/core/…", "modules/…", "src/…"
+        .headerSearchPath("cpp/dawn/include"), // "webgpu/…", "dawn/…"
         .headerSearchPath("cpp/rnskia"), // apple/ uses bare "RNSkView.h"
         .headerSearchPath("cpp/utils"), // apple/ uses bare "RNSkLog.h"
 
-        // CocoaPods forces both project-wide; the SwiftPM path defines neither.
-        // Skia's Apple sources still gate on them: without them RNSkiaModule's
-        // legacy branch fails to compile and -getTurboModule: is dropped, so
-        // the JSI bindings never install.
+        // CocoaPods defines both project-wide for a New Architecture app; the
+        // SwiftPM path defines neither. Skia's own sources no longer gate on
+        // them, but React's headers do (RCT_REMOVE_LEGACY_ARCH hides the
+        // legacy bridge API), so mirror what CocoaPods does.
         .define("RCT_NEW_ARCH_ENABLED", to: "1"),
         .define("RCT_REMOVE_LEGACY_ARCH", to: "1"),
 
-        .define("SK_METAL", to: "1"),
-        .define("SK_GANESH", to: "1"),
+        // Skia's public headers only declare the Graphite API with SK_GRAPHITE.
+        .define("SK_GRAPHITE", to: "1"),
         .define("SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API", to: "1"),
         .define("SK_DISABLE_LEGACY_SHAPER_FACTORY", to: "1"),
 

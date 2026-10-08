@@ -1,4 +1,4 @@
-import { Circle, Group, Path } from "@shopify/react-native-skia";
+import { Circle, Group, Path } from "react-native-skia";
 import React from "react";
 
 export const Cog = () => {

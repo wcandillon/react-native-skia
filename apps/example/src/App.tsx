@@ -30,12 +30,13 @@ import {
   Stickers,
   FrostedCard,
   SpeedTest,
-  Video,
-  Chat,
   LiquidGlass,
   Pictures,
   WebGPU,
   HighBitDepth,
+  Graphite,
+  GraphiteCanvasExample,
+  AndroidViews,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -44,6 +45,9 @@ import { useAssets } from "./Tests/useAssets";
 import { Chess } from "./Examples/Chess";
 import { apiScreenPaths } from "./Examples/API/linking";
 import "./resolveAssetSourcePolyfill";
+// The two lines below are needed by three.js
+import "fast-text-encoding";
+window.parent = window;
 
 const linking: LinkingOptions<StackParamList> = {
   config: {
@@ -76,11 +80,12 @@ const linking: LinkingOptions<StackParamList> = {
       Stickers: "stickers",
       FrostedCard: "frosted-card",
       SpeedTest: "speedtest",
-      Video: "video",
-      Chat: "chat",
       Pictures: "pictures",
       WebGPU: "webgpu",
       HighBitDepth: "high-bit-depth",
+      Graphite: "graphite",
+      GraphiteCanvas: "graphite-canvas",
+      AndroidViews: "android-views",
     },
   },
   prefixes: ["rnskia://"],
@@ -225,20 +230,6 @@ const App = () => {
               }}
             />
             <Stack.Screen
-              name="Video"
-              component={Video}
-              options={{
-                header: () => null,
-              }}
-            />
-            <Stack.Screen
-              name="Chat"
-              component={Chat}
-              options={{
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen
               name="Performance"
               component={PerformanceDrawingTest}
             />
@@ -251,6 +242,12 @@ const App = () => {
               }}
             />
             <Stack.Screen name="HighBitDepth" component={HighBitDepth} />
+            <Stack.Screen name="Graphite" component={Graphite} />
+            <Stack.Screen
+              name="GraphiteCanvas"
+              component={GraphiteCanvasExample}
+            />
+            <Stack.Screen name="AndroidViews" component={AndroidViews} />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

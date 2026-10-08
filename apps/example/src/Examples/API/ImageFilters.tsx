@@ -12,7 +12,7 @@ import {
   Circle,
   Skia,
   useFont,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 
 import { Examples, SIZE } from "./components/Examples";

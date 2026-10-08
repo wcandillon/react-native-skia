@@ -210,7 +210,9 @@ describe("Path Performance Benchmarks", () => {
         const start = performance.now();
         let result = path;
         for (let i = 0; i < ctx.iterations; i++) {
-          result = result.transform(matrix);
+          result = Skia.PathBuilder.MakeFromPath(result)
+            .transform(matrix)
+            .build();
         }
         return performance.now() - start;
       },
@@ -233,7 +235,7 @@ describe("Path Performance Benchmarks", () => {
         const start = performance.now();
         let result = path;
         for (let i = 0; i < ctx.iterations; i++) {
-          result = result.offset(1, 1);
+          result = Skia.PathBuilder.MakeFromPath(result).offset(1, 1).build();
         }
         return performance.now() - start;
       },
@@ -397,7 +399,9 @@ describe("Path Performance Benchmarks", () => {
           builder.addCircle(50, 50, 20);
           builder.addRect(Skia.XYWHRect(30, 30, 40, 40));
           const path = builder.build();
-          path.transform(Skia.Matrix().translate(i, i));
+          Skia.PathBuilder.MakeFromPath(path)
+            .transform(Skia.Matrix().translate(i, i))
+            .build();
         }
         return performance.now() - start;
       },

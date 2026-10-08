@@ -19,7 +19,7 @@ import {
   Canvas,
   Image,
   useAnimatedImageValue,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const AnimatedImages = () => {
   // This can be an animated GIF or WebP file
@@ -59,7 +59,7 @@ import {
   Canvas,
   Image,
   useAnimatedImageValue,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const AnimatedImages = () => {
   const isPaused = useSharedValue(false);
@@ -96,7 +96,7 @@ export const AnimatedImages = () => {
 To load an image as a `SkAnimatedImage` object, we offer a `useAnimatedImage` hook:
 
 ```tsx twoslash
-import {useAnimatedImage} from "@shopify/react-native-skia";
+import {useAnimatedImage} from "react-native-skia";
 
 // bird is an SkAnimatedImage
 const bird = useAnimatedImage(

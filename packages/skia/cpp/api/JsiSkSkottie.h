@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -31,9 +32,9 @@
 #pragma clang diagnostic pop
 
 namespace RNSkia {
-using namespace facebook;
+namespace jsi = facebook::jsi;
 
-std::unique_ptr<SkCodec> DecodeImageData(sk_sp<SkData> data) {
+inline std::unique_ptr<SkCodec> DecodeImageData(sk_sp<SkData> data) {
   if (data == nullptr) {
     return nullptr;
   }
@@ -74,6 +75,8 @@ public:
       if (!codec) {
         return nullptr;
       }
+      // The asset keeps its decoded frame for the lifetime of the animation.
+      _decodedImageBytes += codec->getInfo().computeMinByteSize();
       return skresources::MultiFrameImageAsset::Make(std::move(codec));
     }
 
@@ -102,11 +105,16 @@ public:
     return this->findAsset(name);
   }
 
+  // Bytes of the decoded images for the assets loaded so far.
+  size_t decodedImageBytes() const { return _decodedImageBytes; }
+
 private:
   explicit SkottieAssetProvider(AssetMap assets, sk_sp<SkFontMgr> fontMgr)
       : fAssets(std::move(assets)), fFontMgr(std::move(fontMgr)) {}
   const AssetMap fAssets;
   const sk_sp<SkFontMgr> fFontMgr;
+  // loadImageAsset() is const in skottie::ResourceProvider.
+  mutable size_t _decodedImageBytes = 0;
 
   sk_sp<SkData> findAsset(const char name[]) const {
     auto it = fAssets.find(name);
@@ -121,6 +129,12 @@ class ManagedAnimation {
 public:
   ManagedAnimation(std::string json, SkottieAssetProvider::AssetMap assets,
                    sk_sp<SkFontMgr> fontMgr) {
+    _approximateBytesUsed = json.size();
+    for (const auto &asset : assets) {
+      if (asset.second) {
+        _approximateBytesUsed += asset.second->size();
+      }
+    }
     _propManager = std::make_unique<CustomPropertyManager>(
         CustomPropertyManager::Mode::kCollapseProperties, "");
     _resourceProvider =
@@ -132,6 +146,8 @@ public:
     builder->setPropertyObserver(_propManager->getPropertyObserver());
     _animation = builder->make(json.c_str(), json.size());
     _slotManager = builder->getSlotManager();
+    // Image assets are loaded while the animation is built.
+    _approximateBytesUsed += _resourceProvider->decodedImageBytes();
   }
 
   ~ManagedAnimation() {
@@ -151,6 +167,10 @@ public:
   sk_sp<skottie::SlotManager> _slotManager = nullptr;
   sk_sp<SkottieAssetProvider> _resourceProvider = nullptr;
   std::unique_ptr<CustomPropertyManager> _propManager = nullptr;
+  // Size of the animation JSON, its encoded assets and its decoded images:
+  // the memory the animation actually owns (the scene graph is in the same
+  // order as the JSON). Used as the GC hint for the wrapper.
+  size_t _approximateBytesUsed = 0;
 };
 
 class JsiSkSkottie
@@ -322,8 +342,7 @@ public:
     if (!slotID.has_value() || !scalar.has_value()) {
       return false;
     }
-    return getObject()->_slotManager->setScalarSlot(SkString(*slotID),
-                                                    *scalar);
+    return getObject()->_slotManager->setScalarSlot(SkString(*slotID), *scalar);
   }
 
   bool setVec2Slot(JsiOptional<std::string> slotID,
@@ -579,31 +598,13 @@ public:
 
   size_t getMemoryPressure() override {
     auto animation = getObject();
-    if (!animation || !animation->_animation) {
-      return 1024; // Base size if no animation
+    if (!animation) {
+      return kMinMemoryPressure;
     }
-
-    auto size = animation->_animation->size();
-    auto duration = animation->_animation->duration();
-    auto fps = animation->_animation->fps();
-
-    // Estimate memory usage based on animation properties
-    // Base calculation: width * height * 4 bytes per pixel * estimated frame
-    // count
-    size_t frameCount = static_cast<size_t>(duration * fps);
-    size_t estimatedFrameSize =
-        static_cast<size_t>(size.width() * size.height() * 4);
-
-    // Conservative estimate: assume some frames are cached
-    size_t cachedFrames =
-        std::min(frameCount, static_cast<size_t>(60)); // Max 60 cached frames
-    size_t animationMemory = estimatedFrameSize * cachedFrames;
-
-    // Add base overhead for animation data structures
-    size_t baseOverhead =
-        64 * 1024; // 64KB for metadata, property managers, etc.
-
-    return animationMemory + baseOverhead;
+    // Skottie keeps no frame cache: report the bytes the animation owns.
+    // Estimating a pixel cache here (width * height * 4 * 60 frames) charged
+    // hundreds of MB per wrapper, and each capture in a worklet repeated it.
+    return std::max(animation->_approximateBytesUsed, kMinMemoryPressure);
   }
 };
 } // namespace RNSkia

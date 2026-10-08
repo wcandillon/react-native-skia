@@ -17,12 +17,7 @@ export const HomeScreenButton: React.FC<Props> = ({
 }) => {
   const navigation = useNavigation();
   const gotoRoute = useCallback(() => {
-    navigation.dispatch(
-      CommonActions.navigate({
-        name: route,
-        params: {},
-      })
-    );
+    navigation.dispatch(CommonActions.navigate(route, {}));
   }, [route, navigation]);
   return (
     <TouchableOpacity

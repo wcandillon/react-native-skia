@@ -8,12 +8,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import {
-  Canvas,
-  Circle,
-  Skia,
-  SkiaPictureView,
-} from "@shopify/react-native-skia";
+import { Canvas, Circle, Skia, SkiaPictureView } from "react-native-skia";
 import { ScrollView } from "react-native-gesture-handler";
 
 import { AnimationWithTouchHandler } from "../Reanimated/AnimationWithTouchHandler";
@@ -57,9 +52,8 @@ export const FirstFrame = () => {
           key={`picture-${count}`}
           picture={picture}
           style={styles.canvas}
-          androidWarmup
-        ></SkiaPictureView>
-        <Canvas style={styles.canvas} key={`canvas-${count}`} androidWarmup>
+        />
+        <Canvas style={styles.canvas} key={`canvas-${count}`}>
           <Circle cx={100} cy={100} r={50} color="red" />
         </Canvas>
         <View style={{ width, height: 100 }}>

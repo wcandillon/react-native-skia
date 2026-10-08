@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { CubicBezierHandle } from "@shopify/react-native-skia";
+import type { CubicBezierHandle } from "react-native-skia";
 import {
   Skia,
   isEdge,
@@ -11,7 +11,7 @@ import {
   vec,
   useImage,
   useClock,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { View, useWindowDimensions } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";

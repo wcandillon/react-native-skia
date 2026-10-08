@@ -29,7 +29,9 @@ public:
       : JsiSkWrappingSkPtrNativeObject<JsiSkShader, SkShader>(
             std::move(context), std::move(shader)) {}
 
-  size_t getMemoryPressure() override { return 1024 * 1024; }
+  // A shader node is a few hundred bytes; the images it may reference
+  // are reported by their own wrappers.
+  size_t getMemoryPressure() override { return kMinMemoryPressure; }
 
   static sk_sp<SkShader> fromValue(jsi::Runtime &runtime,
                                    const jsi::Value &obj) {

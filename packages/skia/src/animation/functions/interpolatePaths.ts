@@ -12,6 +12,12 @@ const lerp = (
   p2: SkPath
 ) => {
   "worklet";
+  // Zero-width segment (duplicate input stops): t would be NaN or Infinity.
+  // Return the segment's end path (p2), i.e. the value jumps to p2 at the stop.
+  // reanimated's interpolate has no explicit guard here, so this is our choice.
+  if (to === from) {
+    return p2;
+  }
   const t = (value - from) / (to - from);
   // interpolate returns a new path (immutable operation)
   return p2.interpolate(p1, t)!;
@@ -41,12 +47,25 @@ export const interpolatePaths = (
   _output?: SkPath
 ) => {
   "worklet";
+  if (input.length < 2 || input.length !== outputRange.length) {
+    throw new Error(
+      `interpolatePaths() requires input and outputRange to have the same length and at least 2 entries, received ${input.length} and ${outputRange.length}`
+    );
+  }
+  if (Number.isNaN(value)) {
+    throw new Error("interpolatePaths() received NaN as value");
+  }
   const extrapolation = validateInterpolationOptions(options);
   if (value < input[0]) {
     switch (extrapolation.extrapolateLeft) {
       case Extrapolate.CLAMP:
         return outputRange[0];
       case Extrapolate.EXTEND:
+        if (!Number.isFinite(value)) {
+          throw new Error(
+            "interpolatePaths() cannot extend with an infinite value, use clamp extrapolation instead"
+          );
+        }
         return lerp(value, input[0], input[1], outputRange[0], outputRange[1]);
       case Extrapolate.IDENTITY:
         throw new Error(
@@ -60,6 +79,11 @@ export const interpolatePaths = (
       case Extrapolate.CLAMP:
         return outputRange[outputRange.length - 1];
       case Extrapolate.EXTEND:
+        if (!Number.isFinite(value)) {
+          throw new Error(
+            "interpolatePaths() cannot extend with an infinite value, use clamp extrapolation instead"
+          );
+        }
         return lerp(
           value,
           input[input.length - 2],

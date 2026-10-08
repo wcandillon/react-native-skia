@@ -4,8 +4,10 @@
 #include <mutex>
 
 #include "RNDawnUtils.h"
-#include "RNDawnWindowContext.h"
 #include "RNImageProvider.h"
+#include "utils/RNSkLog.h"
+
+#include <vector>
 
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkData.h"
@@ -22,23 +24,11 @@
 
 #include "src/gpu/graphite/ContextOptionsPriv.h"
 
-#ifdef __APPLE__
-#include <CoreVideo/CVPixelBuffer.h>
-#else
-#include <android/hardware_buffer.h>
-#include <android/hardware_buffer_jni.h>
-#endif
-
 namespace RNSkia {
 
 struct AsyncContext {
   bool fCalled = false;
   std::unique_ptr<const SkSurface::AsyncReadResult> fResult;
-};
-
-struct SharedTextureContext {
-  wgpu::SharedTextureMemory sharedTextureMemory;
-  wgpu::Texture texture;
 };
 
 static void
@@ -51,9 +41,6 @@ async_callback(void *c,
 
 class DawnContext {
 public:
-  // TODO: remove
-  friend class RNSkApplePlatformContext;
-
   DawnContext(const DawnContext &) = delete;
   DawnContext &operator=(const DawnContext &) = delete;
 
@@ -93,6 +80,43 @@ public:
     return rasterImage;
   }
 
+  // A recorder of its own for a client that records on one thread and replays
+  // on another (SkiaGraphiteView): unlike getRecorder() it is not tied to the
+  // calling thread. Creating a recorder is a Context operation, hence the lock.
+  std::unique_ptr<skgpu::graphite::Recorder> makeRecorder() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    skgpu::graphite::RecorderOptions options;
+    options.fImageProvider = ImageProvider::Make();
+    return fGraphiteContext->makeRecorder(options);
+  }
+
+  // Replays the recordings, in order, onto the target surface (a deferred
+  // canvas target) and submits them as one batch. Returns false if any of
+  // them was rejected; the others are still submitted.
+  bool
+  insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
+                   SkSurface *targetSurface) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    bool success = true;
+    for (auto *recording : recordings) {
+      skgpu::graphite::InsertRecordingInfo info;
+      info.fRecording = recording;
+      info.fTargetSurface = targetSurface;
+      auto status = fGraphiteContext->insertRecording(info);
+      // InsertStatus converts to true on success.
+      if (!static_cast<bool>(status)) {
+        RNSkLogger::logToConsole(
+            "Graphite rejected a recording (InsertStatus %d): %s",
+            static_cast<int>(
+                static_cast<skgpu::graphite::InsertStatus::V>(status)),
+            status.message().c_str());
+        success = false;
+      }
+    }
+    fGraphiteContext->submit();
+    return success;
+  }
+
   void submitRecording(
       skgpu::graphite::Recording *recording,
       skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
@@ -101,78 +125,6 @@ public:
     info.fRecording = recording;
     fGraphiteContext->insertRecording(info);
     fGraphiteContext->submit(syncToCpu);
-  }
-
-  sk_sp<SkImage> MakeImageFromBuffer(void *buffer) {
-#ifdef __APPLE__
-    wgpu::SharedTextureMemoryIOSurfaceDescriptor platformDesc;
-    auto ioSurface = CVPixelBufferGetIOSurface((CVPixelBufferRef)buffer);
-    platformDesc.ioSurface = ioSurface;
-    int width = static_cast<int>(IOSurfaceGetWidth(ioSurface));
-    int height = static_cast<int>(IOSurfaceGetHeight(ioSurface));
-#else
-    wgpu::SharedTextureMemoryAHardwareBufferDescriptor platformDesc;
-    auto ahb = (AHardwareBuffer *)buffer;
-    platformDesc.handle = ahb;
-    AHardwareBuffer_Desc adesc;
-    AHardwareBuffer_describe(ahb, &adesc);
-    int width = adesc.width;
-    int height = adesc.height;
-#endif
-
-    wgpu::SharedTextureMemoryDescriptor desc = {};
-    desc.nextInChain = &platformDesc;
-    wgpu::SharedTextureMemory memory =
-        backendContext.fDevice.ImportSharedTextureMemory(&desc);
-
-    wgpu::TextureDescriptor textureDesc;
-    textureDesc.format = DawnUtils::PreferredTextureFormat;
-    textureDesc.dimension = wgpu::TextureDimension::e2D;
-    textureDesc.usage =
-        wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc;
-    textureDesc.size = {static_cast<uint32_t>(width),
-                        static_cast<uint32_t>(height), 1};
-
-    wgpu::Texture texture = memory.CreateTexture(&textureDesc);
-
-    wgpu::SharedTextureMemoryBeginAccessDescriptor beginAccessDesc;
-    beginAccessDesc.initialized = true;
-    beginAccessDesc.fenceCount = 0;
-#if defined(__ANDROID__)
-    // Dawn's Vulkan backend requires the acquired VkImageLayout to be chained.
-    // UNDEFINED (= 0) on both ends is the canonical "no prior GPU producer"
-    // pattern (matches GPUSharedTextureMemory::beginAccess).
-    wgpu::SharedTextureMemoryVkImageLayoutBeginState vkBegin = {};
-    vkBegin.oldLayout = 0;
-    vkBegin.newLayout = 0;
-    beginAccessDesc.nextInChain = &vkBegin;
-#endif
-    bool success =
-        memory.BeginAccess(texture, &beginAccessDesc) == wgpu::Status::Success;
-
-    if (success) {
-      skgpu::graphite::BackendTexture betFromView =
-          skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-      auto result = SkImages::WrapTexture(
-          getRecorder(), betFromView, DawnUtils::PreferedColorType,
-          kPremul_SkAlphaType, nullptr,
-          [](void *context) {
-            auto ctx = static_cast<SharedTextureContext *>(context);
-            wgpu::SharedTextureMemoryEndAccessState endState = {};
-#if defined(__ANDROID__)
-            wgpu::SharedTextureMemoryVkImageLayoutEndState vkEnd = {};
-            endState.nextInChain = &vkEnd;
-#endif
-            ctx->sharedTextureMemory.EndAccess(ctx->texture, &endState);
-            delete ctx;
-          },
-          new SharedTextureContext{memory, texture});
-      return result;
-    }
-    if (!success) {
-      return nullptr;
-    }
-    return nullptr;
   }
 
   // Create offscreen surface
@@ -230,26 +182,11 @@ public:
       return nullptr;
     }
 
-    // Map WebGPU format to Skia color type
-    SkColorType colorType;
-    switch (format) {
-    case wgpu::TextureFormat::RGBA8Unorm:
-      colorType = kRGBA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::BGRA8Unorm:
-      colorType = kBGRA_8888_SkColorType;
-      break;
-    case wgpu::TextureFormat::RGBA16Float:
-      colorType = kRGBA_F16_SkColorType;
-      break;
-    case wgpu::TextureFormat::R8Unorm:
-      colorType = kGray_8_SkColorType;
-      break;
-    default:
-      // Use preferred color type for unsupported formats
-      colorType = DawnUtils::PreferedColorType;
-      break;
-    }
+    // Map the WebGPU format to a Skia color type; fall back to the preferred
+    // color type for formats Skia does not sample.
+    SkColorType colorType =
+        DawnUtils::colorTypeForTextureFormat(format).value_or(
+            DawnUtils::PreferedColorType);
 
     skgpu::graphite::BackendTexture backendTexture =
         skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
@@ -263,6 +200,39 @@ public:
 
     return SkImages::WrapTexture(
         getRecorder(), backendTexture, colorType, kPremul_SkAlphaType, nullptr,
+        [](void *context) {
+          auto ref = static_cast<TextureRef *>(context);
+          delete ref;
+        },
+        textureRef);
+  }
+
+  // Create an SkSurface that draws straight into a WebGPU texture (zero-copy).
+  // The texture must have RenderAttachment usage; give it TextureBinding too
+  // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
+  // The surface retains the texture for its lifetime.
+  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+    if (!texture) {
+      return nullptr;
+    }
+    if (!(texture.GetUsage() & wgpu::TextureUsage::RenderAttachment)) {
+      throw std::runtime_error(
+          "MakeSurfaceFromTexture: the texture needs RenderAttachment usage");
+    }
+
+    skgpu::graphite::BackendTexture backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+
+    struct TextureRef {
+      wgpu::Texture texture;
+    };
+    auto textureRef = new TextureRef{texture};
+
+    // The color type is derived from the texture format.
+    return SkSurfaces::WrapBackendTexture(
+        getRecorder(), backendTexture,
+        nullptr, // colorspace
+        nullptr, // surfaceProps
         [](void *context) {
           auto ref = static_cast<TextureRef *>(context);
           delete ref;
@@ -325,10 +295,9 @@ public:
     return texture;
   }
 
-  // Create onscreen surface with window
-  std::unique_ptr<WindowContext> MakeWindow(void *window, int width, int height,
-                                            bool highBitDepth = false) {
-    // 1. Create Surface
+  // The Dawn surface over a native window: a CAMetalLayer on Apple
+  // platforms, an ANativeWindow on Android (see RNSkWindowSurface).
+  wgpu::Surface MakeWGPUSurface(void *window) {
     wgpu::SurfaceDescriptor surfaceDescriptor;
 #ifdef __APPLE__
     wgpu::SurfaceSourceMetalLayer metalSurfaceDesc;
@@ -339,11 +308,7 @@ public:
     androidSurfaceDesc.window = window;
     surfaceDescriptor.nextInChain = &androidSurfaceDesc;
 #endif
-    auto surface =
-        wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
-    return std::make_unique<DawnWindowContext>(
-        getRecorder(), backendContext.fDevice, surface, window, width, height,
-        highBitDepth);
+    return wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
   }
 
   skgpu::graphite::Recorder *getRecorder() {

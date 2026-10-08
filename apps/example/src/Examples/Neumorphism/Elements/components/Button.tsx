@@ -1,11 +1,4 @@
-import {
-  FitBox,
-  rect,
-  rrect,
-  Box,
-  BoxShadow,
-  mix,
-} from "@shopify/react-native-skia";
+import { FitBox, rect, rrect, Box, BoxShadow, mix } from "react-native-skia";
 import type { ReactNode } from "react";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";

@@ -5,7 +5,7 @@ import {
   LinearGradient,
   RadialGradient,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { ReactNode } from "react";
 import React from "react";
 

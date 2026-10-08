@@ -6,7 +6,7 @@ slug: /tutorials
 ---
 
 Below is a list of tutorials sorted by category.
-Please [make a PR](https://github.com/Shopify/react-native-skia/edit/main/docs/docs/tutorials.md) if you would like to add entries to the list.
+Please [make a PR](https://github.com/wcandillon/react-native-skia/edit/main/apps/docs/docs/tutorials.md) if you would like to add entries to the list.
 
 ## 📏 SDFs
 * ♟️ [The Shader's Gambit ](https://www.youtube.com/watch?v=wUsFNlas620)

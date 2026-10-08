@@ -13,7 +13,7 @@ If you're already familiar with GLSL, or are looking to convert a GLSL shader to
 The first step is to create a shader and compile it using `RuntimeEffect.Make`.
 
 ```tsx twoslash
-import {Skia} from "@shopify/react-native-skia";
+import {Skia} from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 vec4 main(vec2 pos) {
@@ -43,7 +43,7 @@ Shaders can be nested with one another.
 ### Simple Shader
 
 ```tsx twoslash
-import {Skia, Canvas, Shader, Fill} from "@shopify/react-native-skia";
+import {Skia, Canvas, Shader, Fill} from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 vec4 main(vec2 pos) {
@@ -72,7 +72,7 @@ The following uniform types are supported: `float`, `float2`, `float3`, `float4`
 The types can also be used as arrays, e.g. `uniform float3 colors[12]`. 
 
 ```tsx twoslash
-import {Canvas, Skia, Shader, Fill, vec} from "@shopify/react-native-skia";
+import {Canvas, Skia, Shader, Fill, vec} from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 uniform vec2 c;
@@ -103,7 +103,7 @@ const UniformShader = () => {
 ### Nested Shaders
 
 ```tsx twoslash
-import {Canvas, Skia, ImageShader, Shader, Fill, useImage} from "@shopify/react-native-skia";
+import {Canvas, Skia, ImageShader, Shader, Fill, useImage} from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 uniform shader image;

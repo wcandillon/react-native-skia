@@ -17,7 +17,7 @@ import {
   TextAlign,
   useFonts,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import {
   Easing,
   useDerivedValue,
@@ -70,13 +70,14 @@ const ParagraphPathDemo = () => {
     paragraph.layout(contentWidth);
     // getPath() converts the glyphs of a laid out line into an SkPath, with
     // all font fallbacks already applied. Merge the lines into a single path.
-    const path = Skia.Path.Make();
+    const pathBuilder = Skia.PathBuilder.Make();
     paragraph.getLineMetrics().forEach(({ lineNumber }) => {
       const line = paragraph.getPath(lineNumber);
       if (line) {
-        path.addPath(line);
+        pathBuilder.addPath(line);
       }
     });
+    const path = pathBuilder.build();
     return { path, height: paragraph.getHeight() };
   }, [customFontMgr, contentWidth]);
 

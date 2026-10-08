@@ -1,4 +1,4 @@
-import { Group, Path } from "@shopify/react-native-skia";
+import { Group, Path } from "react-native-skia";
 import React from "react";
 
 export const Wind = () => {

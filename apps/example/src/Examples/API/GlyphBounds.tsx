@@ -6,12 +6,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import type {
-  Glyph,
-  SkFont,
-  SkPoint,
-  SkRect,
-} from "@shopify/react-native-skia";
+import type { Glyph, SkFont, SkPoint, SkRect } from "react-native-skia";
 import {
   Canvas,
   Glyphs,
@@ -21,7 +16,7 @@ import {
   Skia,
   useFonts,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import {
   Easing,
@@ -191,13 +186,14 @@ const GlyphBoundsDemo = () => {
     });
     // getPath() turns the same laid out glyphs into an SkPath used for the
     // trim reveal below.
-    const path = Skia.Path.Make();
+    const pathBuilder = Skia.PathBuilder.Make();
     paragraph.getLineMetrics().forEach(({ lineNumber }) => {
       const line = paragraph.getPath(lineNumber);
       if (line) {
-        path.addPath(line);
+        pathBuilder.addPath(line);
       }
     });
+    const path = pathBuilder.build();
     return { path, items, height: paragraph.getHeight() };
   }, [customFontMgr, layoutWidth]);
 

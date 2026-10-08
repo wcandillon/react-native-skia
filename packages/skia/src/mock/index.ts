@@ -25,6 +25,7 @@ export const Mock = (CanvasKit: CanvasKit) => {
     Canvas: require("react-native").View,
     getPreferredHighBitDepthCanvasFormat: () => "rgba16float",
     SkiaPictureView: require("react-native").View,
+    SkiaGraphiteView: require("react-native").View,
     JsiSkImage: JsiSkImage,
     drawAsPicture: Noop,
     drawAsImage: Noop,
@@ -49,7 +50,6 @@ export const Mock = (CanvasKit: CanvasKit) => {
     useValueEffect: Noop,
     // Reanimated hooks
     isOnMainThread: () => true,
-    isFabric: true,
     useClock: NoopSharedValue,
     usePathInterpolation: NoopSharedValue,
     useImageAsTexture: NoopSharedValue,
@@ -67,6 +67,5 @@ export const Mock = (CanvasKit: CanvasKit) => {
     useTypeface: () => null,
     useImage: () => null,
     useSVG: () => null,
-    useVideo: () => null,
   };
 };

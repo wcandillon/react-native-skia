@@ -27,7 +27,7 @@ The example below generates a circle with a green mint color.
 The circle is first drawn with the light blue color `#add8e6`, and the runtime shader switches the blue with the green channel: we get mint green `#ade6d8`.
 
 ```tsx twoslash
-import {Canvas, Text, RuntimeShader, Skia, Group, Circle} from "@shopify/react-native-skia";
+import {Canvas, Text, RuntimeShader, Skia, Group, Circle} from "react-native-skia";
 
 const source = Skia.RuntimeEffect.Make(`
 uniform shader image;
@@ -58,7 +58,7 @@ export const RuntimeShaderDemo = () => {
 To keep the image filter output crisp, We upscale the filtered drawing to the [pixel density of the app](https://reactnative.dev/docs/pixelratio). Once the drawing is filtered, we scale it back to the original size. This can be seen in the example below. These operations must be performed on a Skia layer via the `layer` property.
 
 ```tsx twoslash
-import {Canvas, Text, RuntimeShader, Skia, Group, Circle, Paint, Fill, useFont} from "@shopify/react-native-skia";
+import {Canvas, Text, RuntimeShader, Skia, Group, Circle, Paint, Fill, useFont} from "react-native-skia";
 import {PixelRatio} from "react-native";
 
 const pd = PixelRatio.get();

@@ -17,7 +17,7 @@ We found [its-fine](https://github.com/pmndrs/its-fine), also used by [react-thr
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, Fill } from "@shopify/react-native-skia";
+import { Canvas, Fill } from "react-native-skia";
 import {useTheme, ThemeProvider, ThemeContext} from "./docs/getting-started/Theme";
 import { useContextBridge, FiberProvider } from "its-fine";
 

@@ -14,18 +14,6 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
   */
   getCanvas(): SkCanvas;
 
-  /**
-   * Returns the backend texture of the surface.
-   * The returned object can be used to create a Skia Image object.
-   * The returned object is backend specific and should be used with caution.
-   * It is the caller's responsibility to ensure that the texture is not used after the surface is deleted
-   * or draw operations are performed on the surface.
-   * The returned object may be null if the surface does not have a backend texture.
-   *
-   * @return backend texture of the surface or null
-   */
-  getNativeTextureUnstable(): unknown;
-
   /** Returns Image capturing Surface contents. Subsequent drawing to
      Surface contents are not captured.
 
@@ -40,9 +28,9 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
   /**
    * Make sure any queued draws are sent to the screen or the GPU.
    * @param sync - When true, block until the GPU has finished executing the
-   * submitted work. Use this before reading the surface's texture from a native
-   * consumer on a different command queue (see {@link getNativeTextureUnstable}).
-   * Defaults to false.
+   * submitted work. Use this before a consumer on a different command queue
+   * reads the texture this surface draws into (see
+   * `Skia.Surface.MakeFromGPUTexture`). Defaults to false.
    */
   flush(sync?: boolean): void;
 

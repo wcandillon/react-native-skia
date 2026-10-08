@@ -21,8 +21,8 @@ If the view is optimized away, `makeImageFromView` will crash or return the wron
 ```tsx twoslash
 import { useState, useRef } from "react";
 import { View, Text, PixelRatio, StyleSheet, Pressable } from "react-native";
-import type { SkImage } from "@shopify/react-native-skia";
-import { makeImageFromView, Canvas, Image } from "@shopify/react-native-skia";
+import type { SkImage } from "react-native-skia";
+import { makeImageFromView, Canvas, Image } from "react-native-skia";
 
 const pd = PixelRatio.get();
 

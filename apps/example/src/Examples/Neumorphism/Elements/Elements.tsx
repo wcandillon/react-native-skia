@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, useWindowDimensions } from "react-native";
-import { Canvas, Fill } from "@shopify/react-native-skia";
+import { Canvas, Fill } from "react-native-skia";
 import { useSharedValue, withTiming } from "react-native-reanimated";
 
 import { Switch } from "./components/Switch";

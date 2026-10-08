@@ -16,7 +16,7 @@ Draws a circle.
 | r    | `number` | Radius.          |
 
 ```tsx twoslash
-import {Canvas, Circle} from "@shopify/react-native-skia";
+import {Canvas, Circle} from "react-native-skia";
 
 const CircleDemo = () => {
   const r = 128;
@@ -45,7 +45,7 @@ Draws an oval based on its bounding rectangle.
 
 
 ```tsx twoslash
-import {Canvas, Oval} from "@shopify/react-native-skia";
+import {Canvas, Oval} from "react-native-skia";
 
 const OvalDemo = () => {
   return (

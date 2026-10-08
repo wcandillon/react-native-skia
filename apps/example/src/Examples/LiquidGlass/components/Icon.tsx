@@ -1,6 +1,6 @@
 import React from "react";
-import type { SkPath } from "@shopify/react-native-skia";
-import { fitbox, rect, Path, Skia } from "@shopify/react-native-skia";
+import type { SkPath } from "react-native-skia";
+import { fitbox, rect, Path, Skia } from "react-native-skia";
 
 export type IconName = "plus" | "search" | "credit-card" | "more" | "cast";
 

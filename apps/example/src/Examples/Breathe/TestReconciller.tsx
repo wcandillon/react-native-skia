@@ -9,7 +9,7 @@ import {
   Group,
   polar2Canvas,
   mix,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 

@@ -358,6 +358,54 @@ describe("Path", () => {
     const p4 = interpolatePaths(1.1, [0, 1], [p1, p2], "clamp");
     expect(p4.toCmds()).toEqual(p2.toCmds());
   });
+  describe("interpolatePaths() degenerate inputs", () => {
+    const setup = () => {
+      const { Skia } = setupSkia();
+      const p1 = makePath(Skia, (b) => b.moveTo(0, 0).lineTo(100, 100));
+      const p2 = makePath(Skia, (b) => b.moveTo(0, 100).lineTo(100, 0));
+      return { p1, p2 };
+    };
+    it("throws on NaN", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(NaN, [0, 1], [p1, p2])).toThrow(
+        "interpolatePaths() received NaN as value"
+      );
+    });
+    it("throws on empty input", () => {
+      expect(() => interpolatePaths(0, [], [])).toThrow(/interpolatePaths\(\)/);
+    });
+    it("throws on mismatched lengths", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(0, [0, 0.5, 1], [p1, p2])).toThrow(
+        /same length/
+      );
+    });
+    it("returns the end path for zero-width input", () => {
+      const { p1, p2 } = setup();
+      const path = interpolatePaths(0, [0, 0], [p1, p2]);
+      expect(path.toCmds()).toEqual(p2.toCmds());
+      const extended = interpolatePaths(1, [0, 0], [p1, p2]);
+      expect(extended.toCmds()).toEqual(p2.toCmds());
+    });
+    it("clamps Infinity", () => {
+      const { p1, p2 } = setup();
+      expect(
+        interpolatePaths(Infinity, [0, 1], [p1, p2], "clamp").toCmds()
+      ).toEqual(p2.toCmds());
+      expect(
+        interpolatePaths(-Infinity, [0, 1], [p1, p2], "clamp").toCmds()
+      ).toEqual(p1.toCmds());
+    });
+    it("throws on Infinity with extend", () => {
+      const { p1, p2 } = setup();
+      expect(() => interpolatePaths(Infinity, [0, 1], [p1, p2])).toThrow(
+        /infinite/
+      );
+      expect(() =>
+        interpolatePaths(-Infinity, [0, 1], [p1, p2], "extend")
+      ).toThrow(/infinite/);
+    });
+  });
   it("should be possible to call dispose on a path", () => {
     const { Skia } = setupSkia();
     using path = makePath(Skia, (b) =>

@@ -6,8 +6,8 @@ import {
   SafeAreaView,
   StyleSheet,
 } from "react-native";
-import type { SkImage, SkSurface } from "@shopify/react-native-skia";
-import { Canvas, Image, Skia } from "@shopify/react-native-skia";
+import type { SkImage, SkSurface } from "react-native-skia";
+import { Canvas, Image, Skia } from "react-native-skia";
 import { Text } from "react-native-gesture-handler";
 import type { SharedValue } from "react-native-reanimated";
 import {

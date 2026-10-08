@@ -19,7 +19,9 @@ import type { SharedValue } from "react-native-reanimated";
 
 import Rea from "../external/reanimated/ReanimatedProxy";
 import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
-import SkiaPictureViewNativeComponent from "../specs/SkiaPictureViewNativeComponent";
+import { androidNativeProps } from "../views/android";
+import type { AndroidCanvasProps } from "../views/types";
+import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import type { SkImage, SkRect, SkSize } from "../skia/types";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 import { Skia } from "../skia";
@@ -59,16 +61,17 @@ export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
   return { ref, size };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const isFabric = Boolean((global as any)?.nativeFabricUIManager);
-
 export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
-  debug?: boolean;
-  /** @deprecated Not supported on Fabric. Use `onSize` or `useCanvasSize()` instead. */
+  /** @deprecated Not supported on native. Use `onSize` or `useCanvasSize()` instead. */
   onLayout?: ViewProps["onLayout"];
+  /**
+   * Declares that the canvas covers every pixel of its bounds, so nothing
+   * behind it needs to show through. On Android an opaque canvas is backed by
+   * a `SurfaceView` by default, the cheapest path (see `android.surfaceType`).
+   * Defaults to false.
+   */
   opaque?: boolean;
   onSize?: SharedValue<SkSize>;
-  colorSpace?: "p3" | "srgb";
   /**
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. Colors are
@@ -78,26 +81,25 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
    * before the canvas is mounted.
    */
   highBitDepth?: boolean;
+  /** Android-only rendering options. Ignored on iOS and web. */
+  android?: AndroidCanvasProps;
   ref?: React.Ref<CanvasRef>;
-  androidWarmup?: boolean;
   __destroyWebGLContextAfterRender?: boolean;
 }
 
-export const Canvas = ({
-  debug,
-  opaque,
+/**
+ * What the canvas owns: the native id, the scene graph root rendered into it,
+ * the `onSize` measurement and the imperative handle of the ref.
+ */
+const useCanvasRoot = ({
   children,
   onSize,
-  colorSpace = "p3",
-  highBitDepth = false,
-  androidWarmup = false,
   ref,
   onLayout,
-  ...viewProps
-}: CanvasProps) => {
-  if (onLayout && isFabric) {
+}: Pick<CanvasProps, "children" | "onSize" | "ref" | "onLayout">) => {
+  if (onLayout && Platform.OS !== "web") {
     console.error(
-      "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://shopify.github.io/react-native-skia/docs/canvas/overview/#getting-the-canvas-size"
+      "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://wcandillon.github.io/react-native-skia/docs/canvas/overview/#canvas-size"
     );
   }
   const viewRef = useCanvasRefPriv(null);
@@ -169,6 +171,40 @@ export const Canvas = ({
         },
       }) as CanvasRef
   );
+  return { nativeId, viewRef };
+};
+
+/**
+ * The declarative canvas. Its children are rendered by Skia's own React
+ * renderer; the frames are produced off the JS thread:
+ *
+ * - the JS thread records the scene graph into a native recorder once per
+ *   React commit and hands it to the view;
+ * - the Reanimated UI runtime only reads the shared values into it (the one
+ *   step that needs a JS runtime), it never replays anything;
+ * - a dedicated native thread pool replays the recorder into a Graphite
+ *   recording whenever the content changed, at most once per presented frame;
+ * - the view presents the recording on the next vsync.
+ *
+ * On the web the scene is drawn into a picture on the JS thread and painted
+ * on a WebGL canvas.
+ */
+export const Canvas = ({
+  opaque,
+  children,
+  onSize,
+  highBitDepth = false,
+  android,
+  ref,
+  onLayout,
+  ...viewProps
+}: CanvasProps) => {
+  const { nativeId, viewRef } = useCanvasRoot({
+    children,
+    onSize,
+    ref,
+    onLayout,
+  });
 
   const onLayoutWeb = useCallback(
     (e: LayoutChangeEvent) => {
@@ -183,15 +219,13 @@ export const Canvas = ({
     [onLayout, onSize]
   );
   return (
-    <SkiaPictureViewNativeComponent
+    <SkiaViewNativeComponent
       ref={viewRef}
       collapsable={false}
       nativeID={`${nativeId}`}
-      debug={debug}
       opaque={opaque}
-      colorSpace={colorSpace}
       highBitDepth={highBitDepth}
-      androidWarmup={androidWarmup}
+      {...androidNativeProps(android)}
       onLayout={
         Platform.OS === "web" && (onSize || onLayout) ? onLayoutWeb : onLayout
       }

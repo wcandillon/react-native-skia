@@ -1,4 +1,4 @@
-import { Canvas, useImage, Image } from "@shopify/react-native-skia";
+import { Canvas, useImage, Image } from "react-native-skia";
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 

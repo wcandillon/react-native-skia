@@ -55,7 +55,7 @@ public:
   CommandType type;
   std::string nodeType;
 
-  Command(CommandType t) : type(t) {}
+  explicit Command(CommandType t) : type(t) {}
   Command(CommandType t, std::string nodeT) : type(t), nodeType(nodeT) {}
   virtual ~Command() = default;
 };

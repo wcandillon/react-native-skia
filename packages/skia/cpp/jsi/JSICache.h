@@ -13,7 +13,8 @@ namespace jsi = facebook::jsi;
 
 /**
  * Per-runtime store for JSI values that native code wants to keep across
- * calls (currently: the prototype object of every NativeObject class).
+ * calls: the prototype object of every NativeObject class, and the JS
+ * wrapper of every native object that has one on the runtime.
  *
  * Ownership model (borrowed from react-native-nitro-modules' JSICache):
  *
@@ -72,6 +73,26 @@ public:
    */
   jsi::Object &setPrototype(PrototypeKey key, jsi::Object prototype);
 
+  /**
+   * Returns the JS wrapper stored for `nativeObject` on this runtime, or
+   * undefined if none was stored or the wrapper has been collected.
+   *
+   * The key is the native object's address. A live wrapper keeps its native
+   * object alive (the object is the wrapper's NativeState), so as long as
+   * the entry locks it still belongs to that object. Once the wrapper has
+   * been collected the entry is stale and is skipped or replaced, so an
+   * address reused by a new object can never resolve to the old wrapper.
+   */
+  jsi::Value lockWrapper(jsi::Runtime &runtime, const void *nativeObject);
+
+  /**
+   * Stores `wrapper` as the JS wrapper of `nativeObject` on this runtime.
+   * Only a weak reference is kept: the wrapper stays collectable, and the
+   * native object is released when it goes away.
+   */
+  void setWrapper(jsi::Runtime &runtime, const void *nativeObject,
+                  const jsi::Object &wrapper);
+
   JSICache() = default;
   ~JSICache() override = default;
   JSICache(const JSICache &) = delete;
@@ -81,6 +102,12 @@ private:
   static std::shared_ptr<JSICache> getOrCreateOnGlobal(jsi::Runtime &runtime);
 
   std::unordered_map<PrototypeKey, jsi::Object> _prototypes;
+  // Native object -> its wrapper on this runtime. Entries of collected
+  // wrappers are pruned in setWrapper once the map has doubled since the
+  // last pruning, so it stays proportional to the number of live wrappers.
+  std::unordered_map<const void *, jsi::WeakObject> _wrappers;
+  size_t _pruneWrappersAt = kMinPruneWrappersAt;
+  static constexpr size_t kMinPruneWrappersAt = 64;
 
   // Runtime -> cache. Weak on purpose: the runtime's global owns the cache.
   static std::mutex _registryMutex;

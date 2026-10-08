@@ -10,20 +10,16 @@
 #include "JsiSkConverters.h"
 #include "JsiSkDispatcher.h"
 #include "JsiSkNativeObjects.h"
-#include "JsiTextureInfo.h"
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
 
-#if defined(SK_GRAPHITE)
 #include "rnskia/RNDawnContext.h"
-#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkSurface.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
 
 #pragma clang diagnostic pop
 
@@ -84,10 +80,10 @@ public:
   void flush(JsiOptional<bool> syncParam) {
     auto surface = getObject();
     // When `sync` is true, block until the GPU has finished executing the
-    // submitted work. Required before a native consumer on a different command
-    // queue reads this surface's texture via getNativeTextureUnstable(). #3916
+    // submitted work. Required before a consumer on a different command queue
+    // (a secondary Dawn device, for instance) reads the texture this surface
+    // draws into (see Surface.MakeFromGPUTexture). #3916
     bool sync = syncParam.has_value() && *syncParam;
-#if defined(SK_GRAPHITE)
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
     // only Graphite-backed surfaces need to snap and submit a recording.
     if (auto *recorder = surface->recorder()) {
@@ -96,11 +92,6 @@ public:
           recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
                                 : skgpu::graphite::SyncToCpu::kNo);
     }
-#else
-    if (auto dContext = GrAsDirectContext(surface->recordingContext())) {
-      dContext->flushAndSubmit(sync ? GrSyncCpu::kYes : GrSyncCpu::kNo);
-    }
-#endif
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -113,14 +104,12 @@ public:
     } else {
       image = surface->makeImageSnapshot();
     }
-#if defined(SK_GRAPHITE)
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.
     if (auto *recorder = surface->recorder()) {
       auto recording = recorder->snap();
       DawnContext::getInstance().submitRecording(recording.get());
     }
-#endif
     if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
       jsiImage->setObject(image);
@@ -128,11 +117,6 @@ public:
     }
     return makeJsiObject(
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
-  }
-
-  JSI_HOST_FUNCTION(getNativeTextureUnstable) {
-    auto texInfo = getContext()->getTexture(getObject());
-    return JsiTextureInfo::toValue(runtime, texInfo);
   }
 
   size_t getMemoryPressure() override {
@@ -173,11 +157,8 @@ public:
     size_t estimated = pixelBytes;
 
     auto canvas = surface->getCanvas();
-    const bool isGpuBacked =
-        surface->recordingContext() != nullptr ||
-        surface->recorder() != nullptr ||
-        (canvas && (canvas->recordingContext() != nullptr ||
-                    canvas->recorder() != nullptr));
+    const bool isGpuBacked = surface->recorder() != nullptr ||
+                             (canvas && canvas->recorder() != nullptr);
 
     if (isGpuBacked) {
       // Account for a resolved texture and depth/stencil attachments.
@@ -199,8 +180,6 @@ public:
     installHostMethod(runtime, prototype, "makeImageSnapshot",
                       &JsiSkSurface::makeImageSnapshot);
     installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
-    installHostMethod(runtime, prototype, "getNativeTextureUnstable",
-                      &JsiSkSurface::getNativeTextureUnstable);
   }
 };
 

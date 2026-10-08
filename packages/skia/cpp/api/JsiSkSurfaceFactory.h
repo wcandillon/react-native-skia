@@ -6,9 +6,12 @@
 
 #include <jsi/jsi.h>
 
+#include "JsiGPUTexture.h"
 #include "JsiSkNativeObjects.h"
 
 #include "JsiSkSurface.h"
+
+#include "rnskia/RNDawnContext.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -59,12 +62,37 @@ public:
                                       getContext(), std::move(surface)));
   }
 
+  // Pointer-based texture interop with react-native-webgpu, the surface
+  // counterpart of JsiSkImageFactory::MakeImageFromGPUTexture: Skia draws
+  // directly into a texture created on the shared device, so WebGPU can
+  // sample what Skia drew without any copy.
+  JSI_HOST_FUNCTION(MakeFromGPUTexture) {
+    if (count < 1) {
+      throw std::runtime_error(
+          "MakeFromGPUTexture requires a GPUTexture argument");
+    }
+    // The surface keeps the texture alive for its lifetime, and the JS
+    // GPUTexture keeps its own reference, which the caller may release once
+    // the surface exists.
+    wgpu::Texture texture =
+        gpuTextureFromValue(runtime, arguments[0], "MakeFromGPUTexture");
+    auto surface = DawnContext::getInstance().MakeSurfaceFromTexture(texture);
+    if (surface == nullptr) {
+      throw std::runtime_error(
+          "MakeFromGPUTexture: failed to wrap the texture");
+    }
+    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
+                                      getContext(), std::move(surface)));
+  }
+
   size_t getMemoryPressure() override { return 2048; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installMethod(runtime, prototype, "Make", &JsiSkSurfaceFactory::Make);
     installHostMethod(runtime, prototype, "MakeOffscreen",
                       &JsiSkSurfaceFactory::MakeOffscreen);
+    installHostMethod(runtime, prototype, "MakeFromGPUTexture",
+                      &JsiSkSurfaceFactory::MakeFromGPUTexture);
   }
 
   explicit JsiSkSurfaceFactory(std::shared_ptr<RNSkPlatformContext> context)

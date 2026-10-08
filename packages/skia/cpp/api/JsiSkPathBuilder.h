@@ -271,11 +271,18 @@ public:
             std::make_shared<SkPathBuilder>(std::move(builder))) {}
 
   size_t getMemoryPressure() override {
-    auto builder = getObject();
-    if (!builder)
+    if (isDisposed()) {
       return 0;
-    // Estimate memory usage based on snapshot
-    return builder->snapshot().approximateBytesUsed();
+    }
+    auto builder = getObjectUnchecked();
+    if (!builder) {
+      return 0;
+    }
+    // The point, verb and conic weight arrays of the builder. Snapshotting
+    // the path to measure it would copy them, and this runs on every round
+    // trip of the object to JS.
+    return builder->points().size_bytes() + builder->verbs().size_bytes() +
+           builder->conicWeights().size_bytes();
   }
 
   static jsi::Value toValue(jsi::Runtime &runtime,

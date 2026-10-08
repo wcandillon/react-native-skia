@@ -116,6 +116,10 @@ private:
     builder.setResourceProvider(provider);
 
     auto svg_dom = builder.make(*stream);
+    if (!svg_dom) {
+      return jsi::Value::null();
+    }
+
     return makeJsiObject(
         runtime, std::make_shared<JsiSkSVG>(getContext(), std::move(svg_dom)));
   }

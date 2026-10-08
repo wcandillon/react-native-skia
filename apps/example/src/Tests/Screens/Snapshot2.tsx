@@ -7,7 +7,7 @@ import {
   useWindowDimensions,
   ScrollView,
 } from "react-native";
-import { Canvas, RoundedRect, Image, Skia } from "@shopify/react-native-skia";
+import { Canvas, RoundedRect, Image, Skia } from "react-native-skia";
 import { Switch } from "react-native-gesture-handler";
 
 export const Snapshot2 = () => {

@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import type { SkImage, SkRect, SkSize } from "@shopify/react-native-skia";
+import type { SkImage, SkRect, SkSize } from "react-native-skia";
 import {
   Canvas,
   Image,
   ImageFormat,
   PaintStyle,
   Skia,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { Button, View } from "react-native";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 

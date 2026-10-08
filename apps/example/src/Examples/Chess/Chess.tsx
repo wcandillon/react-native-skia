@@ -1,5 +1,5 @@
 import React from "react";
-import { Canvas, Fill, Shader } from "@shopify/react-native-skia";
+import { Canvas, Fill, Shader } from "react-native-skia";
 import { Dimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {

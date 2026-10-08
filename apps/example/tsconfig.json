@@ -1,16 +1,10 @@
 {
   "extends": "eslint-config-react-native-wcandillon/tsconfig.base",
   "compilerOptions": {
-    "target": "es2018",
-    "module": "commonjs",
-    "lib": ["es2018", "dom"],
-    "jsx": "react",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "@shopify/react-native-skia": ["../../packages/skia/src/index.ts"]
+      "react-native-skia": ["../../packages/skia/src/index.ts"],
+      "three": ["../../node_modules/@types/three/src/Three.WebGPU.d.ts"],
+      "three/addons/*": ["../../node_modules/@types/three/examples/jsm/*"]
     }
   }
 }
