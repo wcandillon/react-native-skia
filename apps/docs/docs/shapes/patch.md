@@ -17,7 +17,7 @@ Draws a [Coons patch](https://en.wikipedia.org/wiki/Coons_patch).
 ## Example
 
 ```tsx twoslash
-import {Canvas, Patch, vec} from "@shopify/react-native-skia";
+import {Canvas, Patch, vec} from "react-native-skia";
 
 const PatchDemo = () => {
   const colors = ["#61dafb", "#fb61da", "#61fbcf", "#dafb61"];

@@ -21,16 +21,26 @@ const sidebars = {
       items: [
         "getting-started/installation",
         "getting-started/hello-world",
+        "getting-started/migration",
         "getting-started/web",
         "getting-started/headless",
-        "getting-started/bundle-size",
       ],
+    },
+    {
+      type: "doc",
+      label: "WebGPU",
+      id: "webgpu",
     },
     {
       collapsed: true,
       type: "category",
       label: "Canvas",
-      items: ["canvas/canvas", "canvas/rendering-modes", "canvas/contexts"],
+      items: [
+        "canvas/canvas",
+        "canvas/rendering-modes",
+        "canvas/contexts",
+        "canvas/graphite",
+      ],
     },
     {
       collapsed: true,
@@ -67,11 +77,6 @@ const sidebars = {
       type: "category",
       label: "Images",
       items: ["image", "animated-images", "image-svg", "snapshotviews"],
-    },
-    {
-      type: "doc",
-      label: "Video",
-      id: "video",
     },
     {
       type: "doc",

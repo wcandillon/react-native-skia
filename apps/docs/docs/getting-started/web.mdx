@@ -10,6 +10,7 @@ import {Snack} from '@site/src/components/Snack';
 React Native Skia runs in the browser via [CanvasKit](https://skia.org/docs/user/modules/canvaskit/), a WebAssembly (WASM) build of Skia.
 The CanvasKit WASM file, which is 2.9MB when gzipped, is loaded asynchronously.
 Despite its considerable size, it offers flexibility in determining when and how Skia loads, giving you full control over the user experience.
+On the Web, Skia renders with WebGL: Graphite and the [WebGPU interop](/docs/webgpu) are only available on native platforms.
 
 We support direct integration with [Expo](#expo) and [Remotion](#remotion).
 Additionally, you'll find manual installation steps for any webpack projects.
@@ -30,6 +31,13 @@ npx create-expo-app my-app -e with-skia
 
 This template includes the proper configuration for web support out of the box, so you don't need to manually configure loading methods.
 
+:::info
+
+The template currently installs React Native Skia v2 (`@shopify/react-native-skia`).
+To move the project to v3, follow the [migration guide](/docs/getting-started/migration).
+
+:::
+
 <video width="61%" autoPlay loop muted playsInline>
   <source src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/expo-template2.mp4?alt=media&token=cdc13f16-9c5a-488a-b5d6-19d11f3e1842" type="video/mp4" />
 </video>
@@ -40,11 +48,11 @@ Use the `setup-skia-web` script to ensure that the `canvaskit.wasm` file is acce
 If you're [loading CanvasKit from a CDN](#using-a-cdn), running the `setup-skia-web` script is unnecessary.
 
 ```bash
-$ npx expo install @shopify/react-native-skia
+$ npx expo install react-native-skia
 $ yarn setup-skia-web
 ```
 
-Run `yarn setup-skia-web` each time you upgrade the `@shopify/react-native-skia` package.
+Run `yarn setup-skia-web` each time you upgrade the `react-native-skia` package.
 Consider incorporating it into your `postinstall` script for convenience.
 
 After setup, choose your method to [Load Skia](#loading-skia).
@@ -64,7 +72,7 @@ import '@expo/metro-runtime';
 import { App } from 'expo-router/build/qualified-entry';
 import { renderRootComponent } from 'expo-router/build/renderRootComponent';
 
-import { LoadSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
+import { LoadSkiaWeb } from 'react-native-skia/lib/module/web';
 
 LoadSkiaWeb().then(async () => {
   renderRootComponent(App);
@@ -92,7 +100,7 @@ The following example demonstrates preloading Skia before rendering the `MySkiaC
 ```tsx
 import React from 'react';
 import { Text } from "react-native";
-import { WithSkiaWeb } from "@shopify/react-native-skia/lib/module/web";
+import { WithSkiaWeb } from "react-native-skia/lib/module/web";
 
 export default function App() {
   return (
@@ -117,7 +125,7 @@ The `LoadSkiaWeb()` function facilitates Skia's loading prior to the React app's
 Below is an `index.web.js` example:
 
 ```tsx
-import { LoadSkiaWeb } from "@shopify/react-native-skia/lib/module/web";
+import { LoadSkiaWeb } from "react-native-skia/lib/module/web";
 
 LoadSkiaWeb().then(async () => {
   const App = (await import("./src/App")).default;
@@ -131,7 +139,7 @@ Below, CanvasKit loads via code-splitting from a CDN.
 It is critical that the CDN-hosted CanvasKit version aligns with React Native Skia's requirements.
 
 ```tsx
-import { WithSkiaWeb } from "@shopify/react-native-skia/lib/module/web";
+import { WithSkiaWeb } from "react-native-skia/lib/module/web";
 import { version } from 'canvaskit-wasm/package.json';
 
 export default function App() {
@@ -147,7 +155,7 @@ export default function App() {
 Alternatively, use deferred component registration:
 
 ```tsx
-import { LoadSkiaWeb } from "@shopify/react-native-skia/lib/module/web";
+import { LoadSkiaWeb } from "react-native-skia/lib/module/web";
 import { version } from 'canvaskit-wasm/package.json';
 
 LoadSkiaWeb({
@@ -171,7 +179,7 @@ This even works with animated canvases but it will come with a performance cost 
 
 ```tsx twoslash
 import { View } from 'react-native';
-import { Canvas, Fill } from "@shopify/react-native-skia";
+import { Canvas, Fill } from "react-native-skia";
 
 export default function App() {
   return (
@@ -192,7 +200,7 @@ export default function App() {
 ## Unsupported Features
 
 The following React Native Skia APIs are currently unsupported on React Native Web.
-To request these features, please submit [a feature request on GitHub](https://github.com/Shopify/react-native-skia/issues/new/choose).
+To request these features, please submit [a feature request on GitHub](https://github.com/wcandillon/react-native-skia/issues/new/choose).
 
 **Unsupported**
 

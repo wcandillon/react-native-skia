@@ -1,13 +1,25 @@
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <jsi/jsi.h>
+
+#include "include/core/SkData.h"
+#include "include/utils/SkParsePath.h"
+
+#include "api/JsiSkPath.h"
+#include "api/JsiSkRRect.h"
+#include "api/JsiSkRect.h"
+#include "api/JsiSkRuntimeEffect.h"
 
 namespace RNSkia {
 
 using Uniforms = std::map<std::string, std::vector<float>>;
 
-std::vector<float> processArray(jsi::Runtime &runtime,
-                                const jsi::Array &array) {
+inline std::vector<float> processArray(jsi::Runtime &runtime,
+                                       const jsi::Array &array) {
   std::vector<float> result;
   size_t length = array.length(runtime);
   result.reserve(length);
@@ -37,18 +49,18 @@ std::vector<float> processArray(jsi::Runtime &runtime,
   return result;
 }
 
-bool isJSPoint(jsi::Runtime &runtime, const jsi::Value &value) {
+inline bool isJSPoint(jsi::Runtime &runtime, const jsi::Value &value) {
   return value.isObject() &&
          value.asObject(runtime).hasProperty(runtime, "x") &&
          value.asObject(runtime).hasProperty(runtime, "y");
 }
 
-bool isIndexable(jsi::Runtime &runtime, const jsi::Value &value) {
+inline bool isIndexable(jsi::Runtime &runtime, const jsi::Value &value) {
   return value.isObject() && value.asObject(runtime).hasProperty(runtime, "0");
 }
 
-std::shared_ptr<SkRect> processRect(jsi::Runtime &runtime,
-                                    const jsi::Value &value) {
+inline std::shared_ptr<SkRect> processRect(jsi::Runtime &runtime,
+                                           const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
     auto ptr = tryGetJsiObject<JsiSkRect>(runtime, object);
@@ -68,7 +80,7 @@ std::shared_ptr<SkRect> processRect(jsi::Runtime &runtime,
   return nullptr;
 }
 
-SkPoint processPoint(jsi::Runtime &runtime, const jsi::Value &value) {
+inline SkPoint processPoint(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
     if (object.hasProperty(runtime, "x") && object.hasProperty(runtime, "y")) {
@@ -81,8 +93,8 @@ SkPoint processPoint(jsi::Runtime &runtime, const jsi::Value &value) {
 }
 
 // TODO: return the SkRRect directly
-std::shared_ptr<SkRRect> processRRect(jsi::Runtime &runtime,
-                                      const jsi::Value &value) {
+inline std::shared_ptr<SkRRect> processRRect(jsi::Runtime &runtime,
+                                             const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
     auto ptr = tryGetJsiObject<JsiSkRRect>(runtime, object);
@@ -119,8 +131,8 @@ std::shared_ptr<SkRRect> processRRect(jsi::Runtime &runtime,
 }
 
 // Return SkPath instead of shared_ptr<SkPath>
-std::shared_ptr<SkPath> processPath(jsi::Runtime &runtime,
-                                    const jsi::Value &value) {
+inline std::shared_ptr<SkPath> processPath(jsi::Runtime &runtime,
+                                           const jsi::Value &value) {
   if (value.isString()) {
     auto pathString = value.getString(runtime).utf8(runtime);
     SkPath result;

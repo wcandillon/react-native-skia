@@ -1,4 +1,4 @@
-import { Group, Path, Line, vec } from "@shopify/react-native-skia";
+import { Group, Path, Line, vec } from "react-native-skia";
 import React from "react";
 
 export const Snow = () => {

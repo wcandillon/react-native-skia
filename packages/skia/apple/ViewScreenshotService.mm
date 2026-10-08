@@ -1,5 +1,6 @@
 #import "ViewScreenshotService.h"
 #import <QuartzCore/QuartzCore.h>
+#import <React/RCTUtils.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -9,12 +10,12 @@
 #pragma clang diagnostic pop
 
 @implementation ViewScreenshotService {
-  RCTUIManager *_uiManager;
+  __weak RCTViewRegistry *_viewRegistry;
 }
 
-- (instancetype)initWithUiManager:(RCTUIManager *)uiManager {
+- (instancetype)initWithViewRegistry:(RCTViewRegistry *)viewRegistry {
   if (self = [super init]) {
-    _uiManager = uiManager;
+    _viewRegistry = viewRegistry;
   }
   return self;
 }
@@ -22,7 +23,7 @@
 - (sk_sp<SkImage>)screenshotOfViewWithTag:(NSNumber *)viewTag {
 #if !TARGET_OS_OSX
   // Find view corresponding to the tag
-  auto view = [_uiManager viewForReactTag:viewTag];
+  auto view = [_viewRegistry viewForReactTag:viewTag];
   if (view == NULL) {
     RCTFatal(RCTErrorWithMessage(@"Could not find view with tag"));
     return nullptr;

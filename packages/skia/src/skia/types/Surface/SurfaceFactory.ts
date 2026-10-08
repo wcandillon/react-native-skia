@@ -1,3 +1,5 @@
+import type { GPUTextureHandle } from "../GPUTexture";
+
 import type { SkSurface } from "./Surface";
 
 export const ColorSpace = {
@@ -32,4 +34,21 @@ export interface SurfaceFactory {
     height: number,
     opts?: SurfaceOptions
   ) => SkSurface | null;
+
+  /**
+   * Creates a GPU backed surface that draws directly into a WebGPU texture
+   * (zero-copy). The texture must be created with React Native WebGPU on
+   * the shared device (importDevice(Skia.getNativeDevice())) with the
+   * RENDER_ATTACHMENT usage; add TEXTURE_BINDING to sample what Skia drew
+   * from WebGPU after each flush(). The surface holds its own reference to
+   * the texture and keeps it alive for its lifetime, so the caller may
+   * release the GPUTexture once the surface exists. Calling destroy() on the
+   * GPUTexture still invalidates the surface.
+   *
+   * Native only.
+   *
+   * @param texture - The GPUTexture (see {@link GPUTextureHandle})
+   * @returns An SkSurface rendering into the texture, or throws if the texture is invalid
+   */
+  MakeFromGPUTexture: (texture: GPUTextureHandle) => SkSurface;
 }

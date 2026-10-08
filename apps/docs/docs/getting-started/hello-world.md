@@ -9,7 +9,7 @@ React Native Skia provides a declarative API using its own React Renderer.
 
 ```tsx twoslash
 import React from "react";
-import { Canvas, Circle, Group } from "@shopify/react-native-skia";
+import { Canvas, Circle, Group } from "react-native-skia";
 
 const App = () => {
   const width = 256;

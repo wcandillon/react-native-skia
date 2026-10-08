@@ -5,10 +5,6 @@ inputs:
   github_token:
     description: 'GitHub Token'
     required: false
-  graphite:
-    description: 'Use Graphite Skia Build'
-    required: false
-    default: 'false'
 
 runs:
   using: composite
@@ -25,16 +21,9 @@ runs:
       run: yarn install --immutable
       shell: bash
 
-    - name: Install Skia (standard build)
-      if: inputs.graphite != 'true'
+    # Copies the Skia, Graphite and Dawn headers. The prebuilt binaries are
+    # resolved from node_modules by the podspec and build.gradle.
+    - name: Copy Skia headers
       working-directory: packages/skia
-      run: yarn install-skia
-      shell: bash
-
-    - name: Install Skia Graphite
-      if: inputs.graphite == 'true'
-      working-directory: packages/skia
-      run: |
-        rm -rf libs
-        yarn install-skia-graphite
+      run: yarn copy-skia-headers
       shell: bash

@@ -1,4 +1,4 @@
-import { Circle, Group, Paint } from "@shopify/react-native-skia";
+import { Circle, Group, Paint } from "react-native-skia";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";
 import { interpolateColor, useDerivedValue } from "react-native-reanimated";

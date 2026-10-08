@@ -36,7 +36,7 @@ import {
   Skia,
   Shader,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const LinearGradientDemo = () => {
   return (
@@ -74,7 +74,7 @@ import {
   Skia,
   Shader,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const RadialGradientDemo = () => {
   return (
@@ -114,7 +114,7 @@ import {
   Skia,
   Shader,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const TwoPointConicalGradientDemo = () => {
   return (
@@ -155,7 +155,7 @@ import {
   Skia,
   Shader,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const SweepGradientDemo = () => {
   return (

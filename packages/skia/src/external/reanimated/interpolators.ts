@@ -115,7 +115,7 @@ export const usePathInterpolation = (
     // For example, throw an error or return early
     throw new Error(
       `Not all paths in the output range are interpolable.
-See: https://shopify.github.io/react-native-skia/docs/animations/hooks#usepathinterpolation`
+See: https://wcandillon.github.io/react-native-skia/docs/animations/hooks#usepathinterpolation`
     );
   }
   return useInterpolator(

@@ -1,4 +1,4 @@
-import { Canvas, Rect, rect } from "@shopify/react-native-skia";
+import { Canvas, Rect, rect } from "react-native-skia";
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { TextInput } from "react-native-gesture-handler";

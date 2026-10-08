@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Dimensions, ScrollView, Text, View } from "react-native";
-import { Canvas, Circle, Group, useClock } from "@shopify/react-native-skia";
+import { Canvas, Circle, Group, useClock } from "react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 

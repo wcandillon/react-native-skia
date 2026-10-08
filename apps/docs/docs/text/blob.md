@@ -16,7 +16,7 @@ A text blob contains glyphs, positions, and paint attributes specific to the tex
 ## Example
 
 ```tsx twoslash
-import {Canvas, TextBlob, Skia, useFont} from "@shopify/react-native-skia";
+import {Canvas, TextBlob, Skia, useFont} from "react-native-skia";
 
 
 export const HelloWorld = () => {

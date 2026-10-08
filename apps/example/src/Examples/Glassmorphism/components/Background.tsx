@@ -1,4 +1,4 @@
-import { Fill, Group, Paint, rect } from "@shopify/react-native-skia";
+import { Fill, Group, Paint, rect } from "react-native-skia";
 import React from "react";
 import { useWindowDimensions } from "react-native";
 

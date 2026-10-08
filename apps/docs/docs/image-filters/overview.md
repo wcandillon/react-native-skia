@@ -13,7 +13,7 @@ Color Filters and Shaders can also be used as Image filters.
 In the example below, we first apply a color matrix to the content and a blur image filter.
 
 ```tsx twoslash
-import { Canvas, Blur, Image, ColorMatrix, useImage } from "@shopify/react-native-skia";
+import { Canvas, Blur, Image, ColorMatrix, useImage } from "react-native-skia";
 
 const ComposeImageFilter = () => {
   const image = useImage(require("./assets/oslo.jpg"));

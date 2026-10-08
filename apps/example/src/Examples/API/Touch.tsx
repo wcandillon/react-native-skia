@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import type { SkPicture } from "@shopify/react-native-skia";
+import type { SkPicture } from "react-native-skia";
 import {
   Group,
   Fill,
@@ -8,7 +8,7 @@ import {
   Picture,
   Skia,
   PaintStyle,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import type { TouchData } from "react-native-gesture-handler";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";

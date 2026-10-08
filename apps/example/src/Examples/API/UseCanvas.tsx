@@ -1,4 +1,4 @@
-import type { SkSize } from "@shopify/react-native-skia";
+import type { SkSize } from "react-native-skia";
 import {
   BlurMask,
   Canvas,
@@ -8,7 +8,7 @@ import {
   mix,
   polar2Canvas,
   vec,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React, { useEffect } from "react";
 import { View } from "react-native";
 import { useNavigation } from "@react-navigation/native";

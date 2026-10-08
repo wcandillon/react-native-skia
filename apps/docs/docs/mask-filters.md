@@ -20,7 +20,7 @@ Creates a blur mask filter.
 ### Example
 
 ```tsx twoslash
-import {Canvas, Fill, Circle, BlurMask, vec} from "@shopify/react-native-skia";
+import {Canvas, Fill, Circle, BlurMask, vec} from "react-native-skia";
 
 const MaskFilterDemo = () => {
   return (

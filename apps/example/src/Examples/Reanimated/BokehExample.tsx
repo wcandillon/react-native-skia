@@ -6,7 +6,7 @@ import {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { Canvas, Circle, Fill } from "@shopify/react-native-skia";
+import { Canvas, Circle, Fill } from "react-native-skia";
 
 import { AnimationDemo } from "./Components";
 

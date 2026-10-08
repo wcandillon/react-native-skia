@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Fill,
-  ImageShader,
-  useClock,
-  useImage,
-} from "@shopify/react-native-skia";
+import { Fill, ImageShader, useClock, useImage } from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 export const Pattern = () => {

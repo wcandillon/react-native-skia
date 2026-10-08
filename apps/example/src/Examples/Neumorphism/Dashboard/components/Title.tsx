@@ -1,4 +1,4 @@
-import { Group, Text, useFont } from "@shopify/react-native-skia";
+import { Group, Text, useFont } from "react-native-skia";
 import React from "react";
 
 import { Button, BUTTON_SIZE } from "./Button";

@@ -1,12 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import {
-  Canvas,
-  Fill,
-  LinearGradient,
-  vec,
-  useClock,
-} from "@shopify/react-native-skia";
+import { Canvas, Fill, LinearGradient, vec, useClock } from "react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 

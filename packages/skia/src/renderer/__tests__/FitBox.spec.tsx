@@ -138,7 +138,9 @@ describe("FitBox", () => {
     const src = path.computeTightBounds();
     const dst = Skia.XYWHRect(0, 0, 20, 20);
     const transform = fitbox("fill", src, dst);
-    const c = path.copy().transform(processTransform2d(transform));
+    const c = Skia.PathBuilder.MakeFromPath(path.copy())
+      .transform(processTransform2d(transform))
+      .build();
     const newBounds = c.computeTightBounds();
     expect(newBounds.x).toBe(0);
     expect(newBounds.y).toBe(0);
@@ -162,7 +164,9 @@ describe("FitBox", () => {
     const dst = Skia.XYWHRect(0, 0, 20, 20);
     const matrix = fitbox("contain", src, dst);
 
-    const transformedPath = path.transform(processTransform2d(matrix));
+    const transformedPath = Skia.PathBuilder.MakeFromPath(path)
+      .transform(processTransform2d(matrix))
+      .build();
     const newBounds = transformedPath.computeTightBounds();
     expect(newBounds.x).toBe(0);
     expect(newBounds.y).toBe(5);
@@ -177,7 +181,9 @@ describe("FitBox", () => {
     const src = path.computeTightBounds();
     const dst = Skia.XYWHRect(0, 0, 10, 10);
     const matrix = fitbox("fill", src, dst);
-    const transformedPath = path.transform(processTransform2d(matrix));
+    const transformedPath = Skia.PathBuilder.MakeFromPath(path)
+      .transform(processTransform2d(matrix))
+      .build();
     const newBounds = transformedPath.computeTightBounds();
     expect(newBounds.x).toBe(0);
     expect(newBounds.y).toBe(0);
@@ -198,7 +204,9 @@ describe("FitBox", () => {
     const src = path.computeTightBounds();
     const dst = Skia.XYWHRect(10, 20, 8, 8);
     const matrix = fitbox("fill", src, dst);
-    const transformedPath = path.transform(processTransform2d(matrix));
+    const transformedPath = Skia.PathBuilder.MakeFromPath(path)
+      .transform(processTransform2d(matrix))
+      .build();
     const newBounds = transformedPath.computeTightBounds();
     expect(newBounds.x).toBe(10);
     expect(newBounds.y).toBe(20);
@@ -219,7 +227,9 @@ describe("FitBox", () => {
     const src = path.computeTightBounds();
     const dst = Skia.XYWHRect(0, 0, 10, 10);
     const matrix = fitbox("cover", src, dst);
-    const transformedPath = path.transform(processTransform2d(matrix));
+    const transformedPath = Skia.PathBuilder.MakeFromPath(path)
+      .transform(processTransform2d(matrix))
+      .build();
     const newBounds = transformedPath.computeTightBounds();
     expect(newBounds.x).toBe(-5);
     expect(newBounds.y).toBe(0);

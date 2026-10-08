@@ -20,7 +20,7 @@ namespace jsi = facebook::jsi;
 
 namespace para = skia::textlayout;
 
-bool asBool(jsi::Runtime &runtime, const jsi::Value &value) {
+inline bool asBool(jsi::Runtime &runtime, const jsi::Value &value) {
   if (!value.isBool()) {
     throw jsi::JSError(runtime, "Expected boolean value");
   }

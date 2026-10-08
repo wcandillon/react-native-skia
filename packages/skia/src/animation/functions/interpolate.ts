@@ -22,10 +22,7 @@ interface RequiredExtrapolationConfig {
 }
 
 export type ExtrapolationType =
-  | ExtrapolationConfig
-  | Extrapolate
-  | string
-  | undefined;
+  ExtrapolationConfig | Extrapolate | string | undefined;
 
 function getVal(
   type: Extrapolate,

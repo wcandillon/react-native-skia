@@ -6,10 +6,12 @@ import java.nio.file.Paths
 // https://github.com/facebookincubator/fbjni/blob/main/docs/android_setup.md
 
 // These defaults should reflect the SDK versions used by
-// the minimum React Native version supported (0.78).
+// the minimum React Native version supported (0.78), except minSdk:
+// the Graphite binaries are built for API level 26 (ndk_api in
+// scripts/skia-configuration.ts).
 def DEFAULT_COMPILE_SDK_VERSION = 35
 def DEFAULT_BUILD_TOOLS_VERSION = '35.0.0'
-def DEFAULT_MIN_SDK_VERSION = 24
+def DEFAULT_MIN_SDK_VERSION = 26
 def DEFAULT_TARGET_SDK_VERSION = 34
 
 def safeExtGet(prop, fallback) {
@@ -58,54 +60,82 @@ static def resolveNodePackage(packageName, baseDir) {
   return proc.text.trim()
 }
 
-// Graphite is detected via a marker file (created by install-skia-graphite for
-// in-repo development, or shipped in the npm tarball for next-channel releases).
-// The prebuilt binaries live in the react-native-skia-android npm package for the
-// default (Ganesh) build and in react-native-skia-graphite-android for Graphite.
-// In-repo Graphite development downloads them directly into libs/android instead,
-// which takes precedence over the npm package when present.
-def useGraphite = file("${projectDir}/../libs/.graphite").exists()
-def localGraphiteLibs = file("${projectDir}/../libs/android")
-def skiaLibsPath = useGraphite
-    ? (localGraphiteLibs.exists()
-        ? "${projectDir}/../libs/android"
-        : "${resolveNodePackage('react-native-skia-graphite-android', projectDir)}/libs")
-    : "${resolveNodePackage('react-native-skia-android', projectDir)}/libs"
+// The Graphite binaries live in the react-native-skia-graphite-android npm
+// package. Binaries built locally with `yarn build-skia` land in libs/android
+// and take precedence when present.
+def localSkiaLibs = file("${projectDir}/../libs/android")
+def skiaLibsPath = localSkiaLibs.exists()
+    ? "${projectDir}/../libs/android"
+    : "${resolveNodePackage('react-native-skia-graphite-android', projectDir)}/libs"
 
-// Both packages must link the exact same Dawn artifact: compare this
-// Graphite build's Dawn release tag (libs/.dawn-version) with the tag
-// react-native-webgpu declares in its package.json `dawn` field.
-if (useGraphite) {
-    def dawnMarker = file("${projectDir}/../libs/.dawn-version")
-    def webgpuDir = null
-    try {
-        webgpuDir = resolveNodePackage('react-native-webgpu', projectDir)
-    } catch (Exception ignored) {
-        // react-native-webgpu not installed: nothing to check
-    }
-    if (dawnMarker.exists() && webgpuDir != null) {
-        def skiaDawn = dawnMarker.text.trim()
-        def webgpuJson = new groovy.json.JsonSlurper().parse(file("${webgpuDir}/package.json"))
-        if (webgpuJson.dawn == null) {
-            throw new GradleException(
-                "react-native-skia: the installed react-native-webgpu " +
-                "(${webgpuJson.version}) does not declare a `dawn` field in its " +
-                "package.json, so it predates shared-Dawn support and cannot be " +
-                "paired with this Graphite build (which links ${skiaDawn}). " +
-                "Upgrade react-native-webgpu.")
-        }
-        def webgpuDawn = "dawn-" + webgpuJson.dawn.toString().replace('/', '-')
-        if (skiaDawn != webgpuDawn) {
-            throw new GradleException(
-                "react-native-skia: Dawn version mismatch. This Graphite build links " +
-                "${skiaDawn} but react-native-webgpu links ${webgpuDawn}. " +
-                "Align the two packages so the app contains exactly one Dawn.")
-        }
-        logger.warn("react-native-skia: Dawn versions match (${skiaDawn})")
-    }
+// Dawn, the WebGPU implementation Graphite renders with, ships in the
+// react-native-webgpu-dawn npm package: the one react-native-webgpu depends on
+// too, built from the Dawn commit this Skia release pins. A Dawn built locally
+// with `yarn build-dawn` (libs/dawn/android) takes precedence over the package.
+def dawnPkgDir = resolveNodePackage('react-native-webgpu-dawn', projectDir)
+def dawnPkg = new groovy.json.JsonSlurper().parse(file("${dawnPkgDir}/package.json"))
+def localDawnLibs = file("${projectDir}/../libs/dawn/android")
+def dawnLibsPath = localDawnLibs.exists()
+    ? localDawnLibs.absolutePath
+    : "${dawnPkgDir}/libs/android"
+
+// Fail early rather than with a ninja "missing and no known rule" error. Only
+// the ABIs being built are needed, so a local Dawn built for one ABI works.
+def missingDawn = reactNativeArchitectures().findAll {
+    !file("${dawnLibsPath}/${it}/libwebgpu_dawn.so").exists()
+}
+if (!missingDawn.isEmpty()) {
+    throw new GradleException(
+        "react-native-skia: libwebgpu_dawn.so not found in ${dawnLibsPath} " +
+        "for ${missingDawn.join(', ')}. Reinstall dependencies (yarn install / npm install).")
 }
 
-logger.warn("react-native-skia: SK_GRAPHITE: ${useGraphite}")
+// Both packages must link the exact same Dawn. react-native-webgpu depends on
+// react-native-webgpu-dawn too: the version it resolves must be the one this
+// package resolves. Older releases vendor their own Dawn and record the Dawn
+// commit it was built from (`dawnCommit`), which must then be the commit this
+// Graphite build's Dawn package was built from.
+def webgpuDir = null
+try {
+    webgpuDir = resolveNodePackage('react-native-webgpu', projectDir)
+} catch (Exception ignored) {
+    // react-native-webgpu not installed: nothing to check
+}
+// Set once the check below passes: react-native-webgpu then ships the Dawn
+// the app packages and this module leaves its own copy out (see
+// packagingOptions below).
+def dawnShippedByWebgpu = false
+if (webgpuDir != null) {
+    def webgpuJson = new groovy.json.JsonSlurper().parse(file("${webgpuDir}/package.json"))
+    def dawnCommit = dawnPkg.dawn?.commit?.toString()
+    if (webgpuJson.dependencies?.get('react-native-webgpu-dawn') != null) {
+        def webgpuDawnDir = resolveNodePackage('react-native-webgpu-dawn', file(webgpuDir))
+        def webgpuDawnVersion = new groovy.json.JsonSlurper().parse(file("${webgpuDawnDir}/package.json")).version
+        if (webgpuDawnVersion != dawnPkg.version) {
+            throw new GradleException(
+                "react-native-skia: Dawn version mismatch. This Graphite build links " +
+                "react-native-webgpu-dawn ${dawnPkg.version} but react-native-webgpu resolves " +
+                "${webgpuDawnVersion}. Align the two packages so the app contains exactly one Dawn.")
+        }
+        logger.warn("react-native-skia: Dawn versions match (react-native-webgpu-dawn ${dawnPkg.version})")
+    } else if (webgpuJson.dawnCommit == null) {
+        throw new GradleException(
+            "react-native-skia: the installed react-native-webgpu (${webgpuJson.version}) " +
+            "neither depends on react-native-webgpu-dawn nor declares the Dawn commit it " +
+            "vendors, so it cannot be paired with this Graphite build. Upgrade react-native-webgpu.")
+    } else if (webgpuJson.dawnCommit.toString() != dawnCommit) {
+        throw new GradleException(
+            "react-native-skia: Dawn version mismatch. This Graphite build links Dawn " +
+            "${dawnCommit?.take(10)} (react-native-webgpu-dawn ${dawnPkg.version}) but " +
+            "react-native-webgpu ${webgpuJson.version} vendors Dawn ${webgpuJson.dawnCommit.toString().take(10)}. " +
+            "Align the two packages so the app contains exactly one Dawn.")
+    } else {
+        logger.warn("react-native-skia: Dawn versions match (commit ${dawnCommit?.take(10)})")
+    }
+    dawnShippedByWebgpu = true
+}
+
+logger.warn("react-native-skia: Dawn libs: ${dawnLibsPath}")
 logger.warn("react-native-skia: Skia libs: ${skiaLibsPath}")
 logger.warn("react-native-skia: node_modules/ found at: ${nodeModules}")
 
@@ -138,7 +168,7 @@ logger.warn("react-native-skia: buildDir: ${buildDir}")
 logger.warn("react-native-skia: node_modules: ${nodeModules}")
 
 android {
-    namespace "com.reactnative.skia"
+    namespace = "com.reactnative.skia"
 
     compileSdkVersion safeExtGet('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION)
     buildToolsVersion safeExtGet('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION)
@@ -146,10 +176,10 @@ android {
     // Used to override the NDK path/version on internal CI or by allowing
     // users to customize the NDK path/version from their root project.
     if (rootProject.hasProperty("ndkPath")) {
-        ndkPath rootProject.ext.ndkPath
+        ndkPath = rootProject.ext.ndkPath
     }
     if (rootProject.hasProperty("ndkVersion")) {
-        ndkVersion rootProject.ext.ndkVersion
+        ndkVersion = rootProject.ext.ndkVersion
     }
 
     defaultConfig {
@@ -157,6 +187,8 @@ android {
         targetSdkVersion safeExtGet('targetSdkVersion', DEFAULT_TARGET_SDK_VERSION)
         versionCode 1
         versionName "1.0"
+
+        consumerProguardFiles 'proguard-rules.pro'
 
         externalNativeBuild {
             cmake {
@@ -167,25 +199,26 @@ android {
                           "-DREACT_NATIVE_DIR=${defaultDir}",
                           "-DNODE_MODULES_DIR=${nodeModules}",
                           "-DSKIA_LIBS_PATH=${skiaLibsPath}",
-                          "-DSK_GRAPHITE=${useGraphite ? 'ON' : 'OFF'}",
+                          "-DDAWN_LIBS_PATH=${dawnLibsPath}",
                           "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 
             }
         }
     }
+    // The Java sources use switch expressions (Java 14+). React Native's Gradle
+    // plugin aligns every module on 17 from the app's plugin block, but a host
+    // that opts out of that alignment must still compile this library.
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     lintOptions {
-        abortOnError false
+        abortOnError = false
     }
 
     publishing {
         singleVariant("release") {
             withSourcesJar()
-        }
-    }
-
-    sourceSets.main {
-        jniLibs {
-            srcDirs += [skiaLibsPath]
         }
     }
 
@@ -203,15 +236,24 @@ android {
              "**/libreactnative.so",
              "META-INF/**"
         ]
+        // libwebgpu_dawn.so is packaged with this module through the CMake
+        // imported target. The Android Gradle plugin only merges duplicate
+        // native libraries when they are byte-identical, which a locally built
+        // Dawn or an older react-native-webgpu's own copy is not, so once the
+        // check above passed let react-native-webgpu be the one package that
+        // ships it.
+        if (dawnShippedByWebgpu) {
+            excludes += "**/libwebgpu_dawn.so"
+        }
     }
 
     buildFeatures {
-        prefab true
-        prefabPublishing true
+        prefab = true
+        prefabPublishing = true
     }
     prefab {
         rnskia {
-            headers "${project.buildDir}/headers/rnskia/"
+            headers = "${project.buildDir}/headers/rnskia/"
         }
     }
 }
@@ -230,6 +272,7 @@ repositories {
 dependencies {
     //noinspection GradleDynamicVersion
     implementation 'com.facebook.react:react-native:+'  // From node_modules
+    testImplementation 'junit:junit:4.13.2'
 }
 
 // Package all the cpp code in a flattened directory structure

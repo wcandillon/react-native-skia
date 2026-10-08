@@ -21,7 +21,7 @@ import {
   ColorMatrix,
   Image,
   useImage,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const MatrixColorFilter = () => {
   const image = useImage(require("./assets/oslo.jpg"));
@@ -54,7 +54,7 @@ Creates a color filter with the given color and blend mode.
 | children? | `ColorFilter` | Optional color filter to be applied first.         |
 
 ```tsx twoslash
-import { Canvas, BlendColor, Group, Circle } from "@shopify/react-native-skia";
+import { Canvas, BlendColor, Group, Circle } from "react-native-skia";
 
 const MatrixColorFilter = () => {
   const r = 128;
@@ -88,7 +88,7 @@ import {
   Image,
   useImage,
   Lerp,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const MatrixColorFilter = () => {
   const image = useImage(require("./assets/oslo.jpg"));
@@ -127,7 +127,7 @@ import {
   Group,
   Circle,
   LinearToSRGBGamma,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const MatrixColorFilter = () => {
   const r = 128;
@@ -159,7 +159,7 @@ import {
   Group,
   Circle,
   SRGBToLinearGamma,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 const MatrixColorFilter = () => {
   const r = 128;

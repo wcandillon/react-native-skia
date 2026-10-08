@@ -1,5 +1,5 @@
-import type { SkPath } from "@shopify/react-native-skia";
-import { Group, Path, vec } from "@shopify/react-native-skia";
+import type { SkPath } from "react-native-skia";
+import { Group, Path, vec } from "react-native-skia";
 import React from "react";
 
 export const R = 50;

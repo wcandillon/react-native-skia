@@ -7,7 +7,6 @@ on: workflow_dispatch
 
 jobs:
   build-windows-library:
-    if: ${{ github.repository == 'shopify/react-native-skia' }}
     runs-on: windows-latest
     steps:
       - name: Checkout

@@ -1,4 +1,4 @@
-import type { Vector } from "@shopify/react-native-skia";
+import type { Vector } from "react-native-skia";
 import {
   BlurMask,
   add,
@@ -7,7 +7,7 @@ import {
   Paint,
   LinearGradient,
   Group,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 
 interface BallProps {

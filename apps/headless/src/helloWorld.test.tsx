@@ -1,6 +1,6 @@
 import React from "react";
-import { getSkiaExports, ColorType, Group, Circle, drawOffscreen } from "@shopify/react-native-skia/src/headless";
-import { LoadSkiaWeb } from "@shopify/react-native-skia/src/web/LoadSkiaWeb";
+import { getSkiaExports, ColorType, Group, Circle, drawOffscreen } from "react-native-skia/src/headless";
+import { LoadSkiaWeb } from "react-native-skia/src/web/LoadSkiaWeb";
 
 describe("Test Skia", () => {
   beforeEach(async () => {

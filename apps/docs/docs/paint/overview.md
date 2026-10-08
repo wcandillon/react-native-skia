@@ -35,7 +35,7 @@ When drawing something, you can pass Paint components as children to add strokes
 In the example below, the circle has one light blue fill and two stroke paints.
 
 ```tsx twoslash
-import {Canvas, Circle, Paint, vec} from "@shopify/react-native-skia";
+import {Canvas, Circle, Paint, vec} from "react-native-skia";
 
 const width = 256;
 const height = 256;
@@ -64,7 +64,7 @@ Descendants inherit the paint attributes.
 In the example below, the first circle will be filled with a light blue color, and the second circle will have a light blue stroke.  
 
 ```tsx twoslash
-import {Canvas, Circle, Paint, Group} from "@shopify/react-native-skia";
+import {Canvas, Circle, Paint, Group} from "react-native-skia";
 
 const width = 256;
 const height = 256;
@@ -90,7 +90,7 @@ export const PaintDemo = () => {
 Complex painting attributes like a shader or an image filter can be passed as children to a group or a drawing.
 
 ```tsx twoslash
-import {Canvas, Circle, Group, LinearGradient, vec} from "@shopify/react-native-skia";
+import {Canvas, Circle, Group, LinearGradient, vec} from "react-native-skia";
 
 const width = 256;
 const height = 256;
@@ -127,7 +127,7 @@ export const PaintDemo = () => {
 Finally, we can assign a ref to a Paint component for later use.
 
 ```tsx twoslash
-import {Canvas, Circle, Paint, Skia} from "@shopify/react-native-skia";
+import {Canvas, Circle, Paint, Skia} from "react-native-skia";
 const width = 256;
 const height = 256;
 const r = width / 2;

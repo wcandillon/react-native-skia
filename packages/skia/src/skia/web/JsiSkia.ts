@@ -43,8 +43,6 @@ import { JsiSkTypefaceFontProviderFactory } from "./JsiSkTypefaceFontProviderFac
 import { JsiSkFontMgrFactory } from "./JsiSkFontMgrFactory";
 import { JsiSkAnimatedImageFactory } from "./JsiSkAnimatedImageFactory";
 import { JsiSkParagraphBuilderFactory } from "./JsiSkParagraphBuilderFactory";
-import { JsiSkNativeBufferFactory } from "./JsiSkNativeBufferFactory";
-import { createVideo } from "./JsiVideo";
 import { throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkottieFactory } from "./JsiSkottieFactory";
 
@@ -133,9 +131,7 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   TypefaceFontProvider: new JsiSkTypefaceFontProviderFactory(CanvasKit),
   FontMgr: new JsiSkFontMgrFactory(CanvasKit),
   ParagraphBuilder: new JsiSkParagraphBuilderFactory(CanvasKit),
-  NativeBuffer: new JsiSkNativeBufferFactory(CanvasKit),
   Skottie: new JsiSkottieFactory(CanvasKit),
-  Video: createVideo.bind(null, CanvasKit),
   Recorder: () => {
     return throwNotImplementedOnRNWeb<JsiRecorder>();
   },

@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, useWindowDimensions } from "react-native";
-import { Canvas, Circle } from "@shopify/react-native-skia";
+import { Canvas, Circle } from "react-native-skia";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useSharedValue, withDecay } from "react-native-reanimated";
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Canvas, Picture, Skia } from "@shopify/react-native-skia";
+import { Canvas, Picture, Skia } from "react-native-skia";
 import {
   useDerivedValue,
   useSharedValue,

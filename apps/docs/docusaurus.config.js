@@ -7,13 +7,13 @@ import { themes } from "prism-react-renderer";
 const config = {
   title: "React Native Skia",
   tagline: "High Performance 2D Graphics",
-  url: "https://shopify.github.io/",
+  url: "https://wcandillon.github.io/",
   baseUrl: "/react-native-skia/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
   onBrokenAnchors: "throw",
   favicon: "img/favicon.ico",
-  organizationName: "shopify", // Usually your GitHub org/user name.
+  organizationName: "wcandillon", // Usually your GitHub org/user name.
   projectName: "react-native-skia", // Usually your repo name.
   // scripts: [{ src: "https://snack.expo.dev/embed.js", async: true }],
   // plugins: [
@@ -44,7 +44,7 @@ const config = {
           sidebarPath: require.resolve("./sidebars.js"),
           // Please change this to your repo.
           editUrl:
-            "https://github.com/shopify/react-native-skia/edit/main/apps/docs/",
+            "https://github.com/wcandillon/react-native-skia/edit/main/apps/docs/",
         },
         // blog: {
         //   showReadingTime: true,
@@ -74,6 +74,15 @@ const config = {
         indexName: "react-native-skia",
         contextualSearch: false,
       },
+      metadata: [
+        { name: "algolia-site-verification", content: "120C18B37B56CF72" },
+      ],
+      announcementBar: {
+        id: "v3",
+        content:
+          'React Native Skia v3 is out, powered by Skia Graphite. Read the <a href="/react-native-skia/docs/getting-started/migration">migration guide</a>, or go to the <a href="/react-native-skia/v2/">v2 documentation</a>.',
+        isCloseable: true,
+      },
       navbar: {
         title: "React Native Skia",
         logo: {
@@ -89,8 +98,25 @@ const config = {
           },
           // {to: '/blog', label: 'Blog', position: 'left'},
           {
+            type: "dropdown",
+            label: "latest",
+            position: "right",
+            items: [
+              {
+                label: "latest (v3)",
+                to: "/docs/getting-started/installation",
+              },
+              {
+                // Frozen v2 build, deployed from the docs-v2 branch
+                label: "v2",
+                to: "pathname:///react-native-skia/v2/",
+                target: "_self",
+              },
+            ],
+          },
+          {
             label: "GitHub",
-            href: "https://github.com/shopify/react-native-skia",
+            href: "https://github.com/wcandillon/react-native-skia",
             position: "right",
           },
         ],
@@ -104,6 +130,16 @@ const config = {
               {
                 label: "Documentation",
                 to: "/docs/getting-started/installation",
+              },
+              {
+                label: "Migrating to v3",
+                to: "/docs/getting-started/migration",
+              },
+              {
+                // Frozen v2 build, deployed from the docs-v2 branch
+                label: "v2 Documentation",
+                to: "pathname:///react-native-skia/v2/",
+                target: "_self",
               },
             ],
           },
@@ -133,12 +169,16 @@ const config = {
               // },
               {
                 label: "GitHub",
-                href: "https://github.com/shopify/react-native-skia",
+                href: "https://github.com/wcandillon/react-native-skia",
+              },
+              {
+                label: "React Native WebGPU",
+                href: "https://github.com/wcandillon/react-native-webgpu",
               },
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} Shopify, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © 2026-present William Candillon. Copyright © 2021-2026 Shopify Inc. Built with Docusaurus.`,
       },
       prism: {
         //theme: themes.jettwaveLight,

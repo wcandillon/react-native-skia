@@ -12,7 +12,7 @@ import {
   useFont,
   Text,
   Box,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import React from "react";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";

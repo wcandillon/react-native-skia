@@ -1,4 +1,4 @@
-import type { Vector } from "@shopify/react-native-skia";
+import type { Vector } from "react-native-skia";
 import { useEffect } from "react";
 import {
   Easing,

@@ -16,7 +16,7 @@ Draws text along a path.
 ## Example
 
 ```tsx twoslash
-import {Canvas, Group, TextPath, Skia, useFont, vec, Fill} from "@shopify/react-native-skia";
+import {Canvas, Group, TextPath, Skia, useFont, vec, Fill} from "react-native-skia";
 
 const size = 128;
 const path = Skia.Path.Circle(size, size, size/2);

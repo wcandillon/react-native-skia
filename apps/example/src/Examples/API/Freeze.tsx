@@ -6,7 +6,7 @@ import {
   Rect,
   Text,
   useClock,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 
 const size = 200;

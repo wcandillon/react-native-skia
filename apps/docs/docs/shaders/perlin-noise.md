@@ -30,7 +30,7 @@ import {
   Shader,
   Fill,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const FractalNoiseDemo = () => {
   return (
@@ -70,7 +70,7 @@ import {
   Shader,
   Fill,
   vec
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const TurbulenceDemo = () => {
   return (

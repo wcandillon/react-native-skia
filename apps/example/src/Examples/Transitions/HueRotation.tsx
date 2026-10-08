@@ -1,4 +1,4 @@
-import { Shader, Skia } from "@shopify/react-native-skia";
+import { Shader, Skia } from "react-native-skia";
 import type { ReactNode } from "react";
 import React, { useEffect } from "react";
 import {

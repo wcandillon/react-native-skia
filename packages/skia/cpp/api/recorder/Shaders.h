@@ -2,10 +2,13 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
+#include <vector>
 
 #include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradient.h>
+#include <include/effects/SkPerlinNoiseShader.h>
 
 #include "Command.h"
 #include "Convertor.h"

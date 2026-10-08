@@ -21,7 +21,7 @@ In this example, we animate a trail of circles. The number of circles in the tra
 
 ```tsx twoslash
 import React, { useEffect } from "react";
-import { Canvas, Picture, Skia } from "@shopify/react-native-skia";
+import { Canvas, Picture, Skia } from "react-native-skia";
 import {
   useDerivedValue,
   useSharedValue,
@@ -75,7 +75,7 @@ For instance, in the example below, we apply a blur image filter.
 
 ```tsx twoslash
 import React, { useMemo } from "react";
-import { Canvas, Skia, Group, Paint, Blur, BlendMode, Picture } from "@shopify/react-native-skia";
+import { Canvas, Skia, Group, Paint, Blur, BlendMode, Picture } from "react-native-skia";
 
 export const Demo = () => {
   const picture = useMemo(() => {
@@ -122,7 +122,7 @@ import {
   Picture,
   Skia,
   Group,
-} from "@shopify/react-native-skia";
+} from "react-native-skia";
 
 export const PictureExample = () => {
   // Create picture

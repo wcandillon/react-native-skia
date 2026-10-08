@@ -20,7 +20,7 @@ Creates an effect that breaks a path into segments of a certain length and rando
 ### Example
 
 ```tsx twoslash
-import {Canvas, DiscretePathEffect, Path} from "@shopify/react-native-skia";
+import {Canvas, DiscretePathEffect, Path} from "react-native-skia";
 
 const logo = "M256 128.015C256 111.057 234.762...";
 
@@ -53,7 +53,7 @@ Creates an effect that adds dashes to the path.
 ### Example
 
 ```tsx twoslash
-import {Canvas, DashPathEffect, Path} from "@shopify/react-native-skia";
+import {Canvas, DashPathEffect, Path} from "react-native-skia";
 
 const logo = "M256 128.015C256 111.057 234.762...";
 
@@ -84,7 +84,7 @@ Creates a path effect that can turn sharp corners into rounded corners.
 ### Example
 
 ```tsx twoslash
-import {Canvas, CornerPathEffect, Rect} from "@shopify/react-native-skia";
+import {Canvas, CornerPathEffect, Rect} from "react-native-skia";
 
 
 const Discrete = () => {
@@ -123,7 +123,7 @@ Dash by replicating the specified path.
 ### Example
 
 ```tsx twoslash
-import {Canvas, Path1DPathEffect, Path} from "@shopify/react-native-skia";
+import {Canvas, Path1DPathEffect, Path} from "react-native-skia";
 
 const logo = "M256 128.015C256 111.057 234.762...";
 
@@ -161,7 +161,7 @@ Stamp the specified path to fill the shape, using the matrix to define the latti
 ### Example
 
 ```tsx twoslash
-import {Canvas, Path2DPathEffect, Path, processTransform2d} from "@shopify/react-native-skia";
+import {Canvas, Path2DPathEffect, Path, processTransform2d} from "react-native-skia";
 
 const logo = "M256 128.015C256 111.057 234.762...";
 
@@ -196,7 +196,7 @@ Stamp the specified path to fill the shape, using the matrix to define the latti
 ### Example
 
 ```tsx twoslash
-import {Canvas, Line2DPathEffect, Path, processTransform2d} from "@shopify/react-native-skia";
+import {Canvas, Line2DPathEffect, Path, processTransform2d} from "react-native-skia";
 
 const logo = "M256 128.015C256 111.057 234.762...";
 
