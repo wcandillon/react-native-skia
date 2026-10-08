@@ -181,6 +181,20 @@ jobs:
         env:
           SKIA_BRANCH: ${{ inputs.skia_branch }}
 
+      # tools/git-sync-deps clones every dependency in Skia's DEPS (Dawn,
+      # ANGLE, the Vulkan headers, freetype, harfbuzz, ...) from googlesource.
+      # The checkout cleans the submodule on the self-hosted Mac too, so
+      # without this every job clones them all again. The sync is idempotent:
+      # with the clones restored it only verifies the commits, and after a
+      # DEPS change (an older key) it fetches the difference into them.
+      - name: Cache the Skia dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: externals/skia/third_party/externals
+          key: ${{ runner.os }}-skia-deps-${{ hashFiles('externals/skia/DEPS') }}
+          restore-keys: |
+            ${{ runner.os }}-skia-deps-
+
       - name: Setup Android NDK
         id: setup-ndk
         if: startsWith(matrix.target, 'android')
@@ -272,6 +286,17 @@ jobs:
           echo "Skia commit: $(git rev-parse HEAD)"
         env:
           SKIA_BRANCH: ${{ inputs.skia_branch }}
+
+      # Same as in build-skia, under its own key: sync-dawn-deps.py only
+      # syncs the DEPS entries Dawn needs, so a cache saved here is a subset
+      # of the one build-skia saves and must not be mistaken for it.
+      - name: Cache the Dawn dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: externals/skia/third_party/externals
+          key: ${{ runner.os }}-dawn-deps-${{ hashFiles('externals/skia/DEPS') }}
+          restore-keys: |
+            ${{ runner.os }}-dawn-deps-
 
       - name: Setup Android NDK
         id: setup-ndk

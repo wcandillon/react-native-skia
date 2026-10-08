@@ -9,17 +9,42 @@ inputs:
 runs:
   using: composite
   steps:
+    # setup-node's yarn cache only keeps the downloaded zips (.yarn/cache):
+    # the install still unpacks every package into node_modules, which is
+    # most of what `yarn install` costs here, with the prebuilt Skia and Dawn
+    # packages. So the installed node_modules are cached too, and the install
+    # is skipped on an exact hit. The install state is what `yarn run` reads,
+    # so it travels with them.
+    - name: Restore node_modules
+      id: node-modules
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+          .yarn/install-state.gz
+        key: ${{ runner.os }}-${{ runner.arch }}-node-modules-${{ hashFiles('.nvmrc', '.yarnrc.yml', 'yarn.lock', '.yarn/patches/**') }}
+
+    # On the self-hosted Mac the checkout cleans the workspace, so the zips in
+    # .yarn/cache would be downloaded from GitHub's cache on every run. The
+    # global cache keeps them on the machine's disk instead, shared with the
+    # other repositories it builds. The GitHub cache is for the hosted
+    # runners, and only when node_modules has to be installed.
     - name: Setup Node.js
-      uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version-file: .nvmrc
-        cache: yarn
+        cache: ${{ (runner.environment == 'github-hosted' && steps.node-modules.outputs.cache-hit != 'true') && 'yarn' || '' }}
         cache-dependency-path: yarn.lock
         registry-url: 'https://registry.npmjs.org'
 
     - name: Install dependencies
+      if: steps.node-modules.outputs.cache-hit != 'true'
       run: yarn install --immutable
       shell: bash
+      env:
+        YARN_ENABLE_GLOBAL_CACHE: ${{ runner.environment == 'self-hosted' }}
 
     # Copies the Skia, Graphite and Dawn headers. The prebuilt binaries are
     # resolved from node_modules by the podspec and build.gradle.
