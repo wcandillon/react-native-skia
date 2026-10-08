@@ -145,6 +145,18 @@ SwiftPM support requires **React Native 0.87 or newer**: earlier releases ship
 no `scripts/spm`. `apps/example` is on an older version, so it cannot exercise
 this path.
 
+The harness is `spm-example/` at the repo root, deliberately outside the yarn
+workspace so its React Native does not collide with the workspace's. Its
+[README](../../spm-example/README.md) covers the details; the short form is:
+
+```sh
+cd spm-example && npm install
+cd ios && npx react-native spm update
+xcodebuild -project SpmExample.xcodeproj -scheme SpmExample \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+
 Autolinking references the library through a symlink at
 `<app>/ios/build/generated/autolinking/libs/ReactNativeSkia`, and SwiftPM
 resolves the manifest's relative paths against that symlink rather than against
@@ -153,9 +165,11 @@ every standard app. The target name is pinned in `react-native.config.js`;
 without it a future React Native release would derive it from the podspec
 instead and change the header import prefix.
 
-Skia's Apple sources still gate on `RCT_NEW_ARCH_ENABLED` and
-`RCT_REMOVE_LEGACY_ARCH`. CocoaPods forces both project-wide; the SwiftPM path
-defines neither, so `Package.swift` defines them itself.
+CocoaPods defines `RCT_NEW_ARCH_ENABLED` and `RCT_REMOVE_LEGACY_ARCH`
+project-wide for a New Architecture app; the SwiftPM path defines neither.
+Skia's own sources no longer gate on them, but React's headers do
+(`RCT_REMOVE_LEGACY_ARCH` hides the legacy bridge API), so `Package.swift`
+defines both itself.
 
 The library requires iOS 15.1 (see the podspec), but the platform floor of
 `Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`

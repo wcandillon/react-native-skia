@@ -5,145 +5,84 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <unordered_map>
+#include <utility>
 
 namespace RNSkia {
 
 /**
- * Thread-local dispatcher for managing deferred operations.
- * Each thread gets its own dispatcher instance for queueing operations
- * to be executed on that specific thread.
+ * A queue of operations bound to the thread that created it.
+ *
+ * Destroying a Graphite surface flushes it into its recorder and deregisters
+ * it from it, and a recorder is single-threaded: an SkSurface has to be
+ * destroyed on the thread it was created on. The JS garbage collector may
+ * finalize the object holding it on any thread, so the finalizer hands the
+ * surface to the dispatcher of the creating thread instead, and that thread
+ * destroys it the next time it works with a surface (see JsiSkSurface).
+ *
+ * Graphite images and pictures need none of this: a Graphite resource may be
+ * released from any thread, it returns to its recorder's cache through a
+ * thread-safe queue.
  */
 class Dispatcher {
-private:
+public:
   using Operation = std::function<void()>;
 
-  struct DispatcherData {
-    std::queue<Operation> operationQueue;
-    std::mutex queueMutex;
-  };
-
-  // Thread-local storage for dispatcher data
-  static thread_local std::shared_ptr<DispatcherData> _threadDispatcher;
-
-  // Global registry of all dispatchers by thread ID
-  static inline std::mutex _registryMutex;
-  static inline std::unordered_map<std::thread::id,
-                                   std::weak_ptr<DispatcherData>>
-      _dispatcherRegistry;
-
-  std::shared_ptr<DispatcherData> _data;
-  std::thread::id _threadId;
-
-public:
-  Dispatcher() : _threadId(std::this_thread::get_id()) {
-    // Get or create dispatcher data for current thread
-    if (!_threadDispatcher) {
-      _threadDispatcher = std::make_shared<DispatcherData>();
-
-      // Register in global registry
-      std::lock_guard<std::mutex> lock(_registryMutex);
-      _dispatcherRegistry[_threadId] = _threadDispatcher;
-    }
-    _data = _threadDispatcher;
-  }
-
-  /**
-   * Get the dispatcher for the current thread.
-   * Creates one if it doesn't exist.
-   */
+  /** The dispatcher of the current thread, created on first use. */
   static std::shared_ptr<Dispatcher> getDispatcher() {
-    return std::make_shared<Dispatcher>();
+    static thread_local auto dispatcher = std::make_shared<Dispatcher>();
+    return dispatcher;
+  }
+
+  Dispatcher() : _threadId(std::this_thread::get_id()) {}
+
+  /** Whether the caller runs on the dispatcher's thread. */
+  bool isCurrentThread() const {
+    return std::this_thread::get_id() == _threadId;
   }
 
   /**
-   * Get the dispatcher for a specific thread.
-   * Returns nullptr if that thread doesn't have a dispatcher.
+   * Lets go of `object` on the dispatcher's thread: right away when called
+   * from it, otherwise when that thread next calls processQueue(). Pass the
+   * last reference for the object to be destroyed there.
    */
-  static std::shared_ptr<Dispatcher> getDispatcher(std::thread::id threadId) {
-    std::lock_guard<std::mutex> lock(_registryMutex);
-    auto it = _dispatcherRegistry.find(threadId);
-    if (it != _dispatcherRegistry.end()) {
-      if (auto data = it->second.lock()) {
-        auto dispatcher = std::make_shared<Dispatcher>();
-        dispatcher->_data = data;
-        dispatcher->_threadId = threadId;
-        return dispatcher;
-      }
-    }
-    return nullptr;
-  }
-
-  /**
-   * Queue an operation to be executed on the dispatcher's thread.
-   * The operation will be executed when processQueue() is called on that
-   * thread.
-   */
-  void run(Operation op) {
-    if (!_data)
+  template <typename T> void release(T object) {
+    if (!object || isCurrentThread()) {
       return;
+    }
+    run([object = std::move(object)]() {});
+  }
 
-    std::lock_guard<std::mutex> lock(_data->queueMutex);
-    _data->operationQueue.push(std::move(op));
+  /** Queues an operation to run on the dispatcher's thread. */
+  void run(Operation op) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _queue.push(std::move(op));
   }
 
   /**
-   * Process all pending operations for the current thread.
-   * Must be called from the thread that owns this dispatcher.
-   * Returns the number of operations processed.
+   * Runs the queued operations. A no-op on any thread but the dispatcher's.
+   * Returns the number of operations run.
    */
   size_t processQueue() {
-    if (!_data)
-      return 0;
-
-    // Only process if we're on the correct thread
-    if (std::this_thread::get_id() != _threadId) {
+    if (!isCurrentThread()) {
       return 0;
     }
-
     std::queue<Operation> operations;
     {
-      std::lock_guard<std::mutex> lock(_data->queueMutex);
-      operations.swap(_data->operationQueue);
+      std::lock_guard<std::mutex> lock(_mutex);
+      operations.swap(_queue);
     }
-
     size_t count = operations.size();
     while (!operations.empty()) {
-      auto &op = operations.front();
-      op();
+      operations.front()();
       operations.pop();
     }
-
     return count;
   }
 
-  /**
-   * Get the number of pending operations.
-   */
-  size_t getPendingCount() const {
-    if (!_data)
-      return 0;
-
-    std::lock_guard<std::mutex> lock(_data->queueMutex);
-    return _data->operationQueue.size();
-  }
-
-  /**
-   * Clean up dispatcher for a thread that's shutting down.
-   */
-  static void cleanup() {
-    if (_threadDispatcher) {
-      // Process any remaining operations
-      auto dispatcher = getDispatcher();
-      dispatcher->processQueue();
-
-      // Remove from registry
-      std::lock_guard<std::mutex> lock(_registryMutex);
-      _dispatcherRegistry.erase(std::this_thread::get_id());
-
-      _threadDispatcher.reset();
-    }
-  }
+private:
+  std::thread::id _threadId;
+  std::mutex _mutex;
+  std::queue<Operation> _queue;
 };
 
 } // namespace RNSkia

@@ -188,6 +188,8 @@ android {
         versionCode 1
         versionName "1.0"
 
+        consumerProguardFiles 'proguard-rules.pro'
+
         externalNativeBuild {
             cmake {
                 cppFlags "-fexceptions", "-frtti"

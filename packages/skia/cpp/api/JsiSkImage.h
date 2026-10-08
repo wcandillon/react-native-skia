@@ -7,7 +7,6 @@
 #include <variant>
 
 #include "JsiSkConverters.h"
-#include "JsiSkDispatcher.h"
 #include "JsiSkImageInfo.h"
 #include "JsiSkMatrix.h"
 #include "JsiSkNativeObjects.h"
@@ -139,9 +138,6 @@ inline SkSamplingOptions SamplingOptionsFromValue(jsi::Runtime &runtime,
 }
 
 class JsiSkImage : public JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage> {
-private:
-  std::shared_ptr<Dispatcher> _dispatcher;
-
 public:
   static constexpr const char *CLASS_NAME = "Image";
 
@@ -345,33 +341,9 @@ public:
                   &JsiSkImage::isTextureBacked);
   }
 
-  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context,
-             const sk_sp<SkImage> image)
+  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image)
       : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
-                                                            std::move(image)) {
-    // Get the dispatcher for the current thread
-    _dispatcher = Dispatcher::getDispatcher();
-    // Process any pending operations (e.g. deletions of previous resources)
-    _dispatcher->processQueue();
-  }
-
-public:
-  ~JsiSkImage() override {
-    if (!isDisposed()) {
-      // This JSI Object is being deleted from a GC, which might happen
-      // on a separate Thread. GPU resources (like SkImage) must be deleted
-      // on the same Thread they were created on, so in this case we schedule
-      // deletion to run on the Thread this Object was created on.
-      auto image = getObjectUnchecked();
-      if (image && _dispatcher) {
-        _dispatcher->run([image]() {
-          // Image will be deleted when this lambda is destroyed, on the
-          // original Thread.
-        });
-      }
-      releaseResources();
-    }
-  }
+                                                            std::move(image)) {}
 
   size_t getMemoryPressure() override {
     if (isDisposed()) {
