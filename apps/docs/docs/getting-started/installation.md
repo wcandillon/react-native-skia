@@ -23,7 +23,7 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with) and are resolved automatically by the native build systems (CocoaPods on iOS and macOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
+The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with) and are resolved automatically by the native build systems (CocoaPods on iOS/macOS/tvOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
 
 ## Requirements
 
@@ -35,9 +35,8 @@ The Skia prebuilt binaries are delivered as regular npm dependencies (`react-nat
 | Android | API level 26 (`minSdkVersion = 26`) |
 | Reanimated (optional) | `react-native-reanimated@>=4.0.0` with `react-native-worklets@>=0.7.0` |
 
-React Native Skia runs on iOS, Android, macOS, and [the Web](/docs/getting-started/web).
+React Native Skia runs on iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, and [the Web](/docs/getting-started/web).
 
-tvOS, Android TV, and Mac Catalyst are not supported by v3. They remain supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation).
 For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
 
 ## iOS

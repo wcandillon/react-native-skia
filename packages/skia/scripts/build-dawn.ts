@@ -12,7 +12,8 @@
  *
  * Targets: android-armeabi-v7a, android-arm64-v8a, android-x86, android-x86_64
  * (ANDROID_NDK must be set), ios-arm64, ios-simulator-arm64,
- * ios-simulator-x86_64, maccatalyst-universal, macos-universal.
+ * ios-simulator-x86_64, tvos-arm64, tvos-simulator-arm64,
+ * tvos-simulator-x86_64, maccatalyst-universal, macos-universal.
  *
  * Every run first syncs Dawn and its dependencies to the commits in Skia's
  * DEPS and applies scripts/dawn-patches. The headers are collected into

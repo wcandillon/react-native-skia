@@ -88,10 +88,10 @@ buildscript {
 }
 ```
 
-### iOS and macOS
+### iOS, tvOS, and macOS
 
 The minimum deployment target is iOS 15.1.
-Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios` and `react-native-skia-graphite-apple-macos`), which also ship Dawn.
+Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-tvos`, `react-native-skia-graphite-apple-macos`), alongside `react-native-webgpu-dawn`.
 
 ### Expo
 
@@ -114,10 +114,6 @@ Use [expo-build-properties](https://docs.expo.dev/versions/latest/sdk/build-prop
   }
 }
 ```
-
-### TV
-
-tvOS and Android TV are not available with Graphite. These platforms remain supported on v2.
 
 ### React Native WebGPU
 
