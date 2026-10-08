@@ -6,10 +6,16 @@ import {
   Circle,
   Fill,
   LinearGradient,
+  Text as SkiaText,
   useClock,
+  useFont,
   vec,
 } from "react-native-skia";
-import { useDerivedValue } from "react-native-reanimated";
+import {
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+} from "react-native-reanimated";
 
 // Exercises the Android backing views. The canvas is drawn with rounded
 // corners inside a clipping parent and over a striped background, with an RN
@@ -37,11 +43,23 @@ export const AndroidViews = () => {
   const [surfaceType, setSurfaceType] = useState<SurfaceType>("auto");
   const [opaque, setOpaque] = useState(false);
   const [zOrderOnTop, setZOrderOnTop] = useState(false);
+  const [animate, setAnimate] = useState(true);
   const clock = useClock();
   const cx = useDerivedValue(
     () => 100 + 60 * Math.sin(clock.value / 500),
     [clock]
   );
+  const frameRate = useSharedValue(0);
+  useFrameCallback(({ timeSincePreviousFrame }) => {
+    if (timeSincePreviousFrame !== null && timeSincePreviousFrame > 0) {
+      frameRate.value += (1000 / timeSincePreviousFrame - frameRate.value) / 10;
+    }
+  });
+  const frameRateLabel = useDerivedValue(
+    () => `${Math.round(frameRate.value)} fps`,
+    [frameRate]
+  );
+  const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), 18);
   return (
     <View style={styles.container}>
       <View style={styles.stage}>
@@ -62,7 +80,16 @@ export const AndroidViews = () => {
                 colors={["rgba(0, 122, 255, 0.6)", "rgba(88, 86, 214, 0.6)"]}
               />
             </Fill>
-            <Circle cx={cx} cy={100} r={40} color="white" />
+            <Circle cx={animate ? cx : 100} cy={100} r={40} color="white" />
+            {animate && font && (
+              <SkiaText
+                x={24}
+                y={36}
+                text={frameRateLabel}
+                font={font}
+                color="white"
+              />
+            )}
           </Canvas>
         </View>
         <View style={styles.overlay} pointerEvents="none">
@@ -98,6 +125,10 @@ export const AndroidViews = () => {
             android.zOrderOnTop (SurfaceView only)
           </Text>
           <Switch value={zOrderOnTop} onValueChange={setZOrderOnTop} />
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>animate</Text>
+          <Switch value={animate} onValueChange={setAnimate} />
         </View>
         <Text style={styles.hint}>
           auto picks SurfaceView when opaque and TextureView otherwise. A

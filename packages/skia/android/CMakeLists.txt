@@ -59,6 +59,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaManager.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/rnskia-android/SurfaceFrameRateVote.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JSICache.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiPromises.cpp"
