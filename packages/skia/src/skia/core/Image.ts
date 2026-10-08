@@ -1,3 +1,5 @@
+import type { View } from "react-native";
+
 import { Platform } from "../../Platform";
 import { Skia } from "../Skia";
 import type { DataSourceParam, SkData, SkImage } from "../types";
@@ -60,6 +62,7 @@ export const makeImageFromView = <
     | number
     | React.Component<unknown, unknown>
     | React.ComponentClass<unknown>
+    | React.ComponentRef<typeof View>
     | null,
 >(
   viewRef: React.RefObject<T>,
