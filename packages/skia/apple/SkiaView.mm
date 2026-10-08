@@ -188,6 +188,23 @@ static bool appIsBackgrounded() {
   }
 }
 
+#if !TARGET_OS_OSX
+- (void)didMoveToWindow {
+  [super didMoveToWindow];
+  // A frame presented while the view was out of its window (an inactive tab,
+  // a screen under another one) is not what the layer shows once the view is
+  // back: it keeps the last frame presented while it was on screen, until
+  // something else invalidates it. Present the current frame again as soon
+  // as the view is in a window. It can land a frame after the view appears:
+  // the swapchain presents the drawable from the command buffer
+  // (presentDrawable:), outside of the Core Animation transaction, so
+  // presentsWithTransaction cannot put it in the same one.
+  if (self.window != nil && _view != nullptr) {
+    _view->presentCurrentFrame();
+  }
+}
+#endif // !TARGET_OS_OSX
+
 #pragma mark - Layout
 
 - (void)layoutSubviews {
