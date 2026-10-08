@@ -62,14 +62,7 @@ public:
 
   ~RNSkView() {
     _surface->setRequestRedraw(nullptr);
-    std::shared_ptr<RNSkGraphiteTarget> target;
-    {
-      std::lock_guard<std::mutex> lock(_mutex);
-      target = std::move(_target);
-    }
-    if (target) {
-      target->detach(_surface);
-    }
+    releaseTarget();
   }
 
   // Registry side ------------------------------------------------------------
@@ -140,12 +133,20 @@ public:
   }
 
   /**
-   Releases the content the view draws without scheduling a frame: the host
-   view is torn down. On Android the native view outlives the Java view
-   until it is finalized, so the resources go away here rather than with the
-   garbage collector.
+   Releases everything the view draws with, without scheduling a frame: the
+   host view is torn down. The declarative content goes, and so do the
+   target, its queued recordings and the last presented frame: with them the
+   view's Graphite recorder and its GPU resource cache, unless a JS context
+   object still holds the target. On Android the native view outlives the
+   Java view until it is finalized, which may never happen (GPU memory is
+   invisible to the Java garbage collector), so the resources go away here
+   rather than with the garbage collector. The view can be bound to an id
+   again afterwards (see setNativeId).
    */
-  void releaseContent() { _producer->clear(); }
+  void releaseContent() {
+    _producer->clear();
+    releaseTarget();
+  }
 
   /** Schedules redraw() on the main thread, once. */
   void requestRedraw() {
@@ -307,6 +308,27 @@ public:
   }
 
 private:
+  /**
+   Unbinds the view from its target and lets go of it, and of the last
+   presented frame. The target lives on while a JS context object or a
+   producer job still holds it; otherwise it is destroyed here, with the
+   recorder and every recording left in its queue.
+   */
+  void releaseTarget() {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    std::shared_ptr<RNSkGraphiteRecording> lastPresented;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      target = std::move(_target);
+      lastPresented = std::move(_lastPresented);
+      _targetId = 0;
+    }
+    if (target) {
+      target->detach(_surface);
+    }
+    // Both are released here, outside the lock.
+  }
+
   std::shared_ptr<RNSkGraphiteTarget> getTarget() {
     std::lock_guard<std::mutex> lock(_mutex);
     return _target;

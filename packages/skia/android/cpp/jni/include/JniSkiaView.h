@@ -96,10 +96,15 @@ protected:
       manager->setSkiaView(_view->getNativeId(), nullptr);
       manager->unregisterSkiaView(_view->getNativeId());
     }
-    // React drops the Java view here, but the native view behind it (and the
-    // content it owns) is only destroyed when the Java object is finalized.
-    // Release the content now so it does not wait for the garbage collector.
+    // React drops the Java view here, but the native view behind it is only
+    // destroyed when the Java object is finalized, which the garbage
+    // collector may never get to: the GPU memory the view holds (its Graphite
+    // recorder and resource cache, the queued and last presented recordings,
+    // the swapchain) is invisible to it. Release all of it now. The backing
+    // view normally gave up its surface already when it left the window;
+    // detaching here makes sure of it.
     _view->releaseContent();
+    _surface->detach();
   }
 
   // Choreographer tick: presents the queued recordings, returns whether more

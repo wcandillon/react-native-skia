@@ -35,10 +35,16 @@ void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
 
 void RNSkGraphiteProducer::setTarget(
     std::shared_ptr<RNSkGraphiteTarget> target) {
-  std::lock_guard<std::mutex> lock(_mutex);
-  _target = std::move(target);
-  _dirty = true;
-  kickLocked();
+  std::shared_ptr<RNSkGraphiteTarget> retiredTarget;
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    retiredTarget = std::exchange(_target, std::move(target));
+    // A frame still queued on the previous target is not coming through this
+    // view anymore (the view unbound itself from it): do not wait for it.
+    _presentPending = false;
+    _dirty = true;
+    kickLocked();
+  }
 }
 
 void RNSkGraphiteProducer::setRecorder(std::shared_ptr<Recorder> recorder) {
@@ -55,7 +61,22 @@ void RNSkGraphiteProducer::setPicture(sk_sp<SkPicture> picture) {
 }
 
 void RNSkGraphiteProducer::clear() {
-  replaceContent(nullptr, nullptr, /* dirty= */ false);
+  std::shared_ptr<RNSkGraphiteTarget> retiredTarget;
+  std::shared_ptr<Recorder> retiredRecorder;
+  sk_sp<SkPicture> retiredPicture;
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    retiredTarget = std::move(_target);
+    retiredRecorder = std::move(_recorder);
+    retiredPicture = std::move(_picture);
+    _dirty = false;
+    // A frame queued on the target will not be presented anymore: a view
+    // bound again later must not wait for it.
+    _presentPending = false;
+  }
+  // All three are released here, outside the lock (see replaceContent). The
+  // target may take its Graphite recorder with it; a job in flight holds its
+  // own reference, and drops its frame when it finds the target retired.
 }
 
 void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
@@ -179,7 +200,7 @@ void RNSkGraphiteProducer::produce() {
   }
   std::lock_guard<std::mutex> lock(_mutex);
   _inFlight = false;
-  if (recording != nullptr) {
+  if (recording != nullptr && target == _target) {
     // The next job starts when this frame is on screen. Submitted under the
     // lock: a frame presented in between (a redraw replaying the last one)
     // would otherwise clear the flag before the recording is even queued.
@@ -187,8 +208,10 @@ void RNSkGraphiteProducer::produce() {
     target->submit(std::move(recording));
     return;
   }
-  // Nothing was recorded: keep the content dirty so that the next request
-  // (a surface, a resize) records it. A request that landed while this job
+  // Nothing was recorded, or the target was retired while this job ran (the
+  // view was torn down or bound to another id) and the frame has nowhere to
+  // go: keep the content dirty so that the next request (a surface, a
+  // resize, a new target) records it. A request that landed while this job
   // ran was only noted as dirty; it starts the next job now.
   const bool requested = _dirty;
   _dirty = true;
