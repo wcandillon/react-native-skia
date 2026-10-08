@@ -139,14 +139,6 @@ public:
     return _producer->applyUpdates(runtime, recorderId, values);
   }
 
-  /**
-   Releases the content the view draws without scheduling a frame: the host
-   view is torn down. On Android the native view outlives the Java view
-   until it is finalized, so the resources go away here rather than with the
-   garbage collector.
-   */
-  void releaseContent() { _producer->clear(); }
-
   /** Schedules redraw() on the main thread, once. */
   void requestRedraw() {
     if (_redrawRequested.exchange(true)) {
