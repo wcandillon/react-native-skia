@@ -508,23 +508,18 @@ public:
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
 
-    // Graphite records draws lazily and offers no synchronous GPU readback. If
-    // this canvas belongs to a surface, snap & submit its recording, snapshot
-    // it to a CPU raster image and read from that (mirroring
-    // makeImageSnapshot). A canvas without an owning surface (e.g. a
-    // picture-recording canvas) has no texture to read back, so fall through to
-    // the raster canvas read below.
+    // A Graphite canvas has no readback of its own: the canvas of a surface
+    // reads from a snapshot of the surface (a copy task on its recorder,
+    // submitted so that the texture can be read back). A canvas without an
+    // owning surface (a picture-recording canvas) falls through to the raster
+    // read below.
     if (_surface) {
-      // Snapshot first: makeImageSnapshot records a copy task into the recorder
-      // that must be submitted before the texture can be read back (this is the
-      // same ordering used by JsiSkSurface::makeImageSnapshot and RNSkView).
       auto snapshot = _surface->makeImageSnapshot();
       if (auto *recorder = _surface->recorder()) {
         DawnContext::getInstance().submitRecording(recorder->snap().get());
       }
-      auto raster = DawnContext::getInstance().MakeRasterImage(snapshot);
-      if (!raster || !raster->readPixels(nullptr, *info, bfrPtr, bytesPerRow,
-                                         srcX, srcY)) {
+      if (!JsiSkImage::readPixelsInto(snapshot, *info, bfrPtr, bytesPerRow,
+                                      srcX, srcY)) {
         return jsi::Value::null();
       }
       return dest;

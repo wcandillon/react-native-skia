@@ -30,7 +30,6 @@ import { HAS_REANIMATED_3 } from "../external";
 
 export interface CanvasRef extends FC<CanvasProps> {
   makeImageSnapshot(rect?: SkRect): SkImage;
-  makeImageSnapshotAsync(rect?: SkRect): Promise<SkImage>;
   redraw(): void;
   getNativeId(): number;
   measure(callback: MeasureOnSuccessCallback): void;
@@ -154,9 +153,7 @@ const useCanvasRoot = ({
         makeImageSnapshot: (rect?: SkRect) => {
           return SkiaViewApi.makeImageSnapshot(nativeId, rect);
         },
-        makeImageSnapshotAsync: (rect?: SkRect) => {
-          return SkiaViewApi.makeImageSnapshotAsync(nativeId, rect);
-        },
+
         redraw: () => {
           SkiaViewApi.requestRedraw(nativeId);
         },

@@ -82,7 +82,7 @@ A few rules follow from this model:
 
 ## Snapshots
 
-`makeImageSnapshot()` and `makeImageSnapshotAsync()` from `SkiaViewApi` replay the current frame into an offscreen surface, like they do for a `Canvas`.
+`makeImageSnapshot()` from `SkiaViewApi` replays the current frame into an offscreen surface and returns a GPU image of it, like it does for a `Canvas`.
 
 ## Web
 

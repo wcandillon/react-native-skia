@@ -109,25 +109,6 @@ global.SkiaViewApi = {
     }
     return view.getContext();
   },
-  makeImageSnapshotAsync(nativeId: number, rect?: SkRect) {
-    return new Promise((resolve, reject) => {
-      const view = this.views[`${nativeId}`];
-      if (!view) {
-        reject(
-          new Error(
-            `Cannot make image snapshot: view with nativeID ${nativeId} is not registered (it may have unmounted)`
-          )
-        );
-        return;
-      }
-      const result = view.makeImageSnapshot(rect);
-      if (result) {
-        resolve(result);
-      } else {
-        reject(new Error("Failed to make image snapshot"));
-      }
-    });
-  },
 } as ISkiaViewApiWeb;
 
 // eslint-disable-next-line import/no-default-export

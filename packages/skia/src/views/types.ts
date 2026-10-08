@@ -41,8 +41,12 @@ export interface ISkiaViewApi {
     recorderId: number,
     values: SharedValue<unknown>[]
   ) => void;
+  /**
+   * Renders the view into an offscreen surface and returns a GPU image of
+   * it, on the calling thread. Native: the declarative content is replayed
+   * with its latest values; otherwise the current frame is.
+   */
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
-  makeImageSnapshotAsync: (nativeId: number, rect?: SkRect) => Promise<SkImage>;
   size: (nativeId: number) => SkSize;
   /**
    * The recording side of a view: its native id, the layout size in points,

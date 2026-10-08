@@ -341,12 +341,12 @@ describe("SkiaView.web", () => {
 
     // The lost event goes through; a browser only records the permission to
     // restore once its dispatch is over, so the request has to come from a
-    // later task.
-    await flushMicrotasks();
-    expect(ctx.restoreAllowed).toBe(true);
-    expect(ctx.lost).toBe(true);
+    // later task. Whether that task has run yet is not asserted: act() ends
+    // on a setImmediate, which Node may run before or after a setTimeout(0).
     const surfacesBefore =
       CanvasKitMock.MakeOnScreenGLSurface.mock.calls.length;
+    await flushMicrotasks();
+    expect(ctx.restoreAllowed).toBe(true);
     await flushTimers();
     expect(ctx.lost).toBe(false);
     expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(2);
