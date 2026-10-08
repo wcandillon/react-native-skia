@@ -93,8 +93,14 @@ export interface PatchProps extends DrawingNodeProps {
 
 export interface VerticesProps extends DrawingNodeProps {
   colors?: string[];
-  vertices: SkPoint[];
-  textures?: SkPoint[];
+  /**
+   * The vertex positions, as a list of points or as a Float32Array of
+   * interleaved x, y pairs. The Float32Array is copied in one go, which is
+   * much faster for large meshes that are updated on every frame.
+   */
+  vertices: SkPoint[] | Float32Array;
+  /** The texture coordinates, in the same form as `vertices`. */
+  textures?: SkPoint[] | Float32Array;
   mode: SkEnum<typeof VertexMode>;
   blendMode?: SkEnum<typeof BlendMode>;
   indices?: number[];
