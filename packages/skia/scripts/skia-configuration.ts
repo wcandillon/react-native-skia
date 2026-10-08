@@ -219,6 +219,24 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
       },
+      "arm64-maccatalyst": {
+        cpu: "arm64",
+        platform: "mac",
+        args: [
+          ["target_environment", '"catalyst"'],
+          ["ios_min_target", `"${appleMinTarget}"`],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
+      },
+      "x64-maccatalyst": {
+        cpu: "x64",
+        platform: "mac",
+        args: [
+          ["target_environment", '"catalyst"'],
+          ["ios_min_target", `"${appleMinTarget}"`],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
+      },
     },
     args: appleCommonArgs,
     outputRoot: "libs/ios",
