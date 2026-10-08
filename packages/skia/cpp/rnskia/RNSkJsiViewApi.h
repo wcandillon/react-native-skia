@@ -16,7 +16,7 @@
 #include "RNSkView.h"
 #include "api/JsiSkGraphiteContext.h"
 #include "api/JsiSkNativeObjects.h"
-#include "jsi/JsiPromises.h"
+
 #include "jsi/ViewProperty.h"
 #include <jsi/jsi.h>
 
@@ -271,53 +271,6 @@ public:
     return jsi::Value::undefined();
   }
 
-  JSI_HOST_FUNCTION(makeImageSnapshotAsync) {
-    if (count < 1) {
-      _platformContext->raiseError(std::string(
-          "makeImageSnapshotAsync: Expected at least 1 argument, got " +
-          std::to_string(count) + "."));
-      return jsi::Value::undefined();
-    }
-
-    if (!arguments[0].isNumber()) {
-      _platformContext->raiseError(
-          "makeImageSnapshot: First argument must be a number");
-      return jsi::Value::undefined();
-    }
-
-    // find Skia view
-    int nativeId = arguments[0].asNumber();
-    std::shared_ptr<RNSkView> view =
-        ViewRegistry::getInstance().getView(nativeId);
-    auto context = _platformContext;
-    auto bounds =
-        count > 1 && !arguments[1].isUndefined() && !arguments[1].isNull()
-            ? JsiSkRect::fromValue(runtime, arguments[1])
-            : nullptr;
-    return RNJsi::JsiPromises::createPromiseAsJSIValue(
-        runtime, [context = std::move(context), view, bounds](
-                     jsi::Runtime &runtime,
-                     std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
-          context->runOnMainThread([&runtime, view = std::move(view),
-                                    promise = std::move(promise),
-                                    context = std::move(context), bounds]() {
-            auto image = view->makeImageSnapshot(
-                bounds == nullptr ? nullptr : bounds.get());
-            context->runOnJavascriptThread(
-                [&runtime, context = std::move(context),
-                 promise = std::move(promise), image = std::move(image)]() {
-                  if (image == nullptr) {
-                    promise->reject("Failed to make snapshot from view.");
-                    return;
-                  }
-                  promise->resolve(makeJsiObject(
-                      runtime, std::make_shared<JsiSkImage>(std::move(context),
-                                                            std::move(image))));
-                });
-          });
-        });
-  }
-
   JSI_HOST_FUNCTION(size) {
     if (count != 1) {
       _platformContext->raiseError(std::string(
@@ -383,8 +336,7 @@ public:
                       &RNSkJsiViewApi::requestRedraw);
     installHostMethod(runtime, prototype, "applyUpdates",
                       &RNSkJsiViewApi::applyUpdates);
-    installHostMethod(runtime, prototype, "makeImageSnapshotAsync",
-                      &RNSkJsiViewApi::makeImageSnapshotAsync);
+
     installHostMethod(runtime, prototype, "makeImageSnapshot",
                       &RNSkJsiViewApi::makeImageSnapshot);
     installHostMethod(runtime, prototype, "size", &RNSkJsiViewApi::size);

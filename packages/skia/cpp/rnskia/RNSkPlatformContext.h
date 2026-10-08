@@ -47,6 +47,17 @@ public:
   }
 
   /**
+   * Same, with the runtime the function runs on. Asynchronous work uses this
+   * one rather than a runtime captured when it started: a reload may have
+   * destroyed that runtime by then, and the function is dropped instead.
+   * @param func Function to run
+   */
+  void
+  runOnJavascriptThread(std::function<void(facebook::jsi::Runtime &)> func) {
+    _callInvoker->invokeAsync(react::CallFunc(std::move(func)));
+  }
+
+  /**
    * Runs the passed function on the main thread
    * @param func Function to run.
    */

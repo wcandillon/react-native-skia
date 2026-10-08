@@ -39,7 +39,8 @@ const Demo = () => {
 
 This hook allows you to upload an image to the GPU.
 It accepts an image source as argument.
-It will first load the image from its source and then upload it to the GPU.
+It loads and decodes the image off the JS thread, like [`useImage`](/docs/images#useimage), then uploads it with `makeTextureImage()` on the UI thread.
+An image drawn by several canvases is uploaded once this way; see [GPU and CPU images](/docs/images#gpu-and-cpu-images).
 
 ```tsx twoslash
 import { useWindowDimensions } from "react-native";
@@ -149,10 +150,45 @@ const Demo = () => {
 };
 ```
 
+## Surfaces drawn every frame
+
+`makeImageSnapshot()` copies the texture of the surface. A surface redrawn on every frame does not need a copy per frame: `asImage()` returns an image sharing its texture, once.
+Draw into the surface, flush it, and whatever samples the image on the next frame sees the new content.
+
+```tsx twoslash
+import { useEffect, useMemo } from "react";
+import { useSharedValue, useFrameCallback } from "react-native-reanimated";
+import { Skia, Canvas, Image } from "react-native-skia";
+
+const Demo = () => {
+  const surface = useMemo(() => Skia.Surface.MakeOffscreen(200, 200)!, []);
+  // The image is created once and follows the surface.
+  const image = useMemo(() => surface.asImage(), [surface]);
+  const t = useSharedValue(0);
+  useFrameCallback((frame) => {
+    "worklet";
+    const canvas = surface.getCanvas();
+    canvas.drawColor(Skia.Color("black"));
+    const paint = Skia.Paint();
+    paint.setColor(Skia.Color("cyan"));
+    canvas.drawCircle(100 + 50 * Math.cos(frame.timestamp / 500), 100, 32, paint);
+    surface.flush();
+    t.value = frame.timestamp;
+  });
+  return (
+    <Canvas style={{ flex: 1 }}>
+      <Image image={image} x={0} y={0} width={200} height={200} />
+    </Canvas>
+  );
+};
+```
+
+Never draw the image onto its own surface: use a second surface for a feedback loop.
+
 :::info
 
 On the Web, a texture belongs to the WebGL context that created it, and each canvas has its own context.
-Call `makeNonTextureImage()` on the snapshot before drawing it in a canvas. The texture hooks do it for you.
+Call `makeNonTextureImage()` on the snapshot before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
 
 :::
 
