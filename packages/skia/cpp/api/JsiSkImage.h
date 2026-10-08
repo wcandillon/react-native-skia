@@ -409,7 +409,7 @@ public:
       // on the same Thread they were created on, so in this case we schedule
       // deletion to run on the Thread this Object was created on.
       auto image = getObjectUnchecked();
-      if (image && _dispatcher) {
+      if (image && _dispatcher && !isGaneshTexture(image)) {
         _dispatcher->run([image]() {
           // Image will be deleted when this lambda is destroyed, on the
           // original Thread.
@@ -432,6 +432,31 @@ public:
       }
     }
     return 0;
+  }
+
+protected:
+  void releaseResources() override {
+    auto image = getObjectUnchecked();
+    if (image && _dispatcher && isGaneshTexture(image)) {
+      // A Ganesh texture goes back to the resource cache of the context that
+      // made it when its last reference is dropped, and that cache may only
+      // be used from its own thread: the thread this wrapper was made on.
+      // Pictures, shaders and paints made on other threads can hold the image
+      // longer than this wrapper, from GC or from dispose() alike, so the
+      // image is kept on its thread until they have all let go.
+      _dispatcher->releaseWhenUnreferenced(std::move(image));
+    }
+    JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>::releaseResources();
+  }
+
+private:
+  static bool isGaneshTexture(const sk_sp<SkImage> &image) {
+#if defined(SK_GRAPHITE)
+    // Graphite returns resources to their cache from any thread.
+    return false;
+#else
+    return image->isTextureBacked();
+#endif
   }
 };
 
