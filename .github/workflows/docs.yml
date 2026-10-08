@@ -20,11 +20,10 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The setup already installed the whole workspace, apps/docs included.
       - name: Build Documentation
-        run: |
-          cd apps/docs
-          yarn install
-          yarn build
+        working-directory: apps/docs
+        run: yarn build
 
       - name: Include frozen v2 documentation
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
