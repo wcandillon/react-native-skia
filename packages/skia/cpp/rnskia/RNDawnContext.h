@@ -1,13 +1,24 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#if defined(__APPLE__)
+#include <pthread.h>
+#elif defined(__ANDROID__)
+#include <pthread.h>
+#endif
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
 #include "utils/RNSkLog.h"
-
-#include <vector>
 
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkData.h"
@@ -26,18 +37,8 @@
 
 namespace RNSkia {
 
-struct AsyncContext {
-  bool fCalled = false;
-  std::unique_ptr<const SkSurface::AsyncReadResult> fResult;
-};
-
-static void
-async_callback(void *c,
-               std::unique_ptr<const SkImage::AsyncReadResult> result) {
-  auto context = static_cast<AsyncContext *>(c);
-  context->fResult = std::move(result);
-  context->fCalled = true;
-}
+/** The pixels read back from a Graphite image; nullptr when the read failed. */
+using ReadResult = std::unique_ptr<const SkImage::AsyncReadResult>;
 
 class DawnContext {
 public:
@@ -49,35 +50,106 @@ public:
     return instance;
   }
 
-  sk_sp<SkImage> MakeRasterImage(sk_sp<SkImage> image) {
+  // Readbacks ----------------------------------------------------------------
+  //
+  // Graphite reads pixels back asynchronously: the request goes to the GPU
+  // with the next submit and the result is delivered by the context once the
+  // GPU is done, from checkAsyncWorkCompletion() or from any later submit. A
+  // thread of its own polls the context while readbacks are pending, so a
+  // caller never has to wait inside the context lock (which would hold up
+  // the frames of every view meanwhile).
+
+  /**
+   Reads `srcRect` of a Graphite image back into CPU memory, in the color
+   type and color space of the image. The callback runs on whichever thread
+   completes the GPU work, inside the context lock: it must not use the
+   context nor a JS runtime (hand the result to the right thread instead). It
+   is called exactly once, with nullptr when the read failed.
+   */
+  void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
+                  std::function<void(ReadResult)> callback) {
+    struct Request {
+      std::function<void(ReadResult)> callback;
+    };
+    auto *request = new Request{std::move(callback)};
+    auto info = image->imageInfo().makeDimensions(srcRect.size());
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      _pendingReadbacks.fetch_add(1, std::memory_order_acq_rel);
+      fGraphiteContext->asyncRescaleAndReadPixels(
+          image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
+          SkImage::RescaleMode::kNearest,
+          [](void *context, ReadResult result) {
+            auto *request = static_cast<Request *>(context);
+            getInstance()._pendingReadbacks.fetch_sub(
+                1, std::memory_order_acq_rel);
+            request->callback(std::move(result));
+            delete request;
+          },
+          request);
+      fGraphiteContext->submit();
+    }
+    wakeReadbackPoller();
+  }
+
+  /**
+   Same as readPixels(), waiting for the result. The wait happens outside the
+   context lock; the calling thread blocks for a GPU round trip.
+   */
+  ReadResult readPixelsSync(const sk_sp<SkImage> &image,
+                            const SkIRect &srcRect) {
+    struct Wait {
+      std::mutex mutex;
+      std::condition_variable condition;
+      bool done = false;
+      ReadResult result;
+    };
+    auto wait = std::make_shared<Wait>();
+    readPixels(image, srcRect, [wait](ReadResult result) {
+      {
+        std::lock_guard<std::mutex> lock(wait->mutex);
+        wait->result = std::move(result);
+        wait->done = true;
+      }
+      wait->condition.notify_one();
+    });
+    std::unique_lock<std::mutex> lock(wait->mutex);
+    wait->condition.wait(lock, [&wait]() { return wait->done; });
+    return std::move(wait->result);
+  }
+
+  /**
+   A raster image over the pixels of a read result (nullptr for a failed
+   read). `info` describes the pixels: the image's, for the size that was
+   read.
+   */
+  static sk_sp<SkImage> MakeRasterImage(const SkImageInfo &info,
+                                        ReadResult result) {
+    if (result == nullptr) {
+      return nullptr;
+    }
+    auto rowBytes = result->rowBytes(0);
+    auto size = rowBytes * static_cast<size_t>(info.height());
+    auto *raw = result.release();
+    auto data = SkData::MakeWithProc(
+        raw->data(0), size,
+        [](const void *, void *context) {
+          delete static_cast<const SkImage::AsyncReadResult *>(context);
+        },
+        const_cast<SkImage::AsyncReadResult *>(raw));
+    return SkImages::RasterFromData(info, std::move(data), rowBytes);
+  }
+
+  /**
+   A CPU copy of a Graphite image, read back synchronously; the image itself
+   when it is not texture-backed.
+   */
+  sk_sp<SkImage> MakeRasterImage(const sk_sp<SkImage> &image) {
     if (!image->isTextureBacked()) {
       return image;
     }
-    std::lock_guard<std::mutex> lock(_mutex);
-    AsyncContext asyncContext;
-    fGraphiteContext->asyncRescaleAndReadPixels(
-        image.get(), image->imageInfo(), image->imageInfo().bounds(),
-        SkImage::RescaleGamma::kSrc, SkImage::RescaleMode::kNearest,
-        async_callback, &asyncContext);
-    fGraphiteContext->submit();
-    while (!asyncContext.fCalled) {
-      tick();
-      fGraphiteContext->checkAsyncWorkCompletion();
-    }
-    auto bytesPerRow = asyncContext.fResult->rowBytes(0);
-    auto bufferSize = bytesPerRow * image->imageInfo().height();
-    auto data = SkData::MakeWithProc(
-        asyncContext.fResult->data(0), bufferSize,
-        [](const void *ptr, void *context) {
-          auto *result =
-              reinterpret_cast<const SkSurface::AsyncReadResult *>(context);
-          delete result;
-        },
-        reinterpret_cast<void *>(const_cast<SkSurface::AsyncReadResult *>(
-            asyncContext.fResult.release())));
-    auto rasterImage =
-        SkImages::RasterFromData(image->imageInfo(), data, bytesPerRow);
-    return rasterImage;
+    return MakeRasterImage(image->imageInfo(),
+                           readPixelsSync(image, image->bounds()));
   }
 
   // A recorder of its own for a client that records on one thread and replays
@@ -330,6 +402,50 @@ private:
   std::unique_ptr<skgpu::graphite::Context> fGraphiteContext;
   skgpu::graphite::DawnBackendContext backendContext;
   std::mutex _mutex;
+
+  // The readback poller: started on the first readback, it checks the
+  // context for finished GPU work while readbacks are pending and sleeps
+  // otherwise (see readPixels).
+  std::atomic<int> _pendingReadbacks{0};
+  std::once_flag _pollerOnce;
+  std::mutex _pollerMutex;
+  std::condition_variable _pollerCondition;
+
+  void wakeReadbackPoller() {
+    std::call_once(_pollerOnce, [this]() {
+      std::thread([this]() { pollReadbacks(); }).detach();
+    });
+    // Taken so that a poller between its predicate check and its wait cannot
+    // miss the notification.
+    {
+      std::lock_guard<std::mutex> lock(_pollerMutex);
+    }
+    _pollerCondition.notify_one();
+  }
+
+  void pollReadbacks() {
+#if defined(__APPLE__)
+    pthread_setname_np("RNSkia Readback");
+#elif defined(__ANDROID__)
+    pthread_setname_np(pthread_self(), "RNSkia Readback");
+#endif
+    for (;;) {
+      {
+        std::unique_lock<std::mutex> lock(_pollerMutex);
+        _pollerCondition.wait(lock, [this]() {
+          return _pendingReadbacks.load(std::memory_order_acquire) > 0;
+        });
+      }
+      while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
+        {
+          std::lock_guard<std::mutex> lock(_mutex);
+          tick();
+          fGraphiteContext->checkAsyncWorkCompletion();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    }
+  }
 
   DawnContext() {
     // No dawnProcSetProcs() here: the monolithic libwebgpu_dawn (shared with

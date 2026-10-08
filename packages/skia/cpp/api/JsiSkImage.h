@@ -12,17 +12,20 @@
 #include "JsiSkNativeObjects.h"
 #include "JsiSkShader.h"
 #include "api/third_party/base64.h"
+#include "jsi/JsiPromises.h"
 
 #include "utils/RNSkTypedArray.h"
 
 #include "include/gpu/graphite/Context.h"
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkWorker.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/codec/SkEncodedImageFormat.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkStream.h"
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
@@ -289,15 +292,37 @@ public:
             .asObject(runtime)
             .getArrayBuffer(runtime);
     auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
-
-    // Graphite offers no synchronous GPU readback, so read from a CPU raster
-    // copy of the image (a no-op when the image is already raster).
-    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
-    if (!image ||
-        !image->readPixels(nullptr, info, bfrPtr, bytesPerRow, srcX, srcY)) {
+    if (!readPixelsInto(getObject(), info, bfrPtr, bytesPerRow, srcX, srcY)) {
       return jsi::Value::null();
     }
     return dest;
+  }
+
+  /**
+   Reads the pixels of `image` under `dstInfo` at (srcX, srcY) into `dst`,
+   converting them to the requested color and alpha types. A raster or lazy
+   image is read on the CPU (decoded if needed). A Graphite image is read
+   back from the GPU, only the requested rectangle, and the caller waits for
+   the GPU; see makeRasterImage() to read back without waiting.
+   */
+  static bool readPixelsInto(const sk_sp<SkImage> &image,
+                             const SkImageInfo &dstInfo, void *dst,
+                             size_t rowBytes, int srcX, int srcY) {
+    if (!image->isTextureBacked()) {
+      return image->readPixels(nullptr, dstInfo, dst, rowBytes, srcX, srcY);
+    }
+    auto srcRect =
+        SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
+    if (!image->bounds().contains(srcRect)) {
+      return false;
+    }
+    auto result = DawnContext::getInstance().readPixelsSync(image, srcRect);
+    if (result == nullptr) {
+      return false;
+    }
+    SkPixmap pixels(image->imageInfo().makeDimensions(srcRect.size()),
+                    result->data(0), result->rowBytes(0));
+    return pixels.readPixels(dstInfo, dst, rowBytes);
   }
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
@@ -307,6 +332,49 @@ public:
       return nullptr;
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
+  }
+
+  // A CPU image, resolved without blocking: a Graphite image is read back
+  // from the GPU and the result delivered by the readback poller, an encoded
+  // image is decoded on the worker thread. The promise resolves on the JS
+  // thread, so this is for the JS thread; a worklet uses
+  // makeNonTextureImage().
+  JSI_HOST_FUNCTION(makeRasterImage) {
+    auto image = getObject();
+    auto context = getContext();
+    return RNJsi::JsiPromises::createPromiseAsJSIValue(
+        runtime, [&thisValue, image, context = std::move(context)](
+                     jsi::Runtime &runtime,
+                     std::shared_ptr<RNJsi::JsiPromises::Promise> promise) {
+          if (!image->isTextureBacked() && !image->isLazyGenerated()) {
+            // The executor runs synchronously: thisValue is still valid.
+            promise->resolve(jsi::Value(runtime, thisValue));
+            return;
+          }
+          auto deliver = [&runtime, context, promise](sk_sp<SkImage> raster) {
+            context->runOnJavascriptThread(
+                [&runtime, context, promise, raster = std::move(raster)]() {
+                  if (raster == nullptr) {
+                    promise->reject(
+                        "makeRasterImage: reading the image back failed");
+                    return;
+                  }
+                  promise->resolve(makeJsiObject(
+                      runtime, std::make_shared<JsiSkImage>(context, raster)));
+                });
+          };
+          if (image->isTextureBacked()) {
+            DawnContext::getInstance().readPixels(
+                image, image->bounds(), [image, deliver](ReadResult result) {
+                  deliver(DawnContext::MakeRasterImage(image->imageInfo(),
+                                                       std::move(result)));
+                });
+          } else {
+            RNSkWorker::getInstance().post([image, deliver]() {
+              deliver(image->makeRasterImage(nullptr));
+            });
+          }
+        });
   }
 
   bool isTextureBacked() { return getObject()->isTextureBacked(); }
@@ -337,6 +405,8 @@ public:
                       &JsiSkImage::readPixels);
     installMethod(runtime, prototype, "makeNonTextureImage",
                   &JsiSkImage::makeNonTextureImage);
+    installHostMethod(runtime, prototype, "makeRasterImage",
+                      &JsiSkImage::makeRasterImage);
     installMethod(runtime, prototype, "isTextureBacked",
                   &JsiSkImage::isTextureBacked);
   }
@@ -353,9 +423,14 @@ public:
     if (image) {
       if (image->isTextureBacked()) {
         return image->textureSize();
-      } else {
-        return image->imageInfo().computeMinByteSize();
       }
+      if (image->isLazyGenerated()) {
+        // Still encoded: what it holds is the file, not the decoded pixels.
+        if (auto encoded = image->refEncodedData()) {
+          return encoded->size();
+        }
+      }
+      return image->imageInfo().computeMinByteSize();
     }
     return 0;
   }

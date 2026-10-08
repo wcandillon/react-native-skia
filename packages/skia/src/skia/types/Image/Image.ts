@@ -127,6 +127,10 @@ export interface SkImage extends SkJSIInstance<"Image"> {
 
   /** Read Image pixels
    *
+   * On a GPU image, only the requested rectangle is read back from the GPU,
+   * and the call waits for it. To read back without blocking, call
+   * {@link makeRasterImage} first.
+   *
    * @param srcX - optional x-axis upper left corner of the rectangle to read from
    * @param srcY - optional y-axis upper left corner of the rectangle to read from
    * @param imageInfo - optional describes the pixel format and dimensions of the data to read into
@@ -140,9 +144,23 @@ export interface SkImage extends SkJSIInstance<"Image"> {
 
   /**
    * Returns raster image or lazy image. Copies SkImage backed by GPU texture
-   * into CPU memory if needed. Returns original SkImage if decoded in raster
-   * bitmap, or if encoded in a stream.
+   * into CPU memory if needed, waiting for the GPU. Returns original SkImage
+   * if decoded in raster bitmap, or if encoded in a stream.
    * Returns null if the conversion fails.
+   *
+   * This is the synchronous counterpart of {@link makeRasterImage}, for
+   * worklets and scripts; on the JS thread, prefer `makeRasterImage()`.
    */
   makeNonTextureImage(): SkImage | null;
+
+  /**
+   * Resolves to a CPU image, without blocking the calling thread: a GPU
+   * image is read back from the GPU, an encoded image is decoded on a
+   * background thread, and a raster image resolves to itself.
+   *
+   * Encoding or reading the pixels of the result is then a CPU operation.
+   * The promise resolves on the JS thread: call it from there, not from a
+   * worklet (see {@link makeNonTextureImage}).
+   */
+  makeRasterImage(): Promise<SkImage>;
 }

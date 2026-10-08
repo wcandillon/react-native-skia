@@ -2,17 +2,39 @@ import { Platform } from "../../Platform";
 import { Skia } from "../Skia";
 import type { DataSourceParam, SkImage } from "../types";
 
-import { useRawData } from "./Data";
+import { loadData, useLoading } from "./Data";
 
 const imgFactory = Skia.Image.MakeImageFromEncoded.bind(Skia.Image);
 
 /**
- * Returns a Skia Image object
+ * Loads an image and decodes it off the JS thread. Resolves to a raster
+ * image: drawing it uploads it to the GPU once per canvas (see
+ * `makeTextureImage()` to upload it once), reading its pixels is a CPU
+ * operation. Null until loaded, or on failure.
+ */
+export const loadImage = async (
+  source: DataSourceParam,
+  onError?: (err: Error) => void
+) => {
+  const encoded = await loadData(source, imgFactory, onError);
+  if (encoded === null) {
+    return null;
+  }
+  const image = await encoded.makeRasterImage();
+  if (image !== encoded) {
+    // The encoded bytes are no longer needed.
+    encoded.dispose();
+  }
+  return image;
+};
+
+/**
+ * Returns a Skia Image object, decoded off the JS thread (see `loadImage`).
  * */
 export const useImage = (
   source: DataSourceParam,
   onError?: (err: Error) => void
-) => useRawData(source, imgFactory, onError);
+) => useLoading(source, () => loadImage(source, onError));
 
 /**
  * Creates an image from a given view reference. NOTE: This method has different implementations

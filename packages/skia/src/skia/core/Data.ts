@@ -38,7 +38,7 @@ export const loadData = <T>(
   }
 };
 
-const useLoading = <T extends SkJSIInstance<string>>(
+export const useLoading = <T extends SkJSIInstance<string>>(
   source: DataSourceParam,
   loader: () => Promise<T | null>
 ) => {
