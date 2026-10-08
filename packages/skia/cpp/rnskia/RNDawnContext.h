@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 
@@ -49,6 +51,58 @@ public:
     return instance;
   }
 
+  /**
+   GPU resource cache budgets. Graphite keeps a cache per Recorder (each view
+   has its own) and one in the Context, both 256 MB by default. On a phone a
+   continuously animating view fills its cache and nothing ever trims it, so
+   the defaults are lower and resources left unused for
+   kPurgeResourcesUnusedFor are purged while drawing continues (see
+   performRecorderCleanup). A budget is a soft limit: resources still in use
+   are never purged.
+   */
+  static constexpr size_t kDefaultRecorderBudget = 32 * 1024 * 1024;
+  static constexpr size_t kDefaultContextBudget = 64 * 1024 * 1024;
+  static constexpr std::chrono::milliseconds kPurgeResourcesUnusedFor{5000};
+  static constexpr std::chrono::milliseconds kPurgeInterval{2000};
+
+  /**
+   Overrides the cache budgets: recorders pick up the new budget at their next
+   cleanup, the context right away.
+   */
+  void setResourceCacheLimits(size_t recorderBytes, size_t contextBytes) {
+    _recorderBudget = recorderBytes;
+    std::lock_guard<std::mutex> lock(_mutex);
+    fGraphiteContext->setMaxBudgetedBytes(contextBytes);
+  }
+
+  size_t getRecorderBudget() const { return _recorderBudget; }
+
+  size_t getContextBudget() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return fGraphiteContext->maxBudgetedBytes();
+  }
+
+  /**
+   Purges the recorder's resources left unused for kPurgeResourcesUnusedFor,
+   at most once per kPurgeInterval (tracked in lastCleanup). A recorder is not
+   thread safe: call this on the thread that records with it, between
+   recordings (e.g. right after snap()).
+   */
+  void
+  performRecorderCleanup(skgpu::graphite::Recorder *recorder,
+                         std::chrono::steady_clock::time_point &lastCleanup) {
+    auto now = std::chrono::steady_clock::now();
+    if (recorder == nullptr || now - lastCleanup < kPurgeInterval) {
+      return;
+    }
+    lastCleanup = now;
+    const size_t budget = _recorderBudget;
+    if (recorder->maxBudgetedBytes() != budget) {
+      recorder->setMaxBudgetedBytes(budget);
+    }
+    recorder->performDeferredCleanup(kPurgeResourcesUnusedFor);
+  }
+
   sk_sp<SkImage> MakeRasterImage(sk_sp<SkImage> image) {
     if (!image->isTextureBacked()) {
       return image;
@@ -87,6 +141,7 @@ public:
     std::lock_guard<std::mutex> lock(_mutex);
     skgpu::graphite::RecorderOptions options;
     options.fImageProvider = ImageProvider::Make();
+    options.fGpuBudgetInBytes = _recorderBudget;
     return fGraphiteContext->makeRecorder(options);
   }
 
@@ -114,6 +169,7 @@ public:
       }
     }
     fGraphiteContext->submit();
+    performContextCleanupLocked();
     return success;
   }
 
@@ -125,6 +181,7 @@ public:
     info.fRecording = recording;
     fGraphiteContext->insertRecording(info);
     fGraphiteContext->submit(syncToCpu);
+    performContextCleanupLocked();
   }
 
   // Create offscreen surface
@@ -316,6 +373,7 @@ public:
     if (!recorderOptions.fImageProvider) {
       auto imageProvider = ImageProvider::Make();
       recorderOptions.fImageProvider = imageProvider;
+      recorderOptions.fGpuBudgetInBytes = _recorderBudget;
     }
     static thread_local auto recorder =
         fGraphiteContext->makeRecorder(recorderOptions);
@@ -330,6 +388,19 @@ private:
   std::unique_ptr<skgpu::graphite::Context> fGraphiteContext;
   skgpu::graphite::DawnBackendContext backendContext;
   std::mutex _mutex;
+  std::atomic<size_t> _recorderBudget{kDefaultRecorderBudget};
+  std::chrono::steady_clock::time_point _lastContextCleanup;
+
+  // Same as performRecorderCleanup(), for the context. The caller holds
+  // _mutex.
+  void performContextCleanupLocked() {
+    auto now = std::chrono::steady_clock::now();
+    if (now - _lastContextCleanup < kPurgeInterval) {
+      return;
+    }
+    _lastContextCleanup = now;
+    fGraphiteContext->performDeferredCleanup(kPurgeResourcesUnusedFor);
+  }
 
   DawnContext() {
     // No dawnProcSetProcs() here: the monolithic libwebgpu_dawn (shared with
@@ -366,6 +437,7 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    ctxOptions.fGpuBudgetInBytes = kDefaultContextBudget;
     fGraphiteContext =
         skgpu::graphite::ContextFactory::MakeDawn(backendContext, ctxOptions);
 

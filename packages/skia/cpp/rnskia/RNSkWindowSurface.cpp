@@ -257,6 +257,8 @@ bool RNSkWindowSurface::presentImage(const sk_sp<SkImage> &image) {
     throw std::runtime_error("Failed to create graphite recording");
   }
   DawnContext::getInstance().submitRecording(recording.get());
+  DawnContext::getInstance().performRecorderCleanup(_recorder,
+                                                    _lastRecorderCleanup);
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif

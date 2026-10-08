@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cmath>
 #include <deque>
 #include <functional>
@@ -196,6 +197,9 @@ public:
       throw std::runtime_error(
           "SkiaGraphiteView: snapping the recording failed.");
     }
+    // The recorder is only used under this lock, and no recording is open.
+    DawnContext::getInstance().performRecorderCleanup(_recorder->recorder.get(),
+                                                      _lastRecorderCleanup);
     return std::make_shared<RNSkGraphiteRecording>(
         _recorder, std::move(recording), _recordingTarget);
   }
@@ -342,6 +346,7 @@ private:
   std::mutex _stateMutex;
   std::shared_ptr<RNSkGraphiteRecorder> _recorder;
   bool _recording = false;
+  std::chrono::steady_clock::time_point _lastRecorderCleanup;
   RNSkGraphiteTargetInfo _recordingTarget;
   std::weak_ptr<RNSkWindowSurface> _surface;
   float _layoutWidth = 0;
