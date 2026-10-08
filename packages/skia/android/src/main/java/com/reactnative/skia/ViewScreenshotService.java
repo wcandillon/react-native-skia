@@ -7,7 +7,7 @@ import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
-import android.os.Looper;
+import android.os.HandlerThread;
 import android.util.Log;
 import android.view.PixelCopy;
 import android.view.SurfaceView;
@@ -30,6 +30,10 @@ import java.util.concurrent.TimeUnit;
 public class ViewScreenshotService {
     private static final long SURFACE_VIEW_READ_PIXELS_TIMEOUT = 5;
     private static final String TAG = "SkiaScreenshot";
+
+    // Receives PixelCopy results. Screenshots are taken on the main thread,
+    // which blocks until the copy completes, so the callback cannot run there.
+    private static Handler sPixelCopyHandler;
 
     public static Bitmap makeViewScreenshotFromTag(ReactContext context, int tag) {
         UIManager uiManager = UIManagerHelper.getUIManagerForReactTag(context, tag);
@@ -157,20 +161,33 @@ public class ViewScreenshotService {
         canvas.restore();
     }
 
+    private static synchronized Handler getPixelCopyHandler() {
+        if (sPixelCopyHandler == null) {
+            HandlerThread thread = new HandlerThread("SkiaPixelCopy");
+            thread.start();
+            sPixelCopyHandler = new Handler(thread.getLooper());
+        }
+        return sPixelCopyHandler;
+    }
+
     private static void drawSurfaceView(Canvas canvas, SurfaceView sv, Paint paint, float opacity) {
         final CountDownLatch latch = new CountDownLatch(1);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Bitmap childBitmapBuffer = Bitmap.createBitmap(sv.getWidth(), sv.getHeight(), Bitmap.Config.ARGB_8888);
+            final int[] copyResult = { PixelCopy.ERROR_UNKNOWN };
             try {
-                PixelCopy.request(sv, childBitmapBuffer, copyResult -> {
+                PixelCopy.request(sv, childBitmapBuffer, result -> {
+                    copyResult[0] = result;
+                    latch.countDown();
+                }, getPixelCopyHandler());
+                if (latch.await(SURFACE_VIEW_READ_PIXELS_TIMEOUT, TimeUnit.SECONDS)
+                        && copyResult[0] == PixelCopy.SUCCESS) {
                     canvas.save();
                     applyTransformations(canvas, sv);
                     paint.setAlpha(Math.round(opacity * 255)); // Set paint alpha based on opacity
                     canvas.drawBitmap(childBitmapBuffer, 0, 0, paint);
                     canvas.restore();
-                    latch.countDown();
-                }, new Handler(Looper.getMainLooper()));
-                latch.await(SURFACE_VIEW_READ_PIXELS_TIMEOUT, TimeUnit.SECONDS);
+                }
             } catch (Exception e) {
                 Log.e(TAG, "Cannot PixelCopy for " + sv, e);
                 drawSurfaceViewFromCache(canvas, sv, paint, opacity);
