@@ -4,19 +4,13 @@ import { Button, ScrollView, StyleSheet } from "react-native";
 import type { SkImage, SkPicture, SkSize } from "react-native-skia";
 import { Canvas, Image, Skia } from "react-native-skia";
 import {
-  configureReanimatedLogger,
-  ReanimatedLogLevel,
   runOnJS,
   runOnUI,
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
 
-// This is the default configuration
-configureReanimatedLogger({
-  level: ReanimatedLogLevel.error,
-  strict: false, // Reanimated runs in strict mode by default
-});
+import { useQuietReanimatedLogger } from "./useQuietReanimatedLogger";
 
 const drawPicture = (
   picture: SkPicture,
@@ -82,6 +76,7 @@ const createPictureWithGPUResources = (
 };
 
 export const StressTest2 = () => {
+  useQuietReanimatedLogger();
   const content = useSharedValue<SkImage | null>(null);
   const [picture, setPicture] = useState<SkPicture | null>(null);
   const texture = usePictureAsTexture(picture, {

@@ -6,7 +6,7 @@ import java.nio.file.Paths
 // https://github.com/facebookincubator/fbjni/blob/main/docs/android_setup.md
 
 // These defaults should reflect the SDK versions used by
-// the minimum React Native version supported (0.78), except minSdk:
+// the minimum React Native version supported (0.79), except minSdk:
 // the Graphite binaries are built for API level 26 (ndk_api in
 // scripts/skia-configuration.ts).
 def DEFAULT_COMPILE_SDK_VERSION = 35
