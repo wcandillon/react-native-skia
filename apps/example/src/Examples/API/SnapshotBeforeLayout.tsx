@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Canvas, Circle, useCanvasRef } from "@shopify/react-native-skia";
+import { Canvas, Circle, useCanvasRef } from "react-native-skia";
 
 /**
  * Regression check for https://github.com/Shopify/react-native-skia/issues/4029
