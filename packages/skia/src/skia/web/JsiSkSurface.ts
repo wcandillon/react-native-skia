@@ -36,6 +36,11 @@ export class JsiSkSurface
     return new JsiSkCanvas(this.CanvasKit, this.ref.getCanvas());
   }
 
+  asImage(): SkImage {
+    // CanvasKit has no image sharing the backing of a surface.
+    return this.makeImageSnapshot();
+  }
+
   makeImageSnapshot(bounds?: SkRect, outputImage?: JsiSkImage): SkImage {
     const image = this.ref.makeImageSnapshot(
       bounds
