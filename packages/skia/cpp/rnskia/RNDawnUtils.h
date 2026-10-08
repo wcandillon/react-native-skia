@@ -4,6 +4,7 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <algorithm>
 #include <optional>
 
 #include "webgpu/webgpu_cpp.h"
@@ -348,6 +349,19 @@ createDawnBackendContext(dawn::native::Instance *instance) {
       wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
+
+  // Adreno's Vulkan driver advertises
+  // VK_EXT_multisampled_render_to_single_sampled but crashes in
+  // vkCreateFramebuffer when a render pass uses it (seen on an Adreno 840).
+  // Without the feature, Graphite keeps MSAA with a separate multisampled
+  // attachment that it resolves.
+  constexpr uint32_t kQualcommVendorId = 0x5143;
+  if (adapterInfo.backendType == wgpu::BackendType::Vulkan &&
+      adapterInfo.vendorID == kQualcommVendorId) {
+    features.erase(std::remove(features.begin(), features.end(),
+                               wgpu::FeatureName::MSAARenderToSingleSampled),
+                   features.end());
+  }
 
   wgpu::Device device = requestDevice(matchedAdapter, features, true);
   SkASSERT(device);
