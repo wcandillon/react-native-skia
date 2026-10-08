@@ -42,7 +42,10 @@ public:
   RNSkGraphiteProducer() = default;
   ~RNSkGraphiteProducer();
 
-  /** The target to record into. Main thread. */
+  /**
+   The target to record into. JS thread (the registry side, see
+   RNSkView::setNativeId).
+   */
   void setTarget(std::shared_ptr<RNSkGraphiteTarget> target);
 
   /**
@@ -60,13 +63,6 @@ public:
   void setPicture(sk_sp<SkPicture> picture);
 
   bool hasContent();
-
-  /**
-   Drops the content and the target without scheduling a frame: the host
-   view is being torn down. A job replaying into the target keeps it alive
-   until it is done. Main thread.
-   */
-  void clear();
 
   /**
    Reads the shared values on the calling runtime into the recorder and
