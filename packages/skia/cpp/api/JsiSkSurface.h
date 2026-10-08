@@ -29,36 +29,22 @@ namespace jsi = facebook::jsi;
 
 class JsiSkSurface
     : public JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface> {
-private:
-  std::shared_ptr<Dispatcher> _dispatcher;
-
 public:
   static constexpr const char *CLASS_NAME = "Surface";
 
   JsiSkSurface(std::shared_ptr<RNSkPlatformContext> context,
                sk_sp<SkSurface> surface)
       : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
-            std::move(context), std::move(surface)) {
-    // Get the dispatcher for the current thread
-    _dispatcher = Dispatcher::getDispatcher();
-    // Process any pending operations
+            std::move(context), std::move(surface)),
+        _dispatcher(Dispatcher::getDispatcher()) {
+    // The surface belongs to the recorder of this thread, which is also the
+    // thread that destroys the surfaces finalized elsewhere (see
+    // releaseResources).
     _dispatcher->processQueue();
   }
 
-public:
   ~JsiSkSurface() override {
     if (!isDisposed()) {
-      // This JSI Object is being deleted from a GC, which might happen
-      // on a separate Thread. GPU resources (like SkSurface) must be deleted
-      // on the same Thread they were created on, so in this case we schedule
-      // deletion to run on the Thread this Object was created on.
-      auto surface = getObjectUnchecked();
-      if (surface && _dispatcher) {
-        _dispatcher->run([surface]() {
-          // Surface will be deleted when this lambda is destroyed, on the
-          // original Thread.
-        });
-      }
       releaseResources();
     }
   }
@@ -73,11 +59,12 @@ public:
         std::make_shared<JsiSkCanvas>(getContext(), surface->getCanvas());
     // Keep a reference to the owning surface so the canvas can read pixels back
     // through a snapshot on Graphite (which lacks synchronous canvas readback).
-    canvas->setSurface(surface);
+    canvas->setSurface(surface, _dispatcher);
     return canvas;
   }
 
   void flush(JsiOptional<bool> syncParam) {
+    _dispatcher->processQueue();
     auto surface = getObject();
     // When `sync` is true, block until the GPU has finished executing the
     // submitted work. Required before a consumer on a different command queue
@@ -95,6 +82,7 @@ public:
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
+    _dispatcher->processQueue();
     auto surface = getObject();
     sk_sp<SkImage> image;
     if (count > 0 && arguments[0].isObject()) {
@@ -181,6 +169,20 @@ public:
                       &JsiSkSurface::makeImageSnapshot);
     installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
   }
+
+protected:
+  void releaseResources() override {
+    // Destroying a Graphite surface flushes it into its recorder and
+    // deregisters it from it, and a recorder is single-threaded. The GC may
+    // finalize this object on any thread, and dispose() may be called from
+    // another runtime: let the thread that created the surface destroy it.
+    auto surface = getObjectUnchecked();
+    setObject(nullptr);
+    _dispatcher->release(std::move(surface));
+  }
+
+private:
+  std::shared_ptr<Dispatcher> _dispatcher;
 };
 
 } // namespace RNSkia
