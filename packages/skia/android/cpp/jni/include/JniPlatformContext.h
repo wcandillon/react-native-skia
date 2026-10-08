@@ -9,6 +9,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <utility>
 
 #include "RNSkPlatformContext.h"
 
@@ -24,7 +25,8 @@ public:
       "Lcom/reactnative/skia/PlatformContext;";
 
   static jni::local_ref<jhybriddata>
-  initHybrid(jni::alias_ref<jhybridobject> jThis, const float);
+  initHybrid(jni::alias_ref<jhybridobject> jThis, const float,
+             std::string cacheDirectory);
 
   static void registerNatives();
 
@@ -42,6 +44,8 @@ public:
 
   float getPixelDensity() { return _pixelDensity; }
 
+  const std::string &getCacheDirectory() const { return _cacheDirectory; }
+
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag);
 
 private:
@@ -49,13 +53,15 @@ private:
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
   float _pixelDensity;
+  std::string _cacheDirectory;
   std::mutex _mainThreadTasksMutex;
   std::queue<std::function<void()>> _mainThreadTasks;
   bool _mainThreadDispatchScheduled = false;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,
-      const float pixelDensity)
-      : javaPart_(jni::make_global(jThis)), _pixelDensity(pixelDensity) {}
+      const float pixelDensity, std::string cacheDirectory)
+      : javaPart_(jni::make_global(jThis)), _pixelDensity(pixelDensity),
+        _cacheDirectory(std::move(cacheDirectory)) {}
 };
 } // namespace RNSkia

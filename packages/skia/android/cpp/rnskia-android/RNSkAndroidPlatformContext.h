@@ -41,6 +41,10 @@ public:
     _jniPlatformContext->raiseError(err);
   }
 
+  std::string getCacheDirectory() override {
+    return _jniPlatformContext->getCacheDirectory();
+  }
+
   sk_sp<SkSurface> makeOffscreenSurface(int width, int height,
                                         bool useP3ColorSpace = false) override {
     return DawnContext::getInstance().MakeOffscreen(width, height,

@@ -69,6 +69,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkGraphiteProducer.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkWindowSurface.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNDawnInterop.cpp"
+        "${PROJECT_SOURCE_DIR}/../cpp/rnskia/RNSkPipelineStorage.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/CSSColorParser.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/api/third_party/base64.cpp"

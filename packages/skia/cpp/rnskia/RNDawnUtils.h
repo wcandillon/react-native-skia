@@ -6,6 +6,7 @@
 
 #include <optional>
 
+#include "RNSkPipelineStorage.h"
 #include "webgpu/webgpu_cpp.h"
 
 #include "dawn/native/DawnNative.h"
@@ -153,10 +154,25 @@ getMatchedAdapter(dawn::native::Instance *instance) {
 // Features not supported by the adapter are silently skipped.
 // Set fatalOnDeviceLost=true for primary rendering devices (SK_ABORT on loss),
 // false for secondary/compute devices (log only).
+inline size_t loadPipelineBlob(size_t keySize, const uint8_t *key,
+                               size_t valueSize, uint8_t *value,
+                               void *userdata1, void *) {
+  return static_cast<const RNSkia::RNSkPipelineStorage *>(userdata1)->loadBlob(
+      key, keySize, value, valueSize);
+}
+
+inline void storePipelineBlob(size_t keySize, const uint8_t *key,
+                              size_t valueSize, const uint8_t *value,
+                              void *userdata1, void *) {
+  static_cast<const RNSkia::RNSkPipelineStorage *>(userdata1)->storeBlob(
+      key, keySize, value, valueSize);
+}
+
 inline wgpu::Device
 requestDevice(dawn::native::Adapter &nativeAdapter,
               const std::vector<wgpu::FeatureName> &requestedFeatures,
-              bool fatalOnDeviceLost = true) {
+              bool fatalOnDeviceLost = true,
+              const RNSkia::RNSkPipelineStorage *pipelineStorage = nullptr) {
   wgpu::Adapter adapter = nativeAdapter.Get();
 
   // Filter to only features the adapter supports
@@ -192,6 +208,19 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   togglesDesc.disabledToggleCount = std::size(kDisabledToggles);
   togglesDesc.disabledToggles = kDisabledToggles;
 #endif
+
+  WGPUDawnCacheDeviceDescriptor cacheDesc =
+      WGPU_DAWN_CACHE_DEVICE_DESCRIPTOR_INIT;
+  if (pipelineStorage != nullptr) {
+    cacheDesc.dawnLoadCacheDataCallbackInfo.callback = loadPipelineBlob;
+    cacheDesc.dawnLoadCacheDataCallbackInfo.userdata1 =
+        const_cast<RNSkia::RNSkPipelineStorage *>(pipelineStorage);
+    cacheDesc.dawnStoreCacheDataCallbackInfo.callback = storePipelineBlob;
+    cacheDesc.dawnStoreCacheDataCallbackInfo.userdata1 =
+        const_cast<RNSkia::RNSkPipelineStorage *>(pipelineStorage);
+    togglesDesc.nextInChain =
+        reinterpret_cast<const wgpu::ChainedStruct *>(&cacheDesc);
+  }
 
   wgpu::DeviceDescriptor desc;
   desc.requiredFeatureCount = features.size();
@@ -235,7 +264,8 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 }
 
 inline skgpu::graphite::DawnBackendContext
-createDawnBackendContext(dawn::native::Instance *instance) {
+createDawnBackendContext(dawn::native::Instance *instance,
+                         const RNSkia::RNSkPipelineStorage *pipelineStorage) {
 
   auto matchedAdapter = getMatchedAdapter(instance);
   wgpu::Adapter adapter = matchedAdapter.Get();
@@ -330,7 +360,8 @@ createDawnBackendContext(dawn::native::Instance *instance) {
 #endif
   };
 
-  wgpu::Device device = requestDevice(matchedAdapter, features, true);
+  wgpu::Device device =
+      requestDevice(matchedAdapter, features, true, pipelineStorage);
   SkASSERT(device);
 
   skgpu::graphite::DawnBackendContext backendContext;

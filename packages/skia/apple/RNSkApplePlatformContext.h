@@ -47,6 +47,8 @@ public:
 
   bool prefersP3ColorSpace() override { return _prefersP3ColorSpace; }
 
+  std::string getCacheDirectory() override;
+
   void runOnMainThread(std::function<void()>) override;
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override;
