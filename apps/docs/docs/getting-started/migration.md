@@ -151,6 +151,7 @@ The following APIs were removed in favor of it:
 | `Skia.Image.MakeImageFromNativeTextureUnstable()` | `Skia.Image.MakeImageFromGPUTexture(texture)`, which takes a WebGPU texture. See [WebGPU](/docs/webgpu). |
 | `image.getNativeTextureUnstable()` and `surface.getNativeTextureUnstable()` | `Skia.Image.MakeGPUTextureFromImage()` and `Skia.Surface.MakeFromGPUTexture()`: textures are shared as WebGPU textures. |
 | `Skia.Image.MakeImageFromNativeBuffer(pointer)` on native platforms | React Native WebGPU's `copyExternalImageToTexture()` renders the frame into a texture, which `Skia.Image.MakeImageFromGPUTexture()` wraps. See [native buffers](/docs/webgpu#native-buffers). The method remains on Web, where it takes a `CanvasImageSource`. |
+| `ref.current.makeImageSnapshotAsync()` on a `Canvas` | `makeImageSnapshot()`: with Graphite the snapshot is taken on the calling thread and returns a GPU image. To encode it or read its pixels without blocking, read it back with `image.makeRasterImage()`. See [snapshots](/docs/canvas/overview#getting-a-canvas-snapshot). |
 
 ## What is new
 
