@@ -393,8 +393,7 @@ jobs:
         run: yarn turbo run build:macos --concurrency 1
 
   build-test-ios-spm:
-    if: ${{ github.repository == 'shopify/react-native-skia' }}
-    runs-on: macos-latest-xlarge
+    runs-on: [self-hosted, macOS]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
