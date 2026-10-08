@@ -12,9 +12,12 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkColorSpace.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkImageInfo.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/graphite/Recording.h"
+#include "include/gpu/graphite/Surface.h"
 #include "include/gpu/graphite/TextureInfo.h"
 #include "include/gpu/graphite/dawn/DawnGraphiteTypes.h"
 
@@ -60,7 +63,10 @@ public:
   }
 
   /**
-   Returns a snapshot of the current surface/canvas
+   A GPU image of the surface, or of `bounds` (in points) when given, in
+   sRGB: the content of a Display P3 surface is drawn into an sRGB surface
+   first, which converts the colors on the GPU. Usable by any recorder of the
+   context once this returns; nullptr without a surface.
    */
   sk_sp<SkImage> makeSnapshot(SkRect *bounds) {
     if (_surface == nullptr) {
@@ -75,12 +81,29 @@ public:
     } else {
       image = _surface->makeImageSnapshot();
     }
-    // Only Graphite-backed surfaces have a recorder to snap/submit; a raster
-    // surface's snapshot is already a valid CPU image.
+    // The snapshot is a copy task on the surface's recorder: submitted here,
+    // so that the image is complete for whoever draws it next.
     if (auto *recorder = _surface->recorder()) {
       DawnContext::getInstance().submitRecording(recorder->snap().get());
     }
-    return DawnContext::getInstance().MakeRasterImage(image);
+    if (image == nullptr || !_useP3ColorSpace) {
+      return image;
+    }
+    // A surface tagged sRGB converts the colors of the P3 image drawn into
+    // it (an untagged one would not), on the recorder of this thread.
+    auto &context = DawnContext::getInstance();
+    auto *recorder = context.getRecorder();
+    auto info =
+        SkImageInfo::Make(image->width(), image->height(), image->colorType(),
+                          kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
+    auto srgb = SkSurfaces::RenderTarget(recorder, info);
+    if (srgb == nullptr) {
+      return nullptr;
+    }
+    srgb->getCanvas()->drawImage(image, 0, 0);
+    auto converted = srgb->makeImageSnapshot();
+    context.submitRecording(recorder->snap().get());
+    return converted;
   }
 
   int getWidth() override { return _width; }

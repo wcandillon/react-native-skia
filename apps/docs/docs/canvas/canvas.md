@@ -217,9 +217,8 @@ The colors returned by a [shader](/docs/shaders/overview) are not managed. They 
 
 You can save your drawings as an image by using the `makeImageSnapshot` method, which returns an [Image](/docs/images).
 The drawing is rendered into an offscreen surface with its latest animation values, on the calling thread: the snapshot does not wait for the next frame.
-The `makeImageSnapshotAsync` method does the same on the main thread, and returns a promise.
-
-Both methods support drawings that contain [textures](/docs/animations/textures).
+The image lives on the GPU: drawing it in another canvas costs no copy, and [textures](/docs/animations/textures) in the drawing are supported.
+Encoding it or reading its pixels waits for the GPU; to do that without blocking, read it back first with `makeRasterImage()` (see [images](/docs/images#gpu-and-cpu-images)).
 
 ### Example
 

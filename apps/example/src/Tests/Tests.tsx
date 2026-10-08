@@ -97,23 +97,18 @@ export const Tests = ({ assets }: TestsProps) => {
     if (drawing && client) {
       const it = setTimeout(() => {
         if (ref.current) {
-          ref.current
-            .makeImageSnapshotAsync({
+          try {
+            const image = ref.current.makeImageSnapshot({
               x: 0,
               y: 0,
               width: size,
               height: size,
-            })
-            .then((image) => {
-              if (image && client) {
-                const data = image.encodeToBytes();
-                client.send(data);
-              }
-            })
-            .catch((e) => {
-              console.error(e);
-              client.send(errorEnvelope(e));
             });
+            client.send(image.encodeToBytes());
+          } catch (e) {
+            console.error(e);
+            client.send(errorEnvelope(e));
+          }
         }
       }, timeToDraw);
       return () => {

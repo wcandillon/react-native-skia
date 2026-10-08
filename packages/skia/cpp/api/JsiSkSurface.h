@@ -20,6 +20,7 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkSurface.h"
+#include "include/gpu/graphite/Surface.h"
 
 #pragma clang diagnostic pop
 
@@ -79,6 +80,24 @@ public:
           recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
                                 : skgpu::graphite::SyncToCpu::kNo);
     }
+  }
+
+  // An image sharing the texture of the surface, without a copy: a canvas
+  // drawing it shows what the surface holds by then (flush the surface
+  // first). A raster surface has no texture to share: its snapshot instead.
+  std::shared_ptr<JsiSkImage> asImage() {
+    _dispatcher->processQueue();
+    auto surface = getObject();
+    auto sharesTexture = surface->recorder() != nullptr;
+    auto image = sharesTexture ? SkSurfaces::AsImage(surface)
+                               : surface->makeImageSnapshot();
+    if (image == nullptr) {
+      throw std::runtime_error(
+          "asImage: the texture of the surface cannot be sampled");
+    }
+    // The surface already reports the texture as its memory.
+    return std::make_shared<JsiSkImage>(getContext(), std::move(image),
+                                        sharesTexture);
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -167,6 +186,7 @@ public:
     installMethod(runtime, prototype, "getCanvas", &JsiSkSurface::getCanvas);
     installHostMethod(runtime, prototype, "makeImageSnapshot",
                       &JsiSkSurface::makeImageSnapshot);
+    installMethod(runtime, prototype, "asImage", &JsiSkSurface::asImage);
     installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
   }
 
