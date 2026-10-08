@@ -14,20 +14,22 @@ import PackageDescription
 // Skia's xcframeworks are ~200MB and are not carried in this package. They come
 // from the react-native-skia-graphite-apple-ios npm package, which
 // react-native-skia depends on, so a checkout that has installed its
-// dependencies builds offline. The package also ships the shared Dawn
-// (libwebgpu_dawn.xcframework) Graphite runs on.
+// dependencies builds offline. Dawn, the WebGPU implementation Graphite runs
+// on, comes from the react-native-webgpu-dawn package the same way: the one
+// react-native-webgpu depends on too, so an app with both links one Dawn.
 // Xcode passes the symlink as the package directory, hence resolvingSymlinks.
 let packageRoot = URL(fileURLWithPath: Context.packageDirectory)
   .resolvingSymlinksInPath().path
 
-let binariesPath = [
-  "../../react-native-skia-graphite-apple-ios", // consumer: sibling in node_modules
-  "../../node_modules/react-native-skia-graphite-apple-ios", // this monorepo
-]
-.map { "\(packageRoot)/\($0)" }
-.first { FileManager.default.fileExists(atPath: "\($0)/Package.swift") }
+// A node package next to this one: a sibling in the consumer's node_modules,
+// or under this monorepo's root.
+let nodePackage = { (name: String) -> String? in
+  ["../../\(name)", "../../node_modules/\(name)"]
+    .map { "\(packageRoot)/\($0)" }
+    .first { FileManager.default.fileExists(atPath: "\($0)/Package.swift") }
+}
 
-guard let binariesPath else {
+guard let binariesPath = nodePackage("react-native-skia-graphite-apple-ios") else {
   // Reached when the package was skipped at install time (`--omit=optional`,
   // or a non-Apple `os` filter), which SwiftPM would otherwise report as an
   // unresolvable dependency path.
@@ -36,6 +38,13 @@ guard let binariesPath else {
     react-native-skia-graphite-apple-ios was not found next to react-native-skia. \
     It ships the prebuilt Skia binaries this package links against. Reinstall \
     dependencies without --omit=optional, on macOS.
+    """)
+}
+guard let dawnPath = nodePackage("react-native-webgpu-dawn") else {
+  fatalError(
+    """
+    react-native-webgpu-dawn was not found next to react-native-skia. It ships the \
+    Dawn library this package links against. Reinstall dependencies.
     """)
 }
 
@@ -50,6 +59,7 @@ let package = Package(
     .package(name: "React-GeneratedCode", path: "../../../ios"),
     .package(name: "ReactNative", path: "../../../../xcframeworks"),
     .package(path: binariesPath),
+    .package(path: dawnPath),
   ],
   targets: [
     .target(
@@ -62,6 +72,7 @@ let package = Package(
         .product(
           name: "react-native-skia-graphite-apple-ios",
           package: "react-native-skia-graphite-apple-ios"),
+        .product(name: "react-native-webgpu-dawn", package: "react-native-webgpu-dawn"),
       ],
       // apple/ and cpp/ have no common ancestor below the package root, and
       // .headerSearchPath cannot escape the target path.
