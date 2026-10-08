@@ -83,25 +83,31 @@ const IndicesDemo = () => {
 A list of point objects is read one point at a time when it crosses into native code.
 For a mesh with thousands of vertices that is rebuilt on every frame, this can cost more than drawing it.
 Instead, pass the positions (and texture coordinates) as a `Float32Array` of interleaved x, y pairs.
-The array is copied in a single operation, and the same `Float32Array` can be mutated in place from frame to frame.
-`Skia.MakeVertices` accepts the same form.
+The array is copied in a single operation. `Skia.MakeVertices` accepts the same form.
+
+The buffer only needs to be allocated once: keep it in a shared value and mutate it in place on every frame.
+Assigning the same array back to `value` would not trigger a redraw, so use `modify`, which notifies Skia even though the reference did not change.
 
 ```tsx twoslash
-import { useDerivedValue, useSharedValue } from "react-native-reanimated";
+import { useFrameCallback, useSharedValue } from "react-native-reanimated";
 import { Canvas, Vertices } from "react-native-skia";
 
 const COLUMNS = 64;
 const ROWS = 24;
 
 const MeshDemo = () => {
-  const progress = useSharedValue(0);
-  const vertices = useDerivedValue(() => {
-    const points = new Float32Array(COLUMNS * ROWS * 2);
-    for (let i = 0; i < COLUMNS * ROWS; i++) {
-      points[2 * i] = (i % COLUMNS) * 5 + progress.value;
-      points[2 * i + 1] = Math.floor(i / COLUMNS) * 5;
-    }
-    return points;
+  // Allocated once, updated in place
+  const vertices = useSharedValue(new Float32Array(COLUMNS * ROWS * 2));
+  useFrameCallback(({ timeSinceFirstFrame }) => {
+    vertices.modify((points) => {
+      "worklet";
+      const offset = (timeSinceFirstFrame / 16) % 5;
+      for (let i = 0; i < COLUMNS * ROWS; i++) {
+        points[2 * i] = (i % COLUMNS) * 5 + offset;
+        points[2 * i + 1] = Math.floor(i / COLUMNS) * 5;
+      }
+      return points;
+    });
   });
   return (
     <Canvas style={{ flex: 1 }}>
