@@ -11,6 +11,7 @@
 #include "RNSkLog.h"
 #include "RNSkView.h"
 #include "RNSkWindowSurface.h"
+#include "SurfaceFrameRateVote.h"
 
 namespace RNSkia {
 namespace jni = facebook::jni;
@@ -52,27 +53,33 @@ public:
 
 protected:
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
-                        bool highBitDepth) {
-    attachWindow(surface, width, height, isSurface, highBitDepth);
+                        bool highBitDepth, float maxRefreshRate) {
+    attachWindow(surface, width, height, isSurface, highBitDepth,
+                 maxRefreshRate);
     _view->redraw();
   }
 
   void surfaceSizeChanged(jobject surface, int width, int height,
-                          bool isSurface, bool highBitDepth) {
+                          bool isSurface, bool highBitDepth,
+                          float maxRefreshRate) {
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.
     if (width != 0 || height != 0) {
       if (_surface->isAttached()) {
         _surface->resize(width, height);
       } else {
-        attachWindow(surface, width, height, isSurface, highBitDepth);
+        attachWindow(surface, width, height, isSurface, highBitDepth,
+                     maxRefreshRate);
       }
     }
     // Paint the new size right away rather than on the next scheduled redraw.
     _view->redraw();
   }
 
-  void surfaceDestroyed() { _surface->detach(); }
+  void surfaceDestroyed() {
+    _frameRateVote->detach();
+    _surface->detach();
+  }
 
   /**
    The pixel size the backing view was laid out with. The surface it gets
@@ -117,6 +124,13 @@ private:
       : _manager(skiaManager->cthis()->getSkiaManager()) {
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
+    // Weak: the surface is shared with the view and can outlive this object.
+    std::weak_ptr<SurfaceFrameRateVote> weakVote = _frameRateVote;
+    _surface->setDidPresent([weakVote]() {
+      if (auto vote = weakVote.lock()) {
+        vote->onFramePresented();
+      }
+    });
     _view = std::make_shared<RNSkView>(context, _surface);
     // A submitted recording arms the Java view's frame callback. Weak: the
     // Java view owns this object through its hybrid data.
@@ -138,8 +152,9 @@ private:
    gives it back through the releaser. Android never renders in Display P3.
    */
   void attachWindow(jobject surface, int width, int height, bool isSurface,
-                    bool highBitDepth) {
+                    bool highBitDepth, float maxRefreshRate) {
     // Release the old surface and its window first.
+    _frameRateVote->detach();
     _surface->detach();
     JNIEnv *env = jni::Environment::current();
     jobject jSurface = surface;
@@ -167,6 +182,11 @@ private:
       RNSkLogger::logToConsole("Could not acquire the native window");
       releaseWindow(nullptr, ownedSurface);
       return;
+    }
+    if (isSurface) {
+      // Only a SurfaceView votes: a TextureView is composited into its window,
+      // which casts its own vote.
+      _frameRateVote->attach(window, maxRefreshRate);
     }
     _surface->attach(window, width, height, highBitDepth,
                      /* useP3ColorSpace= */ false,
@@ -198,6 +218,8 @@ private:
   }
 
   std::weak_ptr<RNSkManager> _manager;
+  std::shared_ptr<SurfaceFrameRateVote> _frameRateVote =
+      std::make_shared<SurfaceFrameRateVote>();
   // Declared before the view, which unbinds itself from the surface when it
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;
