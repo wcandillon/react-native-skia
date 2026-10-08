@@ -26,7 +26,12 @@ MetalContext::MetalContext() {
   _commandQueue =
       id<MTLCommandQueue>(CFRetain((GrMTLHandle)[_device newCommandQueue]));
   GrMtlBackendContext backendContext = {};
-  backendContext.fDevice.reset((__bridge void *)_device);
+  // retain, not reset: reset adopts a reference that the backend context
+  // releases when it goes out of scope, and _device (an ARC strong reference)
+  // never gave it one. Each MetalContext destroyed (they are thread_local, so
+  // at every thread exit) would release the shared system device once more
+  // than it retained it. The queue below is balanced by its CFRetain.
+  backendContext.fDevice.retain((__bridge void *)_device);
   backendContext.fQueue.reset((__bridge void *)_commandQueue);
   GrContextOptions grContextOptions; // set different options here.
 
