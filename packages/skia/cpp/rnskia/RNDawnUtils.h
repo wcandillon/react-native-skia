@@ -159,12 +159,28 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
               bool fatalOnDeviceLost = true) {
   wgpu::Adapter adapter = nativeAdapter.Get();
 
-  // Filter to only features the adapter supports
+  // Filter to only features the adapter supports.
+  // Dawn's Vulkan backend accepts at most one shared-fence feature per device
+  // (SyncFD, VkSemaphoreOpaqueFD or VkSemaphoreZirconHandle) and fails device
+  // creation otherwise. Some drivers (Samsung Xclipse, the Android emulator)
+  // advertise several, so keep only the first supported one in request order.
   std::vector<wgpu::FeatureName> features;
+  bool hasVulkanSharedFence = false;
   for (auto feature : requestedFeatures) {
-    if (adapter.HasFeature(feature)) {
-      features.push_back(feature);
+    if (!adapter.HasFeature(feature)) {
+      continue;
     }
+    const bool isVulkanSharedFence =
+        feature == wgpu::FeatureName::SharedFenceSyncFD ||
+        feature == wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD ||
+        feature == wgpu::FeatureName::SharedFenceVkSemaphoreZirconHandle;
+    if (isVulkanSharedFence) {
+      if (hasVulkanSharedFence) {
+        continue;
+      }
+      hasVulkanSharedFence = true;
+    }
+    features.push_back(feature);
   }
 
   static constexpr const char *kToggles[] = {
@@ -316,6 +332,9 @@ createDawnBackendContext(dawn::native::Instance *instance) {
 #else
       wgpu::FeatureName::SharedTextureMemoryAHardwareBuffer,
       // Vulkan equivalent of the above: EndAccess exports a sync-fd fence.
+      // Only one of these is enabled (see requestDevice). SyncFD comes first
+      // because AHardwareBuffer interop is sync-fd based; OpaqueFD is a
+      // fallback for drivers that do not advertise sync-fd semaphores.
       wgpu::FeatureName::SharedFenceSyncFD,
       wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
       // Video and camera frames are YUV AHardwareBuffers. Dawn imports them
