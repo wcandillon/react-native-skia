@@ -24,8 +24,10 @@ const image3 = useImage("Logo");
 ```
 
 Loading an image is an asynchronous operation, so the `useImage` hook will return null until the image is fully loaded. You can use this behavior to conditionally render the `Image` component, as shown in the [example below](#example).
+The image is also decoded before the hook returns it, off the JS thread: the canvas that draws it never decodes on its first frame (see [GPU and CPU images](#gpu-and-cpu-images)).
 
 The hook also provides an optional error handler as a second parameter.
+`loadImage(source)` does the same outside of React and returns a promise.
 
 ### MakeImageFromEncoded
 
@@ -69,9 +71,39 @@ const img = Skia.Image.MakeImage(
 
 **Note**: The nested for-loops in the code sample above seem to have a mistake in the loop conditions. They should loop up to `256`, not `256 * 4`, as the pixel data array has been initialized with `256 * 256 * 4` elements representing a 256 by 256 image where each pixel is represented by 4 bytes (RGBA).
 
-### useImage
+## GPU and CPU images
 
-`useImage` is simply a helper function to load image data. 
+An image lives either on the CPU, as pixels in memory, or on the GPU, as a texture. Where it lives decides what is cheap.
+
+| Image | Lives | Drawing it | Reading its pixels |
+| :-- | :-- | :-- | :-- |
+| `useImage()`, `Skia.Image.MakeImage()`, `makeRasterImage()` | CPU | Uploaded once per canvas, then cached | Immediate |
+| `surface.makeImageSnapshot()`, `surface.asImage()`, `makeTextureImage()`, `Skia.Image.MakeImageFromGPUTexture()` | GPU | No copy, from any canvas and any thread | Waits for the GPU |
+| `Skia.Image.MakeImageFromEncoded()` | Encoded bytes | Decoded and uploaded by the first canvas that draws it, on that frame | Decodes |
+
+Moving an image from one side to the other is explicit:
+
+- `image.makeTextureImage()` uploads a CPU image (or decodes and uploads an encoded one) now, on the calling thread, and returns the GPU image. Use it for an image drawn by several canvases, or to pay the upload before the first frame: this is what [`useImageAsTexture`](/docs/animations/textures#useimageastexture) does. Pass `{ mipmapped: true }` to also build the mipmaps for the `MipmapMode` sampling options.
+- `image.makeRasterImage()` resolves to a CPU copy of a GPU image without blocking the JS thread (an encoded image is decoded on a background thread, a CPU image resolves to itself). `encodeToBytes()`, `encodeToBase64()` and `readPixels()` work on a GPU image too, but they wait for the GPU: when the JS thread should not wait, read the image back first.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+surface.getCanvas().drawColor(Skia.Color("cyan"));
+surface.flush();
+// A GPU image: drawing it anywhere costs nothing.
+const image = surface.makeImageSnapshot();
+// Encoding it waits for the GPU; reading it back first does not.
+image.makeRasterImage().then((raster) => {
+  const base64 = raster.encodeToBase64();
+  console.log(base64);
+});
+```
+
+`makeNonTextureImage()` is the synchronous counterpart of `makeRasterImage()`, for worklets.
+
+On the Web, a texture belongs to the canvas that created it: `makeTextureImage()` returns the image as is, and `surface.asImage()` is a snapshot.
 
 ## Image Component
 
@@ -176,4 +208,7 @@ const ImageDemo = () => {
 | `getImageInfo`  | Returns the image info for the image.                                 |
 | `encodeToBytes` | Encodes the image pixels, returning the result as a `UInt8Array`.     |
 | `encodeToBase64`| Encodes the image pixels, returning the result as a base64-encoded string. |
-| `readPixels`    | Reads the image pixels, returning result as UInt8Array or Float32Array |
+| `readPixels`    | Reads the image pixels, returning result as UInt8Array or Float32Array. On a GPU image, waits for the GPU. |
+| `makeRasterImage` | Resolves to a CPU copy of the image, read back from the GPU or decoded on a background thread. See [GPU and CPU images](#gpu-and-cpu-images). |
+| `makeTextureImage` | Uploads the image to the GPU now and returns the GPU image. See [GPU and CPU images](#gpu-and-cpu-images). |
+| `makeNonTextureImage` | Synchronous counterpart of `makeRasterImage`, for worklets. |

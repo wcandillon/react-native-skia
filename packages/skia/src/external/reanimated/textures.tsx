@@ -19,18 +19,7 @@ const createTextureFromImage = (
   image: SkImage
 ) => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(image.width(), image.height());
-  if (!surface) {
-    texture.value = null;
-    return;
-  }
-  const canvas = surface.getCanvas();
-  canvas.drawImage(image, 0, 0);
-  surface.flush();
-  texture.value = surface.makeImageSnapshot();
-  if (Platform.OS === "web") {
-    texture.value = texture.value.makeNonTextureImage();
-  }
+  texture.value = image.makeTextureImage();
 };
 
 const createTexture = (

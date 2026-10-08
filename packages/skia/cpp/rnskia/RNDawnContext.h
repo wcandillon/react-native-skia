@@ -26,6 +26,7 @@
 #include "include/gpu/graphite/Context.h"
 #include "include/gpu/graphite/ContextOptions.h"
 #include "include/gpu/graphite/GraphiteTypes.h"
+#include "include/gpu/graphite/Image.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/Surface.h"
@@ -150,6 +151,29 @@ public:
     }
     return MakeRasterImage(image->imageInfo(),
                            readPixelsSync(image, image->bounds()));
+  }
+
+  /**
+   A Graphite image of `image`: uploaded on the recorder of this thread and
+   submitted, so that any recorder can draw it once this returns. The image
+   itself when it already is one (with mipmaps when asked for). An encoded
+   image is decoded on the calling thread first. nullptr when the upload
+   failed.
+   */
+  sk_sp<SkImage> MakeTextureImage(const sk_sp<SkImage> &image, bool mipmapped) {
+    if (image->isTextureBacked() && (!mipmapped || image->hasMipmaps())) {
+      return image;
+    }
+    auto *recorder = getRecorder();
+    auto texture =
+        SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
+    if (texture == nullptr) {
+      return nullptr;
+    }
+    if (auto recording = recorder->snap()) {
+      submitRecording(recording.get());
+    }
+    return texture;
   }
 
   // A recorder of its own for a client that records on one thread and replays

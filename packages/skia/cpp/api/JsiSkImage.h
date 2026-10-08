@@ -325,6 +325,30 @@ public:
     return pixels.readPixels(dstInfo, dst, rowBytes);
   }
 
+  // A GPU image: uploaded now, on the calling thread, and drawn by every
+  // canvas afterwards without the upload per canvas a raster image gets.
+  // Options: { mipmapped?: boolean }.
+  JSI_HOST_FUNCTION(makeTextureImage) {
+    bool mipmapped = false;
+    if (count > 0 && arguments[0].isObject()) {
+      auto value =
+          arguments[0].asObject(runtime).getProperty(runtime, "mipmapped");
+      mipmapped = value.isBool() && value.getBool();
+    }
+    auto image = getObject();
+    auto texture =
+        DawnContext::getInstance().MakeTextureImage(image, mipmapped);
+    if (texture == nullptr) {
+      throw jsi::JSError(runtime,
+                         "makeTextureImage: uploading the image failed");
+    }
+    if (texture == image) {
+      return jsi::Value(runtime, thisValue);
+    }
+    return makeJsiObject(runtime, std::make_shared<JsiSkImage>(
+                                      getContext(), std::move(texture)));
+  }
+
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
   makeNonTextureImage() {
     auto rasterImage = DawnContext::getInstance().MakeRasterImage(getObject());
@@ -407,6 +431,8 @@ public:
                   &JsiSkImage::makeNonTextureImage);
     installHostMethod(runtime, prototype, "makeRasterImage",
                       &JsiSkImage::makeRasterImage);
+    installHostMethod(runtime, prototype, "makeTextureImage",
+                      &JsiSkImage::makeTextureImage);
     installMethod(runtime, prototype, "isTextureBacked",
                   &JsiSkImage::isTextureBacked);
   }

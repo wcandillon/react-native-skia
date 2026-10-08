@@ -163,4 +163,19 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * worklet (see {@link makeNonTextureImage}).
    */
   makeRasterImage(): Promise<SkImage>;
+
+  /**
+   * Returns a GPU image: the image is uploaded now, on the calling thread,
+   * and every canvas draws it afterwards without a copy. A raster image
+   * drawn directly is uploaded once per canvas instead, and an encoded
+   * image is decoded first. Returns the image itself when it already is a
+   * GPU image. Throws if the upload fails.
+   *
+   * Native only: on the Web, a texture belongs to the canvas that created
+   * it, so the image is returned as is.
+   *
+   * @param opts - `mipmapped`: also build the mipmaps, for the
+   * `MipmapMode` sampling options.
+   */
+  makeTextureImage(opts?: { mipmapped?: boolean }): SkImage;
 }

@@ -50,10 +50,82 @@ describe("Readback", () => {
   itRunsE2eOnly("a raster image resolves to itself", async () => {
     const result = await surface.eval((Skia, ctx) => {
       const data = Skia.Data.fromBytes(new Uint8Array([0, 0, 255, 255]));
-      const image = Skia.Image.MakeImage({ width: 1, height: 1, ...ctx }, data, 4)!;
+      const image = Skia.Image.MakeImage(
+        { width: 1, height: 1, ...ctx },
+        data,
+        4
+      )!;
       return image.makeRasterImage().then((raster) => raster === image);
     }, pixelInfo);
     expect(result).toBe(true);
+  });
+
+  itRunsE2eOnly("makeTextureImage() uploads a raster image once", async () => {
+    const result = await surface.eval((Skia, ctx) => {
+      const backing = (image: unknown) =>
+        (image as { isTextureBacked(): boolean }).isTextureBacked();
+      const data = Skia.Data.fromBytes(
+        new Uint8Array([
+          255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
+        ])
+      );
+      const raster = Skia.Image.MakeImage(
+        { width: 2, height: 2, ...ctx },
+        data,
+        8
+      )!;
+      const texture = raster.makeTextureImage();
+      const again = texture.makeTextureImage();
+      const offscreen = Skia.Surface.MakeOffscreen(2, 2)!;
+      offscreen.getCanvas().drawImage(texture, 0, 0);
+      offscreen.flush();
+      return {
+        rasterOnGPU: backing(raster),
+        textureOnGPU: backing(texture),
+        same: again === texture,
+        pixel: Array.from(
+          offscreen
+            .makeImageSnapshot()
+            .readPixels(1, 1, { width: 1, height: 1, ...ctx })!
+        ),
+      };
+    }, pixelInfo);
+    expect(result.rasterOnGPU).toBe(false);
+    expect(result.textureOnGPU).toBe(true);
+    expect(result.same).toBe(true);
+    expect(result.pixel).toEqual([255, 255, 0, 255]);
+  });
+
+  itRunsE2eOnly("asImage() follows the surface", async () => {
+    const result = await surface.eval((Skia, ctx) => {
+      const backing = (image: unknown) =>
+        (image as { isTextureBacked(): boolean }).isTextureBacked();
+      const source = Skia.Surface.MakeOffscreen(2, 2)!;
+      source.getCanvas().drawColor(Skia.Color("cyan"));
+      source.flush();
+      const live = source.asImage();
+      const snapshot = source.makeImageSnapshot();
+      source.getCanvas().drawColor(Skia.Color("red"));
+      source.flush();
+      const target = Skia.Surface.MakeOffscreen(2, 2)!;
+      const read = (image: typeof live) => {
+        target.getCanvas().drawImage(image, 0, 0);
+        target.flush();
+        return Array.from(
+          target
+            .makeImageSnapshot()
+            .readPixels(0, 0, { width: 1, height: 1, ...ctx })!
+        );
+      };
+      return {
+        live: read(live),
+        snapshot: read(snapshot),
+        liveOnGPU: backing(live),
+      };
+    }, pixelInfo);
+    expect(result.live).toEqual([255, 0, 0, 255]);
+    expect(result.snapshot).toEqual([0, 255, 255, 255]);
+    expect(result.liveOnGPU).toBe(true);
   });
 
   itRunsE2eOnly("an encoded image is decoded off the JS thread", async () => {
