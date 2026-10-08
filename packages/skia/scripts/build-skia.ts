@@ -18,6 +18,7 @@ import {
   ProjectRoot,
   SkiaSrc,
 } from "./skia-configuration";
+import { applyDawnPatches } from "./dawn-configuration";
 import { $, mapKeys, runAsync } from "./utils";
 
 const getOutDir = (platform: PlatformName, targetName: string) => {
@@ -149,7 +150,7 @@ export const copyLib = (
 /**
  * Builds an XCFramework for a specific Apple platform.
  * Each platform produces its own XCFramework:
- * - apple-ios: arm64-iphoneos + lipo'd iphonesimulator (arm64 + x64)
+ * - apple-ios: arm64-iphoneos + lipo'd iphonesimulator (arm64 + x64) + lipo'd maccatalyst (arm64 + x64)
  * - apple-macos: lipo'd macosx (arm64 + x64)
  */
 const buildXCFramework = (platformName: ApplePlatformName) => {
@@ -172,7 +173,7 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     let xcframeworkCmd = "xcodebuild -create-xcframework ";
 
     if (shortPlatform === "ios") {
-      // iOS: device + lipo'd simulator (arm64 + x64)
+      // iOS: device + lipo'd simulator (arm64 + x64) + lipo'd Mac Catalyst (arm64 + x64)
       $(`mkdir -p ${prefix}/iphonesimulator`);
       $(`rm -rf ${prefix}/iphonesimulator/${name}`);
       $(
@@ -180,6 +181,12 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       );
       xcframeworkCmd += `-library ${prefix}/arm64-iphoneos/${name} `;
       xcframeworkCmd += `-library ${prefix}/iphonesimulator/${name} `;
+      $(`mkdir -p ${prefix}/maccatalyst`);
+      $(`rm -rf ${prefix}/maccatalyst/${name}`);
+      $(
+        `lipo -create ${prefix}/x64-maccatalyst/${name} ${prefix}/arm64-maccatalyst/${name} -output ${prefix}/maccatalyst/${name}`
+      );
+      xcframeworkCmd += `-library ${prefix}/maccatalyst/${name} `;
     } else if (shortPlatform === "macos") {
       // macOS: lipo arm64 + x64
       $(`mkdir -p ${prefix}/macosx`);
@@ -297,21 +304,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       }
     }
 
-    // Apply arm64e simulator patch
-    const arm64ePatchFile = path.join(__dirname, "dawn-arm64e-simulator.patch");
-    $(`cd ${SkiaSrc} && git apply ${arm64ePatchFile}`);
-
     // Remove arm64e arch flags (not available on simulator)
     {
       const filePath = `${SkiaSrc}/gn/skia/BUILD.gn`;
       const search = [
+        `        "-arch",`,
+        `        "arm64e",`,
         `      ]`,
-        `      if (!ios_use_simulator) {`,
-        `        _arch_flags += [`,
-        `          "-arch",`,
-        `          "arm64e",`,
-        `        ]`,
-        `      }`,
         `    } else if (current_cpu == "x86") {`,
       ].join("\n");
       const replace = [
@@ -424,7 +423,7 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         `"Metal.framework",
       "QuartzCore.framework",
     ]
-    if (is_mac) {
+    if (is_mac && !is_catalyst) {
       frameworks += [ "Cocoa.framework" ]
     }
   }
@@ -454,9 +453,18 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       );
       fs.writeFileSync(filePath, content);
     }
+    // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
+    const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
+    $(`git apply ${catalystPatch}`);
+    // The GN build compiles the same Dawn checkout as build-dawn.ts.
+    // Without this, Mac Catalyst compilation will be failed.
+    applyDawnPatches();
     console.log("Patches applied successfully");
   }
-  $(`rm -rf ${PackageRoot}/libs`);
+  // Keep the separately built Dawn library and headers in libs/dawn.
+  for (const { platform } of buildTargets) {
+    $(`rm -rf ${PackageRoot}/${configurations[platform].outputRoot}`);
+  }
 
   // Build specified platforms and targets
   for (const buildTarget of buildTargets) {
