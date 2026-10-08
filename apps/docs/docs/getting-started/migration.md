@@ -197,6 +197,9 @@ Run `pod install` again so CocoaPods picks up the new binary packages.
 **The app does not run in Expo Go.**
 Expo Go ships the native code of v2. Use a development build.
 
+**The `Atlas` component is slower than in v2.**
+Graphite draws an atlas one sprite at a time, where Ganesh drew it in a single GPU operation. See the [performance notes](/docs/shapes/atlas#performance) of the Atlas component.
+
 **Screenshot tests report differences.**
 Graphite is a different renderer than Ganesh, and its output can differ slightly. Review the differences and update your reference images.
 
