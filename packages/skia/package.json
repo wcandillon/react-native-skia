@@ -129,7 +129,6 @@
     "react-native": "0.83.1",
     "react-native-builder-bob": "0.18.2",
     "react-native-reanimated": "4.3.1",
-    "react-native-skia-graphite-headers": "154.1.0",
     "react-native-worklets": "0.8.3",
     "rimraf": "3.0.2",
     "semantic-release": "^24.1.0",
@@ -142,9 +141,10 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.0",
-    "react-native-skia-graphite-android": "154.1.0",
-    "react-native-skia-graphite-apple-ios": "154.1.0",
-    "react-native-skia-graphite-apple-macos": "154.1.0",
+    "react-native-skia-graphite-android": "154.2.0",
+    "react-native-skia-graphite-apple-ios": "154.2.0",
+    "react-native-skia-graphite-apple-macos": "154.2.0",
+    "react-native-webgpu-dawn": "154.2.0",
     "react-reconciler": "0.31.0"
   },
   "eslintIgnore": [
