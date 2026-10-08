@@ -47,6 +47,8 @@
     "build": "bob build && merge-dirs lib/typescript/src lib/commonjs && merge-dirs lib/typescript/src lib/module",
     "clean-skia": "yarn rimraf ./libs && yarn rimraf ../../externals/skia/out",
     "build-skia": "tsx ./scripts/build-skia.ts",
+    "build-dawn": "tsx ./scripts/build-dawn.ts",
+    "package-binaries": "tsx ./scripts/package-binaries.ts",
     "copy-skia-headers": "tsx ./scripts/copy-skia-headers.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
     "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
@@ -128,7 +130,6 @@
     "react-native": "0.83.1",
     "react-native-builder-bob": "0.18.2",
     "react-native-reanimated": "4.3.1",
-    "react-native-skia-graphite-headers": "154.1.0",
     "react-native-worklets": "0.8.3",
     "rimraf": "3.0.2",
     "semantic-release": "^24.1.0",
@@ -141,9 +142,10 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.0",
-    "react-native-skia-graphite-android": "154.1.0",
-    "react-native-skia-graphite-apple-ios": "154.1.0",
-    "react-native-skia-graphite-apple-macos": "154.1.0",
+    "react-native-skia-graphite-android": "154.2.0",
+    "react-native-skia-graphite-apple-ios": "154.2.0",
+    "react-native-skia-graphite-apple-macos": "154.2.0",
+    "react-native-webgpu-dawn": "154.2.0",
     "react-reconciler": "0.31.0"
   },
   "eslintIgnore": [

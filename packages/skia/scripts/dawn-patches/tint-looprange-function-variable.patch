@@ -1,0 +1,60 @@
+[tint] Use a function variable for the LoopRange loop index
+
+Backport of https://github.com/google/dawn/pull/87 (Gerrit change 348435),
+not yet in the Dawn commit Skia pins in its DEPS (third_party/externals/dawn).
+
+Builder::LoopRange held the loop index in a block parameter of the loop body,
+which the SPIR-V writer emits as an OpPhi. On a Pixel 8 (Mali-G715, driver
+r54p3, Android 17) with the Vulkan backend, shaders that execute such a loop
+hang the GPU and the device is lost a few seconds later. LoopRange is used on
+the SPIR-V path by ZeroInitWorkgroupMemory, PreservePadding, Std140,
+DecomposeAccess (whole array loads, which is how Skia Graphite's gradient
+shaders read their color stops) and ForkExplicitLayoutTypes.
+
+Hold the index in a function variable declared in the loop initializer
+instead. This is the shape a WGSL `for` loop lowers to, which that driver
+executes correctly.
+
+Drop this patch once the pinned Dawn carries the change: build-dawn.ts skips
+it when it is already present and fails when it no longer applies.
+
+---
+--- a/src/tint/lang/core/ir/builder.h
++++ b/src/tint/lang/core/ir/builder.h
+@@ -2076,15 +2076,21 @@ class Builder {
+         auto* end_value = Value(std::forward<END>(end));
+         auto* step_value = Value(std::forward<STEP>(step));
+ 
++        // The loop index is held in a function variable rather than in a block parameter of the
++        // loop body. A block parameter becomes an OpPhi in SPIR-V, and loops with that shape hang
++        // the GPU on some Mali drivers (see https://crbug.com/568850691).
+         auto* loop = Loop();
+-        auto* idx = BlockParam("idx", start_value->Type());
+-        loop->Body()->SetParams({idx});
++        ir::Var* idx_var = nullptr;
+         Append(loop->Initializer(), [&] {
+             // Start the loop with `idx = start`.
+-            NextIteration(loop, start_value);
++            idx_var = Var("idx", ir.Types().ptr(core::AddressSpace::kFunction, start_value->Type(),
++                                                core::Access::kReadWrite));
++            idx_var->SetInitializer(start_value);
++            NextIteration(loop);
+         });
+         Append(loop->Body(), [&] {
+             // Loop until `idx == end`.
++            auto* idx = Load(idx_var)->Result();
+             auto* breakif = If(GreaterThanEqual(idx, end_value));
+             Append(breakif->True(), [&] {  //
+                 ExitLoop(loop);
+@@ -2096,8 +2102,9 @@ class Builder {
+         });
+         Append(loop->Continuing(), [&] {
+             // Update the index with `idx += step` and go to the next iteration.
+-            auto* new_idx = Add(idx, step_value);
+-            NextIteration(loop, new_idx);
++            auto* idx = Load(idx_var)->Result();
++            Store(idx_var, Add(idx, step_value));
++            NextIteration(loop);
+         });
+     }
+ 
