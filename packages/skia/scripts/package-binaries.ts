@@ -220,7 +220,8 @@ const packageSpecs = (skiaVersion: string): PackageSpec[] => [
   },
   {
     name: "react-native-skia-graphite-apple-ios",
-    description: "Skia Graphite prebuilt binaries for iOS (device + simulator)",
+    description:
+      "Skia Graphite prebuilt binaries for iOS (device + simulator + Mac Catalyst)",
     populate: (pkgDir) =>
       copyXcframeworks(
         path.join(LibsRoot, "ios"),

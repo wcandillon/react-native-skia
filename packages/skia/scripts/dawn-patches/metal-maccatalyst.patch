@@ -1,0 +1,63 @@
+[metal] Support Mac Catalyst GPU family and feature detection
+
+Dawn's iOS 9-era MTLFeatureSet checks use an API deprecated since iOS 16
+(2022). Mac Catalyst falls under DAWN_PLATFORM_IS(IOS), so these checks need
+TARGET_OS_MACCATALYST guards. Xcode marks the iOS enum constants
+API_UNAVAILABLE(macos, macCatalyst, tvos), even though the general Metal
+documentation lists feature sets for multiple platforms.
+
+Skip the iOS-only checks on Catalyst and use GPU-family queries for its
+store/MSAA resolve support and Mac2 limits.
+
+Drop this patch when Dawn includes equivalent Catalyst guards or removes
+the deprecated feature-set checks. Both Skia's GN build and build-dawn.ts
+apply it to the same Dawn checkout.
+
+---
+--- a/src/dawn/native/metal/PhysicalDeviceMTL.mm
++++ b/src/dawn/native/metal/PhysicalDeviceMTL.mm
+@@ -248,7 +248,7 @@
+ ResultOrError<MTLGPUFamily> GetMTLGPUFamily(id<MTLDevice> device) {
+     // https://developer.apple.com/documentation/metal/mtldevice/detecting_gpu_features_and_metal_software_versions?language=objc
+
+-#if !DAWN_PLATFORM_IS(IOS)
++#if !DAWN_PLATFORM_IS(IOS) || TARGET_OS_MACCATALYST
+     if ([device supportsFamily:MTLGPUFamilyMac2]) {
+         return MTLGPUFamily::Mac2;
+     }
+@@ -402,7 +402,7 @@
+                                                TogglesState* deviceToggles) const {
+     {
+         bool haveStoreAndMSAAResolve = false;
+-#if DAWN_PLATFORM_IS(MACOS)
++#if DAWN_PLATFORM_IS(MACOS) || TARGET_OS_MACCATALYST
+         haveStoreAndMSAAResolve = [*mDevice supportsFamily:MTLGPUFamilyCommon2];
+ #elif DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS)
+ #if !defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0
+@@ -416,7 +416,7 @@
+         deviceToggles->Default(Toggle::EmulateStoreAndMSAAResolve, !haveStoreAndMSAAResolve);
+
+         bool haveSamplerCompare = true;
+-#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
++#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && !TARGET_OS_MACCATALYST && \
+     (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
+         haveSamplerCompare = [*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1];
+ #endif
+@@ -431,7 +431,7 @@
+         // base vertex/instance draws execute correctly there because Metal commands are serviced
+         // by the host GPU, which always supports them.
+         // NOTE: TARGET_OS_SIMULATOR can be defined but set to false for MacOS builds.
+-#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) &&        \
++#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && !TARGET_OS_MACCATALYST && \
+     (!defined(TARGET_OS_SIMULATOR) || !TARGET_OS_SIMULATOR) && \
+     (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
+         haveBaseVertexBaseInstance = [*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1];
+@@ -640,7 +640,7 @@
+     }
+ #endif
+
+-#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
++#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && !TARGET_OS_MACCATALYST && \
+     (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
+     if ([*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily1_v1]) {
+         EnableFeature(Feature::TextureCompressionETC2);
