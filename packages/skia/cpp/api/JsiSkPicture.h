@@ -2,10 +2,10 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "JsiSkConverters.h"
 #include "JsiSkData.h"
-#include "JsiSkDispatcher.h"
 #include "JsiSkMatrix.h"
 #include "JsiSkNativeObjects.h"
 #include "JsiSkRect.h"
@@ -24,39 +24,13 @@ namespace jsi = facebook::jsi;
 
 class JsiSkPicture
     : public JsiSkWrappingSkPtrNativeObject<JsiSkPicture, SkPicture> {
-private:
-  std::shared_ptr<Dispatcher> _dispatcher;
-
 public:
   static constexpr const char *CLASS_NAME = "Picture";
 
   JsiSkPicture(std::shared_ptr<RNSkPlatformContext> context,
-               const sk_sp<SkPicture> picture)
-      : JsiSkWrappingSkPtrNativeObject<JsiSkPicture, SkPicture>(context,
-                                                                picture) {
-    // Get the dispatcher for the current thread
-    _dispatcher = Dispatcher::getDispatcher();
-    // Process any pending operations
-    _dispatcher->processQueue();
-  }
-
-public:
-  ~JsiSkPicture() override {
-    if (!isDisposed()) {
-      // This JSI Object is being deleted from a GC, which might happen
-      // on a separate Thread. GPU resources (like SkPicture) must be deleted
-      // on the same Thread they were created on, so in this case we schedule
-      // deletion to run on the Thread this Object was created on.
-      auto picture = getObjectUnchecked();
-      if (picture && _dispatcher) {
-        _dispatcher->run([picture]() {
-          // Picture will be deleted when this lambda is destroyed, on the
-          // original Thread.
-        });
-      }
-      releaseResources();
-    }
-  }
+               sk_sp<SkPicture> picture)
+      : JsiSkWrappingSkPtrNativeObject<JsiSkPicture, SkPicture>(
+            std::move(context), std::move(picture)) {}
 
   std::shared_ptr<JsiSkShader>
   makeShader(double tmx, double tmy, double fm,
