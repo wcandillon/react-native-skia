@@ -65,14 +65,6 @@ If the NDK is not installed, you can install it via Android Studio by going to t
 
 And then the _SDK Location_ section. It will show you the NDK path, or the option to download it if you don't have it installed.
 
-### Proguard
-
-If you're using Proguard, make sure to add the following rule at `proguard-rules.pro`:
-
-```
--keep class com.reactnative.skia.** { *; }
-```
-
 ### TroubleShooting
 
 For error **_CMake 'X.X.X' was not found in SDK, PATH, or by cmake.dir property._**
