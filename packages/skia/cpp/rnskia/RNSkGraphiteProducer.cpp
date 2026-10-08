@@ -35,10 +35,16 @@ void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
 
 void RNSkGraphiteProducer::setTarget(
     std::shared_ptr<RNSkGraphiteTarget> target) {
-  std::lock_guard<std::mutex> lock(_mutex);
-  _target = std::move(target);
-  _dirty = true;
-  kickLocked();
+  std::shared_ptr<RNSkGraphiteTarget> retiredTarget;
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    retiredTarget = std::exchange(_target, std::move(target));
+    // A frame still queued on the previous target is not coming through this
+    // view anymore (the view unbound itself from it): do not wait for it.
+    _presentPending = false;
+    _dirty = true;
+    kickLocked();
+  }
 }
 
 void RNSkGraphiteProducer::setRecorder(std::shared_ptr<Recorder> recorder) {
@@ -52,10 +58,6 @@ void RNSkGraphiteProducer::setRecorder(std::shared_ptr<Recorder> recorder) {
 
 void RNSkGraphiteProducer::setPicture(sk_sp<SkPicture> picture) {
   replaceContent(nullptr, std::move(picture), /* dirty= */ true);
-}
-
-void RNSkGraphiteProducer::clear() {
-  replaceContent(nullptr, nullptr, /* dirty= */ false);
 }
 
 void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
@@ -180,16 +182,23 @@ void RNSkGraphiteProducer::produce() {
   std::lock_guard<std::mutex> lock(_mutex);
   _inFlight = false;
   if (recording != nullptr) {
-    // The next job starts when this frame is on screen. Submitted under the
+    // Queued even if the view was bound to another target while this job
+    // ran: a target never drops a recording, a later one on the same
+    // recorder may depend on resources this one uploads. Submitted under the
     // lock: a frame presented in between (a redraw replaying the last one)
     // would otherwise clear the flag before the recording is even queued.
-    _presentPending = true;
     target->submit(std::move(recording));
-    return;
+    if (target == _target) {
+      // The next job starts when this frame is on screen.
+      _presentPending = true;
+      return;
+    }
+    // The frame went to the previous target; the new one has none yet.
   }
-  // Nothing was recorded: keep the content dirty so that the next request
-  // (a surface, a resize) records it. A request that landed while this job
-  // ran was only noted as dirty; it starts the next job now.
+  // Nothing was recorded for the current target: keep the content dirty so
+  // that the next request (a surface, a resize) records it. A request that
+  // landed while this job ran (binding a new target is one) was only noted
+  // as dirty; it starts the next job now.
   const bool requested = _dirty;
   _dirty = true;
   if (requested) {

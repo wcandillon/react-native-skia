@@ -234,9 +234,9 @@ public:
 
   /**
    Undoes attach(), for the view owning the given surface only. Native view
-   ids are reused across reloads and an Android view is only destroyed when
-   its Java object is finalized, so a view going away may find its target
-   already bound to its successor; that binding is left alone.
+   ids are reused across reloads, and a view only lets go of its target when
+   it is destroyed, so a view going away may find its target already bound
+   to its successor; that binding is left alone.
    */
   void detach(const std::shared_ptr<RNSkWindowSurface> &surface) {
     {
