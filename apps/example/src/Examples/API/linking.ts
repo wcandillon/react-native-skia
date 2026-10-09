@@ -40,6 +40,8 @@ export const apiScreenPaths: Record<keyof Routes, string> = {
   StressTest3: "stress-test3",
   StressTest4: "stress-test4",
   PictureViewCrashTest: "picture-view-crash-test",
+  KeyboardTapRepro: "keyboard-tap-repro",
+  FrameCallbackChurn: "frame-callback-churn",
   FirstFrame: "first-frame",
   FirstFrameEmpty: "first-frame-empty",
   PictureBug: "picture-bug",

@@ -110,7 +110,10 @@ const useCanvasRoot = ({
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
 
-  useReanimatedFrame(() => {
+  // The callback identity must be stable: Reanimated's useFrameCallback has
+  // deps [callback, autostart], so an inline worklet would unregister and
+  // re-register the frame callback on the UI thread on every single render.
+  const onFrame = useCallback(() => {
     "worklet";
     if (onSize && measure) {
       const result =
@@ -132,7 +135,9 @@ const useCanvasRoot = ({
         }
       }
     }
-  }, !!onSize);
+  }, [onSize, viewRef]);
+
+  useReanimatedFrame(onFrame, !!onSize);
 
   // Render effects
   useLayoutEffect(() => {

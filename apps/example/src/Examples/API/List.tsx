@@ -147,6 +147,14 @@ export const examples = [
     title: "💥 PictureView Race Condition",
   },
   {
+    screen: "KeyboardTapRepro",
+    title: "⌨️ Lost Tap (#4006)",
+  },
+  {
+    screen: "FrameCallbackChurn",
+    title: "🔁 Frame Callback Churn",
+  },
+  {
     screen: "FirstFrame",
     title: "🎬 First Frame",
   },
