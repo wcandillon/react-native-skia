@@ -16,7 +16,9 @@ import { useDerivedValue } from "react-native-reanimated";
 // view stacked on top of it. This makes the difference between the two views
 // visible at a glance: a TextureView keeps the clip, the alpha and the
 // stacking order, while a SurfaceView punches through all of them. The
-// zOrderOnTop switch then moves the SurfaceView above the whole window.
+// zOrderOnTop switch then moves the SurfaceView above the whole window. The
+// mounted switch mounts the canvas afresh, and the parent clips switch takes
+// the clip away, so the stripes around a SurfaceView must survive its hole.
 
 type SurfaceType = "auto" | AndroidSurfaceType;
 
@@ -37,6 +39,8 @@ export const AndroidViews = () => {
   const [surfaceType, setSurfaceType] = useState<SurfaceType>("auto");
   const [opaque, setOpaque] = useState(false);
   const [zOrderOnTop, setZOrderOnTop] = useState(false);
+  const [mounted, setMounted] = useState(true);
+  const [parentClips, setParentClips] = useState(true);
   const clock = useClock();
   const cx = useDerivedValue(
     () => 100 + 60 * Math.sin(clock.value / 500),
@@ -46,24 +50,26 @@ export const AndroidViews = () => {
     <View style={styles.container}>
       <View style={styles.stage}>
         <Stripes />
-        <View style={styles.clip}>
-          <Canvas
-            style={styles.canvas}
-            opaque={opaque}
-            android={{
-              surfaceType: surfaceType === "auto" ? undefined : surfaceType,
-              zOrderOnTop,
-            }}
-          >
-            <Fill>
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(0, 200)}
-                colors={["rgba(0, 122, 255, 0.6)", "rgba(88, 86, 214, 0.6)"]}
-              />
-            </Fill>
-            <Circle cx={cx} cy={100} r={40} color="white" />
-          </Canvas>
+        <View style={[styles.frame, parentClips && styles.clip]}>
+          {mounted && (
+            <Canvas
+              style={styles.canvas}
+              opaque={opaque}
+              android={{
+                surfaceType: surfaceType === "auto" ? undefined : surfaceType,
+                zOrderOnTop,
+              }}
+            >
+              <Fill>
+                <LinearGradient
+                  start={vec(0, 0)}
+                  end={vec(0, 200)}
+                  colors={["rgba(0, 122, 255, 0.6)", "rgba(88, 86, 214, 0.6)"]}
+                />
+              </Fill>
+              <Circle cx={cx} cy={100} r={40} color="white" />
+            </Canvas>
+          )}
         </View>
         <View style={styles.overlay} pointerEvents="none">
           <Text style={styles.overlayText}>RN view above the canvas</Text>
@@ -99,6 +105,14 @@ export const AndroidViews = () => {
           </Text>
           <Switch value={zOrderOnTop} onValueChange={setZOrderOnTop} />
         </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>mounted</Text>
+          <Switch value={mounted} onValueChange={setMounted} />
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>parent clips</Text>
+          <Switch value={parentClips} onValueChange={setParentClips} />
+        </View>
         <Text style={styles.hint}>
           auto picks SurfaceView when opaque and TextureView otherwise. A
           SurfaceView ignores the rounded clip and the overlay; with zOrderOnTop
@@ -122,12 +136,14 @@ const styles = StyleSheet.create({
   stripe: {
     flex: 1,
   },
-  clip: {
+  frame: {
     width: 260,
     height: 200,
     borderRadius: 32,
-    overflow: "hidden",
     transform: [{ rotate: "-6deg" }],
+  },
+  clip: {
+    overflow: "hidden",
   },
   canvas: {
     width: 260,
