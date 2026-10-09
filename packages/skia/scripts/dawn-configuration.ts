@@ -24,6 +24,7 @@ export const DawnAppleXcframework = path.join(
 // Deployment targets of the podspec (s.platforms) and ndk_api of
 // skia-configuration.ts.
 const iosMinTarget = "15.1";
+const tvosMinTarget = "15.1";
 const macosMinTarget = "11.0";
 const androidPlatform = "android-26";
 
@@ -79,7 +80,7 @@ const android = (abi: string): DawnTarget => ({
 });
 
 const apple = (
-  platform: "iOS" | "Darwin" | "Catalyst",
+  platform: "iOS" | "tvOS" | "Darwin" | "Catalyst",
   architectures: string,
   sysroot: string,
   minTarget: string,
@@ -134,6 +135,27 @@ export const dawnTargets: Record<string, DawnTarget> = {
     "iphonesimulator",
     iosMinTarget,
     "ios-simulator-x86_64"
+  ),
+  "tvos-arm64": apple(
+    "tvOS",
+    "arm64",
+    "appletvos",
+    tvosMinTarget,
+    "tvos-arm64"
+  ),
+  "tvos-simulator-arm64": apple(
+    "tvOS",
+    "arm64",
+    "appletvsimulator",
+    tvosMinTarget,
+    "tvos-simulator-arm64"
+  ),
+  "tvos-simulator-x86_64": apple(
+    "tvOS",
+    "x86_64",
+    "appletvsimulator",
+    tvosMinTarget,
+    "tvos-simulator-x86_64"
   ),
   "maccatalyst-universal": apple(
     "Catalyst",
@@ -408,6 +430,16 @@ export const createDawnXcframework = () => {
     `lipo -create ${slice("ios-simulator-arm64")} ${slice("ios-simulator-x86_64")} -output ${simulatorLib}`
   );
 
+  const tvSimulator = path.join(appleDir, "tvos-simulator");
+  fs.mkdirSync(tvSimulator, { recursive: true });
+  const tvSimulatorLib = path.join(tvSimulator, dawnLibraryName("apple"));
+  console.log("📺 Creating the fat tvOS simulator library");
+  execSync(
+    `lipo -create ${slice("tvos-simulator-arm64")} ${slice(
+      "tvos-simulator-x86_64"
+    )} -output ${tvSimulatorLib}`
+  );
+
   fileOps.rm(DawnAppleXcframework);
   console.log(`🍏 Creating ${DawnAppleXcframework}`);
   execSync(
@@ -415,11 +447,14 @@ export const createDawnXcframework = () => {
       "xcodebuild -create-xcframework",
       `-library ${slice("ios-arm64")} -headers ${include}`,
       `-library ${simulatorLib} -headers ${include}`,
+      `-library ${slice("tvos-arm64")} -headers ${include}`,
+      `-library ${tvSimulatorLib} -headers ${include}`,
       `-library ${slice("maccatalyst-universal")} -headers ${include}`,
       `-library ${slice("macos-universal")} -headers ${include}`,
       `-output ${DawnAppleXcframework}`,
     ].join(" ")
   );
   fileOps.rm(simulator);
+  fileOps.rm(tvSimulator);
   console.log(`✅ ${DawnAppleXcframework}`);
 };

@@ -85,7 +85,8 @@ export const commonArgs = [
   // Passed via extra_cflags_cc per-target instead of skia_use_cpp20 (not available in all Skia versions)
 ];
 
-export type PlatformName = "apple-ios" | "apple-macos" | "android";
+export type PlatformName =
+  "apple-ios" | "apple-tvos" | "apple-macos" | "android";
 
 export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
 
@@ -113,9 +114,11 @@ export type Platform<PlatformTarget extends Target = Target> = {
   options?: Arg[];
 };
 
-// The deployment target of the podspec (s.platforms).
-const appleMinTarget = "15.1";
-const appleSimulatorMinTarget = appleMinTarget;
+// Deployment targets of the binaries.
+// Each target has separate GN args; ios_min_target also carries tvOS/macOS minima.
+const iosMinTarget = "15.1";
+const tvosMinTarget = "15.1";
+const macosMinTarget = "11.0";
 
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [
@@ -198,7 +201,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
         cpu: "arm64",
         platform: "ios",
         args: [
-          ["ios_min_target", `"${appleMinTarget}"`],
+          ["ios_min_target", `"${iosMinTarget}"`],
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
       },
@@ -206,7 +209,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
         cpu: "arm64",
         platform: "ios",
         args: [
-          ["ios_min_target", `"${appleSimulatorMinTarget}"`],
+          ["ios_min_target", `"${iosMinTarget}"`],
           ["ios_use_simulator", true],
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
@@ -215,7 +218,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
         cpu: "x64",
         platform: "ios",
         args: [
-          ["ios_min_target", `"${appleSimulatorMinTarget}"`],
+          ["ios_min_target", `"${iosMinTarget}"`],
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
       },
@@ -224,7 +227,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
         platform: "mac",
         args: [
           ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${appleMinTarget}"`],
+          ["ios_min_target", `"${iosMinTarget}"`],
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
       },
@@ -233,7 +236,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
         platform: "mac",
         args: [
           ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${appleMinTarget}"`],
+          ["ios_min_target", `"${iosMinTarget}"`],
           ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
         ],
       },
@@ -242,17 +245,56 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
     outputRoot: "libs/ios",
     outputNames: appleOutputNames,
   },
+  "apple-tvos": {
+    targets: {
+      "arm64-tvos": {
+        cpu: "arm64",
+        platform: "tvos",
+        args: [
+          ["ios_min_target", `"${tvosMinTarget}"`],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
+      },
+      "arm64-tvsimulator": {
+        cpu: "arm64",
+        platform: "tvos",
+        args: [
+          ["ios_min_target", `"${tvosMinTarget}"`],
+          ["ios_use_simulator", true],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
+      },
+      "x64-tvsimulator": {
+        cpu: "x64",
+        platform: "tvos",
+        args: [
+          ["ios_min_target", `"${tvosMinTarget}"`],
+          ["ios_use_simulator", true],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
+      },
+    },
+    args: appleCommonArgs,
+    outputRoot: "libs/tvos",
+    outputNames: appleOutputNames,
+  },
   "apple-macos": {
     targets: {
       "arm64-macosx": {
         cpu: "arm64",
         platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
+        args: [
+          ["ios_min_target", `"${macosMinTarget}"`],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
       },
       "x64-macosx": {
         cpu: "x64",
         platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
+        args: [
+          ["ios_min_target", `"${macosMinTarget}"`],
+          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
+        ],
       },
     },
     args: appleCommonArgs,

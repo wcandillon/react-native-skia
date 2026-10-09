@@ -110,7 +110,7 @@ jobs:
       - name: Check which packages are already on npm
         run: |
           set -eo pipefail
-          packages="react-native-skia-graphite-android react-native-skia-graphite-apple-ios react-native-skia-graphite-apple-macos react-native-webgpu-dawn"
+          packages="react-native-skia-graphite-android react-native-skia-graphite-apple-ios react-native-skia-graphite-apple-tvos react-native-skia-graphite-apple-macos react-native-webgpu-dawn"
           published=""
           missing=""
           for pkg in $packages; do
@@ -148,6 +148,9 @@ jobs:
           - target: apple-ios
             runner: [self-hosted, macOS]
             output: packages/skia/libs/ios
+          - target: apple-tvos
+            runner: [self-hosted, macOS]
+            output: packages/skia/libs/tvos
           - target: apple-macos
             runner: [self-hosted, macOS]
             output: packages/skia/libs/macos
@@ -260,6 +263,15 @@ jobs:
           - target: ios-simulator-x86_64
             runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/ios-simulator-x86_64
+          - target: tvos-arm64
+            runner: [self-hosted, macOS]
+            output: packages/skia/libs/dawn/apple/tvos-arm64
+          - target: tvos-simulator-arm64
+            runner: [self-hosted, macOS]
+            output: packages/skia/libs/dawn/apple/tvos-simulator-arm64
+          - target: tvos-simulator-x86_64
+            runner: [self-hosted, macOS]
+            output: packages/skia/libs/dawn/apple/tvos-simulator-x86_64
           - target: maccatalyst-universal
             runner: [self-hosted, macOS]
             output: packages/skia/libs/dawn/apple/maccatalyst-universal
@@ -457,6 +469,6 @@ jobs:
             if [ "${{ inputs.dry_run }}" = "true" ]; then
               echo "> Dry run: nothing was published. The packages are in the \`npm-packages\` artifact of this run."
             else
-              echo "Published react-native-skia-graphite-android, react-native-skia-graphite-apple-ios, react-native-skia-graphite-apple-macos and react-native-webgpu-dawn at ${{ needs.prepare.outputs.npm_version }}."
+              echo "Published react-native-skia-graphite-android, react-native-skia-graphite-apple-ios, react-native-skia-graphite-apple-tvos, react-native-skia-graphite-apple-macos and react-native-webgpu-dawn at ${{ needs.prepare.outputs.npm_version }}."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
