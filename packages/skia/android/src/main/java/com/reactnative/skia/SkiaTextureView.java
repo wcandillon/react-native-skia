@@ -23,6 +23,18 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
         setSurfaceTextureListener(this);
     }
 
+    // A TextureView makes its SurfaceTexture in its first draw, and shows a
+    // frame presented then only in the next one, so it draws empty once. A
+    // texture handed over before that draw, with a frame presented into it, is
+    // what the first draw shows. TextureView reports no onSurfaceTextureAvailable
+    // for a texture it was given.
+    void supplySurfaceTexture(int width, int height) {
+        SurfaceTexture surfaceTexture = new SurfaceTexture(false);
+        surfaceTexture.setDefaultBufferSize(width, height);
+        setSurfaceTexture(surfaceTexture);
+        mApi.onSurfaceTextureCreated(surfaceTexture, width, height);
+    }
+
     @Override
     public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
         Log.i(tag, "onSurfaceTextureAvailable:  " + width + "x" + height);
