@@ -391,7 +391,7 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
         `parser.add_argument(
       "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")
   parser.add_argument(
-      "--ios_use_simulator", action=argparse.BooleanOptionalAction, help="Build for an Apple mobile simulator.")`
+      "--ios_use_simulator", action=argparse.BooleanOptionalAction, help="Build for Apple simulator.")`
       );
       // Add iOS/tvOS OS/CPU mapping
       content = content.replace(

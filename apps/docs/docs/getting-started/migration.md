@@ -10,7 +10,7 @@ Graphite is Skia's new GPU backend. In React Native Skia it runs on [Dawn](https
 
 :::info[Staying on v2]
 
-v2 is still maintained. It renders with OpenGL ES on Android and has lower version requirements: it runs on Android devices below API level 26 or without Vulkan, and it supports tvOS, Android TV, Mac Catalyst, and Expo Go.
+v2 is still maintained. It renders with OpenGL ES on Android and has lower version requirements: it runs on Android devices below API level 26 or without Vulkan, and it supports Android TV and Expo Go.
 If you need any of these, stay on v2 (`yarn add react-native-skia@2`) and use the [v2 documentation](https://wcandillon.github.io/react-native-skia/v2/).
 
 :::
@@ -114,6 +114,10 @@ Use [expo-build-properties](https://docs.expo.dev/versions/latest/sdk/build-prop
   }
 }
 ```
+
+### Android TV
+
+Android TV is not available with Graphite. It remains supported on v2.
 
 ### React Native WebGPU
 

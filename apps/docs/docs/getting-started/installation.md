@@ -35,8 +35,9 @@ The Skia prebuilt binaries are delivered as regular npm dependencies (`react-nat
 | Android | API level 26 (`minSdkVersion = 26`) |
 | Reanimated (optional) | `react-native-reanimated@>=4.0.0` with `react-native-worklets@>=0.7.0` |
 
-React Native Skia runs on iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, and [the Web](/docs/getting-started/web).
+React Native Skia runs on iOS, Android, macOS, Mac Catalyst, tvOS, and [the Web](/docs/getting-started/web).
 
+Android TV is not supported by v3. It remain supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation).
 For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
 
 ## iOS

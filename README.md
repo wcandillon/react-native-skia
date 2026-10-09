@@ -28,7 +28,7 @@ React Native Skia v3 renders with [Graphite](https://skia.org/docs/user/graphite
 |:--|:--|:--|
 | npm | `react-native-skia` | `react-native-skia@2` (`@shopify/react-native-skia` up to 2.14) |
 | Skia backend | Graphite | Ganesh |
-| Platforms | iOS, Android (API level 26 and above), macOS, Mac Catalyst, tvOS, Android TV, Web | iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, Web |
+| Platforms | iOS, Android (API level 26 and above), macOS, Mac Catalyst, tvOS, Web | iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, Web |
 | Branch | [`main`](https://github.com/wcandillon/react-native-skia/tree/main) | [`2.x`](https://github.com/wcandillon/react-native-skia/tree/2.x) |
 | Documentation | [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) | [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/) |
 

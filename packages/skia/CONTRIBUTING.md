@@ -8,7 +8,7 @@
 | `2.x` | v2 | Ganesh | `2.x` | [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/) |
 
 `main` is where v3 is developed: it only supports the [Graphite](https://skia.org/docs/user/graphite/) backend.
-`2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend.
+`2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend and the platforms Graphite does not support (Android TV).
 Open pull requests against `main`, unless the change only applies to v2.
 
 ## Library Development
