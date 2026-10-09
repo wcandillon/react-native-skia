@@ -146,12 +146,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             if (getWidth() > 0 || getHeight() > 0) {
                 mView.layout(0, 0, getWidth(), getHeight());
             }
-            // A view shown in a window and laid out replaces one that was showing
-            // the canvas: its TextureView gets the texture, and the last frame,
-            // before its first draw rather than during it, so the swap draws no
-            // empty frame. A view that is not drawn keeps the lazy path, which
-            // makes no texture until a draw can show it.
-            if (kind == BackingViewKind.TEXTURE_VIEW && isShown() && getWidth() > 0 && getHeight() > 0) {
+            // Swapping a canvas on screen to a TextureView draws no empty frame:
+            // the new view gets its texture, and the last frame, before its first
+            // draw rather than during it.
+            if (kind.receivesSurfaceBeforeFirstDraw(isShown(), getWidth(), getHeight())) {
                 ((SkiaTextureView) mView).supplySurfaceTexture(getWidth(), getHeight());
             }
         } else {

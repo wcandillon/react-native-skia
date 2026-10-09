@@ -164,9 +164,9 @@ public:
 
   /**
    Main thread. Presents everything submitted since the last frame; with
-   nothing queued, presents the last frame again (a redraw after a resize or
-   on a new surface). Without a surface the queue is left alone: the surface
-   presents it when it appears.
+   nothing queued, presents the last frame again, unless a new one is on its
+   way and the window still shows the last (see WindowContent). Without a
+   surface the queue is left alone: the surface presents it when it appears.
    */
   void redraw(WindowContent windowContent = WindowContent::LastFrame) {
     _redrawRequested = false;
