@@ -23,6 +23,12 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
         setSurfaceTextureListener(this);
     }
 
+    // The renderer moved to another view: this one keeps its last frame on screen
+    // until it is removed, and reports nothing.
+    void detachFromRenderer() {
+        mApi = SkiaViewAPI.DETACHED;
+    }
+
     @Override
     public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
         Log.i(tag, "onSurfaceTextureAvailable:  " + width + "x" + height);
