@@ -14,35 +14,37 @@ public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     SkiaViewAPI mApi;
     private final boolean mZOrderOnTop;
-    private final SurfaceHandOver mHandOver = new SurfaceHandOver(new SurfaceHandOver.Host() {
-        // Only reached on API 29 and later, see SurfaceHandOver.defersToWindowFrame.
-        @Override
-        @RequiresApi(Build.VERSION_CODES.Q)
-        public void runAfterWindowFrameCommits(Runnable handOver) {
-            getViewTreeObserver().registerFrameCommitCallback(handOver);
-            invalidate();
-        }
+    private final SurfaceHandOver mHandOver;
 
-        @Override
-        public void handOverSurface() {
-            mApi.onSurfaceCreated(getHolder().getSurface(), getWidth(), getHeight());
-        }
-
-        @Override
-        public void forwardSurfaceChanged() {
-            mApi.onSurfaceChanged(getHolder().getSurface(), getWidth(), getHeight());
-        }
-
-        @Override
-        public void forwardSurfaceDestroyed() {
-            mApi.onSurfaceDestroyed();
-        }
-    });
-
-    public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean zOrderOnTop, boolean opaque) {
+    public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean zOrderOnTop, boolean opaque,
+            boolean replacesCanvasOnScreen) {
         super(context);
         mApi = api;
         mZOrderOnTop = zOrderOnTop;
+        mHandOver = new SurfaceHandOver(new SurfaceHandOver.Host() {
+            // Only reached on API 29 and later, see SurfaceHandOver.defersArrivalToWindowFrame.
+            @Override
+            @RequiresApi(Build.VERSION_CODES.Q)
+            public void runAfterWindowFrameCommits(Runnable handOver) {
+                getViewTreeObserver().registerFrameCommitCallback(handOver);
+                invalidate();
+            }
+
+            @Override
+            public void handOverSurface() {
+                mApi.onSurfaceCreated(getHolder().getSurface(), getWidth(), getHeight());
+            }
+
+            @Override
+            public void forwardSurfaceChanged() {
+                mApi.onSurfaceChanged(getHolder().getSurface(), getWidth(), getHeight());
+            }
+
+            @Override
+            public void forwardSurfaceDestroyed() {
+                mApi.onSurfaceDestroyed();
+            }
+        }, replacesCanvasOnScreen);
         // Must be set before the surface is created.
         setZOrderOnTop(zOrderOnTop);
         setOpaque(opaque);
@@ -63,8 +65,8 @@ public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
-        mHandOver.onSurfaceCreated(
-                SurfaceHandOver.defersToWindowFrame(Build.VERSION.SDK_INT, isHardwareAccelerated(), mZOrderOnTop));
+        mHandOver.onSurfaceCreated(SurfaceHandOver.defersArrivalToWindowFrame(
+                Build.VERSION.SDK_INT, isHardwareAccelerated(), mZOrderOnTop));
     }
 
     @Override

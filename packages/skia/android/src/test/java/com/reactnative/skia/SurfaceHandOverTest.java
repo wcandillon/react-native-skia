@@ -51,27 +51,27 @@ public class SurfaceHandOverTest {
     }
 
     private final RecordingHost mHost = new RecordingHost();
-    private final SurfaceHandOver mHandOver = new SurfaceHandOver(mHost);
+    private final SurfaceHandOver mHandOver = new SurfaceHandOver(mHost, false);
 
     @Test
-    public void defersOnlyWhereTheLayerShowsOutsideTheWindowFrame() {
-        assertFalse(SurfaceHandOver.defersToWindowFrame(28, true, true));
-        assertTrue(SurfaceHandOver.defersToWindowFrame(29, true, true));
-        assertTrue(SurfaceHandOver.defersToWindowFrame(30, true, true));
-        assertTrue(SurfaceHandOver.defersToWindowFrame(31, true, true));
-        assertFalse(SurfaceHandOver.defersToWindowFrame(32, true, true));
-        assertFalse(SurfaceHandOver.defersToWindowFrame(36, true, true));
+    public void defersArrivalOnlyWhereTheLayerShowsAheadOfTheWindowFrame() {
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(28, true, true));
+        assertTrue(SurfaceHandOver.defersArrivalToWindowFrame(29, true, true));
+        assertTrue(SurfaceHandOver.defersArrivalToWindowFrame(30, true, true));
+        assertTrue(SurfaceHandOver.defersArrivalToWindowFrame(31, true, true));
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(32, true, true));
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(36, true, true));
     }
 
     @Test
     public void neverDefersWithoutHardwareRendering() {
-        assertFalse(SurfaceHandOver.defersToWindowFrame(29, false, true));
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(29, false, true));
     }
 
     @Test
     public void neverDefersALayerBehindTheWindow() {
-        assertFalse(SurfaceHandOver.defersToWindowFrame(29, true, false));
-        assertFalse(SurfaceHandOver.defersToWindowFrame(31, true, false));
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(29, true, false));
+        assertFalse(SurfaceHandOver.defersArrivalToWindowFrame(31, true, false));
     }
 
     @Test
@@ -116,6 +116,26 @@ public class SurfaceHandOverTest {
         mHost.commitWindowFrame();
         mHandOver.onSurfaceChanged();
         assertEquals(Arrays.asList(Call.CREATED, Call.CHANGED), mHost.calls);
+    }
+
+    @Test
+    public void firstSurfaceReplacingACanvasOnScreenIsHandedOverAtOnce() {
+        SurfaceHandOver replacing = new SurfaceHandOver(mHost, true);
+        replacing.onSurfaceCreated(true);
+        assertEquals(Arrays.asList(Call.CREATED), mHost.calls);
+        assertEquals(0, mHost.afterFrameCommit.size());
+    }
+
+    @Test
+    public void laterSurfaceOfAReplacingViewWaitsForTheWindowFrame() {
+        SurfaceHandOver replacing = new SurfaceHandOver(mHost, true);
+        replacing.onSurfaceCreated(true);
+        replacing.onSurfaceReleased();
+        replacing.onSurfaceCreated(true);
+        assertEquals(Arrays.asList(Call.CREATED, Call.DESTROYED), mHost.calls);
+
+        mHost.commitWindowFrame();
+        assertEquals(Arrays.asList(Call.CREATED, Call.DESTROYED, Call.CREATED), mHost.calls);
     }
 
     @Test
