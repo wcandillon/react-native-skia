@@ -38,4 +38,5 @@ export type StackParamList = {
   Graphite: undefined;
   GraphiteCanvas: undefined;
   AndroidViews: undefined;
+  ZIndexDrawer: undefined;
 };

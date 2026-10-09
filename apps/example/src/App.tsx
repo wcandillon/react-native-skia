@@ -37,6 +37,7 @@ import {
   Graphite,
   GraphiteCanvasExample,
   AndroidViews,
+  ZIndexDrawer,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -86,6 +87,7 @@ const linking: LinkingOptions<StackParamList> = {
       Graphite: "graphite",
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
+      ZIndexDrawer: "zindex-drawer",
     },
   },
   prefixes: ["rnskia://"],
@@ -248,6 +250,7 @@ const App = () => {
               component={GraphiteCanvasExample}
             />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
+            <Stack.Screen name="ZIndexDrawer" component={ZIndexDrawer} />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>
