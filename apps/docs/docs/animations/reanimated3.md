@@ -10,6 +10,8 @@ Starting version `2.10` and above, this integration requires **Reanimated v4 or 
 
 React Native Skia supports the direct usage of Reanimated's shared and derived values as properties. There is no need for functions like `createAnimatedComponent` or `useAnimatedProps`; simply pass the Reanimated values directly as properties.
 
+**Note:** For animating `transform` properties, pass the entire transform object instead of individual properties. See section below for details.
+
 ```tsx twoslash
 import {useEffect} from "react";
 import {Canvas, Circle, Group} from "react-native-skia";
@@ -149,4 +151,23 @@ export const AnimatedGradient = () => {
     </Canvas>
   );
 };
+```
+
+## Animating Transforms
+
+For animating `transform` properties, create a derived value that returns the array of transforms with each property as a separate object. Passing reanimated values directly will not work.
+
+```tsx
+const transform = useDerivedValue(() => {
+  return [
+    { rotate: rotation.value }, 
+    { scale: scale.value }
+  ];
+});
+
+return (
+  <Canvas>
+    <Group transform={transform}>...</Group>
+  </Canvas>
+);
 ```
