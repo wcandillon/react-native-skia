@@ -1,9 +1,15 @@
-import type { CanvasKit, TypefaceFontProvider } from "canvaskit-wasm";
+import type {
+  CanvasKit,
+  FontStyle as CanvasKitFontStyle,
+  TypefaceFontProvider,
+} from "canvaskit-wasm";
 
 import type { SkTypefaceFontProvider } from "../types/Paragraph/TypefaceFontProvider";
 import type { FontStyle, SkTypeface } from "../types";
+import { FontSlant, FontWeight, FontWidth } from "../types";
 
-import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
+import { HostObject } from "./Host";
+import { JsiSkTypeface } from "./JsiSkTypeface";
 
 export class JsiSkTypefaceFontProvider
   extends HostObject<TypefaceFontProvider, "FontMgr">
@@ -13,8 +19,24 @@ export class JsiSkTypefaceFontProvider
     super(CanvasKit, ref, "FontMgr");
   }
 
-  matchFamilyStyle(_name: string, _style: FontStyle) {
-    return throwNotImplementedOnRNWeb<SkTypeface>();
+  matchFamilyStyle(name: string, style: FontStyle): SkTypeface {
+    if (!name || !style) {
+      throw new Error("matchFamilyStyle requires a name and a style");
+    }
+
+    const fontStyle = {
+      weight: style.weight ?? FontWeight.Normal,
+      width: style.width ?? FontWidth.Normal,
+      slant: style.slant ?? FontSlant.Upright,
+    } as unknown as CanvasKitFontStyle;
+
+    const typeface = this.ref.matchFamilyStyle(name, fontStyle);
+
+    if (!typeface) {
+      throw new Error(`Could not find font family ${name}`);
+    }
+
+    return new JsiSkTypeface(this.CanvasKit, typeface);
   }
   countFamilies() {
     return this.ref.countFamilies();
