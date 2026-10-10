@@ -77,6 +77,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         return super.dispatchTouchEvent(ev);
     }
 
+    // ReactViewGroup.initView() turns child clipping off. HWUI then treats a change to the
+    // backing view as unbounded damage, so each frame repaints the whole window instead of
+    // this view's box. The backing view is always laid out at (0, 0, width, height), so
+    // clipping it changes nothing visible.
+    @Override
+    public void setClipChildren(boolean clipChildren) {
+        super.setClipChildren(true);
+    }
+
     public void setOpaque(boolean value) {
         mOpaque = value;
     }
@@ -191,6 +200,14 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     }
 
     // Frames --------------------------------------------------------------
+
+    /** The first frame was presented into a SurfaceView's surface. Main thread; called from native. */
+    @DoNotStrip
+    public void onFirstFramePresented() {
+        if (mView instanceof SkiaSurfaceView) {
+            ((SkiaSurfaceView) mView).onFirstFramePresented();
+        }
+    }
 
     /** A recording was submitted. Main thread; called from native. */
     @DoNotStrip
