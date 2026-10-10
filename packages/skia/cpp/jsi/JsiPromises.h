@@ -1,12 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 
 #include <jsi/jsi.h>
 
-#include "api/third_party/base64.h"
+#include "RuntimeLifecycleMonitor.h"
+#include "third_party/base64.h"
 
 namespace RNJsi {
 namespace jsi = facebook::jsi;
@@ -29,15 +31,20 @@ protected:
 
 class JsiPromises {
 public:
-  struct Promise : public LongLivedObject {
+  struct Promise : public LongLivedObject, public RuntimeLifecycleListener {
     Promise(jsi::Runtime &rt, jsi::Function resolve, jsi::Function reject);
+    ~Promise();
+
+    void onRuntimeDestroyed(jsi::Runtime *) override;
 
     void resolve(const jsi::Value &result);
     void reject(const std::string &error);
 
     jsi::Runtime &runtime_;
+    std::mutex mutex_;
     jsi::Function resolve_;
     jsi::Function reject_;
+    bool runtimeDestroyed_{false};
   };
 
   using PromiseSetupFunctionType =
