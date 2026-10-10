@@ -20,5 +20,6 @@ export const createPicture = (
   }
   const canvas = recorder.beginRecording(bounds);
   cb(canvas);
+  recorder.dispose();
   return recorder.finishRecordingAsPicture();
 };
