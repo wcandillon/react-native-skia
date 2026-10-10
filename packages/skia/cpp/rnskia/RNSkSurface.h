@@ -40,10 +40,12 @@ public:
    Replays the recordings, in order, onto the target texture and presents
    it. Called on the thread that owns the surface. Returns false when the
    surface cannot present right now (there is none, or the app is in the
-   background): nothing was consumed.
+   background). insertAttempted distinguishes an unavailable surface from
+   an insertion failure; ordered recordings cannot be retried after an attempt.
    */
   virtual bool presentRecordings(
-      const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      bool *insertAttempted = nullptr) = 0;
 
   /**
    Draws an image at the origin of the target texture and presents it. Same

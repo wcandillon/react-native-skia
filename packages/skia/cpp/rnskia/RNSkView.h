@@ -339,19 +339,53 @@ private:
           bool remember) {
     // Recordings of the target's size and color space are replayed straight
     // onto it, as one batch; any other goes through a texture of its own.
-    std::vector<skgpu::graphite::Recording *> batch;
+    std::vector<std::shared_ptr<RNSkGraphiteRecording>> batch;
     std::shared_ptr<RNSkGraphiteRecording> last;
     bool success = true;
     auto flush = [&]() {
-      if (!batch.empty()) {
-        success = surface.presentRecordings(batch) && success;
-        batch.clear();
+      if (batch.empty()) {
+        return;
       }
+      std::vector<skgpu::graphite::Recording *> nativeBatch;
+      for (const auto &recording : batch) {
+        nativeBatch.push_back(recording->get());
+      }
+      bool insertAttempted = false;
+      const bool presented =
+          surface.presentRecordings(nativeBatch, &insertAttempted);
+      bool needsRetry = !presented && !insertAttempted;
+      for (const auto &recording : batch) {
+        if (insertAttempted && recording->isOrdered()) {
+          recording->markInsertAttempted();
+          if (!presented) {
+            recording->invalidateIfOrdered();
+            _producer->requestFrame();
+          }
+        } else if (!presented) {
+          needsRetry = true;
+        }
+      }
+      if (presented) {
+        last = batch.back();
+      }
+      success = !needsRetry && success;
+      batch.clear();
     };
     for (const auto &recording : recordings) {
-      // A recording made for another format (recorded before the surface
-      // existed, with a bit depth the surface did not get) cannot be
-      // replayed onto this one.
+      if (!recording->canRetry()) {
+        if (recording->isInvalidated()) {
+          _producer->requestFrame();
+        }
+        continue;
+      }
+      // Ordered frames are recreated for the current target. Passing them
+      // through an intermediate can consume an atlas upload before a failed
+      // window present, or skip it when no matching texture can be made.
+      if (recording->isOrdered() && !recording->isCompatibleWith(targetInfo)) {
+        recording->invalidateIfOrdered();
+        _producer->requestFrame();
+        continue;
+      }
       if (!recording->hasFormatOf(targetInfo)) {
         RNSkLogger::logToConsole("SkiaView: skipping a recording made for a "
                                  "different surface format");
@@ -359,8 +393,7 @@ private:
       }
       if (recording->hasSizeOf(targetInfo) &&
           recording->hasColorSpaceOf(targetInfo)) {
-        batch.push_back(recording->get());
-        last = recording;
+        batch.push_back(recording);
         continue;
       }
       flush();
@@ -371,11 +404,7 @@ private:
       }
     }
     flush();
-    if (last == nullptr) {
-      // Nothing presentable: the recordings are consumed, not kept.
-      return true;
-    }
-    if (success && remember) {
+    if (success && remember && last != nullptr) {
       std::lock_guard<std::mutex> lock(_mutex);
       _lastPresented = last;
     }

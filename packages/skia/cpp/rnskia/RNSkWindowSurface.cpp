@@ -204,7 +204,11 @@ bool RNSkWindowSurface::canPresent() {
 }
 
 bool RNSkWindowSurface::presentRecordings(
-    const std::vector<skgpu::graphite::Recording *> &recordings) {
+    const std::vector<skgpu::graphite::Recording *> &recordings,
+    bool *insertAttempted) {
+  if (insertAttempted) {
+    *insertAttempted = false;
+  }
   if (!canPresent()) {
     return false;
   }
@@ -223,6 +227,9 @@ bool RNSkWindowSurface::presentRecordings(
       &surfaceProps);
   if (!surface) {
     return false;
+  }
+  if (insertAttempted) {
+    *insertAttempted = true;
   }
   bool success =
       DawnContext::getInstance().insertRecordings(recordings, surface.get());

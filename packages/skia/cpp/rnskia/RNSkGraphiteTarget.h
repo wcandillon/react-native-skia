@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <deque>
 #include <functional>
@@ -38,12 +39,14 @@ namespace RNSkia {
  */
 struct RNSkGraphiteRecorder {
   std::unique_ptr<skgpu::graphite::Recorder> recorder;
+  bool requireOrderedRecordings = false;
+  std::atomic<bool> invalidated{false};
 };
 
 /**
  * A frame snapped from a view's recorder, with the description of the target
- * it was recorded for. Immutable once snapped: it can be replayed any number
- * of times, from any thread.
+ * it was recorded for. Imperative recordings are replayable; declarative
+ * recordings are presented once, in order, so their atlas can be cached.
  */
 class RNSkGraphiteRecording {
 public:
@@ -54,6 +57,24 @@ public:
         _target(target) {}
 
   skgpu::graphite::Recording *get() const { return _recording.get(); }
+
+  bool isInvalidated() const { return _recorder->invalidated.load(); }
+
+  bool isOrdered() const { return _recorder->requireOrderedRecordings; }
+  bool wasInsertAttempted() const { return _insertAttempted.load(); }
+  void markInsertAttempted() { _insertAttempted = true; }
+
+  bool canRetry() const {
+    return !isOrdered() || (!isInvalidated() && !wasInsertAttempted());
+  }
+
+  // Skipping an ordered frame also skips uploads used by later frames from
+  // that recorder. Retire the stream so the next frame starts a fresh atlas.
+  void invalidateIfOrdered() {
+    if (_recorder->requireOrderedRecordings) {
+      _recorder->invalidated = true;
+    }
+  }
 
   /**
    Whether the recording was made for a texture of the given size. A deferred
@@ -101,6 +122,7 @@ private:
   std::shared_ptr<RNSkGraphiteRecorder> _recorder;
   std::unique_ptr<skgpu::graphite::Recording> _recording;
   RNSkGraphiteTargetInfo _target;
+  std::atomic<bool> _insertAttempted{false};
 };
 
 /**
@@ -147,7 +169,7 @@ public:
    Returns a canvas that records the next frame, in points. The canvas is
    deleted by finishRecording(). Throws while a recording is already open.
    */
-  SkCanvas *beginRecording() {
+  SkCanvas *beginRecording(bool requireOrderedRecordings = false) {
     auto target = resolveTargetInfo();
     std::lock_guard<std::mutex> lock(_stateMutex);
     if (_recording) {
@@ -157,9 +179,21 @@ public:
     if (target.width <= 0 || target.height <= 0) {
       throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
     }
-    if (_recorder == nullptr) {
+    // A new target starts a new ordered stream and uploads a fresh atlas.
+    const bool targetChanged =
+        target.width != _recordingTarget.width ||
+        target.height != _recordingTarget.height ||
+        target.colorType != _recordingTarget.colorType ||
+        target.useP3ColorSpace != _recordingTarget.useP3ColorSpace ||
+        !target.textureInfo.canBeFulfilledBy(_recordingTarget.textureInfo) ||
+        !_recordingTarget.textureInfo.canBeFulfilledBy(target.textureInfo);
+    if (_recorder == nullptr || _recorder->invalidated ||
+        _recorder->requireOrderedRecordings != requireOrderedRecordings ||
+        (requireOrderedRecordings && targetChanged)) {
       auto recorder = std::make_shared<RNSkGraphiteRecorder>();
-      recorder->recorder = DawnContext::getInstance().makeRecorder();
+      recorder->requireOrderedRecordings = requireOrderedRecordings;
+      recorder->recorder =
+          DawnContext::getInstance().makeRecorder(requireOrderedRecordings);
       if (recorder->recorder == nullptr) {
         throw std::runtime_error(
             "SkiaGraphiteView: could not create a Graphite recorder.");
@@ -193,6 +227,11 @@ public:
     _recording = false;
     auto recording = _recorder->recorder->snap();
     if (recording == nullptr) {
+      // snap() advances the ordered ID even on failure: the next frame
+      // needs a new recorder, not a gap in the existing stream.
+      if (_recorder->requireOrderedRecordings) {
+        _recorder->invalidated = true;
+      }
       throw std::runtime_error(
           "SkiaGraphiteView: snapping the recording failed.");
     }
@@ -266,7 +305,15 @@ public:
   void requeue(
       const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
     std::lock_guard<std::mutex> lock(_queueMutex);
-    _queue.insert(_queue.begin(), recordings.begin(), recordings.end());
+    // An insert attempt advances Graphite's ordered ID even if it fails.
+    // Previously inserted ordered frames must never be replayed in a retry.
+    auto position = _queue.begin();
+    for (const auto &recording : recordings) {
+      if (recording->canRetry()) {
+        position = _queue.insert(position, recording);
+        ++position;
+      }
+    }
   }
 
   /** The most recently submitted recording still waiting, if any. */

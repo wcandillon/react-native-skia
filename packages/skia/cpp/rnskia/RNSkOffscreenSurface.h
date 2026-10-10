@@ -130,7 +130,11 @@ public:
   }
 
   bool presentRecordings(
-      const std::vector<skgpu::graphite::Recording *> &recordings) override {
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      bool *insertAttempted = nullptr) override {
+    if (insertAttempted) {
+      *insertAttempted = false;
+    }
     auto *recorder = _surface ? _surface->recorder() : nullptr;
     if (recorder == nullptr) {
       return false;
@@ -143,6 +147,9 @@ public:
       _surface->getCanvas()->clear(SK_ColorTRANSPARENT);
       DawnContext::getInstance().submitRecording(recorder->snap().get());
       _cleared = true;
+    }
+    if (insertAttempted) {
+      *insertAttempted = true;
     }
     return DawnContext::getInstance().insertRecordings(recordings,
                                                        _surface.get());
