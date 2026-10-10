@@ -21,7 +21,7 @@ export const drawAsPicture = async (element: ReactElement, bounds?: SkRect) => {
   root.drawOnCanvas(canvas);
   const picture = recorder.finishRecordingAsPicture();
   recorder.dispose();
-  root.unmount();
+  await root.unmount();
   return picture;
 };
 
