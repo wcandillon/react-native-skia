@@ -133,12 +133,17 @@ public:
 
   // The surface is used by one thread at a time, so it is always the target
   // the caller read.
-  bool presentRecordings(
+  RecordingPresent presentRecordings(
       const RNSkGraphiteTargetInfo & /* target */,
-      const std::vector<skgpu::graphite::Recording *> &recordings) override {
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      uint64_t orderedGeneration) override {
+    // Snapshots draw declarative content directly on the calling thread.
+    if (orderedGeneration != 0) {
+      return RecordingPresent::kDeclined;
+    }
     auto *recorder = _surface ? _surface->recorder() : nullptr;
     if (recorder == nullptr) {
-      return false;
+      return RecordingPresent::kDeclined;
     }
     // A new surface clears itself in its first pass, which its own recorder
     // only records when it next snaps. The recordings go straight to the
@@ -151,7 +156,7 @@ public:
     }
     // A rejected recording is logged and dropped (see RNSkWindowSurface).
     DawnContext::getInstance().insertRecordings(recordings, _surface.get());
-    return true;
+    return RecordingPresent::kPresented;
   }
 
   bool presentImage(const RNSkGraphiteTargetInfo & /* target */,

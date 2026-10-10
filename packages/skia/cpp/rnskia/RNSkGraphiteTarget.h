@@ -35,25 +35,25 @@
 namespace RNSkia {
 
 /**
- * The Graphite recorder of a target JS records into (see
- * RNSkGraphiteTarget::beginRecording()). Shared by the target and by every
+ * A recorder owned by a target. Shared by the target and by every
  * recording snapped from it, so that the recorder outlives its recordings
  * whichever of them is released last. Made for one GPU device (see
  * DawnContext::generation()): once that device is lost the target makes a
- * new one, and the recordings of this one are dropped. Declarative content
- * is recorded on the recorders of the render thread pool instead, which
- * outlive everything (see DawnContext::getThreadRecorder).
+ * new one, and the recordings of this one are dropped. An ordered recorder
+ * is dedicated to one view because different views may present in any order.
  */
 struct RNSkGraphiteRecorder {
   std::unique_ptr<skgpu::graphite::Recorder> recorder;
   uint64_t generation = 0;
+  bool ordered = false;
+  std::atomic<bool> invalidated{false};
 };
 
 /**
  * A frame snapped from a recorder, with the generation of the GPU device it
- * was recorded for and the description of the target. Immutable once
- * snapped: it can be replayed any number of times, from any thread, onto the
- * device it was recorded for (see isCurrent).
+ * was recorded for and the description of the target. Unordered recordings
+ * can be replayed. An ordered recording is inserted once on its view's
+ * present thread, in snap order.
  */
 class RNSkGraphiteRecording {
 public:
@@ -69,6 +69,18 @@ public:
         _recording(std::move(recording)), _target(target) {}
 
   skgpu::graphite::Recording *get() const { return _recording.get(); }
+  uint64_t generation() const { return _generation; }
+  bool isOrdered() const { return _recorder != nullptr && _recorder->ordered; }
+  bool isInvalidated() const {
+    return isOrdered() && _recorder->invalidated.load();
+  }
+
+  // Later frames may reference atlas uploads from this one.
+  void invalidateIfOrdered() const {
+    if (isOrdered()) {
+      _recorder->invalidated.store(true);
+    }
+  }
 
   /**
    Whether the recording can be replayed right now: it was recorded for the
@@ -137,10 +149,10 @@ private:
  *
  * Recording happens on the producer's thread (the JS thread, a worklet
  * runtime or the render thread pool), presenting on the main thread; the
- * queue is the hand-off. A frame is recorded on the recorder of the thread
- * recording it (the render thread pool) or on a recorder of the target's own
- * (JS); either way a single recording is open at a time, and it is snapped
- * on the thread that opened it.
+ * queue is the hand-off. Animated declarative frames use a target-owned
+ * ordered recorder, static content uses the render thread's recorder, and
+ * JS uses a target-owned unordered recorder. A single recording is open at
+ * a time and is snapped on the thread that opened it.
  */
 class RNSkGraphiteTarget {
 public:
@@ -188,10 +200,8 @@ public:
   /**
    Returns a canvas that records the next frame, in points, on the recorder
    of the calling thread (see DawnContext::getThreadRecorder): the render
-   thread pool records the declarative content of every view this way, a
-   view always on the same thread (see RNSkThreadPool::acquireLane), so a
-   view holds no recorder of its own and the recorders of a few threads
-   serve every view, each with a warm cache and atlases for its views.
+   thread pool records static content this way, with a few recorders
+   serving every view.
    finishRecording() snaps it, on the same thread, before the thread records
    anything else (a recorder takes one deferred canvas at a time). The canvas
    is deleted by finishRecording(). Returns nullptr while the view has no
@@ -201,8 +211,14 @@ public:
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
     std::lock_guard<std::mutex> lock(_stateMutex);
-    return openRecordingLocked(recorder.recorder, recorder.generation, nullptr,
-                               target);
+    auto *canvas = openRecordingLocked(recorder.recorder, recorder.generation,
+                                       nullptr, target);
+    if (canvas != nullptr) {
+      // The content became static. Queued frames keep the ordered recorder
+      // alive until they are presented or discarded.
+      _orderedRecorder.reset();
+    }
+    return canvas;
   }
 
   /**
@@ -212,25 +228,14 @@ public:
    another target before finishing this one. Throws while a recording is
    already open, or when no recorder or deferred canvas can be made.
    */
-  SkCanvas *beginRecording() {
-    auto target = resolveTargetInfo();
-    std::lock_guard<std::mutex> lock(_stateMutex);
-    // A recorder made for a GPU device that was lost since is replaced: the
-    // recordings still holding it keep it alive until they are dropped.
-    const auto generation = DawnContext::generation();
-    if (_ownRecorder == nullptr || _ownRecorder->generation != generation) {
-      auto recorder = std::make_shared<RNSkGraphiteRecorder>();
-      recorder->recorder = DawnContext::getInstance().makeRecorder();
-      recorder->generation = generation;
-      if (recorder->recorder == nullptr) {
-        throw std::runtime_error(
-            "SkiaGraphiteView: could not create a Graphite recorder.");
-      }
-      _ownRecorder = std::move(recorder);
-    }
-    return openRecordingLocked(_ownRecorder->recorder.get(),
-                               _ownRecorder->generation, _ownRecorder, target);
-  }
+  SkCanvas *beginRecording() { return beginOwnedRecording(false); }
+
+  /**
+   Animated content records on the view's render lane and is presented in
+   order. Keeping its atlas across snaps requires a separate stream for each
+   view: views sharing a render lane can present on different threads.
+   */
+  SkCanvas *beginOrderedRecording() { return beginOwnedRecording(true); }
 
   /**
    Snaps the open recording, on the thread that opened it. Throws when no
@@ -250,6 +255,10 @@ public:
     RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
+      // A failed snap consumes an ID in the ordered stream.
+      if (owner != nullptr && owner->ordered) {
+        owner->invalidated.store(true);
+      }
       throw std::runtime_error(
           "SkiaGraphiteView: snapping the recording failed.");
     }
@@ -264,11 +273,10 @@ public:
    before the view exists too, as the registry owns the target until the
    view is gone (see RNSkGraphiteTargetRegistry). The one exception is a
    recording made for a lost GPU device (see RNSkGraphiteRecording::isCurrent):
-   it can never be presented, and a client recording on every frame
-   regardless would grow the queue without bound, so it is dropped, along
-   with whatever waits in the queue, which was made for that device too.
+   it can never be presented. Returns false if it was dropped. Existing
+   queued recordings are left for the present thread to account for.
    */
-  void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
+  bool submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
@@ -276,10 +284,8 @@ public:
       // never reads below zero.
       _submitted.fetch_add(1, std::memory_order_relaxed);
       if (!recording->isCurrent()) {
-        // Dropped, with whatever waited: done, as far as pacing goes.
-        _done.fetch_add(_queue.size() + 1, std::memory_order_release);
-        _queue.clear();
-        return;
+        _done.fetch_add(1, std::memory_order_release);
+        return false;
       }
       _queue.push_back(std::move(recording));
       requestFrame = _requestFrame;
@@ -287,6 +293,7 @@ public:
     if (requestFrame) {
       requestFrame();
     }
+    return true;
   }
 
   // View side ----------------------------------------------------------------
@@ -299,6 +306,9 @@ public:
               std::function<void()> requestFrame) {
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
+      if (_orderedRecorder != nullptr && _surface.lock() != surface.lock()) {
+        _orderedRecorder->invalidated.store(true);
+      }
       _surface = std::move(surface);
     }
     std::lock_guard<std::mutex> lock(_queueMutex);
@@ -318,6 +328,9 @@ public:
         return;
       }
       _surface.reset();
+      if (_orderedRecorder != nullptr) {
+        _orderedRecorder->invalidated.store(true);
+      }
     }
     std::lock_guard<std::mutex> lock(_queueMutex);
     _requestFrame = nullptr;
@@ -376,6 +389,33 @@ public:
   }
 
 private:
+  SkCanvas *beginOwnedRecording(bool ordered) {
+    auto target = resolveTargetInfo();
+    std::lock_guard<std::mutex> lock(_stateMutex);
+    if (target.width <= 0 || target.height <= 0) {
+      return nullptr;
+    }
+    auto &owner = ordered ? _orderedRecorder : _ownRecorder;
+    if (owner == nullptr || !DawnContext::isCurrent(owner->generation) ||
+        (ordered && (owner->invalidated.load() || target != _orderedTarget))) {
+      auto recorder = std::make_shared<RNSkGraphiteRecorder>();
+      recorder->ordered = ordered;
+      recorder->recorder =
+          DawnContext::getInstance().makeRecorder(recorder->generation, ordered);
+      if (recorder->recorder == nullptr) {
+        throw std::runtime_error(
+            "SkiaGraphiteView: could not create a Graphite recorder.");
+      }
+      owner = std::move(recorder);
+    }
+    auto *canvas = openRecordingLocked(owner->recorder.get(), owner->generation,
+                                       owner, target);
+    if (ordered) {
+      _orderedTarget = target;
+    }
+    return canvas;
+  }
+
   /**
    The surface props a recording is made with, under the state lock. With
    the defaults Graphite rasterizes a glyph for the exact transform it is
@@ -517,12 +557,12 @@ private:
 
   std::shared_ptr<RNSkPlatformContext> _context;
 
-  // The target's own recorder (JS, see beginRecording()), the open recording
-  // (its recorder, the generation it was made for, the owner keeping the
-  // recorder alive when it is the target's own, and the target it was opened
-  // against) and the target description.
+  // The target-owned recorders, the open recording, and the target
+  // description are protected by the state mutex.
   std::mutex _stateMutex;
   std::shared_ptr<RNSkGraphiteRecorder> _ownRecorder;
+  std::shared_ptr<RNSkGraphiteRecorder> _orderedRecorder;
+  RNSkGraphiteTargetInfo _orderedTarget;
   bool _recording = false;
   skgpu::graphite::Recorder *_openRecorder = nullptr;
   uint64_t _openGeneration = 0;

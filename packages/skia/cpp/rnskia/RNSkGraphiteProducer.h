@@ -28,9 +28,9 @@ class RNSkGraphiteTarget;
  * waits for a replay. A pool thread, the same one for every frame of the view
  * (see RNSkThreadPool::acquireLane), replays the commands (the recorder
  * writes the pending values into them first) into a deferred canvas of the
- * view's target, on the Graphite recorder of that thread (a view holds none
- * of its own, see RNSkGraphiteTarget::beginRecording), and submits the
- * recording; the main thread presents it on the next vsync.
+ * view's target, and submits the recording for the next vsync. Animated
+ * content uses the target's ordered recorder; static pictures use the
+ * Graphite recorder of the pool thread.
  *
  * A recording with shared values arrives without their values (recording
  * reads none, see Variables) and is not replayed before the mapper has read
@@ -155,9 +155,8 @@ private:
   bool _dirty = false;
   bool _inFlight = false;
   size_t _queued = 0;
-  // The render thread every job of this producer runs on, so that its
-  // frames are always recorded on the same Graphite recorder (see
-  // RNSkThreadPool::acquireLane). Set once, read without the lock.
+  // The render thread that owns the recorder used by this producer
+  // (see RNSkThreadPool::acquireLane). Set once, read without the lock.
   const size_t _lane;
 };
 

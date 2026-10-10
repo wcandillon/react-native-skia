@@ -200,7 +200,7 @@ void RNSkGraphiteProducer::kickLocked() {
   _inFlight = true;
   std::weak_ptr<RNSkGraphiteProducer> weakThis = weak_from_this();
   // Always on the same thread (see RNSkThreadPool::acquireLane), so that
-  // the frames of this view find a warm recorder.
+  // the frames of this view use their recorder on its recording thread.
   renderPool().post(_lane, [weakThis]() {
     if (auto self = weakThis.lock()) {
       self->produce();
@@ -230,10 +230,11 @@ void RNSkGraphiteProducer::produce() {
     // Without a GPU nothing records, and Skia.gpu says why.
     if (auto *context = DawnContext::tryGetInstance()) {
       try {
-        // On the recorder of this pool thread, the same for every frame of
-        // the view: a view holds no recorder of its own (see
-        // RNSkGraphiteTarget::beginRecording).
-        canvas = target->beginRecording(context->getThreadRecorder());
+        // Animated content can reuse its glyph atlas between frames. Static
+        // pictures still share the pool's unordered recorders.
+        canvas = recorder != nullptr
+                     ? target->beginOrderedRecording()
+                     : target->beginRecording(context->getThreadRecorder());
       } catch (const std::exception &e) {
         RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
                                  e.what());
@@ -259,12 +260,10 @@ void RNSkGraphiteProducer::produce() {
   _inFlight = false;
   if (recording != nullptr) {
     // Queued even if the view was bound to another target while this job
-    // ran: a target never drops a recording, a later one on the same
-    // recorder may depend on resources this one uploads. Submitted under the
-    // lock: a frame presented in between (a redraw replaying the last one)
-    // would otherwise clear the flag before the recording is even queued.
-    target->submit(std::move(recording));
-    if (target == _target) {
+    // ran: a later recording may depend on resources this one uploads.
+    // Submit under the lock so a present cannot free its slot before it is
+    // counted. A recording from a lost GPU does not take a slot.
+    if (target->submit(std::move(recording)) && target == _target) {
       _queued++;
       // Values that arrived during the replay start the next job right away,
       // while this frame waits for its vsync, as long as there is room.
@@ -273,7 +272,7 @@ void RNSkGraphiteProducer::produce() {
       }
       return;
     }
-    // The frame went to the previous target; the new one has none yet.
+    // The current target still needs a frame.
   }
   // Nothing was recorded for the current target: keep the content dirty so
   // that the next request (a surface, a resize) records it. A request that

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
@@ -25,6 +26,8 @@ namespace RNSkia {
  */
 class RNSkSurface {
 public:
+  enum class RecordingPresent { kDeclined, kConsumed, kPresented };
+
   virtual ~RNSkSurface() = default;
 
   /** Width of the surface, in pixels. */
@@ -44,18 +47,19 @@ public:
    it. The target is the one the caller read with getTargetInfo() and chose
    the recordings for: a surface that is no longer that target (resized from
    another thread since) declines, as the recordings would not fit it.
-   Called on the thread that presents on the surface. Returns false when the
-   surface cannot present right now (there is none, the app is in the
-   background, or the surface is not the target given): nothing was
-   consumed.
+   Called on the thread that presents on the surface. A nonzero generation
+   identifies a single ordered recording. A declined frame can be retried;
+   a consumed frame must be discarded even though it was not shown.
    */
-  virtual bool presentRecordings(
+  virtual RecordingPresent presentRecordings(
       const RNSkGraphiteTargetInfo &target,
-      const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      uint64_t orderedGeneration = 0) = 0;
 
   /**
    Draws an image onto the target texture (see drawOnto) and presents it.
-   Same target, thread and return value as presentRecordings(). Used for a
+   Same target and thread as presentRecordings(). Returns whether the
+   surface took the image. Used for a
    recording whose size or color space differs from the target's: it is
    replayed into a texture of its own first (see RNSkView::present).
    */
