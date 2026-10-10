@@ -110,10 +110,10 @@ The `android` prop selects it; it is ignored on iOS and web.
 
 | Option | Type | Effect |
 | --- | --- | --- |
-| `surfaceType` | `"SurfaceView" \| "TextureView"` | Backing view. Defaults to `SurfaceView` when the canvas is `opaque` and to `TextureView` otherwise |
+| `surfaceType` | `"SurfaceView" \| "TextureView"` | Backing view. Defaults to `SurfaceView` when the canvas is `opaque` (from Android 11, see below) and to `TextureView` otherwise |
 | `zOrderOnTop` | `boolean` | `SurfaceView` only: composites above every React Native view in the window. Defaults to `false` |
 
-**`SurfaceView`** is the default for an opaque canvas and the fastest path.
+**`SurfaceView`** is the default for an opaque canvas from Android 11 and the fastest path.
 Each frame goes straight to the system compositor as its own layer, with no extra copy and no involvement of the React Native view hierarchy.
 The price is that it is not really view content: it punches a hole through the window, so parent transforms, clipping, rounded corners, and z-ordering with sibling views do not apply to it.
 Use it whenever the canvas is a plain opaque rectangle.
@@ -127,7 +127,11 @@ That routing costs an extra texture copy and typically a frame of latency, and i
 | Composited like a regular view | no | yes |
 | Extra copy | none | one |
 | Latency | lowest | one frame more |
-| Selected when | `opaque` (default) | `opaque={false}` (default) |
+| Selected when | `opaque`, from Android 11 (default) | `opaque={false}`, or `opaque` before Android 11 (default) |
+
+Before Android 11, a `SurfaceView` destroys its layer as soon as it leaves the window, a frame before the window stops showing the hole it punched, so an opaque canvas leaving the screen flashes black.
+On those releases an opaque canvas is therefore backed by a `TextureView`, unless it sets `zOrderOnTop` or `highBitDepth`, which only a `SurfaceView` provides.
+`surfaceType: "SurfaceView"` still selects a `SurfaceView` there.
 
 `opaque` applies to whichever view is selected: on a `SurfaceView` it picks `PixelFormat.OPAQUE` or `PixelFormat.TRANSLUCENT`, on a `TextureView` it calls `setOpaque`.
 Changing `opaque` at runtime updates the view in place; changing `surfaceType` or `zOrderOnTop` replaces the backing view, which recreates its surface.
@@ -192,7 +196,7 @@ const Demo = () => {
 
 :::warning
 
-On Android, `highBitDepth` requires an opaque `SurfaceView` (the default for `opaque`): the 10-bit format only has 2 bits of alpha, and a `TextureView` composites through an 8-bit pass anyway.
+On Android, `highBitDepth` requires an opaque `SurfaceView` (what an `opaque` canvas with `highBitDepth` gets by default): the 10-bit format only has 2 bits of alpha, and a `TextureView` composites through an 8-bit pass anyway.
 When the surface does not support the 10-bit format, the canvas falls back to 8-bit.
 
 :::

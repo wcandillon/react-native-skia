@@ -15,7 +15,10 @@ export interface AndroidCanvasProps {
   /**
    * Backing view. Defaults to `SurfaceView` when the canvas is `opaque` and to
    * `TextureView` otherwise; both composite correctly in React Native stacking
-   * order without further flags.
+   * order without further flags. Before Android 11 an opaque canvas defaults
+   * to `TextureView` too, unless it sets `zOrderOnTop` or `highBitDepth`:
+   * those releases remove a `SurfaceView` as it leaves the window, a frame
+   * before the window stops showing it.
    */
   surfaceType?: AndroidSurfaceType;
   /**
@@ -65,8 +68,8 @@ export interface ISkiaViewApi {
 export interface SkiaBaseViewProps extends ViewProps {
   /**
    * Declares that the canvas covers every pixel of its bounds. On Android an
-   * opaque canvas is backed by a `SurfaceView` by default, the cheapest path
-   * (see `android.surfaceType`). Defaults to false.
+   * opaque canvas is backed by a `SurfaceView` by default, the cheapest path,
+   * except before Android 11 (see `android.surfaceType`). Defaults to false.
    */
   opaque?: boolean;
 
