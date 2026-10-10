@@ -54,11 +54,12 @@ protected:
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
                         bool highBitDepth) {
     attachWindow(surface, width, height, isSurface, highBitDepth);
-    _view->redraw();
+    _view->redraw(RNSkView::WindowContent::Nothing);
   }
 
   void surfaceSizeChanged(jobject surface, int width, int height,
                           bool isSurface, bool highBitDepth) {
+    auto windowContent = RNSkView::WindowContent::LastFrame;
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.
     if (width != 0 || height != 0) {
@@ -66,10 +67,11 @@ protected:
         _surface->resize(width, height);
       } else {
         attachWindow(surface, width, height, isSurface, highBitDepth);
+        windowContent = RNSkView::WindowContent::Nothing;
       }
     }
     // Paint the new size right away rather than on the next scheduled redraw.
-    _view->redraw();
+    _view->redraw(windowContent);
   }
 
   void surfaceDestroyed() { _surface->detach(); }
