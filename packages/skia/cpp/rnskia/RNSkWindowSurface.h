@@ -118,7 +118,8 @@ public:
   bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
   bool presentRecordings(
-      const std::vector<skgpu::graphite::Recording *> &recordings) override;
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      bool *insertAttempted = nullptr) override;
 
   bool presentImage(const sk_sp<SkImage> &image) override;
 

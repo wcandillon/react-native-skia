@@ -186,10 +186,12 @@ public:
   // A recorder of its own for a client that records on one thread and replays
   // on another (SkiaGraphiteView): unlike getRecorder() it is not tied to the
   // calling thread. Creating a recorder is a Context operation, hence the lock.
-  std::unique_ptr<skgpu::graphite::Recorder> makeRecorder() {
+  std::unique_ptr<skgpu::graphite::Recorder>
+  makeRecorder(bool requireOrderedRecordings = false) {
     std::lock_guard<std::mutex> lock(_mutex);
     skgpu::graphite::RecorderOptions options;
     options.fImageProvider = ImageProvider::Make();
+    options.fRequireOrderedRecordings = requireOrderedRecordings;
     return fGraphiteContext->makeRecorder(options);
   }
 

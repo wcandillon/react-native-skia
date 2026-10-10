@@ -158,7 +158,10 @@ void RNSkGraphiteProducer::produce() {
   if (target && (recorder || picture)) {
     SkCanvas *canvas = nullptr;
     try {
-      canvas = target->beginRecording();
+      // Declarative frames are submitted exactly once and in order. Preserve
+      // the glyph atlas across snaps; imperative recordings remain replayable
+      // by using beginRecording()'s unordered default.
+      canvas = target->beginRecording(/* requireOrderedRecordings= */ true);
     } catch (const std::exception &) {
       // No surface and no layout yet: the view asks for a frame once it
       // has a size.
