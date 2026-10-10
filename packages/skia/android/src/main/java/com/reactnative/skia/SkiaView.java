@@ -1,7 +1,9 @@
 package com.reactnative.skia;
 
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.SurfaceTexture;
+import android.os.Build;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.MotionEvent;
@@ -29,6 +31,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private HybridData mHybridData;
 
     private View mView;
+    // Attached and undrawn until the next swap, until the canvas leaves its
+    // window or the window hides: see BackingViewKind.retiresWhenReplaced.
+    @Nullable
+    private SkiaSurfaceView mRetiredSurfaceView;
 
     // Props, applied together in updateView(). A null kind is "auto".
     private boolean mOpaque = false;
@@ -129,8 +135,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
                 || kind != mAppliedKind
                 || zOrderOnTop != mAppliedZOrderOnTop
                 || highBitDepth != mAppliedHighBitDepth) {
+            removeRetiredSurfaceView();
             if (mView != null) {
-                removeView(mView);
+                if (mAppliedKind.retiresWhenReplaced(Build.VERSION.SDK_INT, isShown(), getWidth(), getHeight())) {
+                    retireSurfaceView((SkiaSurfaceView) mView);
+                } else {
+                    removeView(mView);
+                }
             }
             mAppliedKind = kind;
             mAppliedZOrderOnTop = zOrderOnTop;
@@ -157,6 +168,36 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
                 case SURFACE_VIEW -> ((SkiaSurfaceView) mView).setOpaque(mOpaque);
                 case TEXTURE_VIEW -> ((SkiaTextureView) mView).setOpaque(mOpaque);
             }
+        }
+    }
+
+    private void retireSurfaceView(SkiaSurfaceView view) {
+        view.retire();
+        mRetiredSurfaceView = view;
+        // The window recomputes its transparent region only on a layout pass,
+        // which React Native's requestLayout never reaches.
+        requestTransparentRegion(view);
+    }
+
+    private void removeRetiredSurfaceView() {
+        SkiaSurfaceView retired = mRetiredSurfaceView;
+        if (retired == null) {
+            return;
+        }
+        mRetiredSurfaceView = null;
+        removeView(retired);
+    }
+
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        return child != mRetiredSurfaceView && super.drawChild(canvas, child, drawingTime);
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        if (visibility != VISIBLE) {
+            removeRetiredSurfaceView();
         }
     }
 
@@ -219,6 +260,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         Choreographer.getInstance().removeFrameCallback(this);
         removeCallbacks(mPostedPresent);
         mFrameScheduler.cancel();
+        removeRetiredSurfaceView();
     }
 
     // A no-op for a dropped view (see dropInstance), which every mounted view
