@@ -2,6 +2,7 @@ package com.reactnative.skia;
 
 import android.content.Context;
 import android.graphics.SurfaceTexture;
+import android.os.Build;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.MotionEvent;
@@ -93,13 +94,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mHighBitDepth = value;
     }
 
-    // Resolve the backing view from the props. "auto" picks SurfaceView for an
-    // opaque canvas and TextureView for a non-opaque one.
+    // Resolve the backing view from the props: see BackingViewKind.forAutoSurfaceType
+    // for what "auto" picks.
     private BackingViewKind resolveKind() {
         if (mRequestedKind != null) {
             return mRequestedKind;
         }
-        return mOpaque ? BackingViewKind.SURFACE_VIEW : BackingViewKind.TEXTURE_VIEW;
+        return BackingViewKind.forAutoSurfaceType(mOpaque, mZOrderOnTop, mHighBitDepth, Build.VERSION.SDK_INT);
     }
 
     // The 10-bit buffer format only has 2 bits of alpha, which would visibly
