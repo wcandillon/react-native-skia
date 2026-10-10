@@ -129,6 +129,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
                 || kind != mAppliedKind
                 || zOrderOnTop != mAppliedZOrderOnTop
                 || highBitDepth != mAppliedHighBitDepth) {
+            boolean replacesCanvasOnScreen = mView != null && isShown() && getWidth() > 0 && getHeight() > 0;
             if (mView != null) {
                 removeView(mView);
             }
@@ -136,7 +137,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             mAppliedZOrderOnTop = zOrderOnTop;
             mAppliedHighBitDepth = highBitDepth;
             mView = switch (kind) {
-                case SURFACE_VIEW -> new SkiaSurfaceView(getContext(), this, zOrderOnTop, mOpaque);
+                case SURFACE_VIEW -> new SkiaSurfaceView(getContext(), this, zOrderOnTop, mOpaque, replacesCanvasOnScreen);
                 case TEXTURE_VIEW -> new SkiaTextureView(getContext(), this, mOpaque);
             };
             addView(mView);

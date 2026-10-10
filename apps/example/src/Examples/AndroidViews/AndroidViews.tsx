@@ -16,7 +16,10 @@ import { useDerivedValue } from "react-native-reanimated";
 // view stacked on top of it. This makes the difference between the two views
 // visible at a glance: a TextureView keeps the clip, the alpha and the
 // stacking order, while a SurfaceView punches through all of them. The
-// zOrderOnTop switch then moves the SurfaceView above the whole window.
+// zOrderOnTop switch then moves the SurfaceView above the whole window. The
+// shown switch puts a plain screen in the canvas's place and swaps the canvas
+// back in one frame; the canvas mounts again while hidden, so it has its
+// picture before the swap gives it a surface, as on a screen navigated to.
 
 type SurfaceType = "auto" | AndroidSurfaceType;
 
@@ -37,6 +40,8 @@ export const AndroidViews = () => {
   const [surfaceType, setSurfaceType] = useState<SurfaceType>("auto");
   const [opaque, setOpaque] = useState(false);
   const [zOrderOnTop, setZOrderOnTop] = useState(false);
+  const [shown, setShown] = useState(true);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const clock = useClock();
   const cx = useDerivedValue(
     () => 100 + 60 * Math.sin(clock.value / 500),
@@ -46,7 +51,8 @@ export const AndroidViews = () => {
     <View style={styles.container}>
       <View style={styles.stage}>
         <Stripes />
-        <View style={styles.clip}>
+        {!shown && <View style={styles.plainScreen} />}
+        <View key={hiddenCount} style={[styles.clip, !shown && styles.hidden]}>
           <Canvas
             style={styles.canvas}
             opaque={opaque}
@@ -99,6 +105,18 @@ export const AndroidViews = () => {
           </Text>
           <Switch value={zOrderOnTop} onValueChange={setZOrderOnTop} />
         </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>shown</Text>
+          <Switch
+            value={shown}
+            onValueChange={(value) => {
+              setShown(value);
+              if (!value) {
+                setHiddenCount((count) => count + 1);
+              }
+            }}
+          />
+        </View>
         <Text style={styles.hint}>
           auto picks SurfaceView when opaque and TextureView otherwise. A
           SurfaceView ignores the rounded clip and the overlay; with zOrderOnTop
@@ -128,6 +146,13 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: "hidden",
     transform: [{ rotate: "-6deg" }],
+  },
+  hidden: {
+    display: "none",
+  },
+  plainScreen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#ff9500",
   },
   canvas: {
     width: 260,
