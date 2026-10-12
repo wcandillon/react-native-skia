@@ -66,7 +66,7 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   /**
    * Declares that the canvas covers every pixel of its bounds, so nothing
    * behind it needs to show through. On Android an opaque canvas is backed by
-   * a `SurfaceView` by default, the cheapest path, except before Android 11
+   * a `SurfaceView` by default, the cheapest path, except before Android 12L
    * (see `android.surfaceType`). Defaults to false.
    */
   opaque?: boolean;

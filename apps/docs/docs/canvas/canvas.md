@@ -110,10 +110,10 @@ The `android` prop selects it; it is ignored on iOS and web.
 
 | Option | Type | Effect |
 | --- | --- | --- |
-| `surfaceType` | `"SurfaceView" \| "TextureView"` | Backing view. Defaults to `SurfaceView` when the canvas is `opaque` (from Android 11, see below) and to `TextureView` otherwise |
+| `surfaceType` | `"SurfaceView" \| "TextureView"` | Backing view. Defaults to `SurfaceView` when the canvas is `opaque` (from Android 12L, see below) and to `TextureView` otherwise |
 | `zOrderOnTop` | `boolean` | `SurfaceView` only: composites above every React Native view in the window. Defaults to `false` |
 
-**`SurfaceView`** is the default for an opaque canvas from Android 11 and the fastest path.
+**`SurfaceView`** is the default for an opaque canvas from Android 12L and the fastest path.
 Each frame goes straight to the system compositor as its own layer, with no extra copy and no involvement of the React Native view hierarchy.
 The price is that it is not really view content: it punches a hole through the window, so parent transforms, clipping, rounded corners, and z-ordering with sibling views do not apply to it.
 Use it whenever the canvas is a plain opaque rectangle.
@@ -127,9 +127,9 @@ That routing costs an extra texture copy and typically a frame of latency, and i
 | Composited like a regular view | no | yes |
 | Extra copy | none | one |
 | Latency | lowest | one frame more |
-| Selected when | `opaque`, from Android 11 (default) | `opaque={false}`, or `opaque` before Android 11 (default) |
+| Selected when | `opaque`, from Android 12L (default) | `opaque={false}`, or `opaque` before Android 12L (default) |
 
-Before Android 11, a `SurfaceView` destroys its layer as soon as it leaves the window, a frame before the window stops showing the hole it punched, so an opaque canvas leaving the screen flashes black.
+Before Android 12L, a `SurfaceView` loses its layer as soon as it leaves the window, a frame before the window stops showing the hole it punched, so an opaque canvas leaving the screen flashes black.
 On those releases an opaque canvas is therefore backed by a `TextureView`, unless it sets `zOrderOnTop` or `highBitDepth`, which only a `SurfaceView` provides.
 `surfaceType: "SurfaceView"` still selects a `SurfaceView` there.
 

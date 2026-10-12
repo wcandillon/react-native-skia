@@ -101,7 +101,7 @@ export const AndroidViews = () => {
         </View>
         <Text style={styles.hint}>
           auto picks SurfaceView when opaque and TextureView otherwise, and
-          before Android 11 TextureView for an opaque canvas too unless
+          before Android 12L TextureView for an opaque canvas too unless
           zOrderOnTop is on. A SurfaceView ignores the rounded clip and the
           overlay; with zOrderOnTop it also covers the controls when they
           overlap.
