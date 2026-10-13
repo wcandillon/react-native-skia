@@ -1,6 +1,6 @@
 import type { CanvasKit, Surface } from "canvaskit-wasm";
 
-import type { SkSurface, SurfaceFactory } from "../types";
+import type { SkSurface, SurfaceFactory, SurfaceOptions } from "../types";
 
 import { Host, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkSurface } from "./JsiSkSurface";
@@ -10,7 +10,8 @@ export class JsiSkSurfaceFactory extends Host implements SurfaceFactory {
     super(CanvasKit);
   }
 
-  Make(width: number, height: number) {
+  // CanvasKit raster surfaces are always sRGB; display-p3 is not supported on Web.
+  Make(width: number, height: number, _opts?: SurfaceOptions) {
     return new JsiSkSurface(
       this.CanvasKit,
       this.CanvasKit.MakeSurface(width, height)!

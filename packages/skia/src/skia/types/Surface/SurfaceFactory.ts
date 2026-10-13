@@ -13,13 +13,19 @@ export interface SurfaceOptions {
 
 export interface SurfaceFactory {
   /**
-   * Returns a CPU backed surface with the given dimensions, an SRGB colorspace, Unpremul
-   * alphaType and 8888 color type. The pixels belonging to this surface  will be in memory and
-   * not visible.
+   * Returns a CPU backed surface with the given dimensions, Premul alphaType and
+   * 8888 color type. The pixels belonging to this surface will be in memory and
+   * not visible. Without a color space the surface is untagged and images with
+   * an ICC profile (e.g. Display P3 photos) are drawn without color conversion.
    * @param width - number of pixels of the width of the drawable area.
    * @param height - number of pixels of the height of the drawable area.
+   * @param opts - optional surface options (e.g. colorSpace: "srgb" | "display-p3").
    */
-  Make: (width: number, height: number) => SkSurface | null;
+  Make: (
+    width: number,
+    height: number,
+    opts?: SurfaceOptions
+  ) => SkSurface | null;
 
   /**
    * Creates a GPU backed surface.
