@@ -91,5 +91,5 @@ A few rules follow from this model:
 
 ## Web
 
-The web has no Graphite. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings onto its WebGL surface, using the same renderer as `SkiaPictureView` (context-loss recovery included, and `__destroyWebGLContextAfterRender` to stay under the browser's limit on live WebGL contexts).
-Frames are presented in submission order and never dropped, right before the browser paints. Two differences to keep in mind: the surface starts cleared on every frame, so a recording should draw the whole frame rather than a delta on top of the previous one; and a WebGL texture belongs to the context that created it, so an image snapshot taken from an offscreen surface must go through `makeNonTextureImage()` before another view can draw it.
+The web has no Graphite. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings through the WebGL context the page shares, using the same renderer as `SkiaPictureView`.
+Frames are presented in submission order and never dropped, right before the browser paints. One difference to keep in mind: the surface starts cleared on every frame, so a recording should draw the whole frame rather than a delta on top of the previous one.

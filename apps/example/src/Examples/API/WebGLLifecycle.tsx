@@ -22,20 +22,19 @@ import {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import type { CanvasKit as CanvasKitType } from "canvaskit-wasm";
+import { peekSharedWebGLContext } from "react-native-skia/src/skia/web/SharedWebGLContext";
 
-// Exercises the lifetime of the WebGL context behind a <Canvas> on web.
-// The context belongs to the <canvas> element while the renderer belongs to
-// a layout effect, and the two don't line up:
+// Exercises the lifetime of the WebGL context behind the canvases on web.
+// Every canvas on the page draws through one shared WebGL context; a
+// <canvas> element owns none, and the renderer belongs to a layout effect:
 // - StrictMode (DEV) re-runs the layout effect on the same element (#3976):
-//   losing the context on cleanup left the canvas blank for good and made
-//   CanvasKit fault inside wasm on the next construction.
-// - A canvas that really unmounts must lose its context right away, since a
-//   detached canvas keeps it alive until garbage collection and browsers cap
-//   the number of live contexts (16 in Chrome, which then evicts the oldest,
-//   visible or not) (#3349).
-// - A context the browser evicted has to be picked up again once restored.
-// - Switching between the live and the static renderer needs a fresh
-//   element, as an element is bound to one context kind for life.
+//   the canvas must keep painting.
+// - Mounting and unmounting canvases past the browser's limit on live
+//   contexts (16 in Chrome, which then evicts the oldest, visible or not)
+//   must not cost any context (#3349): there is only ever one.
+// - A context the browser took away (a GPU reset) is picked up again once
+//   restored, and every canvas repaints.
 // Every action below reports on the status line; on native they are no-ops.
 
 const SIZE = 200;
@@ -43,11 +42,12 @@ const CHURN_CYCLES = 20;
 
 const isWeb = Platform.OS === "web" && typeof document !== "undefined";
 
-const referenceCanvas = () =>
-  isWeb
-    ? document.querySelector<HTMLCanvasElement>(
-        '[data-testid="reference"] canvas'
-      )
+// index.web.js puts the CanvasKit instance on globalThis.
+declare const CanvasKit: CanvasKitType;
+
+const sharedContext = () =>
+  isWeb && typeof CanvasKit !== "undefined"
+    ? peekSharedWebGLContext(CanvasKit)
     : null;
 
 const Spinner = () => {
@@ -97,7 +97,6 @@ class Boundary extends Component<BoundaryProps, { failed: boolean }> {
 
 export const WebGLLifecycle = () => {
   const [strict, setStrict] = useState(false);
-  const [isStatic, setIsStatic] = useState(false);
   const [churnMounted, setChurnMounted] = useState(false);
   const [cycle, setCycle] = useState(0);
   const [contextState, setContextState] = useState("unknown");
@@ -107,33 +106,24 @@ export const WebGLLifecycle = () => {
     restoreContext(): void;
   } | null>(null);
 
-  // Poll the reference canvas: a lost context is what an evicted or
-  // unrestored canvas looks like from the outside.
+  // Poll the shared context: a lost context is what a GPU reset looks like
+  // from the outside, and "none" means no canvas has made it yet.
   useEffect(() => {
     if (!isWeb) {
       return undefined;
     }
     const tick = () => {
-      const canvas = referenceCanvas();
-      if (!canvas) {
-        setContextState("no canvas");
-        return;
-      }
-      if (isStatic) {
-        setContextState("static");
-        return;
-      }
-      const gl = canvas.getContext("webgl2");
-      if (!gl) {
+      const shared = sharedContext();
+      if (!shared) {
         setContextState("none");
       } else {
-        setContextState(gl.isContextLost() ? "LOST" : "ok");
+        setContextState(shared.gl.isContextLost() ? "LOST" : "ok");
       }
     };
     tick();
     const interval = setInterval(tick, 250);
     return () => clearInterval(interval);
-  }, [isStatic, strict]);
+  }, [strict]);
 
   const remount = () => {
     setError(null);
@@ -154,10 +144,11 @@ export const WebGLLifecycle = () => {
   };
 
   const lose = () => {
-    const gl = referenceCanvas()?.getContext("webgl2");
+    const shared = sharedContext();
     // The extension object has to be obtained while the context is healthy:
     // getExtension() returns null on a lost context.
-    loseContextRef.current = gl?.getExtension("WEBGL_lose_context") ?? null;
+    loseContextRef.current =
+      shared?.gl.getExtension("WEBGL_lose_context") ?? null;
     loseContextRef.current?.loseContext();
   };
 
@@ -167,7 +158,7 @@ export const WebGLLifecycle = () => {
 
   const reference = (
     <Boundary onError={setError}>
-      <Canvas style={styles.canvas} __destroyWebGLContextAfterRender={isStatic}>
+      <Canvas style={styles.canvas}>
         <Spinner />
       </Canvas>
     </Boundary>
@@ -181,9 +172,8 @@ export const WebGLLifecycle = () => {
         only.
       </Text>
       <Text style={styles.status} testID="status">
-        {`cycles ${cycle}/${CHURN_CYCLES} · reference: ${contextState}` +
+        {`cycles ${cycle}/${CHURN_CYCLES} · context: ${contextState}` +
           ` · strict: ${strict ? "on" : "off"}` +
-          ` · renderer: ${isStatic ? "static" : "live"}` +
           (error ? ` · error: ${error}` : "")}
       </Text>
       <View style={styles.row}>
@@ -217,19 +207,14 @@ export const WebGLLifecycle = () => {
         />
         <Button testID="lose" title="Lose context" onPress={lose} />
         <Button testID="restore" title="Restore context" onPress={restore} />
-        <Button
-          testID="renderer"
-          title={isStatic ? "Renderer: static" : "Renderer: live"}
-          onPress={() => setIsStatic((s) => !s)}
-        />
       </View>
       <Text style={styles.description}>
         Mount & unmount: more cycles than the browser's context limit; the
-        reference canvas must not be evicted (Chrome logs "Too many active WebGL
-        contexts" when it is). StrictMode: re-runs the renderer on the same
-        element; the canvas must keep painting. Lose then restore: the canvas
-        goes blank, then resumes. Renderer: switches between the live and the
-        static renderer; both must paint.
+        reference canvas must keep its context (Chrome logs "Too many active
+        WebGL contexts" when one is evicted). StrictMode: re-runs the renderer
+        on the same element; the canvas must keep painting. Lose then restore:
+        the shared context goes away (a GPU reset) and comes back; the canvas
+        goes blank, then resumes.
       </Text>
     </ScrollView>
   );

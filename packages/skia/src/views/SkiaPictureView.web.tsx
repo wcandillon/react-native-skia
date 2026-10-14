@@ -41,15 +41,13 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
   const redrawPendingRef = useRef(false);
   const flushScheduledRef = useRef(false);
 
-  const isStatic = props.__destroyWebGLContextAfterRender === true;
-
   const paint = useCallback((renderer: Renderer) => {
     if (pictureRef.current) {
       redrawPendingRef.current = false;
       renderer.draw([pictureRef.current]);
     }
   }, []);
-  const rendererRef = useSkiaWebRenderer(canvasRef, isStatic, {
+  const rendererRef = useSkiaWebRenderer(canvasRef, {
     paint,
     onLayout,
   });
@@ -205,16 +203,14 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
     ref: _ref,
     onLayout: _onLayout,
     picture: _picture,
-    __destroyWebGLContextAfterRender: _isStatic,
+    // Deprecated, kept out of the DOM.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;
   return (
     <Platform.View {...viewProps}>
       <canvas
-        // A canvas element is bound to one context kind for life (WebGL for
-        // the live renderer, 2D for the static one), so switching renderers
-        // needs a fresh element.
-        key={isStatic ? "static" : "webgl"}
         ref={canvasRef}
         style={{ display: "block", width: "100%", height: "100%" }}
       />
