@@ -1,5 +1,5 @@
 import React from "react";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Canvas, Circle } from "react-native-skia";
 
 function SkiaCircle() {
@@ -29,7 +29,7 @@ function ViewCircle() {
 
 export function Snapshot7() {
   return (
-    <SafeAreaView style={{ flex: 1, alignItems: "center" }}>
+    <View style={{ flex: 1, alignItems: "center" }}>
       <View
         style={{
           marginBottom: 10,
@@ -73,6 +73,6 @@ export function Snapshot7() {
         <ViewCircle />
         <ViewCircle />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

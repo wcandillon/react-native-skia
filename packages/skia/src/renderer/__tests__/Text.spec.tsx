@@ -107,6 +107,9 @@ describe("Test different text examples", () => {
     expect(tf).toBeTruthy();
     const font = Skia.Font(tf, fontSize);
     const text = "欢迎";
+    const textWidth = font
+      .getGlyphWidths(font.getGlyphIDs(text))
+      .reduce((sum, glyphWidth) => sum + glyphWidth, 0);
     const padding = 16;
     const surface = await drawOnNode(
       <>
@@ -114,14 +117,14 @@ describe("Test different text examples", () => {
           text={text}
           font={font}
           y={height / 2}
-          x={(width - font.getTextWidth(text)) / 2}
+          x={(width - textWidth) / 2}
         />
 
         <Text
           text={text}
           font={font}
           y={height / 2 + fontSize + padding}
-          x={(width - font.getTextWidth(text)) / 2}
+          x={(width - textWidth) / 2}
           style={"stroke"}
           color={"black"}
           strokeWidth={1}

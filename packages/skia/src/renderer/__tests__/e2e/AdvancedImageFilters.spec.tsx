@@ -21,7 +21,7 @@ describe("Advanced Image Filters", () => {
     const { skiaLogoPng } = images;
     const base64 = await surface.eval(
       (Skia, ctx) => {
-        const sur = Skia.Surface.Make(768, 768)!;
+        const sur = Skia.Surface.MakeRaster(768, 768)!;
         const canvas = sur.getCanvas();
         const paint = Skia.Paint();
         // Create a blurred version of the image for the glow effect
@@ -56,7 +56,7 @@ describe("Advanced Image Filters", () => {
     const { skiaLogoPng } = images;
     const base64 = await surface.eval(
       (Skia, ctx) => {
-        const sur = Skia.Surface.Make(768, 768)!;
+        const sur = Skia.Surface.MakeRaster(768, 768)!;
         const canvas = sur.getCanvas();
 
         // Draw background image first
@@ -146,7 +146,7 @@ describe("Advanced Image Filters", () => {
     const { skiaLogoPng } = images;
     const base64 = await surface.eval(
       (Skia, ctx) => {
-        const sur = Skia.Surface.Make(768, 768)!;
+        const sur = Skia.Surface.MakeRaster(768, 768)!;
         const canvas = sur.getCanvas();
 
         // Fill background with a gradient
@@ -213,7 +213,7 @@ describe("Advanced Image Filters", () => {
     const { skiaLogoPng, mask } = images;
     const base64 = await surface.eval(
       (Skia, ctx) => {
-        const sur = Skia.Surface.Make(768, 768)!;
+        const sur = Skia.Surface.MakeRaster(768, 768)!;
         const canvas = sur.getCanvas();
 
         // Draw a background
@@ -289,7 +289,7 @@ describe("Advanced Image Filters", () => {
     const { skiaLogoPng } = images;
     const base64 = await surface.eval(
       (Skia, ctx) => {
-        const sur = Skia.Surface.Make(768, 768)!;
+        const sur = Skia.Surface.MakeRaster(768, 768)!;
         const canvas = sur.getCanvas();
 
         // First, let's create a metallic gradient background

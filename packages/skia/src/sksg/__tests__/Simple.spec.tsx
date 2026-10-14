@@ -43,7 +43,7 @@ describe("Simple", () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
     await root.render(<skCircle r={128} color="cyan" />);
-    const surface = Skia.Surface.Make(768, 768)!;
+    const surface = Skia.Surface.MakeRaster(768, 768)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
@@ -61,7 +61,7 @@ describe("Simple", () => {
         <skCircle r={128} cx={768 / 2} cy={768 / 2} color="cyan" />
       </>
     );
-    const surface = Skia.Surface.Make(768, 768)!;
+    const surface = Skia.Surface.MakeRaster(768, 768)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
@@ -98,7 +98,7 @@ describe("Simple", () => {
         </skGroup>
       </>
     );
-    const surface = Skia.Surface.Make(width, height)!;
+    const surface = Skia.Surface.MakeRaster(width, height)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
@@ -136,7 +136,7 @@ describe("Simple", () => {
         </skGroup>
       </>
     );
-    const surface = Skia.Surface.Make(width, height)!;
+    const surface = Skia.Surface.MakeRaster(width, height)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);

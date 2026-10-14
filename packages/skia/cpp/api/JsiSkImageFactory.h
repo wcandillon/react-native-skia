@@ -50,9 +50,10 @@ public:
         "Skia.Image.MakeImageFromGPUTexture()");
   }
 
+  // A raster (CPU) image holding a copy of the pixels.
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
-  MakeImage(std::shared_ptr<SkImageInfo> imageInfo, sk_sp<SkData> pixelData,
-            double bytesPerRow) {
+  MakeRasterImage(std::shared_ptr<SkImageInfo> imageInfo,
+                  sk_sp<SkData> pixelData, double bytesPerRow) {
     auto image = SkImages::RasterFromData(*imageInfo, pixelData, bytesPerRow);
     if (image == nullptr) {
       return nullptr;
@@ -149,8 +150,8 @@ public:
                       &JsiSkImageFactory::MakeImageFromViewTag);
     installHostMethod(runtime, prototype, "MakeImageFromNativeBuffer",
                       &JsiSkImageFactory::MakeImageFromNativeBuffer);
-    installMethod(runtime, prototype, "MakeImage",
-                  &JsiSkImageFactory::MakeImage);
+    installMethod(runtime, prototype, "MakeRasterImage",
+                  &JsiSkImageFactory::MakeRasterImage);
     installMethod(runtime, prototype, "MakeNull", &JsiSkImageFactory::MakeNull);
     installHostMethod(runtime, prototype, "MakeImageFromGPUTexture",
                       &JsiSkImageFactory::MakeImageFromGPUTexture);

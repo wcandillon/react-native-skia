@@ -39,7 +39,8 @@ Both packages follow Chrome/Skia milestones. Pick one row and install versions f
 
 | Milestone | react-native-skia | Dawn | react-native-webgpu |
 | --- | --- | --- | --- |
-| m154a | 3.1.0 and later | `react-native-webgpu-dawn` 154.2.0 | 0.13.0 and later, or 0.12.1 |
+| m154a | 3.4.0 and later | `react-native-webgpu-dawn` 154.3.0 | 0.13.1 and later, or 0.12.1 |
+| m154a | 3.1.0 to 3.3.0 | `react-native-webgpu-dawn` 154.2.0 | 0.13.0, or 0.12.1 |
 | m154a | 3.0.6 to 3.0.8 | `dawn-chrome-m154a`, vendored | 0.12.1, or 0.13.0 and later with react-native-skia 3.0.8 |
 | m154 | 3.0.0 to 3.0.5 | `dawn-chrome-m154`, vendored | 0.10.0 to 0.11.2 |
 

@@ -41,7 +41,7 @@
     "@types/minimist": "^1.2.5",
     "@types/node": "^22.13.9",
     "eslint": "9.36.0",
-    "eslint-config-react-native-wcandillon": "5.0.0",
+    "eslint-config-react-native-wcandillon": "5.0.1",
     "minimist": "^1.2.8",
     "ts-morph": "^25.0.1",
     "ts-node": "^10.9.2",

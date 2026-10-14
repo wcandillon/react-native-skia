@@ -4,7 +4,18 @@
   "tasks": {
     "build:android": {
       "cache": false,
-      "env": ["JAVA_HOME", "ANDROID_NDK", "ANDROID_SDK", "ANDROID_HOME"],
+      "env": [
+        "JAVA_HOME",
+        "ANDROID_NDK",
+        "ANDROID_SDK",
+        "ANDROID_HOME",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures"
+      ],
+      "passThroughEnv": [
+        "CMAKE_C_COMPILER_LAUNCHER",
+        "CMAKE_CXX_COMPILER_LAUNCHER",
+        "CCACHE_*"
+      ],
       "outputs": [
         "apps/*/android",
         "!apps/*/android/.gradle",

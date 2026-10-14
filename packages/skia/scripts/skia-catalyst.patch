@@ -11,7 +11,8 @@ Flags alone cannot fix Dawn's iOS-only Metal feature-set checks, which fail:
 The source guards for those checks are in metal-maccatalyst.patch.
 
 Declare the Catalyst environment in GN and set its compiler/assembler/linker
-targets.
+targets. Use ios_min_target for both Catalyst and macOS deployment targets;
+each target has its own GN build arguments.
 
 Drop this patch when the pinned Skia includes equivalent Catalyst support.
 
@@ -36,7 +37,7 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
 
 --- a/gn/skia/BUILD.gn
 +++ b/gn/skia/BUILD.gn
-@@ -264,44 +264,54 @@
+@@ -264,44 +264,55 @@
          "-isysroot",
          xcode_sysroot,
        ]
@@ -78,8 +79,9 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
 -        "-target",
 -        "arm64-apple-macos11",
 -      ]
++    assert(ios_min_target != "",
++           "ios_min_target is required for macOS and Mac Catalyst")
 +    if (is_catalyst) {
-+      assert(ios_min_target != "", "ios_min_target is required for Mac Catalyst")
 +      if (current_cpu == "arm64") {
 +        _mac_target = "arm64-apple-ios${ios_min_target}-macabi"
 +      } else {
@@ -100,9 +102,9 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
 -      ]
 -    }
 +      if (current_cpu == "arm64") {
-+        _mac_target = "arm64-apple-macos11"
++        _mac_target = "arm64-apple-macos${ios_min_target}"
 +      } else {
-+        _mac_target = "x86_64-apple-macos11"
++        _mac_target = "x86_64-apple-macos${ios_min_target}"
 +      }
 +    }
 +    asmflags += [

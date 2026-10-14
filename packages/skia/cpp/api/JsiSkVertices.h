@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "JsiSkNativeObjects.h"
+#include "JsiSkPoint.h"
 #include "JsiSkRect.h"
 
 #pragma clang diagnostic push
@@ -72,28 +73,21 @@ public:
       std::vector<SkColor> colors;
       std::vector<uint16_t> indices;
 
-      auto jsiPositions = arguments[1].asObject(runtime).asArray(runtime);
-      auto positionsSize = static_cast<int>(jsiPositions.size(runtime));
-      positions.reserve(positionsSize);
-      for (int i = 0; i < positionsSize; i++) {
-        std::shared_ptr<SkPoint> point = JsiSkPoint::fromValue(
-            runtime,
-            jsiPositions.getValueAtIndex(runtime, i).asObject(runtime));
-        positions.push_back(*point.get());
+      if (!JsiSkPoint::readPoints(runtime, arguments[1], positions)) {
+        throw jsi::JSError(runtime, "The positions must be an array of points "
+                                    "or a Float32Array of x, y pairs");
       }
+      auto positionsSize = static_cast<int>(positions.size());
 
       if (count >= 3 && !arguments[2].isNull() && !arguments[2].isUndefined()) {
-        auto jsiTexs = arguments[2].asObject(runtime).asArray(runtime);
-        auto texsSize = jsiTexs.size(runtime);
-        if (texsSize != positionsSize) {
+        if (!JsiSkPoint::readPoints(runtime, arguments[2], texs)) {
+          throw jsi::JSError(runtime,
+                             "The texture coordinates must be an array of "
+                             "points or a Float32Array of x, y pairs");
+        }
+        if (static_cast<int>(texs.size()) != positionsSize) {
           throw jsi::JSError(runtime, "The number of texture coordinates must "
                                       "match the number of positions");
-        }
-        texs.reserve(texsSize);
-        for (int i = 0; i < texsSize; i++) {
-          auto point = JsiSkPoint::fromValue(
-              runtime, jsiTexs.getValueAtIndex(runtime, i).asObject(runtime));
-          texs.push_back(*point.get());
         }
       }
 

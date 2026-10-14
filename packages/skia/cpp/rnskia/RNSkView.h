@@ -82,16 +82,18 @@ public:
    */
   void setNativeId(size_t nativeId) {
     _nativeId = nativeId;
+    // The registry's entry, not the view's: after a reload a recycled view
+    // still holds the target of the previous bundle.
+    auto target = RNSkGraphiteTargetRegistry::getInstance().bind(
+        nativeId, _platformContext);
     std::shared_ptr<RNSkGraphiteTarget> previous;
     {
       std::lock_guard<std::mutex> lock(_mutex);
-      if (_target && _targetId == nativeId) {
+      if (_target == target) {
         return;
       }
       previous = std::move(_target);
-      _targetId = nativeId;
-      _target = RNSkGraphiteTargetRegistry::getInstance().getOrCreate(
-          nativeId, _platformContext);
+      _target = target;
     }
     if (previous) {
       previous->detach(_surface);
@@ -105,7 +107,6 @@ public:
         }
       });
     };
-    auto target = getTarget();
     target->attach(_surface, scheduleOnMainThread);
     _producer->setTarget(target);
     if (target->hasQueued()) {
@@ -431,7 +432,6 @@ private:
   // read by snapshots.
   std::mutex _mutex;
   std::shared_ptr<RNSkGraphiteTarget> _target;
-  size_t _targetId = 0;
   std::shared_ptr<RNSkGraphiteRecording> _lastPresented;
 };
 

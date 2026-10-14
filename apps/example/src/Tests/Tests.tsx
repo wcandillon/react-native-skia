@@ -14,6 +14,7 @@ import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
 import { Screens } from "./Screens";
 import { useClient } from "./useClient";
+import { workletSerialization } from "./workletSerialization";
 
 export const CI = process.env.CI === "true";
 const s = 3;
@@ -56,7 +57,9 @@ export const Tests = ({ assets }: TestsProps) => {
                 })`
             ).call({
               Skia,
-              ctx: parseProps(tree.ctx, assets),
+              // The worklet serializer spec needs app-side worklets (see
+              // workletSerialization.ts); hand them over through the context.
+              ctx: { ...parseProps(tree.ctx, assets), workletSerialization },
               size: size * PixelRatio.get(),
               scale: s,
             });

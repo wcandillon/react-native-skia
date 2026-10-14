@@ -202,7 +202,9 @@ public:
 
   /**
    Queues a recording for the next frame. Recordings are never dropped: a
-   later frame may depend on resources an earlier one uploaded.
+   later frame may depend on resources an earlier one uploaded. This holds
+   before the view exists too, as the registry owns the target until the
+   view is gone (see RNSkGraphiteTargetRegistry).
    */
   void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
@@ -356,8 +358,13 @@ private:
 };
 
 /**
- * Targets by native view id. Entries are weak: a target lives as long as the
- * view or a JS context object holds it.
+ * Targets by native view id. The registry owns every target. An entry is
+ * made by whichever side comes first, the context JS makes for the id or the
+ * view binding to it, and kept until the platform view of the id is
+ * unregistered or, for an id no view ever bound to, until JS retires it. A
+ * reload clears the registry, as native ids start over with the next bundle
+ * (see ~RNSkManager). The same ownership as the SurfaceRegistry of
+ * react-native-webgpu.
  */
 class RNSkGraphiteTargetRegistry {
 public:
@@ -370,28 +377,97 @@ public:
   RNSkGraphiteTargetRegistry &
   operator=(const RNSkGraphiteTargetRegistry &) = delete;
 
+  /** The target of the id, for the context JS makes; made when missing. */
   std::shared_ptr<RNSkGraphiteTarget>
   getOrCreate(size_t nativeId,
               const std::shared_ptr<RNSkPlatformContext> &context) {
     std::lock_guard<std::mutex> lock(_mutex);
-    auto it = _targets.find(nativeId);
-    if (it != _targets.end()) {
-      if (auto target = it->second.lock()) {
-        return target;
+    auto &entry = getOrCreateLocked(nativeId, context);
+    return entry.target;
+  }
+
+  /**
+   The target of the id, for the view binding to it; made when missing. From
+   here on the entry is the view's: its unregistration retires it, not JS
+   (see removeIfUnbound). Made and marked under one lock, so that a removal
+   racing with the bind either finds the entry bound or runs before it is
+   made again.
+   */
+  std::shared_ptr<RNSkGraphiteTarget>
+  bind(size_t nativeId, const std::shared_ptr<RNSkPlatformContext> &context) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto &entry = getOrCreateLocked(nativeId, context);
+    entry.bound = true;
+    return entry.target;
+  }
+
+  /** Retires the entry of a platform view that is gone. */
+  void remove(size_t nativeId) {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      auto it = _entries.find(nativeId);
+      if (it == _entries.end()) {
+        return;
       }
+      target = std::move(it->second.target);
+      _entries.erase(it);
     }
-    for (auto entry = _targets.begin(); entry != _targets.end();) {
-      entry = entry->second.expired() ? _targets.erase(entry) : ++entry;
+    // The target, and the GPU resources of its queue, may be destroyed here,
+    // outside of the lock.
+  }
+
+  /**
+   Retires the entry from the JS side, when the view component unmounts,
+   unless a view bound to it: that entry is the view's, and its teardown
+   retires it. React's StrictMode simulates an unmount without unmounting
+   the native views, which would otherwise orphan a bound view.
+   */
+  void removeIfUnbound(size_t nativeId) {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      auto it = _entries.find(nativeId);
+      if (it == _entries.end() || it->second.bound) {
+        return;
+      }
+      target = std::move(it->second.target);
+      _entries.erase(it);
     }
-    auto target = std::make_shared<RNSkGraphiteTarget>(context);
-    _targets[nativeId] = target;
-    return target;
+  }
+
+  /** Drops every entry: the bundle is going away (see ~RNSkManager). */
+  void clear() {
+    std::unordered_map<size_t, Entry> entries;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      entries.swap(_entries);
+    }
   }
 
 private:
+  struct Entry {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    bool bound = false;
+  };
+
   RNSkGraphiteTargetRegistry() = default;
+
+  Entry &
+  getOrCreateLocked(size_t nativeId,
+                    const std::shared_ptr<RNSkPlatformContext> &context) {
+    auto it = _entries.find(nativeId);
+    if (it != _entries.end()) {
+      return it->second;
+    }
+    return _entries
+        .emplace(nativeId,
+                 Entry{std::make_shared<RNSkGraphiteTarget>(context), false})
+        .first->second;
+  }
+
   std::mutex _mutex;
-  std::unordered_map<size_t, std::weak_ptr<RNSkGraphiteTarget>> _targets;
+  std::unordered_map<size_t, Entry> _entries;
 };
 
 } // namespace RNSkia

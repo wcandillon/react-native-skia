@@ -1,4 +1,4 @@
-import type { FC, RefObject } from "react";
+import type { RefObject } from "react";
 import React, {
   useCallback,
   useEffect,
@@ -28,7 +28,7 @@ import { Skia } from "../skia";
 import { Platform } from "../Platform";
 import { HAS_REANIMATED_3 } from "../external";
 
-export interface CanvasRef extends FC<CanvasProps> {
+export interface CanvasRef {
   makeImageSnapshot(rect?: SkRect): SkImage;
   redraw(): void;
   getNativeId(): number;
@@ -60,9 +60,7 @@ export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
   return { ref, size };
 };
 
-export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
-  /** @deprecated Not supported on native. Use `onSize` or `useCanvasSize()` instead. */
-  onLayout?: ViewProps["onLayout"];
+export interface CanvasProps extends ViewProps {
   /**
    * Declares that the canvas covers every pixel of its bounds, so nothing
    * behind it needs to show through. On Android an opaque canvas is backed by
@@ -83,7 +81,6 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   /** Android-only rendering options. Ignored on iOS and web. */
   android?: AndroidCanvasProps;
   ref?: React.Ref<CanvasRef>;
-  __destroyWebGLContextAfterRender?: boolean;
 }
 
 /**
@@ -94,13 +91,7 @@ const useCanvasRoot = ({
   children,
   onSize,
   ref,
-  onLayout,
-}: Pick<CanvasProps, "children" | "onSize" | "ref" | "onLayout">) => {
-  if (onLayout && Platform.OS !== "web") {
-    console.error(
-      "<Canvas onLayout={onLayout} /> is not supported on the new architecture, to fix the issue, see: https://wcandillon.github.io/react-native-skia/docs/canvas/overview/#canvas-size"
-    );
-  }
+}: Pick<CanvasProps, "children" | "onSize" | "ref">) => {
   const viewRef = useCanvasRefPriv(null);
   // Native ID
   const nativeId = useMemo(() => {
@@ -148,25 +139,25 @@ const useCanvasRoot = ({
   // Component methods
   useImperativeHandle(
     ref,
-    () =>
-      ({
-        makeImageSnapshot: (rect?: SkRect) => {
-          return SkiaViewApi.makeImageSnapshot(nativeId, rect);
-        },
+    (): CanvasRef => ({
+      makeImageSnapshot: (rect?: SkRect) => {
+        return SkiaViewApi.makeImageSnapshot(nativeId, rect);
+      },
 
-        redraw: () => {
-          SkiaViewApi.requestRedraw(nativeId);
-        },
-        getNativeId: () => {
-          return nativeId;
-        },
-        measure: (callback) => {
-          viewRef.current?.measure(callback);
-        },
-        measureInWindow: (callback) => {
-          viewRef.current?.measureInWindow(callback);
-        },
-      }) as CanvasRef
+      redraw: () => {
+        SkiaViewApi.requestRedraw(nativeId);
+      },
+      getNativeId: () => {
+        return nativeId;
+      },
+      measure: (callback) => {
+        viewRef.current?.measure(callback);
+      },
+      measureInWindow: (callback) => {
+        viewRef.current?.measureInWindow(callback);
+      },
+    }),
+    [nativeId, viewRef]
   );
   return { nativeId, viewRef };
 };
@@ -200,7 +191,6 @@ export const Canvas = ({
     children,
     onSize,
     ref,
-    onLayout,
   });
 
   const onLayoutWeb = useCallback(

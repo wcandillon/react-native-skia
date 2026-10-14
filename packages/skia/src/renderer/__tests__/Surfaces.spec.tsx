@@ -30,12 +30,12 @@ describe("Surface", () => {
     // When leaking, the WASM memory limit will be reached quite quickly
     // causing the test to fail
     for (let i = 0; i < 500; i++) {
-      using surface = Skia.Surface.Make(1920, 1080)!;
+      using surface = Skia.Surface.MakeRaster(1920, 1080)!;
       const canvas = surface.getCanvas();
       canvas.clear(Skia.Color("cyan"));
       surface.flush();
       using image = surface.makeImageSnapshot();
-      using copy = image.makeNonTextureImage();
+      using copy = image.makeRasterImageSync();
       expect(copy).toBeDefined();
     }
   });
@@ -44,7 +44,7 @@ describe("Surface", () => {
     // When leaking, the WASM memory limit will be reached quite quickly
     // causing the test to fail
     for (let i = 0; i < 500; i++) {
-      using surface = Skia.Surface.Make(1920, 1080)!;
+      using surface = Skia.Surface.MakeRaster(1920, 1080)!;
       const canvas = surface.getCanvas();
       canvas.clear(Skia.Color("cyan"));
       surface.flush();

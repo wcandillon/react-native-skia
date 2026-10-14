@@ -1,0 +1,177 @@
+name: Agent
+# A Claude Code agent run on the self-hosted Mac, started by hand. It builds
+# and launches the example app on its own simulator, lets the agent look at
+# the screen through screenshots, and keeps what the agent saw as an
+# artifact. The first rung of this ladder, a run that only proved the
+# integration (Bun and the Claude Code CLI install on the runner, the
+# subscription token, the tool allowlist, the report in the step summary), was
+# this job without the app; the next ones give the agent a tour of every
+# example and a pull request to probe.
+#
+# Only workflow_dispatch and schedule may start this workflow. Both are
+# maintainer-only, so the token never reaches a run that executes code from a
+# fork. The action's subprocess isolation is Linux-only: on this Mac the tool
+# allowlist in claude_args is the only guard, so keep it tight.
+on:
+  workflow_dispatch:
+  # Nightly at 02:00 CET (03:00 CEST; GitHub's cron is UTC only): a quiet
+  # hour on the shared runner, and the night's screenshots are the baseline
+  # the pull request runs compare against. GitHub only fires schedules from
+  # the default branch.
+  schedule:
+    - cron: "0 1 * * *"
+
+# One agent run at a time on the shared machine.
+concurrency:
+  group: agent
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      # Own Metro port, test server port and simulator next to the CI job's
+      # (see the table in ci.yml), so an agent run can overlap with it. The
+      # derived data is separate too: two xcodebuilds must not share one.
+      METRO_PORT: 8084
+      E2E_PORT: 4245
+      IOS_SIMULATOR: skia-agent
+      DERIVED_DATA: ${{ github.workspace }}/../derived-data/skia-agent-ios
+      BUNDLE_ID: com.microsoft.ReactTestApp
+      # The screenshots and logs the agent works from, uploaded at the end.
+      AGENT_OUTPUT: ${{ github.workspace }}/agent-output
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install CocoaPods
+        working-directory: apps/example/ios
+        run: pod install
+
+      - name: Ensure Metro and test server ports are free
+        run: |
+          lsof -ti :$METRO_PORT | xargs -r kill -9 || true
+          lsof -ti :$E2E_PORT | xargs -r kill -9 || true
+
+      # GitHub Actions sets CI=true, which the app inlines into its bundle and
+      # uses to open on the Tests screen. The agent wants the Home screen, so
+      # Metro runs with CI unset. Metro's transform cache is keyed on file
+      # content, not on env, and lives in $TMPDIR, shared with the CI job's
+      # Metro on this machine: an own TMPDIR keeps the two bundles apart.
+      - name: Start Package Manager
+        working-directory: apps/example
+        run: |
+          mkdir -p "$AGENT_OUTPUT" "$RUNNER_TEMP/metro-tmp"
+          env -u CI TMPDIR="$RUNNER_TEMP/metro-tmp" \
+            yarn start --port $METRO_PORT --reset-cache > "$AGENT_OUTPUT/metro.log" 2>&1 &
+
+      # Same recipe as ci.yml, on the agent's own simulator.
+      - name: Prepare iOS simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | jq -r --arg name "$IOS_SIMULATOR" '
+            .devices[] | .[] | select(.name == $name) | .udid' | head -n 1)
+          if [ -z "$UDID" ]; then
+            RUNTIME=$(xcrun simctl list runtimes available --json | jq -r '
+              .runtimes | map(select(.platform == "iOS"))
+              | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
+            DEVICE_TYPE=$(xcrun simctl list devicetypes --json | jq -r '
+              .devicetypes | map(select(.name | test("^iPhone [0-9]+ Pro$")))
+              | sort_by(.name | capture("^iPhone (?<n>[0-9]+) Pro$").n | tonumber) | last | .identifier')
+            echo "Creating $IOS_SIMULATOR ($DEVICE_TYPE, $RUNTIME)"
+            UDID=$(xcrun simctl create "$IOS_SIMULATOR" "$DEVICE_TYPE" "$RUNTIME")
+          fi
+          echo "Using simulator $IOS_SIMULATOR ($UDID)"
+          echo "IOS_SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl uninstall "$UDID" "$BUNDLE_ID" || true
+
+      - name: Build example for iOS
+        working-directory: apps/example/ios
+        run: |
+          set -o pipefail && xcodebuild \
+            -workspace example.xcworkspace \
+            -scheme example \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            RCT_METRO_PORT=$METRO_PORT \
+            build | tee xcodebuild.log | xcpretty || {
+              grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
+              exit 1
+            }
+
+      # Metro builds the bundle before the app asks for it: Metro no longer
+      # prints JS logs, so there is no "app is running" line to wait for, and
+      # a warm Metro answers the app's request within seconds. The screenshot
+      # is the state the agent starts from, for the artifact.
+      - name: Install and launch app on simulator
+        run: |
+          xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
+          curl -sf --max-time 900 -o /dev/null \
+            "http://localhost:$METRO_PORT/index.bundle?platform=ios&dev=true&lazy=true&minify=false"
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID"
+          sleep 20
+          xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@34968b5981d5d170904281aa3df6f3c0d4a28855 # v1.0.249
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The workflow's own token instead of the Claude GitHub App, which is
+          # not installed on this repository.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Claude's final report goes to the run's step summary.
+          display_report: true
+          prompt: |
+            The React Native Skia example app is running on the iOS simulator
+            ${{ env.IOS_SIMULATOR_UDID }} (bundle id ${{ env.BUNDLE_ID }}),
+            served by a Metro whose log is ${{ env.AGENT_OUTPUT }}/metro.log.
+            The simulator is headless: you see it only through screenshots,
+            taken with `xcrun simctl io <udid> screenshot <file>.png` into
+            ${{ env.AGENT_OUTPUT }}.
+
+            1. Screenshot the current screen and describe it in two lines. It
+               should be the app's Home list (apps/example/src/Home); say
+               whether anything on it looks wrong, such as an error toast or
+               a red box.
+            2. Grep metro.log for errors and warnings.
+
+            Reply with the screenshot's file name and what it shows, then the
+            error lines if any. Do nothing else.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 15
+            --allowedTools "Bash(xcrun simctl io:*),Bash(sleep:*),Read,Grep"
+
+      - name: Upload the agent's screenshots and logs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          name: agent-ios
+          path: agent-output
+          if-no-files-found: ignore
+
+      # Stop Metro and shut the simulator down so they don't hold memory
+      # while the machine runs the other repositories' jobs.
+      - name: Clean up
+        if: always()
+        run: |
+          lsof -ti :$METRO_PORT | xargs -r kill -9 || true
+          lsof -ti :$E2E_PORT | xargs -r kill -9 || true
+          if [ -n "$IOS_SIMULATOR_UDID" ]; then
+            xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
+          fi

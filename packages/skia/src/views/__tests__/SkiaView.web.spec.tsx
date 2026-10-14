@@ -15,8 +15,10 @@ import {
   installWebEnvironment,
   resetWebEnvironment,
   installCanvasKit,
-  contexts,
   contextOf,
+  webglContexts,
+  offscreenCanvases,
+  sharedContext,
   fakePicture,
   display,
   mediaQueryListeners,
@@ -54,7 +56,7 @@ const setPicture = (nativeID: number) =>
 interface MountOptions {
   onLayout?: () => void;
   strict?: boolean;
-  isStatic?: boolean;
+  destroyContextAfterRender?: boolean;
 }
 
 const mountView = (nativeID: string, options: MountOptions = {}) => {
@@ -64,13 +66,14 @@ const mountView = (nativeID: string, options: MountOptions = {}) => {
   const render = ({
     onLayout,
     strict = false,
-    isStatic = false,
+    destroyContextAfterRender = false,
   }: MountOptions) => {
     const view = (
       <SkiaView
         nativeID={nativeID}
         onLayout={onLayout}
-        __destroyWebGLContextAfterRender={isStatic}
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
+        __destroyWebGLContextAfterRender={destroyContextAfterRender}
         style={{ width: 360, height: 520 }}
       />
     );
@@ -102,41 +105,92 @@ describe("SkiaView.web", () => {
     canvasSize.height = 520;
 
     const view = mountView("1");
-    // The renderer and its surface exist right after mount.
+    // The shared context exists right after mount; a surface is made on it
+    // for the view's size when the view first paints.
     expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(1);
-    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
+    expect(CanvasKitMock.MakeOnScreenGLSurface).not.toHaveBeenCalled();
 
     // Note that no ResizeObserver entry has been delivered at this point.
     await setPicture(1);
+    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledWith(
+      expect.anything(),
+      360,
+      520,
+      "srgb"
+    );
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    // The frame is copied from the shared canvas onto the element.
+    const shared = offscreenCanvases[0];
+    expect(shared.width).toBe(360);
+    expect(shared.height).toBe(520);
+    expect(contextOf(view.canvas()).drawImage).toHaveBeenCalledWith(
+      shared,
+      0,
+      0,
+      360,
+      520,
+      0,
+      0,
+      360,
+      520
+    );
+
+    // The context outlives the view.
+    await view.unmount();
+    expect(CanvasKitMock.deleteContext).not.toHaveBeenCalled();
+  });
+
+  // The element owns no WebGL context: a context per element is what used
+  // to run into the browser's limit on live contexts (#3349).
+  it("presents through a 2D context and never gives the element a WebGL context", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountView("11");
+    await setPicture(11);
+    const canvas = view.canvas();
+    expect(webglContexts.has(canvas)).toBe(false);
+    const ctx = contextOf(canvas);
+    // Each frame replaces the previous one, transparent pixels included
+    // (sizing the element resets the context's state, so the operation has
+    // to hold at the time of the copy), and keeps the wide gamut of the
+    // shared drawing buffer.
+    expect(ctx.compositeOperations).toEqual(["copy"]);
+    expect(ctx.colorSpace).toBe("display-p3");
+    expect(sharedContext().drawingBufferColorSpace).toBe("display-p3");
+
+    // A resize in between doesn't lose it.
+    canvasSize.width = 400;
+    deliverResize();
+    expect(ctx.compositeOperations).toEqual(["copy", "copy"]);
 
     await view.unmount();
-    expect(CanvasKitMock.deleteContext).toHaveBeenCalledWith(1);
   });
 
   it("holds a picture dispatched while unmeasured and paints it on first resize", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
 
     const view = mountView("2");
-    // No measurable size yet: the renderer exists but has no surface.
-    expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(1);
+    // No measurable size yet: the renderer exists but has nothing to draw on.
     expect(CanvasKitMock.MakeOnScreenGLSurface).not.toHaveBeenCalled();
 
     await setPicture(2);
     expect(rawCanvas.drawPicture).not.toHaveBeenCalled();
 
-    // The canvas gets its size: the observer delivery must create the
-    // surface and paint the held picture synchronously.
+    // The canvas gets its size: the observer delivery must paint the held
+    // picture synchronously.
     canvasSize.width = 360;
     canvasSize.height = 520;
     deliverResize();
     expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    expect(contextOf(view.canvas()).drawImage).toHaveBeenCalledTimes(1);
 
     await view.unmount();
   });
 
-  it("recreates the surface at the new density when the pixel density changes", async () => {
+  it("repaints at the new density when the pixel density changes", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
@@ -163,7 +217,10 @@ describe("SkiaView.web", () => {
       1040,
       "srgb"
     );
+    expect(rawCanvas.scale).toHaveBeenLastCalledWith(2, 2);
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    expect(view.canvas().width).toBe(720);
+    expect(view.canvas().height).toBe(1040);
 
     await view.unmount();
   });
@@ -194,68 +251,129 @@ describe("SkiaView.web", () => {
   // cleanup does not imply the host node is gone. React re-runs layout
   // effects on a *preserved* <canvas> element under StrictMode's DEV
   // double-invoke (doubleInvokeEffectsOnFiber) and when an Activity/offscreen
-  // subtree is revealed (reappearLayoutEffects). Losing the element's WebGL
-  // context on dispose lost it permanently, so the second construction could
-  // not build a GrDirectContext on it.
+  // subtree is revealed (reappearLayoutEffects). The element holds nothing a
+  // renderer has to take over, so the second construction just paints.
   it("survives its layout effect being re-run on the same canvas element", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
     const view = mountView("5", { strict: true });
+    // Neither construction touched the shared context.
+    expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(1);
+    expect(CanvasKitMock.deleteContext).not.toHaveBeenCalled();
 
-    // The effect really was torn down and re-run, against the very same
-    // element. Without this the test could pass without exercising the bug.
-    const canvasArgs = CanvasKitMock.GetWebGLContext.mock.calls.map(
-      ([canvas]) => canvas
-    );
-    expect(canvasArgs.length).toBeGreaterThan(1);
-    expect(new Set(canvasArgs).size).toBe(1);
-
-    // ...and the renderer that came out of it can still paint.
     await setPicture(5);
-    expect(contextOf(view.canvas()).lost).toBe(false);
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    expect(contextOf(view.canvas()).drawImage).toHaveBeenCalled();
 
     await view.unmount();
   });
 
-  // #3349: browsers cap the number of live WebGL contexts per page (Chrome
-  // evicts the oldest past 16) and a detached canvas keeps its context alive
-  // until garbage collection, so a canvas that really leaves the document must
-  // lose its context eagerly — without breaking the re-run case above.
-  it("loses the element's context once the element has left the document", async () => {
-    const { registry } = installCanvasKit();
+  // #3349: with a context per element, a page that mounted and unmounted
+  // canvases past the browser's limit had its oldest live context evicted.
+  it("shares one context between every view, mounted or gone", async () => {
+    const { CanvasKitMock, registry } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("6", { strict: true });
-    const canvas = view.canvas();
-    const ctx = contextOf(canvas);
-    await flushMicrotasks();
-    // Re-run on a connected element: the context is kept, and exactly one
-    // handle for it is registered.
-    expect(ctx.lost).toBe(false);
-    expect(registry.size).toBe(1);
+    const first = mountView("6");
+    await setPicture(6);
+    for (let i = 0; i < 20; i++) {
+      const churn = mountView(`${100 + i}`);
+      await setPicture(100 + i);
+      await churn.unmount();
+    }
+    const second = mountView("7");
+    await setPicture(7);
 
-    await view.unmount();
-    expect(canvas.isConnected).toBe(false);
-    expect(ctx.lost).toBe(true);
-    expect(registry.size).toBe(0);
+    expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(1);
+    expect(CanvasKitMock.deleteContext).not.toHaveBeenCalled();
+    expect(registry.size).toBe(1);
+    // Views of one size share a surface on the drawing buffer.
+    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
+    expect(sharedContext().lost).toBe(false);
+    expect(contextOf(first.canvas()).drawImage).toHaveBeenCalledTimes(1);
+    expect(contextOf(second.canvas()).drawImage).toHaveBeenCalledTimes(1);
+
+    await first.unmount();
+    await second.unmount();
+  });
+
+  // Resizing the shared drawing buffer reallocates it, so it only grows,
+  // and a smaller view draws in its bottom-left corner.
+  it("grows the shared drawing buffer to the largest view and presents the corner a view drew in", async () => {
+    const { CanvasKitMock, rawSurfaces } = installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+    const large = mountView("8");
+    await setPicture(8);
+    const shared = offscreenCanvases[0];
+    expect(shared.width).toBe(360);
+    expect(shared.height).toBe(520);
+
+    canvasSize.width = 200;
+    canvasSize.height = 100;
+    const small = mountView("9");
+    await setPicture(9);
+    expect(shared.width).toBe(360);
+    expect(shared.height).toBe(520);
+    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenLastCalledWith(
+      expect.anything(),
+      200,
+      100,
+      "srgb"
+    );
+    expect(contextOf(small.canvas()).drawImage).toHaveBeenLastCalledWith(
+      shared,
+      0,
+      420,
+      200,
+      100,
+      0,
+      0,
+      200,
+      100
+    );
+    // The surfaces on the buffer survive a draw of another size...
+    expect(rawSurfaces.map((s) => s.delete.mock.calls.length)).toEqual([0, 0]);
+
+    // ...and are rebuilt when the buffer grows.
+    canvasSize.width = 800;
+    canvasSize.height = 100;
+    deliverResize();
+    expect(shared.width).toBe(800);
+    expect(shared.height).toBe(520);
+    expect(rawSurfaces.map((s) => s.delete.mock.calls.length)).toEqual([
+      1, 1, 0,
+    ]);
+    expect(contextOf(small.canvas()).drawImage).toHaveBeenLastCalledWith(
+      shared,
+      0,
+      420,
+      800,
+      100,
+      0,
+      0,
+      800,
+      100
+    );
+
+    await small.unmount();
+    await large.unmount();
   });
 
   // A canvas whose renderer is disposed but which stays in the document
-  // (hidden in an Activity) keeps its context, but must not keep a full-size
-  // drawing buffer (which CanvasKit requests with depth and stencil).
-  it("frees the drawing buffer when its renderer is disposed", async () => {
+  // (hidden in an Activity) must not keep a full-size bitmap.
+  it("frees the element's bitmap when its renderer is disposed", async () => {
     installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
     display.pixelDensity = 2;
 
-    const view = mountView("7");
+    const view = mountView("10");
     const canvas = view.canvas();
-    await setPicture(7);
+    await setPicture(10);
     expect(canvas.width).toBe(720);
     expect(canvas.height).toBe(1040);
 
@@ -264,18 +382,18 @@ describe("SkiaView.web", () => {
     expect(canvas.height).toBe(0);
   });
 
-  it("recovers from the browser losing and restoring the context", async () => {
+  it("recovers from the browser losing and restoring the shared context", async () => {
     const { CanvasKitMock, rawCanvas, grContext, registry } =
       installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    const view = mountView("8");
-    await setPicture(8);
+    const view = mountView("12");
+    await setPicture(12);
     expect(rawCanvas.drawPicture).toHaveBeenCalledTimes(1);
-    const ctx = contextOf(view.canvas());
+    const ctx = sharedContext();
 
-    // "Too many active WebGL contexts. Oldest context will be lost."
+    // A GPU reset.
     ctx.lose();
     // The event hasn't been delivered yet, but the context is already gone:
     // a resize in that window must neither throw nor build a surface.
@@ -294,11 +412,11 @@ describe("SkiaView.web", () => {
 
     // Redraw requests while lost are dropped, not crashes.
     rawCanvas.drawPicture.mockClear();
-    await setPicture(8);
+    await setPicture(12);
     expect(rawCanvas.drawPicture).not.toHaveBeenCalled();
 
-    // A slot freed up: the browser brings the context back. The renderer
-    // rebuilds on it, at the size the canvas has by now, and repaints.
+    // The browser brings the context back: it is registered anew, and the
+    // view repaints at the size it has by now.
     ctx.restore();
     await flushMicrotasks();
     expect(ctx.lost).toBe(false);
@@ -315,73 +433,22 @@ describe("SkiaView.web", () => {
     await view.unmount();
   });
 
-  // The context of a canvas that has no renderer attached (hidden in an
-  // Activity) can be evicted meanwhile; the renderer built on it when it is
-  // revealed cannot use CanvasKit on it (MakeWebGLContext faults) and has to
-  // ask for the context back first.
-  it("waits for a context lost while no renderer was attached", async () => {
+  it("ignores the deprecated destroy-context-after-render prop", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
-    // StrictMode's double-invoke is the one way to detach and re-attach a
-    // renderer on a preserved element with React 19.0 (no Activity yet).
-    // The eviction is made to happen at the exact moment the first renderer
-    // lets go of the context, i.e. with no renderer attached.
-    const deleteContext = CanvasKitMock.deleteContext.getMockImplementation();
-    CanvasKitMock.deleteContext.mockImplementationOnce((handle: number) => {
-      contextOf(CanvasKitMock.GetWebGLContext.mock.calls[0][0]).lose();
-      deleteContext?.(handle);
-    });
-    const view = mountView("9", { strict: true });
-    const ctx = contextOf(view.canvas());
-    expect(ctx.lost).toBe(true);
-    // Constructed on a lost context: no fault, and no attempt to build on it.
-    expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(1);
-
-    // The lost event goes through; a browser only records the permission to
-    // restore once its dispatch is over, so the request has to come from a
-    // later task. Whether that task has run yet is not asserted: act() ends
-    // on a setImmediate, which Node may run before or after a setTimeout(0).
-    const surfacesBefore =
-      CanvasKitMock.MakeOnScreenGLSurface.mock.calls.length;
-    await flushMicrotasks();
-    expect(ctx.restoreAllowed).toBe(true);
-    await flushTimers();
-    expect(ctx.lost).toBe(false);
-    expect(CanvasKitMock.GetWebGLContext).toHaveBeenCalledTimes(2);
-    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(
-      surfacesBefore + 1
-    );
-
-    await setPicture(9);
+    const view = mountView("13", { destroyContextAfterRender: true });
+    const canvas = view.canvas();
+    await setPicture(13);
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    expect(CanvasKitMock.deleteContext).not.toHaveBeenCalled();
+    expect(canvas.hasAttribute("__destroyWebGLContextAfterRender")).toBe(false);
 
-    await view.unmount();
-  });
-
-  // A canvas element is bound to one context kind for life: the static
-  // renderer draws through a 2D context, so switching renderers on the same
-  // element would fail in either direction.
-  it("switches to a fresh canvas element when the renderer kind changes", async () => {
-    const { registry } = installCanvasKit();
-    canvasSize.width = 360;
-    canvasSize.height = 520;
-
-    const view = mountView("10");
-    const webglCanvas = view.canvas();
-    const ctx = contextOf(webglCanvas);
-    expect(registry.size).toBe(1);
-
-    view.render({ isStatic: true });
+    // Toggling it keeps the element.
+    view.render({ destroyContextAfterRender: false });
     await flushMicrotasks();
-    const staticCanvas = view.canvas();
-    expect(staticCanvas).not.toBe(webglCanvas);
-    // The old element really went away, context and all.
-    expect(webglCanvas.isConnected).toBe(false);
-    expect(ctx.lost).toBe(true);
-    expect(registry.size).toBe(0);
-    expect(contexts.has(staticCanvas)).toBe(false);
+    expect(view.canvas()).toBe(canvas);
 
     await view.unmount();
   });

@@ -93,12 +93,13 @@ const Demo = () => {
 
 ## Under the hood
 
-Reanimated provides a [`runOnUI`](https://docs.swmansion.com/react-native-reanimated/docs/threading/runOnUI) function that enables the execution of JavaScript code on the UI thread. The hooks above use it to create GPU textures without blocking the JS thread.
+React Native Worklets provides a [`scheduleOnUI`](https://docs.swmansion.com/react-native-worklets/docs/threading/scheduleOnUI) function that enables the execution of JavaScript code on the UI thread. The hooks above use it to create GPU textures without blocking the JS thread.
 
 ```tsx twoslash
 import { useEffect } from "react";
-import { runOnUI, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
+import { scheduleOnUI } from "react-native-worklets";
 import { Skia, Canvas, Image } from "react-native-skia";
 import type { SkImage } from "react-native-skia";
 
@@ -114,7 +115,7 @@ const createTexture = (image: SharedValue<SkImage | null>) => {
 const Demo = () => {
   const image = useSharedValue<SkImage | null>(null);
   useEffect(() => {
-    runOnUI(createTexture)(image);
+    scheduleOnUI(createTexture, image);
   }, []);
   
   return (
@@ -125,7 +126,7 @@ const Demo = () => {
 };
 ```
 
-This example demonstrates how to create a texture, draw a cyan color onto it, and then display it using the `Image` component from `react-native-skia`. The `runOnUI` function ensures that the texture creation and drawing operations are performed on the UI thread.
+This example demonstrates how to create a texture, draw a cyan color onto it, and then display it using the `Image` component from `react-native-skia`. The `scheduleOnUI` function ensures that the texture creation and drawing operations are performed on the UI thread.
 
 Since textures are shared between threads, you can also create one directly on the JS thread, without Reanimated:
 
@@ -188,7 +189,7 @@ Never draw the image onto its own surface: use a second surface for a feedback l
 :::info
 
 On the Web, a texture belongs to the WebGL context that created it, and each canvas has its own context.
-Call `makeNonTextureImage()` on the snapshot before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
+Call `makeRasterImageSync()` on the snapshot before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
 
 :::
 

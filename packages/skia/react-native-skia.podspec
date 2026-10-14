@@ -56,9 +56,10 @@ install_apple_skia_libs = lambda do |base_dir, packages|
 end
 
 # The Graphite binaries ship in the react-native-skia-graphite-apple-* npm
-# packages (no tvOS).
+# packages.
 apple_skia_packages = {
   'ios' => 'react-native-skia-graphite-apple-ios',
+  'tvos' => 'react-native-skia-graphite-apple-tvos',
   'macos' => 'react-native-skia-graphite-apple-macos'
 }
 install_apple_skia_libs.call(__dir__, apple_skia_packages)
@@ -155,6 +156,7 @@ end
 # Build platform-specific framework paths (relative to pod's libs directory)
 # xcframeworks are copied into libs/ by install_apple_skia_libs above.
 ios_frameworks = framework_names.map { |f| "libs/ios/#{f}.xcframework" } + dawn_frameworks
+tvos_frameworks = framework_names.map { |f| "libs/tvos/#{f}.xcframework" } + dawn_frameworks
 osx_frameworks = framework_names.map { |f| "libs/macos/#{f}.xcframework" } + dawn_frameworks
 
 Pod::Spec.new do |s|
@@ -171,7 +173,7 @@ Pod::Spec.new do |s|
     "Christian Falch" => "christian.falch@gmail.com",
     "William Candillon" => "wcandillon@gmail.com"
   }
-  s.platforms    = { :ios => "15.1", :osx => "11" }
+  s.platforms    = { :ios => "15.1", :tvos => "15.1", :osx => "11" }
   s.source       = { :git => "https://github.com/wcandillon/react-native-skia.git", :tag => "#{s.version}" }
 
   s.requires_arc = true
@@ -186,6 +188,7 @@ Pod::Spec.new do |s|
 
   # Platform-specific vendored frameworks (copied into libs/)
   s.ios.vendored_frameworks = ios_frameworks
+  s.tvos.vendored_frameworks = tvos_frameworks
   s.osx.vendored_frameworks = osx_frameworks
 
   # Preserve the copied libs directory

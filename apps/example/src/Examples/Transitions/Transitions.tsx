@@ -2,11 +2,11 @@ import React, { useCallback, useMemo } from "react";
 import { Dimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
-  runOnJS,
   useDerivedValue,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { Canvas, Fill, ImageShader, Shader, clamp } from "react-native-skia";
 
 import { snapPoint } from "./Math";
@@ -77,7 +77,7 @@ export const Transitions = () => {
         .onEnd(({ velocityX }) => {
           const dst = snapPoint(progressRight.value, velocityX / width, [0, 1]);
           progressRight.value = withTiming(dst, { duration }, () => {
-            runOnJS(previous)();
+            scheduleOnRN(previous);
           });
         }),
     [previous, progressRight]
@@ -96,7 +96,7 @@ export const Transitions = () => {
         .onEnd(({ velocityX }) => {
           const dst = snapPoint(progressLeft.value, -velocityX / width, [0, 1]);
           progressLeft.value = withTiming(dst, { duration }, () => {
-            runOnJS(next)();
+            scheduleOnRN(next);
           });
         }),
     [next, progressLeft]

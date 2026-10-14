@@ -11,7 +11,7 @@ const recordTranslations = async (element: ReactElement) => {
   const { Skia } = importSkia();
   const root = new SkiaSGRoot(Skia);
   await root.render(element);
-  const surface = Skia.Surface.Make(128, 128)!;
+  const surface = Skia.Surface.MakeRaster(128, 128)!;
   const canvas = surface.getCanvas();
   const translate = jest.spyOn(canvas, "translate");
   jest.spyOn(canvas, "drawSvg").mockImplementation(() => {});

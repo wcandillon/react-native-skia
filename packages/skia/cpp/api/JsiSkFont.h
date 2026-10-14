@@ -51,9 +51,8 @@ public:
     return std::vector<double>(widths.begin(), widths.end());
   }
 
-  // TODO: deprecate
-  int getTextWidth(std::string str,
-                   std::optional<std::shared_ptr<SkPaint>> paint) {
+  double getTextWidth(std::string str,
+                      std::optional<std::shared_ptr<SkPaint>> paint) {
     auto numGlyphIDs = getObject()->countText(str.c_str(), str.length(),
                                               SkTextEncoding::kUTF8);
     std::vector<SkGlyphID> glyphs;
@@ -66,7 +65,7 @@ public:
     auto w = SkSpan(widths.data(), widths.size());
     getObject()->getWidthsBounds(
         g, w, {}, paint.has_value() ? paint.value().get() : nullptr);
-    return std::accumulate(widths.begin(), widths.end(), 0);
+    return std::accumulate(widths.begin(), widths.end(), 0.0);
   }
 
   std::shared_ptr<JsiSkRect>

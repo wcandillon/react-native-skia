@@ -1,4 +1,5 @@
 import Rea from "../external/reanimated/ReanimatedProxy";
+import { Worklets } from "../external/reanimated/WorkletsProxy";
 import type { Skia } from "../skia/types";
 import { HAS_REANIMATED_3 } from "../external/reanimated/renderHelpers";
 
@@ -66,10 +67,10 @@ class ReanimatedContainer extends Container {
       this.recording = null;
       // Deferred through the same channel as the draw calls so it runs after
       // any of them that are still queued.
-      Rea.runOnUI(() => {
+      Worklets.scheduleOnUI(() => {
         "worklet";
         disposeRecording(recording);
-      })();
+      });
     }
   }
 
@@ -97,14 +98,14 @@ class ReanimatedContainer extends Container {
         drawOnscreen(Skia, nativeId, recording!);
       }, Array.from(animationValues));
     }
-    Rea.runOnUI(() => {
+    Worklets.scheduleOnUI(() => {
       "worklet";
       if (previousRecording) {
         // Runs after any still-queued draw of the previous recording.
         disposeRecording(previousRecording);
       }
       drawOnscreen(Skia, nativeId, recording!);
-    })();
+    });
   }
 }
 

@@ -80,7 +80,7 @@
   "readmeFilename": "README.md",
   "peerDependencies": {
     "react": ">=19.0",
-    "react-native": ">=0.78",
+    "react-native": ">=0.79",
     "react-native-reanimated": ">=4.0.0",
     "react-native-worklets": ">=0.7.0"
   },
@@ -115,7 +115,7 @@
     "@types/react-reconciler": "0.28.9",
     "@types/ws": "8.5.3",
     "eslint": "9.36.0",
-    "eslint-config-react-native-wcandillon": "5.0.0",
+    "eslint-config-react-native-wcandillon": "5.0.1",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "extract-zip": "^2.0.1",
@@ -142,10 +142,11 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.0",
-    "react-native-skia-graphite-android": "154.2.0",
-    "react-native-skia-graphite-apple-ios": "154.2.0",
-    "react-native-skia-graphite-apple-macos": "154.2.0",
-    "react-native-webgpu-dawn": "154.2.0",
+    "react-native-skia-graphite-android": "154.3.0",
+    "react-native-skia-graphite-apple-ios": "154.3.0",
+    "react-native-skia-graphite-apple-macos": "154.3.0",
+    "react-native-skia-graphite-apple-tvos": "154.3.0",
+    "react-native-webgpu-dawn": "154.3.0",
     "react-reconciler": "0.31.0"
   },
   "eslintIgnore": [

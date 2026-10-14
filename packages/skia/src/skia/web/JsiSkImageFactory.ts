@@ -83,7 +83,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeImage(info: ImageInfo, data: SkData, bytesPerRow: number) {
+  MakeRasterImage(info: ImageInfo, data: SkData, bytesPerRow: number) {
     // see toSkImageInfo() from canvaskit
     const image = this.CanvasKit.MakeImage(
       {

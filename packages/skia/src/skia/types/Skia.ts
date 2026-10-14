@@ -76,16 +76,18 @@ export interface Skia {
    * Returns an Vertices based on the given positions and optional parameters.
    * See SkVertices.h (especially the Builder) for more details.
    * @param mode
-   * @param positions
-   * @param textureCoordinates
+   * @param positions - a list of points, or a Float32Array of interleaved
+   * x, y pairs. The Float32Array is copied in one go, which is much faster
+   * for large meshes that are rebuilt on every frame.
+   * @param textureCoordinates - in the same form as positions.
    * @param colors - either a list of int colors or a flattened color array.
    * @param indices
    * @param isVolatile
    */
   MakeVertices(
     mode: VertexMode,
-    positions: SkPoint[],
-    textureCoordinates?: SkPoint[] | null,
+    positions: SkPoint[] | Float32Array,
+    textureCoordinates?: SkPoint[] | Float32Array | null,
     colors?: SkColor[],
     indices?: number[] | null,
     isVolatile?: boolean

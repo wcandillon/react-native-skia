@@ -5,9 +5,11 @@
 
 #include <jsi/jsi.h>
 
+#include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
+#include "jsi/BoxedNativeObject.h"
 
 namespace RNSkia {
 namespace jsi = facebook::jsi;
@@ -24,6 +26,11 @@ RNSkManager::RNSkManager(
 }
 
 RNSkManager::~RNSkManager() {
+  // The runtime that made the Graphite contexts is going away, with the
+  // views of its bundle. Native ids start over with the next bundle, and a
+  // target kept past this point would be bound by the first view reusing
+  // its id.
+  RNSkGraphiteTargetRegistry::getInstance().clear();
   // Free up any references
   _viewApi = nullptr;
   _jsRuntime = nullptr;
@@ -53,6 +60,15 @@ void RNSkManager::installBindings() {
 
   _jsRuntime->global().setProperty(*_jsRuntime, "SkiaViewApi",
                                    makeJsiObject(*_jsRuntime, _viewApi));
+
+  // The native half of the worklet serializer (see
+  // src/skia/SkiaWorkletSerialization.ts). The serializer worklets capture it
+  // by closure and worklets passes a HostObject to every runtime by reference,
+  // so the main runtime is the only place it needs installing.
+  _jsRuntime->global().setProperty(
+      *_jsRuntime, "__skiaWorkletHelpers",
+      jsi::Object::createFromHostObject(
+          *_jsRuntime, std::make_shared<RNJsi::NativeObjectWorkletHelpers>()));
 
   // The WebGPU JS API (RNWebGPU, navigator.gpu, constants, createImageBitmap)
   // is no longer installed here: react-native-webgpu is the single WebGPU API

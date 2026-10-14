@@ -66,7 +66,7 @@ template <typename Derived> class NativeObject;
  * ```
  */
 template <typename Derived>
-class NativeObject : public jsi::NativeState,
+class NativeObject : public NativeObjectBase,
                      public std::enable_shared_from_this<Derived> {
 public:
   // Marker type for SFINAE detection in JSIConverter
@@ -136,24 +136,13 @@ public:
       defineProperty.call(runtime, prototype, toStringTag, descriptor);
     }
 
-    // Install the shared pieces every native object needs for JS type
-    // detection and cross-runtime transfer (worklets):
-    // - `__typename__` (CLASS_NAME), used by JS type guards and as the
-    //   boxing brand
-    // - `__box()`, which wraps the object into a RNJsi::BoxedNativeObject
-    //   HostObject that worklets can pass across runtimes by reference
-    // See registerCustomSerializable in src/skia/SkiaWorkletSerialization.ts.
+    // `__typename__` (CLASS_NAME) is what the JS type guards read. Worklet
+    // serialization does not go through the prototype: the serializer
+    // recognizes and boxes native objects from their native state, see
+    // NativeObjectWorkletHelpers in jsi/BoxedNativeObject.h.
     prototype.setProperty(
         runtime, "__typename__",
         jsi::String::createFromUtf8(runtime, Derived::CLASS_NAME));
-
-    auto boxFunc = jsi::Function::createFromHostFunction(
-        runtime, jsi::PropNameID::forUtf8(runtime, "__box"), 0,
-        [](jsi::Runtime &rt, const jsi::Value &thisValue, const jsi::Value *,
-           size_t) -> jsi::Value {
-          return RNJsi::boxNativeObject(rt, thisValue);
-        });
-    prototype.setProperty(runtime, "__box", boxFunc);
 
     // Install a generic toJSON so JSON.stringify sees the data properties.
     // They live on the prototype (getters), and JSON.stringify only
@@ -186,7 +175,7 @@ public:
                 continue;
               }
               auto value = self.getProperty(rt, name.c_str());
-              // Skip methods (dispose, __box, ...) — JSON.stringify would
+              // Skip methods (dispose, ...) — JSON.stringify would
               // drop them anyway; skipping avoids serializing them at all.
               if (value.isObject() && value.asObject(rt).isFunction(rt)) {
                 continue;
@@ -359,11 +348,10 @@ public:
   jsi::Runtime *getCreationRuntime() const { return _creationRuntime; }
 
 protected:
-  explicit NativeObject(const char *name) : _name(name) {}
+  explicit NativeObject(const char *name) : NativeObjectBase(name) {}
 
   virtual ~NativeObject() {}
 
-  const char *_name;
   jsi::Runtime *_creationRuntime = nullptr;
 
   // ============================================================

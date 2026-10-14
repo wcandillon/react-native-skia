@@ -92,6 +92,13 @@ export const checkImage = (
       }
     }
     return diffPixelsCount;
+  } else if (CI && !overwrite) {
+    // On CI a missing reference would let the check pass without comparing
+    // anything, so the image goes where the workflows upload failed checks.
+    fs.writeFileSync(`${p}.test.png`, png);
+    throw new Error(
+      `${relPath} has no reference image; this run's image is ${relPath}.test.png`
+    );
   } else {
     fs.writeFileSync(p, png);
   }

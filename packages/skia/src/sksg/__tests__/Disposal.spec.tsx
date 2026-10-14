@@ -13,7 +13,7 @@ const isDeleted = (obj: unknown) =>
 describe("Disposal", () => {
   it("deletes renderer-created objects at the end of the frame", () => {
     const { Skia } = importSkia();
-    const surface = Skia.Surface.Make(64, 64)!;
+    const surface = Skia.Surface.MakeRaster(64, 64)!;
     const canvas = surface.getCanvas();
     const paintPool: SkPaint[] = [];
     const ctx = createDrawingContext(Skia, paintPool, canvas);
@@ -30,7 +30,7 @@ describe("Disposal", () => {
 
   it("never deletes user-owned objects", () => {
     const { Skia } = importSkia();
-    const surface = Skia.Surface.Make(64, 64)!;
+    const surface = Skia.Surface.MakeRaster(64, 64)!;
     const canvas = surface.getCanvas();
     const paintPool: SkPaint[] = [];
     const ctx = createDrawingContext(Skia, paintPool, canvas);
@@ -52,7 +52,7 @@ describe("Disposal", () => {
         </skCircle>
       </skGroup>
     );
-    const surface = Skia.Surface.Make(64, 64)!;
+    const surface = Skia.Surface.MakeRaster(64, 64)!;
     const canvas = surface.getCanvas();
     // Drawing twice exercises pool reuse after a frame has been disposed.
     root.drawOnCanvas(canvas);

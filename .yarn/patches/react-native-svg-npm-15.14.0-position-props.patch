@@ -1,0 +1,160 @@
+diff --git a/lib/typescript/elements/Image.d.ts b/lib/typescript/elements/Image.d.ts
+index a49a0476abb75a39354f065731325976aaed79b2..0bcfa3a27de64baeee96a1cf47944d88bed02f98 100644
+--- a/lib/typescript/elements/Image.d.ts
++++ b/lib/typescript/elements/Image.d.ts
+@@ -2,7 +2,7 @@ import * as React from 'react';
+ import type { ImageProps as RNImageProps, NativeSyntheticEvent, ImageLoadEventData } from 'react-native';
+ import type { CommonPathProps, NumberProp } from '../lib/extract/types';
+ import Shape from './Shape';
+-export interface ImageProps extends CommonPathProps {
++export interface ImageProps extends Omit<CommonPathProps, 'x' | 'y'> {
+     x?: NumberProp;
+     y?: NumberProp;
+     width?: NumberProp;
+diff --git a/lib/typescript/elements/Mask.d.ts b/lib/typescript/elements/Mask.d.ts
+index cd697404da6729fd241f31b21cb1a5cdbb9e9486..0dc1e600e590e36688a529c89f3299bd29a99bd7 100644
+--- a/lib/typescript/elements/Mask.d.ts
++++ b/lib/typescript/elements/Mask.d.ts
+@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
+ import * as React from 'react';
+ import type { CommonPathProps, MaskType, NumberProp, Units } from '../lib/extract/types';
+ import Shape from './Shape';
+-export interface MaskProps extends CommonPathProps {
++export interface MaskProps extends Omit<CommonPathProps, 'x' | 'y'> {
+     children?: ReactNode;
+     id?: string;
+     x?: NumberProp;
+diff --git a/lib/typescript/elements/Rect.d.ts b/lib/typescript/elements/Rect.d.ts
+index 2a86a57a1dac0b226625e5359c686ed987070005..1475da520df7ef4c04f13ff7898b0b477c14561a 100644
+--- a/lib/typescript/elements/Rect.d.ts
++++ b/lib/typescript/elements/Rect.d.ts
+@@ -1,7 +1,7 @@
+ import * as React from 'react';
+ import type { CommonPathProps, NumberProp } from '../lib/extract/types';
+ import Shape from './Shape';
+-export interface RectProps extends CommonPathProps {
++export interface RectProps extends Omit<CommonPathProps, 'x' | 'y'> {
+     x?: NumberProp;
+     y?: NumberProp;
+     width?: NumberProp;
+diff --git a/lib/typescript/elements/TSpan.d.ts b/lib/typescript/elements/TSpan.d.ts
+index 7ba4730e70500c9f73126dd7491886d05cc53bda..c8df4a0188631b92e1ce3a79b019f89e7dc2a8bc 100644
+--- a/lib/typescript/elements/TSpan.d.ts
++++ b/lib/typescript/elements/TSpan.d.ts
+@@ -2,7 +2,9 @@ import * as React from 'react';
+ import type { TextChild } from '../lib/extract/extractText';
+ import Shape from './Shape';
+ import type { ColumnMajorTransformMatrix, CommonPathProps, FontProps, NumberArray, NumberProp } from '../lib/extract/types';
+-export interface TSpanProps extends CommonPathProps, FontProps {
++export interface TSpanProps
++  extends Omit<CommonPathProps, 'x' | 'y'>,
++    FontProps {
+     children?: TextChild;
+     x?: NumberArray;
+     y?: NumberArray;
+diff --git a/lib/typescript/elements/Text.d.ts b/lib/typescript/elements/Text.d.ts
+index 2e445f79e9f589ebe65cb0fb0c228b7b8e629870..349482f93d1aaaa13a58b04050c9234e1e520d6f 100644
+--- a/lib/typescript/elements/Text.d.ts
++++ b/lib/typescript/elements/Text.d.ts
+@@ -3,7 +3,7 @@ import * as React from 'react';
+ import type { ColumnMajorTransformMatrix, NumberArray, NumberProp, TextSpecificProps } from '../lib/extract/types';
+ import Shape from './Shape';
+ import './TSpan';
+-export interface TextProps extends TextSpecificProps {
++export interface TextProps extends Omit<TextSpecificProps, 'x' | 'y'> {
+     children?: ReactNode;
+     x?: NumberArray;
+     y?: NumberArray;
+diff --git a/lib/typescript/elements/Use.d.ts b/lib/typescript/elements/Use.d.ts
+index 75ccbd3fbc920bdd19e49f222c77c419a01c98b3..38021ef299cf138fb9e0635d8a28b42946ada41d 100644
+--- a/lib/typescript/elements/Use.d.ts
++++ b/lib/typescript/elements/Use.d.ts
+@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
+ import * as React from 'react';
+ import type { CommonPathProps, NumberProp } from '../lib/extract/types';
+ import Shape from './Shape';
+-export interface UseProps extends CommonPathProps {
++export interface UseProps extends Omit<CommonPathProps, 'x' | 'y'> {
+     children?: ReactNode;
+     xlinkHref?: string;
+     href?: string;
+diff --git a/src/elements/Image.tsx b/src/elements/Image.tsx
+index c58e4974d544bed3a092439ed9aee1e233c9ff9a..c48b94e250985c9a53ac6c09487800f006d26d4e 100644
+--- a/src/elements/Image.tsx
++++ b/src/elements/Image.tsx
+@@ -14,7 +14,7 @@ import RNSVGImage from '../fabric/ImageNativeComponent';
+ 
+ const spacesRegExp = /\s+/;
+ 
+-export interface ImageProps extends CommonPathProps {
++export interface ImageProps extends Omit<CommonPathProps, 'x' | 'y'> {
+   x?: NumberProp;
+   y?: NumberProp;
+   width?: NumberProp;
+diff --git a/src/elements/Mask.tsx b/src/elements/Mask.tsx
+index fe0eeb7910a30124adba8267dc561b6768ee5d22..e12f13031c0e15b135999388aa7b35bdd6b0bef2 100644
+--- a/src/elements/Mask.tsx
++++ b/src/elements/Mask.tsx
+@@ -13,7 +13,7 @@ import RNSVGMask from '../fabric/MaskNativeComponent';
+ import type { NativeMethods } from 'react-native';
+ import { maskType } from '../lib/maskType';
+ 
+-export interface MaskProps extends CommonPathProps {
++export interface MaskProps extends Omit<CommonPathProps, 'x' | 'y'> {
+   children?: ReactNode;
+   id?: string;
+   x?: NumberProp;
+diff --git a/src/elements/Rect.tsx b/src/elements/Rect.tsx
+index b97320e49688729513cb40165c5a338f7345f1cb..1e54ffb923c74dd3b8e1ffd071077cfb5db257e0 100644
+--- a/src/elements/Rect.tsx
++++ b/src/elements/Rect.tsx
+@@ -5,7 +5,7 @@ import Shape from './Shape';
+ import RNSVGRect from '../fabric/RectNativeComponent';
+ import type { NativeMethods } from 'react-native';
+ 
+-export interface RectProps extends CommonPathProps {
++export interface RectProps extends Omit<CommonPathProps, 'x' | 'y'> {
+   x?: NumberProp;
+   y?: NumberProp;
+   width?: NumberProp;
+diff --git a/src/elements/TSpan.tsx b/src/elements/TSpan.tsx
+index 0c06568fb24241c328b1b9da8acf6f952e4f20c9..ef408a8d9b2dca79b97e3728835d9eac5510880e 100644
+--- a/src/elements/TSpan.tsx
++++ b/src/elements/TSpan.tsx
+@@ -15,7 +15,9 @@ import type {
+ } from '../lib/extract/types';
+ import RNSVGTSpan from '../fabric/TSpanNativeComponent';
+ 
+-export interface TSpanProps extends CommonPathProps, FontProps {
++export interface TSpanProps
++  extends Omit<CommonPathProps, 'x' | 'y'>,
++    FontProps {
+   children?: TextChild;
+   x?: NumberArray;
+   y?: NumberArray;
+diff --git a/src/elements/Text.tsx b/src/elements/Text.tsx
+index 164c0310deda079a45a03e3f255af834cf8c9646..dad5e48faf8ccb11dc66890d236d9a49147cded0 100644
+--- a/src/elements/Text.tsx
++++ b/src/elements/Text.tsx
+@@ -14,7 +14,7 @@ import Shape from './Shape';
+ import './TSpan';
+ import RNSVGText from '../fabric/TextNativeComponent';
+ 
+-export interface TextProps extends TextSpecificProps {
++export interface TextProps extends Omit<TextSpecificProps, 'x' | 'y'> {
+   children?: ReactNode;
+   x?: NumberArray;
+   y?: NumberArray;
+diff --git a/src/elements/Use.tsx b/src/elements/Use.tsx
+index 35763ed10a7499bbee1884f7e9af6295cfacccf3..f1cc15664c159efdc1dc48138d96772e9d559a9d 100644
+--- a/src/elements/Use.tsx
++++ b/src/elements/Use.tsx
+@@ -7,7 +7,7 @@ import Shape from './Shape';
+ import RNSVGUse from '../fabric/UseNativeComponent';
+ import type { NativeMethods } from 'react-native';
+ 
+-export interface UseProps extends CommonPathProps {
++export interface UseProps extends Omit<CommonPathProps, 'x' | 'y'> {
+   children?: ReactNode;
+   xlinkHref?: string;
+   href?: string;

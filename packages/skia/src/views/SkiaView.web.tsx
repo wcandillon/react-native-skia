@@ -27,9 +27,9 @@ import { SkiaViewNativeId } from "./SkiaViewNativeId";
 import { useSkiaWebRenderer } from "./SkiaWebRenderer";
 import type { Renderer, WebFrame } from "./SkiaWebRenderer";
 
-// The web has no Graphite: the view paints pictures on a WebGL canvas (with
-// context-loss recovery and the destroy-context-after-render mode). It shows
-// one of two kinds of content. The picture of a <Canvas> or a
+// The web has no Graphite: the view paints pictures through the WebGL
+// context the page shares (see SkiaWebRenderer). It shows one of two kinds
+// of content. The picture of a <Canvas> or a
 // <SkiaPictureView> is a whole frame: the latest one wins. The recordings
 // submitted through the view's context (SkiaGraphiteView) keep their native
 // semantics, presented in submission order and never dropped, with one
@@ -43,6 +43,7 @@ export interface SkiaViewHandle extends SkiaWebViewHandle {
 
 export interface SkiaViewProps extends ViewProps {
   ref?: React.Ref<SkiaViewHandle>;
+  /** @deprecated Does nothing: every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
 }
 
@@ -164,8 +165,6 @@ export const SkiaView = (props: SkiaViewProps) => {
     [props.nativeID]
   );
 
-  const isStatic = props.__destroyWebGLContextAfterRender === true;
-
   // Presents the recordings submitted since the last frame. A frame that
   // cannot be painted yet (unmeasured canvas, lost context) stays queued for
   // the next opportunity.
@@ -198,7 +197,7 @@ export const SkiaView = (props: SkiaViewProps) => {
     },
     [present]
   );
-  const rendererRef = useSkiaWebRenderer(canvasRef, isStatic, {
+  const rendererRef = useSkiaWebRenderer(canvasRef, {
     paint,
     onLayout,
   });
@@ -394,16 +393,14 @@ export const SkiaView = (props: SkiaViewProps) => {
     ref: _ref,
     onLayout: _onLayout,
     nativeID: _nativeID,
-    __destroyWebGLContextAfterRender: _isStatic,
+    // Deprecated, kept out of the DOM.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;
   return (
     <Platform.View nativeID={`${nativeId}`} {...viewProps}>
       <canvas
-        // A canvas element is bound to one context kind for life (WebGL for
-        // the live renderer, 2D for the static one), so switching renderers
-        // needs a fresh element.
-        key={isStatic ? "static" : "webgl"}
         ref={canvasRef}
         style={{ display: "block", width: "100%", height: "100%" }}
       />

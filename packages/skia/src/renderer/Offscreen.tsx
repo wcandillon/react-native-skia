@@ -5,10 +5,14 @@ import { Skia } from "../skia";
 import { Platform } from "../Platform";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 
+// react-native-worklets' RuntimeKind.ReactNative; every worklet runtime has another kind.
+const REACT_NATIVE_RUNTIME_KIND = 1;
+
 export const isOnMainThread = () => {
   "worklet";
+  const runtimeKind = globalThis.__RUNTIME_KIND;
   return (
-    (typeof _WORKLET !== "undefined" && _WORKLET === true) ||
+    (runtimeKind !== undefined && runtimeKind !== REACT_NATIVE_RUNTIME_KIND) ||
     Platform.OS === "web"
   );
 };
@@ -28,19 +32,19 @@ export const drawAsPicture = async (element: ReactElement, bounds?: SkRect) => {
 export const drawAsImage = async (
   element: ReactElement,
   size: SkSize
-): Promise<SkImage | null> => {
+): Promise<SkImage> => {
   return drawAsImageFromPicture(await drawAsPicture(element), size);
 };
 
 export const drawAsImageFromPicture = (
   picture: SkPicture,
   size: SkSize
-): SkImage | null => {
+): SkImage => {
   "worklet";
   const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
   const canvas = surface.getCanvas();
   canvas.drawPicture(picture);
   surface.flush();
   const image = surface.makeImageSnapshot();
-  return image.makeNonTextureImage();
+  return image.makeRasterImageSync();
 };

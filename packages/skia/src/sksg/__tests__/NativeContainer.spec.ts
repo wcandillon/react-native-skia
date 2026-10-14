@@ -14,10 +14,6 @@ const mockStopMapper = jest.fn();
 jest.mock("../../external/reanimated/ReanimatedProxy", () => ({
   __esModule: true,
   default: {
-    runOnUI:
-      (fn: (...args: unknown[]) => void) =>
-      (...args: unknown[]) =>
-        fn(...args),
     startMapper: (mapper: unknown, deps: unknown) =>
       mockStartMapper(mapper, deps),
     stopMapper: (id: number) => mockStopMapper(id),

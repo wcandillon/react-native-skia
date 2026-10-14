@@ -166,16 +166,11 @@ LoadSkiaWeb({
 });
 ```
 
-## WebGL Contextes
+## WebGL Contexts
 
-Web browsers limit the number of WebGL contexts to 16 per webpage.
-Usually developers will see this error when they exceed this limit:
-
-```
-WARNING: Too many active WebGL contexts. Oldest context will be lost.
-```
-If you canvas is static and doesn't contain animation values, you can use the `__destroyWebGLContextAfterRender={true}` prop on your Canvas components to destroy the WebGL context after rendering.
-This even works with animated canvases but it will come with a performance cost as the context will be recreated on each render.
+Browsers limit the number of live WebGL contexts per page (16 in Chrome, which then evicts the oldest one with the warning `Too many active WebGL contexts. Oldest context will be lost.`).
+React Native Skia stays well under that limit on its own: every `Canvas` on the page and every surface made with `Skia.Surface.MakeOffscreen()` draws through one shared WebGL context.
+A page can hold as many canvases as it likes, and the snapshot of any canvas or offscreen surface can be drawn by any other.
 
 ```tsx twoslash
 import { View } from 'react-native';
@@ -185,9 +180,9 @@ export default function App() {
   return (
     <View style={{ flex: 1 }}>
       {
-        // 20 Skia Canvases with __destroyWebGLContextAfterRender={true}
-        new Array(20).fill(0).map((_, i) => (
-          <Canvas key={i} style={{ width: 100, height: 100 }} __destroyWebGLContextAfterRender={true}>
+        // 40 Skia canvases, one WebGL context
+        new Array(40).fill(0).map((_, i) => (
+          <Canvas key={i} style={{ width: 100, height: 100 }}>
             <Fill color="lightblue" />
           </Canvas>
         ))
@@ -196,6 +191,11 @@ export default function App() {
   );
 }
 ```
+
+The `__destroyWebGLContextAfterRender` prop of earlier versions is deprecated and does nothing.
+
+If the browser ever takes the shared context away (a GPU reset), the canvases repaint once it is restored.
+An offscreen surface created before the loss is gone with it: its methods throw, and a new surface has to be made.
 
 ## Unsupported Features
 

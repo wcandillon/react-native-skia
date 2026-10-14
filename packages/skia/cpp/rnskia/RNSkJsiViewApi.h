@@ -308,7 +308,8 @@ public:
    Returns the recording side of a view: (nativeId, width, height, opaque,
    highBitDepth), the size in points as laid out and the props the surface
    format follows from. The view may not exist yet; the context binds to it
-   by id when it does.
+   by id when it does, and the registry owns the target in between, so a
+   frame submitted before then is kept whether or not JS keeps the context.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
@@ -329,6 +330,21 @@ public:
                                       _platformContext, std::move(target)));
   }
 
+  /**
+   Retires the target made for a view id from the JS side: (nativeId). Called
+   when the view component unmounts; a no-op once a view bound to the id,
+   whose teardown retires it (see RNSkGraphiteTargetRegistry).
+   */
+  JSI_HOST_FUNCTION(destroyGraphiteContext) {
+    if (count < 1 || !arguments[0].isNumber()) {
+      throw jsi::JSError(runtime,
+                         "destroyGraphiteContext: expected (nativeId)");
+    }
+    auto nativeId = static_cast<size_t>(arguments[0].asNumber());
+    RNSkGraphiteTargetRegistry::getInstance().removeIfUnbound(nativeId);
+    return jsi::Value::undefined();
+  }
+
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "setJsiProperty",
                       &RNSkJsiViewApi::setJsiProperty);
@@ -342,6 +358,8 @@ public:
     installHostMethod(runtime, prototype, "size", &RNSkJsiViewApi::size);
     installHostMethod(runtime, prototype, "makeGraphiteContext",
                       &RNSkJsiViewApi::makeGraphiteContext);
+    installHostMethod(runtime, prototype, "destroyGraphiteContext",
+                      &RNSkJsiViewApi::destroyGraphiteContext);
   }
 
   /**
@@ -383,6 +401,7 @@ public:
    */
   void unregisterSkiaView(size_t nativeId) {
     ViewRegistry::getInstance().removeViewInfo(nativeId);
+    RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
   }
 
   /**

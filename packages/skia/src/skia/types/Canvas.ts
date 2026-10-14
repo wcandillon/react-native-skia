@@ -40,7 +40,12 @@ export interface SkCanvas {
    * @param top
    * @param paint
    */
-  drawImage: (image: SkImage, x: number, y: number, paint?: SkPaint) => void;
+  drawImage: (
+    image: SkImage,
+    x: number,
+    y: number,
+    paint?: SkPaint | null
+  ) => void;
 
   /**
    * Draws sub-rectangle src from provided image, scaled and translated to fill dst rectangle.
@@ -232,7 +237,7 @@ export interface SkCanvas {
     colors?: readonly SkColor[] | null,
     texs?: readonly SkPoint[] | null,
     mode?: BlendMode | null,
-    paint?: SkPaint
+    paint?: SkPaint | null
   ): void;
 
   /**
@@ -405,7 +410,7 @@ export interface SkCanvas {
    * @param flags
    */
   saveLayer(
-    paint?: SkPaint,
+    paint?: SkPaint | null,
     bounds?: SkRect | null,
     backdrop?: SkImageFilter | null,
     flags?: SaveLayerFlag
@@ -514,9 +519,9 @@ export interface SkCanvas {
    * @param {SkRect[]} srcs - The source rectangles.
    * @param {SkRSXform[]} dsts - The destination transformations.
    * @param {SkPaint} paint - The paint used for drawing.
-   * @param {BlendMode} [blendMode] - The blend mode used for drawing. Optional.
-   * @param {SkColor[]} [colors] - The colors used for drawing. Optional.
-   * @param {CubicResampler | FilterOptions} [sampling] - The sampling options. Optional.
+   * @param {BlendMode | null} [blendMode] - The blend mode used for drawing. Optional, null or undefined defaults to DstOver.
+   * @param {SkColor[] | null} [colors] - The colors used for drawing. Optional, null or undefined draws without per-sprite colors.
+   * @param {CubicResampler | FilterOptions | null} [sampling] - The sampling options. Optional, null or undefined defaults to linear filtering.
    * @returns {void} This method does not return anything.
    */
   drawAtlas(
@@ -524,9 +529,9 @@ export interface SkCanvas {
     srcs: SkRect[],
     dsts: SkRSXform[],
     paint: SkPaint,
-    blendMode?: BlendMode,
-    colors?: SkColor[],
-    sampling?: SamplingOptions
+    blendMode?: BlendMode | null,
+    colors?: readonly SkColor[] | null,
+    sampling?: SamplingOptions | null
   ): void;
 
   /** Read Image pixels

@@ -1,8 +1,10 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library). The native builds and the emulator/simulator runs happen on
-# pull requests and in the merge queue, so a merge does not pay for the full
-# suite twice.
+# build-library) and the Android build without its emulator run. The native
+# builds and the emulator/simulator runs happen on pull requests and in the
+# merge queue, so a merge does not pay for the full suite twice. The Android
+# build runs on push because a pull request can only restore caches saved by
+# its own earlier runs or by its base branch (see build-test-android).
 on:
   push:
     branches:
@@ -81,7 +83,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         with:
           name: web-example-screenshots
           path: apps/example/e2e/screenshots/
@@ -89,7 +91,7 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         with:
           name: web-example-test-results
           path: apps/example/test-results/
@@ -118,8 +120,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # On pull requests and in the merge queue this builds the example app and
+  # runs the e2e suite on the emulator. On push it stops after the build: its
+  # only purpose there is to save the Gradle cache and the ccache on the base
+  # branch, where every pull request can restore them. Without that producer
+  # each pull request started cold (0 ccache hits, 28 minutes of C++) and saved
+  # its own 1.8 GB Gradle cache, which kept the repository above its 10 GB
+  # cache limit and evicted every entry within hours.
   build-test-android:
-    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -159,7 +167,7 @@ jobs:
           ndk-version: r27d
 
       - name: Set ANDROID_NDK
-        run: echo "ANDROID_NDK=$ANDROID_HOME/ndk-bundle" >> $GITHUB_ENV
+        run: echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
@@ -187,18 +195,23 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('./apps/example/android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('./apps/example/android/gradle/wrapper/gradle-wrapper.properties', 'yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
       # Compiler cache for the C++ builds (this library, React Native and the
       # other native modules). CMake reads the launcher from the environment,
-      # which Gradle passes on to it, so build.gradle needs no change. Most
+      # which Gradle passes on to it, so build.gradle needs no change; turbo
+      # runs tasks in strict env mode, so turbo.json lists the launcher, the
+      # CCACHE_* settings and the architecture property, or none of them would
+      # reach the build (they did not until then: every ABI was built and the
+      # compiler check fell back to mtime, which the NDK reinstall defeats). Most
       # pull requests touch little C++, and a hit turns the compile into a
       # copy. The key is unique per run: the cache is a rolling one, always
-      # saved, and restored from the most recent run. The compiler check is on
-      # the binary's content rather than its mtime because the NDK is
-      # reinstalled on every run.
+      # saved, and restored from the most recent run on this ref or on the
+      # base branch (the push runs keep the base branch's entry fresh). The
+      # compiler check is on the binary's content rather than its mtime
+      # because the NDK is reinstalled on every run.
       - name: Install ccache
         run: sudo apt-get install -y ccache
 
@@ -231,64 +244,91 @@ jobs:
           path: ~/.cache/ccache
           key: ${{ runner.os }}-ccache-android-${{ github.sha }}
 
+      # Everything below is the emulator run, skipped on push (see the job
+      # comment).
       - name: Unit test the Android library
+        if: github.event_name != 'push'
         working-directory: apps/example/android
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
         run: ./gradlew :react-native-skia:testDebugUnitTest
 
       - name: Upload Android APK artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         with:
           name: android-example-apk
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Enable KVM group perms
+        if: github.event_name != 'push'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # CI=true is inlined into the bundle and opens the app on the Tests
+      # screen. The background bundle request warms Metro's transform cache
+      # while the emulator boots, so the app's own first request is served in
+      # seconds instead of minutes.
       - name: Start Package Manager
+        if: github.event_name != 'push'
         working-directory: apps/example/
-        run: E2E=true yarn start &
+        run: |
+          E2E=true yarn start &
+          (sleep 10 && curl -sf --retry 12 --retry-connrefused --retry-delay 5 -o /dev/null "http://localhost:8081/index.bundle?platform=android&dev=true&minify=false") &
 
+      # The runner has no GPU: the guest sees SwiftShader's Vulkan 1.3 device
+      # through gfxstream and Graphite renders through Dawn on it. The image
+      # has to be API 34 or newer: on API 30 the guest Vulkan driver fails to
+      # map its host-visible memory (goldfish-address-space errno 1) and the
+      # app crashes on the first mapped buffer (react-native-webgpu#505).
+      #
+      # The whole e2e suite, as the iOS job does. `yarn e2e` sets E2E=true,
+      # which is what makes the tests run on the emulator: without it the
+      # harness uses CanvasKit in Node and never talks to the app. Paragraphs
+      # stays excluded, as it was before the Graphite switch.
       - name: Run Android Emulator Tests
+        if: github.event_name != 'push'
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
-          api-level: 30
+          api-level: 35
           arch: x86_64
           profile: Nexus 5X
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swangle_indirect -noaudio -no-boot-anim
           disable-animations: true
+          # The action runs each script line in its own shell, hence the
+          # detached logcat capture. The app reaches Metro and the test server
+          # at localhost (useClient), which inside the emulator is the guest:
+          # Metro is reversed here, the test server port by the jest
+          # globalSetup, the same as for a phone.
           script: |
-            # Wait for Metro bundler
-            sleep 10
+            adb reverse tcp:8081 tcp:8081
+            nohup adb logcat > logcat.txt 2>&1 &
+            # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
+            ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
+            adb wait-for-device shell monkey -p com.microsoft.reacttestapp 1
+            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns Paragraphs
 
-            # Install and launch app
-            adb install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell monkey -p com.microsoft.reacttestapp 1
-
-            # Run tests
-            # We run the Path render tests plus the WebGPU specs.
-            # ArrayBuffer, ComputeShader, ErrorScope, ImageBitmapBounds and
-            # DawnToggles are pure surface.eval round-trips that assert on
-            # returned values. The external-texture specs (ExternalTexture,
-            # ImportExternalTexture, SharedTextureMemory) additionally exercise
-            # NativeBuffer import and GPU read-back; they self-validate via
-            # copyTextureToBuffer (not Skia image readPixels) and skip
-            # themselves where NativeBuffer/createImageBitmap are unavailable.
-            cd packages/skia && CI=true yarn test -i "e2e/(Path|ArrayBuffer|ComputeShader|ErrorScope|ImageBitmapBounds|DawnToggles|ExternalTexture|ImportExternalTexture|SharedTextureMemory)" --testPathIgnorePatterns Paragraphs
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
-        if: failure()
+      # The *.test.png images of failed checks: a failed comparison's, and
+      # the image of a check without a reference.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always() && github.event_name != 'push'
         with:
-          path: packages/skia/src/__tests__/snapshots/
+          path: packages/skia/src/__tests__/snapshots/**/*.test.png
           name: tests-snapshots-screenshots
+          if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
-        if: failure()
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always() && github.event_name != 'push'
+        with:
+          path: logcat.txt
+          name: android-logcat
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: failure() && github.event_name != 'push'
         with:
           path: apps/docs/static/
           name: tests-docs-screenshots
@@ -304,6 +344,7 @@ jobs:
       #   8081   4242         (React Native defaults, used by redraw)
       #   8082   4243         skia-ci     (this job)
       #   8083   4244         webgpu-ci   (react-native-webgpu)
+      #   8084   4245         skia-agent  (agent.yml)
       # RCT_METRO_PORT is compiled into the app by xcodebuild; E2E_PORT is
       # inlined into the JS bundle (useClient) and read by the jest
       # globalSetup, so the app and the test server agree on the port.
@@ -401,6 +442,14 @@ jobs:
       - name: Run e2e tests
         working-directory: packages/skia
         run: CI=true yarn e2e --testPathIgnorePatterns "Paragraph"
+
+      # The *.test.png images of failed checks, as the Android job uploads them.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always() && github.event_name != 'push'
+        with:
+          path: packages/skia/src/__tests__/snapshots/**/*.test.png
+          name: ios-tests-snapshots-screenshots
+          if-no-files-found: ignore
 
       # Stop Metro and shut the simulator down so they don't hold memory
       # while the machine runs the other repositories' jobs.

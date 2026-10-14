@@ -44,15 +44,14 @@ const styles = StyleSheet.create({
 });
 
 export const List = () => {
-  const { navigate } =
-    useNavigation<NativeStackNavigationProp<Routes, "List">>();
+  const navigation = useNavigation<NativeStackNavigationProp<Routes, "List">>();
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {examples.map((thumbnail) => (
         <Pressable
           key={thumbnail.screen}
           onPress={() => {
-            navigate(thumbnail.screen);
+            navigation.navigate(thumbnail.screen);
           }}
           testID={thumbnail.screen}
         >

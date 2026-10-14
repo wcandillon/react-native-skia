@@ -33,11 +33,34 @@ describe("Text", () => {
     const font = fonts.NotoSansSCRegular;
     const result = await surface.eval(
       (_Skia, ctx) => {
-        return ctx.font.getTextWidth("欢迎");
+        return ctx.font
+          .getGlyphWidths(ctx.font.getGlyphIDs("欢迎"))
+          .reduce((sum, glyphWidth) => sum + glyphWidth, 0);
       },
       { font }
     );
     expect(result).toBe(64);
+  });
+  it("Should calculate the text width as the sum of the glyph advances", async () => {
+    const font = fonts.DinMedium;
+    const result = await surface.eval(
+      (_Skia, ctx) => {
+        ctx.font.setLinearMetrics(true);
+        const text = "Lorem ipsum dolor sit amet";
+        const advances = ctx.font.getGlyphWidths(ctx.font.getGlyphIDs(text));
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- the case checks getTextWidth itself
+        const width = ctx.font.getTextWidth(text);
+        ctx.font.setLinearMetrics(false);
+        return {
+          width,
+          advances: advances.reduce((sum, advance) => sum + advance, 0),
+          fractional: advances.some((advance) => advance % 1 !== 0),
+        };
+      },
+      { font }
+    );
+    expect(result.fractional).toBe(true);
+    expect(result.width).toBeCloseTo(result.advances, 4);
   });
   itRunsE2eOnly("Should calculate text width correctly", async () => {
     const font = fonts.DinMedium;

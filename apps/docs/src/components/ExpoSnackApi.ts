@@ -50,7 +50,7 @@ export const ExpoSnack = {
       return;
     }
 
-    var iframeId = Math.random().toString(36).substr(2, 10);
+    var iframeId = Math.random().toString(36).slice(2, 12);
     var iframe = document.createElement("iframe") as any;
 
     var iframeQueryParams = "?iframeId=" + iframeId;

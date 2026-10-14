@@ -109,6 +109,9 @@ global.SkiaViewApi = {
     }
     return view.getContext();
   },
+  destroyGraphiteContext() {
+    // The web view owns its context and lets go of it when it unregisters.
+  },
 } as ISkiaViewApiWeb;
 
 // eslint-disable-next-line import/no-default-export

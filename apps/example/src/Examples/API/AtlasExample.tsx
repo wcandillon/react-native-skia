@@ -19,7 +19,7 @@ const PALETTE = [
 ];
 
 const makeDotImage = () => {
-  const surface = Skia.Surface.Make(SPRITE_SIZE, SPRITE_SIZE);
+  const surface = Skia.Surface.MakeRaster(SPRITE_SIZE, SPRITE_SIZE);
   if (!surface) {
     return null;
   }

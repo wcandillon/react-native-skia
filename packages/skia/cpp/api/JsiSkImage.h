@@ -357,11 +357,14 @@ public:
                                       getContext(), std::move(texture)));
   }
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
-  makeNonTextureImage() {
+  // A CPU image, blocking the calling thread: a Graphite image is read back
+  // from the GPU, waiting for it, and an encoded image is decoded. This is
+  // the synchronous counterpart of makeRasterImage(), for worklets.
+  std::shared_ptr<JsiSkImage> makeRasterImageSync() {
     auto rasterImage = DawnContext::getInstance().MakeRasterImage(getObject());
     if (!rasterImage) {
-      return nullptr;
+      throw std::runtime_error(
+          "makeRasterImageSync: reading the image back failed");
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(rasterImage));
   }
@@ -370,7 +373,7 @@ public:
   // from the GPU and the result delivered by the readback poller, an encoded
   // image is decoded on the worker thread. The promise resolves on the JS
   // thread, so this is for the JS thread; a worklet uses
-  // makeNonTextureImage().
+  // makeRasterImageSync().
   JSI_HOST_FUNCTION(makeRasterImage) {
     auto image = getObject();
     auto context = getContext();
@@ -438,8 +441,8 @@ public:
                   &JsiSkImage::encodeToBase64);
     installHostMethod(runtime, prototype, "readPixels",
                       &JsiSkImage::readPixels);
-    installMethod(runtime, prototype, "makeNonTextureImage",
-                  &JsiSkImage::makeNonTextureImage);
+    installMethod(runtime, prototype, "makeRasterImageSync",
+                  &JsiSkImage::makeRasterImageSync);
     installHostMethod(runtime, prototype, "makeRasterImage",
                       &JsiSkImage::makeRasterImage);
     installHostMethod(runtime, prototype, "makeTextureImage",

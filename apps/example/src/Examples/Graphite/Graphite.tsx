@@ -94,7 +94,7 @@ export const useGpuImage = () =>
     const image = surface.makeImageSnapshot();
     // On the web a texture belongs to the WebGL context that made it; the
     // views have their own, so they need a CPU copy.
-    return Platform.OS === "web" ? image.makeNonTextureImage() : image;
+    return Platform.OS === "web" ? image.makeRasterImageSync() : image;
   }, []);
 
 const JSThreadView = ({ image }: { image: SkImage | null }) => {

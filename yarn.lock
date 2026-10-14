@@ -12734,7 +12734,7 @@ __metadata:
     "@types/node": ^22.13.9
     clsx: ^1.1.1
     eslint: 9.36.0
-    eslint-config-react-native-wcandillon: 5.0.0
+    eslint-config-react-native-wcandillon: 5.0.1
     expo-asset: ^10.0.6
     file-loader: ^6.2.0
     its-fine: ^1.0.8
@@ -13657,9 +13657,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-config-react-native-wcandillon@npm:5.0.0":
-  version: 5.0.0
-  resolution: "eslint-config-react-native-wcandillon@npm:5.0.0"
+"eslint-config-react-native-wcandillon@npm:5.0.1":
+  version: 5.0.1
+  resolution: "eslint-config-react-native-wcandillon@npm:5.0.1"
   dependencies:
     "@typescript-eslint/eslint-plugin": ^8.70.0
     "@typescript-eslint/parser": ^8.70.0
@@ -13673,7 +13673,7 @@ __metadata:
     eslint-plugin-react-native: ^5.0.0
     prettier: ^3.9.6
     typescript: ^5.9.3
-  checksum: 2cf8efb99986fc6f91c8e0bc0d64906e59034adad4e3e90bbcc6c4901b0bf86c1c909fb100269ab231d5a68967e06a8b5bef4a7042ef54c1452b20d2072175f1
+  checksum: 8d32aac9260c9defedba6b5ef0f395d1a274701d343c3639d93bd0765de6c5682e31af0b882fd516ab3d45dbf472cf7f3e1dff63367bc0ba40d559dc08064982
   languageName: node
   linkType: hard
 
@@ -14233,7 +14233,7 @@ __metadata:
     babel-plugin-transform-inline-environment-variables: ^0.4.4
     cdt2d: ^1.0.0
     eslint: 9.36.0
-    eslint-config-react-native-wcandillon: 5.0.0
+    eslint-config-react-native-wcandillon: 5.0.1
     eslint-plugin-import: 2.32.0
     fast-text-encoding: ^1.0.6
     its-fine: ^2.0.0
@@ -14250,7 +14250,7 @@ __metadata:
     react-native-safe-area-context: ^5.2.0
     react-native-screens: ^4.10.0
     react-native-skia: "workspace:*"
-    react-native-svg: "patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch"
+    react-native-svg: "patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch&../../.yarn/patches/react-native-svg-npm-15.14.0-position-props.patch"
     react-native-test-app: 4.4.7
     react-native-web: ^0.21.2
     react-native-webgpu: 0.12.1
@@ -15664,10 +15664,10 @@ __metadata:
   linkType: hard
 
 "handlebars@npm:^4.7.7, handlebars@npm:^4.7.8, handlebars@npm:^4.7.9":
-  version: 4.7.9
-  resolution: "handlebars@npm:4.7.9"
+  version: 4.7.10
+  resolution: "handlebars@npm:4.7.10"
   dependencies:
-    minimist: ^1.2.5
+    minimist: ^1.2.8
     neo-async: ^2.6.2
     source-map: ^0.6.1
     uglify-js: ^3.1.4
@@ -15677,7 +15677,7 @@ __metadata:
       optional: true
   bin:
     handlebars: bin/handlebars
-  checksum: ac39070fc1c3c76a654e4b526383eaf1601976eaa474547b263915b4806977f083600e586ca923709baeed7c82a42640bcc9cc04c37a7efd3fb444f49b8347d6
+  checksum: 4f5a03912fbc7f1d42d4a5ee8ec32440b0a519fc6d9a3251c9b6f0369d8e1e900484b4009f7d36befca0c191b424f999feccc1125613f9ad5e4926742c8b5172
   languageName: node
   linkType: hard
 
@@ -15938,7 +15938,7 @@ __metadata:
   dependencies:
     "@types/jest": ^29.5.0
     eslint: 9.36.0
-    eslint-config-react-native-wcandillon: 5.0.0
+    eslint-config-react-native-wcandillon: 5.0.1
     jest: ^29.7.0
     react: ^19.0.0
     react-native-skia: "workspace:*"
@@ -21553,7 +21553,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimist@npm:^1.2.0, minimist@npm:^1.2.5, minimist@npm:^1.2.6, minimist@npm:^1.2.8":
+"minimist@npm:^1.2.0, minimist@npm:^1.2.6, minimist@npm:^1.2.8":
   version: 1.2.8
   resolution: "minimist@npm:1.2.8"
   checksum: 75a6d645fb122dad29c06a7597bddea977258957ed88d7a6df59b5cd3fe4a527e253e9bbf2e783e4b73657f9098b96a5fe96ab8a113655d4109108577ecf85b0
@@ -25103,24 +25103,31 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-android@npm:154.2.0":
-  version: 154.2.0
-  resolution: "react-native-skia-graphite-android@npm:154.2.0"
-  checksum: bad85c60be3b7c03a92688dfda67b9e6274c03b9becde995e7c87b385bd4a4bbe9ff1c316c03572a8fe2811a8102a6336b160dc88e672bd148cd29dbba4f4c2b
+"react-native-skia-graphite-android@npm:154.3.0":
+  version: 154.3.0
+  resolution: "react-native-skia-graphite-android@npm:154.3.0"
+  checksum: ffffcd5ac80548d2eea3b61c9142e57e8acd94fc8014be47c2d8dfef72845a1257859ee77dd5325e6a519e4fe2d7afa04a7bd27b611f4c3ecf70de3873bec3e7
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-ios@npm:154.2.0":
-  version: 154.2.0
-  resolution: "react-native-skia-graphite-apple-ios@npm:154.2.0"
-  checksum: 6cc9d920f4a79d12d2d773d94792a4dd37a1ba609efe9ab291e9b37f948e5bca9df3b4c76da580ca691fbbcce869dfddb34fbdaf5f6acaf918428176c6726571
+"react-native-skia-graphite-apple-ios@npm:154.3.0":
+  version: 154.3.0
+  resolution: "react-native-skia-graphite-apple-ios@npm:154.3.0"
+  checksum: f1f7f14f0f7f515b92717d96a5e958cb37ecab529a7469c64829119789ec800217c54d78ee66e0a663b133c038f7dc299ad7ba909c224b8459d563146c698ab7
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-macos@npm:154.2.0":
-  version: 154.2.0
-  resolution: "react-native-skia-graphite-apple-macos@npm:154.2.0"
-  checksum: 38452d4546328e940663f5900f880994f8213a79f4baa6df5e483f70a97eb768329bec664bfce27a124cd9f81a578d36357e982eb8658b971cbb95e207a02b06
+"react-native-skia-graphite-apple-macos@npm:154.3.0":
+  version: 154.3.0
+  resolution: "react-native-skia-graphite-apple-macos@npm:154.3.0"
+  checksum: ccec98ef830eb47d9c2a4a3d6c0b4c637ab3d8deb93e3e2806d9e1c361099f0050d085ee4344b645292c4783f3dd0896054721a1c450afa9d7f495f697eb5259
+  languageName: node
+  linkType: hard
+
+"react-native-skia-graphite-apple-tvos@npm:154.3.0":
+  version: 154.3.0
+  resolution: "react-native-skia-graphite-apple-tvos@npm:154.3.0"
+  checksum: 38a3e4d8dcdeb8bb9351cd452e05ba04d591214ecb7399852ea440ed8edeb8ff4115836280d8db73b0284e1c842a029a5e15e6a5aa65a6a1794cc96b8e64d349
   languageName: node
   linkType: hard
 
@@ -25159,7 +25166,7 @@ __metadata:
     "@types/ws": 8.5.3
     canvaskit-wasm: 0.41.0
     eslint: 9.36.0
-    eslint-config-react-native-wcandillon: 5.0.0
+    eslint-config-react-native-wcandillon: 5.0.1
     eslint-plugin-import: 2.32.0
     eslint-plugin-react-hooks: ^5.2.0
     extract-zip: ^2.0.1
@@ -25174,10 +25181,11 @@ __metadata:
     react-native: 0.83.1
     react-native-builder-bob: 0.18.2
     react-native-reanimated: 4.3.1
-    react-native-skia-graphite-android: 154.2.0
-    react-native-skia-graphite-apple-ios: 154.2.0
-    react-native-skia-graphite-apple-macos: 154.2.0
-    react-native-webgpu-dawn: 154.2.0
+    react-native-skia-graphite-android: 154.3.0
+    react-native-skia-graphite-apple-ios: 154.3.0
+    react-native-skia-graphite-apple-macos: 154.3.0
+    react-native-skia-graphite-apple-tvos: 154.3.0
+    react-native-webgpu-dawn: 154.3.0
     react-native-worklets: 0.8.3
     react-reconciler: 0.31.0
     rimraf: 3.0.2
@@ -25190,7 +25198,7 @@ __metadata:
     ws: 8.21.0
   peerDependencies:
     react: ">=19.0"
-    react-native: ">=0.78"
+    react-native: ">=0.79"
     react-native-reanimated: ">=4.0.0"
     react-native-worklets: ">=0.7.0"
   peerDependenciesMeta:
@@ -25219,9 +25227,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-svg@patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch::locator=example%40workspace%3Aapps%2Fexample":
+"react-native-svg@patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch&../../.yarn/patches/react-native-svg-npm-15.14.0-position-props.patch::locator=example%40workspace%3Aapps%2Fexample":
   version: 15.14.0
-  resolution: "react-native-svg@patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch::version=15.14.0&hash=f0af0e&locator=example%40workspace%3Aapps%2Fexample"
+  resolution: "react-native-svg@patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch&../../.yarn/patches/react-native-svg-npm-15.14.0-position-props.patch::version=15.14.0&hash=50ed0f&locator=example%40workspace%3Aapps%2Fexample"
   dependencies:
     css-select: ^5.1.0
     css-tree: ^1.1.3
@@ -25229,7 +25237,7 @@ __metadata:
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 2c06b36399bc6f4c84ce11b3ec5231b73393575d121a790e7701b61e3ad23b5abc628f55b79fc9eea997130a73ad53921b644fdf48eddd564f66192292714063
+  checksum: 2a4568118dc390fe00b325fc295360b0e4dadd4b5908104d9fa9c1f1b3f05fccea5294986d55a40e680d0d3a48bda6b829aecdc2ad8325469855bda8b5236d5a
   languageName: node
   linkType: hard
 
@@ -25326,10 +25334,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webgpu-dawn@npm:154.2.0":
-  version: 154.2.0
-  resolution: "react-native-webgpu-dawn@npm:154.2.0"
-  checksum: e9798715a2f6402a3dd265b0daace8232e0245c118badba2a043c4696b7c34de5bc958267602cc0f9524c43d032efa8c3fcad40453dc1ca9c07c1a3cba60f995
+"react-native-webgpu-dawn@npm:154.3.0":
+  version: 154.3.0
+  resolution: "react-native-webgpu-dawn@npm:154.3.0"
+  checksum: 29a03a1c88e046413395e1cca965dbcce10146387e24540c59b00e25d069402667ecbf8bf971a66bc69e8d1ae369ca3c63fa0d0af903ff01ee1b16f2aa0dfb65
   languageName: node
   linkType: hard
 

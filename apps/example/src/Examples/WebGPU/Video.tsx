@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1a1a1a",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
   },

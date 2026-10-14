@@ -10,7 +10,7 @@ Graphite is Skia's new GPU backend. In React Native Skia it runs on [Dawn](https
 
 :::info[Staying on v2]
 
-v2 is still maintained. It renders with OpenGL ES on Android and has lower version requirements: it runs on Android devices below API level 26 or without Vulkan, and it supports tvOS, Android TV, Mac Catalyst, and Expo Go.
+v2 is still maintained. It renders with OpenGL ES on Android and has lower version requirements: it runs on Android devices below API level 26 or without Vulkan, and it supports Android TV and Expo Go.
 If you need any of these, stay on v2 (`yarn add react-native-skia@2`) and use the [v2 documentation](https://wcandillon.github.io/react-native-skia/v2/).
 
 :::
@@ -88,10 +88,10 @@ buildscript {
 }
 ```
 
-### iOS and macOS
+### iOS, tvOS, and macOS
 
 The minimum deployment target is iOS 15.1.
-Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios` and `react-native-skia-graphite-apple-macos`), which also ship Dawn.
+Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-tvos`, `react-native-skia-graphite-apple-macos`), alongside `react-native-webgpu-dawn`.
 
 ### Expo
 
@@ -115,9 +115,9 @@ Use [expo-build-properties](https://docs.expo.dev/versions/latest/sdk/build-prop
 }
 ```
 
-### TV
+### Android TV
 
-tvOS and Android TV are not available with Graphite. These platforms remain supported on v2.
+Android TV is not available with Graphite. It remains supported on v2.
 
 ### React Native WebGPU
 
@@ -154,6 +154,15 @@ The following APIs were removed in favor of it:
 | `ref.current.makeImageSnapshotAsync()` on a `Canvas` | `makeImageSnapshot()`: with Graphite the snapshot is taken on the calling thread and returns a GPU image. To encode it or read its pixels without blocking, read it back with `image.makeRasterImage()`. See [snapshots](/docs/canvas/overview#getting-a-canvas-snapshot). |
 
 When an image cannot be decoded, `useImage()` now calls `onError` with the message `Could not decode the image` (it was `Could not load data`).
+
+A few methods were renamed so that the name says whether the result lives on the CPU or on the GPU: "raster" is a CPU surface or image, "texture" a GPU one (see [GPU and CPU images](/docs/images#gpu-and-cpu-images)).
+`Skia.Surface.MakeOffscreen()`, which creates a GPU surface, keeps its name.
+
+| Renamed | New name |
+|:--|:--|
+| `Skia.Surface.Make(width, height)` | `Skia.Surface.MakeRaster(width, height)`: a CPU surface. |
+| `Skia.Image.MakeImage(info, data, bytesPerRow)` | `Skia.Image.MakeRasterImage(info, data, bytesPerRow)`: a CPU image. |
+| `image.makeNonTextureImage()` | `image.makeRasterImageSync()`: the synchronous counterpart of `image.makeRasterImage()`, for worklets. It now throws when the readback fails instead of returning `null`. |
 
 ## What is new
 

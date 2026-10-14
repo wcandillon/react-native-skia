@@ -33,7 +33,7 @@ describe("Native object memory pressure", () => {
       let delta = 0;
       for (let attempt = 0; attempt < 5; attempt++) {
         const before = externalBytes();
-        const image = Skia.Image.MakeImage(info, data, width * 4);
+        const image = Skia.Image.MakeRasterImage(info, data, width * 4);
         delta = externalBytes() - before;
         if (image === null || delta === size) {
           break;
@@ -59,15 +59,15 @@ describe("Native object memory pressure", () => {
           : 0;
       const { width, height, colorType, alphaType } = c;
       const data = Skia.Data.fromBytes(new Uint8Array(width * height * 4));
-      const image = Skia.Image.MakeImage(
+      const image = Skia.Image.MakeRasterImage(
         { width, height, colorType, alphaType },
         data,
         width * 4
       )!;
-      // __box()/unbox() is how worklets move an object to another runtime.
+      // box()/unbox() is how worklets move an object to another runtime.
       // Unboxing on the runtime that already has a wrapper must resolve to
       // that wrapper, and charge nothing more.
-      const boxed = (image as any).__box();
+      const boxed = (globalThis as any).__skiaWorkletHelpers.box(image);
       const before = externalBytes();
       let sameObject = true;
       for (let i = 0; i < 100; i++) {

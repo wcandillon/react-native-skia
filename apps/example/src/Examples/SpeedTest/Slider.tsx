@@ -2,12 +2,12 @@ import { StyleSheet, View, useWindowDimensions } from "react-native";
 import React from "react";
 import Animated, {
   interpolate,
-  runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 interface Props {
@@ -62,7 +62,7 @@ export const Slider: React.FC<Props> = ({
         [minValue, maxValue]
       );
 
-      runOnJS(onValueChange)(progress);
+      scheduleOnRN(onValueChange, progress);
     }
   );
 

@@ -194,13 +194,12 @@ public:
   }
 
   // Replays the recordings, in order, onto the target surface (a deferred
-  // canvas target) and submits them as one batch. Returns false if any of
-  // them was rejected; the others are still submitted.
-  bool
+  // canvas target) and submits them as one batch. A recording Graphite
+  // rejects is logged and skipped; the others are still submitted.
+  void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
     std::lock_guard<std::mutex> lock(_mutex);
-    bool success = true;
     for (auto *recording : recordings) {
       skgpu::graphite::InsertRecordingInfo info;
       info.fRecording = recording;
@@ -213,11 +212,9 @@ public:
             static_cast<int>(
                 static_cast<skgpu::graphite::InsertStatus::V>(status)),
             status.message().c_str());
-        success = false;
       }
     }
     fGraphiteContext->submit();
-    return success;
   }
 
   void submitRecording(

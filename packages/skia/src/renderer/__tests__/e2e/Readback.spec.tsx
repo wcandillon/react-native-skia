@@ -26,7 +26,7 @@ describe("Readback", () => {
         const corner = Array.from(
           snapshot.readPixels(7, 7, { width: 1, height: 1, ...ctx })!
         );
-        const synchronous = snapshot.makeNonTextureImage()!;
+        const synchronous = snapshot.makeRasterImageSync();
         return snapshot.makeRasterImage().then((raster) => ({
           snapshotOnGPU: backing(snapshot),
           rasterOnGPU: backing(raster),
@@ -59,7 +59,7 @@ describe("Readback", () => {
         canvas.drawRect(Skia.XYWHRect(4, 4, 4, 4), paint);
         offscreen.flush();
         const snapshot = offscreen.makeImageSnapshot();
-        const raster = snapshot.makeNonTextureImage()!;
+        const raster = snapshot.makeRasterImageSync();
         const read = (image: typeof snapshot, x: number, y: number) =>
           Array.from(
             image.readPixels(x, y, { width: 4, height: 2, ...ctx }) ?? []
@@ -89,7 +89,7 @@ describe("Readback", () => {
   itRunsE2eOnly("a raster image resolves to itself", async () => {
     const result = await surface.eval((Skia, ctx) => {
       const data = Skia.Data.fromBytes(new Uint8Array([0, 0, 255, 255]));
-      const image = Skia.Image.MakeImage(
+      const image = Skia.Image.MakeRasterImage(
         { width: 1, height: 1, ...ctx },
         data,
         4
@@ -108,7 +108,7 @@ describe("Readback", () => {
           255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
         ])
       );
-      const raster = Skia.Image.MakeImage(
+      const raster = Skia.Image.MakeRasterImage(
         { width: 2, height: 2, ...ctx },
         data,
         8

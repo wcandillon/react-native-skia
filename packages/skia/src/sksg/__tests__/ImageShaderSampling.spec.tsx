@@ -11,7 +11,7 @@ const RECT = { x: 0, y: 0, width: SIZE, height: SIZE };
 // A 2x2 checkerboard blown up to 256x256: every filter mode produces a
 // distinctive result at the seam between two texels.
 const makeCheckerboard = (Skia: Skia) => {
-  const surface = Skia.Surface.Make(2, 2)!;
+  const surface = Skia.Surface.MakeRaster(2, 2)!;
   const canvas = surface.getCanvas();
   const black = Skia.Paint();
   black.setColor(Skia.Color("black"));
@@ -45,7 +45,7 @@ const drawShader = async (image: SkImage, sampling?: SamplingOptions) => {
       />
     </skRect>
   );
-  const surface = Skia.Surface.Make(SIZE, SIZE)!;
+  const surface = Skia.Surface.MakeRaster(SIZE, SIZE)!;
   root.drawOnCanvas(surface.getCanvas());
   surface.flush();
   const out = surface.makeImageSnapshot();

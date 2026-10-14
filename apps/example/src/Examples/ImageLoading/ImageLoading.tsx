@@ -33,7 +33,7 @@ export const ImageLoading = () => {
   };
   const updateImage = () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.Make(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(skimage.width(), skimage.height());
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }
@@ -59,7 +59,7 @@ export const ImageLoading = () => {
   };
   const saveImage = async () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.Make(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(skimage.width(), skimage.height());
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }

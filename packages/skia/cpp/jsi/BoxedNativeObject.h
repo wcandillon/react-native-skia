@@ -16,6 +16,23 @@ namespace RNJsi {
 namespace jsi = facebook::jsi;
 
 /**
+ * Non-template base of every NativeObject. It is what lets code that does not
+ * know the concrete class (NativeObjectWorkletHelpers below) tell one of our
+ * native objects from any other object carrying jsi::NativeState, and read its
+ * brand.
+ */
+class NativeObjectBase : public jsi::NativeState {
+public:
+  /** The class brand (Derived::CLASS_NAME), e.g. "Rect". */
+  const char *getClassName() const { return _name; }
+
+protected:
+  explicit NativeObjectBase(const char *name) : _name(name) {}
+
+  const char *_name;
+};
+
+/**
  * Registry mapping a NativeObject class brand (CLASS_NAME) to a reconstructor
  * that can recreate a fully functional JS object (prototype + native state)
  * on any runtime. This is what enables native objects (Skia and WebGPU) to
@@ -122,7 +139,8 @@ private:
 
 /**
  * Boxes a NativeObject-backed JS value so it can be serialized by worklets
- * and unboxed on another runtime.
+ * and unboxed on another runtime. Throws for anything that is not one of our
+ * native objects.
  */
 inline jsi::Value boxNativeObject(jsi::Runtime &runtime,
                                   const jsi::Value &value) {
@@ -130,17 +148,74 @@ inline jsi::Value boxNativeObject(jsi::Runtime &runtime,
     throw jsi::JSError(runtime, "box() expects a native object");
   }
   auto object = value.asObject(runtime);
-  if (!object.hasNativeState(runtime)) {
+  if (!object.hasNativeState<NativeObjectBase>(runtime)) {
     throw jsi::JSError(runtime, "box() expects a native object");
   }
-  auto brand = object.getProperty(runtime, "__typename__");
-  if (!brand.isString()) {
-    throw jsi::JSError(runtime, "box() expects a native object");
-  }
+  auto state = object.getNativeState<NativeObjectBase>(runtime);
   return jsi::Object::createFromHostObject(
-      runtime, std::make_shared<BoxedNativeObject>(
-                   object.getNativeState(runtime),
-                   brand.asString(runtime).utf8(runtime)));
+      runtime,
+      std::make_shared<BoxedNativeObject>(state, state->getClassName()));
 }
+
+/**
+ * The native half of the worklet serializer (see registerCustomSerializable in
+ * src/skia/SkiaWorkletSerialization.ts):
+ *
+ * - isNativeObject(value): true only for objects whose NativeState is a
+ *   NativeObjectBase. Other native-state objects (WebGPU objects, worklets'
+ *   own serializable refs) and objects that merely inherit from one of our
+ *   prototypes (Object.create(rect)) are rejected, and no JS property is ever
+ *   read, so getters and Proxy traps of unrelated objects never run.
+ * - box(value): boxNativeObject(), for unbox() on the target runtime.
+ *
+ * One instance is installed on the main runtime as
+ * globalThis.__skiaWorkletHelpers (see RNSkManager::installBindings) and
+ * captured by the serializer's determine/pack worklets. Worklets hands a
+ * HostObject to every runtime by reference, so the helper is available
+ * wherever a native object gets captured (Reanimated UI runtime,
+ * createWorkletRuntime, Vision Camera frame processors) without installing
+ * anything on those runtimes.
+ */
+class NativeObjectWorkletHelpers : public jsi::HostObject {
+public:
+  jsi::Value get(jsi::Runtime &runtime, const jsi::PropNameID &name) override {
+    auto propName = name.utf8(runtime);
+    if (propName == "isNativeObject") {
+      return jsi::Function::createFromHostFunction(
+          runtime, name, 1,
+          [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args,
+             size_t count) -> jsi::Value {
+            return jsi::Value(
+                count > 0 && args[0].isObject() &&
+                args[0].getObject(rt).hasNativeState<NativeObjectBase>(rt));
+          });
+    }
+    if (propName == "box") {
+      return jsi::Function::createFromHostFunction(
+          runtime, name, 1,
+          [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args,
+             size_t count) -> jsi::Value {
+            if (count < 1) {
+              throw jsi::JSError(rt, "box() expects a native object");
+            }
+            return boxNativeObject(rt, args[0]);
+          });
+    }
+    return jsi::Value::undefined();
+  }
+
+  void set(jsi::Runtime &runtime, const jsi::PropNameID &,
+           const jsi::Value &) override {
+    throw jsi::JSError(runtime, "Worklet helpers are read-only");
+  }
+
+  std::vector<jsi::PropNameID> getPropertyNames(jsi::Runtime &rt) override {
+    std::vector<jsi::PropNameID> names;
+    names.reserve(2);
+    names.push_back(jsi::PropNameID::forUtf8(rt, "isNativeObject"));
+    names.push_back(jsi::PropNameID::forUtf8(rt, "box"));
+    return names;
+  }
+};
 
 } // namespace RNJsi

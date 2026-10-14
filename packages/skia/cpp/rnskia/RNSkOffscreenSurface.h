@@ -144,8 +144,9 @@ public:
       DawnContext::getInstance().submitRecording(recorder->snap().get());
       _cleared = true;
     }
-    return DawnContext::getInstance().insertRecordings(recordings,
-                                                       _surface.get());
+    // A rejected recording is logged and dropped (see RNSkWindowSurface).
+    DawnContext::getInstance().insertRecordings(recordings, _surface.get());
+    return true;
   }
 
   bool presentImage(const sk_sp<SkImage> &image) override {

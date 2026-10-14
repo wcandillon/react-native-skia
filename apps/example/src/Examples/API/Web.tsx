@@ -22,6 +22,10 @@ const examples = [
     screen: "WebMemory",
     title: "💧 WASM Memory",
   },
+  {
+    screen: "WebOffscreen",
+    title: "🧱 Offscreen Surfaces",
+  },
 ] as const;
 
 const styles = StyleSheet.create({
@@ -40,14 +44,13 @@ const styles = StyleSheet.create({
 });
 
 export const Web = () => {
-  const { navigate } =
-    useNavigation<NativeStackNavigationProp<Routes, "Web">>();
+  const navigation = useNavigation<NativeStackNavigationProp<Routes, "Web">>();
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {examples.map((thumbnail) => (
         <Pressable
           key={thumbnail.screen}
-          onPress={() => navigate(thumbnail.screen)}
+          onPress={() => navigation.navigate(thumbnail.screen)}
           testID={thumbnail.screen}
         >
           <View style={styles.thumbnail}>

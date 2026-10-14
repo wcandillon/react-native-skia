@@ -301,7 +301,19 @@ createDawnBackendContext(dawn::native::Instance *instance) {
 
   // Primary device features — request everything Skia/Graphite can use
   std::vector<wgpu::FeatureName> features = {
+#if !defined(__ANDROID__)
+      // Not on Android: Dawn creates its Vulkan swapchain images without
+      // VK_IMAGE_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT, so every
+      // MSAA pass Graphite draws onto the window with this feature violates
+      // VUID-VkFramebufferCreateInfo-samples-06881 (confirmed with the
+      // validation layers on a Pixel 8). Mali tolerates it; Adreno crashes in
+      // vkCreateFramebuffer (#4158). Without the feature Graphite renders
+      // through a transient MSAA attachment and resolves, the same path as on
+      // GPUs without the extension. Re-enable once Dawn creates swapchains
+      // with the flag or reports which textures cannot take an implicit
+      // sample count: https://issues.chromium.org/issues/571594984
       wgpu::FeatureName::MSAARenderToSingleSampled,
+#endif
       wgpu::FeatureName::TransientAttachments,
       wgpu::FeatureName::Unorm16TextureFormats,
       wgpu::FeatureName::DualSourceBlending,
