@@ -13,7 +13,6 @@ import "./Elements";
 
 const skiaReconciler = ReactReconciler(sksgHostConfig);
 
-// @ts-expect-error DefinitelyTyped is not up to date
 skiaReconciler.injectIntoDevTools();
 
 export class SkiaSGRoot {
@@ -34,6 +33,9 @@ export class SkiaSGRoot {
       null,
       "",
       console.error,
+      skiaReconciler.defaultOnCaughtError,
+      console.error,
+      () => {},
       null
     );
   }

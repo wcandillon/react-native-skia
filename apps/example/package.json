@@ -30,8 +30,8 @@
     "cdt2d": "^1.0.0",
     "fast-text-encoding": "^1.0.6",
     "its-fine": "^2.0.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "react-native": "0.83.1",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-macos": "^0.81.8",
@@ -71,7 +71,7 @@
     "playwright": "1.59.0",
     "prettier": "2.8.8",
     "react-native-test-app": "4.4.7",
-    "react-test-renderer": "19.0.0",
+    "react-test-renderer": "19.2.0",
     "typescript": "^5.2.2"
   },
   "engines": {

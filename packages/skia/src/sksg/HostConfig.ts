@@ -1,10 +1,9 @@
 /*global NodeJS*/
 import { createContext } from "react";
-import type { Fiber, HostConfig } from "react-reconciler";
+import type { Fiber, HostConfig, ReactContext } from "react-reconciler";
 import { DefaultEventPriority } from "react-reconciler/constants";
 
 import type { NodeType } from "../dom/types";
-import { shallowEq } from "../renderer/typeddash";
 
 import type { Node } from "./Node";
 import type { Container } from "./StaticContainer";
@@ -23,14 +22,21 @@ type Instance = Node;
 
 type Props = object;
 type TextInstance = Node;
+type ActivityInstance = Instance;
 type SuspenseInstance = Instance;
 type HydratableInstance = Instance;
+type FormInstance = Instance;
 type PublicInstance = Instance;
 type HostContext = object;
-type UpdatePayload = Container;
 type ChildSet = Node[];
 type TimeoutHandle = NodeJS.Timeout;
 type NoTimeout = -1;
+type TransitionStatus = null;
+type SuspendedState = null;
+type RendererInspectionConfig = null;
+type FormStateMarkerInstance = Instance;
+type HoistableRoot = never;
+type Resource = never;
 
 type SkiaHostConfig = HostConfig<
   NodeType,
@@ -38,14 +44,21 @@ type SkiaHostConfig = HostConfig<
   Container,
   Instance,
   TextInstance,
+  ActivityInstance,
   SuspenseInstance,
   HydratableInstance,
+  FormInstance,
   PublicInstance,
   HostContext,
-  UpdatePayload,
   ChildSet,
   TimeoutHandle,
-  NoTimeout
+  NoTimeout,
+  TransitionStatus,
+  SuspendedState,
+  RendererInspectionConfig,
+  FormStateMarkerInstance,
+  HoistableRoot,
+  Resource
 >;
 let currentUpdatePriority: EventPriority = NoEventPriority;
 
@@ -67,7 +80,7 @@ export const sksgHostConfig: SkiaHostConfig = {
     return {};
   },
 
-  getChildHostContext(_parentHostContext, _type, _rootContainerInstance) {
+  getChildHostContext(_parentHostContext, _type) {
     debug("getChildHostContext");
     return {};
   },
@@ -152,22 +165,6 @@ export const sksgHostConfig: SkiaHostConfig = {
     debug("clearContainer");
   },
 
-  prepareUpdate(
-    _instance: Instance,
-    _type: string,
-    oldProps: Props,
-    newProps: Props,
-    container: Container,
-    _hostContext: HostContext
-  ) {
-    debug("prepareUpdate");
-    const propsAreEqual = shallowEq(oldProps, newProps);
-    if (propsAreEqual) {
-      return null;
-    }
-    return container;
-  },
-
   preparePortalMount: () => {
     debug("preparePortalMount");
   },
@@ -222,8 +219,6 @@ export const sksgHostConfig: SkiaHostConfig = {
     debug("cloneHiddenTextInstance");
     throw new Error("Not yet implemented.");
   },
-  // see https://github.com/pmndrs/react-three-fiber/pull/2360#discussion_r916356874
-  getCurrentEventPriority: () => DefaultEventPriority,
   beforeActiveInstanceBlur: () => {},
   afterActiveInstanceBlur: () => {},
   detachDeletedInstance: (_node: Instance) => {},
@@ -236,20 +231,24 @@ export const sksgHostConfig: SkiaHostConfig = {
   getInstanceFromScope: function (_scopeInstance): Instance | null {
     throw new Error("Function not implemented.");
   },
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error
   shouldAttemptEagerTransition: () => false,
   trackSchedulerEvent: () => {},
   resolveEventType: () => null,
   resolveEventTimeStamp: () => -1.1,
   requestPostPaintCallback() {},
   maySuspendCommit: () => false,
+  maySuspendCommitOnUpdate: () => false,
+  maySuspendCommitInSyncRender: () => false,
   preloadInstance: () => true, // true indicates already loaded
-  startSuspendingCommit() {},
+  startSuspendingCommit: () => null,
   suspendInstance() {},
+  suspendOnActiveViewTransition() {},
   waitForCommitToBeReady: () => null,
+  getSuspendedCommitReason: () => null,
   NotPendingTransition: null,
-  HostTransitionContext: createContext(null),
+  HostTransitionContext: createContext<TransitionStatus>(
+    null
+  ) as unknown as ReactContext<TransitionStatus>,
   setCurrentUpdatePriority(newPriority: number) {
     currentUpdatePriority = newPriority;
   },
@@ -264,7 +263,12 @@ export const sksgHostConfig: SkiaHostConfig = {
   },
   resetFormInstance() {},
 
-  // DefinitelyTyped is not up to date, these are needed for devtools
   rendererVersion: "0.0.1",
   rendererPackageName: "react-native-skia",
+  extraDevToolsConfig: null,
+  // React logs an error raised in another environment, such as a server component, through this
+  bindToConsole(methodName, [format, ...rest], badgeName) {
+    const log: (...data: unknown[]) => void = Reflect.get(console, methodName);
+    return log.bind(console, `[%s] ${format}`, ` ${badgeName} `, ...rest);
+  },
 };
