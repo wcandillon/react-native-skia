@@ -141,7 +141,7 @@
     "ws": "8.21.0"
   },
   "dependencies": {
-    "canvaskit-wasm": "0.41.0",
+    "canvaskit-wasm": "0.41.1",
     "react-native-skia-android": "154.0.0",
     "react-native-skia-apple-ios": "154.0.0",
     "react-native-skia-apple-macos": "154.0.0",
