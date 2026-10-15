@@ -21,10 +21,12 @@ Behind the scenes, it is using its own React renderer.
 ## Canvas size
 
 The size of the canvas is available on both the UI and JS thread.
+It is the size the canvas is laid out at: a transform on the canvas or on one of its ancestors doesn't change it.
 
 ### UI thread
 
-The `onSize` property receives a shared value, which will be updated whenever the canvas size changes.
+The `onSize` property receives a shared value, which is updated on the UI thread whenever the canvas size changes.
+When react-native-worklets 0.8 or newer is linked, the canvas view writes it from its own layout without involving the JS thread; otherwise each new size also reaches the JS thread as an event.
 You can see it in action in the example below.
 
 ```tsx twoslash
@@ -48,8 +50,8 @@ const Demo = () => {
 
 ### JS thread
 
-To get the canvas size on the JS thread, you can use `useLayoutEffect` and `measure()`.
-Since this is a very common pattern, we offer a `useCanvasSize` hook you can use for convenience.
+The `useCanvasSize` hook returns the canvas size as React state, updated whenever it changes.
+Pass its `ref` to the canvas, or pass your own canvas ref to the hook.
 
 ```tsx twoslash
 import {Fill, Canvas, Rect, useCanvasSize} from "react-native-skia";
@@ -59,28 +61,6 @@ const Demo = () => {
   return (
     <Canvas style={{ flex: 1 }} ref={ref}>
       <Rect color="cyan" rect={{ x: 0, y: 0, width, height }} />
-    </Canvas>
-  );
-};
-```
-
-This example is equivalent to the code below:
-
-```tsx twoslash
-import {useLayoutEffect, useState} from "react";
-import {Fill, Canvas, Rect, useCanvasRef} from "react-native-skia";
-
-const Demo = () => {
-  const ref = useCanvasRef();
-  const [rect, setRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  useLayoutEffect(() => {
-    ref.current?.measure((_x, _y, width, height) => {
-      setRect({ x: 0, y: 0, width, height });
-    });
-  }, []);
-  return (
-    <Canvas style={{ flex: 1 }} ref={ref}>
-      <Rect color="cyan" rect={rect} />
     </Canvas>
   );
 };

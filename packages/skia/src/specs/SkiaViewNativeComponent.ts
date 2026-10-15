@@ -1,5 +1,15 @@
 import { codegenNativeComponent, type ViewProps } from "react-native";
-import type { WithDefault } from "react-native/Libraries/Types/CodegenTypes";
+import type {
+  DirectEventHandler,
+  Double,
+  WithDefault,
+} from "react-native/Libraries/Types/CodegenTypes";
+
+/** The size the view is laid out at, in points. */
+export type LayoutSizeEvent = Readonly<{
+  width: Double;
+  height: Double;
+}>;
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - pointerEvents needs to be redeclared for codegen to generate native bindings
@@ -15,6 +25,12 @@ export interface NativeProps extends ViewProps {
     "auto" | "none" | "box-none" | "box-only",
     "auto"
   >;
+  /**
+   * While true, the view sends onLayoutSize: once with the size it has, then
+   * whenever that size changes.
+   */
+  reportsLayoutSize?: WithDefault<boolean, false>;
+  onLayoutSize?: DirectEventHandler<LayoutSizeEvent>;
 }
 
 // eslint-disable-next-line import/no-default-export

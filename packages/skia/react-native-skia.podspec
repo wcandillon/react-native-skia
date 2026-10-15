@@ -140,6 +140,25 @@ if has_webgpu_pkg
 end
 dawn_frameworks = has_webgpu_pkg ? [] : ['libs/dawn/apple/libwebgpu_dawn.xcframework']
 
+# <Canvas onSize> is written on the UI runtime straight from the view's own
+# layout through react-native-worklets' stable C++ API (0.8.0 and later) when
+# the app has react-native-worklets. Without it, the view sends its size in
+# onLayoutSize events to a Reanimated handler, and the events also reach JS.
+worklets_pkg_dir = resolve_node_package.call('react-native-worklets', __dir__)
+worklets_version = worklets_pkg_dir.nil? ? nil : JSON.parse(File.read(File.join(worklets_pkg_dir, 'package.json')))['version'].to_s
+# Only an RNWorklets pod the Podfile declares (autolinking adds it with the
+# package) can be depended on: a package installed for another one's sake is not.
+pod_config = Pod::Config.instance
+podfile = pod_config.instance_variable_defined?(:@podfile) ? pod_config.instance_variable_get(:@podfile) : nil
+podfile_has_worklets = !podfile.nil? && podfile.dependencies.any? { |dependency| dependency.root_name == 'RNWorklets' }
+links_worklets = podfile_has_worklets && !worklets_version.nil? && Gem::Version.new(worklets_version) >= Gem::Version.new('0.8.0')
+if links_worklets
+  Pod::UI.puts "react-native-skia: react-native-worklets #{worklets_version} linked for onSize"
+  preprocessor_defs += ' RNSKIA_WORKLETS=1'
+elsif podfile_has_worklets
+  Pod::UI.puts "react-native-skia: react-native-worklets #{worklets_version} predates its stable C++ API (0.8.0), onSize is written from events"
+end
+
 # Verify that the prebuilt binaries are available (copied in above from the npm
 # packages, or built locally with `yarn build-skia`).
 unless Dir.exist?(File.join(__dir__, 'libs', 'ios')) && Dir.exist?(File.join(__dir__, 'libs', 'macos'))
@@ -204,4 +223,5 @@ Pod::Spec.new do |s|
   s.dependency "React"
   s.dependency "React-callinvoker"
   s.dependency "React-Core"
+  s.dependency "RNWorklets" if links_worklets
 end

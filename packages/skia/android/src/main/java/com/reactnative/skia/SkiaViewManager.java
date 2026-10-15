@@ -12,6 +12,9 @@ import com.facebook.react.views.view.ReactViewManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class SkiaViewManager extends ReactViewManager implements SkiaViewManagerInterface<SkiaView> {
 
     protected SkiaViewManagerDelegate mDelegate;
@@ -66,6 +69,22 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     @ReactProp(name = ViewProps.POINTER_EVENTS)
     public void setPointerEvents(SkiaView view, @Nullable String pointerEventsStr) {
         view.setPointerEvents(PointerEvents.parsePointerEvents(pointerEventsStr));
+    }
+
+    @ReactProp(name = "reportsLayoutSize")
+    public void setReportsLayoutSize(SkiaView view, boolean value) {
+        view.setReportsLayoutSize(value);
+    }
+
+    @Nullable
+    @Override
+    public Map<String, Object> getExportedCustomDirectEventTypeConstants() {
+        Map<String, Object> inherited = super.getExportedCustomDirectEventTypeConstants();
+        Map<String, Object> constants = inherited == null ? new HashMap<>() : new HashMap<>(inherited);
+        Map<String, Object> registration = new HashMap<>();
+        registration.put("registrationName", LayoutSizeEvent.REGISTRATION_NAME);
+        constants.put(LayoutSizeEvent.EVENT_NAME, registration);
+        return constants;
     }
 
     // The backing view depends on several props (opaque, androidSurfaceType,

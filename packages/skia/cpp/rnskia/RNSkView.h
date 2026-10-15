@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -35,6 +36,18 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
+/** The size a platform view is laid out at, in points. */
+struct RNSkLayoutSize {
+  double width;
+  double height;
+
+  bool operator==(const RNSkLayoutSize &other) const {
+    return width == other.width && height == other.height;
+  }
+};
+
+using RNSkLayoutSizeHandler = std::function<void(RNSkLayoutSize)>;
+
 /**
  * The native side of a Skia view. Frames come from one of two producers: JS
  * records them itself through the view's target
@@ -45,8 +58,9 @@ namespace jsi = facebook::jsi;
  * frame (see setFrameScheduler).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
- * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
- * replay on the calling thread. Presenting runs on the main thread.
+ * applyUpdates() which a Reanimated mapper calls on the UI runtime, and the
+ * layout size, which both runtimes read; snapshots replay on the calling
+ * thread. Presenting and recording the layout size run on the main thread.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -236,7 +250,68 @@ public:
   /** Height of the surface, in pixels. */
   int getScaledHeight() { return _surface->getHeight(); }
 
+  /** The size recorded by setLayoutSize; none until the view is laid out. */
+  std::optional<RNSkLayoutSize> getLayoutSize() {
+    std::lock_guard<std::mutex> lock(_layoutSizeMutex);
+    return _layoutSize;
+  }
+
+  /**
+   Installs the handler <Canvas onSize> writes its shared value with, or
+   removes it (nullptr). It runs on the main thread with the size the view
+   has, then whenever that size changes.
+   */
+  void
+  setLayoutSizeHandler(std::shared_ptr<const RNSkLayoutSizeHandler> handler) {
+    {
+      std::lock_guard<std::mutex> lock(_layoutSizeMutex);
+      _layoutSizeHandler = handler;
+    }
+    if (handler == nullptr) {
+      return;
+    }
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    _platformContext->runOnMainThread([weakThis, handler]() {
+      auto view = weakThis.lock();
+      if (view == nullptr) {
+        return;
+      }
+      std::optional<RNSkLayoutSize> size;
+      {
+        std::lock_guard<std::mutex> lock(view->_layoutSizeMutex);
+        // Replaced in the meantime: the newer handler gets the size instead.
+        if (view->_layoutSizeHandler != handler) {
+          return;
+        }
+        size = view->_layoutSize;
+      }
+      if (size.has_value()) {
+        (*handler)(*size);
+      }
+    });
+  }
+
   // Platform view side -------------------------------------------------------
+
+  /**
+   Records the size the platform view is laid out at, in points: the size
+   SkiaViewApi.layoutSize returns and the view's onLayoutSize events carry.
+   Runs the layout size handler when the size changes. Main thread.
+   */
+  void setLayoutSize(RNSkLayoutSize size) {
+    std::shared_ptr<const RNSkLayoutSizeHandler> handler;
+    {
+      std::lock_guard<std::mutex> lock(_layoutSizeMutex);
+      if (_layoutSize == size) {
+        return;
+      }
+      _layoutSize = size;
+      handler = _layoutSizeHandler;
+    }
+    if (handler != nullptr) {
+      (*handler)(size);
+    }
+  }
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface
@@ -433,6 +508,12 @@ private:
   std::mutex _mutex;
   std::shared_ptr<RNSkGraphiteTarget> _target;
   std::shared_ptr<RNSkGraphiteRecording> _lastPresented;
+
+  // Recorded on the main thread, read from both runtimes; the handler is
+  // installed from the JS thread.
+  std::mutex _layoutSizeMutex;
+  std::optional<RNSkLayoutSize> _layoutSize;
+  std::shared_ptr<const RNSkLayoutSizeHandler> _layoutSizeHandler;
 };
 
 } // namespace RNSkia

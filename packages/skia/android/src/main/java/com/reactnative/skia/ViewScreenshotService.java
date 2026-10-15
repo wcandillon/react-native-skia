@@ -147,7 +147,15 @@ public class ViewScreenshotService {
         canvas.restore();
     }
 
+    // A surface laid out with no area shows nothing, and no bitmap can be made at its size.
+    private static boolean hasNoArea(View view) {
+        return view.getWidth() <= 0 || view.getHeight() <= 0;
+    }
+
     private static void drawTextureView(Canvas canvas, TextureView tv, Paint paint, float opacity) {
+        if (hasNoArea(tv)) {
+            return;
+        }
         tv.setOpaque(false);
         Bitmap childBitmapBuffer = tv.getBitmap(Bitmap.createBitmap(tv.getWidth(), tv.getHeight(), Bitmap.Config.ARGB_8888));
         canvas.save();
@@ -158,6 +166,9 @@ public class ViewScreenshotService {
     }
 
     private static void drawSurfaceView(Canvas canvas, SurfaceView sv, Paint paint, float opacity) {
+        if (hasNoArea(sv)) {
+            return;
+        }
         final CountDownLatch latch = new CountDownLatch(1);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Bitmap childBitmapBuffer = Bitmap.createBitmap(sv.getWidth(), sv.getHeight(), Bitmap.Config.ARGB_8888);

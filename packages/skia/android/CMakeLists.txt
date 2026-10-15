@@ -185,6 +185,14 @@ target_link_libraries(${PACKAGE_NAME}
     -landroid
 )
 
+# <Canvas onSize> runs its worklet from the view's layout through the stable
+# C++ API of react-native-worklets, linked when Gradle found it (0.8.0+).
+if(RNSKIA_WORKLETS)
+    find_package(react-native-worklets REQUIRED CONFIG)
+    target_link_libraries(${PACKAGE_NAME} react-native-worklets::worklets)
+    target_compile_definitions(${PACKAGE_NAME} PRIVATE RNSKIA_WORKLETS=1)
+endif()
+
 # Enable Android 16kb native library alignment
 if(CMAKE_ANDROID_NDK_VERSION VERSION_LESS "27")
     target_link_options(${PACKAGE_NAME} PRIVATE "-Wl,-z,max-page-size=16384")

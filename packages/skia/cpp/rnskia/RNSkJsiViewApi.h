@@ -20,6 +20,10 @@
 #include "jsi/ViewProperty.h"
 #include <jsi/jsi.h>
 
+#if RNSKIA_WORKLETS
+#include <worklets/Compat/StableApi.h>
+#endif
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -28,6 +32,10 @@ using RNSkViewInfo = struct RNSkViewInfo {
   RNSkViewInfo() { view = nullptr; }
   std::shared_ptr<RNSkView> view;
   std::unordered_map<std::string, RNJsi::ViewProperty> props;
+  // Kept for the id rather than handed over once: a view that is torn down
+  // and recreated for the same id (an iOS view leaving the hierarchy) gets it
+  // again.
+  std::shared_ptr<const RNSkLayoutSizeHandler> layoutSizeHandler;
 };
 
 class ViewRegistry {
@@ -305,6 +313,76 @@ public:
   }
 
   /**
+   The size the view is laid out at, in points, as its onLayoutSize events
+   carry it, or null until a view with the id has been laid out. Called from
+   the JS and the UI runtimes.
+   */
+  JSI_HOST_FUNCTION(layoutSize) {
+    if (count != 1 || !arguments[0].isNumber()) {
+      _platformContext->raiseError("layoutSize: expected (nativeId: number)");
+      return jsi::Value::undefined();
+    }
+    auto nativeId = static_cast<size_t>(arguments[0].asNumber());
+    auto view = ViewRegistry::getInstance().getView(nativeId);
+    auto size = view != nullptr ? view->getLayoutSize() : std::nullopt;
+    if (!size.has_value()) {
+      return jsi::Value::null();
+    }
+    auto sizeObj = jsi::Object(runtime);
+    sizeObj.setProperty(runtime, "width", size->width);
+    sizeObj.setProperty(runtime, "height", size->height);
+    return sizeObj;
+  }
+
+#if RNSKIA_WORKLETS
+  /**
+   Installs the worklet <Canvas onSize> writes its shared value with, called
+   as (nativeId, uiRuntimeHolder, worklet), or removes it with
+   (nativeId, null, null). The view runs it on the UI runtime with its width
+   and height in points, from its own layout on the main thread, so no event
+   reaches JS. Installed only when react-native-worklets 0.8 or newer is
+   linked.
+   */
+  JSI_HOST_FUNCTION(setLayoutSizeHandler) {
+    if (count != 3 || !arguments[0].isNumber() ||
+        arguments[1].isNull() != arguments[2].isNull()) {
+      _platformContext->raiseError(
+          "setLayoutSizeHandler: expected (nativeId: number, uiRuntimeHolder, "
+          "worklet), or (nativeId: number, null, null)");
+      return jsi::Value::undefined();
+    }
+    auto nativeId = static_cast<size_t>(arguments[0].asNumber());
+    std::shared_ptr<const RNSkLayoutSizeHandler> handler;
+    if (!arguments[1].isNull()) {
+      std::weak_ptr<worklets::WorkletRuntime> uiRuntime =
+          worklets::getWorkletRuntimeFromHolder(runtime,
+                                                arguments[1].asObject(runtime));
+      auto worklet = worklets::extractSerializable(
+          runtime, arguments[2],
+          "setLayoutSizeHandler: the handler must be a worklet",
+          worklets::Serializable::ValueType::WorkletType);
+      handler = std::make_shared<const RNSkLayoutSizeHandler>(
+          [uiRuntime, worklet](RNSkLayoutSize size) {
+            if (auto workletRuntime = uiRuntime.lock()) {
+              worklets::runSyncOnRuntime(workletRuntime, worklet,
+                                         jsi::Value(size.width),
+                                         jsi::Value(size.height));
+            }
+          });
+    }
+    ViewRegistry::getInstance().withViewInfo(
+        nativeId, [&](std::shared_ptr<RNSkViewInfo> info) {
+          info->layoutSizeHandler = handler;
+          if (info->view != nullptr) {
+            info->view->setLayoutSizeHandler(handler);
+          }
+          return nullptr;
+        });
+    return jsi::Value::undefined();
+  }
+#endif // RNSKIA_WORKLETS
+
+  /**
    Returns the recording side of a view: (nativeId, width, height, opaque,
    highBitDepth), the size in points as laid out and the props the surface
    format follows from. The view may not exist yet; the context binds to it
@@ -358,6 +436,12 @@ public:
     installHostMethod(runtime, prototype, "makeImageSnapshot",
                       &RNSkJsiViewApi::makeImageSnapshot);
     installHostMethod(runtime, prototype, "size", &RNSkJsiViewApi::size);
+    installHostMethod(runtime, prototype, "layoutSize",
+                      &RNSkJsiViewApi::layoutSize);
+#if RNSKIA_WORKLETS
+    installHostMethod(runtime, prototype, "setLayoutSizeHandler",
+                      &RNSkJsiViewApi::setLayoutSizeHandler);
+#endif
     installHostMethod(runtime, prototype, "makeGraphiteContext",
                       &RNSkJsiViewApi::makeGraphiteContext);
     installHostMethod(runtime, prototype, "destroyGraphiteContext",
@@ -391,6 +475,7 @@ public:
 
           info->view->setJsiProperties(info->props);
           info->props.clear();
+          info->view->setLayoutSizeHandler(info->layoutSizeHandler);
 
           return nullptr;
         },
@@ -421,6 +506,7 @@ public:
             info->view->setNativeId(nativeId);
             info->view->setJsiProperties(info->props);
             info->props.clear();
+            info->view->setLayoutSizeHandler(info->layoutSizeHandler);
           } else {
             info->view = view; // Set to nullptr
           }

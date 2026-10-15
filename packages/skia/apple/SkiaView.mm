@@ -50,6 +50,10 @@ static bool appIsBackgrounded() {
   RNSkia::RNSkManager *_manager;
   size_t _nativeId;
   bool _highBitDepth;
+  // onLayoutSize: whether JS asked for the size, and the size last sent.
+  bool _reportsLayoutSize;
+  bool _hasReportedLayoutSize;
+  facebook::react::Size _reportedLayoutSize;
 #if !TARGET_OS_OSX
   CADisplayLink *_displayLink;
 #endif
@@ -60,6 +64,8 @@ static bool appIsBackgrounded() {
     _manager = [RNSkiaModule latestActiveSkManager].get();
     _nativeId = 0;
     _highBitDepth = false;
+    _reportsLayoutSize = false;
+    _hasReportedLayoutSize = false;
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
   }
@@ -93,6 +99,7 @@ static bool appIsBackgrounded() {
     return [[NSThread currentThread] isMainThread] && !appIsBackgrounded();
   });
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+  [self recordLayoutSize];
   [self.layer addSublayer:_layer];
   if (_nativeId != 0) {
     _manager->setSkiaView(_nativeId, _view);
@@ -124,6 +131,8 @@ static bool appIsBackgrounded() {
   [super prepareForRecycle];
   [self stopDisplayLink];
   [self unregisterView];
+  _reportsLayoutSize = false;
+  _hasReportedLayoutSize = false;
 }
 
 - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
@@ -134,6 +143,41 @@ static bool appIsBackgrounded() {
     // refreshed and we would have a stale manager then
     _manager = [RNSkiaModule latestActiveSkManager].get();
   }
+  [self recordLayoutSize];
+  [self reportLayoutSizeIfChanged];
+}
+
+// Records the size the view is laid out at as soon as Fabric sets it, ahead of
+// layoutSubviews: the surface reads it in pixels for frames recorded before
+// the layer has its size, and the native view keeps it in points, the size
+// the onLayoutSize events carry.
+- (void)recordLayoutSize {
+  const auto size = _layoutMetrics.frame.size;
+  if (_view == nullptr || size.width < 0 || size.height < 0) {
+    return;
+  }
+  float pd = _view->getPlatformContext()->getPixelDensity();
+  _surface->setLayoutSize(static_cast<int>(std::lround(size.width * pd)),
+                          static_cast<int>(std::lround(size.height * pd)));
+  _view->setLayoutSize({size.width, size.height});
+}
+
+// While JS asks for it, sends the size the view is laid out at: once with the
+// size it has, then whenever it changes. On the main thread, where a
+// Reanimated handler for onSize runs before the event reaches JS.
+- (void)reportLayoutSizeIfChanged {
+  const auto size = _layoutMetrics.frame.size;
+  if (!_reportsLayoutSize || _eventEmitter == nullptr || size.width < 0 ||
+      size.height < 0) {
+    return;
+  }
+  if (_hasReportedLayoutSize && size == _reportedLayoutSize) {
+    return;
+  }
+  _hasReportedLayoutSize = true;
+  _reportedLayoutSize = size;
+  std::static_pointer_cast<const SkiaViewEventEmitter>(_eventEmitter)
+      ->onLayoutSize({.width = size.width, .height = size.height});
 }
 
 - (void)unregisterView {
@@ -232,6 +276,10 @@ static bool appIsBackgrounded() {
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
   [self setHighBitDepth:newProps.highBitDepth];
+  _reportsLayoutSize = newProps.reportsLayoutSize;
+  if (!_reportsLayoutSize) {
+    _hasReportedLayoutSize = false;
+  }
   // opaque, androidSurfaceType and androidZOrderOnTop select the backing view
   // on Android; a CAMetalLayer composites like any other layer.
 }

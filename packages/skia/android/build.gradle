@@ -135,6 +135,25 @@ if (webgpuDir != null) {
     dawnShippedByWebgpu = true
 }
 
+// <Canvas onSize> is written on the UI runtime straight from the view's own
+// layout through react-native-worklets' stable C++ API (0.8.0 and later) when
+// the app links react-native-worklets. Without it, the view sends its size in
+// onLayoutSize events to a Reanimated handler, and the events also reach JS.
+def workletsDir = null
+try {
+    workletsDir = resolveNodePackage('react-native-worklets', projectDir)
+} catch (Exception ignored) {
+    // react-native-worklets not installed: onSize is written from events
+}
+def linksWorklets = false
+if (workletsDir != null && findProject(':react-native-worklets') != null) {
+    def workletsVersion = new groovy.json.JsonSlurper().parse(file("${workletsDir}/package.json")).version.toString()
+    def workletsVersionParts = workletsVersion.tokenize('.-')
+    linksWorklets = workletsVersionParts[0].toInteger() > 0 || workletsVersionParts[1].toInteger() >= 8
+    logger.warn("react-native-skia: react-native-worklets ${workletsVersion}" +
+        (linksWorklets ? " linked for onSize" : " predates its stable C++ API (0.8.0), onSize is written from events"))
+}
+
 logger.warn("react-native-skia: Dawn libs: ${dawnLibsPath}")
 logger.warn("react-native-skia: Skia libs: ${skiaLibsPath}")
 logger.warn("react-native-skia: node_modules/ found at: ${nodeModules}")
@@ -200,6 +219,7 @@ android {
                           "-DNODE_MODULES_DIR=${nodeModules}",
                           "-DSKIA_LIBS_PATH=${skiaLibsPath}",
                           "-DDAWN_LIBS_PATH=${dawnLibsPath}",
+                          "-DRNSKIA_WORKLETS=${linksWorklets ? 'ON' : 'OFF'}",
                           "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 
             }
@@ -245,6 +265,10 @@ android {
         if (dawnShippedByWebgpu) {
             excludes += "**/libwebgpu_dawn.so"
         }
+        // Linked from react-native-worklets, which packages it.
+        if (linksWorklets) {
+            excludes += "**/libworklets.so"
+        }
     }
 
     buildFeatures {
@@ -272,7 +296,23 @@ repositories {
 dependencies {
     //noinspection GradleDynamicVersion
     implementation 'com.facebook.react:react-native:+'  // From node_modules
+    if (linksWorklets) {
+        implementation project(':react-native-worklets')
+    }
     testImplementation 'junit:junit:4.13.2'
+}
+
+// The prefab of react-native-worklets is only complete once its native build
+// has run.
+if (linksWorklets) {
+    evaluationDependsOn(':react-native-worklets')
+    afterEvaluate {
+        ['Debug', 'Release'].each { variant ->
+            tasks.named("externalNativeBuild${variant}").configure {
+                dependsOn(project(':react-native-worklets').tasks.named("externalNativeBuild${variant}"))
+            }
+        }
+    }
 }
 
 // Package all the cpp code in a flattened directory structure

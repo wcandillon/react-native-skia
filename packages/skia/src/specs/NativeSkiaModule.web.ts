@@ -43,7 +43,6 @@ global.SkiaViewApi = {
   views: {},
   deferedPictures: {},
   unregisteredViews: new Set<string>(),
-  deferedOnSize: {},
   web: true,
   registerView(nativeId: string, view: SkiaWebViewHandle) {
     this.unregisteredViews.delete(nativeId);
@@ -82,6 +81,9 @@ global.SkiaViewApi = {
     } else {
       return { width: 0, height: 0 };
     }
+  },
+  layoutSize(nativeId: number) {
+    return this.views[`${nativeId}`]?.getSize() ?? null;
   },
   requestRedraw(nativeId: number) {
     // The view may already have unmounted (e.g. a trailing animation frame).

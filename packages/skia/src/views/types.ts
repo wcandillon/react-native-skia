@@ -1,5 +1,6 @@
 import type { ViewProps } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
+import type { SerializableRef } from "react-native-worklets";
 
 import type {
   SkGraphiteContext,
@@ -10,6 +11,9 @@ import type {
 } from "../skia/types";
 
 export type AndroidSurfaceType = "SurfaceView" | "TextureView";
+
+/** Runs on the UI runtime with the size a view is laid out at, in points. */
+export type LayoutSizeWorklet = (width: number, height: number) => void;
 
 export interface AndroidCanvasProps {
   /**
@@ -48,6 +52,20 @@ export interface ISkiaViewApi {
    */
   makeImageSnapshot: (nativeId: number, rect?: SkRect) => SkImage;
   size: (nativeId: number) => SkSize;
+  /** The view's laid-out size in points, or null until it is laid out; callable from any runtime. */
+  layoutSize: (nativeId: number) => SkSize | null;
+  /**
+   * Installs the worklet `<Canvas onSize>` writes its shared value with, or
+   * removes it (`null, null`): the view runs it on the UI runtime with its
+   * size in points, once and on every change, without an event reaching JS.
+   * Only present when react-native-worklets 0.8 or newer is linked natively.
+   */
+  setLayoutSizeHandler?: (
+    nativeId: number,
+    ...handler:
+      | [uiRuntimeHolder: object, worklet: SerializableRef<LayoutSizeWorklet>]
+      | [uiRuntimeHolder: null, worklet: null]
+  ) => void;
   /**
    * The recording side of a view: its native id, the layout size in points,
    * and the props its surface format follows from.

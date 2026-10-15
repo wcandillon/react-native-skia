@@ -13,7 +13,10 @@ import androidx.annotation.Nullable;
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
 import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.uimanager.PixelUtil;
 import com.facebook.react.uimanager.PointerEvents;
+import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.events.EventDispatcher;
 import com.facebook.react.views.view.ReactViewGroup;
 
 /**
@@ -42,6 +45,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private BackingViewKind mAppliedKind = null;
     private boolean mAppliedZOrderOnTop;
     private boolean mAppliedHighBitDepth;
+
+    private final LayoutSizeReporter mLayoutSizeReporter = new LayoutSizeReporter(this::dispatchLayoutSize);
 
     private final Runnable mPostedPresent = this::onPostedPresent;
     private final FrameScheduler mFrameScheduler = new FrameScheduler(new FrameScheduler.Host() {
@@ -99,6 +104,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     public void setHighBitDepth(boolean value) {
         mHighBitDepth = value;
+    }
+
+    public void setReportsLayoutSize(boolean value) {
+        mLayoutSizeReporter.setReporting(value);
     }
 
     // Resolve the backing view from the props. "auto" picks SurfaceView for an
@@ -187,14 +196,30 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        int width = right - left;
+        int height = bottom - top;
+        float widthInPoints = PixelUtil.toDIPFromPixel(width);
+        float heightInPoints = PixelUtil.toDIPFromPixel(height);
         // The backing view gets this exact size, and so does its surface: tell
         // the native side now, so that a frame recorded before the surface
         // exists (the first one usually is) already has the right size.
         if (hasNativeView()) {
-            setLayoutSize(right - left, bottom - top);
+            setLayoutSize(width, height, widthInPoints, heightInPoints);
         }
         if (mView != null) {
-            mView.layout(0, 0, right - left, bottom - top);
+            mView.layout(0, 0, width, height);
+        }
+        mLayoutSizeReporter.onLayout(widthInPoints, heightInPoints);
+    }
+
+    // Dispatched on the main thread, where a Reanimated handler for onSize
+    // runs before the event reaches JavaScript.
+    private void dispatchLayoutSize(float width, float height) {
+        EventDispatcher dispatcher =
+                UIManagerHelper.getEventDispatcherForReactTag((ReactContext) getContext(), getId());
+        if (dispatcher != null) {
+            dispatcher.dispatchEvent(
+                    new LayoutSizeEvent(UIManagerHelper.getSurfaceId(this), getId(), width, height));
         }
     }
 
@@ -292,7 +317,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private native void surfaceDestroyed();
 
-    private native void setLayoutSize(int width, int height);
+    private native void setLayoutSize(int width, int height, float widthInPoints, float heightInPoints);
 
     native void registerView(int nativeId);
 

@@ -75,12 +75,15 @@ protected:
   void surfaceDestroyed() { _surface->detach(); }
 
   /**
-   The pixel size the backing view was laid out with. The surface it gets
-   (SurfaceView or TextureView) has exactly this size, so a frame recorded
-   before the surface exists already matches it. Main thread.
+   The size the backing view was laid out with, in pixels and in points. The
+   surface it gets (SurfaceView or TextureView) has exactly the pixel size, so
+   a frame recorded before the surface exists already matches it; the size in
+   points is the one the view reports to JS. Main thread.
    */
-  void setLayoutSize(int width, int height) {
+  void setLayoutSize(int width, int height, float widthInPoints,
+                     float heightInPoints) {
     _surface->setLayoutSize(width, height);
+    _view->setLayoutSize({widthInPoints, heightInPoints});
   }
 
   void registerView(int nativeId) {
