@@ -1,10 +1,12 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library) and the Android build without its emulator run. The native
-# builds and the emulator/simulator runs happen on pull requests and in the
-# merge queue, so a merge does not pay for the full suite twice. The Android
-# build runs on push because a pull request can only restore caches saved by
-# its own earlier runs or by its base branch (see build-test-android).
+# build-library), the Android build without its emulator run, and the SwiftPM
+# build. The native builds and the emulator/simulator runs happen on pull
+# requests and in the merge queue, so a merge does not pay for the full suite
+# twice. The Android build runs on push because a pull request can only
+# restore caches saved by its own earlier runs or by its base branch (see
+# build-test-android). The SwiftPM build runs on push, and on the pull
+# requests whose diff can affect it (see spm-changes).
 on:
   push:
     branches:
@@ -17,6 +19,7 @@ on:
   merge_group:
     types:
       - checks_requested
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.ref }}
@@ -479,9 +482,69 @@ jobs:
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
 
+  # Decides whether build-test-ios-spm runs. That job only proves that
+  # packages/skia/Package.swift resolves and compiles, so a pull request pays
+  # for it only when its diff touches what can change the outcome: the
+  # manifest and the autolinking config, the Apple and C++ sources it
+  # compiles, the scripts that copy the headers from the Skia submodule and
+  # the submodule itself, the dependencies that pin the prebuilt binaries,
+  # the example that links it, or CI itself. Pushes to main/next, the merge
+  # queue and manual runs build unconditionally: a change this list misses
+  # still shows up on main, and those runs save the node_modules cache the
+  # pull request runs restore (see .github/actions/setup).
+  spm-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      # The checkout is the pull request's merge commit at depth 1. Fetching
+      # the base commit by hash gives git both trees, which is all a diff
+      # needs, without the history in between.
+      - name: Compare the pull request to its base
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --depth=1 origin "$BASE"
+          changed=$(git diff --name-only "$BASE" HEAD)
+          run=false
+          while IFS= read -r file; do
+            case "$file" in
+              packages/skia/Package.swift|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
+              spm-example/*|package.json|yarn.lock|.gitmodules|externals/*|\
+              .github/workflows/ci.yml|.github/actions/setup/*)
+                echo "$file"
+                run=true
+                ;;
+            esac
+          done <<< "$changed"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  # The SwiftPM example builds on a GitHub-hosted Mac. It needs no Metro,
+  # simulator or CocoaPods, so nothing ties it to the self-hosted machine, and
+  # a fresh runner is the strictest check that Package.swift finds the
+  # prebuilt Skia and Dawn packages next to the library with nothing cached.
+  # It used to run on the self-hosted Mac ahead of build-test-ios, which then
+  # waited for it, and a hung xcodebuild there held the one machine that runs
+  # the iOS and macOS checks.
   build-test-ios-spm:
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 60
+    needs: spm-changes
+    if: needs.spm-changes.outputs.run == 'true'
+    runs-on: macos-latest
+    # Cold run: yarn install with the Skia and Dawn binaries, the React Native
+    # artifacts, then one xcodebuild.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
@@ -496,6 +559,10 @@ jobs:
         uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # xcpretty is a gem, not part of the macOS runner image.
+      - name: Install xcpretty
+        run: command -v xcpretty >/dev/null || sudo gem install xcpretty --no-document
 
       # spm-example sits outside the yarn workspace so its React Native can
       # differ from the one apps/example pins. It ships no lockfile; react and
@@ -512,9 +579,7 @@ jobs:
         run: npx react-native spm update
 
       # No simulator is booted: a generic destination is enough to prove the
-      # package compiles and links, and keeps this job off the skia-ci device
-      # build-test-ios uses. The derived data is kept outside the workspace,
-      # as in build-test-ios, so the build is incremental between runs.
+      # package compiles and links.
       - name: Build spm-example for iOS
         working-directory: spm-example/ios
         run: |
@@ -524,7 +589,7 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$GITHUB_WORKSPACE/../derived-data/skia-ci-spm" \
+            -derivedDataPath spm-build \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             build | tee xcodebuild.log | xcpretty || {

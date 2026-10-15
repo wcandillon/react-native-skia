@@ -32,13 +32,11 @@ export const Mock = (CanvasKit: CanvasKit) => {
     drawAsImageFromPicture: Noop,
     useCanvasRef: NoopValue,
     useCanvasSize: () => ({
-      ref: {
-        current: 0,
-      },
       size: {
         width: 0,
         height: 0,
       },
+      onLayout: Noop,
     }),
     // Skia Animations
     useValue: NoopValue,

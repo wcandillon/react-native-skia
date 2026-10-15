@@ -134,7 +134,7 @@ fn fs_main() -> @location(0) vec4f {
 `;
 
 export const TriangleInSkia = () => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   const image = useSharedValue<SkImage | null>(null);
 
   useEffect(() => {
@@ -191,7 +191,7 @@ export const TriangleInSkia = () => {
   }, [size.width, size.height, image]);
 
   return (
-    <Canvas ref={ref} style={{ flex: 1 }}>
+    <Canvas onLayout={onLayout} style={{ flex: 1 }}>
       <Image
         image={image}
         x={0}
@@ -300,7 +300,7 @@ import { Canvas, Image, Skia, useCanvasSize } from "react-native-skia";
 import { createVideoPlayer, importDevice } from "react-native-webgpu";
 
 export const Video = ({ url }: { url: string }) => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   const image = useSharedValue<SkImage | null>(null);
 
   useEffect(() => {
@@ -356,7 +356,7 @@ export const Video = ({ url }: { url: string }) => {
   }, [url, image]);
 
   return (
-    <Canvas ref={ref} style={{ flex: 1 }}>
+    <Canvas onLayout={onLayout} style={{ flex: 1 }}>
       <Image
         image={image}
         x={0}
@@ -508,7 +508,7 @@ renderer.setAnimationLoop(() => {
 The shared value is then drawn like any other image:
 
 ```tsx
-<Canvas ref={ref} style={{ flex: 1 }}>
+<Canvas onLayout={onLayout} style={{ flex: 1 }}>
   <Image
     image={image}
     x={0}

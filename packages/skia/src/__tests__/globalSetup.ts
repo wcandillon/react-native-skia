@@ -5,7 +5,8 @@ import { WebSocketServer } from "ws";
 
 declare global {
   var testServer: Server;
-  var testClient: WebSocket;
+  // Each test file keeps a global's first value, so the client is a property.
+  var testConnection: { client: WebSocket | null };
   var testOS: "ios" | "android" | "web" | "node" | "macos";
 }
 
@@ -36,14 +37,17 @@ const reversePort = (port: number) => {
 // connection also waits for Metro to build the app's bundle.
 const connectTimeoutSeconds = Number(process.env.E2E_CONNECT_TIMEOUT ?? 600);
 
+export const testPort = () => Number(process.env.E2E_PORT ?? 4242);
+
 const globalSetup = () => {
   return new Promise<void>((resolve, reject) => {
     if (process.env.E2E !== "true") {
       resolve();
       return;
     }
-    const port = Number(process.env.E2E_PORT ?? 4242);
+    const port = testPort();
     reversePort(port);
+    global.testConnection = { client: null };
     global.testServer = new WebSocketServer({ port });
     console.log(
       `\n\nTest server listening on port ${port} (waiting for the example app to open on E2E tests screen)`
@@ -57,7 +61,6 @@ const globalSetup = () => {
       );
     }, connectTimeoutSeconds * 1000);
     global.testServer.on("connection", (client) => {
-      global.testClient = client;
       client.once("message", (msg) => {
         clearTimeout(deadline);
         const obj = JSON.parse(msg.toString("utf8"));
@@ -65,6 +68,8 @@ const globalSetup = () => {
         if (!isOS(OS)) {
           throw new Error("Unknown testing platform: " + OS);
         }
+        // Only a socket that says hello is the app's, and the latest one wins.
+        global.testConnection.client = client;
         global.testOS = OS;
         console.log(`${OS} device connected`);
         resolve();

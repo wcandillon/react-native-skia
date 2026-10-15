@@ -333,7 +333,9 @@ public:
   /**
    Retires the target made for a view id from the JS side: (nativeId). Called
    when the view component unmounts; a no-op once a view bound to the id,
-   whose teardown retires it (see RNSkGraphiteTargetRegistry).
+   whose teardown retires it. A context JS still holds keeps the target for
+   the view to bind to, as React's StrictMode runs this cleanup right after
+   mount (see RNSkGraphiteTargetRegistry).
    */
   JSI_HOST_FUNCTION(destroyGraphiteContext) {
     if (count < 1 || !arguments[0].isNumber()) {

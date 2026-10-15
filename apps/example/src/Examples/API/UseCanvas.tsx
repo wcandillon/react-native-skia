@@ -118,7 +118,13 @@ export const UseCanvas = () => {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
-        <Canvas style={{ flex: 1 }} onSize={size}>
+        <Canvas
+          style={{ flex: 1 }}
+          onLayout={(e) => {
+            const { layout } = e.nativeEvent;
+            size.value = { width: layout.width, height: layout.height };
+          }}
+        >
           <Bridge>
             <MyComp size={size} />
           </Bridge>

@@ -362,6 +362,9 @@ private:
  * made by whichever side comes first, the context JS makes for the id or the
  * view binding to it, and kept until the platform view of the id is
  * unregistered or, for an id no view ever bound to, until JS retires it. A
+ * retired entry lets go of its target without forgetting it: for as long as
+ * a context JS made holds the target, whoever comes for the id next, the view
+ * binding to it or another context, takes it over (see removeIfUnbound). A
  * reload clears the registry, as native ids start over with the next bundle
  * (see ~RNSkManager). The same ownership as the SurfaceRegistry of
  * react-native-webgpu.
@@ -421,19 +424,33 @@ public:
    Retires the entry from the JS side, when the view component unmounts,
    unless a view bound to it: that entry is the view's, and its teardown
    retires it. React's StrictMode simulates an unmount without unmounting
-   the native views, which would otherwise orphan a bound view.
+   the native views, which would otherwise orphan a bound view. It runs that
+   cleanup right after mount, before the native view registered when the UI
+   thread lags, and the context the first effect run made stays in use. So
+   the target is let go of, not forgotten: for as long as a context holds
+   it, the view binding to the id takes it over (see getOrCreateLocked).
    */
   void removeIfUnbound(size_t nativeId) {
     std::shared_ptr<RNSkGraphiteTarget> target;
     {
       std::lock_guard<std::mutex> lock(_mutex);
       auto it = _entries.find(nativeId);
-      if (it == _entries.end() || it->second.bound) {
-        return;
+      if (it != _entries.end() && !it->second.bound && it->second.target) {
+        target = std::move(it->second.target);
+        if (target.use_count() == 1) {
+          // No context holds it: nothing is left to take over.
+          _entries.erase(it);
+        } else {
+          it->second.retired = target;
+        }
       }
-      target = std::move(it->second.target);
-      _entries.erase(it);
+      // The entries retired earlier whose context is gone by now.
+      for (auto entry = _entries.begin(); entry != _entries.end();) {
+        entry = entry->second.isExpired() ? _entries.erase(entry) : ++entry;
+      }
     }
+    // The target, and the GPU resources of its queue, may be destroyed here,
+    // outside of the lock, when no context holds it.
   }
 
   /** Drops every entry: the bundle is going away (see ~RNSkManager). */
@@ -447,8 +464,16 @@ public:
 
 private:
   struct Entry {
+    /** The target, owned until JS retires the entry. */
     std::shared_ptr<RNSkGraphiteTarget> target;
+    /**
+     The target of a retired entry, for as long as a context JS made holds
+     it, for whoever comes for the id next (see getOrCreateLocked).
+     */
+    std::weak_ptr<RNSkGraphiteTarget> retired;
     bool bound = false;
+    /** Retired, and its context gone: nothing left to take over. */
+    bool isExpired() const { return !target && retired.expired(); }
   };
 
   RNSkGraphiteTargetRegistry() = default;
@@ -456,14 +481,17 @@ private:
   Entry &
   getOrCreateLocked(size_t nativeId,
                     const std::shared_ptr<RNSkPlatformContext> &context) {
-    auto it = _entries.find(nativeId);
-    if (it != _entries.end()) {
-      return it->second;
+    auto &entry = _entries[nativeId];
+    if (!entry.target) {
+      // A new id, or one JS retired: the target a context still holds, when
+      // there is one, is owned again from here on.
+      entry.target = entry.retired.lock();
+      entry.retired.reset();
+      if (!entry.target) {
+        entry.target = std::make_shared<RNSkGraphiteTarget>(context);
+      }
     }
-    return _entries
-        .emplace(nativeId,
-                 Entry{std::make_shared<RNSkGraphiteTarget>(context), false})
-        .first->second;
+    return entry;
   }
 
   std::mutex _mutex;

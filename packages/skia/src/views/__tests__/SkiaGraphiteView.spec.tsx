@@ -33,13 +33,16 @@ const { SkiaViewApi } = jest.requireMock<{
   };
 }>("../api");
 
-const mountView = () => {
+const mountView = ({ strict = false } = {}) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
+  const element = <SkiaGraphiteView ref={ref} />;
   act(() => {
-    root.render(<SkiaGraphiteView ref={ref} />);
+    root.render(
+      strict ? <React.StrictMode>{element}</React.StrictMode> : element
+    );
   });
   const view = ref.current;
   if (view === null) {
@@ -109,5 +112,29 @@ describe("SkiaGraphiteView on native", () => {
     expect(SkiaViewApi.destroyGraphiteContext).toHaveBeenCalledWith(
       view.getNativeId()
     );
+  });
+
+  // StrictMode runs the unmount cleanup once right after mount and re-runs
+  // the effect, with the id unchanged: a context kept from the first effect
+  // run was made for the id the cleanup retires, and the native side keeps
+  // its target for the view (see RNSkGraphiteTargetRegistry).
+  it("retires the same id under StrictMode's simulated unmount", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({ strict: true });
+    const nativeId = view.getNativeId();
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenLastCalledWith(
+      nativeId,
+      200,
+      100,
+      false,
+      false
+    );
+    expect(SkiaViewApi.destroyGraphiteContext.mock.calls).toEqual([[nativeId]]);
+    await unmount();
+    expect(SkiaViewApi.destroyGraphiteContext.mock.calls).toEqual([
+      [nativeId],
+      [nativeId],
+    ]);
   });
 });

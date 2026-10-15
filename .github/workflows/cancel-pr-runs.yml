@@ -1,0 +1,57 @@
+name: Cancel PR workflows
+
+# When a pull request is closed or merged, cancel every workflow run that is
+# still queued or running for its head branch, so runners are freed instead of
+# finishing work nobody will look at. A new push already does this through the
+# concurrency groups of the individual workflows; this covers close and merge.
+#
+# pull_request_target is used instead of pull_request so the job also has a
+# token that can cancel runs when the pull request comes from a fork. The job
+# never checks out or runs code from the pull request, so this is safe.
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel queued and running workflow runs for the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          OWN_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          echo "Pull request #$PR_NUMBER ($HEAD_REPO@$HEAD_REF, $HEAD_SHA)"
+          runs=$(mktemp)
+          for status in queued in_progress waiting pending requested; do
+            gh api -X GET "repos/$REPO/actions/runs" \
+              -f branch="$HEAD_REF" -f status="$status" -F per_page=100 \
+              | jq -r \
+                  --arg head_repo "$HEAD_REPO" \
+                  --arg head_sha "$HEAD_SHA" \
+                  --argjson own "$OWN_RUN_ID" \
+                  '.workflow_runs[]
+                   | select(.id != $own)
+                   | select((.head_repository.full_name // "") == $head_repo
+                            or .head_sha == $head_sha)
+                   | "\(.id) \(.name)"' >> "$runs"
+          done
+          if [ ! -s "$runs" ]; then
+            echo "No active runs to cancel."
+            exit 0
+          fi
+          sort -u "$runs" | while read -r id name; do
+            echo "Cancelling run $id ($name)"
+            gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null \
+              || echo "::warning::Could not cancel run $id ($name)"
+          done

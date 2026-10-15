@@ -36,10 +36,7 @@ import type { Renderer, WebFrame } from "./SkiaWebRenderer";
 // difference: the surface starts cleared on every frame, so a recording draws
 // the whole frame rather than a delta.
 
-export interface SkiaViewHandle extends SkiaWebViewHandle {
-  /** The canvas element, for Reanimated's measure(). */
-  readonly canvasRef: () => HTMLCanvasElement | null;
-}
+export type SkiaViewHandle = SkiaWebViewHandle;
 
 export interface SkiaViewProps extends ViewProps {
   ref?: React.Ref<SkiaViewHandle>;
@@ -336,9 +333,6 @@ export const SkiaView = (props: SkiaViewProps) => {
       makeImageSnapshot,
       measure,
       measureInWindow,
-      get canvasRef() {
-        return () => canvasRef.current;
-      },
     }),
     [
       setPicture,

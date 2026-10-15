@@ -141,7 +141,7 @@
     "ws": "8.21.0"
   },
   "dependencies": {
-    "canvaskit-wasm": "0.41.0",
+    "canvaskit-wasm": "0.41.1",
     "react-native-skia-graphite-android": "154.3.0",
     "react-native-skia-graphite-apple-ios": "154.3.0",
     "react-native-skia-graphite-apple-macos": "154.3.0",

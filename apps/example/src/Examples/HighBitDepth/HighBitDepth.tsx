@@ -40,7 +40,10 @@ const GradientCanvas = ({
         style={styles.canvas}
         opaque
         highBitDepth={highBitDepth}
-        onSize={size}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          size.value = { width, height };
+        }}
       >
         <Fill>
           <LinearGradient start={start} end={end} colors={[colorA, colorB]} />

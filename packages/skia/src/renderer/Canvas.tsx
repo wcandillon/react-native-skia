@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import React, {
   useCallback,
   useEffect,
@@ -12,21 +11,18 @@ import type {
   LayoutChangeEvent,
   MeasureInWindowOnSuccessCallback,
   MeasureOnSuccessCallback,
-  View,
   ViewProps,
 } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
 
-import Rea from "../external/reanimated/ReanimatedProxy";
 import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
 import { androidNativeProps } from "../views/android";
 import type { AndroidCanvasProps } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
+import { measureLayout } from "../views/measureLayout";
+import type { NativeView } from "../views/measureLayout";
 import type { SkImage, SkRect, SkSize } from "../skia/types";
 import { SkiaSGRoot } from "../sksg/Reconciler";
 import { Skia } from "../skia";
-import { Platform } from "../Platform";
-import { HAS_REANIMATED_3 } from "../external";
 
 export interface CanvasRef {
   makeImageSnapshot(rect?: SkRect): SkImage;
@@ -34,30 +30,34 @@ export interface CanvasRef {
   getNativeId(): number;
   measure(callback: MeasureOnSuccessCallback): void;
   measureInWindow(callback: MeasureInWindowOnSuccessCallback): void;
+  /**
+   * The size of the canvas in points, the one of its layout, read
+   * synchronously: for a one-off read, in an event handler for instance. It
+   * is `0x0` before the canvas is mounted. To follow the size across layout
+   * changes, see `useCanvasSize`.
+   */
+  readonly size: SkSize;
 }
 
 export const useCanvasRef = () => useRef<CanvasRef>(null);
 
-const useReanimatedFrame = !HAS_REANIMATED_3 ? () => {} : Rea.useFrameCallback;
-const measure = !HAS_REANIMATED_3 ? null : Rea.measure;
-
-const useCanvasRefPriv: typeof useRef<View> = !HAS_REANIMATED_3
-  ? useRef
-  : Rea.useAnimatedRef;
-
-export const useCanvasSize = (userRef?: RefObject<CanvasRef | null>) => {
-  const ourRef = useCanvasRef();
-  const ref = userRef ?? ourRef;
+/**
+ * The size of a canvas in points, on the JS thread. Pass `onLayout` to the
+ * canvas: `size` is its layout, 0x0 until the canvas is laid out, and follows
+ * every resize. The canvas is a regular view, its size is the one of its
+ * layout; to read it on the UI thread, write the layout into a shared value.
+ */
+export const useCanvasSize = () => {
   const [size, setSize] = useState<SkSize>({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    if (ref.current) {
-      ref.current.measure((_x, _y, width, height) => {
-        setSize({ width, height });
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setSize((current) =>
+      current.width === width && current.height === height
+        ? current
+        : { width, height }
+    );
   }, []);
-  return { ref, size };
+  return { size, onLayout };
 };
 
 export interface CanvasProps extends ViewProps {
@@ -68,7 +68,6 @@ export interface CanvasProps extends ViewProps {
    * (see `android.surfaceType`). Defaults to false.
    */
   opaque?: boolean;
-  onSize?: SharedValue<SkSize>;
   /**
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. Colors are
@@ -84,15 +83,14 @@ export interface CanvasProps extends ViewProps {
 }
 
 /**
- * What the canvas owns: the native id, the scene graph root rendered into it,
- * the `onSize` measurement and the imperative handle of the ref.
+ * What the canvas owns: the native id, the scene graph root rendered into it
+ * and the imperative handle of the ref.
  */
 const useCanvasRoot = ({
   children,
-  onSize,
   ref,
-}: Pick<CanvasProps, "children" | "onSize" | "ref">) => {
-  const viewRef = useCanvasRefPriv(null);
+}: Pick<CanvasProps, "children" | "ref">) => {
+  const viewRef = useRef<NativeView>(null);
   // Native ID
   const nativeId = useMemo(() => {
     return SkiaViewNativeId.current++;
@@ -100,30 +98,6 @@ const useCanvasRoot = ({
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
-
-  useReanimatedFrame(() => {
-    "worklet";
-    if (onSize && measure) {
-      const result =
-        // eslint-disable-next-line no-nested-ternary
-        Platform.OS === "web"
-          ? // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            viewRef.current?.canvasRef
-            ? // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-              // @ts-expect-error
-              measure(viewRef.current.canvasRef)
-            : { width: 0, height: 0 }
-          : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            measure(viewRef as any);
-      if (result) {
-        const { width, height } = result;
-        if (onSize.value.width !== width || onSize.value.height !== height) {
-          onSize.value = { width, height };
-        }
-      }
-    }
-  }, !!onSize);
 
   // Render effects
   useLayoutEffect(() => {
@@ -156,6 +130,10 @@ const useCanvasRoot = ({
       measureInWindow: (callback) => {
         viewRef.current?.measureInWindow(callback);
       },
+      get size() {
+        const view = viewRef.current;
+        return view ? measureLayout(view) : { width: 0, height: 0 };
+      },
     }),
     [nativeId, viewRef]
   );
@@ -176,35 +154,19 @@ const useCanvasRoot = ({
  *
  * On the web the scene is drawn into a picture on the JS thread and painted
  * on a WebGL canvas.
+ *
+ * The canvas is a regular view: its size is the one of its layout, reported
+ * by `onLayout` (see `useCanvasSize`).
  */
 export const Canvas = ({
   opaque,
   children,
-  onSize,
   highBitDepth = false,
   android,
   ref,
-  onLayout,
   ...viewProps
 }: CanvasProps) => {
-  const { nativeId, viewRef } = useCanvasRoot({
-    children,
-    onSize,
-    ref,
-  });
-
-  const onLayoutWeb = useCallback(
-    (e: LayoutChangeEvent) => {
-      if (onLayout) {
-        onLayout(e);
-      }
-      if (Platform.OS === "web" && onSize) {
-        const { width, height } = e.nativeEvent.layout;
-        onSize.value = { width, height };
-      }
-    },
-    [onLayout, onSize]
-  );
+  const { nativeId, viewRef } = useCanvasRoot({ children, ref });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}
@@ -213,9 +175,6 @@ export const Canvas = ({
       opaque={opaque}
       highBitDepth={highBitDepth}
       {...androidNativeProps(android)}
-      onLayout={
-        Platform.OS === "web" && (onSize || onLayout) ? onLayoutWeb : onLayout
-      }
       {...viewProps}
     />
   );

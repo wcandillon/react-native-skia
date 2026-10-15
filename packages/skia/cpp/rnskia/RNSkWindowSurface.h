@@ -91,8 +91,7 @@ public:
 
   /**
    Installed by the view owning the surface: asks it for a frame when the
-   window appears or changes size, and when a present was declined so that
-   it is tried again (the app coming back to the foreground).
+   window appears or changes size.
    */
   void setRequestRedraw(std::function<void()> requestRedraw) {
     _requestRedraw = std::move(requestRedraw);
@@ -100,12 +99,16 @@ public:
 
   /**
    Installed by the platform view: whether the window can show a frame right
-   now. Presenting is declined while it returns false, and a redraw is
-   requested instead. Without one, an attached window always can.
+   now (not while the app is in the background). The view presents nothing
+   while it returns false, and asks again once told that it can (see
+   RNSkView::onCanPresent). Without one, an attached window always can.
    */
   void setCanPresent(std::function<bool()> canPresent) {
     _canPresent = std::move(canPresent);
   }
+
+  /** Whether a window is attached and can show a frame right now. */
+  bool canPresent();
 
   // RNSkSurface -------------------------------------------------------------
 
@@ -137,7 +140,6 @@ private:
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
   skgpu::graphite::TextureInfo getTextureInfo() const;
-  bool canPresent();
   void requestRedraw() {
     if (_requestRedraw) {
       _requestRedraw();

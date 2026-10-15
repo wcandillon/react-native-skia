@@ -191,16 +191,7 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 }
 
 bool RNSkWindowSurface::canPresent() {
-  if (!_surface) {
-    return false;
-  }
-  if (_canPresent && !_canPresent()) {
-    // The frame is kept by the caller: ask for it again once the window can
-    // show it.
-    requestRedraw();
-    return false;
-  }
-  return true;
+  return _surface && (!_canPresent || _canPresent());
 }
 
 bool RNSkWindowSurface::presentRecordings(

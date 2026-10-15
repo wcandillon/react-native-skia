@@ -94,7 +94,15 @@ const AnimatedCanvas = ({ image, onSnapshot }: AnimatedCanvasProps) => {
     () => size.value.height / 2 - imageSize.value / 2
   );
   return (
-    <Canvas ref={ref} style={styles.canvas} opaque onSize={size}>
+    <Canvas
+      ref={ref}
+      style={styles.canvas}
+      opaque
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        size.value = { width, height };
+      }}
+    >
       <Fill color="#0b1020" />
       {image && (
         <Group transform={transform} origin={origin}>

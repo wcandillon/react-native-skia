@@ -4,7 +4,10 @@ import { View, StyleSheet } from "react-native";
 import { TextInput } from "react-native-gesture-handler";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
 
-export const OnSize = () => {
+// The canvas size on the UI thread: onLayout writes the layout into a shared
+// value and the values derived from it follow every resize. Type into the
+// input to resize the canvas.
+export const CanvasSize = () => {
   const size = useSharedValue({ width: 0, height: 0 });
   const redRect = useDerivedValue(() => {
     console.log(
@@ -25,7 +28,13 @@ export const OnSize = () => {
         backgroundColor: "cyan",
       }}
     >
-      <Canvas onSize={size} style={StyleSheet.absoluteFill}>
+      <Canvas
+        style={StyleSheet.absoluteFill}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          size.value = { width, height };
+        }}
+      >
         <Rect rect={redRect} color="red" />
       </Canvas>
       <TextInput

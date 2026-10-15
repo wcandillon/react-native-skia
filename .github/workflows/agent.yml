@@ -1,27 +1,58 @@
 name: Agent
-# A Claude Code agent run on the self-hosted Mac, started by hand. It builds
-# and launches the example app on its own simulator, lets the agent look at
-# the screen through screenshots, and keeps what the agent saw as an
-# artifact. The first rung of this ladder, a run that only proved the
-# integration (Bun and the Claude Code CLI install on the runner, the
-# subscription token, the tool allowlist, the report in the step summary), was
-# this job without the app; the next ones give the agent a tour of every
-# example and a pull request to probe.
+# A Claude Code agent run started by hand. It builds and launches the example
+# app on its own simulator or emulator, lets the agent open every example
+# through deep links and look at the screen through screenshots, and keeps
+# what the agent saw as an artifact. The first rung of this ladder, a run
+# that only proved the integration (Bun and the Claude Code CLI install on
+# the runner, the subscription token, the tool allowlist, the report in the
+# step summary), was the iOS job without the app; the second, a single
+# screenshot of the Home list; the third, the tour of every example, on iOS
+# and on Android. This one gives the agent a pull request to probe: the run
+# builds the pull request's head, the agent reads its diff, picks the
+# screens that exercise the change and reports whether it does what it
+# says. An optional request from the maintainer narrows or redirects that.
 #
-# Only workflow_dispatch and schedule may start this workflow. Both are
-# maintainer-only, so the token never reaches a run that executes code from a
-# fork. The action's subprocess isolation is Linux-only: on this Mac the tool
-# allowlist in claude_args is the only guard, so keep it tight.
+# Navigation goes through deep links because the devices are headless and
+# the agent cannot tap: .github/scripts/agent-screen.sh opens a route of the
+# app's linking config and screenshots it, the same way on both platforms,
+# so the two jobs share one prompt.
+#
+# Only workflow_dispatch may start this workflow. It is maintainer-only, so
+# the token never reaches a run that executes code from a fork. The action's
+# subprocess isolation is Linux-only: on the Mac the tool allowlist in
+# claude_args is the only guard, so keep it tight.
 on:
   workflow_dispatch:
-  # Nightly at 02:00 CET (03:00 CEST; GitHub's cron is UTC only): a quiet
-  # hour on the shared runner, and the night's screenshots are the baseline
-  # the pull request runs compare against. GitHub only fires schedules from
-  # the default branch.
-  schedule:
-    - cron: "0 1 * * *"
+    inputs:
+      platform:
+        description: Platform(s) to tour
+        type: choice
+        options:
+          - both
+          - ios
+          - android
+        default: both
+      pr:
+        description: >
+          Pull request number to build and look at, empty for the
+          dispatched branch
+        type: string
+        default: ""
+      prompt:
+        description: >
+          What to look at, in your words, empty to let the agent decide
+          from the pull request's diff (or tour everything)
+        type: string
+        default: ""
+      routes:
+        description: >
+          Routes to open, space-separated (for example "breathe api/shapes"),
+          empty to let the agent decide
+        type: string
+        default: ""
 
-# One agent run at a time on the shared machine.
+# One agent run at a time on the shared Mac; the Android job runs on a hosted
+# runner but is kept in the same group so a run stays one unit.
 concurrency:
   group: agent
   cancel-in-progress: false
@@ -31,9 +62,11 @@ permissions:
 
 jobs:
   ios:
+    if: inputs.platform != 'android'
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 90
+    timeout-minutes: 150
     env:
+      AGENT_PLATFORM: ios
       # Own Metro port, test server port and simulator next to the CI job's
       # (see the table in ci.yml), so an agent run can overlap with it. The
       # derived data is separate too: two xcodebuilds must not share one.
@@ -45,10 +78,25 @@ jobs:
       # The screenshots and logs the agent works from, uploaded at the end.
       AGENT_OUTPUT: ${{ github.workspace }}/agent-output
     steps:
+      # The pull request's head when a number is given. The build then runs
+      # the pull request's code, as the CI job does on every pull request;
+      # the workflow file and the step below's scripts stay the dispatched
+      # branch's, so the one command the agent may run is the maintainers'
+      # version, whatever the pull request changes under .github.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           submodules: recursive
+          ref: ${{ inputs.pr && format('refs/pull/{0}/head', inputs.pr) || '' }}
+
+      - name: Describe the pull request
+        if: inputs.pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout ${{ github.sha }} -- .github/scripts
+          .github/scripts/agent-pr.sh "${{ inputs.pr }}"
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -137,25 +185,21 @@ jobs:
           # Claude's final report goes to the run's step summary.
           display_report: true
           prompt: |
-            The React Native Skia example app is running on the iOS simulator
-            ${{ env.IOS_SIMULATOR_UDID }} (bundle id ${{ env.BUNDLE_ID }}),
-            served by a Metro whose log is ${{ env.AGENT_OUTPUT }}/metro.log.
-            The simulator is headless: you see it only through screenshots,
-            taken with `xcrun simctl io <udid> screenshot <file>.png` into
-            ${{ env.AGENT_OUTPUT }}.
-
-            1. Screenshot the current screen and describe it in two lines. It
-               should be the app's Home list (apps/example/src/Home); say
-               whether anything on it looks wrong, such as an error toast or
-               a red box.
-            2. Grep metro.log for errors and warnings.
-
-            Reply with the screenshot's file name and what it shows, then the
-            error lines if any. Do nothing else.
+            Read .github/scripts/agent-tour.md first: it is your brief. The
+            facts of this run:
+            - Platform: iOS, on an iOS simulator.
+            - Output directory: ${{ env.AGENT_OUTPUT }}. The logs in it: metro.log.
+            - Screenshot command, for a second look at a screen:
+              `xcrun simctl io ${{ env.IOS_SIMULATOR_UDID }} screenshot ${{ env.AGENT_OUTPUT }}/<name>.png`.
+            - Pull request: "${{ inputs.pr }}" (empty: none; otherwise pr.md
+              and pr.diff are in the output directory).
+            - Routes: "${{ inputs.routes }}" (empty: your choice, as the
+              brief says).
+            - Maintainer's request: "${{ inputs.prompt }}" (empty: none).
           claude_args: |
             --model claude-opus-5-5
-            --max-turns 15
-            --allowedTools "Bash(xcrun simctl io:*),Bash(sleep:*),Read,Grep"
+            --max-turns 300
+            --allowedTools "Bash(.github/scripts/agent-screen.sh:*),Bash(xcrun simctl io:*),Bash(sleep:*),Read,Grep"
 
       - name: Upload the agent's screenshots and logs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
@@ -175,3 +219,226 @@ jobs:
           if [ -n "$IOS_SIMULATOR_UDID" ]; then
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
+
+  # The Android tour runs on a hosted runner, as the CI Android job does: the
+  # build and the emulator are the same recipe as build-test-android in
+  # ci.yml, only the emulator is booted by hand here because it has to stay
+  # up across the steps the agent runs in. The runner is the job's own
+  # machine, so Metro keeps its default port and nothing has to be kept apart
+  # from another job. Linux is also where the action isolates the agent's
+  # subprocesses.
+  android:
+    if: inputs.platform != 'ios'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      AGENT_PLATFORM: android
+      METRO_PORT: 8081
+      ANDROID_AVD: skia-agent
+      ANDROID_SYSTEM_IMAGE: system-images;android-35;default;x86_64
+      ANDROID_PACKAGE: com.microsoft.reacttestapp
+      AGENT_OUTPUT: ${{ github.workspace }}/agent-output
+    steps:
+      # The pull request's head when a number is given. The build then runs
+      # the pull request's code, as the CI job does on every pull request;
+      # the workflow file and the step below's scripts stay the dispatched
+      # branch's, so the one command the agent may run is the maintainers'
+      # version, whatever the pull request changes under .github.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+          ref: ${{ inputs.pr && format('refs/pull/{0}/head', inputs.pr) || '' }}
+
+      - name: Describe the pull request
+        if: inputs.pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout ${{ github.sha }} -- .github/scripts
+          .github/scripts/agent-pr.sh "${{ inputs.pr }}"
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          # Keep the swap file: the Graphite C++ build peaks close to the
+          # runner's 16 GB and the swap is the only headroom left.
+          swap-storage: false
+
+      - name: Install JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install NDK
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        id: setup-ndk
+        with:
+          ndk-version: r27d
+
+      - name: Set ANDROID_NDK
+        run: echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK tools
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
+
+      - name: Finalize Android SDK
+        run: |
+          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
+
+      - name: Install Android SDK
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > $GITHUB_WORKSPACE/apps/example/android/local.properties
+
+      # Restore only: the CI push runs on main keep both caches fresh, and
+      # the repository's cache limit is tight (see build-test-android).
+      - name: Restore Gradle cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('./apps/example/android/gradle/wrapper/gradle-wrapper.properties', 'yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install ccache
+        run: sudo apt-get install -y ccache
+
+      - name: Restore ccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-android-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-android-
+
+      - name: Build example for Android
+        env:
+          JAVA_OPTS: "-XX:MaxHeapSize=6g"
+          # Only the emulator ABI is needed, so skip the other three.
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_MAXSIZE: 2G
+          CCACHE_COMPILERCHECK: content
+        run: |
+          ccache --zero-stats
+          yarn turbo run build:android --concurrency 1
+          ccache --show-stats
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # CI=true is inlined into the bundle and opens the app on the Tests
+      # screen; the agent wants Home, so Metro runs with CI unset. The
+      # bundle request warms Metro while the emulator boots.
+      - name: Start Package Manager
+        working-directory: apps/example
+        run: |
+          mkdir -p "$AGENT_OUTPUT"
+          env -u CI yarn start --port $METRO_PORT > "$AGENT_OUTPUT/metro.log" 2>&1 &
+          (sleep 10 && curl -sf --retry 12 --retry-connrefused --retry-delay 5 -o /dev/null \
+            "http://localhost:$METRO_PORT/index.bundle?platform=android&dev=true&lazy=true&minify=false") &
+
+      # The same image and emulator options as the CI job (see its comment on
+      # why API 34 or newer and swangle), booted here instead of through the
+      # emulator-runner action, whose emulator only lives for its own step.
+      # The app's ComponentActivity is not exported, and the deep links the
+      # agent navigates with go to it as explicit intents (see
+      # .github/scripts/agent-screen.sh), which only root may send: adbd is
+      # restarted as root, which the default (non Play Store) image allows.
+      - name: Boot Android emulator
+        run: |
+          sdkmanager --install "$ANDROID_SYSTEM_IMAGE" emulator > /dev/null
+          echo no | avdmanager create avd --force -n "$ANDROID_AVD" -k "$ANDROID_SYSTEM_IMAGE" -d "Nexus 5X"
+          nohup emulator -avd "$ANDROID_AVD" -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot-save \
+            > "$AGENT_OUTPUT/emulator.log" 2>&1 &
+          adb wait-for-device
+          until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+            sleep 5
+          done
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell input keyevent 82
+          adb root
+          adb wait-for-device
+          # The app reaches Metro at localhost, which inside the emulator is
+          # the guest: reverse the port to the host.
+          adb reverse tcp:8081 tcp:$METRO_PORT
+          nohup adb logcat > "$AGENT_OUTPUT/logcat.txt" 2>&1 &
+
+      # Right after boot adb can still answer "device offline" for a moment,
+      # so the install is retried. The screenshot is the state the agent
+      # starts from, for the artifact.
+      - name: Install and launch app on emulator
+        run: |
+          ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
+          curl -sf --max-time 900 -o /dev/null \
+            "http://localhost:$METRO_PORT/index.bundle?platform=android&dev=true&lazy=true&minify=false"
+          adb shell am start -W -n "$ANDROID_PACKAGE/.MainActivity"
+          sleep 20
+          adb exec-out screencap -p > "$AGENT_OUTPUT/launch.png"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@34968b5981d5d170904281aa3df6f3c0d4a28855 # v1.0.249
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          display_report: true
+          prompt: |
+            Read .github/scripts/agent-tour.md first: it is your brief. The
+            facts of this run:
+            - Platform: Android, on an emulator.
+            - Output directory: ${{ env.AGENT_OUTPUT }}. The logs in it: metro.log and logcat.txt (the device log).
+            - Screenshot command, for a second look at a screen:
+              `adb exec-out screencap -p > ${{ env.AGENT_OUTPUT }}/<name>.png`.
+            - Pull request: "${{ inputs.pr }}" (empty: none; otherwise pr.md
+              and pr.diff are in the output directory).
+            - Routes: "${{ inputs.routes }}" (empty: your choice, as the
+              brief says).
+            - Maintainer's request: "${{ inputs.prompt }}" (empty: none).
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 300
+            --allowedTools "Bash(.github/scripts/agent-screen.sh:*),Bash(adb exec-out screencap:*),Bash(sleep:*),Read,Grep"
+
+      - name: Upload the agent's screenshots and logs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          name: agent-android
+          path: agent-output
+          if-no-files-found: ignore
+
+      - name: Clean up
+        if: always()
+        run: |
+          adb emu kill || true
+          pkill -f "emulator -avd $ANDROID_AVD" || true

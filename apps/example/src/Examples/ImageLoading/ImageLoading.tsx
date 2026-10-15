@@ -33,7 +33,10 @@ export const ImageLoading = () => {
   };
   const updateImage = () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.MakeRaster(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(
+      skimage.width(),
+      skimage.height()
+    );
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }
@@ -59,7 +62,10 @@ export const ImageLoading = () => {
   };
   const saveImage = async () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.MakeRaster(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(
+      skimage.width(),
+      skimage.height()
+    );
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }
@@ -82,7 +88,14 @@ export const ImageLoading = () => {
       <Button onPress={loadImage} title="1. Load Image" />
       <Button onPress={updateImage} title="2. Update Image" />
       <Button onPress={saveImage} title="3. Save Image" />
-      <Canvas testID="image-loading-canvas" onSize={size} style={{ flex: 1 }}>
+      <Canvas
+        testID="image-loading-canvas"
+        style={{ flex: 1 }}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          size.value = { width, height };
+        }}
+      >
         <Image image={skimage} rect={rect} />
       </Canvas>
     </View>

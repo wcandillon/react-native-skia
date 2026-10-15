@@ -12,7 +12,7 @@ import { useThreeScene } from "./components/useThreeScene";
 export const Helmet = () => {
   const texture = useHDR(require("./assets/helmet/royal_esplanade_1k.hdr"));
   const gltf = useGLTF(require("./assets/helmet/DamagedHelmet.gltf"));
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
 
   const makeScene = useCallback<ThreeSceneFactory>(
     (renderer, { width, height }) => {
@@ -52,7 +52,7 @@ export const Helmet = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.loading}>Loading assets...</Text>
-      <Canvas ref={ref} style={StyleSheet.absoluteFill}>
+      <Canvas onLayout={onLayout} style={StyleSheet.absoluteFill}>
         <Image
           image={scene}
           x={0}

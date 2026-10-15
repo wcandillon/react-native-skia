@@ -65,7 +65,10 @@ export interface ISkiaViewApi {
   /**
    * Retires what `makeGraphiteContext` made for a view id, once the view
    * component unmounts. A no-op when a view bound to the id: its own
-   * teardown retires it. On the web the view owns its context; a no-op.
+   * teardown retires it. A context still held keeps its target for the
+   * native view to bind to, as React's StrictMode runs the unmount cleanup
+   * right after mount and keeps the first effect run's context. On the web
+   * the view owns its context; a no-op.
    */
   destroyGraphiteContext: (nativeId: number) => void;
 }

@@ -148,7 +148,7 @@ const Frame = ({ image, width, height, filter }: FrameProps) => {
 // is published through a shared value. Tap the video to pause and resume, and
 // pick a Skia effect in the bar at the bottom.
 export const Video = () => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   const image = useSharedValue<SkImage | null>(null);
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const [paused, setPaused] = useState(false);
@@ -223,7 +223,7 @@ export const Video = () => {
   return (
     <View style={styles.container}>
       <Pressable style={StyleSheet.absoluteFill} onPress={toggle}>
-        <Canvas ref={ref} style={StyleSheet.absoluteFill}>
+        <Canvas onLayout={onLayout} style={StyleSheet.absoluteFill}>
           <Frame
             image={image}
             width={size.width}

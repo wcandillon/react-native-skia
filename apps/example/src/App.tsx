@@ -88,7 +88,16 @@ const linking: LinkingOptions<StackParamList> = {
       AndroidViews: "android-views",
     },
   },
-  prefixes: ["rnskia://"],
+  // react-native-test-app registers its bundle id as the iOS URL scheme, and
+  // iOS is the one platform where a URL is the only way to drive the app
+  // from outside (the agent workflow's deep link tour, see
+  // .github/scripts/agent-screen.sh): accept it next to rnskia://. Prefixes
+  // match case-sensitively, so both spellings are listed.
+  prefixes: [
+    "rnskia://",
+    "com.microsoft.ReactTestApp://",
+    "com.microsoft.reacttestapp://",
+  ],
 };
 
 const HeaderLeft = (props: HeaderBackButtonProps) => {

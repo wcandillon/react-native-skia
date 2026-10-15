@@ -43,7 +43,6 @@ global.SkiaViewApi = {
   views: {},
   deferedPictures: {},
   unregisteredViews: new Set<string>(),
-  deferedOnSize: {},
   web: true,
   registerView(nativeId: string, view: SkiaWebViewHandle) {
     this.unregisteredViews.delete(nativeId);

@@ -12,52 +12,30 @@ Behind the scenes, it is using its own React renderer.
 | Name | Type     |  Description    |
 |:-----|:---------|:-----------------|
 | style?   | `ViewStyle` | View style |
-| ref?   | `Ref<CanvasRef>` | Reference to the canvas (see [canvas size](#canvas-size) and [snapshots](#getting-a-canvas-snapshot)) |
-| onSize? | `SharedValue<Size>` | Reanimated value to which the canvas size will be assigned  (see [canvas size](#canvas-size)) |
+| ref?   | `Ref<CanvasRef>` | Reference to the canvas (see [size](#one-off-reads) and [snapshots](#getting-a-canvas-snapshot)) |
+| onLayout? | `(event: LayoutChangeEvent) => void` | Called with the layout of the canvas whenever it changes (see [canvas size](#canvas-size)) |
 | opaque? | `boolean` | Declares that the canvas covers every pixel of its bounds. Defaults to `false`. On Android it selects the cheapest backing view (see [Android rendering options](#android-rendering-options)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
 
 ## Canvas size
 
-The size of the canvas is available on both the UI and JS thread.
-
-### UI thread
-
-The `onSize` property receives a shared value, which will be updated whenever the canvas size changes.
-You can see it in action in the example below.
-
-```tsx twoslash
-import {useSharedValue, useDerivedValue} from "react-native-reanimated";
-import {Fill, Canvas, Rect} from "react-native-skia";
-
-const Demo = () => {
-  // size will be updated as the canvas size changes
-  const size = useSharedValue({ width: 0, height: 0 });
-  const rect = useDerivedValue(() => {
-    const {width, height} = size.value;
-    return { x: 0, y: 0, width, height };
-  });
-  return (
-    <Canvas style={{ flex: 1 }} onSize={size}>
-      <Rect color="cyan" rect={rect} />
-    </Canvas>
-  );
-};
-```
+The canvas is a regular React Native view: its size is the one of its layout, in points, and `onLayout` reports it whenever it changes.
+There is no other size to track.
+This is the model of [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/api/canvas#pixel-density), whose canvas exposes `clientWidth` and `clientHeight`, and of the [Graphite View](/docs/canvas/graphite), whose context exposes `width` and `height`.
 
 ### JS thread
 
-To get the canvas size on the JS thread, you can use `useLayoutEffect` and `measure()`.
-Since this is a very common pattern, we offer a `useCanvasSize` hook you can use for convenience.
+The `useCanvasSize` hook wraps `onLayout`: pass its `onLayout` to the canvas, and `size` follows the layout.
+It is `0x0` until the canvas is laid out.
 
 ```tsx twoslash
-import {Fill, Canvas, Rect, useCanvasSize} from "react-native-skia";
+import {Canvas, Rect, useCanvasSize} from "react-native-skia";
 
 const Demo = () => {
-  const {ref, size: {width, height}} = useCanvasSize();
+  const { size: { width, height }, onLayout } = useCanvasSize();
   return (
-    <Canvas style={{ flex: 1 }} ref={ref}>
+    <Canvas style={{ flex: 1 }} onLayout={onLayout}>
       <Rect color="cyan" rect={{ x: 0, y: 0, width, height }} />
     </Canvas>
   );
@@ -67,24 +45,75 @@ const Demo = () => {
 This example is equivalent to the code below:
 
 ```tsx twoslash
-import {useLayoutEffect, useState} from "react";
-import {Fill, Canvas, Rect, useCanvasRef} from "react-native-skia";
+import {useState} from "react";
+import {Canvas, Rect} from "react-native-skia";
+
+const Demo = () => {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  return (
+    <Canvas
+      style={{ flex: 1 }}
+      onLayout={({ nativeEvent: { layout: { width, height } } }) =>
+        setSize({ width, height })
+      }
+    >
+      <Rect color="cyan" rect={{ x: 0, y: 0, ...size }} />
+    </Canvas>
+  );
+};
+```
+
+### One-off reads
+
+For a single read, in an event handler for instance, `size` on the canvas ref is the current layout, read synchronously.
+It is the layout size, without the transforms applied to the view, and `0x0` before the canvas is mounted.
+
+```tsx twoslash
+import {Canvas, useCanvasRef, Fill} from "react-native-skia";
 
 const Demo = () => {
   const ref = useCanvasRef();
-  const [rect, setRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  useLayoutEffect(() => {
-    ref.current?.measure((_x, _y, width, height) => {
-      setRect({ x: 0, y: 0, width, height });
-    });
-  }, []);
+  const logSize = () => {
+    console.log(ref.current?.size);
+  };
   return (
-    <Canvas style={{ flex: 1 }} ref={ref}>
+    <Canvas ref={ref} style={{ flex: 1 }} onTouchEnd={logSize}>
+      <Fill color="cyan" />
+    </Canvas>
+  );
+};
+```
+
+### UI thread
+
+To use the size in Reanimated values, write the layout into a shared value.
+The values derived from it are updated on every layout change, and the canvas is redrawn with them without any further work on the JS thread.
+
+```tsx twoslash
+import {useSharedValue, useDerivedValue} from "react-native-reanimated";
+import {Canvas, Rect} from "react-native-skia";
+
+const Demo = () => {
+  const size = useSharedValue({ width: 0, height: 0 });
+  const rect = useDerivedValue(() => {
+    const {width, height} = size.value;
+    return { x: 0, y: 0, width, height };
+  });
+  return (
+    <Canvas
+      style={{ flex: 1 }}
+      onLayout={({ nativeEvent: { layout } }) => {
+        size.value = { width: layout.width, height: layout.height };
+      }}
+    >
       <Rect color="cyan" rect={rect} />
     </Canvas>
   );
 };
 ```
+
+The layout event goes through the JS thread, so the first frame drawn with a new size can follow the resize by a frame.
+A frame loop on a [Graphite View](/docs/canvas/graphite) does not need it: the `width` and `height` of its context follow the layout on every read.
 
 ## How frames are produced
 

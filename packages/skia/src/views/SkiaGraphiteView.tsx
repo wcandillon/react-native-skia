@@ -2,12 +2,12 @@ import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
 
 import type { SkGraphiteContext } from "../skia/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
-import { Platform } from "../Platform";
 
 import { SkiaViewApi } from "./api";
 import { androidNativeProps } from "./android";
 import type { SkiaGraphiteViewNativeProps } from "./types";
 import { SkiaViewNativeId } from "./SkiaViewNativeId";
+import { measureLayout } from "./measureLayout";
 
 export interface SkiaGraphiteViewRef {
   /**
@@ -21,23 +21,6 @@ export interface SkiaGraphiteViewRef {
 export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
   ref?: React.Ref<SkiaGraphiteViewRef>;
 }
-
-// A view measured relative to itself gets its layout size, without the
-// transforms getBoundingClientRect() includes; measureLayout() calls back
-// synchronously on the new architecture. On the web the view measures itself
-// (see SkiaView.web).
-const measureLayout = (
-  view: React.ComponentRef<typeof SkiaViewNativeComponent>
-) => {
-  if (Platform.OS === "web") {
-    return { width: 0, height: 0 };
-  }
-  let size = { width: 0, height: 0 };
-  view.measureLayout(view, (_left, _top, width, height) => {
-    size = { width, height };
-  });
-  return size;
-};
 
 /**
  * A view whose frames are recorded from JavaScript, on any runtime, through
@@ -55,6 +38,9 @@ export const SkiaGraphiteView = ({
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
   // Retires the native target made for this id on unmount, in case no native
   // view ever bound to it; a bound target is retired by the view's teardown.
+  // StrictMode runs this cleanup right after mount too, possibly before the
+  // native view registered: a context kept from the first effect run keeps
+  // its target, which the native view takes over when it registers.
   useEffect(
     () => () => {
       if (SkiaViewApi && SkiaViewApi.destroyGraphiteContext) {

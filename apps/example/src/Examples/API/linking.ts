@@ -34,7 +34,7 @@ export const apiScreenPaths: Record<keyof Routes, string> = {
   Checker: "checker",
   UseCanvas: "use-canvas",
   OnLayout: "on-layout",
-  OnSize: "on-size",
+  CanvasSize: "canvas-size",
   StressTest: "stress-test",
   StressTest2: "stress-test2",
   StressTest3: "stress-test3",

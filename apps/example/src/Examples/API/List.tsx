@@ -123,8 +123,8 @@ export const examples = [
     title: "🎛️ OnLayout",
   },
   {
-    screen: "OnSize",
-    title: "📏 OnSize",
+    screen: "CanvasSize",
+    title: "📏 Canvas Size",
   },
   {
     screen: "StressTest",

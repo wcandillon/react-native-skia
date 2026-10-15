@@ -3,11 +3,11 @@ import { Text } from "react-native";
 import { Canvas, Fill, useCanvasSize } from "react-native-skia";
 
 export const OnLayoutDemo = () => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   return (
     <>
       <Text>{`OnLayout: ${size?.width} / ${size?.height}`}</Text>
-      <Canvas style={{ flex: 1 }} ref={ref}>
+      <Canvas style={{ flex: 1 }} onLayout={onLayout}>
         <Fill color="red" />
       </Canvas>
     </>
