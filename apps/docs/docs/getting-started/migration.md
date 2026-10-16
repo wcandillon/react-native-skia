@@ -17,7 +17,7 @@ If you need any of these, stay on v2 (`yarn add react-native-skia@2`) and use th
 
 The drawing API is the same as in v2: components, hooks, shaders, and the imperative `Skia` API all work as before.
 What changes is the package name, the platform requirements, and a few `Canvas` props.
-Most apps migrate in three steps, and a fourth one applies to apps that play videos or draw camera frames:
+Most apps migrate in three steps, and a fourth one applies to apps that play videos, draw camera frames, or snapshot views:
 
 1. [Rename the package](#1-rename-the-package)
 2. [Check the platform requirements](#2-check-the-platform-requirements)
@@ -140,7 +140,7 @@ The `NativeSkiaViewProps` type was removed as well.
 
 ## 4. Replace the removed APIs
 
-Native buffers (camera and video frames) are now produced and owned by [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/), and Skia only wraps them.
+Native buffers (camera and video frames) and view snapshots are now produced by [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/), and Skia only wraps the textures it renders them into.
 The following APIs were removed in favor of it:
 
 | Removed | Replacement |
@@ -151,6 +151,7 @@ The following APIs were removed in favor of it:
 | `Skia.NativeBuffer.Release()` | `NativeVideoFrame.release()`: React Native WebGPU owns the buffers it hands out. |
 | `Skia.Image.MakeImageFromNativeTextureUnstable()` | `Skia.Image.MakeImageFromGPUTexture(texture)`, which takes a WebGPU texture. See [WebGPU](/docs/webgpu). |
 | `image.getNativeTextureUnstable()` and `surface.getNativeTextureUnstable()` | `Skia.Image.MakeGPUTextureFromImage()` and `Skia.Surface.MakeFromGPUTexture()`: textures are shared as WebGPU textures. |
+| `makeImageFromView()` and `Skia.Image.MakeImageFromViewTag()` | React Native WebGPU's `queue.drawElementImageToTexture()` draws the view into a texture, which `Skia.Image.MakeImageFromGPUTexture()` wraps. The snapshot is a GPU image, and on iOS and Android 13+ it never leaves the GPU. See [view snapshots](/docs/webgpu#view-snapshots). |
 | `Skia.Image.MakeImageFromNativeBuffer(pointer)` on native platforms | React Native WebGPU's `copyExternalImageToTexture()` renders the frame into a texture, which `Skia.Image.MakeImageFromGPUTexture()` wraps. See [native buffers](/docs/webgpu#native-buffers). The method remains on Web, where it takes a `CanvasImageSource`. |
 | `ref.current.makeImageSnapshotAsync()` on a `Canvas` | `makeImageSnapshot()`: with Graphite the snapshot is taken on the calling thread and returns a GPU image. To encode it or read its pixels without blocking, read it back with `image.makeRasterImage()`. See [snapshots](/docs/canvas/overview#getting-a-canvas-snapshot). |
 | `useCanvasSize()` returning `{ ref, size }` | It returns `{ size, onLayout }` and no longer takes a ref: pass `onLayout` to the canvas instead of `ref`, and `size` follows every layout change instead of being measured once. Keep `useCanvasRef()` for the ref: its `size` property reads the layout synchronously. See [canvas size](/docs/canvas/overview#canvas-size). |

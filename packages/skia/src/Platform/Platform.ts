@@ -1,10 +1,4 @@
-import {
-  Image,
-  PixelRatio,
-  Platform as RNPlatform,
-  findNodeHandle,
-  View,
-} from "react-native";
+import { Image, PixelRatio, Platform as RNPlatform, View } from "react-native";
 
 import type { DataModule } from "../skia/types";
 import { isRNModule, unwrapModule } from "../skia/types";
@@ -21,6 +15,5 @@ export const Platform: IPlatform = {
     }
     return isRNModule(asset) ? Image.resolveAssetSource(asset).uri : asset.uri;
   },
-  findNodeHandle,
   View,
 };

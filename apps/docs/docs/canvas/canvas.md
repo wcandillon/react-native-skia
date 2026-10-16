@@ -146,6 +146,7 @@ The `android` prop selects it; it is ignored on iOS and web.
 Each frame goes straight to the system compositor as its own layer, with no extra copy and no involvement of the React Native view hierarchy.
 The price is that it is not really view content: it punches a hole through the window, so parent transforms, clipping, rounded corners, and z-ordering with sibling views do not apply to it.
 Use it whenever the canvas is a plain opaque rectangle.
+On an adaptive display (Android 11 and later) the canvas asks for the display's highest refresh rate while it animates, as the window does for regular views, and lets the rate drop again once the animation stops.
 
 **`TextureView`** is the default for a non-opaque canvas.
 It is a regular Android view: frames go through a `SurfaceTexture` that the UI toolkit samples as a texture when it draws the view, so parent transforms, clipping, alpha, and z-order all apply and the canvas can be composited over other React Native views.

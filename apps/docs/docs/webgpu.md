@@ -14,6 +14,7 @@ Textures created on that device can be used by both libraries without any copy:
 - **From WebGPU to Skia:** draw the output of a WebGPU pipeline or of a [three.js](#threejs) scene in a Skia canvas, and compose it with anything Skia can draw.
 - **From Skia to WebGPU:** draw text, paths, or any Skia drawing straight into a texture that a WebGPU pipeline samples.
 - **Camera and video frames:** draw the frames that React Native WebGPU decodes or wraps in a Skia canvas.
+- **View snapshots:** draw a snapshot of any React Native view, taken by React Native WebGPU, in a Skia canvas.
 
 :::info
 
@@ -98,7 +99,7 @@ The interop surface is small:
 The two functions that take a texture read its `nativePointer`, an extension of `GPUTexture` provided by React Native WebGPU.
 `MakeGPUTextureFromImage()` returns such a pointer, which `adoptTexture()` turns into a `GPUTexture`: only React Native WebGPU can build the typed object, the same way `importDevice()` builds the `GPUDevice`.
 A raw `WGPUTexture` pointer (a `BigInt`) is accepted wherever a texture is, for libraries that export textures without React Native WebGPU.
-[Camera and video frames](#native-buffers) go through a texture as well.
+[Camera and video frames](#native-buffers) and [view snapshots](#view-snapshots) go through a texture as well.
 
 ## From WebGPU to Skia
 
@@ -386,6 +387,93 @@ Pass the frame's orientation as `rotation` and `mirrored`, and release the frame
 - **Any runtime.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
 
 On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeImageFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
+
+## View snapshots
+
+A snapshot of a React Native view follows the same path as a video frame: React Native WebGPU rasterizes the view into a texture of the shared device with [`queue.drawElementImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture), and `Skia.Image.MakeImageFromGPUTexture()` wraps that texture into an image.
+Skia has no view snapshot API of its own: `makeImageFromView()` from v2 was removed in favor of this path. It needs React Native WebGPU 0.14.0 or above.
+
+The view is rendered by the platform, so the snapshot includes everything the screen shows: text, images, SVGs, transforms, elevation shadows, and Skia canvases.
+On iOS and on Android 13 and above, the view is drawn into the texture on the GPU, without any copy through the CPU.
+Pass the view as a ref, a host instance, or a tag from `findNodeHandle()`; render it with `collapsable={false}` so that React Native does not optimize the host view away.
+
+```tsx
+import React, { useCallback, useRef } from "react";
+import type { LayoutChangeEvent } from "react-native";
+import { Button, PixelRatio, Text, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
+import type { SkImage } from "react-native-skia";
+import { Canvas, Image, Skia } from "react-native-skia";
+import { importDevice } from "react-native-webgpu";
+
+export const Snapshot = () => {
+  const ref = useRef<View>(null);
+  const layout = useRef({ width: 0, height: 0 });
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    layout.current = event.nativeEvent.layout;
+  }, []);
+  const image = useSharedValue<SkImage | null>(null);
+  const texture = useRef<GPUTexture | null>(null);
+
+  const takeSnapshot = useCallback(async () => {
+    const { width, height } = layout.current;
+    if (width === 0 || height === 0) {
+      return;
+    }
+    const device = importDevice(Skia.getNativeDevice());
+    // The natural size of the snapshot: the view's size in points times the
+    // pixel ratio
+    const scale = PixelRatio.get();
+    const next = device.createTexture({
+      size: [Math.round(width * scale), Math.round(height * scale)],
+      format: "rgba8unorm",
+      usage:
+        GPUTextureUsage.COPY_DST |
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING,
+    });
+    // The view is rasterized on the UI thread, hence the promise.
+    // Skia images are premultiplied: ask for premultiplied pixels.
+    await device.queue.drawElementImageToTexture(
+      { source: ref },
+      { texture: next, premultipliedAlpha: true }
+    );
+    // Wrap the texture, without any copy. A new image is what makes the
+    // canvas redraw; the previous one is dropped before its texture.
+    const previous = image.value;
+    image.value = Skia.Image.MakeImageFromGPUTexture(next);
+    previous?.dispose();
+    texture.current?.destroy();
+    texture.current = next;
+  }, [image]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View
+        ref={ref}
+        onLayout={onLayout}
+        collapsable={false}
+        style={{ flex: 1, backgroundColor: "cyan" }}
+      >
+        <Text>This is a React Native view</Text>
+      </View>
+      <Button title="Take snapshot" onPress={takeSnapshot} />
+      <Canvas style={{ flex: 1 }}>
+        <Image image={image} x={0} y={0} width={256} height={256} fit="contain" />
+      </Canvas>
+    </View>
+  );
+};
+```
+
+The result is a regular GPU image: use it in an `Image`, an `ImageShader`, or as the input of an image filter, from any canvas and any thread.
+The texture must be created with `COPY_DST`; `RENDER_ATTACHMENT` lets React Native WebGPU draw the view into it on the GPU (without it, the pixels are read back through the CPU), and `TEXTURE_BINDING` lets Skia sample it.
+`drawElementImageToTexture()` also takes a source rectangle, a destination size and origin, and works from a worklet runtime: see its [documentation](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture) for the details, and for what each platform includes in a snapshot.
+
+On Android, a `SurfaceView` is composed outside the view hierarchy and comes out blank in a snapshot.
+A Skia `Canvas` is backed by a `TextureView` unless it is `opaque`, in which case give it `android={{ surfaceType: "TextureView" }}` to appear in snapshots (the same applies to a React Native WebGPU `Canvas`).
+
+On the Web, rasterize the DOM node into a canvas (for instance with [html2canvas](https://html2canvas.hertzen.com/)) and pass the canvas to `Skia.Image.MakeImageFromNativeBuffer()`.
 
 ## Three.js
 

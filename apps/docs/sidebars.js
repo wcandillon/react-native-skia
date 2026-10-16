@@ -76,7 +76,7 @@ const sidebars = {
       collapsed: true,
       type: "category",
       label: "Images",
-      items: ["image", "animated-images", "image-svg", "snapshotviews"],
+      items: ["image", "animated-images", "image-svg"],
     },
     {
       type: "doc",

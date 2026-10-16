@@ -32,13 +32,6 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, null as unknown as Image);
   }
 
-  MakeImageFromViewTag(viewTag: number): Promise<SkImage | null> {
-    const view = viewTag as unknown as HTMLElement;
-    // TODO: Implement screenshot from view in React JS
-    console.log(view);
-    return Promise.resolve(null);
-  }
-
   MakeImageFromNativeBuffer(
     buffer: CanvasImageSource,
     surface?: JsiSkSurface,

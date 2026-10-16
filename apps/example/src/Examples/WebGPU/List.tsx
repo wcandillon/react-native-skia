@@ -31,6 +31,12 @@ export const examples = [
     title: "Video",
     description: "Video frames decoded by WebGPU and drawn by a Skia Canvas",
   },
+  {
+    screen: "ViewSnapshot",
+    title: "View Snapshot",
+    description:
+      "A React Native view drawn into a texture by WebGPU and distorted by a Skia shader",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

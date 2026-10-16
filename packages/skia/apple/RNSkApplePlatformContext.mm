@@ -167,10 +167,4 @@ void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   });
 }
 
-sk_sp<SkImage>
-RNSkApplePlatformContext::takeScreenshotFromViewTag(size_t viewTag) {
-  return [_screenshotService
-      screenshotOfViewWithTag:[NSNumber numberWithLong:viewTag]];
-}
-
 } // namespace RNSkia

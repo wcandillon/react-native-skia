@@ -26,7 +26,7 @@ describe("RemoteSurface", () => {
     const first = new FakeSocket();
     const second = new FakeSocket();
     global.testConnection = { client: asWebSocket(first) };
-    const response = new RemoteSurface().screen("Snapshot1");
+    const response = new RemoteSurface().screen("GraphiteView");
     global.testConnection.client = asWebSocket(second);
     jest.advanceTimersByTime(30 * 1000);
     await expect(response).rejects.toThrow("eval timed out");
@@ -37,7 +37,7 @@ describe("RemoteSurface", () => {
 
   it("rejects without arming its timeout while no app has said hello", async () => {
     global.testConnection = { client: null };
-    await expect(new RemoteSurface().screen("Snapshot1")).rejects.toThrow(
+    await expect(new RemoteSurface().screen("GraphiteView")).rejects.toThrow(
       "Client is not connected"
     );
     expect(jest.getTimerCount()).toBe(0);

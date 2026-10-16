@@ -44,6 +44,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private boolean mAppliedZOrderOnTop;
     private boolean mAppliedHighBitDepth;
 
+    private final SurfaceFrameRateVote mFrameRateVote = new SurfaceFrameRateVote(this);
     private final Runnable mPostedPresent = this::onPostedPresent;
     private final FrameScheduler mFrameScheduler = new FrameScheduler(new FrameScheduler.Host() {
         @Override
@@ -58,7 +59,16 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
         @Override
         public boolean presentFrame() {
-            return hasNativeView() && SkiaView.this.presentFrame();
+            if (!hasNativeView()) {
+                return false;
+            }
+            boolean moreQueued = SkiaView.this.presentFrame();
+            // Only a SurfaceView votes (attached in onSurfaceCreated): a
+            // TextureView is composited into its window, which votes for it.
+            // A frame the surface could not take counts as presented here,
+            // which at worst votes a frame early.
+            mFrameRateVote.onFramePresented();
+            return moreQueued;
         }
     });
 
@@ -238,6 +248,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     @Override
     public void onSurfaceCreated(Surface surface, int width, int height) {
+        mFrameRateVote.attach(surface);
         if (!hasNativeView()) {
             return;
         }
@@ -275,6 +286,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     @Override
     public void onSurfaceDestroyed() {
+        // The surface is still valid here, so the vote can be taken back.
+        mFrameRateVote.detach();
         if (!hasNativeView()) {
             return;
         }

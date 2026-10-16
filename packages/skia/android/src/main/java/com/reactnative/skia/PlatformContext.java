@@ -43,11 +43,6 @@ public class PlatformContext {
     }
 
     @DoNotStrip
-    Object takeScreenshotFromViewTag(int tag) {
-        return ViewScreenshotService.makeViewScreenshotFromTag(mContext, tag);
-    }
-
-    @DoNotStrip
     public byte[] getJniStreamFromSource(String sourceUri) throws IOException {
         // First try loading the input as a resource directly
         int resourceId = mContext.getResources().getIdentifier(sourceUri, "drawable", mContext.getPackageName());

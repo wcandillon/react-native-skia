@@ -1,10 +1,11 @@
-import type { RefObject } from "react";
 import React, { useCallback, useRef, useState } from "react";
+import type { LayoutChangeEvent } from "react-native";
 import {
   View,
   StyleSheet,
   Button,
   Text,
+  PixelRatio,
   useWindowDimensions,
   ScrollView,
 } from "react-native";
@@ -15,7 +16,6 @@ import {
   Fill,
   Skia,
   RoundedRect,
-  makeImageFromView,
   mix,
   Shader,
   ImageShader,
@@ -24,6 +24,7 @@ import {
 } from "react-native-skia";
 import { Switch } from "react-native-gesture-handler";
 import { useDerivedValue, useSharedValue } from "react-native-reanimated";
+import { importDevice } from "react-native-webgpu";
 
 import { useLoop } from "../../components/Animations";
 
@@ -31,14 +32,44 @@ const source = Skia.RuntimeEffect.Make(`
 uniform shader image;
 uniform float r;
 
-half4 main(float2 xy) {   
+half4 main(float2 xy) {
   xy.x += sin(xy.y / r) * 4;
   return image.eval(xy).rgba;
 }`)!;
 
-export const Snapshot = () => {
+// A snapshot of a native view is taken by React Native WebGPU, which draws
+// the view into a texture of the shared device; Skia wraps that texture into
+// an image without copying it.
+const snapshotView = async (
+  view: React.RefObject<View | null>,
+  width: number,
+  height: number
+) => {
+  const device = importDevice(Skia.getNativeDevice());
+  const scale = PixelRatio.get();
+  const texture = device.createTexture({
+    size: [Math.round(width * scale), Math.round(height * scale)],
+    format: "rgba8unorm",
+    usage:
+      GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.RENDER_ATTACHMENT |
+      GPUTextureUsage.TEXTURE_BINDING,
+  });
+  // Skia images are premultiplied
+  await device.queue.drawElementImageToTexture(
+    { source: view },
+    { texture, premultipliedAlpha: true }
+  );
+  return { texture, image: Skia.Image.MakeImageFromGPUTexture(texture) };
+};
+
+export const ViewSnapshot = () => {
   const { width } = useWindowDimensions();
   const viewRef = useRef<View>(null);
+  const layout = useRef({ width: 0, height: 0 });
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    layout.current = event.nativeEvent.layout;
+  }, []);
 
   const progress = useLoop({ duration: 1500 });
   const uniforms = useDerivedValue(
@@ -47,18 +78,39 @@ export const Snapshot = () => {
   );
 
   const image = useSharedValue<SkImage | null>(null);
+  const texture = useRef<GPUTexture | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const takeSnapshot = useCallback(async () => {
-    if (viewRef.current != null) {
-      image.value = await makeImageFromView(viewRef as RefObject<View>);
+    const { width: w, height: h } = layout.current;
+    if (viewRef.current === null || w === 0 || h === 0) {
+      return;
+    }
+    try {
+      const snapshot = await snapshotView(viewRef, w, h);
+      // Drop the previous image before the texture it samples
+      const previous = image.value;
+      image.value = snapshot.image;
+      previous?.dispose();
+      texture.current?.destroy();
+      texture.current = snapshot.texture;
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, [image]);
 
   return (
     <View style={{ flex: 1 }}>
-      <View ref={viewRef} style={styles.view} collapsable={false}>
+      <View
+        ref={viewRef}
+        style={styles.view}
+        collapsable={false}
+        onLayout={onLayout}
+      >
         <Component />
       </View>
       <Button title="Take snapshot" onPress={takeSnapshot} />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       <Canvas style={styles.canvas}>
         <Fill color="white" />
         <Fill>
@@ -158,6 +210,10 @@ const styles = StyleSheet.create({
   },
   canvas: {
     flex: 1,
+  },
+  error: {
+    color: "red",
+    paddingHorizontal: 16,
   },
   pinkContainer: {
     backgroundColor: "#00ff6922",

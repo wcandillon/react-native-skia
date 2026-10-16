@@ -64,12 +64,6 @@ public:
   virtual void runOnMainThread(std::function<void()> func) = 0;
 
   /**
-   * Takes a screenshot of a given view represented by the view tag
-   * @param tag React view tag
-   */
-  virtual sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) = 0;
-
-  /**
    * Returns an SkStream wrapping the require uri provided.
    * @param sourceUri Uri for the resource to load as a string
    * @op Operation to execute when the stream has successfuly been loaded.
@@ -114,21 +108,6 @@ public:
    */
   virtual std::string resolveFontFamily(const std::string &familyName) {
     return familyName;
-  }
-
-  /**
-   * Creates an skImage containing the screenshot of a native view and its
-   * children.
-   * @param viewTag React viewtag
-   * @param callback Called when image is ready or with null if something
-   * failed.
-   */
-  virtual void
-  makeViewScreenshot(int viewTag,
-                     std::function<void(sk_sp<SkImage>)> callback) {
-    runOnMainThread([this, callback, viewTag]() {
-      callback(takeScreenshotFromViewTag(viewTag));
-    });
   }
 
   /**

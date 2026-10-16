@@ -48,14 +48,6 @@ export interface ImageFactory {
   MakeImageFromNativeBuffer: (source: CanvasImageSource) => SkImage;
 
   /**
-   * Returns an image that will be a screenshot of the view represented by
-   * the view tag
-   * @param viewTag - The tag of the view to make an image from.
-   * @returns Returns a valid SkImage, if the view tag is invalid, nullptr is returned.
-   */
-  MakeImageFromViewTag: (viewTag: number) => Promise<SkImage | null>;
-
-  /**
    * Returns a raster (CPU) image with the given pixel data and format.
    * The pixel data is always copied: the image is not modifiable after
    * creation. Drawing the image uploads it once per canvas; call

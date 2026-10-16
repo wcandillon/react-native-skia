@@ -55,10 +55,6 @@ public:
     _jniPlatformContext->runTaskOnMainThread(std::move(task));
   }
 
-  sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override {
-    return _jniPlatformContext->takeScreenshotFromViewTag(tag);
-  }
-
 private:
   JniPlatformContext *_jniPlatformContext;
 };

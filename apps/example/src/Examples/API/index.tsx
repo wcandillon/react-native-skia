@@ -24,7 +24,6 @@ import { Touch } from "./Touch";
 import { PictureViewExample } from "./PictureView";
 import { OnLayoutDemo } from "./OnLayout";
 import { CanvasSize } from "./CanvasSize";
-import { Snapshot } from "./Snapshot";
 import { IconsExample } from "./Icons";
 import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
@@ -123,13 +122,6 @@ export const API = () => {
         component={GlyphBounds}
         options={{
           title: "🔠 Glyph Bounds",
-        }}
-      />
-      <Stack.Screen
-        name="Snapshot"
-        component={Snapshot}
-        options={{
-          title: "📺 View Snapshot",
         }}
       />
       <Stack.Screen

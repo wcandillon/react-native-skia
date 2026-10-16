@@ -42,8 +42,6 @@ public:
 
   float getPixelDensity() { return _pixelDensity; }
 
-  sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag);
-
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;

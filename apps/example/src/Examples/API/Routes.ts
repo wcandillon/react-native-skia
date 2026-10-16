@@ -23,7 +23,6 @@ export type Routes = {
   PictureView: undefined;
   OnLayout: undefined;
   CanvasSize: undefined;
-  Snapshot: undefined;
   IconsExample: undefined;
   Paragraphs: undefined;
   Paragraphs2: undefined;

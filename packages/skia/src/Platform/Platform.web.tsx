@@ -79,8 +79,5 @@ export const Platform: IPlatform = {
     }
     return asset.uri;
   },
-  findNodeHandle: () => {
-    throw new Error("findNodeHandle is not supported on the web");
-  },
   View,
 };

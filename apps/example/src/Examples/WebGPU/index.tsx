@@ -8,6 +8,7 @@ import { Cube } from "./Cube";
 import { Helmet } from "./Helmet";
 import { Cloth } from "./Cloth";
 import { Video } from "./Video";
+import { ViewSnapshot } from "./ViewSnapshot";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -54,6 +55,13 @@ export const WebGPU = () => {
         component={Video}
         options={{
           title: "Video",
+        }}
+      />
+      <Stack.Screen
+        name="ViewSnapshot"
+        component={ViewSnapshot}
+        options={{
+          title: "View Snapshot",
         }}
       />
     </Stack.Navigator>

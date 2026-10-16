@@ -16,9 +16,6 @@ static __weak RNSkiaModule *sharedInstance = nil;
 }
 
 RCT_EXPORT_MODULE()
-// Injected by React Native (bridgeless included). It is how a module looks up
-// a native view by react tag without touching RCTBridge or RCTUIManager.
-@synthesize viewRegistry_DEPRECATED = _viewRegistry_DEPRECATED;
 
 #pragma mark Accessors
 
@@ -77,8 +74,7 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(install) {
   sharedInstance = self;
   _skManager = std::make_shared<RNSkia::RNSkManager>(
       _runtime, _jsInvoker,
-      std::make_shared<RNSkia::RNSkApplePlatformContext>(
-          self.viewRegistry_DEPRECATED, _jsInvoker));
+      std::make_shared<RNSkia::RNSkApplePlatformContext>(_jsInvoker));
   return @true;
 }
 

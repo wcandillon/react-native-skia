@@ -1,13 +1,17 @@
 #pragma once
 
-#import <React/RCTBridgeModule.h>
+#import <CoreFoundation/CoreFoundation.h>
+#if !TARGET_OS_OSX
+#import <UIKit/UIKit.h>
+#else
+#import <AppKit/AppKit.h>
+#endif // !TARGET_OS_OSX
 
 #include <functional>
 #include <memory>
 #include <string>
 
 #include "RNSkPlatformContext.h"
-#include "ViewScreenshotService.h"
 
 namespace facebook {
 namespace react {
@@ -20,7 +24,6 @@ namespace RNSkia {
 class RNSkApplePlatformContext : public RNSkPlatformContext {
 public:
   RNSkApplePlatformContext(
-      RCTViewRegistry *viewRegistry,
       std::shared_ptr<facebook::react::CallInvoker> jsCallInvoker)
 #if !TARGET_OS_OSX
       : RNSkPlatformContext(jsCallInvoker, [[UIScreen mainScreen] scale]) {
@@ -28,10 +31,6 @@ public:
       : RNSkPlatformContext(jsCallInvoker,
                             [[NSScreen mainScreen] backingScaleFactor]) {
 #endif // !TARGET_OS_OSX
-
-    // Create screenshot manager
-    _screenshotService =
-        [[ViewScreenshotService alloc] initWithViewRegistry:viewRegistry];
     _prefersP3ColorSpace = mainScreenSupportsP3();
   }
 
@@ -49,8 +48,6 @@ public:
 
   void runOnMainThread(std::function<void()>) override;
 
-  sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override;
-
   virtual void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op) override;
@@ -66,7 +63,6 @@ public:
   std::string resolveFontFamily(const std::string &familyName) override;
 
 private:
-  ViewScreenshotService *_screenshotService;
   bool _prefersP3ColorSpace = false;
 };
 
