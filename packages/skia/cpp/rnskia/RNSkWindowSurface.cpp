@@ -71,6 +71,7 @@ void RNSkWindowSurface::resize(int width, int height) {
 }
 
 void RNSkWindowSurface::detach() {
+  dropHeldFrame();
   // The surface goes before the window it draws into.
   _surface = nullptr;
   _recorder = nullptr;
@@ -139,6 +140,7 @@ skgpu::graphite::TextureInfo RNSkWindowSurface::getTextureInfo() const {
 }
 
 void RNSkWindowSurface::configureSurface() {
+  dropHeldFrame();
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -191,7 +193,7 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 }
 
 bool RNSkWindowSurface::canPresent() {
-  return _surface && (!_canPresent || _canPresent());
+  return _surface && !_presentHeld && (!_canPresent || _canPresent());
 }
 
 bool RNSkWindowSurface::presentRecordings(
@@ -221,8 +223,7 @@ bool RNSkWindowSurface::presentRecordings(
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  _surface.Present();
-  didPresent();
+  presentOrHold();
   return true;
 }
 
@@ -253,8 +254,46 @@ bool RNSkWindowSurface::presentImage(const sk_sp<SkImage> &image) {
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
+  presentOrHold();
+  return true;
+}
+
+void RNSkWindowSurface::presentOrHold() {
+  if (_holdsPresentForGpu && !previousFrameDone()) {
+    _presentHeld = true;
+    return;
+  }
+  presentNow();
+}
+
+RNSkWindowSurface::HeldFrame RNSkWindowSurface::presentHeldFrame() {
+  if (!_presentHeld) {
+    return HeldFrame::None;
+  }
+  if (!previousFrameDone()) {
+    return HeldFrame::Waiting;
+  }
+  _presentHeld = false;
+  presentNow();
+  return HeldFrame::Presented;
+}
+
+void RNSkWindowSurface::presentNow() {
   _surface.Present();
   didPresent();
+  if (_holdsPresentForGpu) {
+    _previousFrameWork = DawnContext::getInstance().trackSubmittedWork();
+  }
+}
+
+bool RNSkWindowSurface::previousFrameDone() {
+  if (!_previousFrameWork.has_value()) {
+    return true;
+  }
+  if (!DawnContext::getInstance().isWorkDone(*_previousFrameWork)) {
+    return false;
+  }
+  _previousFrameWork.reset();
   return true;
 }
 

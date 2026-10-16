@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -108,7 +109,10 @@ public:
     _canPresent = std::move(canPresent);
   }
 
-  /** Whether a window is attached and can show a frame right now. */
+  /**
+   Whether a window is attached, holds no frame (see setHoldsPresentForGpu)
+   and can show a frame right now.
+   */
   bool canPresent();
 
   /**
@@ -118,6 +122,29 @@ public:
   void setDidPresent(std::function<void()> didPresent) {
     _didPresent = std::move(didPresent);
   }
+
+  /**
+   Installed by the platform view on Android, where a present waits until
+   the GPU has finished the frame presented before it (libgui's queueBuffer,
+   for every Vulkan swapchain). A frame replayed before then has its work
+   submitted and its present held until presentHeldFrame() finds that frame
+   done; the window takes no other frame meanwhile (see canPresent).
+   */
+  void setHoldsPresentForGpu(bool holdsPresentForGpu) {
+    _holdsPresentForGpu = holdsPresentForGpu;
+  }
+
+  /** What presentHeldFrame() did with the frame the window holds. */
+  enum class HeldFrame { None, Presented, Waiting };
+
+  /**
+   Presents the frame the window holds once the GPU has finished the one
+   presented before it, without waiting for the GPU. Main thread.
+   */
+  HeldFrame presentHeldFrame();
+
+  /** Whether the window holds a frame (see setHoldsPresentForGpu). */
+  bool hasHeldFrame() const { return _presentHeld; }
 
   // RNSkSurface -------------------------------------------------------------
 
@@ -159,6 +186,18 @@ private:
       _didPresent();
     }
   }
+  // Presents the frame just replayed, or holds it (see
+  // setHoldsPresentForGpu).
+  void presentOrHold();
+  void presentNow();
+  // Whether the GPU has finished the frame presented last, without waiting.
+  bool previousFrameDone();
+  // A held frame, and the work of the frame before it, go with the
+  // swapchain.
+  void dropHeldFrame() {
+    _presentHeld = false;
+    _previousFrameWork.reset();
+  }
 
   wgpu::Device _device;
   wgpu::Surface _surface;
@@ -186,6 +225,11 @@ private:
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
   std::function<void()> _didPresent;
+  bool _holdsPresentForGpu = false;
+  // A replayed frame whose present waits, and the GPU work of the frame
+  // presented last (see setHoldsPresentForGpu). Main thread.
+  bool _presentHeld = false;
+  std::optional<wgpu::Future> _previousFrameWork;
 };
 
 } // namespace RNSkia

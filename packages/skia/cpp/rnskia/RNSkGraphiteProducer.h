@@ -15,7 +15,16 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class Recorder;
+class RNSkGraphiteRecording;
 class RNSkGraphiteTarget;
+
+/** When a view's next replay may start (see RNSkGraphiteProducer). */
+enum class ReplayPacing {
+  // Once the previous recording is presented.
+  AfterPresent,
+  // As soon as the previous replay has finished.
+  Pipelined,
+};
 
 /**
  * Records the declarative content of a view (a Recorder handed over by
@@ -31,10 +40,18 @@ class RNSkGraphiteTarget;
  * vsync.
  *
  * Pacing: a view has at most one job in flight and at most one recording
- * waiting to be presented. Updates that arrive meanwhile only mark the content
- * dirty; the next presented frame starts the next job. A producer that
- * outruns the display therefore records once per vsync, and the queue of the
- * target never grows.
+ * waiting to be presented. Pipelined, the default, a job starts as soon as
+ * the previous one has finished, without waiting for its recording to be
+ * presented: a replay longer than a frame overlaps the wait for the next
+ * vsync instead of starting after it, which would present every other
+ * vsync. A recording that finishes while the previous one still waits is
+ * held here and submitted once that one is presented, and no job starts
+ * while one is held: a present replays every queued recording, so a second
+ * one of this view would be drawn and never shown. After present, the next
+ * job starts once the previous recording is presented. Updates that arrive
+ * meanwhile only mark the content dirty. A producer that outruns the
+ * display therefore records once per vsync, and the queue of the target
+ * never grows.
  */
 class RNSkGraphiteProducer
     : public std::enable_shared_from_this<RNSkGraphiteProducer> {
@@ -87,8 +104,14 @@ public:
    */
   bool requestFrame();
 
-  /** The view presented a frame: the next one may start. */
+  /**
+   The view presented a frame: a held recording goes to the target, and the
+   next job may start.
+   */
   void onFramePresented();
+
+  /** When the next replay may start. Any thread. */
+  void setPacing(ReplayPacing pacing);
 
   /**
    Replays the current content into a canvas, on the calling thread (a
@@ -113,6 +136,7 @@ private:
   void replaceContent(std::shared_ptr<Recorder> recorder,
                       sk_sp<SkPicture> picture, bool dirty);
   void kickLocked();
+  bool waitsForPresentLocked() const;
   void produce();
 
   // Content and scheduling state.
@@ -123,6 +147,8 @@ private:
   bool _dirty = false;
   bool _inFlight = false;
   bool _presentPending = false;
+  ReplayPacing _pacing = ReplayPacing::Pipelined;
+  std::shared_ptr<RNSkGraphiteRecording> _held;
 };
 
 } // namespace RNSkia
