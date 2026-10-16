@@ -210,6 +210,14 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     // Frames --------------------------------------------------------------
 
+    /** The first frame was presented into a SurfaceView's surface. Main thread; called from native. */
+    @DoNotStrip
+    public void onFirstFramePresented() {
+        if (mView instanceof SkiaSurfaceView) {
+            ((SkiaSurfaceView) mView).onFirstFramePresented();
+        }
+    }
+
     /** A recording was submitted. Main thread; called from native. */
     @DoNotStrip
     public void scheduleFrame() {
