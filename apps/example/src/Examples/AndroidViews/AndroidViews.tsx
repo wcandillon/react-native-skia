@@ -135,9 +135,11 @@ export const AndroidViews = () => {
           <Switch value={animate} onValueChange={setAnimate} />
         </View>
         <Text style={styles.hint}>
-          auto picks SurfaceView when opaque and TextureView otherwise. A
-          SurfaceView ignores the rounded clip and the overlay; with zOrderOnTop
-          it also covers the controls when they overlap.
+          auto picks SurfaceView when opaque and TextureView otherwise, and
+          before Android 12L TextureView for an opaque canvas too unless
+          zOrderOnTop is on. A SurfaceView ignores the rounded clip and the
+          overlay; with zOrderOnTop it also covers the controls when they
+          overlap.
         </Text>
       </View>
     </View>
