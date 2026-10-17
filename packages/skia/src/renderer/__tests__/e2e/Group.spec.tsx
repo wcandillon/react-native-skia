@@ -1,7 +1,17 @@
 import React from "react";
 
 import { checkImage, docPath } from "../../../__tests__/setup";
-import { Image, Group, Fill, FitBox, Path } from "../../components";
+import {
+  Image,
+  Group,
+  Fill,
+  FitBox,
+  Path,
+  Rect,
+  Circle,
+  Paint,
+  Blur,
+} from "../../components";
 import { images, importSkia, PIXEL_RATIO, surface } from "../setup";
 
 describe("Group", () => {
@@ -122,5 +132,164 @@ describe("Group", () => {
       </FitBox>
     );
     checkImage(img, docPath("group/scale-path.png"));
+  });
+  it("Copies a layer and adds new content to it", async () => {
+    const { width, height } = surface;
+    const centreY = height / 2;
+    const { BlendMode, TileMode, SaveLayerFlag, ClipOp, rect } = importSkia();
+    const img = await surface.drawOffscreen(
+      (Skia, canvas, _ctx) => {
+        canvas.clear(Skia.Color("black"));
+
+        const bluePaint = Skia.Paint();
+        bluePaint.setColor(Skia.Color([0, 0, 0.6, 1]));
+        canvas.drawRect(
+          { x: 0, y: centreY - 0.1 * height, width, height: 0.2 * height },
+          bluePaint
+        );
+
+        const redPaint = Skia.Paint();
+        redPaint.setColor(Skia.Color([0.8, 0, 0, 1]));
+        canvas.drawCircle(0.25 * width, centreY, 0.2 * width, redPaint);
+
+        const layerRestorePaint = Skia.Paint();
+        layerRestorePaint.setBlendMode(BlendMode.Screen);
+        layerRestorePaint.setImageFilter(
+          Skia.ImageFilter.MakeBlur(width * 0.05, width * 0.05, TileMode.Decal)
+        );
+        // show the difference between top and bottom halves
+        canvas.clipRect(rect(0, 0, width, centreY), ClipOp.Intersect, false);
+        canvas.saveLayer(
+          layerRestorePaint,
+          null,
+          null,
+          SaveLayerFlag.SaveLayerInitWithPrevious
+        );
+        canvas.drawCircle(0.75 * width, centreY, 0.2 * width, redPaint);
+        canvas.restore();
+      },
+      { width: surface.width }
+    );
+    checkImage(img, docPath("group/bloom.png"));
+  });
+  it("Copies a layer and adds new content to it (decl)", async () => {
+    const { width, height } = surface;
+    const centreY = height / 2;
+    const { SaveLayerFlag, rect } = importSkia();
+    const img = await surface.draw(
+      <>
+        <Fill color="black" />
+        <Rect
+          x={0}
+          y={centreY - 0.1 * height}
+          width={width}
+          height={0.2 * height}
+          color={[0, 0, 0.6, 1]}
+        />
+        <Circle
+          cx={0.25 * width}
+          cy={centreY}
+          r={0.2 * width}
+          color={[0.8, 0, 0, 1]}
+        />
+        <Group clip={rect(0, 0, width, centreY)}>
+          <Group
+            saveLayerFlags={SaveLayerFlag.SaveLayerInitWithPrevious}
+            layer={
+              <Paint blendMode={"screen"}>
+                <Blur blur={width * 0.05} mode={"decal"} />
+              </Paint>
+            }
+          >
+            <Circle
+              cx={0.75 * width}
+              cy={centreY}
+              r={0.2 * width}
+              color={[0.8, 0, 0, 1]}
+            />
+          </Group>
+        </Group>
+      </>
+    );
+
+    checkImage(img, docPath("group/bloom.png"));
+  });
+  it("Copies a layer through a backdrop filter and adds new content to it", async () => {
+    const { width, height } = surface;
+    const centreY = height / 2;
+    const { BlendMode, TileMode, ClipOp, rect } = importSkia();
+    const img = await surface.drawOffscreen(
+      (Skia, canvas, _ctx) => {
+        canvas.clear(Skia.Color("black"));
+
+        const bluePaint = Skia.Paint();
+        bluePaint.setColor(Skia.Color([0, 0, 0.6, 1]));
+        canvas.drawRect(
+          { x: 0, y: centreY - 0.1 * height, width, height: 0.2 * height },
+          bluePaint
+        );
+
+        const redPaint = Skia.Paint();
+        redPaint.setColor(Skia.Color([0.8, 0, 0, 1]));
+        canvas.drawCircle(0.25 * width, centreY, 0.2 * width, redPaint);
+
+        const layerRestorePaint = Skia.Paint();
+        layerRestorePaint.setBlendMode(BlendMode.Screen);
+
+        // show the difference between top and bottom halves
+        canvas.clipRect(rect(0, 0, width, centreY), ClipOp.Intersect, false);
+        canvas.saveLayer(
+          layerRestorePaint,
+          null,
+          Skia.ImageFilter.MakeBlur(width * 0.05, width * 0.05, TileMode.Decal)
+        );
+        canvas.drawCircle(0.75 * width, centreY, 0.2 * width, redPaint);
+        canvas.restore();
+      },
+      { width: surface.width }
+    );
+    checkImage(img, docPath("group/bloom2.png"));
+  });
+  it("Copies a layer through a backdrop filter and adds new content to it (decl)", async () => {
+    const { width, height } = surface;
+    const centreY = height / 2;
+    const { TileMode, rect, Skia } = importSkia();
+    const img = await surface.draw(
+      <>
+        <Fill color="black" />
+        <Rect
+          x={0}
+          y={centreY - 0.1 * height}
+          width={width}
+          height={0.2 * height}
+          color={[0, 0, 0.6, 1]}
+        />
+        <Circle
+          cx={0.25 * width}
+          cy={centreY}
+          r={0.2 * width}
+          color={[0.8, 0, 0, 1]}
+        />
+        <Group clip={rect(0, 0, width, centreY)}>
+          <Group
+            layer={<Paint blendMode={"screen"} />}
+            backdropFilter={Skia.ImageFilter.MakeBlur(
+              width * 0.05,
+              width * 0.05,
+              TileMode.Decal
+            )}
+          >
+            <Circle
+              cx={0.75 * width}
+              cy={centreY}
+              r={0.2 * width}
+              color={[0.8, 0, 0, 1]}
+            />
+          </Group>
+        </Group>
+      </>
+    );
+
+    checkImage(img, docPath("group/bloom2.png"));
   });
 });

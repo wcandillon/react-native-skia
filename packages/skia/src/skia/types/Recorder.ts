@@ -28,6 +28,7 @@ import type {
   VerticesProps,
   SkottieProps,
   DrawingNodeProps,
+  SaveLayerProps,
 } from "../../dom/types";
 import type { AnimatedProps } from "../../renderer/processors/Animations/Animations";
 
@@ -61,7 +62,7 @@ export interface BaseRecorder {
   saveCTM(props: AnimatedProps<CTMProps>): void;
   restoreCTM(): void;
   drawPaint(): void;
-  saveLayer(): void;
+  saveLayer(props: AnimatedProps<SaveLayerProps>): void;
   saveBackdropFilter(): void;
   drawBox(
     boxProps: AnimatedProps<BoxProps>,

@@ -6,6 +6,8 @@ import type {
   InputMatrix,
   InputRRect,
   PaintStyle,
+  SaveLayerFlag,
+  SkImageFilter,
   SkPaint,
   SkPath,
   SkRect,
@@ -70,7 +72,12 @@ export interface TransformProps {
   matrix?: InputMatrix;
 }
 
-export interface CTMProps extends TransformProps {
+export interface SaveLayerProps {
+  backdropFilter?: SkImageFilter;
+  saveLayerFlags?: SaveLayerFlag;
+}
+
+export interface CTMProps extends TransformProps, SaveLayerProps {
   clip?: ClipDef;
   invertClip?: boolean;
   layer?: SkPaint | boolean;

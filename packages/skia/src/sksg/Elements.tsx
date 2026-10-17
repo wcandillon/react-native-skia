@@ -53,6 +53,7 @@ import type {
   BlendProps,
   SkottieProps,
   ImageFilterProps,
+  SaveLayerProps,
 } from "../dom/types";
 import type { SkiaProps } from "../renderer";
 
@@ -60,7 +61,7 @@ declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       skGroup: SkiaProps<GroupProps>;
-      skLayer: SkiaProps<ChildrenProps>;
+      skLayer: SkiaProps<ChildrenProps & SaveLayerProps>;
       skPaint: SkiaProps<PaintProps>;
 
       // Drawings

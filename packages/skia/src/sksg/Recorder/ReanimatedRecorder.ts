@@ -29,6 +29,7 @@ import type {
   AtlasProps,
   SkottieProps,
   DrawingNodeProps,
+  SaveLayerProps,
 } from "../../dom/types";
 import type { AnimatedProps } from "../../renderer";
 import { isSharedValue, isSharedValueSelector } from "../utils";
@@ -174,8 +175,8 @@ export class ReanimatedRecorder implements BaseRecorder {
     this.recorder.drawPaint();
   }
 
-  saveLayer(): void {
-    this.recorder.saveLayer();
+  saveLayer(props: AnimatedProps<SaveLayerProps>): void {
+    this.recorder.saveLayer(props);
   }
 
   saveBackdropFilter(): void {

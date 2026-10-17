@@ -255,7 +255,7 @@ const visitNode = (recorder: BaseRecorder, node: Node<any>) => {
   }
   pushPaints(recorder, paints);
   if (node.type === NodeType.Layer) {
-    recorder.saveLayer();
+    recorder.saveLayer(node.props);
   }
   const ctm = processCTM(props);
   const shouldRestore = !!ctm || node.type === NodeType.Layer;

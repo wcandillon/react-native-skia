@@ -117,10 +117,15 @@ const play = (ctx: DrawingContext, _command: Command) => {
   const command = materializeCommand(_command);
   if (isCommand(command, CommandType.SaveBackdropFilter)) {
     ctx.saveBackdropFilter();
-  } else if (isCommand(command, CommandType.SaveLayer)) {
+  } else if (isDrawCommand(command, CommandType.SaveLayer)) {
     ctx.materializePaint();
     const paint = ctx.paintDeclarations.pop();
-    ctx.canvas.saveLayer(paint);
+    ctx.canvas.saveLayer(
+      paint,
+      null,
+      command.props.backdropFilter,
+      command.props.saveLayerFlags
+    );
   } else if (isDrawCommand(command, CommandType.SavePaint)) {
     if (command.props.paint) {
       ctx.pushPaint(command.props.paint);

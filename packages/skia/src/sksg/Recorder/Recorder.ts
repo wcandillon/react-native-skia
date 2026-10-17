@@ -28,6 +28,7 @@ import type {
   BoxShadowProps,
   SkottieProps,
   DrawingNodeProps,
+  SaveLayerProps,
 } from "../../dom/types";
 import type { AnimatedProps } from "../../renderer";
 import { isSharedValue, isSharedValueSelector } from "../utils";
@@ -214,8 +215,8 @@ export class Recorder implements BaseRecorder {
     this.add({ type: CommandType.DrawPaint });
   }
 
-  saveLayer() {
-    this.add({ type: CommandType.SaveLayer });
+  saveLayer(props: AnimatedProps<SaveLayerProps>) {
+    this.add({ type: CommandType.SaveLayer, props });
   }
 
   saveBackdropFilter() {

@@ -416,8 +416,8 @@ public:
         std::make_unique<Command>(CommandType::RestorePaintDeclaration));
   }
 
-  void saveLayer() {
-    pushCommand(std::make_unique<Command>(CommandType::SaveLayer));
+  void saveLayer(jsi::Runtime &runtime, const jsi::Object &props) {
+    pushCommand(std::make_unique<SaveLayerCmd>(runtime, props, variables));
   }
 
   void saveBackdropFilter() {
@@ -531,10 +531,8 @@ inline void Recorder::playCommand(DrawingCtx *ctx, Command *cmd) {
     break;
   }
   case CommandType::SaveLayer: {
-    ctx->materializePaint();
-    auto paint = ctx->paintDeclarations.back();
-    ctx->paintDeclarations.pop_back();
-    ctx->canvas->saveLayer(SkCanvas::SaveLayerRec(nullptr, &paint, nullptr, 0));
+    auto *saveCTMCmd = static_cast<SaveCTMCmd *>(cmd);
+    saveCTMCmd->saveCTM(ctx);
     break;
   }
   case CommandType::MaterializePaint: {
