@@ -7,6 +7,8 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -47,12 +49,82 @@ public:
   DawnContext(const DawnContext &) = delete;
   DawnContext &operator=(const DawnContext &) = delete;
 
+  /**
+   The GPU Skia renders with, or why there is none: a device without a
+   Vulkan 1.1 driver on Android, a driver short of the WebGPU core
+   requirements, a device creation failure. Probed once per process, the
+   first time the context is asked for (RNSkManager does so when the module
+   is installed), and reported to JS as Skia.gpu.
+   */
+  struct GpuInfo {
+    bool available = false;
+    /** The adapter Skia renders on; empty when unavailable. */
+    DawnUtils::AdapterDescription adapter;
+    /** Why the GPU is unavailable; empty when it is. */
+    std::string error;
+  };
+
+  /**
+   The context. Throws std::runtime_error, with the reason, when the device
+   has no GPU Skia can render with: a JSI host function lets it propagate
+   and JS gets an Error; native code on a thread of its own, or called from
+   Java or Objective-C, uses tryGetInstance() instead, since an exception
+   there takes the process down.
+   */
   static DawnContext &getInstance() {
-    // Never destroyed: the readback poller is a detached thread using the
-    // context, which the process takes down at exit instead of a static
-    // destructor tearing the context down under it.
-    static auto *instance = new DawnContext();
+    auto *instance = tryGetInstance();
+    if (instance == nullptr) {
+      throw std::runtime_error(getGpuInfo().error);
+    }
     return *instance;
+  }
+
+  /** The context, or nullptr when the GPU is unavailable. Never throws. */
+  static DawnContext *tryGetInstance() noexcept { return probe().instance; }
+
+  /**
+   Probes the GPU if not done yet and describes it. Once the device is lost
+   (see isDeviceLost), unavailable, with the loss as the error. Never throws.
+   */
+  static GpuInfo getGpuInfo() noexcept {
+    GpuInfo info = probe().info;
+    if (!info.available || !isDeviceLost()) {
+      return info;
+    }
+    auto &state = lostState();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    info.available = false;
+    info.error = state.message;
+    return info;
+  }
+
+  /**
+   Starts the probe on a thread of its own, so that installing the module
+   does not wait for the GPU (drivers load, a device and a Graphite context
+   are created). Whoever needs the context first (a view's window, a GPU
+   call, Skia.gpu) waits for the probe to finish instead.
+   */
+  static void probeInBackground() {
+    std::thread([]() {
+#if defined(__APPLE__)
+      pthread_setname_np("RNSkia GPU Probe");
+#elif defined(__ANDROID__)
+      pthread_setname_np(pthread_self(), "RNSkia GPU Probe");
+#endif
+      probe();
+    }).detach();
+  }
+
+  /**
+   Whether the GPU device was lost since it was created: a driver reset, the
+   GPU out of memory, a device-level error. A lost Dawn device fails every
+   later operation instead of crashing, so the context stays usable in the
+   sense that calls return: views stop presenting (RNSkWindowSurface), GPU
+   APIs return nothing, and Skia.gpu reports the loss. Nothing recovers the
+   device short of restarting the app. Any thread.
+   */
+  static bool isDeviceLost() noexcept {
+    return lostState().lost.load(std::memory_order_acquire);
   }
 
   // Readbacks ----------------------------------------------------------------
@@ -147,14 +219,16 @@ public:
 
   /**
    A CPU copy of a Graphite image, read back synchronously; the image itself
-   when it is not texture-backed.
+   when it is not texture-backed, which needs no GPU (nor the context: it
+   works on a device without one). Throws without a GPU for a Graphite
+   image, like getInstance().
    */
-  sk_sp<SkImage> MakeRasterImage(const sk_sp<SkImage> &image) {
+  static sk_sp<SkImage> MakeRasterImage(const sk_sp<SkImage> &image) {
     if (!image->isTextureBacked()) {
       return image;
     }
-    return MakeRasterImage(image->imageInfo(),
-                           readPixelsSync(image, image->bounds()));
+    return MakeRasterImage(image->imageInfo(), getInstance().readPixelsSync(
+                                                   image, image->bounds()));
   }
 
   /**
@@ -271,7 +345,7 @@ public:
 #endif
     };
 
-    return DawnUtils::requestDevice(adapter, features, false);
+    return DawnUtils::requestDevice(adapter, features, /* listener= */ nullptr);
   }
 
   // Create an SkImage from a WebGPU texture
@@ -426,6 +500,69 @@ public:
   }
 
 private:
+  struct Probe {
+    DawnContext *instance = nullptr;
+    GpuInfo info;
+  };
+
+  struct LostState {
+    // Read on every frame of every view (RNSkWindowSurface::canPresent):
+    // the flag is atomic, the mutex only guards the message.
+    std::atomic<bool> lost{false};
+    std::mutex mutex;
+    std::string message;
+  };
+
+  // Never destroyed: Dawn reports a loss from any of its threads, possibly
+  // during process teardown.
+  static LostState &lostState() noexcept {
+    static auto *state = new LostState();
+    return *state;
+  }
+
+  // The primary device's loss callback (DawnUtils::requestDevice): records
+  // the loss for isDeviceLost() and getGpuInfo(), and logs it once.
+  static void markDeviceLost(const std::string &message) noexcept {
+    auto &state = lostState();
+    std::string error =
+        "React Native Skia lost its GPU device; nothing renders until the "
+        "app is restarted. Reason: " +
+        message;
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      if (state.lost.load(std::memory_order_relaxed)) {
+        return;
+      }
+      state.message = error;
+      state.lost.store(true, std::memory_order_release);
+    }
+    RNSkLogger::logToConsole(error);
+  }
+
+  static const Probe &probe() noexcept {
+    // Attempted once: a device without a usable GPU does not get one by
+    // asking again, and the attempt enumerates drivers. The context is never
+    // destroyed: the readback poller is a detached thread using it, which
+    // the process takes down at exit instead of a static destructor tearing
+    // the context down under it.
+    static const Probe *result = []() noexcept {
+      auto *probe = new Probe();
+      try {
+        probe->instance = new DawnContext();
+        probe->info.available = true;
+        probe->info.adapter = DawnUtils::describeAdapter(
+            probe->instance->backendContext.fDevice.GetAdapter());
+      } catch (const std::exception &e) {
+        probe->info.error = e.what();
+        RNSkLogger::logToConsole(probe->info.error);
+      }
+      return probe;
+    }();
+    return *result;
+  }
+
+  // Declared before the device it listens to, so that it outlives it.
+  DawnUtils::DeviceLostListener _deviceLostListener;
   std::unique_ptr<dawn::native::Instance> instance;
   std::unique_ptr<skgpu::graphite::Context> fGraphiteContext;
   skgpu::graphite::DawnBackendContext backendContext;
@@ -512,7 +649,13 @@ private:
 
     instance = std::make_unique<dawn::native::Instance>(&instanceDesc);
 
-    backendContext = DawnUtils::createDawnBackendContext(instance.get());
+    // Dawn reports a loss from whichever thread detects it; the record is
+    // static (lostState), so the listener needs nothing of this object.
+    _deviceLostListener.onLost = [](const std::string &message) {
+      DawnContext::markDeviceLost(message);
+    };
+    backendContext = DawnUtils::createDawnBackendContext(instance.get(),
+                                                         &_deviceLostListener);
 
     skgpu::graphite::ContextOptions ctxOptions;
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
@@ -522,7 +665,9 @@ private:
         skgpu::graphite::ContextFactory::MakeDawn(backendContext, ctxOptions);
 
     if (!fGraphiteContext) {
-      throw std::runtime_error("Failed to create graphite context");
+      throw std::runtime_error(
+          "React Native Skia could not create its Graphite context on the "
+          "GPU device.");
     }
   }
 

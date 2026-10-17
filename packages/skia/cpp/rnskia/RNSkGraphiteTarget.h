@@ -204,12 +204,19 @@ public:
    Queues a recording for the next frame. Recordings are never dropped: a
    later frame may depend on resources an earlier one uploaded. This holds
    before the view exists too, as the registry owns the target until the
-   view is gone (see RNSkGraphiteTargetRegistry).
+   view is gone (see RNSkGraphiteTargetRegistry). The one exception is a
+   lost GPU device: nothing presents ever again (RNSkWindowSurface), and a
+   client recording on every frame regardless would grow the queue without
+   bound, so the recordings are dropped instead.
    */
   void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
+      if (DawnContext::isDeviceLost()) {
+        _queue.clear();
+        return;
+      }
       _queue.push_back(std::move(recording));
       requestFrame = _requestFrame;
     }

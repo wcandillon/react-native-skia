@@ -28,12 +28,20 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
   detach();
-  auto &context = DawnContext::getInstance();
-  _device = context.getWGPUDevice();
-  _recorder = context.getRecorder();
   _nativeHandle = nativeHandle;
   _releaser = std::move(releaser);
-  _surface = context.MakeWGPUSurface(nativeHandle);
+  // Called from the platform view (Java or Objective-C), where an exception
+  // would take the process down: without a GPU (reported when the module was
+  // installed, see DawnContext::getGpuInfo) the window is given back and the
+  // view stays blank.
+  auto *context = DawnContext::tryGetInstance();
+  if (context == nullptr) {
+    detach();
+    return;
+  }
+  _device = context->getWGPUDevice();
+  _recorder = context->getRecorder();
+  _surface = context->MakeWGPUSurface(nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     detach();
@@ -191,7 +199,10 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 }
 
 bool RNSkWindowSurface::canPresent() {
-  return _surface && (!_canPresent || _canPresent());
+  // A lost device (see DawnContext::isDeviceLost) takes no frame: the view
+  // keeps its last one and the queue waits, as while in the background.
+  return _surface && !DawnContext::isDeviceLost() &&
+         (!_canPresent || _canPresent());
 }
 
 bool RNSkWindowSurface::presentRecordings(

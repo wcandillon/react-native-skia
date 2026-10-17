@@ -3,4 +3,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.reactnative.skia">
 
+    <!-- React Native Skia renders with Vulkan, through Dawn, which needs
+         Vulkan 1.1 (0x401000). Declared as required so that the Play Store
+         does not serve the app to devices without it, where every canvas
+         would stay blank. An app that handles those devices itself (see
+         Skia.gpu.isAvailable) removes it from its own manifest with
+         tools:node="remove". -->
+    <uses-feature
+        android:name="android.hardware.vulkan.version"
+        android:version="0x401000"
+        android:required="true" />
+
 </manifest>

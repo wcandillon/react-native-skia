@@ -181,7 +181,7 @@ public:
                       ? static_cast<SkEncodedImageFormat>(*formatParam)
                       : SkEncodedImageFormat::kPNG;
     auto quality = qualityParam.has_value() ? *qualityParam : 100.0;
-    auto image = DawnContext::getInstance().MakeRasterImage(getObject());
+    auto image = DawnContext::MakeRasterImage(getObject());
     sk_sp<SkData> data;
 
     if (format == SkEncodedImageFormat::kJPEG) {
@@ -361,7 +361,7 @@ public:
   // from the GPU, waiting for it, and an encoded image is decoded. This is
   // the synchronous counterpart of makeRasterImage(), for worklets.
   std::shared_ptr<JsiSkImage> makeRasterImageSync() {
-    auto rasterImage = DawnContext::getInstance().MakeRasterImage(getObject());
+    auto rasterImage = DawnContext::MakeRasterImage(getObject());
     if (!rasterImage) {
       throw std::runtime_error(
           "makeRasterImageSync: reading the image back failed");

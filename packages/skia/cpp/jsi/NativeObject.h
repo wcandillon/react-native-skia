@@ -403,6 +403,25 @@ protected:
   }
 
   /**
+   * Defines `name` on the prototype as an enumerable, configurable accessor
+   * whose getter is `getterFunc` (Object.defineProperty).
+   */
+  static void defineGetter(jsi::Runtime &runtime, jsi::Object &prototype,
+                           const char *name, jsi::Function getterFunc) {
+    auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
+    auto defineProperty =
+        objectCtor.getPropertyAsFunction(runtime, "defineProperty");
+
+    jsi::Object descriptor(runtime);
+    descriptor.setProperty(runtime, "get", getterFunc);
+    descriptor.setProperty(runtime, "enumerable", true);
+    descriptor.setProperty(runtime, "configurable", true);
+
+    defineProperty.call(runtime, prototype,
+                        jsi::String::createFromUtf8(runtime, name), descriptor);
+  }
+
+  /**
    * Install a getter on the prototype.
    */
   template <typename ReturnType>
@@ -424,19 +443,27 @@ protected:
                 rt, std::move(result));
           }
         });
+    defineGetter(runtime, prototype, name, std::move(getterFunc));
+  }
 
-    // Use Object.defineProperty to create a proper getter
-    auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
-    auto defineProperty =
-        objectCtor.getPropertyAsFunction(runtime, "defineProperty");
-
-    jsi::Object descriptor(runtime);
-    descriptor.setProperty(runtime, "get", getterFunc);
-    descriptor.setProperty(runtime, "enumerable", true);
-    descriptor.setProperty(runtime, "configurable", true);
-
-    defineProperty.call(runtime, prototype,
-                        jsi::String::createFromUtf8(runtime, name), descriptor);
+  /**
+   * Install a getter whose native implementation builds the value itself
+   * from the calling jsi::Runtime (a plain object of several fields, for
+   * instance), where no JSIConverter applies.
+   */
+  static void
+  installGetterWithRuntime(jsi::Runtime &runtime, jsi::Object &prototype,
+                           const char *name,
+                           jsi::Value (Derived::*getter)(jsi::Runtime &)) {
+    auto getterFunc = jsi::Function::createFromHostFunction(
+        runtime, jsi::PropNameID::forUtf8(runtime, std::string("get_") + name),
+        0,
+        [getter](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+          return (native.get()->*getter)(rt);
+        });
+    defineGetter(runtime, prototype, name, std::move(getterFunc));
   }
 
   /**

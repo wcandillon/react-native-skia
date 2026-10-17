@@ -170,6 +170,27 @@ public:
                                                  count);
   }
 
+  // The GPU Skia renders with, or why there is none (Skia.gpu, see
+  // src/skia/types/Skia.ts). A fresh object per read, of plain values.
+  jsi::Value getGpu(jsi::Runtime &runtime) {
+    const auto &gpu = DawnContext::getGpuInfo();
+    auto string = [&runtime](const std::string &value) {
+      return jsi::String::createFromUtf8(runtime, value);
+    };
+    jsi::Object result(runtime);
+    result.setProperty(runtime, "isAvailable", gpu.available);
+    result.setProperty(runtime, "backend", string(gpu.adapter.backend));
+    result.setProperty(runtime, "vendor", string(gpu.adapter.vendor));
+    result.setProperty(runtime, "architecture",
+                       string(gpu.adapter.architecture));
+    result.setProperty(runtime, "device", string(gpu.adapter.device));
+    result.setProperty(runtime, "description", string(gpu.adapter.description));
+    result.setProperty(runtime, "error",
+                       gpu.available ? jsi::Value::null()
+                                     : jsi::Value(runtime, string(gpu.error)));
+    return result;
+  }
+
   // Factory properties: like the legacy HostObject implementation, each
   // property access returns a fresh JS wrapper around the shared factory
   // instance.
@@ -230,6 +251,7 @@ public:
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
+    installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);
     installHostMethod(runtime, prototype, "Font", &JsiSkApi::Font);
     installHostMethod(runtime, prototype, "Paint", &JsiSkApi::Paint);
     installHostMethod(runtime, prototype, "RSXform", &JsiSkApi::RSXform);

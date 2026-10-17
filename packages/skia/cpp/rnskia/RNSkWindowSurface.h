@@ -107,7 +107,10 @@ public:
     _canPresent = std::move(canPresent);
   }
 
-  /** Whether a window is attached and can show a frame right now. */
+  /**
+   Whether a window is attached and can show a frame right now: not while
+   the platform view says it cannot, nor once the GPU device is lost.
+   */
   bool canPresent();
 
   // RNSkSurface -------------------------------------------------------------

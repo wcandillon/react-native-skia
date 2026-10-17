@@ -57,6 +57,24 @@ buildscript {
 }
 ```
 
+### Vulkan
+
+Skia renders with Vulkan 1.1, which every 64-bit device shipped with Android 10 or later supports.
+The library's manifest declares it as a required feature, so the Play Store does not serve your app to devices without it.
+This does not affect the emulator (use an API 29 or later image with hardware graphics acceleration).
+
+On a device without Vulkan the app still runs: `Skia.gpu.isAvailable` is false, `Skia.gpu.error` says why, and canvases stay blank.
+To ship to those devices anyway, remove the declaration from your app's manifest and check the flag before rendering with Skia:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+  <uses-feature android:name="android.hardware.vulkan.version" tools:node="remove" />
+</manifest>
+```
+
+If another dependency already declares `android.hardware.vulkan.version` with a different version, keep one declaration and mark it `tools:replace="android:version"`.
+
 Currently, you will need Android NDK to be installed.
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
 `ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/<version>` for instance.
