@@ -211,7 +211,7 @@ export const center = { x: width / 2, y: height / 2 };
 export const drawOnNode = async (element: ReactNode) => {
   const { surface: ckSurface, draw, root } = await mountCanvas(element);
   await draw();
-  root.unmount();
+  await root.unmount();
   return ckSurface;
 };
 
