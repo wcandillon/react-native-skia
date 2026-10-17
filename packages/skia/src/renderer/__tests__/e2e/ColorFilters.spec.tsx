@@ -9,6 +9,7 @@ import {
   Image,
   Lerp,
   LinearToSRGBGamma,
+  Paint,
   SRGBToLinearGamma,
 } from "../../components";
 import { docPath, checkImage, processResult } from "../../../__tests__/setup";
@@ -57,6 +58,31 @@ describe("Color Filters", () => {
       </>
     );
     checkImage(img, docPath("color-filters/color-blend.png"));
+  });
+  it("should warn and ignore a BlendColor filter with no color", async () => {
+    const { width } = surface;
+    const r = width / 2;
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const img = await surface.draw(
+        <Group
+          layer={
+            <Paint>
+              {/* @ts-expect-error color is required */}
+              <BlendColor color={undefined} mode="srcIn" />
+            </Paint>
+          }
+        >
+          <Circle cx={r} cy={r} r={r} color="magenta" />
+        </Group>
+      );
+      expect(img).toBeTruthy();
+      if (surface.OS === "node") {
+        expect(warn).toHaveBeenCalled();
+      }
+    } finally {
+      warn.mockRestore();
+    }
   });
   it("should build the reference result for should use composition", async () => {
     const { surface: ckSurface, Skia, canvas } = setupSkia(wWidth, wHeight);

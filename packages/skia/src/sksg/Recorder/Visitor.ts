@@ -128,6 +128,16 @@ const pushColorFilters = (
     if (colorFilter.children.length > 0) {
       pushColorFilters(recorder, colorFilter.children);
     }
+    if (
+      colorFilter.type === NodeType.BlendColorFilter &&
+      (colorFilter.props.color === undefined ||
+        colorFilter.props.color === null)
+    ) {
+      console.warn(
+        "<BlendColor> received an empty color. The color filter will be ignored."
+      );
+      return;
+    }
     recorder.pushColorFilter(colorFilter.type, colorFilter.props);
     const needsComposition =
       colorFilter.type !== NodeType.LerpColorFilter &&
