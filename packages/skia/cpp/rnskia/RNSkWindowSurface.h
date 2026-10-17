@@ -110,8 +110,9 @@ public:
   }
 
   /**
-   Whether a window is attached, holds no frame (see setHoldsPresentForGpu)
-   and can show a frame right now.
+   Whether a window is attached and can show a frame right now: not while it
+   holds a frame (see setHoldsPresentForGpu) or the platform view says it
+   cannot, nor once the GPU device is lost.
    */
   bool canPresent();
 

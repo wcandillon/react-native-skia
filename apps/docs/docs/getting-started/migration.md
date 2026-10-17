@@ -88,6 +88,12 @@ buildscript {
 }
 ```
 
+Vulkan 1.1 is a hard requirement: the library's manifest declares `android.hardware.vulkan.version` as a required feature, which merges into your app's manifest.
+The Play Store then stops serving your app to devices without Vulkan 1.1 (older hardware, some TV boxes).
+This is a change in distribution compared to v2, which rendered with OpenGL ES on every device.
+On a device without Vulkan the app still runs: `Skia.gpu.isAvailable` is false and canvases stay blank.
+See [the Vulkan section of the installation guide](/docs/getting-started/installation#vulkan) for the details and how to opt out of the declaration.
+
 ### iOS, tvOS, and macOS
 
 The minimum deployment target is iOS 15.1.

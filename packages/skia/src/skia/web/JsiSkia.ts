@@ -138,4 +138,14 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   getNativeDevice: () => {
     return throwNotImplementedOnRNWeb<bigint>();
   },
+  // CanvasKit renders on WebGL and falls back to software on its own.
+  gpu: {
+    isAvailable: true,
+    backend: "WebGL",
+    vendor: "",
+    architecture: "",
+    device: "",
+    description: "",
+    error: null,
+  },
 });

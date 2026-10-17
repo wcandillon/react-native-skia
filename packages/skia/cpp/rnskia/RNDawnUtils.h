@@ -4,7 +4,12 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <functional>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "webgpu/webgpu_cpp.h"
 
@@ -103,17 +108,99 @@ colorTypeForTextureFormat(wgpu::TextureFormat format) {
   }
 }
 
+inline const char *backendTypeName(wgpu::BackendType type) {
+  switch (type) {
+  case wgpu::BackendType::Metal:
+    return "Metal";
+  case wgpu::BackendType::Vulkan:
+    return "Vulkan";
+  case wgpu::BackendType::OpenGL:
+    return "OpenGL";
+  case wgpu::BackendType::OpenGLES:
+    return "OpenGLES";
+  case wgpu::BackendType::WebGPU:
+    return "WebGPU";
+  case wgpu::BackendType::Null:
+    return "Null";
+  default:
+    return "Undefined";
+  }
+}
+
+// Through Dawn's own conversion: a length of wgpu::kStrlen means
+// null-terminated, which a std::string built from (data, length) would not
+// survive.
+inline std::string toString(wgpu::StringView view) {
+  return std::string(std::string_view(view));
+}
+
+// What an adapter reports about itself, in the terms of GPUAdapterInfo.
+struct AdapterDescription {
+  std::string backend;
+  std::string vendor;
+  std::string architecture;
+  std::string device;
+  std::string description;
+};
+
+inline AdapterDescription describeAdapter(const wgpu::Adapter &adapter) {
+  wgpu::AdapterInfo info;
+  adapter.GetInfo(&info);
+  AdapterDescription result;
+  result.backend = backendTypeName(info.backendType);
+  result.vendor = toString(info.vendor);
+  result.architecture = toString(info.architecture);
+  result.device = toString(info.device);
+  result.description = toString(info.description);
+  return result;
+}
+
+// The backend Skia renders with: Metal on Apple, Vulkan on Android.
+#ifdef __APPLE__
+constexpr auto kPlatformBackendType = wgpu::BackendType::Metal;
+#elif __ANDROID__
+constexpr auto kPlatformBackendType = wgpu::BackendType::Vulkan;
+#endif
+
+// Why no adapter was found, for the error raised to JS: every adapter Dawn
+// can see on any backend and at the compatibility feature level, so that the
+// message tells a device without Vulkan apart from one whose driver falls
+// short of the WebGPU core requirements.
+inline std::string describeMissingAdapter(dawn::native::Instance *instance) {
+  std::string message = "React Native Skia renders with ";
+  message += backendTypeName(kPlatformBackendType);
+#ifdef __ANDROID__
+  message += " (Vulkan 1.1 or later)";
+#endif
+  message += " and found no GPU adapter meeting the WebGPU core requirements "
+             "on this device.";
+  wgpu::RequestAdapterOptions options;
+  options.featureLevel = wgpu::FeatureLevel::Compatibility;
+  auto adapters = instance->EnumerateAdapters(&options);
+  if (adapters.empty()) {
+    message += " No adapter is available on any backend.";
+    return message;
+  }
+  message += " Adapters found:";
+  for (const auto &adapter : adapters) {
+    auto info = describeAdapter(adapter.Get());
+    message += " [" + info.backend + ": " + info.device;
+    if (!info.description.empty()) {
+      message += ", " + info.description;
+    }
+    message += "]";
+  }
+  return message;
+}
+
 // Find the best matching GPU adapter for the current platform.
 // Sorts by adapter type (DiscreteGPU > IntegratedGPU > CPU) and selects the
 // first adapter matching the platform backend (Metal on Apple, Vulkan on
-// Android).
+// Android). Throws std::runtime_error, with a message describing the
+// device, when there is none.
 inline dawn::native::Adapter
 getMatchedAdapter(dawn::native::Instance *instance) {
-#ifdef __APPLE__
-  constexpr auto kDefaultBackendType = wgpu::BackendType::Metal;
-#elif __ANDROID__
-  constexpr auto kDefaultBackendType = wgpu::BackendType::Vulkan;
-#endif
+  constexpr auto kDefaultBackendType = kPlatformBackendType;
 
   wgpu::RequestAdapterOptions options;
   options.backendType = kDefaultBackendType;
@@ -122,7 +209,7 @@ getMatchedAdapter(dawn::native::Instance *instance) {
   std::vector<dawn::native::Adapter> adapters =
       instance->EnumerateAdapters(&options);
   if (adapters.empty()) {
-    throw std::runtime_error("No matching adapter found");
+    throw std::runtime_error(describeMissingAdapter(instance));
   }
 
   std::sort(adapters.begin(), adapters.end(),
@@ -146,17 +233,29 @@ getMatchedAdapter(dawn::native::Instance *instance) {
     }
   }
 
-  throw std::runtime_error("No matching adapter found");
+  throw std::runtime_error(describeMissingAdapter(instance));
 }
 
+// Where requestDevice() reports what becomes of the device. A loss after
+// creation (a driver reset, the GPU out of memory, a device-level error)
+// goes to onLost with Dawn's message, on whichever thread Dawn detects it.
+// A creation failure leaves Dawn's message in creationFailure, for the
+// caller of requestDevice(): that callback runs inside CreateDevice, on the
+// calling thread. The listener must outlive the device.
+struct DeviceLostListener {
+  std::function<void(const std::string &message)> onLost;
+  std::string creationFailure;
+};
+
 // Create a Dawn device from the given adapter with the requested features.
-// Features not supported by the adapter are silently skipped.
-// Set fatalOnDeviceLost=true for primary rendering devices (SK_ABORT on loss),
-// false for secondary/compute devices (log only).
+// Features not supported by the adapter are silently skipped. The device's
+// loss is reported to `listener` (see DeviceLostListener), or only logged
+// without one (a secondary device). Neither takes the process down: a lost
+// device fails its later operations, which the callers handle.
 inline wgpu::Device
 requestDevice(dawn::native::Adapter &nativeAdapter,
               const std::vector<wgpu::FeatureName> &requestedFeatures,
-              bool fatalOnDeviceLost = true) {
+              DeviceLostListener *listener) {
   wgpu::Adapter adapter = nativeAdapter.Get();
 
   // Filter to only features the adapter supports.
@@ -214,90 +313,55 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   desc.requiredFeatures = features.data();
   desc.nextInChain = &togglesDesc;
 
-  if (fatalOnDeviceLost) {
-    desc.SetDeviceLostCallback(
-        wgpu::CallbackMode::AllowSpontaneous,
-        [](const wgpu::Device &, wgpu::DeviceLostReason reason,
-           wgpu::StringView message) {
-          if (reason != wgpu::DeviceLostReason::Destroyed) {
-            SK_ABORT("Device lost: %.*s\n", static_cast<int>(message.length),
-                     message.data);
+  // Destroyed is the context tearing the device down on purpose, and
+  // CallbackCancelled the instance going away: neither is a loss.
+  desc.SetDeviceLostCallback(
+      wgpu::CallbackMode::AllowSpontaneous,
+      [](const wgpu::Device &, wgpu::DeviceLostReason reason,
+         wgpu::StringView message, DeviceLostListener *listener) {
+        switch (reason) {
+        case wgpu::DeviceLostReason::Destroyed:
+        case wgpu::DeviceLostReason::CallbackCancelled:
+          return;
+        case wgpu::DeviceLostReason::FailedCreation:
+          if (listener != nullptr) {
+            listener->creationFailure = toString(message);
           }
-        });
-    desc.SetUncapturedErrorCallback(
-        [](const wgpu::Device &, wgpu::ErrorType, wgpu::StringView message) {
-          SkDebugf("Device error: %.*s\n", static_cast<int>(message.length),
-                   message.data);
-        });
-  } else {
-    desc.SetDeviceLostCallback(
-        wgpu::CallbackMode::AllowSpontaneous,
-        [](const wgpu::Device &, wgpu::DeviceLostReason reason,
-           wgpu::StringView message) {
-          if (reason != wgpu::DeviceLostReason::Destroyed) {
-            RNSkia::RNSkLogger::logToConsole("Device lost: %.*s",
-                                             static_cast<int>(message.length),
-                                             message.data);
+          return;
+        default:
+          if (listener != nullptr && listener->onLost) {
+            listener->onLost(toString(message));
+          } else {
+            RNSkia::RNSkLogger::logToConsole("Device lost: " +
+                                             toString(message));
           }
-        });
-    desc.SetUncapturedErrorCallback([](const wgpu::Device &, wgpu::ErrorType,
-                                       wgpu::StringView message) {
-      RNSkia::RNSkLogger::logToConsole(
-          "Device error: %.*s", static_cast<int>(message.length), message.data);
-    });
-  }
+          return;
+        }
+      },
+      listener);
+  desc.SetUncapturedErrorCallback(
+      [](const wgpu::Device &, wgpu::ErrorType, wgpu::StringView message) {
+        RNSkia::RNSkLogger::logToConsole("Device error: " + toString(message));
+      });
 
   return wgpu::Device::Acquire(nativeAdapter.CreateDevice(&desc));
 }
 
+// `listener` is told of the primary device's loss (see DeviceLostListener)
+// and must outlive the device.
 inline skgpu::graphite::DawnBackendContext
-createDawnBackendContext(dawn::native::Instance *instance) {
+createDawnBackendContext(dawn::native::Instance *instance,
+                         DeviceLostListener *listener) {
 
   auto matchedAdapter = getMatchedAdapter(instance);
   wgpu::Adapter adapter = matchedAdapter.Get();
 
   // Log selected adapter info
-  wgpu::AdapterInfo adapterInfo;
-  adapter.GetInfo(&adapterInfo);
-  std::string deviceName =
-      adapterInfo.device.data
-          ? std::string(adapterInfo.device.data, adapterInfo.device.length)
-          : "Unknown";
-  std::string description = adapterInfo.description.data
-                                ? std::string(adapterInfo.description.data,
-                                              adapterInfo.description.length)
-                                : "Unknown";
-
-  std::string backendName;
-  switch (adapterInfo.backendType) {
-  case wgpu::BackendType::Metal:
-    backendName = "Metal";
-    break;
-  case wgpu::BackendType::Vulkan:
-    backendName = "Vulkan";
-    break;
-  case wgpu::BackendType::OpenGL:
-    backendName = "OpenGL";
-    break;
-  case wgpu::BackendType::OpenGLES:
-    backendName = "OpenGLES";
-    break;
-  case wgpu::BackendType::WebGPU:
-    backendName = "WebGPU";
-    break;
-  case wgpu::BackendType::Null:
-    backendName = "Null";
-    break;
-  default:
-    backendName = "Undefined (" +
-                  std::to_string(static_cast<int>(adapterInfo.backendType)) +
-                  ")";
-    break;
-  }
-
+  auto adapterInfo = describeAdapter(adapter);
   RNSkia::RNSkLogger::logToConsole(
       "Selected Dawn adapter - Backend: %s, Device: %s, Description: %s",
-      backendName.c_str(), deviceName.c_str(), description.c_str());
+      adapterInfo.backend.c_str(), adapterInfo.device.c_str(),
+      adapterInfo.description.c_str());
 
   // Primary device features — request everything Skia/Graphite can use
   std::vector<wgpu::FeatureName> features = {
@@ -361,8 +425,17 @@ createDawnBackendContext(dawn::native::Instance *instance) {
 #endif
   };
 
-  wgpu::Device device = requestDevice(matchedAdapter, features, true);
-  SkASSERT(device);
+  wgpu::Device device = requestDevice(matchedAdapter, features, listener);
+  if (!device) {
+    std::string error =
+        "React Native Skia could not create a GPU device on the " +
+        adapterInfo.backend + " adapter " + adapterInfo.device + " (" +
+        adapterInfo.description + ").";
+    if (listener != nullptr && !listener->creationFailure.empty()) {
+      error += " Reason: " + listener->creationFailure;
+    }
+    throw std::runtime_error(error);
+  }
 
   skgpu::graphite::DawnBackendContext backendContext;
   backendContext.fInstance = wgpu::Instance(instance->Get());
