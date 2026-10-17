@@ -491,6 +491,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
     const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
     $(`git apply ${catalystPatch}`);
+    // A runtime effect local named like main's parameters ("pos") broke
+    // Graphite's SkSL, and the failed pipeline then crashed insertRecording.
+    const runtimeEffectPatch = path.join(
+      __dirname,
+      "skia-graphite-runtime-effect-names.patch"
+    );
+    $(`git apply ${runtimeEffectPatch}`);
     // The GN build compiles the same Dawn checkout as build-dawn.ts.
     // Without this, Mac Catalyst compilation will be failed.
     applyDawnPatches();

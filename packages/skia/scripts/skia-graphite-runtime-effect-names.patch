@@ -1,0 +1,60 @@
+diff --git a/src/gpu/graphite/QueueManager.cpp b/src/gpu/graphite/QueueManager.cpp
+index c3c2ca1..87c666d 100644
+--- a/src/gpu/graphite/QueueManager.cpp
++++ b/src/gpu/graphite/QueueManager.cpp
+@@ -203,6 +203,12 @@ InsertStatus QueueManager::addRecording(const InsertRecordingInfo& info, Context
+         std::string failureMsg;
+         const bool validPipelines = info.fRecording->priv().taskList()->visitPipelines(
+                 [&failureMsg](const GraphicsPipeline* pipeline) {
++                    // A handle has no pipeline when its creation failed outright (reported when
++                    // the handle was resolved) or when the commands failed before the handle was
++                    // resolved. Neither is an async compilation failure.
++                    if (!pipeline) {
++                        return true;
++                    }
+                     if (auto failure = pipeline->didAsyncCompilationFail()) {
+                         failureMsg = *failure;
+                         return false;
+diff --git a/src/sksl/codegen/SkSLPipelineStageCodeGenerator.cpp b/src/sksl/codegen/SkSLPipelineStageCodeGenerator.cpp
+index 6768e80..2ac7479 100644
+--- a/src/sksl/codegen/SkSLPipelineStageCodeGenerator.cpp
++++ b/src/sksl/codegen/SkSLPipelineStageCodeGenerator.cpp
+@@ -102,6 +102,9 @@ private:
+     // Handles arrays correctly, eg: `float x[2]`
+     std::string typedVariable(const Type& type, std::string_view name);
+ 
++    // Whether `name` is one of the names the caller substitutes for main's parameters.
++    bool isCallerName(std::string_view name) const;
++
+     void writeVarDeclaration(const VarDeclaration& var);
+     void writeGlobalVarDeclaration(const GlobalVarDeclaration& g);
+     void writeStructDefinition(const StructDefinition& s);
+@@ -758,9 +761,26 @@ std::string PipelineStageCodeGenerator::typedVariable(const Type& type, std::str
+     return decl;
+ }
+ 
++bool PipelineStageCodeGenerator::isCallerName(std::string_view name) const {
++    for (const char* callerName : {fSampleCoords, fInputColor, fDestColor}) {
++        if (callerName && name == callerName) {
++            return true;
++        }
++    }
++    return false;
++}
++
+ void PipelineStageCodeGenerator::writeVarDeclaration(const VarDeclaration& var) {
+-    this->write(this->modifierString(var.var()->modifierFlags()));
+-    this->write(this->typedVariable(var.var()->type(), var.var()->name()));
++    const Variable* variable = var.var();
++    std::string name(variable->name());
++    // References to main's parameters are written as the caller's names (see
++    // writeVariableReference), so a local of the same name would redeclare or shadow them.
++    if (this->isCallerName(name)) {
++        name = fCallbacks->getMangledName(name.c_str());
++        fVariableNames.set(variable, name);
++    }
++    this->write(this->modifierString(variable->modifierFlags()));
++    this->write(this->typedVariable(variable->type(), name));
+     if (var.value()) {
+         this->write(" = ");
+         this->writeExpression(*var.value(), Precedence::kExpression);
