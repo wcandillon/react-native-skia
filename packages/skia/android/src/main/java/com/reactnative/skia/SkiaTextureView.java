@@ -1,14 +1,18 @@
 package com.reactnative.skia;
 
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.graphics.SurfaceTexture;
+import android.os.Build;
 import android.util.Log;
 import android.view.TextureView;
 import androidx.annotation.NonNull;
 
 @SuppressLint("ViewConstructor")
 public class SkiaTextureView extends TextureView implements TextureView.SurfaceTextureListener {
+
+    private static int sDeviceGlEsVersion;
 
     private String tag = "SkiaTextureView";
 
@@ -21,6 +25,20 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
         // toggled on a live view.
         setOpaque(opaque);
         setSurfaceTextureListener(this);
+    }
+
+    @Override
+    public void setOpaque(boolean opaque) {
+        super.setOpaque(TextureViewOpacity.marksOpaque(opaque, Build.VERSION.SDK_INT, this::readDeviceGlEsVersion));
+    }
+
+    // A device constant that arrives over binder, so it is read once per process.
+    private int readDeviceGlEsVersion() {
+        if (sDeviceGlEsVersion == 0) {
+            ActivityManager activityManager = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            sDeviceGlEsVersion = activityManager.getDeviceConfigurationInfo().reqGlEsVersion;
+        }
+        return sDeviceGlEsVersion;
     }
 
     @Override
