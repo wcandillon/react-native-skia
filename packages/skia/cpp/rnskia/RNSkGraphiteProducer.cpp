@@ -39,6 +39,12 @@ void RNSkGraphiteProducer::setTarget(
   {
     std::lock_guard<std::mutex> lock(_mutex);
     retiredTarget = std::exchange(_target, std::move(target));
+    // A held recording was made for the previous target, which never drops
+    // one (see produce()).
+    if (_held != nullptr) {
+      retiredTarget->submit(std::move(_held));
+      _held = nullptr;
+    }
     // A frame still queued on the previous target is not coming through this
     // view anymore (the view unbound itself from it): do not wait for it.
     _presentPending = false;
@@ -124,14 +130,33 @@ bool RNSkGraphiteProducer::requestFrame() {
 void RNSkGraphiteProducer::onFramePresented() {
   std::lock_guard<std::mutex> lock(_mutex);
   _presentPending = false;
+  if (_held != nullptr) {
+    _target->submit(std::move(_held));
+    _held = nullptr;
+    _presentPending = true;
+  }
   if (_dirty) {
     kickLocked();
   }
 }
 
+void RNSkGraphiteProducer::setPacing(ReplayPacing pacing) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _pacing = pacing;
+}
+
+bool RNSkGraphiteProducer::waitsForPresentLocked() const {
+  switch (_pacing) {
+  case ReplayPacing::AfterPresent:
+    return _presentPending;
+  case ReplayPacing::Pipelined:
+    return false;
+  }
+}
+
 void RNSkGraphiteProducer::kickLocked() {
-  if (_inFlight || _presentPending || _target == nullptr ||
-      (_recorder == nullptr && _picture == nullptr)) {
+  if (_inFlight || _held != nullptr || waitsForPresentLocked() ||
+      _target == nullptr || (_recorder == nullptr && _picture == nullptr)) {
     return;
   }
   _inFlight = true;
@@ -182,6 +207,12 @@ void RNSkGraphiteProducer::produce() {
   std::lock_guard<std::mutex> lock(_mutex);
   _inFlight = false;
   if (recording != nullptr) {
+    if (target == _target && _presentPending) {
+      // The previous frame still waits for its vsync: this one goes to the
+      // target once that one is presented (see onFramePresented()).
+      _held = std::move(recording);
+      return;
+    }
     // Queued even if the view was bound to another target while this job
     // ran: a target never drops a recording, a later one on the same
     // recorder may depend on resources this one uploads. Submitted under the
@@ -189,8 +220,12 @@ void RNSkGraphiteProducer::produce() {
     // would otherwise clear the flag before the recording is even queued.
     target->submit(std::move(recording));
     if (target == _target) {
-      // The next job starts when this frame is on screen.
+      // Pipelined, updates that arrived while this job ran start the next
+      // one now, while this frame waits for its vsync.
       _presentPending = true;
+      if (_dirty) {
+        kickLocked();
+      }
       return;
     }
     // The frame went to the previous target; the new one has none yet.

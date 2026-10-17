@@ -198,6 +198,10 @@ public:
     }
     if (presentOrKeep(*target, targetInfo, recordings)) {
       _producer->onFramePresented();
+      // A frame held for the GPU goes from the frame scheduler.
+      if (_surface->hasHeldFrame() && _frameScheduler) {
+        _frameScheduler();
+      }
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
@@ -256,6 +260,9 @@ public:
     _frameScheduler = std::move(scheduler);
   }
 
+  /** Set by the platform view: when the next replay may start. */
+  void setReplayPacing(ReplayPacing pacing) { _producer->setPacing(pacing); }
+
   /** Main thread: a recording is waiting. */
   void scheduleFrame() {
     if (_frameScheduler) {
@@ -272,9 +279,22 @@ public:
    the next frame rather than left waiting for a redraw. Without a surface the
    queue is left alone: the surface presents it when it appears. While the
    window cannot show a frame (the app in the background) the queue is left
-   alone too, and nobody asks again before onCanPresent().
+   alone too, and nobody asks again before onCanPresent(). A frame the window
+   holds for the GPU (see RNSkWindowSurface::setHoldsPresentForGpu) goes
+   first, once the GPU is done; until then it is asked about on every frame.
    */
   bool presentFrame() {
+    switch (_surface->presentHeldFrame()) {
+    case RNSkWindowSurface::HeldFrame::Waiting:
+      return true;
+    case RNSkWindowSurface::HeldFrame::Presented:
+      if (_redrawRequested) {
+        postRedraw();
+      }
+      break;
+    case RNSkWindowSurface::HeldFrame::None:
+      break;
+    }
     auto target = getTarget();
     if (target == nullptr) {
       return false;
@@ -291,7 +311,7 @@ public:
       return true;
     }
     _producer->onFramePresented();
-    return target->hasQueued();
+    return target->hasQueued() || _surface->hasHeldFrame();
   }
 
   /**
