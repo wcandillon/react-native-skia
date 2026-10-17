@@ -145,4 +145,21 @@ describe("Simple", () => {
     expect(image).toBeDefined();
     checkImage(image, "snapshots/sksg/breathe-0.png");
   });
+  it("should handle zero blur gracefully without errors", async () => {
+    const { Skia } = importSkia();
+    const root = new SkiaSGRoot(Skia);
+    await root.render(
+      <skGroup>
+        <skBlurImageFilter blur={0} mode="decal" />
+        <skCircle r={64} color="cyan" c={{ x: 64, y: 64 }} />
+      </skGroup>
+    );
+    const surface = Skia.Surface.Make(128, 128)!;
+    expect(surface).toBeDefined();
+    const canvas = surface.getCanvas();
+    expect(() => {
+      root.drawOnCanvas(canvas);
+      surface.flush();
+    }).not.toThrow();
+  });
 });
