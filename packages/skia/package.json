@@ -112,7 +112,7 @@
     "@types/pngjs": "6.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/react-reconciler": "0.28.9",
+    "@types/react-reconciler": "0.33.1",
     "@types/ws": "8.5.3",
     "eslint": "9.36.0",
     "eslint-config-react-native-wcandillon": "5.0.1",
@@ -125,8 +125,8 @@
     "merge-dirs": "0.2.1",
     "pngjs": "6.0.0",
     "prettier": "2.8.7",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "react-native": "0.83.1",
     "react-native-builder-bob": "0.18.2",
     "react-native-reanimated": "4.3.1",
@@ -147,7 +147,7 @@
     "react-native-skia-graphite-apple-macos": "154.3.0",
     "react-native-skia-graphite-apple-tvos": "154.3.0",
     "react-native-webgpu-dawn": "154.3.0",
-    "react-reconciler": "0.31.0"
+    "react-reconciler": "0.33.0"
   },
   "eslintIgnore": [
     "node_modules/",
