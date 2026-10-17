@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <utility>
@@ -108,8 +109,16 @@ public:
   }
 
   /**
-   Whether a window is attached and can show a frame right now: not while
-   the platform view says it cannot, nor once the GPU device is lost.
+   Declines every present while held: the platform view holds the presents
+   of a window whose layer shows before the window frame that lays it out,
+   and presents once it lets go. Main thread.
+   */
+  void setPresentsHeld(bool held) { _presentsHeld = held; }
+
+  /**
+   Whether a window is attached and can show a frame right now: not while its
+   presents are held or the platform view says it cannot, nor once the GPU
+   device is lost.
    */
   bool canPresent();
 
@@ -174,6 +183,7 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+  std::atomic<bool> _presentsHeld{false};
 };
 
 } // namespace RNSkia

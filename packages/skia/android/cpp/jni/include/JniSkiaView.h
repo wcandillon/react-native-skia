@@ -40,7 +40,9 @@ public:
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
          makeNativeMethod("registerView", JniSkiaView::registerView),
          makeNativeMethod("unregisterView", JniSkiaView::unregisterView),
-         makeNativeMethod("presentFrame", JniSkiaView::presentFrame)});
+         makeNativeMethod("presentFrame", JniSkiaView::presentFrame),
+         makeNativeMethod("holdPresents", JniSkiaView::holdPresents),
+         makeNativeMethod("releasePresents", JniSkiaView::releasePresents)});
   }
 
   // The manager is owned by the RNSkiaModule and is destroyed when the module
@@ -108,6 +110,17 @@ protected:
   // Choreographer tick: presents the queued recordings, returns whether more
   // are already waiting.
   bool presentFrame() { return _view->presentFrame(); }
+
+  // The backing view's layer would show a frame before the window frame that
+  // lays it out: nothing is presented until releasePresents().
+  void holdPresents() { _surface->setPresentsHeld(true); }
+
+  // The window frame has committed: present what waits, or the last frame,
+  // right away rather than on the next vsync.
+  void releasePresents() {
+    _surface->setPresentsHeld(false);
+    _view->redraw();
+  }
 
 private:
   friend HybridBase;
