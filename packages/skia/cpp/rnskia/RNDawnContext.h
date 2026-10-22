@@ -5,11 +5,14 @@
 #include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -138,21 +141,13 @@ public:
   }
 
   /**
-   Starts the probe on a thread of its own, so that installing the module
-   does not wait for the GPU (drivers load, a device and a Graphite context
-   are created). Whoever needs the context first (a view's window, a GPU
-   call, Skia.gpu) waits for the probe to finish instead.
+   Starts the probe on the GPU thread (see GpuThread) without waiting
+   for it, so that installing the module does not wait for the GPU (drivers
+   load, a device and a Graphite context are created). Whoever needs the
+   context first (a view's window, a GPU call, Skia.gpu) waits for the probe
+   to finish instead.
    */
-  static void probeInBackground() {
-    std::thread([]() {
-#if defined(__APPLE__)
-      pthread_setname_np("RNSkia GPU Probe");
-#elif defined(__ANDROID__)
-      pthread_setname_np(pthread_self(), "RNSkia GPU Probe");
-#endif
-      probe();
-    }).detach();
-  }
+  static void probeInBackground() { startGpuThread(); }
 
   // Generations ---------------------------------------------------------------
 
@@ -240,8 +235,8 @@ public:
   //
   // Graphite reads pixels back asynchronously: the request goes to the GPU
   // with the next submit and the result is delivered by the context once the
-  // GPU is done, from checkAsyncWorkCompletion() or from any later submit. A
-  // thread of its own polls the context while readbacks are pending, so a
+  // GPU is done, from checkAsyncWorkCompletion() or from any later submit.
+  // The GPU thread polls the context while readbacks are pending, so a
   // caller never has to wait inside the context lock (which would hold up
   // the frames of every view meanwhile).
 
@@ -283,7 +278,7 @@ public:
           request);
       current->context->submit();
     }
-    wakeReadbackPoller();
+    wakeGpuThread();
   }
 
   /**
@@ -776,6 +771,12 @@ private:
     std::string recoveryFailure;
   };
 
+  /** A replacement of `lost` the GPU thread runs once `due` (see recover). */
+  struct ScheduledRecovery {
+    Generation *lost = nullptr;
+    std::chrono::steady_clock::time_point due;
+  };
+
   /**
    The recorder of one thread, with the generation it was made for (see
    currentRecorder). Forgotten when the thread ends.
@@ -806,26 +807,149 @@ private:
     return *registry;
   }
 
+  // The probe's result, which the first caller waits for the GPU thread to
+  // have.
   static const Probe &probe() noexcept {
-    // Attempted once: a device without a usable GPU does not get one by
-    // asking again, and the attempt enumerates drivers. The context is never
-    // destroyed: the readback poller is a detached thread using it, which
-    // the process takes down at exit instead of a static destructor tearing
-    // the context down under it.
     static const Probe *result = []() noexcept {
-      auto *probe = new Probe();
-      try {
-        probe->instance = new DawnContext();
-        probe->info.available = true;
-        probe->info.adapter = DawnUtils::describeAdapter(
-            probe->instance->getWGPUDevice().GetAdapter());
-      } catch (const std::exception &e) {
-        probe->info.error = e.what();
-        RNSkLogger::logToConsole(probe->info.error);
-      }
-      return probe;
+      startGpuThread();
+      return gpuThread().result.get();
     }();
     return *result;
+  }
+
+  // Attempted once: a device without a usable GPU does not get one by asking
+  // again, and the attempt enumerates drivers. The context is never
+  // destroyed: the GPU thread keeps using it until the process takes the
+  // thread down at exit, instead of a static destructor tearing the context
+  // down under it.
+  static const Probe *createProbe() noexcept {
+    auto *probe = new Probe();
+    try {
+      probe->instance = new DawnContext();
+      probe->info.available = true;
+      probe->info.adapter = DawnUtils::describeAdapter(
+          probe->instance->getWGPUDevice().GetAdapter());
+    } catch (const std::exception &e) {
+      probe->info.error = e.what();
+      RNSkLogger::logToConsole(probe->info.error);
+    }
+    return probe;
+  }
+
+  // The GPU thread ------------------------------------------------------------
+
+  // The thread that creates the devices and Graphite contexts Skia renders
+  // with, the probe's and each replacement of a lost device (see
+  // scheduleRecovery), and polls the context while readbacks are pending (see
+  // readPixels): once the probe has a context, it serves them for the life of
+  // the process, never exiting. The guest Vulkan driver of the Android 10
+  // and 11 emulator images remembers the command stream of the first thread
+  // to record into a command buffer, and does not forget it when that thread
+  // exits, which frees the stream: the next thread to record into the buffer
+  // writes through freed memory. Creating a device and a Graphite context
+  // records the first commands of buffers the other threads record into.
+  // https://android.googlesource.com/device/generic/goldfish-opengl/+/refs/heads/android11-release/system/vulkan_enc/ResourceTracker.cpp#4264
+  struct GpuThread {
+    std::once_flag started;
+    std::promise<const Probe *> created;
+    std::future<const Probe *> result = created.get_future();
+  };
+
+  // Never destroyed, like the context the thread keeps using.
+  static GpuThread &gpuThread() noexcept {
+    static auto *thread = new GpuThread();
+    return *thread;
+  }
+
+  static void startGpuThread() noexcept {
+    auto &gpu = gpuThread();
+    std::call_once(gpu.started, [&gpu]() noexcept {
+      try {
+        std::thread([&gpu]() {
+#if defined(__APPLE__)
+          pthread_setname_np("RNSkia GPU");
+#elif defined(__ANDROID__)
+          pthread_setname_np(pthread_self(), "RNSkia GPU");
+#endif
+          const auto *result = createProbe();
+          gpu.created.set_value(result);
+          if (result->instance != nullptr) {
+            result->instance->serveGpuWork();
+          }
+        }).detach();
+      } catch (const std::system_error &e) {
+        auto *probe = new Probe();
+        probe->info.error =
+            std::string("React Native Skia could not start its GPU thread: ") +
+            e.what();
+        RNSkLogger::logToConsole(probe->info.error);
+        gpu.created.set_value(probe);
+      }
+    });
+  }
+
+  /**
+   The GPU thread's work once the context exists: a replacement of a lost
+   device once its backoff allows (see scheduleRecovery), and the polling
+   of the context while readbacks are pending (see readPixels).
+   */
+  void serveGpuWork() {
+    for (;;) {
+      awaitGpuWork();
+      if (auto recovery = takeDueRecovery()) {
+        recover(recovery->lost);
+      }
+      pollReadbacks();
+    }
+  }
+
+  /** Waits until a readback is pending or the scheduled recovery is due. */
+  void awaitGpuWork() {
+    std::unique_lock<std::mutex> lock(_gpuMutex);
+    while (!isRecoveryDueLocked() &&
+           _pendingReadbacks.load(std::memory_order_acquire) == 0) {
+      if (!_scheduledRecovery.has_value()) {
+        _gpuCondition.wait(lock);
+        continue;
+      }
+      // Slept rather than waited for: on Android 8 a condition variable's
+      // timed wait follows the wall clock, which a clock set back stretches
+      // (bionic waits by the monotonic clock from Android 9).
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/pie-release/libc/bionic/bionic_futex.cpp#38
+      const auto left =
+          _scheduledRecovery->due - std::chrono::steady_clock::now();
+      lock.unlock();
+      std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(
+          left, kRecoveryCheckInterval));
+      lock.lock();
+    }
+  }
+
+  /** The scheduled recovery, taken from its slot, if it is due. */
+  std::optional<ScheduledRecovery> takeDueRecovery() {
+    std::lock_guard<std::mutex> lock(_gpuMutex);
+    if (!isRecoveryDueLocked()) {
+      return std::nullopt;
+    }
+    return std::exchange(_scheduledRecovery, std::nullopt);
+  }
+
+  bool isRecoveryDue() {
+    std::lock_guard<std::mutex> lock(_gpuMutex);
+    return isRecoveryDueLocked();
+  }
+
+  // Called with _gpuMutex held.
+  bool isRecoveryDueLocked() const {
+    return _scheduledRecovery.has_value() &&
+           std::chrono::steady_clock::now() >= _scheduledRecovery->due;
+  }
+
+  // Taken so that a GPU thread between its checks and its wait cannot miss
+  // the notification.
+  void wakeGpuThread() {
+    { std::lock_guard<std::mutex> lock(_gpuMutex); }
+    _gpuCondition.notify_one();
   }
 
   // Loss and recovery --------------------------------------------------------
@@ -863,11 +987,11 @@ private:
 
   /**
    Schedules the replacement of `lost`, the device in use (see recover()), on
-   a thread of its own. The delay grows with the attempts in a row that did
-   not take (`failedAttempt`): a replacement that could not be made, or one
-   lost right after it was made, as while the app is in the background on
-   iOS, where GPU work is refused. After kMaxFailedRecoveries the attempts
-   stop until requestRecovery(), when the app comes back to the foreground.
+   the GPU thread. The delay grows with the attempts in a row that did not
+   take (`failedAttempt`): a replacement that could not be made, or one lost
+   right after it was made, as while the app is in the background on iOS,
+   where GPU work is refused. After kMaxFailedRecoveries the attempts stop
+   until requestRecovery(), when the app comes back to the foreground.
    */
   void scheduleRecovery(Generation *lost, bool failedAttempt) noexcept {
     std::chrono::seconds delay;
@@ -886,17 +1010,19 @@ private:
               ? std::chrono::seconds(0)
               : std::chrono::seconds(1 << std::min(_failedRecoveries - 1, 5));
     }
-    std::thread([this, lost, delay]() {
-#if defined(__APPLE__)
-      pthread_setname_np("RNSkia GPU Recovery");
-#elif defined(__ANDROID__)
-      pthread_setname_np(pthread_self(), "RNSkia GPU Recovery");
-#endif
-      if (delay.count() > 0) {
-        std::this_thread::sleep_for(delay);
+    const auto due = std::chrono::steady_clock::now() + delay;
+    {
+      std::lock_guard<std::mutex> lock(_gpuMutex);
+      // One recovery is scheduled at a time: one for an older generation would
+      // find its device replaced, and of two for the same generation the
+      // sooner one runs, scheduling the next itself if it does not take.
+      if (!_scheduledRecovery.has_value() ||
+          lost->id > _scheduledRecovery->lost->id ||
+          (lost == _scheduledRecovery->lost && due < _scheduledRecovery->due)) {
+        _scheduledRecovery = ScheduledRecovery{lost, due};
       }
-      recover(lost);
-    }).detach();
+    }
+    _gpuCondition.notify_one();
   }
 
   /**
@@ -1119,51 +1245,32 @@ private:
 
   // Readbacks ----------------------------------------------------------------
 
-  void wakeReadbackPoller() {
-    std::call_once(_pollerOnce, [this]() {
-      std::thread([this]() { pollReadbacks(); }).detach();
-    });
-    // Taken so that a poller between its predicate check and its wait cannot
-    // miss the notification.
-    { std::lock_guard<std::mutex> lock(_pollerMutex); }
-    _pollerCondition.notify_one();
-  }
-
+  /**
+   Polls the context on the GPU thread while readbacks are pending, until
+   none is or the scheduled recovery comes due: every millisecond at first,
+   then backing off, so that a short readback is delivered quickly and a
+   long one does not take the context lock a thousand times a second.
+   */
   void pollReadbacks() {
-#if defined(__APPLE__)
-    pthread_setname_np("RNSkia Readback");
-#elif defined(__ANDROID__)
-    pthread_setname_np(pthread_self(), "RNSkia Readback");
-#endif
-    for (;;) {
-      {
-        std::unique_lock<std::mutex> lock(_pollerMutex);
-        _pollerCondition.wait(lock, [this]() {
-          return _pendingReadbacks.load(std::memory_order_acquire) > 0;
-        });
-      }
-      // Polls every millisecond at first, then backs off: a short readback
-      // is delivered quickly, a long one does not take the context lock a
-      // thousand times a second.
-      auto interval = std::chrono::milliseconds(1);
-      while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
-        // A busy context is a view rendering: skip this round rather than
-        // hold up its frame.
-        std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-        if (lock.owns_lock()) {
-          tick();
-          _current.load(std::memory_order_acquire)
-              ->context->checkAsyncWorkCompletion();
-          // A readback requested on a device lost since is failed by Dawn;
-          // its context delivers that like any other result.
-          for (auto *retired : _retired) {
-            retired->context->checkAsyncWorkCompletion();
-          }
-          lock.unlock();
-          interval = std::min(interval * 2, std::chrono::milliseconds(4));
+    auto interval = std::chrono::milliseconds(1);
+    while (_pendingReadbacks.load(std::memory_order_acquire) > 0 &&
+           !isRecoveryDue()) {
+      // A busy context is a view rendering: skip this round rather than hold
+      // up its frame.
+      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+      if (lock.owns_lock()) {
+        tick();
+        _current.load(std::memory_order_acquire)
+            ->context->checkAsyncWorkCompletion();
+        // A readback requested on a device lost since is failed by Dawn; its
+        // context delivers that like any other result.
+        for (auto *retired : _retired) {
+          retired->context->checkAsyncWorkCompletion();
         }
-        std::this_thread::sleep_for(interval);
+        lock.unlock();
+        interval = std::min(interval * 2, std::chrono::milliseconds(4));
       }
+      std::this_thread::sleep_for(interval);
     }
   }
 
@@ -1225,7 +1332,7 @@ private:
                    std::memory_order_release);
   }
 
-  // Never run: the context lives as long as the process (see probe).
+  // Never run: the context lives as long as the process (see createProbe).
   ~DawnContext() = default;
 
   // The instance outlives every device made on it.
@@ -1247,19 +1354,23 @@ private:
   int _failedRecoveries = 0;
   static constexpr int kMaxFailedRecoveries = 6;
   static constexpr auto kShortLived = std::chrono::seconds(5);
+  static constexpr auto kRecoveryCheckInterval = std::chrono::milliseconds(50);
 
   // The recorders of the threads (see currentRecorder), with the generation
   // each was made for, and the ones retired, kept alive. Guarded by _mutex.
   std::unordered_map<const skgpu::graphite::Recorder *, uint64_t> _recorders;
   std::vector<std::unique_ptr<skgpu::graphite::Recorder>> _retiredRecorders;
 
-  // The readback poller: started on the first readback, it checks the
-  // context for finished GPU work while readbacks are pending and sleeps
-  // otherwise (see readPixels).
+  // The readbacks the GPU thread polls the context for (see readPixels).
   std::atomic<int> _pendingReadbacks{0};
-  std::once_flag _pollerOnce;
-  std::mutex _pollerMutex;
-  std::condition_variable _pollerCondition;
+
+  // What wakes the GPU thread: a pending readback, or the replacement of a
+  // lost device it runs once due (see scheduleRecovery), guarded by
+  // _gpuMutex. Taken by Dawn's loss callback, possibly inside a Context
+  // operation: never wait for _mutex or _lostMutex while holding it.
+  std::mutex _gpuMutex;
+  std::condition_variable _gpuCondition;
+  std::optional<ScheduledRecovery> _scheduledRecovery;
 };
 
 } // namespace RNSkia

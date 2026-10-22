@@ -369,8 +369,8 @@ public:
   }
 
   // A CPU image, resolved without blocking: a Graphite image is read back
-  // from the GPU and the result delivered by the readback poller, an encoded
-  // image is decoded on the worker thread. The promise resolves on the JS
+  // from the GPU (see DawnContext::readPixels), an encoded image is decoded
+  // on the worker thread. The promise resolves on the JS
   // thread, so this is for the JS thread; a worklet uses
   // makeRasterImageSync().
   JSI_HOST_FUNCTION(makeRasterImage) {
