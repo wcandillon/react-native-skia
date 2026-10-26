@@ -15,6 +15,7 @@ import type {
 } from "react-native";
 
 import { SkiaViewApi } from "../views/api";
+import { listenToFirstFrame } from "../views/firstFrame";
 import { androidNativeProps, useBackingViewWarning } from "../views/android";
 import type { AndroidCanvasProps } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
@@ -78,6 +79,13 @@ export interface CanvasProps extends ViewProps {
    * Ignored on iOS and web.
    */
   android?: AndroidCanvasProps;
+  /**
+   * Called once the canvas has shown its first frame. Until then it shows
+   * nothing, or black on Android with a `SurfaceView`, which can take a while
+   * on a cold start: cover the canvas, for instance, and fade it in once this
+   * is called. Called once per mount, on the JS thread.
+   */
+  onFirstFrame?: () => void;
   ref?: React.Ref<CanvasRef>;
 }
 
@@ -88,10 +96,19 @@ export interface CanvasProps extends ViewProps {
 const useCanvasRoot = ({
   children,
   ref,
-}: Pick<CanvasProps, "children" | "ref">) => {
+  onFirstFrame,
+}: Pick<CanvasProps, "children" | "ref" | "onFirstFrame">) => {
   const viewRef = useRef<NativeView>(null);
   // Native ID
   const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
+
+  // First frame. Listened to from the commit that mounts the view, before
+  // it can draw anything, and again with each new callback.
+  useLayoutEffect(
+    () =>
+      onFirstFrame ? listenToFirstFrame(nativeId, onFirstFrame) : undefined,
+    [nativeId, onFirstFrame]
+  );
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
@@ -164,10 +181,11 @@ export const Canvas = ({
   children,
   highBitDepth = false,
   android,
+  onFirstFrame,
   ref,
   ...viewProps
 }: CanvasProps) => {
-  const { nativeId, viewRef } = useCanvasRoot({ children, ref });
+  const { nativeId, viewRef } = useCanvasRoot({ children, ref, onFirstFrame });
   useBackingViewWarning({ highBitDepth, android });
   return (
     <SkiaViewNativeComponent

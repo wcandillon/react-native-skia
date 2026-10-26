@@ -25,6 +25,7 @@ import type {
 
 import { useSkiaWebRenderer } from "./SkiaWebRenderer";
 import type { Renderer, WebFrame } from "./SkiaWebRenderer";
+import { notifyFirstFrame } from "./firstFrame";
 
 // The web has no Graphite: the view paints pictures through the WebGL
 // context the page shares (see SkiaWebRenderer). It shows one of two kinds
@@ -152,6 +153,7 @@ export const SkiaView = (props: SkiaViewProps) => {
   const queueRef = useRef<WebGraphiteRecording[]>([]);
   const shownRef = useRef<WebGraphiteRecording[]>([]);
   const flushScheduledRef = useRef(false);
+  const firstFrameShownRef = useRef(false);
   const nativeId = useMemo(
     () =>
       props.nativeID !== undefined
@@ -162,21 +164,28 @@ export const SkiaView = (props: SkiaViewProps) => {
 
   // Presents the recordings submitted since the last frame. A frame that
   // cannot be painted yet (unmeasured canvas, lost context) stays queued for
-  // the next opportunity.
-  const present = useCallback((renderer: Renderer) => {
-    const frame = queueRef.current;
-    if (frame.length === 0) {
-      return;
-    }
-    queueRef.current = [];
-    if (!renderer.draw(frame.map((recording) => recording.picture))) {
-      queueRef.current = frame;
-      return;
-    }
-    const previous = shownRef.current;
-    shownRef.current = frame;
-    previous.forEach((recording) => recording.release());
-  }, []);
+  // the next opportunity. The first one painted is reported, as on native.
+  const present = useCallback(
+    (renderer: Renderer) => {
+      const frame = queueRef.current;
+      if (frame.length === 0) {
+        return;
+      }
+      queueRef.current = [];
+      if (!renderer.draw(frame.map((recording) => recording.picture))) {
+        queueRef.current = frame;
+        return;
+      }
+      const previous = shownRef.current;
+      shownRef.current = frame;
+      previous.forEach((recording) => recording.release());
+      if (!firstFrameShownRef.current) {
+        firstFrameShownRef.current = true;
+        notifyFirstFrame(nativeId);
+      }
+    },
+    [nativeId]
+  );
 
   // Paints what the view holds: pending recordings first, else the picture,
   // else the frame on screen again (the surface was recreated).

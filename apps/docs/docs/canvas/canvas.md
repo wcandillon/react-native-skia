@@ -16,6 +16,7 @@ Behind the scenes, it is using its own React renderer.
 | onLayout? | `(event: LayoutChangeEvent) => void` | Called with the layout of the canvas whenever it changes (see [canvas size](#canvas-size)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options: the native view behind the canvas and its options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
+| onFirstFrame? | `() => void` | Called once the canvas has shown its first frame (see [first frame](#first-frame)) |
 
 ## Canvas size
 
@@ -227,6 +228,38 @@ Pair it with `zOrderOnTop` to composite over React Native content, or keep the d
 `zOrderOnTop` draws above all React Native views in the window, including navigation screens, regardless of `zIndex`.
 
 :::
+
+## First frame
+
+Until it has shown its first frame, a canvas shows nothing, or black on Android with a `SurfaceView`, whose surface is punched through the window.
+On a cold start, the first frame can take a second or more: the surface is created and the shaders the drawing uses are compiled first.
+`onFirstFrame` is called once the first frame is on screen, once per mount, on the JS thread, so that the canvas can be covered until then.
+Cover it with a view on top rather than with its own opacity, which a `SurfaceView` ignores.
+On the web, it is called once the first frame is painted.
+
+```tsx twoslash
+import {useState} from "react";
+import {StyleSheet, View} from "react-native";
+import {Canvas, Fill} from "react-native-skia";
+
+export const Demo = () => {
+  const [shown, setShown] = useState(false);
+  return (
+    <View style={{ flex: 1 }}>
+      <Canvas
+        style={{ flex: 1 }}
+        android={{ backingView: "SurfaceView" }}
+        onFirstFrame={() => setShown(true)}
+      >
+        <Fill color="cyan" />
+      </Canvas>
+      {!shown && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "white" }]} />
+      )}
+    </View>
+  );
+};
+```
 
 ## High bit depth
 

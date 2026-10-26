@@ -626,10 +626,42 @@ private:
       flush(recordings.size());
     }
     if (remember && last != nullptr) {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _lastPresented = last;
+      {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _lastPresented = last;
+      }
+      if (!_hasPresentedFrame.exchange(true)) {
+        notifyFirstFrame();
+      }
     }
     return {done, last != nullptr};
+  }
+
+  /**
+   The view showed its first frame: calls `global.__skiaOnFirstFrame(nativeId)`
+   on the JS thread (see src/views/firstFrame.ts). Until then the view shows
+   nothing (a CAMetalLayer, an Android TextureView) or black (an Android
+   SurfaceView). Nothing JS is held here: the function is looked up when
+   called, in the runtime the call lands in (a reload may have replaced the
+   one that was there when the view mounted).
+   */
+  void notifyFirstFrame() {
+    auto nativeId = _nativeId;
+    if (nativeId == 0) {
+      return;
+    }
+    _platformContext->runOnJavascriptThread([nativeId](jsi::Runtime &runtime) {
+      auto listener =
+          runtime.global().getProperty(runtime, "__skiaOnFirstFrame");
+      if (!listener.isObject()) {
+        return;
+      }
+      auto object = listener.asObject(runtime);
+      if (!object.isFunction(runtime)) {
+        return;
+      }
+      object.asFunction(runtime).call(runtime, static_cast<double>(nativeId));
+    });
   }
 
   /** What became of a recording presented through a texture. */
@@ -687,6 +719,7 @@ private:
   bool _windowTakesLatestFrame = false;
   std::function<void(std::function<void()>)> _runOnPresentThread;
   std::atomic<bool> _redrawRequested = {false};
+  std::atomic<bool> _hasPresentedFrame = {false};
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread
