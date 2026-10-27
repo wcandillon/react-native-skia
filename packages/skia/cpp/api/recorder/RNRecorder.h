@@ -4,11 +4,12 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
-#include <map>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <jsi/jsi.h>
@@ -28,6 +29,12 @@
 
 namespace RNSkia {
 
+/**
+ * The recording of a scene: the commands the JS thread records from the scene
+ * graph, and the shared values that drive them (see Variables). A view takes
+ * ownership of it and replays it on a render thread; the Reanimated mapper
+ * reads the shared values into it meanwhile.
+ */
 class Recorder {
 private:
   using CommandList = std::vector<std::unique_ptr<Command>>;
@@ -53,27 +60,27 @@ private:
   // lock.
   std::mutex _commandsMutex;
 
-  // The pending writes, one slot per conversion function: a value read
-  // several times between two replays is written once (the last read wins),
-  // and the memory stays bounded whatever the ratio of updates to replays.
-  // The slots are assigned on the first read, once the recording, and thus
-  // `variables`, is complete.
+  // The pending writes, one per conversion function, in slot order: a value
+  // read several times between two replays is written once (the last read
+  // wins), and the memory stays bounded whatever the ratio of updates to
+  // replays. They are laid out on the first read and grown by a later one
+  // when the recording went on in between (makePicture() reads, and a
+  // recording can resume after it).
   std::mutex _pendingMutex;
   std::vector<PendingWrite> _pendingWrites;
-  std::map<std::string, size_t> _slotBase;
   bool _hasPendingWrites = false;
+  // The error of the last read, when a shared value could not be read (a
+  // value invalid for its prop), until a read succeeds, and whether that
+  // read returned it to its caller. Under _pendingMutex.
+  std::optional<std::string> _readError;
+  bool _readErrorReported = false;
 
-  size_t slotBase(const std::string &name) {
-    std::lock_guard<std::mutex> lock(_pendingMutex);
-    if (_slotBase.empty()) {
-      size_t count = 0;
-      for (const auto &entry : variables) {
-        _slotBase[entry.first] = count;
-        count += entry.second.size();
-      }
+  /** Under _pendingMutex. */
+  void layoutPendingWritesLocked() {
+    const auto count = variables.conversionCount();
+    if (_pendingWrites.size() < count) {
       _pendingWrites.resize(count);
     }
-    return _slotBase.at(name);
   }
 
   /** Writes the pending values into the commands. Under _commandsMutex. */
@@ -144,7 +151,28 @@ private:
     flushPendingGroups(ctx, pending);
   }
 
-  void playCommand(DrawingCtx *ctx, Command *cmd);
+  void playCommand(DrawingCtx *ctx, Command *cmd) {
+    if (cmd->type == CommandType::Group) {
+      playGroup(ctx, static_cast<GroupCommand *>(cmd));
+      return;
+    }
+    if (!isDrawingCommand(cmd->type)) {
+      cmd->play(ctx);
+      return;
+    }
+    // A drawing is played once per paint declared on the node (its <Paint>
+    // children), then with the node's own paint.
+    auto paints = ctx->paintDeclarations;
+    SkPaint paint(ctx->getPaint());
+    paint.setAlphaf(paint.getAlphaf() * ctx->getOpacity());
+    paints.push_back(paint);
+    ctx->paintDeclarations.clear();
+    for (auto &layerPaint : paints) {
+      ctx->pushPaint(layerPaint);
+      cmd->play(ctx);
+      ctx->restorePaint();
+    }
+  }
 
 public:
   std::shared_ptr<RNSkPlatformContext> _context;
@@ -156,18 +184,20 @@ public:
   const double id = nextId();
 
   Recorder() { commandStack.push_back(&commands); }
+
+  /**
+   * Runs on whichever thread drops the last reference: the UI thread when a
+   * mapper is the last to let go of a replaced recording, a render thread when
+   * a replay is. The commands hold GPU backed resources (images, pictures,
+   * paragraphs), which are destroyed on the main thread to release safely.
+   */
   ~Recorder() {
     if (!_context || commands.empty()) {
       return;
     }
-
-    auto context = _context;
     auto pendingCommands = std::make_shared<CommandList>(std::move(commands));
-
-    context->runOnMainThread(
+    _context->runOnMainThread(
         [pendingCommands = std::move(pendingCommands)]() mutable {
-          // Destroy the recorded commands on the main thread to ensure GPU
-          // backed resources release safely.
           pendingCommands->clear();
         });
   }
@@ -204,9 +234,10 @@ public:
     } else if (nodeType == "skTwoPointConicalGradient") {
       pushCommand(std::make_unique<TwoPointConicalGradientCmd>(runtime, props,
                                                                variables));
-      // TODO: should receive skBlendShader here
     } else if (nodeType == "skBlend") {
       pushCommand(std::make_unique<BlendShaderCmd>(runtime, props, variables));
+    } else {
+      throw std::runtime_error("Invalid shader type: " + nodeType);
     }
   }
 
@@ -233,6 +264,8 @@ public:
     } else if (nodeType == "skLine2DPathEffect") {
       pushCommand(
           std::make_unique<Line2DPathEffectCmd>(runtime, props, variables));
+    } else {
+      throw std::runtime_error("Invalid path effect type: " + nodeType);
     }
   }
 
@@ -256,6 +289,8 @@ public:
     } else if (nodeType == "skLerpColorFilter") {
       pushCommand(
           std::make_unique<LerpColorFilterCmd>(runtime, props, variables));
+    } else {
+      throw std::runtime_error("Invalid color filter type: " + nodeType);
     }
   }
 
@@ -284,6 +319,8 @@ public:
                                                                 variables));
     } else if (nodeType == "skImageFilter") {
       pushCommand(std::make_unique<ImageFilterCmd>(runtime, props, variables));
+    } else {
+      throw std::runtime_error("Invalid image filter type: " + nodeType);
     }
   }
 
@@ -349,8 +386,7 @@ public:
   }
 
   void drawImage(jsi::Runtime &runtime, const jsi::Object &props) {
-    pushCommand(
-        std::make_unique<ImageCmd>(_context, runtime, props, variables));
+    pushCommand(std::make_unique<ImageCmd>(runtime, props, variables));
   }
 
   void drawPoints(jsi::Runtime &runtime, const jsi::Object &props) {
@@ -386,8 +422,7 @@ public:
   }
 
   void drawPicture(jsi::Runtime &runtime, const jsi::Object &props) {
-    pushCommand(
-        std::make_unique<PictureCmd>(_context, runtime, props, variables));
+    pushCommand(std::make_unique<PictureCmd>(runtime, props, variables));
   }
 
   void drawImageSVG(jsi::Runtime &runtime, const jsi::Object &props) {
@@ -399,8 +434,7 @@ public:
   }
 
   void drawAtlas(jsi::Runtime &runtime, const jsi::Object &props) {
-    pushCommand(
-        std::make_unique<AtlasCmd>(_context, runtime, props, variables));
+    pushCommand(std::make_unique<AtlasCmd>(runtime, props, variables));
   }
 
   void drawSkottie(jsi::Runtime &runtime, const jsi::Object &props) {
@@ -442,6 +476,7 @@ public:
     }
   }
 
+  /** Replays the commands, with the pending values written in first. */
   void play(DrawingCtx *ctx) {
     std::lock_guard<std::mutex> lock(_commandsMutex);
     flushPendingWritesLocked();
@@ -465,357 +500,135 @@ public:
   }
 
   /**
-   * Reads the current value of each shared value (in the order they were
-   * registered as variable0, variable1, ...) on the calling runtime into the
+   * Whether the commands hold a value for every shared value they read.
+   * Recording registers the reads without performing them (see Variables):
+   * until the first readUpdates(), the animated properties of a recording
+   * are unset and a replay would draw them wrong. A recording without shared
+   * values is complete as recorded.
+   */
+  bool isReady() const {
+    return variables.empty() || _hasReadValues.load(std::memory_order_acquire);
+  }
+
+  /**
+   * Reads the current value of each shared value, in slot order (the order
+   * of JsiRecorder.getSharedValues()), on the calling runtime into the
    * pending writes. The writes do not need the runtime: the next replay
    * (play, on whichever thread owns the commands) writes them into the
    * commands first, so the caller never waits for a replay.
+   *
+   * A value that cannot be read (invalid for its prop) leaves that property
+   * unset, and the recording is not ready before a read of every value
+   * succeeds. The error is returned once, for the caller to report: the
+   * same failure, read after read, is returned again only once a read has
+   * succeeded in between (the mapper reads at every change).
    */
-  void readUpdates(jsi::Runtime &runtime, const jsi::Array &values) {
-    auto size = values.size(runtime);
-    for (size_t i = 0; i < size; i++) {
-      auto sharedValue = values.getValueAtIndex(runtime, i).asObject(runtime);
-      auto name = "variable" + std::to_string(i);
-      auto it = variables.find(name);
-      if (it == variables.end()) {
-        continue;
+  std::optional<std::string> readUpdates(jsi::Runtime &runtime,
+                                         const jsi::Array &values) {
+    Read read;
+    const auto count = std::min(values.size(runtime), variables.size());
+    for (size_t slot = 0; slot < count; slot++) {
+      auto sharedValue =
+          values.getValueAtIndex(runtime, slot).asObject(runtime);
+      readSlot(runtime, slot, sharedValue, read);
+    }
+    return filePendingWrites(std::move(read), count == variables.size());
+  }
+
+  /**
+   * Reads the shared values the recording still holds (getSharedValues() has
+   * not taken them), on the recording runtime. For a recording played on the
+   * JS thread, which no mapper updates: on Reanimated 4, each read is a
+   * blocking round trip to the UI thread, so a view's recording gets its
+   * values from the mapper instead. Errors as readUpdates().
+   */
+  std::optional<std::string> readSharedValues(jsi::Runtime &runtime) {
+    Read read;
+    size_t count = 0;
+    for (size_t slot = 0; slot < variables.size(); slot++) {
+      if (const auto *sharedValue = variables.sharedValue(slot)) {
+        readSlot(runtime, slot, *sharedValue, read);
+        count++;
+      } else {
+        read.index += variables.conversions(slot).size();
       }
-      auto base = slotBase(name);
-      for (size_t j = 0; j < it->second.size(); j++) {
-        if (auto write = it->second[j](runtime, sharedValue)) {
-          std::lock_guard<std::mutex> lock(_pendingMutex);
-          _pendingWrites[base + j] = std::move(write);
-          _hasPendingWrites = true;
+    }
+    return filePendingWrites(std::move(read), count == variables.size());
+  }
+
+  /** The error of the last read, while a shared value cannot be read. */
+  std::optional<std::string> readError() {
+    std::lock_guard<std::mutex> lock(_pendingMutex);
+    return _readError;
+  }
+
+private:
+  /** What a read gathers, outside the lock, before filing it. */
+  struct Read {
+    std::vector<std::pair<size_t, PendingWrite>> writes;
+    /** The pending write of the next conversion (flat, in slot order). */
+    size_t index = 0;
+    /** The first conversion that failed. */
+    std::optional<std::string> error;
+  };
+
+  /**
+   * Reads one shared value through the conversions of its slot, outside the
+   * lock: a conversion calls into the runtime, and the render thread must not
+   * wait on that to replay. A conversion that throws (a value invalid for
+   * its prop) files no write; the others of the slot still run.
+   */
+  void readSlot(jsi::Runtime &runtime, size_t slot,
+                const jsi::Object &sharedValue, Read &read) {
+    for (const auto &conversion : variables.conversions(slot)) {
+      try {
+        if (auto write = conversion(runtime, sharedValue)) {
+          read.writes.emplace_back(read.index, std::move(write));
+        }
+      } catch (const std::exception &error) {
+        if (!read.error) {
+          read.error = error.what();
         }
       }
+      read.index++;
     }
   }
 
   /**
-   * Reads the shared values and writes them into the commands right away.
+   * Files the writes, taking the lock once. `everySlot` says whether the read
+   * covered every shared value: only a read of every value, without a
+   * failure, makes the recording ready (a slot skipped for lack of its value,
+   * or failed, leaves that property unset). Returns the error to report.
    */
-  void applyUpdates(jsi::Runtime &runtime, const jsi::Array &values) {
-    readUpdates(runtime, values);
-    std::lock_guard<std::mutex> lock(_commandsMutex);
-    flushPendingWritesLocked();
+  std::optional<std::string> filePendingWrites(Read read, bool everySlot) {
+    std::lock_guard<std::mutex> lock(_pendingMutex);
+    if (!read.writes.empty()) {
+      layoutPendingWritesLocked();
+      for (auto &[i, write] : read.writes) {
+        _pendingWrites[i] = std::move(write);
+      }
+      _hasPendingWrites = true;
+    }
+    if (read.error) {
+      _readError = std::move(read.error);
+      if (_readErrorReported) {
+        return std::nullopt;
+      }
+      _readErrorReported = true;
+      return _readError;
+    }
+    _readError.reset();
+    _readErrorReported = false;
+    if (everySlot) {
+      _hasReadValues.store(true, std::memory_order_release);
+    }
+    return std::nullopt;
   }
+
+  // Set by the first read of every shared value, on whichever runtime
+  // performs it, and checked by the producer before it replays (another
+  // thread), hence atomic.
+  std::atomic<bool> _hasReadValues{false};
 };
-
-inline void Recorder::playCommand(DrawingCtx *ctx, Command *cmd) {
-  switch (cmd->type) {
-  case CommandType::Group: {
-    auto *group = static_cast<GroupCommand *>(cmd);
-    playGroup(ctx, group);
-    break;
-  }
-  case CommandType::ComposeColorFilter: {
-    ctx->composeColorFilter();
-    break;
-  }
-  case CommandType::ComposeImageFilter: {
-    ctx->composeImageFilter();
-    break;
-  }
-  case CommandType::ComposePathEffect: {
-    ctx->composePathEffect();
-    break;
-  }
-  case CommandType::RestorePaintDeclaration: {
-    ctx->materializePaint();
-    auto paint = ctx->restorePaint();
-    ctx->paintDeclarations.push_back(paint);
-    break;
-  }
-  case CommandType::SaveBackdropFilter: {
-    ctx->saveBackdropFilter();
-    break;
-  }
-  case CommandType::SaveLayer: {
-    ctx->materializePaint();
-    auto paint = ctx->paintDeclarations.back();
-    ctx->paintDeclarations.pop_back();
-    ctx->canvas->saveLayer(SkCanvas::SaveLayerRec(nullptr, &paint, nullptr, 0));
-    break;
-  }
-  case CommandType::MaterializePaint: {
-    ctx->materializePaint();
-    break;
-  }
-  case CommandType::SavePaint: {
-    auto *savePaintCmd = static_cast<SavePaintCmd *>(cmd);
-    savePaintCmd->savePaint(ctx);
-    break;
-  }
-  case CommandType::PushShader: {
-    auto nodeType = cmd->nodeType;
-    if (nodeType == "skShader") {
-      auto *pushShaderCmd = static_cast<PushShaderCmd *>(cmd);
-      pushShaderCmd->pushShader(ctx);
-    } else if (nodeType == "skImageShader") {
-      auto *pushImageShaderCmd = static_cast<PushImageShaderCmd *>(cmd);
-      pushImageShaderCmd->pushShader(ctx);
-    } else if (nodeType == "skColorShader") {
-      auto *colorShaderCmd = static_cast<ColorShaderCmd *>(cmd);
-      colorShaderCmd->pushShader(ctx);
-    } else if (nodeType == "skTurbulence") {
-      auto *turbulenceCmd = static_cast<TurbulenceCmd *>(cmd);
-      turbulenceCmd->pushShader(ctx);
-    } else if (nodeType == "skFractalNoise") {
-      auto *fractalNoiseCmd = static_cast<FractalNoiseCmd *>(cmd);
-      fractalNoiseCmd->pushShader(ctx);
-    } else if (nodeType == "skLinearGradient") {
-      auto *linearGradientCmd = static_cast<LinearGradientCmd *>(cmd);
-      linearGradientCmd->pushShader(ctx);
-    } else if (nodeType == "skRadialGradient") {
-      auto *radialGradientCmd = static_cast<RadialGradientCmd *>(cmd);
-      radialGradientCmd->pushShader(ctx);
-    } else if (nodeType == "skSweepGradient") {
-      auto *sweepGradientCmd = static_cast<SweepGradientCmd *>(cmd);
-      sweepGradientCmd->pushShader(ctx);
-    } else if (nodeType == "skTwoPointConicalGradient") {
-      auto *twoPointConicalGradientCmd =
-          static_cast<TwoPointConicalGradientCmd *>(cmd);
-      twoPointConicalGradientCmd->pushShader(ctx);
-    } else if (nodeType == "skBlendShader") {
-      auto *blendShaderCmd = static_cast<BlendShaderCmd *>(cmd);
-      blendShaderCmd->pushShader(ctx);
-    } else {
-      throw std::runtime_error("Invalid shader type: " + nodeType);
-    }
-    break;
-  }
-  case CommandType::PushImageFilter: {
-    auto nodeType = cmd->nodeType;
-    if (nodeType == "skOffsetImageFilter") {
-      auto *offsetCmd = static_cast<OffsetImageFilterCmd *>(cmd);
-      offsetCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skDisplacementMapImageFilter") {
-      auto *displacementCmd = static_cast<DisplacementMapImageFilterCmd *>(cmd);
-      displacementCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skBlurImageFilter") {
-      auto *blurCmd = static_cast<BlurImageFilterCmd *>(cmd);
-      blurCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skDropShadowImageFilter") {
-      auto *dropShadowCmd = static_cast<DropShadowImageFilterCmd *>(cmd);
-      dropShadowCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skMorphologyImageFilter") {
-      auto *morphologyCmd = static_cast<MorphologyImageFilterCmd *>(cmd);
-      morphologyCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skBlendImageFilter") {
-      auto *blendCmd = static_cast<BlendImageFilterCmd *>(cmd);
-      blendCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skRuntimeShaderImageFilter") {
-      auto *runtimeShaderCmd = static_cast<RuntimeShaderImageFilterCmd *>(cmd);
-      runtimeShaderCmd->pushImageFilter(ctx);
-    } else if (nodeType == "skImageFilter") {
-      auto *imageFilterCmd = static_cast<ImageFilterCmd *>(cmd);
-      imageFilterCmd->pushImageFilter(ctx);
-    } else {
-      throw std::runtime_error("Invalid image filter type: " + nodeType);
-    }
-    break;
-  }
-  case CommandType::PushPathEffect: {
-    auto nodeType = cmd->nodeType;
-    if (nodeType == "skDiscretePathEffect") {
-      auto *discreteCmd = static_cast<DiscretePathEffectCmd *>(cmd);
-      discreteCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skDashPathEffect") {
-      auto *dashCmd = static_cast<DashPathEffectCmd *>(cmd);
-      dashCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skPath1DPathEffect") {
-      auto *path1DCmd = static_cast<Path1DPathEffectCmd *>(cmd);
-      path1DCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skPath2DPathEffect") {
-      auto *path2DCmd = static_cast<Path2DPathEffectCmd *>(cmd);
-      path2DCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skCornerPathEffect") {
-      auto *cornerCmd = static_cast<CornerPathEffectCmd *>(cmd);
-      cornerCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skSumPathEffect") {
-      auto *sumCmd = static_cast<SumPathEffectCmd *>(cmd);
-      sumCmd->pushPathEffect(ctx);
-    } else if (nodeType == "skLine2DPathEffect") {
-      auto *line2DCmd = static_cast<Line2DPathEffectCmd *>(cmd);
-      line2DCmd->pushPathEffect(ctx);
-    } else {
-      throw std::runtime_error("Invalid path effect type: " + nodeType);
-    }
-    break;
-  }
-  case CommandType::PushColorFilter: {
-    auto nodeType = cmd->nodeType;
-    if (nodeType == "skMatrixColorFilter") {
-      auto *matrixCmd = static_cast<MatrixColorFilterCmd *>(cmd);
-      matrixCmd->pushColorFilter(ctx);
-    } else if (nodeType == "skBlendColorFilter") {
-      auto *blendCmd = static_cast<BlendColorFilterCmd *>(cmd);
-      blendCmd->pushColorFilter(ctx);
-    } else if (nodeType == "skLinearToSRGBGammaColorFilter") {
-      auto *linearToSRGBCmd =
-          static_cast<LinearToSRGBGammaColorFilterCmd *>(cmd);
-      linearToSRGBCmd->pushColorFilter(ctx);
-    } else if (nodeType == "skSRGBToLinearGammaColorFilter") {
-      auto *srgbToLinearCmd =
-          static_cast<SRGBToLinearGammaColorFilterCmd *>(cmd);
-      srgbToLinearCmd->pushColorFilter(ctx);
-    } else if (nodeType == "skLumaColorFilter") {
-      auto *lumaCmd = static_cast<LumaColorFilterCmd *>(cmd);
-      lumaCmd->pushColorFilter(ctx);
-    } else if (nodeType == "skLerpColorFilter") {
-      auto *lerpCmd = static_cast<LerpColorFilterCmd *>(cmd);
-      lerpCmd->pushColorFilter(ctx);
-    } else {
-      throw std::runtime_error("Invalid color filter type: " + nodeType);
-    }
-    break;
-  }
-  case CommandType::PushBlurMaskFilter: {
-    auto *blurMaskFilterCmd = static_cast<BlurMaskFilterCmd *>(cmd);
-    blurMaskFilterCmd->pushMaskFilter(ctx);
-    break;
-  }
-  case CommandType::RestorePaint: {
-    ctx->restorePaint();
-    break;
-  }
-  case CommandType::SaveCTM: {
-    auto *saveCTMCmd = static_cast<SaveCTMCmd *>(cmd);
-    saveCTMCmd->saveCTM(ctx);
-    break;
-  }
-  case CommandType::RestoreCTM: {
-    ctx->canvas->restore();
-    break;
-  }
-  default: {
-    auto currentPaints = ctx->paintDeclarations;
-    SkPaint paint(ctx->getPaint());
-    paint.setAlphaf(paint.getAlphaf() * ctx->getOpacity());
-    currentPaints.push_back(paint);
-    ctx->paintDeclarations.clear();
-
-    for (auto &layerPaint : currentPaints) {
-      ctx->pushPaint(layerPaint);
-
-      switch (cmd->type) {
-      case CommandType::DrawPaint:
-        ctx->canvas->drawPaint(layerPaint);
-        break;
-      case CommandType::DrawCircle: {
-        auto *circleCmd = static_cast<CircleCmd *>(cmd);
-        circleCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawPath: {
-        auto *pathCmd = static_cast<PathCmd *>(cmd);
-        pathCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawRect: {
-        auto *rectCmd = static_cast<RectCmd *>(cmd);
-        rectCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawLine: {
-        auto *lineCmd = static_cast<LineCmd *>(cmd);
-        lineCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawTextPath: {
-        auto *textPathCmd = static_cast<TextPathCmd *>(cmd);
-        textPathCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawText: {
-        auto *textCmd = static_cast<TextCmd *>(cmd);
-        textCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawBox: {
-        auto *boxCmd = static_cast<BoxCmd *>(cmd);
-        boxCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawImage: {
-        auto *imageCmd = static_cast<ImageCmd *>(cmd);
-        imageCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawPoints: {
-        auto *pointsCmd = static_cast<PointsCmd *>(cmd);
-        pointsCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawRRect: {
-        auto *rRectCmd = static_cast<RRectCmd *>(cmd);
-        rRectCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawOval: {
-        auto *ovalCmd = static_cast<OvalCmd *>(cmd);
-        ovalCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawPatch: {
-        auto *patchCmd = static_cast<PatchCmd *>(cmd);
-        patchCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawVertices: {
-        auto *verticesCmd = static_cast<VerticesCmd *>(cmd);
-        verticesCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawDiffRect: {
-        auto *diffRectCmd = static_cast<DiffRectCmd *>(cmd);
-        diffRectCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawTextBlob: {
-        auto *textBlobCmd = static_cast<TextBlobCmd *>(cmd);
-        textBlobCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawGlyphs: {
-        auto *glyphsCmd = static_cast<GlyphsCmd *>(cmd);
-        glyphsCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawPicture: {
-        auto *pictureCmd = static_cast<PictureCmd *>(cmd);
-        pictureCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawImageSVG: {
-        auto *imageSVGCmd = static_cast<ImageSVGCmd *>(cmd);
-        imageSVGCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawParagraph: {
-        auto *paragraphCmd = static_cast<ParagraphCmd *>(cmd);
-        paragraphCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawAtlas: {
-        auto *atlasCmd = static_cast<AtlasCmd *>(cmd);
-        atlasCmd->draw(ctx);
-        break;
-      }
-      case CommandType::DrawSkottie: {
-        auto *skottieCmd = static_cast<SkottieCmd *>(cmd);
-        skottieCmd->draw(ctx);
-        break;
-      }
-      default:
-        break;
-      }
-
-      ctx->restorePaint();
-    }
-    break;
-  }
-  }
-}
 
 } // namespace RNSkia

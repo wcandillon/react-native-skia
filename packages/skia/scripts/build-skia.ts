@@ -232,13 +232,18 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     if (validPlatforms.includes(spec)) {
       buildTargets.push({ platform: spec as PlatformName });
     } else if (spec.includes("-")) {
-      // Handle platform-target format (e.g., android-arm, android-arm64)
-      const [platform, target] = spec.split("-", 2);
-      if (!validPlatforms.includes(platform)) {
+      // Handle platform-target format (android-arm64,
+      // apple-ios-arm64-iphonesimulator): the platform is the longest
+      // platform name the spec starts with, the rest is the target.
+      const [platform] = validPlatforms
+        .filter((name) => spec.startsWith(`${name}-`))
+        .sort((a, b) => b.length - a.length);
+      if (!platform) {
         console.error(`❌ Invalid platform or target: ${spec}`);
         console.error(`Valid platforms are: ${validPlatforms.join(", ")}`);
         exit(1);
       }
+      const target = spec.slice(platform.length + 1);
 
       const platformConfig = configurations[platform as PlatformName];
       if (!(target in platformConfig.targets)) {
@@ -491,6 +496,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
     const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
     $(`git apply ${catalystPatch}`);
+    // A runtime effect local named like main's parameters ("pos") broke
+    // Graphite's SkSL, and the failed pipeline then crashed insertRecording.
+    const runtimeEffectPatch = path.join(
+      __dirname,
+      "skia-graphite-runtime-effect-names.patch"
+    );
+    $(`git apply ${runtimeEffectPatch}`);
     // The GN build compiles the same Dawn checkout as build-dawn.ts.
     // Without this, Mac Catalyst compilation will be failed.
     applyDawnPatches();

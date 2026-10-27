@@ -23,7 +23,7 @@ class JsiSkPictureFactory : public JsiSkNativeObject<JsiSkPictureFactory> {
 public:
   static constexpr const char *CLASS_NAME = "PictureFactory";
 
-  JSI_HOST_FUNCTION(MakePicture) {
+  JSI_HOST_FUNCTION(Make) {
     // Handle null case - create JsiSkPicture with nullptr
     if (arguments[0].isNull() || arguments[0].isUndefined()) {
       return makeJsiObject(
@@ -70,8 +70,7 @@ public:
   size_t getMemoryPressure() override { return 1024; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installHostMethod(runtime, prototype, "MakePicture",
-                      &JsiSkPictureFactory::MakePicture);
+    installHostMethod(runtime, prototype, "Make", &JsiSkPictureFactory::Make);
   }
 
   explicit JsiSkPictureFactory(std::shared_ptr<RNSkPlatformContext> context)

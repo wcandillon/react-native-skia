@@ -31,6 +31,11 @@ jest.doMock("../../specs/SkiaViewNativeComponent", () => ({
   default: MockNativeView,
 }));
 
+jest.doMock("../../views/api", () => {
+  let nextNativeId = 1000;
+  return { SkiaViewApi: { allocateNativeId: () => nextNativeId++ } };
+});
+
 jest.doMock("../../skia", () => ({ Skia: {} }));
 
 jest.doMock("../../sksg/Reconciler", () => ({

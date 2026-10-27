@@ -42,9 +42,23 @@ raise_pod_deployment_targets = ->(installer) do
   end
 end
 
+# react-native-test-app generates the app's Info.plist from its own template
+# and takes no extra keys from app.json. Without this one iOS caps every
+# display link at 60 Hz on iPhone, so a ProMotion iPhone would never show the
+# canvases above 60 fps (see the docs, "High refresh rate displays").
+opt_in_promotion = ->(_installer) do
+  plist_path = "#{ws_dir}/node_modules/.generated/ios/Info.plist"
+  return unless File.exist?(plist_path)
+
+  info = Xcodeproj::Plist.read_from_path(plist_path)
+  info['CADisableMinimumFrameDurationOnPhone'] = true
+  Xcodeproj::Plist.write_to_path(info, plist_path)
+end
+
 example_post_install = ->(installer) do
   fix_fmt_consteval.call(installer)
   raise_pod_deployment_targets.call(installer)
+  opt_in_promotion.call(installer)
   installer.pods_project.targets.each do |target|
     next unless ['react-native-skia', 'react-native-webgpu'].include?(target.name)
 

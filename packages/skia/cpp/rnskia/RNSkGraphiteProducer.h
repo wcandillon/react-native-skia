@@ -27,8 +27,15 @@ class RNSkGraphiteTarget;
  * pending writes: that is the only step that needs a JS runtime, and it never
  * waits for a replay. A pool thread replays the commands (the recorder writes
  * the pending values into them first) into a deferred canvas of the view's
- * target and submits the recording; the main thread presents it on the next
- * vsync.
+ * target, on the Graphite recorder of that thread (a view holds none of its
+ * own, see RNSkGraphiteTarget::beginRecording), and submits the recording;
+ * the main thread presents it on the next vsync.
+ *
+ * A recording with shared values arrives without their values (recording
+ * reads none, see Variables) and is not replayed before the mapper has read
+ * them once (Recorder::isReady): the view keeps showing its previous frame
+ * until then, one UI frame at most, rather than a frame with unset
+ * properties.
  *
  * Pacing: a view has at most one job in flight, and the pool keeps at most one
  * frame ahead of the display: a job may start while the previous recording is
@@ -68,6 +75,13 @@ public:
   void setPicture(sk_sp<SkPicture> picture);
 
   bool hasContent();
+
+  /**
+   Whether a frame is on its way: one is being recorded, or was asked for
+   and starts once there is room for it (see requestFrame). The view drops
+   a frame recorded for a size the surface no longer has when one is.
+   */
+  bool hasFrameComing();
 
   /**
    Reads the shared values on the calling runtime into the recorder and
@@ -114,12 +128,17 @@ private:
 
   /**
    Swaps the content under the lock and releases the previous one outside of
-   it: the recorder's destructor hands the commands to the main thread, and a
-   pool thread still replaying it keeps it alive until it is done. Pending
+   it: a pool thread still replaying it keeps it alive until it is done, and
+   the last owner, whichever thread that is, releases its resources. Pending
    writes go away with their recorder.
    */
   void replaceContent(std::shared_ptr<Recorder> recorder,
                       sk_sp<SkPicture> picture, bool dirty);
+  /**
+   Whether there is something to replay: a picture, or a recorder that has
+   read its shared values (see Recorder::isReady). Under the lock.
+   */
+  bool hasContentLocked() const;
   void kickLocked();
   void produce();
 

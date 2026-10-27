@@ -24,6 +24,8 @@ const mockSurface = {
 const mockMakeOffscreen = jest.fn((_width: number, _height: number) => {
   return mockSurface;
 });
+// The setters of every mounted useGpu, for replaceGpuDevice.
+const mockGpuSetters = new Set<(gpu: object) => void>();
 
 jest.mock("../ReanimatedProxy", () => ({
   __esModule: true,
@@ -57,6 +59,19 @@ jest.mock("../../../skia", () => ({
     },
   },
   useImage: () => mockLoadedImage.current,
+  // Like the real hook: a new value once a lost GPU device has been replaced
+  // (see replaceGpuDevice), the same one otherwise.
+  useGpu: () => {
+    const { useState, useEffect } = require("react") as typeof React;
+    const [gpu, setGpu] = useState<object>(() => ({}));
+    useEffect(() => {
+      mockGpuSetters.add(setGpu);
+      return () => {
+        mockGpuSetters.delete(setGpu);
+      };
+    }, []);
+    return gpu;
+  },
 }));
 
 jest.mock("../../../Platform", () => ({ Platform: mockPlatform }));
@@ -71,7 +86,15 @@ const flushUIQueue = () => {
   }
 };
 
-const renderTexture = (useTexture: () => SharedValue<SkImage | null>) => {
+// Skia has replaced a lost GPU device: every useGpu renders again.
+const replaceGpuDevice = () =>
+  act(() => {
+    for (const setGpu of mockGpuSetters) {
+      setGpu({});
+    }
+  });
+
+const mountTexture = (useTexture: () => SharedValue<SkImage | null>) => {
   const rendered: { texture: SharedValue<SkImage | null> | null } = {
     texture: null,
   };
@@ -84,11 +107,16 @@ const renderTexture = (useTexture: () => SharedValue<SkImage | null>) => {
   act(() => {
     root.render(<Probe />);
   });
-  act(() => root.unmount());
   const { texture } = rendered;
   if (texture === null) {
     throw new Error("The texture hook did not render");
   }
+  return { texture, unmount: () => act(() => root.unmount()) };
+};
+
+const renderTexture = (useTexture: () => SharedValue<SkImage | null>) => {
+  const { texture, unmount } = mountTexture(useTexture);
+  unmount();
   return texture;
 };
 
@@ -101,6 +129,7 @@ beforeEach(() => {
   mockCalls.scheduleOnUI = 0;
   mockCalls.deprecatedRunOnUI = 0;
   mockLoadedImage.current = null;
+  mockGpuSetters.clear();
   mockMakeOffscreen.mockClear();
   mockCanvas.drawPicture.mockClear();
   mockSurface.flush.mockClear();
@@ -136,6 +165,26 @@ describe.each([
   });
 });
 
+describe("usePictureAsTexture", () => {
+  it("draws the picture again once the GPU device is replaced", () => {
+    mockPlatform.OS = "ios";
+    const { texture, unmount } = mountTexture(() =>
+      usePictureAsTexture(picture, size)
+    );
+    flushUIQueue();
+    expect(mockMakeOffscreen).toHaveBeenCalledTimes(1);
+    // The texture made on the lost device draws nothing: a new one is made
+    // on the new device.
+    replaceGpuDevice();
+    expect(mockCalls).toEqual({ scheduleOnUI: 2, deprecatedRunOnUI: 0 });
+    flushUIQueue();
+    expect(mockMakeOffscreen).toHaveBeenCalledTimes(2);
+    expect(mockCanvas.drawPicture).toHaveBeenCalledTimes(2);
+    expect(texture.value).toBe(mockSnapshot);
+    unmount();
+  });
+});
+
 describe("useImageAsTexture", () => {
   it("uploads the image as a texture on the UI thread", () => {
     const uploaded = {} as SkImage;
@@ -144,6 +193,22 @@ describe("useImageAsTexture", () => {
     flushUIQueue();
     expect(texture.value).toBe(uploaded);
     expect(mockCalls).toEqual({ scheduleOnUI: 1, deprecatedRunOnUI: 0 });
+  });
+
+  it("uploads the image again once the GPU device is replaced", () => {
+    const makeTextureImage = jest.fn(() => ({}) as SkImage);
+    mockLoadedImage.current = { makeTextureImage } as unknown as SkImage;
+    const { texture, unmount } = mountTexture(() =>
+      useImageAsTexture("image.png")
+    );
+    flushUIQueue();
+    expect(makeTextureImage).toHaveBeenCalledTimes(1);
+    replaceGpuDevice();
+    flushUIQueue();
+    expect(makeTextureImage).toHaveBeenCalledTimes(2);
+    expect(texture.value).toBe(makeTextureImage.mock.results[1].value);
+    expect(mockCalls).toEqual({ scheduleOnUI: 2, deprecatedRunOnUI: 0 });
+    unmount();
   });
 
   it("leaves the texture empty when the image cannot become one", () => {

@@ -59,3 +59,6 @@ packages/skia/cpp/dawn
 buck-out/
 \.buckd/
 *.keystore
+
+# Per-machine editor state (the launch configuration is shared).
+.vscode/settings.json

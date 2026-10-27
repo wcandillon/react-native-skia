@@ -33,11 +33,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -66,11 +62,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -99,11 +91,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -137,7 +125,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -184,7 +172,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -228,7 +216,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -263,5 +251,58 @@ describe("Image Encoding", () => {
     expect(result.midQualityLossy).not.toEqual(result.maxQualityLossless);
     expect(result.maxQualityLossy).not.toEqual(result.maxQualityLossless);
     expect(result.defaultQualityLossless).toEqual(result.maxQualityLossless);
+  });
+  it("SkImage.encodeToBytes: throws for an image the encoder cannot encode", async () => {
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        // JPEG cannot hold an image wider than 65500 pixels.
+        const width = 70000;
+        const height = 1;
+        const bytesPerPixel = 4;
+        const data = Skia.Data.fromBytes(
+          new Uint8Array(width * height * bytesPerPixel)
+        );
+        const image = Skia.Image.MakeRaster(
+          { ...ctx.imageInfoBase, width, height },
+          data,
+          width * bytesPerPixel
+        )!;
+        try {
+          return `returned ${String(image.encodeToBytes(ctx.format))}`;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      },
+      { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
+    );
+
+    expect(result).toContain("encodeToBytes failed");
+  });
+
+  it("SkImage.encodeToBase64: throws for an image the encoder cannot encode", async () => {
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        // JPEG cannot hold an image wider than 65500 pixels.
+        const width = 70000;
+        const height = 1;
+        const bytesPerPixel = 4;
+        const data = Skia.Data.fromBytes(
+          new Uint8Array(width * height * bytesPerPixel)
+        );
+        const image = Skia.Image.MakeRaster(
+          { ...ctx.imageInfoBase, width, height },
+          data,
+          width * bytesPerPixel
+        )!;
+        try {
+          return `returned ${String(image.encodeToBase64(ctx.format))}`;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      },
+      { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
+    );
+
+    expect(result).toContain("encodeToBase64 failed");
   });
 });

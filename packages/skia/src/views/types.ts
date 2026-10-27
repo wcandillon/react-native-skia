@@ -1,13 +1,7 @@
 import type { ViewProps } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import type {
-  SkGraphiteContext,
-  SkImage,
-  SkPicture,
-  SkRect,
-  SkSize,
-} from "../skia/types";
+import type { SkGraphiteContext, SkImage, SkRect, SkSize } from "../skia/types";
 
 /** The Android view a canvas draws into, see {@link AndroidCanvasProps}. */
 export type AndroidBackingView =
@@ -87,6 +81,13 @@ export type AndroidCanvasProps =
 
 export interface ISkiaViewApi {
   web?: boolean;
+  /**
+   * The id a view about to mount registers under. Ids are unique for the
+   * life of the process, not of the JS runtime: the native registries
+   * outlive a reload, and the views of the bundle being replaced leave them
+   * while the new bundle is already mounting.
+   */
+  allocateNativeId: () => number;
   setJsiProperty: <T>(nativeId: number, name: string, value: T) => void;
   requestRedraw: (nativeId: number) => void;
   /**
@@ -149,10 +150,6 @@ export interface SkiaBaseViewProps extends ViewProps {
 
   /** @deprecated Does nothing: on web, every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
-}
-
-export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
-  picture?: SkPicture;
 }
 
 export type SkiaGraphiteViewNativeProps = SkiaBaseViewProps;

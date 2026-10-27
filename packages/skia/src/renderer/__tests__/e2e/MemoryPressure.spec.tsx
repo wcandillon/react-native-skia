@@ -33,7 +33,7 @@ describe("Native object memory pressure", () => {
       let delta = 0;
       for (let attempt = 0; attempt < 5; attempt++) {
         const before = externalBytes();
-        const image = Skia.Image.MakeRasterImage(info, data, width * 4);
+        const image = Skia.Image.MakeRaster(info, data, width * 4);
         delta = externalBytes() - before;
         if (image === null || delta === size) {
           break;
@@ -59,7 +59,7 @@ describe("Native object memory pressure", () => {
           : 0;
       const { width, height, colorType, alphaType } = c;
       const data = Skia.Data.fromBytes(new Uint8Array(width * height * 4));
-      const image = Skia.Image.MakeRasterImage(
+      const image = Skia.Image.MakeRaster(
         { width, height, colorType, alphaType },
         data,
         width * 4

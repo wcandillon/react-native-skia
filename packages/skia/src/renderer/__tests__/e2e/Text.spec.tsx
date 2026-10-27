@@ -139,7 +139,7 @@ describe("Text", () => {
     async () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
-          const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const roboto = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
           )!;
           const font = Skia.Font(roboto, 64);
@@ -164,7 +164,7 @@ describe("Text", () => {
     async () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
-          const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const amiri = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
           )!;
           const font = Skia.Font(amiri, 64);

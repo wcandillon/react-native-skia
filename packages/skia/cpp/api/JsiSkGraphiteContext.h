@@ -46,7 +46,7 @@ public:
     auto recording = getObject()->finishRecording();
     // The deferred canvas is deleted by the snap.
     if (auto canvas = _canvas.lock()) {
-      canvas->setCanvas(nullptr);
+      canvas->detach();
     }
     _canvas.reset();
     return std::make_shared<JsiSkGraphiteRecording>(getContext(),

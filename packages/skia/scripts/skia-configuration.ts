@@ -506,10 +506,23 @@ export const copyHeaders = () => {
     "../../externals/skia/modules/skunicode/include/SkUnicode_icu.h",
     "./cpp/skia/modules/skunicode/include/SkUnicode_icu.h"
   );
-  // Check for duplicate header names and issue warnings
+  // Check for duplicate header names and issue warnings. The pod's header
+  // search path is recursive, so a header name present twice is ambiguous
+  // for a bare #include "Name.h" (#3209). Skia includes its own headers by
+  // their full path, so the pairs it ships are fine as long as the wrapper
+  // includes them by path too.
+  const knownDuplicateHeaders = [
+    // include/cpu/Recorder.h (skcpu::Recorder, included by Graphite's
+    // Recorder.h since m157) and include/gpu/graphite/Recorder.h.
+    "Recorder.h",
+  ];
   const duplicateHeaders = $(
     "find ./cpp -name '*.h' -type f | sed 's/.*\\///' | sort | uniq -d"
-  ).toString();
+  )
+    .toString()
+    .split("\n")
+    .filter((name: string) => name && !knownDuplicateHeaders.includes(name))
+    .join("\n");
   if (duplicateHeaders.trim()) {
     console.warn("⚠️  WARNING: Found duplicate header names:");
     duplicateHeaders

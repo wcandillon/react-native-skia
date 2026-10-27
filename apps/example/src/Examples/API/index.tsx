@@ -21,9 +21,9 @@ import { ImageFilters } from "./ImageFilters";
 import { UseCanvas } from "./UseCanvas";
 import { FreezeExample } from "./Freeze";
 import { Touch } from "./Touch";
-import { PictureViewExample } from "./PictureView";
 import { OnLayoutDemo } from "./OnLayout";
 import { CanvasSize } from "./CanvasSize";
+import { CanvasResize } from "./CanvasResize";
 import { IconsExample } from "./Icons";
 import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
@@ -230,13 +230,6 @@ export const API = () => {
         }}
       />
       <Stack.Screen
-        name="PictureView"
-        component={PictureViewExample}
-        options={{
-          title: "🖼 Picture View",
-        }}
-      />
-      <Stack.Screen
         name="Checker"
         component={FreezeExample}
         options={{
@@ -262,6 +255,13 @@ export const API = () => {
         component={CanvasSize}
         options={{
           title: "📏 Canvas Size",
+        }}
+      />
+      <Stack.Screen
+        name="CanvasResize"
+        component={CanvasResize}
+        options={{
+          title: "↔️ Canvas Resize",
         }}
       />
       <Stack.Screen

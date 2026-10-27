@@ -21,7 +21,7 @@ public:
   static constexpr const char *CLASS_NAME = "TypefaceFactory";
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkTypeface>>
-  MakeFreeTypeFaceFromData(sk_sp<SkData> data) {
+  MakeFromData(sk_sp<SkData> data) {
     auto fontMgr = JsiSkFontMgrFactory::getFontMgr(getContext());
     auto typeface = fontMgr->makeFromData(std::move(data));
     if (typeface == nullptr) {
@@ -33,8 +33,8 @@ public:
   size_t getMemoryPressure() override { return 1024; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installMethod(runtime, prototype, "MakeFreeTypeFaceFromData",
-                  &JsiSkTypefaceFactory::MakeFreeTypeFaceFromData);
+    installMethod(runtime, prototype, "MakeFromData",
+                  &JsiSkTypefaceFactory::MakeFromData);
   }
 
   explicit JsiSkTypefaceFactory(std::shared_ptr<RNSkPlatformContext> context)

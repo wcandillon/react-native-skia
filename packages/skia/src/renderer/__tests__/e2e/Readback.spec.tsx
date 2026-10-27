@@ -89,7 +89,7 @@ describe("Readback", () => {
   itRunsE2eOnly("a raster image resolves to itself", async () => {
     const result = await surface.eval((Skia, ctx) => {
       const data = Skia.Data.fromBytes(new Uint8Array([0, 0, 255, 255]));
-      const image = Skia.Image.MakeRasterImage(
+      const image = Skia.Image.MakeRaster(
         { width: 1, height: 1, ...ctx },
         data,
         4
@@ -108,7 +108,7 @@ describe("Readback", () => {
           255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
         ])
       );
-      const raster = Skia.Image.MakeRasterImage(
+      const raster = Skia.Image.MakeRaster(
         { width: 2, height: 2, ...ctx },
         data,
         8
@@ -171,7 +171,7 @@ describe("Readback", () => {
     const oslo = loadImage("skia/__tests__/assets/oslo-mini.jpg");
     const result = await surface.eval(
       (Skia, ctx) => {
-        const encoded = Skia.Image.MakeImageFromEncoded(
+        const encoded = Skia.Image.MakeFromEncoded(
           Skia.Data.fromBytes(new Uint8Array(ctx.data))
         )!;
         return encoded.makeRasterImage().then((raster) => ({

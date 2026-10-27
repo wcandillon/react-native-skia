@@ -155,6 +155,20 @@ inline AdapterDescription describeAdapter(const wgpu::Adapter &adapter) {
   return result;
 }
 
+// Dawn's own SwiftShader test (gpu_info::IsGoogleSwiftshader): Google's
+// vendor ID with SwiftShader's device ID. The Android emulator exposes the
+// host's SwiftShader through gfxstream, which keeps the IDs and the name, so
+// either identifies it.
+inline bool isSwiftShader(const wgpu::Adapter &adapter) {
+  wgpu::AdapterInfo info;
+  adapter.GetInfo(&info);
+  constexpr uint32_t kVendorIDGoogle = 0x1AE0;
+  constexpr uint32_t kDeviceIDSwiftShader = 0xC0DE;
+  return (info.vendorID == kVendorIDGoogle &&
+          info.deviceID == kDeviceIDSwiftShader) ||
+         toString(info.device).find("SwiftShader") != std::string::npos;
+}
+
 // The backend Skia renders with: Metal on Apple, Vulkan on Android.
 #ifdef __APPLE__
 constexpr auto kPlatformBackendType = wgpu::BackendType::Metal;
@@ -243,24 +257,45 @@ getMatchedAdapter(dawn::native::Instance *instance) {
 
 // Where requestDevice() reports what becomes of the device. A loss after
 // creation (a driver reset, the GPU out of memory, a device-level error)
-// goes to onLost with Dawn's message, on whichever thread Dawn detects it.
-// A creation failure leaves Dawn's message in creationFailure, for the
-// caller of requestDevice(): that callback runs inside CreateDevice, on the
-// calling thread. The listener must outlive the device.
+// goes to onLost with Dawn's reason and message, on whichever thread Dawn
+// detects it: possibly inside a call on the device itself, on the calling
+// thread. A creation failure leaves Dawn's message in creationFailure, for
+// the caller of requestDevice(): that callback runs inside CreateDevice, on
+// the calling thread. The listener must outlive the device.
 struct DeviceLostListener {
-  std::function<void(const std::string &message)> onLost;
+  std::function<void(wgpu::DeviceLostReason reason, const std::string &message)>
+      onLost;
   std::string creationFailure;
 };
+
+// The name WebGPU gives a loss reason (GPUDeviceLostReason, lower case).
+inline const char *deviceLostReasonName(wgpu::DeviceLostReason reason) {
+  switch (reason) {
+  case wgpu::DeviceLostReason::Destroyed:
+    return "destroyed";
+  case wgpu::DeviceLostReason::FailedCreation:
+    return "failed-creation";
+  case wgpu::DeviceLostReason::CallbackCancelled:
+    return "callback-cancelled";
+  default:
+    return "unknown";
+  }
+}
 
 // Create a Dawn device from the given adapter with the requested features.
 // Features not supported by the adapter are silently skipped. The device's
 // loss is reported to `listener` (see DeviceLostListener), or only logged
 // without one (a secondary device). Neither takes the process down: a lost
 // device fails its later operations, which the callers handle.
+//
+// A release build skips Dawn's validation on the device, unless `validate`
+// asks for it: the device that replaces a lost one is validated, so that a
+// texture or buffer made on the lost device and used again is refused with
+// an error rather than reaching the driver (see DawnContext).
 inline wgpu::Device
 requestDevice(dawn::native::Adapter &nativeAdapter,
               const std::vector<wgpu::FeatureName> &requestedFeatures,
-              DeviceLostListener *listener) {
+              DeviceLostListener *listener, bool validate = false) {
   wgpu::Adapter adapter = nativeAdapter.Get();
 
   // Filter to only features the adapter supports.
@@ -287,17 +322,43 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
     features.push_back(feature);
   }
 
-  static constexpr const char *kToggles[] = {
-#if !defined(SK_DEBUG)
-      "skip_validation",
-#endif
+  std::vector<const char *> toggles = {
       "disable_lazy_clear_for_mapped_at_creation_buffer",
       "allow_unsafe_apis",
+#if !defined(__ANDROID__)
+      // Not on Android: with robustness disabled, Qualcomm's shader compiler
+      // (libllvm-qgl, CreateQGLCProgram) segfaults inside
+      // vkCreateGraphicsPipelines while Dawn builds some Graphite render
+      // pipelines (Adreno 740, driver 3df4c357f0). It is not yet known whether
+      // the driver or the SPIR-V Tint emits without robustness is at fault.
+      // Robustness only adds bounds checks to shader buffer and texture
+      // accesses; Chrome ships WebGPU with it on.
       "disable_robustness",
+#endif
   };
+#if defined(NDEBUG)
+  if (!validate) {
+    toggles.push_back("skip_validation");
+  }
+#else
+  (void)validate;
+#endif
+#ifdef __ANDROID__
+  // Dawn checks an imported AHardwareBuffer's allocation size against the
+  // VkImage it binds to, and the Android emulator's SwiftShader driver reports
+  // that size as 0 for every buffer. The first import (react-native-webgpu's
+  // view snapshots draw into an imported AHardwareBuffer on Android 13+) then
+  // fails as an internal error, which Dawn turns into a device loss: nothing
+  // renders for the rest of the process. Dawn itself skips the check on the
+  // Samsung, Qualcomm and Huawei drivers that misreport the size; do the same
+  // for SwiftShader. Real devices keep the check.
+  if (isSwiftShader(adapter)) {
+    toggles.push_back("ignore_imported_ahardwarebuffer_vulkan_image_size");
+  }
+#endif
   wgpu::DawnTogglesDescriptor togglesDesc;
-  togglesDesc.enabledToggleCount = std::size(kToggles);
-  togglesDesc.enabledToggles = kToggles;
+  togglesDesc.enabledToggleCount = toggles.size();
+  togglesDesc.enabledToggles = toggles.data();
 #if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
   // The iOS Simulator only advertises MTLFeatureSet_iOS_GPUFamily2, so Dawn
   // defaults disable_base_instance/disable_base_vertex on and then rejects
@@ -335,7 +396,7 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
           return;
         default:
           if (listener != nullptr && listener->onLost) {
-            listener->onLost(toString(message));
+            listener->onLost(reason, toString(message));
           } else {
             RNSkia::RNSkLogger::logToConsole("Device lost: " +
                                              toString(message));
@@ -353,10 +414,10 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 }
 
 // `listener` is told of the primary device's loss (see DeviceLostListener)
-// and must outlive the device.
+// and must outlive the device. `validate` is passed on to requestDevice().
 inline skgpu::graphite::DawnBackendContext
 createDawnBackendContext(dawn::native::Instance *instance,
-                         DeviceLostListener *listener) {
+                         DeviceLostListener *listener, bool validate = false) {
 
   auto matchedAdapter = getMatchedAdapter(instance);
   wgpu::Adapter adapter = matchedAdapter.Get();
@@ -430,7 +491,8 @@ createDawnBackendContext(dawn::native::Instance *instance,
 #endif
   };
 
-  wgpu::Device device = requestDevice(matchedAdapter, features, listener);
+  wgpu::Device device =
+      requestDevice(matchedAdapter, features, listener, validate);
   if (!device) {
     std::string error =
         "React Native Skia could not create a GPU device on the " +

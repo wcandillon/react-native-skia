@@ -10,7 +10,10 @@
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
+#include "api/JsiSkPicture.h"
+#include "api/recorder/JsiRecorder.h"
 #include "jsi/BoxedNativeObject.h"
+#include "jsi/ViewProperty.h"
 
 namespace RNSkia {
 namespace jsi = facebook::jsi;
@@ -28,16 +31,35 @@ RNSkManager::RNSkManager(
   // depending on what the app does first. On a thread of its own: the
   // module installs during JS startup, which does not wait for the GPU.
   DawnContext::probeInBackground();
+  // A lost GPU device is replaced by a new one (see DawnContext), on which
+  // the windows hold nothing yet: every view records its content again for
+  // it. The redraw waits for the main thread, and for the window to be able
+  // to show a frame (the app may be in the background, where the device was
+  // lost); it then configures the window on the new device. The listener
+  // only reaches the registry, which outlives this manager.
+  _lossListener =
+      DawnContext::addLossListener([](const DawnContext::LossInfo &) {
+        for (const auto &view : ViewRegistry::getInstance().getViews()) {
+          view->requestRedraw();
+        }
+      });
   // Install bindings
   installBindings();
 }
 
 RNSkManager::~RNSkManager() {
+  DawnContext::removeLossListener(_lossListener);
   // The runtime that made the Graphite contexts is going away, with the
-  // views of its bundle. Native ids start over with the next bundle, and a
-  // target kept past this point would be bound by the first view reusing
-  // its id.
+  // views of its bundle: nothing binds to or draws into a target kept past
+  // this point (the next bundle's views get ids of their own, see
+  // ViewRegistry::allocateId).
   RNSkGraphiteTargetRegistry::getInstance().clear();
+  // Likewise for the view registry: Fabric tears the bundle's views down with
+  // no ordering against this destructor, and their late unregistrations are
+  // no-ops (the views only hold the manager weakly). Dropped here, the
+  // entries of views torn down after this point, and the tombstones of the
+  // ones torn down before it, do not stay for the life of the process.
+  ViewRegistry::getInstance().clear();
   // Free up any references
   _viewApi = nullptr;
   _jsRuntime = nullptr;
@@ -83,3 +105,21 @@ void RNSkManager::installBindings() {
   // implementation detail only.
 }
 } // namespace RNSkia
+
+namespace RNJsi {
+
+// Probing for a recorder needs the complete recorder types. Parsing the
+// recorder headers costs about 1.5 GB of compiler memory, so the probe lives
+// in this translation unit, which parses them already. A separate translation
+// unit would compile in parallel and add to the peak memory of the build.
+ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
+  if (auto picture =
+          RNSkia::tryGetJsiObject<RNSkia::JsiSkPicture>(runtime, value)) {
+    _value = picture->getObject();
+  } else if (auto recorder =
+                 RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
+    _value = recorder->getObject();
+  }
+}
+
+} // namespace RNJsi

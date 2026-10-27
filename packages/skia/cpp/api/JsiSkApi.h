@@ -1,10 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <utility>
 
 #include "rnskia/RNSkPlatformContext.h"
 
 #include "JsiSkNativeObjects.h"
+#include "jsi/JsiPromises.h"
 
 #include "rnskia/RNDawnContext.h"
 
@@ -159,7 +163,9 @@ public:
   JSI_HOST_FUNCTION(getNativeDevice) {
     // Raw WGPUDevice pointer of the Graphite device, as a BigInt. Consumed by
     // react-native-webgpu's importDevice(), which AddRefs it; the pointer
-    // stays owned by DawnContext and is valid for the process lifetime.
+    // stays owned by DawnContext and is valid for the process lifetime. It
+    // is the device in use: a lost one is replaced (see DawnContext), and
+    // Skia.gpu.lost tells JS to import the new one.
     auto &dawnContext = DawnContext::getInstance();
     return jsi::BigInt::fromUint64(
         runtime, reinterpret_cast<uint64_t>(dawnContext.getWGPUDevice().Get()));
@@ -171,7 +177,8 @@ public:
   }
 
   // The GPU Skia renders with, or why there is none (Skia.gpu, see
-  // src/skia/types/Skia.ts). A fresh object per read, of plain values.
+  // src/skia/types/Skia.ts). A fresh object per read, of plain values, and
+  // the promise of the device's loss (see getLostPromise).
   jsi::Value getGpu(jsi::Runtime &runtime) {
     const auto &gpu = DawnContext::getGpuInfo();
     auto string = [&runtime](const std::string &value) {
@@ -188,7 +195,15 @@ public:
     result.setProperty(runtime, "error",
                        gpu.available ? jsi::Value::null()
                                      : jsi::Value(runtime, string(gpu.error)));
+    result.setProperty(runtime, "lost",
+                       getLostPromise(runtime, gpu.generation));
     return result;
+  }
+
+  ~JsiSkApi() override {
+    if (_lossListener != 0) {
+      DawnContext::removeLossListener(_lossListener);
+    }
   }
 
   // Factory properties: like the legacy HostObject implementation, each
@@ -305,6 +320,69 @@ public:
   }
 
 private:
+  /**
+   Skia.gpu.lost: the promise of the loss of the device in use, one per
+   device (like WebGPU's GPUDevice.lost, the same promise for every read
+   while the device is in use), resolved on this runtime's thread once React
+   Native Skia has tried to replace the device (see resolveLostPromise).
+   `generation` is the device Skia.gpu describes (see
+   DawnContext::generation()); 0 without a GPU, whose promise never resolves.
+   */
+  jsi::Value getLostPromise(jsi::Runtime &runtime, uint64_t generation) {
+    if (_lostPromiseValue.has_value() && _lostPromiseGeneration == generation) {
+      return jsi::Value(runtime, *_lostPromiseValue);
+    }
+    // The listener is told of every loss, on the thread that replaced the
+    // device: the promise is settled on this runtime's thread, if this
+    // object is still around by then (a reload may have taken it).
+    if (_lossListener == 0) {
+      std::weak_ptr<JsiSkApi> weakThis = this->weak_from_this();
+      auto context = getContext();
+      _lossListener = DawnContext::addLossListener(
+          [weakThis, context](const DawnContext::LossInfo &info) {
+            context->runOnJavascriptThread(
+                [weakThis, info](jsi::Runtime &runtime) {
+                  if (auto self = weakThis.lock()) {
+                    self->resolveLostPromise(runtime, info);
+                  }
+                });
+          });
+    }
+    std::shared_ptr<RNJsi::JsiPromises::Promise> promise;
+    auto value = RNJsi::JsiPromises::createPromiseAsJSIValue(
+        runtime,
+        [&promise](jsi::Runtime &,
+                   std::shared_ptr<RNJsi::JsiPromises::Promise> created) {
+          promise = std::move(created);
+        });
+    _lostPromiseGeneration = generation;
+    _lostPromise = std::move(promise);
+    _lostPromiseValue.emplace(runtime, value);
+    return value;
+  }
+
+  /** Settles Skia.gpu.lost for the device that was lost, if it is pending. */
+  void resolveLostPromise(jsi::Runtime &runtime,
+                          const DawnContext::LossInfo &info) {
+    if (_lostPromise == nullptr || _lostPromiseGeneration != info.generation ||
+        &_lostPromise->runtime_ != &runtime) {
+      return;
+    }
+    auto promise = std::move(_lostPromise);
+    _lostPromiseValue.reset();
+    jsi::Object result(runtime);
+    result.setProperty(runtime, "reason",
+                       jsi::String::createFromUtf8(runtime, info.reason));
+    result.setProperty(runtime, "message",
+                       jsi::String::createFromUtf8(runtime, info.message));
+    promise->resolve(jsi::Value(runtime, result));
+  }
+
+  size_t _lossListener = 0;
+  uint64_t _lostPromiseGeneration = 0;
+  std::shared_ptr<RNJsi::JsiPromises::Promise> _lostPromise;
+  std::optional<jsi::Value> _lostPromiseValue;
+
   std::shared_ptr<JsiSkSVGFactory> _svgFactory;
   std::shared_ptr<JsiSkImageFactory> _imageFactory;
   std::shared_ptr<JsiSkAnimatedImageFactory> _animatedImageFactory;

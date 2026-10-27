@@ -98,6 +98,29 @@ describe("Pictures", () => {
     );
     checkImage(img, docPath("simple-picture.png"));
   });
+  it("throws when drawing on the canvas of a finished recording", async () => {
+    // CanvasKit keeps the recorder's canvas around: nothing to observe on
+    // node.
+    if (surface.OS === "node") {
+      return;
+    }
+    const result = await surface.eval((Skia) => {
+      const recorder = Skia.PictureRecorder();
+      const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, 16, 16));
+      canvas.drawColor(Skia.Color("cyan"));
+      const picture = recorder.finishRecordingAsPicture();
+      let error: Error | null = null;
+      try {
+        canvas.drawColor(Skia.Color("cyan"));
+      } catch (e) {
+        error = e as Error;
+      }
+      picture.dispose();
+      recorder.dispose();
+      return error ? error.message : null;
+    });
+    expect(result).toContain("recording has finished");
+  });
   it("Should draw animated circle trail t=0", async () => {
     const n = 20;
     const progress = 0;
@@ -243,7 +266,7 @@ describe("Pictures", () => {
       canvas.drawCircle(size / 2, size - r, r, paint);
       const picture = recorder.finishRecordingAsPicture();
       const serialized = picture.serialize();
-      const deserialized = Skia.Picture.MakePicture(serialized);
+      const deserialized = Skia.Picture.Make(serialized);
       mainCanvas.drawPicture(deserialized!);
     });
     checkImage(image, "snapshots/pictures/create-picture.png");
@@ -268,9 +291,7 @@ describe("Pictures", () => {
       canvas.drawCircle(size / 2, size - r, r, paint);
       const picture = recorder.finishRecordingAsPicture();
       const serialized = picture.serialize()!;
-      const deserialized = Skia.Picture.MakePicture(
-        serialized.buffer as ArrayBuffer
-      );
+      const deserialized = Skia.Picture.Make(serialized.buffer as ArrayBuffer);
       mainCanvas.drawPicture(deserialized!);
     });
     checkImage(image, "snapshots/pictures/create-picture.png");

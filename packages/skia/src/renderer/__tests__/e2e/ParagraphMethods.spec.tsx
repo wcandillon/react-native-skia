@@ -14,7 +14,7 @@ describe("Paragraph Methods", () => {
     it("should apply the default textStyle from the paragraph style", async () => {
       const heights = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -63,7 +63,7 @@ describe("Paragraph Methods", () => {
     it("should handle multiple placeholders with different alignments", async () => {
       const placeholderRects = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -126,7 +126,7 @@ describe("Paragraph Methods", () => {
     it("should return correct direction for placeholders", async () => {
       const placeholderInfo = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -168,7 +168,7 @@ describe("Paragraph Methods", () => {
     it("should return empty array when no placeholders", async () => {
       const placeholderCount = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -206,7 +206,7 @@ describe("Paragraph Methods", () => {
     it("should return line metrics for single line text", async () => {
       const lineMetrics = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -250,7 +250,7 @@ describe("Paragraph Methods", () => {
     it("should return line metrics for multi-line text with wrapping", async () => {
       const lineMetrics = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -297,7 +297,7 @@ describe("Paragraph Methods", () => {
     it("should handle hard breaks (newlines) correctly", async () => {
       const lineMetrics = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -342,7 +342,7 @@ describe("Paragraph Methods", () => {
     it("should correctly report line dimensions and positions", async () => {
       const lineMetrics = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -395,7 +395,7 @@ describe("Paragraph Methods", () => {
     it("should handle empty lines correctly", async () => {
       const lineMetrics = await surface.eval(
         (Skia, ctx) => {
-          const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const robotoRegular = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();

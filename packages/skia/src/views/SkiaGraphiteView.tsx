@@ -10,7 +10,6 @@ import {
   useBackingViewWarning,
 } from "./android";
 import type { SkiaGraphiteViewNativeProps } from "./types";
-import { SkiaViewNativeId } from "./SkiaViewNativeId";
 import { measureLayout } from "./measureLayout";
 
 export interface SkiaGraphiteViewRef {
@@ -36,7 +35,7 @@ export const SkiaGraphiteView = ({
   ref,
   ...viewProps
 }: SkiaGraphiteViewProps) => {
-  const nativeId = useMemo(() => SkiaViewNativeId.current++, []);
+  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
   useBackingViewWarning({ highBitDepth, android });

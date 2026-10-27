@@ -169,7 +169,7 @@ export const BirdGIF = resolveFile("skia/__tests__/assets/bird.gif").toString(
 
 export const loadImage = (uri: string) => {
   const Skia = global.SkiaApi;
-  const image = Skia.Image.MakeImageFromEncoded(
+  const image = Skia.Image.MakeFromEncoded(
     Skia.Data.fromBytes(resolveFile(uri))
   );
   expect(image).toBeTruthy();
@@ -178,9 +178,7 @@ export const loadImage = (uri: string) => {
 
 export const loadFont = (uri: string, ftSize?: number) => {
   const Skia = global.SkiaApi;
-  const tf = Skia.Typeface.MakeFreeTypeFaceFromData(
-    Skia.Data.fromBytes(resolveFile(uri))
-  );
+  const tf = Skia.Typeface.MakeFromData(Skia.Data.fromBytes(resolveFile(uri)));
   expect(tf).toBeTruthy();
   return Skia.Font(tf!, ftSize ?? fontSize);
 };
@@ -483,7 +481,7 @@ return surface.makeImageSnapshot().encodeToBase64();
     );
     const Skia = global.SkiaApi;
     const data = Skia.Data.fromBase64(base64);
-    const image = Skia.Image.MakeImageFromEncoded(data);
+    const image = Skia.Image.MakeFromEncoded(data);
     if (image === null) {
       throw new Error("Unable to decode image");
     }
@@ -554,7 +552,7 @@ return surface.makeImageSnapshot().encodeToBase64();
   private decodeImage(raw: Buffer) {
     const Skia = global.SkiaApi;
     const data = Skia.Data.fromBytes(new Uint8Array(raw));
-    const image = Skia.Image.MakeImageFromEncoded(data);
+    const image = Skia.Image.MakeFromEncoded(data);
     if (image === null) {
       throw new Error("Unable to decode image");
     }

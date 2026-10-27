@@ -11,7 +11,7 @@ for (let x = 0; x < 256 * 4; x++) {
   }
 }
 const data = Skia.Data.fromBytes(pixels);
-const img = Skia.Image.MakeRasterImage(
+const img = Skia.Image.MakeRaster(
   {
     width: 256,
     height: 256,

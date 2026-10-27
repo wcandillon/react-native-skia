@@ -9,7 +9,7 @@ import type {
   SkSize,
 } from "../../skia/types";
 import { drawAsPicture } from "../../renderer/Offscreen";
-import { Skia, useImage } from "../../skia";
+import { Skia, useGpu, useImage } from "../../skia";
 import { Platform } from "../../Platform";
 
 import Rea from "./ReanimatedProxy";
@@ -70,21 +70,25 @@ export const usePictureAsTexture = (
   size: SkSize
 ) => {
   const texture = Rea.useSharedValue<SkImage | null>(null);
+  // The texture lives on the GPU device: once a lost device has been
+  // replaced, it is made again on the new one.
+  const gpu = useGpu();
   useEffect(() => {
     if (picture !== null) {
       Worklets.scheduleOnUI(createTexture, texture, picture, size);
     }
-  }, [picture, size, texture]);
+  }, [picture, size, texture, gpu]);
   return texture;
 };
 
 export const useImageAsTexture = (source: DataSourceParam) => {
   const image = useImage(source);
   const texture = Rea.useSharedValue<SkImage | null>(null);
+  const gpu = useGpu();
   useEffect(() => {
     if (image !== null) {
       Worklets.scheduleOnUI(createTextureFromImage, texture, image);
     }
-  }, [image, texture]);
+  }, [image, texture, gpu]);
   return texture;
 };

@@ -4,7 +4,6 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 
 #include "JsiSkConverters.h"
 #include "JsiSkImageInfo.h"
@@ -225,7 +224,7 @@ public:
             : JsiOptional<double>();
     auto data = encodeImageData(format, quality);
     if (!data) {
-      return jsi::Value::null();
+      throw jsi::JSError(runtime, "encodeToBytes failed");
     }
 
     auto arrayCtor =
@@ -245,11 +244,11 @@ public:
     return array;
   }
 
-  std::variant<std::nullptr_t, std::string>
-  encodeToBase64(JsiOptional<double> format, JsiOptional<double> quality) {
+  std::string encodeToBase64(JsiOptional<double> format,
+                             JsiOptional<double> quality) {
     auto data = encodeImageData(format, quality);
     if (!data) {
-      return nullptr;
+      throw std::runtime_error("encodeToBase64 failed");
     }
 
     auto len = Base64::Encode(data->bytes(), data->size(), nullptr);

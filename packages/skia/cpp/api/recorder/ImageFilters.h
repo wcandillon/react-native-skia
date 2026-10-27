@@ -23,13 +23,13 @@ private:
 public:
   BlurMaskFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                     Variables &variables)
-      : Command(CommandType::PushBlurMaskFilter, "skBlurMaskFilter") {
+      : Command(CommandType::PushBlurMaskFilter) {
     convertProperty(runtime, object, "blur", props.blur, variables);
     convertProperty(runtime, object, "style", props.style, variables);
     convertProperty(runtime, object, "respectCTM", props.respectCTM, variables);
   }
 
-  void pushMaskFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [blur, style, respectCTM] = props;
     auto maskFilter = SkMaskFilter::MakeBlur(style, blur, respectCTM);
     ctx->getPaint().setMaskFilter(maskFilter);
@@ -48,12 +48,12 @@ private:
 public:
   BlurImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                      Variables &variables)
-      : Command(CommandType::PushImageFilter, "skBlurImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "blur", props.blur, variables);
     convertProperty(runtime, object, "mode", props.mode, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto imgf =
         SkImageFilters::Blur(props.blur.rX, props.blur.rY, props.mode, nullptr);
     ctx->imageFilters.push_back(imgf);
@@ -72,12 +72,12 @@ private:
 public:
   OffsetImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                        Variables &variables)
-      : Command(CommandType::PushImageFilter, "skOffsetImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "x", props.x, variables);
     convertProperty(runtime, object, "y", props.y, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto imgf = SkImageFilters::Offset(props.x, props.y, nullptr);
     ctx->imageFilters.push_back(imgf);
   }
@@ -96,13 +96,13 @@ private:
 public:
   DisplacementMapImageFilterCmd(jsi::Runtime &runtime,
                                 const jsi::Object &object, Variables &variables)
-      : Command(CommandType::PushImageFilter, "skDisplacementMapImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "channelX", props.channelX, variables);
     convertProperty(runtime, object, "channelY", props.channelY, variables);
     convertProperty(runtime, object, "scale", props.scale, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto shader = ctx->shaders.back();
     ctx->shaders.pop_back();
     auto map = SkImageFilters::Shader(shader, nullptr);
@@ -167,7 +167,7 @@ private:
 public:
   DropShadowImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                            Variables &variables)
-      : Command(CommandType::PushImageFilter, "skDropShadowImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "dx", props.dx, variables);
     convertProperty(runtime, object, "dy", props.dy, variables);
     convertProperty(runtime, object, "blur", props.blur, variables);
@@ -176,7 +176,7 @@ public:
     convertProperty(runtime, object, "shadowOnly", props.shadowOnly, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto shadowOnly = props.shadowOnly.value_or(false);
     auto inner = props.inner.value_or(false);
 
@@ -209,12 +209,12 @@ private:
 public:
   MorphologyImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                            Variables &variables)
-      : Command(CommandType::PushImageFilter, "skMorphologyImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "operator", props.op, variables);
     convertProperty(runtime, object, "radius", props.radius, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.op == "erode") {
       auto imgf =
           SkImageFilters::Erode(props.radius.rX, props.radius.rY, nullptr);
@@ -238,11 +238,11 @@ private:
 public:
   BlendImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushImageFilter, "skBlendImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "mode", props.mode, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Get all filters
     auto filters = std::move(ctx->imageFilters);
     ctx->imageFilters.clear();
@@ -274,12 +274,12 @@ private:
 public:
   RuntimeShaderImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                               Variables &variables)
-      : Command(CommandType::PushImageFilter, "skRuntimeShaderImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "source", props.source, variables);
     convertProperty(runtime, object, "uniforms", props.uniforms, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.source) {
       // Create the runtime shader builder
       SkRuntimeShaderBuilder builder(props.source);
@@ -314,11 +314,11 @@ private:
 public:
   ImageFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                  Variables &variables)
-      : Command(CommandType::PushImageFilter, "skImageFilter") {
+      : Command(CommandType::PushImageFilter) {
     convertProperty(runtime, object, "filter", props.filter, variables);
   }
 
-  void pushImageFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->imageFilters.push_back(props.filter);
   }
 };

@@ -22,21 +22,20 @@ public:
   static constexpr const char *CLASS_NAME = "AnimatedImageFactory";
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkAnimatedImage>>
-  MakeAnimatedImageFromEncoded(sk_sp<SkData> data) {
+  MakeFromEncoded(sk_sp<SkData> data) {
     auto codec = SkAndroidCodec::MakeFromData(data);
     auto image = SkAnimatedImage::Make(std::move(codec));
     if (image == nullptr) {
       return nullptr;
     }
-    return std::make_shared<JsiSkAnimatedImage>(getContext(),
-                                                std::move(image));
+    return std::make_shared<JsiSkAnimatedImage>(getContext(), std::move(image));
   }
 
   size_t getMemoryPressure() override { return 1024; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installMethod(runtime, prototype, "MakeAnimatedImageFromEncoded",
-                  &JsiSkAnimatedImageFactory::MakeAnimatedImageFromEncoded);
+    installMethod(runtime, prototype, "MakeFromEncoded",
+                  &JsiSkAnimatedImageFactory::MakeFromEncoded);
   }
 
   explicit JsiSkAnimatedImageFactory(

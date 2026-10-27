@@ -19,12 +19,16 @@ jest.mock("../../specs/SkiaViewNativeComponent", () => ({
     return null;
   },
 }));
-jest.mock("../api", () => ({
-  SkiaViewApi: {
-    makeGraphiteContext: jest.fn(),
-    destroyGraphiteContext: jest.fn(),
-  },
-}));
+jest.mock("../api", () => {
+  let nextNativeId = 1000;
+  return {
+    SkiaViewApi: {
+      allocateNativeId: () => nextNativeId++,
+      makeGraphiteContext: jest.fn(),
+      destroyGraphiteContext: jest.fn(),
+    },
+  };
+});
 
 const { SkiaViewApi } = jest.requireMock<{
   SkiaViewApi: {

@@ -109,9 +109,17 @@ let package = Package(
         .define("SK_GRAPHITE", to: "1"),
         .define("SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API", to: "1"),
         .define("SK_DISABLE_LEGACY_SHAPER_FACTORY", to: "1"),
+        // The Skia binaries are release builds: their inline code is compiled
+        // the same way here in every configuration (SK_RELEASE), else a Debug
+        // build mixes the SK_DEBUG assertions compiled into the package with
+        // the release code of the library on the same objects (a ref-counted
+        // object destroyed by the library then fails the debug destructor's
+        // assertion). Set explicitly: Skia would otherwise derive it from
+        // NDEBUG, which the debug configuration leaves out.
+        .define("SK_RELEASE", to: "1"),
 
-        // React's prebuilt C++ ABI is NDEBUG-gated, and Skia derives
-        // SK_RELEASE from it. Omitting either breaks the Release link.
+        // React's prebuilt C++ ABI is NDEBUG-gated. Omitting either breaks
+        // the Release link.
         .define("DEBUG", .when(configuration: .debug)),
         .define("NDEBUG", .when(configuration: .release)),
       ],

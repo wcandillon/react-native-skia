@@ -31,13 +31,13 @@ private:
 public:
   DiscretePathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                         Variables &variables)
-      : Command(CommandType::PushPathEffect, "skDiscretePathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "length", props.length, variables);
     convertProperty(runtime, object, "deviation", props.deviation, variables);
     convertProperty(runtime, object, "seed", props.seed, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto pe =
         SkDiscretePathEffect::Make(props.length, props.deviation, props.seed);
     ctx->pathEffects.push_back(pe);
@@ -56,12 +56,12 @@ private:
 public:
   DashPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                     Variables &variables)
-      : Command(CommandType::PushPathEffect, "skDashPathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "intervals", props.intervals, variables);
     convertProperty(runtime, object, "phase", props.phase, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto intervals = SkSpan(static_cast<SkScalar *>(props.intervals.data()),
                             props.intervals.size());
     auto pe = SkDashPathEffect::Make(intervals, props.phase);
@@ -83,14 +83,14 @@ private:
 public:
   Path1DPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushPathEffect, "skPath1DPathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "path", props.path, variables);
     convertProperty(runtime, object, "advance", props.advance, variables);
     convertProperty(runtime, object, "phase", props.phase, variables);
     convertProperty(runtime, object, "style", props.style, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto pe = SkPath1DPathEffect::Make(props.path, props.advance, props.phase,
                                        props.style);
     if (pe) {
@@ -111,12 +111,12 @@ private:
 public:
   Path2DPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushPathEffect, "skPath2DPathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "matrix", props.matrix, variables);
     convertProperty(runtime, object, "path", props.path, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto pe = SkPath2DPathEffect::Make(props.matrix, props.path);
     if (pe) {
       ctx->pathEffects.push_back(pe);
@@ -135,11 +135,11 @@ private:
 public:
   CornerPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushPathEffect, "skCornerPathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "r", props.r, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto pe = SkCornerPathEffect::Make(props.r);
     if (pe) {
       ctx->pathEffects.push_back(pe);
@@ -151,9 +151,9 @@ class SumPathEffectCmd : public Command {
 public:
   SumPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                    Variables &variables)
-      : Command(CommandType::PushPathEffect, "skSumPathEffect") {}
+      : Command(CommandType::PushPathEffect) {}
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Get all path effects
     auto effects = std::move(ctx->pathEffects);
     ctx->pathEffects.clear(); // Clear the vector since we moved from it
@@ -187,12 +187,12 @@ private:
 public:
   Line2DPathEffectCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushPathEffect, "skLine2DPathEffect") {
+      : Command(CommandType::PushPathEffect) {
     convertProperty(runtime, object, "width", props.width, variables);
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushPathEffect(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto pe = SkLine2DPathEffect::Make(props.width, props.matrix);
     if (pe) {
       ctx->pathEffects.push_back(pe);

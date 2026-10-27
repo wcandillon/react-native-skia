@@ -60,6 +60,27 @@ export const isShader = (type: NodeType) => {
   );
 };
 
+/**
+ * The type a node records as. A <Blend> is an image filter when it blends
+ * image filters and a shader otherwise; the scene graph keeps the type React
+ * gave it, the tree is never written to while it is visited.
+ */
+export const resolveType = (node: Node): NodeType => {
+  "worklet";
+  if (node.type !== NodeType.Blend) {
+    return node.type;
+  }
+  // Iterative on purpose: a worklet cannot call itself by name. A <Blend>
+  // nested as the first child decides like its parent would.
+  let first = node.children[0];
+  while (first && first.type === NodeType.Blend) {
+    first = first.children[0];
+  }
+  return first && isImageFilter(first.type)
+    ? NodeType.BlendImageFilter
+    : NodeType.Blend;
+};
+
 export const sortNodeChildren = (parent: Node) => {
   "worklet";
   const maskFilters: Node[] = [];
@@ -70,26 +91,21 @@ export const sortNodeChildren = (parent: Node) => {
   const drawings: Node[] = [];
   const paints: Node[] = [];
   parent.children.forEach((node) => {
-    if (isColorFilter(node.type)) {
+    const type = resolveType(node);
+    if (isColorFilter(type)) {
       colorFilters.push(node);
-    } else if (node.type === NodeType.BlurMaskFilter) {
+    } else if (type === NodeType.BlurMaskFilter) {
       maskFilters.push(node);
-    } else if (isPathEffect(node.type)) {
+    } else if (isPathEffect(type)) {
       pathEffects.push(node);
-    } else if (isImageFilter(node.type)) {
+    } else if (isImageFilter(type)) {
       imageFilters.push(node);
-    } else if (isShader(node.type)) {
+    } else if (isShader(type)) {
       shaders.push(node);
-    } else if (node.type === NodeType.Paint) {
+    } else if (type === NodeType.Paint) {
       paints.push(node);
-    } else if (node.type === NodeType.Blend) {
-      if (node.children[0] && isImageFilter(node.children[0].type)) {
-        node.type = NodeType.BlendImageFilter;
-        imageFilters.push(node);
-      } else {
-        node.type = NodeType.Blend;
-        shaders.push(node);
-      }
+    } else if (type === NodeType.Blend) {
+      shaders.push(node);
     } else {
       drawings.push(node);
     }

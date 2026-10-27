@@ -7,7 +7,10 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
+#include "include/core/SkCanvas.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkSamplingOptions.h"
 #include "include/gpu/graphite/Recording.h"
 
 #pragma clang diagnostic pop
@@ -38,20 +41,43 @@ public:
 
   /**
    Replays the recordings, in order, onto the target texture and presents
-   it. Called on the thread that owns the surface. Returns false when the
-   surface cannot present right now (there is none, or the app is in the
-   background): nothing was consumed.
+   it. The target is the one the caller read with getTargetInfo() and chose
+   the recordings for: a surface that is no longer that target (resized from
+   another thread since) declines, as the recordings would not fit it.
+   Called on the thread that presents on the surface. Returns false when the
+   surface cannot present right now (there is none, the app is in the
+   background, or the surface is not the target given): nothing was
+   consumed.
    */
   virtual bool presentRecordings(
+      const RNSkGraphiteTargetInfo &target,
       const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
 
   /**
-   Draws an image at the origin of the target texture and presents it. Same
-   thread and return value as presentRecordings(). Used for a recording whose
-   size or color space differs from the target's: it is replayed into a
-   texture of its own first (see RNSkView::present).
+   Draws an image onto the target texture (see drawOnto) and presents it.
+   Same target, thread and return value as presentRecordings(). Used for a
+   recording whose size or color space differs from the target's: it is
+   replayed into a texture of its own first (see RNSkView::present).
    */
-  virtual bool presentImage(const sk_sp<SkImage> &image) = 0;
+  virtual bool presentImage(const RNSkGraphiteTargetInfo &target,
+                            const sk_sp<SkImage> &image) = 0;
+
+protected:
+  /**
+   Draws an image onto a canvas of the given size, for presentImage(): as it
+   is when the sizes match, else stretched to the canvas, as the compositor
+   shows a buffer of another size than its layer, so that a frame made for
+   another size covers the target rather than leaving an edge of it empty.
+   */
+  static void drawOnto(SkCanvas *canvas, const sk_sp<SkImage> &image, int width,
+                       int height) {
+    if (image->width() == width && image->height() == height) {
+      canvas->drawImage(image, 0, 0);
+      return;
+    }
+    canvas->drawImageRect(image, SkRect::MakeIWH(width, height),
+                          SkSamplingOptions(SkFilterMode::kLinear));
+  }
 };
 
 } // namespace RNSkia

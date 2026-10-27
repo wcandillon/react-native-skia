@@ -144,7 +144,7 @@ export class Recorder implements BaseRecorder {
 
   pushPathEffect(pathEffectType: NodeType, props: AnimatedProps<unknown>) {
     if (!isPathEffect(pathEffectType)) {
-      throw new Error("Invalid color filter type: " + pathEffectType);
+      throw new Error("Invalid path effect type: " + pathEffectType);
     }
     this.add({
       type: CommandType.PushPathEffect,
@@ -155,7 +155,7 @@ export class Recorder implements BaseRecorder {
 
   pushImageFilter(imageFilterType: NodeType, props: AnimatedProps<unknown>) {
     if (!isImageFilter(imageFilterType)) {
-      throw new Error("Invalid color filter type: " + imageFilterType);
+      throw new Error("Invalid image filter type: " + imageFilterType);
     }
     this.add({
       type: CommandType.PushImageFilter,
@@ -181,7 +181,7 @@ export class Recorder implements BaseRecorder {
     children: number
   ) {
     if (!isShader(shaderType) && !(shaderType === NodeType.Blend)) {
-      throw new Error("Invalid color filter type: " + shaderType);
+      throw new Error("Invalid shader type: " + shaderType);
     }
     this.add({ type: CommandType.PushShader, shaderType, props, children });
   }
@@ -224,22 +224,21 @@ export class Recorder implements BaseRecorder {
 
   drawBox(
     boxProps: AnimatedProps<BoxProps>,
-    shadows: {
-      props: BoxShadowProps;
-      animatedProps?: Record<string, unknown>;
-    }[]
+    shadowProps: AnimatedProps<BoxShadowProps>[]
   ) {
-    shadows.forEach((shadow) => {
-      if (shadow.props) {
-        if (shadow.props) {
-          const { animatedProps } = this.processProps(
-            shadow.props as unknown as Record<string, unknown>
-          );
-          if (animatedProps) {
-            shadow.animatedProps = animatedProps;
-          }
-        }
+    const shadows = shadowProps.map((props) => {
+      // The shape the player materializes (see commands/Box.ts).
+      const shadow: {
+        props: AnimatedProps<BoxShadowProps>;
+        animatedProps?: Record<string, unknown>;
+      } = { props };
+      const { animatedProps } = this.processProps(
+        props as unknown as Record<string, unknown>
+      );
+      if (animatedProps) {
+        shadow.animatedProps = animatedProps;
       }
+      return shadow;
     });
     this.add({ type: CommandType.DrawBox, props: boxProps, shadows });
   }

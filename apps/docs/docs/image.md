@@ -29,21 +29,21 @@ The image is also decoded before the hook returns it, off the JS thread: the can
 The hook also provides an optional error handler as a second parameter, called when the image cannot be loaded or decoded (the hook then returns null).
 `loadImage(source)` does the same outside of React: it returns a promise that rejects on failure.
 
-### MakeImageFromEncoded
+### MakeFromEncoded
 
-You can also create image instances manually using `MakeImageFromEncoded`.
+You can also create image instances manually using `MakeFromEncoded`.
 
 ```tsx twoslash
 import { Skia } from "react-native-skia";
 
 // A sample base64-encoded pixel
 const data = Skia.Data.fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==");
-const image = Skia.Image.MakeImageFromEncoded(data);
+const image = Skia.Image.MakeFromEncoded(data);
 ```
 
-### MakeRasterImage
+### MakeRaster
 
-`MakeRasterImage` creates a CPU image from pixel data in the given format. The pixels are copied; see [GPU and CPU images](#gpu-and-cpu-images) for what that means when drawing it.
+`MakeRaster` creates a CPU image from pixel data in the given format. The pixels are copied; see [GPU and CPU images](#gpu-and-cpu-images) for what that means when drawing it.
 
 ```tsx twoslash
 import { Skia, AlphaType, ColorType } from "react-native-skia";
@@ -57,7 +57,7 @@ for (let x = 0; x < 256; x++) {
   }
 }
 const data = Skia.Data.fromBytes(pixels);
-const img = Skia.Image.MakeRasterImage(
+const img = Skia.Image.MakeRaster(
   {
     width: 256,
     height: 256,
@@ -75,18 +75,20 @@ const img = Skia.Image.MakeRasterImage(
 
 An image lives either on the CPU, as pixels in memory, or on the GPU, as a texture. Where it lives decides what is cheap.
 
-The API names follow this split. "Raster" means CPU: `Skia.Surface.MakeRaster()`, `Skia.Image.MakeRasterImage()`, `image.makeRasterImage()`. "Texture" means GPU: `image.makeTextureImage()`. "GPUTexture" is a WebGPU texture shared with [React Native WebGPU](/docs/webgpu): `Skia.Image.MakeImageFromGPUTexture()`, `Skia.Surface.MakeFromGPUTexture()`.
+The API names follow this split. "Raster" means CPU: `Skia.Surface.MakeRaster()`, `Skia.Image.MakeRaster()`, `image.makeRasterImage()`. "Texture" means GPU: `image.makeTextureImage()`. "GPUTexture" is a WebGPU texture shared with [React Native WebGPU](/docs/webgpu): `Skia.Image.MakeFromGPUTexture()`, `Skia.Surface.MakeFromGPUTexture()`.
 A surface follows the same split: `Skia.Surface.MakeRaster()` draws on the CPU and its snapshots are CPU images, `Skia.Surface.MakeOffscreen()` draws on the GPU and its snapshots are GPU images.
 
 | Image | Lives | Drawing it | Reading its pixels |
 | :-- | :-- | :-- | :-- |
-| `useImage()`, `Skia.Image.MakeRasterImage()`, `makeRasterImage()` | CPU | Uploaded once per canvas, then cached | Immediate |
-| `surface.makeImageSnapshot()`, `surface.asImage()`, `makeTextureImage()`, `Skia.Image.MakeImageFromGPUTexture()` | GPU | No copy, from any canvas and any thread | Waits for the GPU |
-| `Skia.Image.MakeImageFromEncoded()` | Encoded bytes | Decoded and uploaded by the first canvas that draws it, on that frame | Decodes |
+| `useImage()`, `Skia.Image.MakeRaster()`, `makeRasterImage()` | CPU | Uploaded on the first frame that draws it, then cached | Immediate |
+| `surface.makeImageSnapshot()`, `surface.asImage()`, `makeTextureImage()`, `Skia.Image.MakeFromGPUTexture()` | GPU | No copy, from any canvas and any thread | Waits for the GPU |
+| `Skia.Image.MakeFromEncoded()` | Encoded bytes | Decoded and uploaded on the first frame that draws it, then cached | Decodes |
+
+The textures of the CPU images the canvases draw are kept in one cache, shared by every canvas: 128 MB at most, least recently drawn out first, and a texture not drawn for ten seconds is released. An image drawn by several canvases is uploaded once and held once, whichever canvas draws it first and however many draw it on the same frame. The upload happens on the frame that first draws the image, on the thread rendering that frame: to pay it earlier, upload the image with `makeTextureImage()`.
 
 Moving an image from one side to the other is explicit:
 
-- `image.makeTextureImage()` uploads a CPU image (or decodes and uploads an encoded one) now, on the calling thread, and returns the GPU image. Use it for an image drawn by several canvases, or to pay the upload before the first frame: this is what [`useImageAsTexture`](/docs/animations/textures#useimageastexture) does. Pass `{ mipmapped: true }` to also build the mipmaps for the `MipmapMode` sampling options.
+- `image.makeTextureImage()` uploads a CPU image (or decodes and uploads an encoded one) now, on the calling thread, and returns the GPU image. Use it to pay the upload before the first frame, or to hold a texture for longer than the cache would: this is what [`useImageAsTexture`](/docs/animations/textures#useimageastexture) does. Pass `{ mipmapped: true }` to also build the mipmaps for the `MipmapMode` sampling options.
 - `image.makeRasterImage()` resolves to a CPU copy of a GPU image without blocking the JS thread (an encoded image is decoded on a background thread, a CPU image resolves to itself). `encodeToBytes()`, `encodeToBase64()` and `readPixels()` work on a GPU image too, but they wait for the GPU: when the JS thread should not wait, read the image back first.
 
 ```tsx twoslash
@@ -209,8 +211,8 @@ const ImageDemo = () => {
 | `height`        | Returns the possibly scaled height of the image.                      |
 | `width`         | Returns the possibly scaled width of the image.                       |
 | `getImageInfo`  | Returns the image info for the image.                                 |
-| `encodeToBytes` | Encodes the image pixels, returning the result as a `UInt8Array`.     |
-| `encodeToBase64`| Encodes the image pixels, returning the result as a base64-encoded string. |
+| `encodeToBytes` | Encodes the image pixels, returning the result as a `UInt8Array`; throws when the image cannot be encoded. |
+| `encodeToBase64`| Encodes the image pixels, returning the result as a base64-encoded string; throws when the image cannot be encoded. |
 | `readPixels`    | Reads the image pixels, returning result as UInt8Array or Float32Array. On a GPU image, waits for the GPU. |
 | `makeRasterImage` | Resolves to a CPU copy of the image, read back from the GPU or decoded on a background thread. See [GPU and CPU images](#gpu-and-cpu-images). |
 | `makeTextureImage` | Uploads the image to the GPU now and returns the GPU image. See [GPU and CPU images](#gpu-and-cpu-images). |

@@ -81,7 +81,7 @@ describe("Test different text examples", () => {
         )
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+    const tf = Skia.Typeface.MakeFromData(data)!;
     expect(tf).toBeTruthy();
     const emojiFont = Skia.Font(tf, fontSize);
     const surface = await drawOnNode(
@@ -103,7 +103,7 @@ describe("Test different text examples", () => {
         )
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+    const tf = Skia.Typeface.MakeFromData(data)!;
     expect(tf).toBeTruthy();
     const font = Skia.Font(tf, fontSize);
     const text = "欢迎";

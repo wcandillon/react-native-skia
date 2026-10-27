@@ -12,6 +12,7 @@ const onboardingJSON = require("./setup/skottie/onboarding.json");
 const basicSlotsJSON = require("./setup/skottie/basic_slots.json");
 const fingerprintJSON = require("./setup/skottie/fingerprint.json");
 const textLayerJSON = require("./setup/skottie/text-layer.json");
+const unnamedLayersJSON = require("./setup/skottie/unnamed-layers.json");
 
 describe("Skottie", () => {
   it("Should render Skottie component with lego animation", async () => {
@@ -191,7 +192,7 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     checkImage(image, docPath("skottie/lego.png"));
   });
@@ -322,7 +323,7 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     checkImage(image, docPath("skottie/basic_slots.png"));
   });
@@ -355,7 +356,7 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     checkImage(image, docPath("skottie/basic_slots-with-colors.png"));
   });
@@ -398,7 +399,7 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     checkImage(image, docPath("skottie/fingerprint-color1.png"));
   });
@@ -456,12 +457,41 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     if (surface.OS === "node" || surface.OS === "web") {
       checkImage(image, docPath("skottie/text-prop-web.png"));
     } else {
       checkImage(image, docPath("skottie/text-prop.png"));
     }
+  });
+  it("loads layers and shapes without a name (nm)", async () => {
+    // Lottie exporters such as Jitter omit "nm" everywhere; the property
+    // observer used to receive a null node name and crash on native.
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        const animation = Skia.Skottie.Make(ctx.unnamedLayers);
+        const sur = Skia.Surface.MakeOffscreen(100, 100);
+        if (!sur) {
+          throw new Error("Failed to create surface");
+        }
+        animation.seekFrame(0);
+        animation.render(sur.getCanvas());
+        sur.flush();
+        return {
+          size: animation.size(),
+          fps: Math.round(animation.fps()),
+          colorProps: animation.getColorProps().length,
+          image: sur.makeImageSnapshot().encodeToBase64(),
+        };
+      },
+      {
+        unnamedLayers: JSON.stringify(unnamedLayersJSON),
+      }
+    );
+    expect(result.size).toEqual({ width: 100, height: 100 });
+    expect(result.fps).toEqual(30);
+    expect(result.colorProps).toEqual(0);
+    expect(result.image).toBeDefined();
   });
 });

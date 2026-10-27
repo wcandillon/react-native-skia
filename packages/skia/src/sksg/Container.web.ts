@@ -8,7 +8,7 @@ import { Recorder, disposeRecording } from "./Recorder/Recorder";
 import { visit } from "./Recorder/Visitor";
 import { replay } from "./Recorder/Player";
 import { createDrawingContext } from "./Recorder/DrawingContext";
-import { Container, StaticContainer } from "./StaticContainer";
+import { JsContainer, StaticContainer } from "./StaticContainer";
 
 import "../skia/NativeSetup";
 import "../views/api";
@@ -43,15 +43,8 @@ const drawOnscreen = (Skia: Skia, nativeId: number, recording: Recording) => {
   recording.lastPicture = picture;
 };
 
-class ReanimatedContainer extends Container {
+class ReanimatedContainer extends JsContainer {
   private mapperId: number | null = null;
-
-  constructor(
-    Skia: Skia,
-    private nativeId: number
-  ) {
-    super(Skia);
-  }
 
   unmount() {
     super.unmount();
