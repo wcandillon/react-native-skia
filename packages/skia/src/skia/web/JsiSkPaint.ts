@@ -36,27 +36,17 @@ const plusDarkerSkSL = `
     }
 `;
 
-// SkSL for PlusLighter blend mode
-// Formula: rc = min(1, dst + src) on every premultiplied channel, alpha
-// included: CSS plus-lighter, the same as SkBlendMode::kPlus
-const plusLighterSkSL = `
-    vec4 main(vec4 src, vec4 dst) {
-        return min(src + dst, vec4(1.0));
-    }
-`;
-
 // Cache for custom blenders per CanvasKit instance
 // Using WeakMap ensures blenders are cleaned up when CanvasKit instance is garbage collected
 interface BlenderCache {
   plusDarker: Blender | null;
-  plusLighter: Blender | null;
 }
 const blenderCache = new WeakMap<CanvasKit, BlenderCache>();
 
 const getBlenderCache = (ck: CanvasKit): BlenderCache => {
   let cache = blenderCache.get(ck);
   if (!cache) {
-    cache = { plusDarker: null, plusLighter: null };
+    cache = { plusDarker: null };
     blenderCache.set(ck, cache);
   }
   return cache;
@@ -135,18 +125,9 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
         this.ref.setBlender(cache.plusDarker);
       }
     } else if (blendMode === kBlendModePlusLighter) {
-      // Use custom PlusLighter blender via SkRuntimeEffect
-      const cache = getBlenderCache(this.CanvasKit);
-      if (!cache.plusLighter) {
-        const effect =
-          this.CanvasKit.RuntimeEffect.MakeForBlender(plusLighterSkSL);
-        if (effect) {
-          cache.plusLighter = effect.makeBlender([]);
-        }
-      }
-      if (cache.plusLighter) {
-        this.ref.setBlender(cache.plusLighter);
-      }
+      // CSS plus-lighter: min(1, dst + src) on every premultiplied channel,
+      // alpha included, which is BlendMode.Plus
+      this.ref.setBlendMode(this.CanvasKit.BlendMode.Plus);
     } else {
       this.ref.setBlendMode(getEnum(this.CanvasKit, "BlendMode", blendMode));
     }
