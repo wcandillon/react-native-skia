@@ -4,6 +4,7 @@
 #include <functional>
 #include <mutex>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
@@ -17,6 +18,7 @@
 
 #include "include/core/SkColorType.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkSurface.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 
@@ -26,23 +28,26 @@ namespace RNSkia {
 
 /**
  * The window a platform view presents into: a CAMetalLayer on Apple
- * platforms, an ANativeWindow on Android, configured as a Dawn surface. The
- * platform view only acquires the native handle and forwards its lifecycle
- * (attach, resize, detach); everything else lives here.
+ * platforms, an ANativeWindow on Android, configured as a Dawn surface; or,
+ * for a static canvas, an image presenter in place of a window (see
+ * attachImagePresenter). The platform view only acquires the native handle
+ * and forwards its lifecycle (attach, resize, detach); everything else lives
+ * here.
  *
  * Threading: the window is attached, resized and detached on the main
  * thread, and presented on the thread the view presents on (see
- * RNSkView::setPresentThread): the main thread too, or a thread of its own.
+ * RNSkView::setPresentThread): the main thread too, or a thread of its own,
+ * the worker for an image presenter (see RNSkView::presentAsImages).
  * A mutex keeps the two apart: the window is never reconfigured or released
  * under a present, and detaching waits for the present in flight before it
  * lets go of the window, so that the platform may destroy it right after.
- * A resize does not wait: it notes the size, which the presenting thread
- * takes by its next present (see takePendingSizeLocked), and the swapchain
- * is configured for it there (see configureIfNeededLocked), not on the main
- * thread as the window attaches or resizes: a Vulkan swapchain is made again
- * for every size (about 5 ms on a Pixel 8), which inside the layout would
- * hold up the traversal, and the presenting thread with it, by that much on
- * every frame of a view animated in size.
+ * Neither a resize nor isAttached() waits: a resize notes the size, which the
+ * presenting thread takes by its next present (see takePendingSizeLocked), and
+ * the swapchain is configured for it there (see configureIfNeededLocked), not
+ * on the main thread as the window attaches or resizes: a Vulkan swapchain is
+ * made again for every size (about 5 ms on a Pixel 8), which inside the layout
+ * would hold up the traversal, and the presenting thread with it, by that much
+ * on every frame of a view animated in size.
  * A present is made for the target the presenting thread read before it took
  * the mutex; under it, the window checks that it still is that target, and
  * declines a present made for a window resized since (see
@@ -65,6 +70,13 @@ public:
    */
   using Releaser = std::function<void(void *nativeHandle)>;
 
+  /**
+   Shows a finished frame as an image, in place of a window (see
+   attachImagePresenter). Called on the thread the view presents on, with
+   the mutex held.
+   */
+  using ImagePresenter = std::function<void(const sk_sp<SkImage> &frame)>;
+
   RNSkWindowSurface();
 
   ~RNSkWindowSurface() override;
@@ -85,6 +97,18 @@ public:
               bool useP3ColorSpace, Releaser releaser);
 
   /**
+   Presents without a window, for a static canvas: each frame is replayed
+   into a texture of its own at the given size in pixels, which the presenter
+   is handed as an image, so the view needs no surface or swapchain. In the
+   8-bit format; useP3ColorSpace renders in Display P3 rather than sRGB. A
+   window or presenter already attached is detached first; resize() and
+   detach() apply to the presenter as to a window. Requests a redraw. Main
+   thread.
+   */
+  void attachImagePresenter(int width, int height, bool useP3ColorSpace,
+                            ImagePresenter presenter);
+
+  /**
    Takes note of a new size, in pixels: what frames are recorded for from
    now (see getTargetInfo), and what the window is configured for by the
    first present of a frame made for it, on the presenting thread (see
@@ -96,17 +120,21 @@ public:
 
   /**
    Destroys the Dawn surface and gives the native handle back to its
-   releaser, once the present in flight, if any, is done: the platform may
-   destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, or the destructor.
+   releaser, or drops the image presenter, once the present in flight, if
+   any, is done: the platform may destroy the window right after. The target
+   description goes away with it; the layout size stays. Main thread, or the
+   destructor.
    */
   void detach();
 
   /**
-   Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDeviceLocked). Any thread.
+   Whether a window or an image presenter is attached, as the last attach
+   or detach left it, read without waiting for a present in flight: the
+   platform view asks on every layout. A window's Dawn surface may be away
+   for a frame while the GPU device is replaced (see ensureDeviceLocked).
+   Any thread.
    */
-  bool isAttached();
+  bool isAttached() const { return _attached.load(std::memory_order_acquire); }
 
   /**
    Whether the window shows a frame the view presented: a window attached in
@@ -176,6 +204,16 @@ public:
    */
   RNSkWindowState readState(RNSkGraphiteTargetInfo *info);
 
+  /**
+   Destroys the replaced GPU device of the given generation if no window
+   holds a surface on it, as on a screen of static canvases and image
+   views, which hold none: the windows that do hold one retire it on their
+   next frame (see retireReplacedDevice), and a window attached from now on
+   is configured on the new device. Any thread, with no window's mutex
+   held: the device's replacement calls it (see RNSkManager).
+   */
+  static void retireUnheldDevice(uint64_t generation);
+
   // RNSkSurface -------------------------------------------------------------
 
   /** Width of the window, in pixels; 0 without a window. Any thread. */
@@ -210,9 +248,44 @@ public:
                     const sk_sp<SkImage> &image) override;
 
 private:
-  // Lets go of the Dawn surface and the window; see detach(). Called with
-  // the mutex held.
+  // Lets go of the Dawn surface and the window, or of the image presenter;
+  // see detach(). Called with the mutex held.
   void detachLocked();
+  // A window: the native handle, the releaser that gives it back, and the
+  // Dawn surface over it (see attach).
+  struct Window {
+    void *nativeHandle = nullptr;
+    Releaser releaser;
+    // Null from a device's replacement until the next frame makes it again
+    // on the new device (see retireReplacedDevice).
+    wgpu::Surface surface;
+    // Attached or resized since the swapchain was configured (see
+    // configureIfNeededLocked).
+    bool needsConfigure = false;
+  };
+  // The image presenter of a static canvas, attached in place of a window
+  // (see attachImagePresenter). It holds no surface, so it neither takes part
+  // in the sweep that retires a replaced device nor starts one: from the
+  // worker, a sweep lets a window's own thread make a surface over a window
+  // the retired device still holds (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) before
+  // it is destroyed. A device no window holds goes with its replacement (see
+  // retireUnheldDevice).
+  struct ImageFrames {
+    ImagePresenter presenter;
+    // The generation of the device the frames are made on (see
+    // ensureDeviceLocked).
+    uint64_t generation = 0;
+  };
+  // Whether a window or an image presenter is attached. Called with the
+  // mutex held.
+  bool isAttachedLocked() const {
+    return !std::holds_alternative<std::monostate>(_attachment);
+  }
+  // Publishes isAttachedLocked() for isAttached(), once an attach or a
+  // detach is through. Called with the mutex held.
+  void publishAttachedLocked() {
+    _attached.store(isAttachedLocked(), std::memory_order_release);
+  }
   // readState(), called with the mutex held.
   RNSkWindowState readStateLocked(RNSkGraphiteTargetInfo *info);
   // Whether the window is the target the caller read (see getTargetInfo):
@@ -240,21 +313,38 @@ private:
   // generation (see retireReplacedDevice), one window at a time under its
   // own mutex. Called with no window's mutex held.
   static void releaseSurfacesOn(uint64_t generation);
+  // Brings what is attached onto the GPU device in use; false when it cannot
+  // present on it (see the overloads). Called with the mutex held.
+  bool ensureDeviceLocked();
   // Configures the window on the GPU device in use when it has no surface:
   // when the device it was configured on was lost and replaced since (see
   // retireReplacedDevice), the surface is made again on the new device, the
   // window itself stays. Returns false without a context, without a
   // surface, or with one made for a device replaced since the sweep (the
   // next frame sweeps again). Called with the mutex held.
-  bool ensureDeviceLocked();
+  bool ensureDeviceLocked(Window &window, uint64_t generation);
+  // Takes the device in use for the frames' textures when it was replaced
+  // since the last frame; false without a context. Called with the mutex
+  // held.
+  bool ensureDeviceLocked(ImageFrames &frames, uint64_t generation);
   // Configures the swapchain for the current size, format and usage. Called
   // with the mutex held.
-  void configureSurface();
+  void configureSurface(Window &window);
   // Configures the swapchain when the window attached or resized since it
   // was last configured (see attach, takePendingSizeLocked), on the
   // presenting thread, by the present that follows. Called with the mutex
   // held.
-  void configureIfNeededLocked();
+  void configureIfNeededLocked(Window &window);
+  // presentRecordings() and presentImage() onto what is attached, once the
+  // target checks passed. Called with the mutex held.
+  bool presentRecordingsLocked(
+      Window &window,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentRecordingsLocked(
+      ImageFrames &frames,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentImageLocked(Window &window, const sk_sp<SkImage> &image);
+  bool presentImageLocked(ImageFrames &frames, const sk_sp<SkImage> &image);
   // Takes the size resize() noted, if any: the window's size from now, and
   // the swapchain's by the next present (see configureIfNeededLocked).
   // Called with the mutex held, on the presenting thread.
@@ -270,8 +360,9 @@ private:
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
   // splits the pass), and CopySrc for copy tasks. Only request what the
   // surface reports as supported.
-  wgpu::TextureUsage supportedSurfaceUsage();
-  bool surfaceSupportsFormat(wgpu::TextureFormat format);
+  wgpu::TextureUsage supportedSurfaceUsage(const wgpu::Surface &surface);
+  bool surfaceSupportsFormat(const wgpu::Surface &surface,
+                             wgpu::TextureFormat format);
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
   skgpu::graphite::TextureInfo getTextureInfo() const;
@@ -279,6 +370,13 @@ private:
   // wraps the swapchain texture for and presentImage() draws on; nullptr
   // when none can be made.
   static skgpu::graphite::Recorder *presentRecorder();
+  // A texture of the window's size, format and usage for the image
+  // presenter's next frame, wrapped for the recorder given; nullptr when it
+  // cannot be made. Called with the mutex held.
+  sk_sp<SkSurface> makeImageTargetLocked(skgpu::graphite::Recorder *recorder);
+  // Hands the image of an image target, drawn into before the GPU reads it,
+  // to the image presenter. Called with the mutex held.
+  void showFrameLocked(ImageFrames &frames, const sk_sp<SkImage> &frame);
   void requestRedraw() {
     if (_requestRedraw) {
       _requestRedraw();
@@ -288,25 +386,26 @@ private:
   // Keeps the main thread (attach, resize, detach) and the thread the view
   // presents on apart; see the class comment.
   std::mutex _mutex;
-  // The device the window is configured on, and its generation (see
+  // What is attached: nothing, a window, or the image presenter of a static
+  // canvas.
+  std::variant<std::monostate, Window, ImageFrames> _attachment;
+  // The device the window is configured on, or the image presenter makes
+  // its frames on, and the generation of the window's surface (see
   // DawnContext::generation()): a lost device is replaced, and the window
   // configured again on the new one (see retireReplacedDevice). The surface
   // is null between the two, and while the window is detached; the
   // generation is 0 then, and readable without the mutex, as a hint that a
-  // sweep is due.
+  // sweep is due. Only a window's surface sets it.
   wgpu::Device _device;
   std::atomic<uint64_t> _generation{0};
-  wgpu::Surface _surface;
-  void *_nativeHandle = nullptr;
   bool _showsFrame = false;
-  Releaser _releaser;
+  // isAttachedLocked() as the last attach or detach left it (see
+  // isAttached).
+  std::atomic<bool> _attached{false};
   int _width = 0;
   int _height = 0;
   wgpu::TextureFormat _format = wgpu::TextureFormat::Undefined;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
-  // The window attached or resized since the swapchain was configured (see
-  // configureIfNeededLocked).
-  bool _needsConfigure = false;
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;
 

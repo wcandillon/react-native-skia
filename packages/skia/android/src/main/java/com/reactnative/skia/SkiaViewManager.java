@@ -39,8 +39,7 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     @Override
     public void setNativeId(@NonNull ReactViewGroup view, @Nullable String nativeId) {
         super.setNativeId(view, nativeId);
-        int nativeIdResolved = Integer.parseInt(nativeId);
-        ((SkiaView) view).registerView(nativeIdResolved);
+        ((SkiaView) view).setPendingNativeId(Integer.parseInt(nativeId));
     }
 
     @ReactProp(name = "highBitDepth")
@@ -51,6 +50,11 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     @ReactProp(name = "androidBackingView")
     public void setAndroidBackingView(SkiaView view, @Nullable String value) {
         view.setBackingView(value);
+    }
+
+    @ReactProp(name = "staticPresentation")
+    public void setStaticPresentation(SkiaView view, boolean value) {
+        view.setStaticPresentation(value);
     }
 
     @ReactProp(name = "androidOpaque")
@@ -74,14 +78,16 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     }
 
     // The backing view depends on several props (androidBackingView,
-    // androidOpaque, the z-order props, highBitDepth), so it is created after
-    // the first transaction, once every prop has arrived, and kept; later
-    // transactions only apply what the view takes in place (see
-    // SkiaView.updateView).
+    // staticPresentation, androidOpaque, the z-order props, highBitDepth), so
+    // it is created after the first transaction, once every prop has arrived,
+    // and kept; later transactions only apply what the view takes in place
+    // (see SkiaView.updateView). The view registers its id after that.
     @Override
     protected void onAfterUpdateTransaction(@NonNull ReactViewGroup view) {
         super.onAfterUpdateTransaction(view);
-        ((SkiaView) view).updateView();
+        SkiaView skiaView = (SkiaView) view;
+        skiaView.updateView();
+        skiaView.registerPendingView();
     }
 
     @Override

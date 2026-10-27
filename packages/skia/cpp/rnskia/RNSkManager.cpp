@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
 #include "RNSkView.h"
+#include "RNSkWindowSurface.h"
 #include "api/JsiSkApi.h"
 #include "api/JsiSkPicture.h"
 #include "api/recorder/JsiRecorder.h"
@@ -35,10 +36,13 @@ RNSkManager::RNSkManager(
   // the windows hold nothing yet: every view records its content again for
   // it. The redraw waits for the main thread, and for the window to be able
   // to show a frame (the app may be in the background, where the device was
-  // lost); it then configures the window on the new device. The listener
-  // only reaches the registry, which outlives this manager.
+  // lost); it then configures the window on the new device. The replaced
+  // device goes now if no window holds a surface on it, else with the
+  // windows' next frames (see RNSkWindowSurface::retireUnheldDevice). The
+  // listener only reaches the registry, which outlives this manager.
   _lossListener =
-      DawnContext::addLossListener([](const DawnContext::LossInfo &) {
+      DawnContext::addLossListener([](const DawnContext::LossInfo &info) {
+        RNSkWindowSurface::retireUnheldDevice(info.generation);
         for (const auto &view : ViewRegistry::getInstance().getViews()) {
           view->requestRedraw();
         }

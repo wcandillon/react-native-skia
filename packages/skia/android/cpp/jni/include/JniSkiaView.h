@@ -12,6 +12,7 @@
 
 #include "JniSkiaManager.h"
 #include "RNSkLog.h"
+#include "RNSkPresentedFrame.h"
 #include "RNSkView.h"
 #include "RNSkWindowSurface.h"
 
@@ -23,7 +24,9 @@ namespace jni = facebook::jni;
  * presents into, and relays the surface callbacks of the backing SurfaceView
  * or TextureView, whose ANativeWindow it acquires for the surface. The
  * surface callbacks come on the main thread; the view presents on the present
- * thread of the Java side (see SkiaView.runOnPresentThread).
+ * thread of the Java side (see SkiaView.runOnPresentThread). A static canvas
+ * has no backing view: it presents its frames as images, on the worker, which
+ * the Java view's image child shows (see presentAsImages).
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
 public:
@@ -43,6 +46,9 @@ public:
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
+         makeNativeMethod("presentAsImages", JniSkiaView::presentAsImages),
+         makeNativeMethod("imagePresenterLaidOut",
+                          JniSkiaView::imagePresenterLaidOut),
          makeNativeMethod("setSurfaceHighBitDepth",
                           JniSkiaView::setSurfaceHighBitDepth),
          makeNativeMethod("registerView", JniSkiaView::registerView),
@@ -56,6 +62,12 @@ public:
   // manager: holding a weak reference makes a late unregister a no-op and a
   // concurrent one keep the manager alive for the duration of the call.
   std::shared_ptr<RNSkManager> getSkiaManager() { return _manager.lock(); }
+
+  ~JniSkiaView() override {
+    if (_presentedFrame != nullptr) {
+      _presentedFrame->close();
+    }
+  }
 
 protected:
   // Main thread. Attaching the window asks the view for a frame on the
@@ -93,6 +105,32 @@ protected:
    */
   void setLayoutSize(int width, int height) {
     _surface->setLayoutSize(width, height);
+  }
+
+  /**
+   The canvas is static: its frames are presented as images, on the worker
+   (see RNSkView::presentAsImages). Main thread, before the view is
+   registered (see SkiaView.updateView).
+   */
+  void presentAsImages() { _view->presentAsImages(); }
+
+  /**
+   A static canvas was laid out at this pixel size, which its images take:
+   the first layout attaches the presenter, and a size the images already
+   have changes nothing. Main thread.
+   */
+  void imagePresenterLaidOut(int width, int height) {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    if (!_surface->isAttached()) {
+      _surface->attachImagePresenter(width, height,
+                                     /* useP3ColorSpace= */ false,
+                                     makeImagePresenter());
+    } else if (_surface->getWidth() != width ||
+               _surface->getHeight() != height) {
+      _surface->resize(width, height);
+    }
   }
 
   /**
@@ -140,11 +178,12 @@ private:
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
     _view = std::make_shared<RNSkView>(context, _surface);
+    _javaView = std::make_shared<JavaView>(jThis);
     // Tasks for the present thread go through the Java view, which owns the
     // thread. Weak: the Java view owns this object through its hybrid data;
     // a task for a view that is gone is dropped. Called from any thread, the
     // render thread pool's included, hence the thread scope.
-    auto javaView = std::make_shared<JavaView>(jThis);
+    auto javaView = _javaView;
     _view->setPresentThread([javaView](std::function<void()> task) {
       jni::ThreadScope threadScope;
       auto javaPart = javaView->weak->lockLocal();
@@ -189,6 +228,31 @@ private:
     }
     std::unique_ptr<jni::weak_ref<jhybridobject>> weak;
   };
+
+  /**
+   Shows each frame of a static canvas through the Java view's image child,
+   by the id of its image (see SkiaView.showPresentedImage), from the worker
+   that presents it.
+   */
+  RNSkWindowSurface::ImagePresenter makeImagePresenter() {
+    auto javaView = _javaView;
+    _presentedFrame = std::make_shared<RNSkPresentedFrame>(
+        _view->getPlatformContext(), [javaView](uint32_t imageId) {
+          jni::ThreadScope threadScope;
+          auto javaPart = javaView->weak->lockLocal();
+          if (!javaPart) {
+            return;
+          }
+          static const auto method =
+              javaPart->getClass()->getMethod<void(jlong)>(
+                  "showPresentedImage");
+          method(javaPart, static_cast<jlong>(imageId));
+        });
+    auto presentedFrame = _presentedFrame;
+    return [presentedFrame](const sk_sp<SkImage> &frame) {
+      presentedFrame->present(frame);
+    };
+  }
 
   /**
    Takes the ANativeWindow behind an android.view.Surface (SurfaceView) or a
@@ -259,6 +323,9 @@ private:
   }
 
   std::weak_ptr<RNSkManager> _manager;
+  std::shared_ptr<JavaView> _javaView;
+  // The frame a static canvas shows (see makeImagePresenter).
+  std::shared_ptr<RNSkPresentedFrame> _presentedFrame;
   // Declared before the view, which unbinds itself from the surface when it
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;

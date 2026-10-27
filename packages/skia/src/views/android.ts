@@ -8,6 +8,8 @@ import type { AndroidBackingView, AndroidCanvasProps } from "./types";
 export interface BackingViewProps {
   highBitDepth?: boolean;
   android?: AndroidCanvasProps;
+  // A static canvas has no backing view: it shows its frames as 8-bit images.
+  static?: boolean;
 }
 
 /** What the native component is handed for the `android` prop. */
@@ -95,11 +97,24 @@ const warnIgnoredChange = (prop: string) =>
 /**
  * Warns, in development on Android, about options a mounting canvas asks for
  * that the native view cannot honour (see BackingViewKind.java, whose rules
- * these mirror). The native side only says so in logcat, which is not where a
- * JS developer looks.
+ * these mirror), and on iOS too for a static canvas asking for highBitDepth.
+ * The native side only says so in logcat, which is not where a JS developer
+ * looks.
  */
 export const warnBackingViewAtMount = (mount: BackingViewProps) => {
-  if (!__DEV__ || Platform.OS !== "android") {
+  if (!__DEV__ || Platform.OS === "web") {
+    return;
+  }
+  if (mount.static) {
+    if (mount.highBitDepth) {
+      console.warn(
+        "Ignoring highBitDepth: a static canvas shows its frames as 8-bit " +
+          "images."
+      );
+    }
+    return;
+  }
+  if (Platform.OS !== "android") {
     return;
   }
   const backingView = resolveBackingView(mount.android);
@@ -130,14 +145,21 @@ export const warnBackingViewAtMount = (mount: BackingViewProps) => {
 /**
  * Warns, in development on Android, about a change of these props that the
  * native view ignores: the backing view is created from them when the canvas
- * mounts (see SkiaView.java, whose setters these rules mirror).
+ * mounts (see SkiaView.java, whose setters these rules mirror). A change of
+ * `static`, which iOS also reads at mount, is warned about on iOS too.
  */
 export const warnBackingViewChange = (
   mount: BackingViewProps,
   prev: BackingViewProps,
   next: BackingViewProps
 ) => {
-  if (!__DEV__ || Platform.OS !== "android") {
+  if (!__DEV__ || Platform.OS === "web") {
+    return;
+  }
+  if (!!prev.static !== !!next.static) {
+    warnIgnoredChange("static");
+  }
+  if (Platform.OS !== "android" || mount.static) {
     return;
   }
   if (resolveBackingView(prev.android) !== resolveBackingView(next.android)) {

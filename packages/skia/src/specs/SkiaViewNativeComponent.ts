@@ -5,6 +5,8 @@ import type { WithDefault } from "react-native/Libraries/Types/CodegenTypes";
 // @ts-ignore - pointerEvents needs to be redeclared for codegen to generate native bindings
 export interface NativeProps extends ViewProps {
   highBitDepth?: boolean;
+  // The `static` prop: frames presented as images, with no surface.
+  staticPresentation?: WithDefault<boolean, false>;
   // The `android` prop, resolved (see views/android.ts)
   androidBackingView?: WithDefault<
     "TextureView" | "SurfaceView" | "HardwareBufferView",

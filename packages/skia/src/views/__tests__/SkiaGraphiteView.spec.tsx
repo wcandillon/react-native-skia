@@ -6,7 +6,10 @@ import type { Ref } from "react";
 import { createRoot } from "react-dom/client";
 
 import { SkiaGraphiteView } from "../SkiaGraphiteView";
-import type { SkiaGraphiteViewRef } from "../SkiaGraphiteView";
+import type {
+  SkiaGraphiteViewProps,
+  SkiaGraphiteViewRef,
+} from "../SkiaGraphiteView";
 
 // The host instance of the native view, which getContext() measures.
 let mockHost: object = {};
@@ -37,12 +40,18 @@ const { SkiaViewApi } = jest.requireMock<{
   };
 }>("../api");
 
-const mountView = ({ strict = false } = {}) => {
+const mountView = ({
+  strict = false,
+  props = {},
+}: {
+  strict?: boolean;
+  props?: Omit<SkiaGraphiteViewProps, "ref">;
+} = {}) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
-  const element = <SkiaGraphiteView ref={ref} />;
+  const element = <SkiaGraphiteView ref={ref} {...props} />;
   act(() => {
     root.render(
       strict ? <React.StrictMode>{element}</React.StrictMode> : element
@@ -140,5 +149,37 @@ describe("SkiaGraphiteView on native", () => {
       [nativeId],
       [nativeId],
     ]);
+  });
+
+  it("records a high bit depth view's frames at high bit depth", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({ props: { highBitDepth: true } });
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
+      view.getNativeId(),
+      200,
+      100,
+      false,
+      true
+    );
+    await unmount();
+  });
+
+  // A static view presents 8-bit images whatever highBitDepth says, and
+  // drops a frame recorded for another format.
+  it("records a static view's frames for its 8-bit images", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({
+      props: { highBitDepth: true, static: true },
+    });
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
+      view.getNativeId(),
+      200,
+      100,
+      false,
+      false
+    );
+    await unmount();
   });
 });

@@ -10,9 +10,14 @@ import type { SkSurface, SkImage } from "../skia/types";
 export const E2E = process.env.E2E === "true";
 export const CI = process.env.CI === "true";
 export const WEB = process.env.WEB === "true";
+// The device darkens apps that do not (Android's force dark, an OEM's dark
+// mode for apps): set for a run on such a device.
+export const FORCE_DARK = process.env.FORCE_DARK === "true";
 export const itFailsE2e = E2E ? it.failing : it;
 export const itSkipsCanvasKit = WEB || !E2E ? it.skip : it;
 export const itRunsE2eOnly = E2E && !WEB ? it : it.skip;
+export const itRunsUnderForceDarkOnly =
+  E2E && !WEB && FORCE_DARK ? it : it.skip;
 export const itRunsNodeOnly = E2E ? it.skip : it;
 export const itRunsCIAndNodeOnly = CI || !E2E ? it : it.skip;
 

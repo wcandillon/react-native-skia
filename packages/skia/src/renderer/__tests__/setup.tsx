@@ -125,6 +125,12 @@ const classifyColor = (red: number, green: number, blue: number) => {
   if (red < 60 && green > 200 && blue < 60) {
     return "green";
   }
+  if (red > 200 && green > 200 && blue > 200) {
+    return "white";
+  }
+  if (red < 60 && green < 60 && blue < 60) {
+    return "black";
+  }
   return null;
 };
 
@@ -136,24 +142,44 @@ export const nameColor = (pixel: ArrayLike<number> | null) => {
   return classifyColor(red, green, blue) ?? `rgb(${red}, ${green}, ${blue})`;
 };
 
-// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
-export const readAllPixels = (image: SkImage) => {
-  const pixels = image.readPixels(0, 0, {
-    width: image.width(),
-    height: image.height(),
+// A region of a snapshot as unpremultiplied RGBA bytes, null when the snapshot
+// has none to read.
+const readRegionOrNull = (
+  image: SkImage,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) =>
+  image.readPixels(x, y, {
+    width,
+    height,
     colorType: ColorType.RGBA_8888,
     alphaType: AlphaType.Unpremul,
   });
+
+const readRegion = (
+  image: SkImage,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) => {
+  const pixels = readRegionOrNull(image, x, y, width, height);
   if (pixels === null) {
     throw new Error("The snapshot has no readable pixels");
   }
   return pixels;
 };
 
+// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
+export const readAllPixels = (image: SkImage) =>
+  readRegion(image, 0, 0, image.width(), image.height());
+
 // The pixels of a screen snapshot in each colour it names.
 export const countColors = (image: SkImage) => {
   const pixels = readAllPixels(image);
-  const counts = { cyan: 0, red: 0, blue: 0, green: 0 };
+  const counts = { cyan: 0, red: 0, blue: 0, green: 0, white: 0, black: 0 };
   for (let i = 0; i < pixels.length; i += 4) {
     const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
     if (color !== null) {
@@ -163,19 +189,95 @@ export const countColors = (image: SkImage) => {
   return counts;
 };
 
+// The colour of the screen at fractions of its width and of its height.
+const readScreenColorAt = (image: SkImage, x: number, y: number) =>
+  nameColor(
+    readRegionOrNull(
+      image,
+      Math.round(image.width() * x),
+      Math.round(image.height() * y),
+      1,
+      1
+    )
+  );
+
 // The colour of the screen at a fraction of its width and of its height.
 export const readScreenColor = (image: SkImage, fraction: number) =>
-  nameColor(
-    image.readPixels(
-      Math.round(image.width() * fraction),
-      Math.round(image.height() * fraction),
-      {
-        width: 1,
-        height: 1,
-        colorType: ColorType.RGBA_8888,
-        alphaType: AlphaType.Unpremul,
-      }
-    )
+  readScreenColorAt(image, fraction, fraction);
+
+// The top and bottom halves of a screen whose views split it in two.
+export const readScreenHalves = (image: SkImage) => ({
+  top: readScreenColor(image, 1 / 4),
+  bottom: readScreenColor(image, 3 / 4),
+});
+
+// The left and right of the top and bottom halves of a screen whose views
+// split it in two.
+export const readScreenQuarters = (image: SkImage) => ({
+  topLeft: readScreenColorAt(image, 1 / 4, 1 / 4),
+  topRight: readScreenColorAt(image, 3 / 4, 1 / 4),
+  bottomLeft: readScreenColorAt(image, 1 / 4, 3 / 4),
+  bottomRight: readScreenColorAt(image, 3 / 4, 3 / 4),
+});
+
+// The luminance of the middle of a screen, the central half of its width and
+// of its height: its mean and its standard deviation, from 0 to 255.
+export const readMiddleLuminance = (image: SkImage) => {
+  const width = Math.round(image.width() / 2);
+  const height = Math.round(image.height() / 2);
+  const pixels = readRegion(
+    image,
+    Math.round(image.width() / 4),
+    Math.round(image.height() / 4),
+    width,
+    height
+  );
+  let sum = 0;
+  let sumOfSquares = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const luminance =
+      0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+    sum += luminance;
+    sumOfSquares += luminance * luminance;
+  }
+  const count = width * height;
+  const mean = sum / count;
+  return {
+    mean,
+    deviation: Math.sqrt(Math.max(0, sumOfSquares / count - mean * mean)),
+  };
+};
+
+// Loses the GPU device Skia renders with, through the device test app's hook
+// (see the Gpu spec), and resolves once Skia has replaced it, with the account
+// of every further loss Skia reports while the views present on the new
+// device: a view that takes a surface on it over a window the lost one still
+// holds loses it too. Such a loss is reported once its own replacement is
+// made, a second after it at the earliest, as a device lost right after it
+// was made counts as an attempt that did not take.
+export const loseGpuDevice = () =>
+  surface.eval(
+    // No async/await: the code runs through Hermes' eval on the device.
+    (Skia, ctx) => {
+      ctx.forceGpuDeviceLoss();
+      return Skia.gpu.lost.then(() => {
+        const further: string[] = [];
+        const watch = () => {
+          Skia.gpu.lost.then((info) => {
+            further.push(info.message);
+            watch();
+          });
+        };
+        watch();
+        return new Promise<string[]>((resolve) =>
+          setTimeout(() => resolve(further), ctx.watchMilliseconds)
+        );
+      });
+    },
+    { watchMilliseconds: 3000 } as {
+      forceGpuDeviceLoss: () => void;
+      watchMilliseconds: number;
+    }
   );
 
 // Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start

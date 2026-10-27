@@ -116,6 +116,13 @@ global.SkiaViewApi = {
   destroyGraphiteContext() {
     // The web view owns its context and lets go of it when it unregisters.
   },
+  // <SkiaImageView> shows an <img> on the web (see SkiaImageView.web.tsx),
+  // which neither retains nor releases.
+  presentedImageId() {
+    return 0;
+  },
+  retainPresentedImage() {},
+  releasePresentedImage() {},
 } as ISkiaViewApiWeb;
 
 // eslint-disable-next-line import/no-default-export

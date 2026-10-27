@@ -8,6 +8,8 @@
 
 #include <condition_variable>
 
+#include "utils/RNSkLog.h"
+
 #if defined(__APPLE__)
 #include <pthread.h>
 #elif defined(__ANDROID__)
@@ -18,8 +20,10 @@ namespace RNSkia {
 
 /**
  * One background thread for work that neither a frame nor JS should wait
- * for: decoding an image, for instance. Jobs run in submission order, one at
- * a time, so a burst of them never fans out into as many threads.
+ * for: decoding an image, or presenting a static canvas's frame, for
+ * instance. Jobs run in submission order, one at a time, so a burst of them
+ * never fans out into as many threads. A job that throws is logged and the
+ * worker goes on: an exception leaving a detached thread ends the process.
  */
 class RNSkWorker {
 public:
@@ -60,7 +64,14 @@ private:
         job = std::move(_jobs.front());
         _jobs.pop_front();
       }
-      job();
+      try {
+        job();
+      } catch (const std::exception &error) {
+        RNSkLogger::logToConsole("RNSkia Worker: a job failed: %s",
+                                 error.what());
+      } catch (...) {
+        RNSkLogger::logToConsole("RNSkia Worker: a job failed");
+      }
     }
   }
 

@@ -129,6 +129,26 @@ export interface ISkiaViewApi {
    * the view owns its context; a no-op.
    */
   destroyGraphiteContext: (nativeId: number) => void;
+  /**
+   * The id a `<SkiaImageView>` shows an image by, the same for every view of
+   * one image. Native only.
+   */
+  presentedImageId: (image: SkImage) => number;
+  /**
+   * Keeps an image presentable while a `<SkiaImageView>` shows it. The first
+   * retain reads the image back and hands it to the platform as a bitmap,
+   * which every view showing the image draws. Native only.
+   */
+  retainPresentedImage: (image: SkImage) => void;
+  /**
+   * Gives back a retain, by id. The last one discards the bitmap. Native only.
+   */
+  releasePresentedImage: (id: number) => void;
+}
+
+export interface SkiaImageViewProps extends ViewProps {
+  /** The image the view shows, filling its bounds; null shows nothing. */
+  image: SkImage | null;
 }
 
 /** The props every Skia view takes, whichever way it is drawn. */
@@ -141,6 +161,16 @@ export interface SkiaBaseViewProps extends ViewProps {
    * when the canvas mounts.
    */
   highBitDepth?: boolean;
+
+  /**
+   * Draws each frame into an image that a plain view shows, with no surface,
+   * swapchain or display link of its own: the canvas mounts and unmounts at
+   * the cost of a view. A change of its content draws it again the same way,
+   * through a readback, so it suits content that changes rarely. Read once,
+   * when the canvas mounts; it takes precedence over `android.backingView`
+   * and `highBitDepth`.
+   */
+  static?: boolean;
 
   /**
    * Android-only rendering options: the native view behind the canvas and its

@@ -14,13 +14,19 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <atomic>
 #include <cmath>
 #include <memory>
+#include <utility>
+#include <variant>
 
 #import "RNSkManager.h"
+#import "RNSkOverloaded.h"
+#import "RNSkPresentedFrame.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#import "SkiaPresentedImageLayer.h"
 
 using namespace facebook::react;
 
@@ -40,16 +46,46 @@ static bool appIsBackgrounded() {
 #endif // !TARGET_OS_OSX
 }
 
-@implementation SkiaView {
-  // The native view and its window surface, from the view's first superview
-  // until it is recycled, and the layer the surface presents into, while the
-  // view is in a superview (see willMoveToSuperview:).
-  std::shared_ptr<RNSkia::RNSkView> _view;
-  std::shared_ptr<RNSkia::RNSkWindowSurface> _surface;
+namespace {
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
-  CAMetalLayer *_layer;
+// A view presenting through its window: the CAMetalLayer the window surface
+// attaches to while the view is in a superview, none while it is out of one
+// (see willMoveToSuperview:), and the display link that presents its frames.
+struct WindowPresentation {
+  CAMetalLayer *layer;
+#if !TARGET_OS_OSX
+  CADisplayLink *displayLink;
+  // Whether the display link asked for the display's full rate yet (see
+  // requestFullFrameRate:).
+  bool fullFrameRateRequested = false;
+#else
+  bool presentAgainScheduled = false;
+#endif
+};
 #pragma clang diagnostic pop
+
+// A static canvas: its frames are presented as images on the worker (see
+// RNSkView::presentAsImages), in a layer of its own, which stays across a
+// change of superview, and shown there (see presentedFrameOf:).
+struct ImagePresentation {
+  SkiaPresentedImageLayer *imageLayer;
+  std::shared_ptr<RNSkia::RNSkPresentedFrame> presentedFrame;
+};
+
+// How the native view presents, from its making until the view is recycled.
+using Presentation =
+    std::variant<std::monostate, WindowPresentation, ImagePresentation>;
+
+} // namespace
+
+@implementation SkiaView {
+  // The native view and its window surface, from the view's first superview
+  // until it is recycled, and how it presents (see willMoveToSuperview:).
+  std::shared_ptr<RNSkia::RNSkView> _view;
+  std::shared_ptr<RNSkia::RNSkWindowSurface> _surface;
+  Presentation _presentation;
   // Owned by the module (see finalizeUpdates:). A view can outlive its
   // manager: on a reload the module is invalidated on the JS thread while
   // Fabric still holds the views of the old bundle, which it deallocates
@@ -59,16 +95,15 @@ static bool appIsBackgrounded() {
   std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
   bool _highBitDepth;
-  // Whether the window can show a frame (see appIsBackgrounded). Main thread.
-  bool _canPresent;
-#if !TARGET_OS_OSX
-  CADisplayLink *_displayLink;
-  // Whether the display link asked for the display's full rate yet (see
-  // requestFullFrameRate).
-  bool _fullFrameRateRequested;
-#else
-  bool _presentAgainScheduled;
-#endif
+  // Whether the native view presents as images, a static canvas: read from
+  // the props when the native view is made.
+  bool _staticPresentation;
+  // Advanced each time the view lets go of its frames (see releaseShownFrame):
+  // an image the worker sent for frames let go of is not shown.
+  uint64_t _presentedFrameGeneration;
+  // Whether the window can show a frame (see appIsBackgrounded). Written on
+  // the main thread, read where the view presents.
+  std::shared_ptr<std::atomic<bool>> _canPresent;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -76,12 +111,9 @@ static bool appIsBackgrounded() {
     _manager = [RNSkiaModule latestActiveSkManager];
     _nativeId = 0;
     _highBitDepth = false;
-    _canPresent = !appIsBackgrounded();
-#if TARGET_OS_OSX
-    _presentAgainScheduled = false;
-#else
-    _fullFrameRateRequested = false;
-#endif
+    _staticPresentation = false;
+    _presentedFrameGeneration = 0;
+    _canPresent = std::make_shared<std::atomic<bool>>(!appIsBackgrounded());
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
@@ -114,7 +146,8 @@ static bool appIsBackgrounded() {
 // until the view is recycled, as on Android: what it shows stays with it
 // while the view is out of its superview, where a scroll view that clips its
 // subviews keeps the rows scrolled away. The window goes then, the layer with
-// its drawables included, so that a view out of the hierarchy holds none.
+// its drawables included, so that a view out of the hierarchy holds none; a
+// static canvas has no window, and keeps its image.
 #if !TARGET_OS_OSX
 - (void)willMoveToSuperview:(UIView *)newSuperView {
   [super willMoveToSuperview:newSuperView];
@@ -126,81 +159,173 @@ static bool appIsBackgrounded() {
   if (newSuperView == nullptr || manager == nullptr) {
     return;
   }
-  if (_layer == nil) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-    _layer = [CAMetalLayer layer];
-#pragma clang diagnostic pop
-    [self.layer addSublayer:_layer];
-    // AppKit lays out a view put in a superview only when asked: the layout
-    // attaches the window's surface to the layer (see layoutSubviews).
-    [self setNeedsLayout];
-    // A view put back gets its last frame onto the new layer now: the layout
-    // comes after the Core Animation commit that carries the layer, which
-    // would show it empty for a frame or two.
-    if (_view != nullptr) {
-      [CATransaction begin];
-      [CATransaction setDisableActions:YES];
-      _layer.frame =
-          CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-      [self attachSurface];
-      [CATransaction commit];
-      if (!_surface->showsFrame()) {
-        _view->redraw();
-      }
-    }
-  }
-  if (_view != nullptr) {
+  if (_view == nullptr) {
+    [self makeNativeView:manager];
     return;
   }
+  std::visit(RNSkia::Overloaded{
+                 [](std::monostate) {},
+                 [&](WindowPresentation &window) {
+                   if (window.layer == nil) {
+                     [self putBackWindow:window];
+                   }
+                 },
+                 [](ImagePresentation &) {},
+             },
+             _presentation);
+}
+
+// The native view, its window surface and how it presents, as the props ask:
+// read once, like the backing view on Android. What waits in the background
+// is presented once the app is back (see appWillEnterForeground:).
+- (void)makeNativeView:(const std::shared_ptr<RNSkia::RNSkManager> &)manager {
   auto context = manager->getPlatformContext();
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
-  _surface->setHighBitDepth(_highBitDepth);
-  // The window belongs to the main thread, and is left alone while the app
-  // is in the background: what the view holds is presented on its next frame
-  // once the app is back (see appWillEnterForeground:).
-  __weak SkiaView *weakSelf = self;
-  _surface->setCanPresent([weakSelf]() {
-    SkiaView *strongSelf = weakSelf;
-    return strongSelf != nil && [[NSThread currentThread] isMainThread] &&
-           strongSelf->_canPresent;
-  });
-  _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+  auto canPresent = _canPresent;
+  if (_staticPresentation) {
+    // The images are 8-bit whatever the prop says, and the frames are
+    // recorded for them from the first. The worker presents them.
+    _surface->setHighBitDepth(false);
+    _surface->setCanPresent([canPresent]() { return canPresent->load(); });
+    _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+    _view->presentAsImages();
+    ImagePresentation images{[SkiaPresentedImageLayer layer], nullptr};
+    [self.layer addSublayer:images.imageLayer];
+    _presentation = std::move(images);
+  } else {
+    // The window belongs to the main thread.
+    _surface->setHighBitDepth(_highBitDepth);
+    _surface->setCanPresent([canPresent]() {
+      return [[NSThread currentThread] isMainThread] && canPresent->load();
+    });
+    _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+    // The display link presents whatever is waiting on its next tick, a frame
+    // for a resized window included: nothing shows before it anyway.
+    __weak SkiaView *weakSelf = self;
+    _view->setFrameScheduler(
+        [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    WindowPresentation window{[CAMetalLayer layer]};
+#pragma clang diagnostic pop
+    [self.layer addSublayer:window.layer];
+    _presentation = std::move(window);
+  }
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
-  // The display link presents whatever is waiting on its next tick, a frame
-  // for a resized window included: nothing shows before it anyway.
-  _view->setFrameScheduler(
-      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
+  // AppKit lays out a view put in a superview only when asked: the layout
+  // attaches the window's surface to the layer, or a static canvas's image
+  // presenter (see layoutSubviews).
+  [self setNeedsLayout];
+}
+
+// A view put back gets a new layer, with its last frame on it now: the layout
+// comes after the Core Animation commit that carries the layer, which would
+// show it empty for a frame or two.
+- (void)putBackWindow:(WindowPresentation &)window {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+  window.layer = [CAMetalLayer layer];
+#pragma clang diagnostic pop
+  [self.layer addSublayer:window.layer];
+  [self setNeedsLayout];
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  window.layer.frame =
+      CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+  [self attachWindow:window];
+  [CATransaction commit];
+  if (!_surface->showsFrame()) {
+    _view->redraw();
+  }
 }
 
 - (void)removeFromSuperview {
-  [self stopDisplayLink];
-  if (_surface != nullptr) {
-    _surface->detach();
-  }
-  [_layer removeFromSuperlayer];
-  _layer = nil;
+  std::visit(RNSkia::Overloaded{
+                 [](std::monostate) {},
+                 [&](WindowPresentation &window) {
+                   [self stopDisplayLink];
+                   _surface->detach();
+                   [window.layer removeFromSuperlayer];
+                   window.layer = nil;
+                 },
+                 [](ImagePresentation &) {},
+             },
+             _presentation);
   [super removeFromSuperview];
 }
 
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self stopDisplayLink];
+  [self releaseShownFrame];
   [self unregisterView];
+}
+
+#pragma mark - Static presentation
+
+// The frames a static canvas presents on the worker, which the layer shows on
+// the main thread by image id, keeping the previous one until the next one's
+// pixels arrive (see RNSkPresentedFrame).
+- (std::shared_ptr<RNSkia::RNSkPresentedFrame>)presentedFrameOf:
+    (ImagePresentation &)images {
+  if (images.presentedFrame == nullptr) {
+    __weak SkiaView *weakSelf = self;
+    const auto generation = ++_presentedFrameGeneration;
+    images.presentedFrame = std::make_shared<RNSkia::RNSkPresentedFrame>(
+        _view->getPlatformContext(), [weakSelf, generation](uint32_t imageId) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf showPresentedImage:imageId ofGeneration:generation];
+          });
+        });
+  }
+  return images.presentedFrame;
+}
+
+- (void)showPresentedImage:(uint32_t)imageId
+              ofGeneration:(uint64_t)generation {
+  auto *images = std::get_if<ImagePresentation>(&_presentation);
+  if (images != nullptr && _presentedFrameGeneration == generation) {
+    [images->imageLayer showImageId:imageId];
+  }
+}
+
+// Gives back the frames a static canvas holds: it is recycled or
+// deallocated.
+- (void)releaseShownFrame {
+  auto *images = std::get_if<ImagePresentation>(&_presentation);
+  if (images == nullptr) {
+    return;
+  }
+  if (images->presentedFrame != nullptr) {
+    images->presentedFrame->close();
+    images->presentedFrame = nullptr;
+    ++_presentedFrameGeneration;
+  }
+  [images->imageLayer showImageId:0];
 }
 
 - (void)prepareForRecycle {
   [super prepareForRecycle];
   [self stopDisplayLink];
+  [self releaseShownFrame];
   // Unregistered first, so that the native view is destroyed here rather than
   // under the registry's lock.
   [self unregisterView];
-  [_layer removeFromSuperlayer];
+  std::visit(RNSkia::Overloaded{
+                 [](std::monostate) {},
+                 [](WindowPresentation &window) {
+                   [window.layer removeFromSuperlayer];
+                 },
+                 [](ImagePresentation &images) {
+                   [images.imageLayer removeFromSuperlayer];
+                 },
+             },
+             _presentation);
+  _presentation = std::monostate{};
   _view = nullptr;
   _surface = nullptr;
-  _layer = nil;
 }
 
 - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
@@ -227,12 +352,12 @@ static bool appIsBackgrounded() {
 
 // The app went to the background (was hidden on macOS): frames wait there.
 - (void)appDidEnterBackground:(NSNotification *)notification {
-  _canPresent = false;
+  _canPresent->store(false);
 }
 
 // The app is coming back: what waited is presented on the view's next frame.
 - (void)appWillEnterForeground:(NSNotification *)notification {
-  _canPresent = true;
+  _canPresent->store(true);
   if (_view != nullptr) {
     _view->onCanPresent();
   }
@@ -246,23 +371,23 @@ static bool appIsBackgrounded() {
 // to them there, and tried again a frame later while some are left (more were
 // submitted meanwhile, or the window could not take one).
 - (void)scheduleFrame {
+  auto *window = std::get_if<WindowPresentation>(&_presentation);
   // Without a window the frames wait: attaching one redraws them.
-  if (_surface == nullptr || !_surface->isAttached()) {
+  if (window == nullptr || !_surface->isAttached()) {
     return;
   }
 #if !TARGET_OS_OSX
-  if (_displayLink == nil) {
-    _displayLink = [CADisplayLink displayLinkWithTarget:self
-                                               selector:@selector(onFrame:)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
-                       forMode:NSRunLoopCommonModes];
+  if (window->displayLink == nil) {
+    window->displayLink =
+        [CADisplayLink displayLinkWithTarget:self selector:@selector(onFrame:)];
+    [window->displayLink addToRunLoop:[NSRunLoop mainRunLoop]
+                              forMode:NSRunLoopCommonModes];
   }
-  [self requestFullFrameRate];
-  _displayLink.paused = NO;
+  [self requestFullFrameRate:*window];
+  window->displayLink.paused = NO;
 #else
-  if (_view != nullptr &&
-      (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
-    [self presentAgainLater];
+  if (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued) {
+    [self presentAgainLater:*window];
   }
 #endif
 }
@@ -275,19 +400,19 @@ static bool appIsBackgrounded() {
 // CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
 // caps every link at 60 Hz. The link is paused while nothing is queued, so an
 // idle view does not keep the display at its full rate.
-- (void)requestFullFrameRate {
+- (void)requestFullFrameRate:(WindowPresentation &)window {
 #if !TARGET_OS_VISION
-  if (_fullFrameRateRequested) {
+  if (window.fullFrameRateRequested) {
     return;
   }
   UIScreen *screen = self.window.screen;
   if (screen == nil) {
     return;
   }
-  _fullFrameRateRequested = true;
+  window.fullFrameRateRequested = true;
   const float maxFps = (float)screen.maximumFramesPerSecond;
   if (maxFps > 60) {
-    _displayLink.preferredFrameRateRange =
+    window.displayLink.preferredFrameRateRange =
         CAFrameRateRangeMake(60, maxFps, maxFps);
   }
 #endif
@@ -300,37 +425,47 @@ static bool appIsBackgrounded() {
   }
 }
 #else
-- (void)presentAgainLater {
-  if (_presentAgainScheduled) {
+- (void)presentAgainLater:(WindowPresentation &)window {
+  if (window.presentAgainScheduled) {
     return;
   }
-  _presentAgainScheduled = true;
+  window.presentAgainScheduled = true;
   __weak SkiaView *weakSelf = self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 60),
                  dispatch_get_main_queue(), ^{
-                   SkiaView *strongSelf = weakSelf;
-                   if (strongSelf == nil) {
-                     return;
-                   }
-                   strongSelf->_presentAgainScheduled = false;
-                   [strongSelf scheduleFrame];
+                   [weakSelf presentAgain];
                  });
+}
+
+- (void)presentAgain {
+  auto *window = std::get_if<WindowPresentation>(&_presentation);
+  if (window == nullptr) {
+    return;
+  }
+  window->presentAgainScheduled = false;
+  [self scheduleFrame];
 }
 #endif
 
 - (void)stopDisplayLink {
 #if !TARGET_OS_OSX
-  [_displayLink invalidate];
-  _displayLink = nil;
-  _fullFrameRateRequested = false;
+  auto *window = std::get_if<WindowPresentation>(&_presentation);
+  if (window == nullptr) {
+    return;
+  }
+  [window->displayLink invalidate];
+  window->displayLink = nil;
+  window->fullFrameRateRequested = false;
 #endif
 }
 
 #pragma mark - Render
 
 - (void)drawRect:(CGRect)rect {
-  // The OS asked for a draw: present what the view holds right away.
-  if (_view != nullptr) {
+  // The OS asked for a draw: a window presents what the view holds right
+  // away; a static canvas's layer keeps the image it shows, and its frames
+  // are presented on the worker.
+  if (std::holds_alternative<WindowPresentation>(_presentation)) {
     _view->redraw();
   }
 }
@@ -339,35 +474,71 @@ static bool appIsBackgrounded() {
 
 - (void)layoutSubviews {
   [super layoutSubviews];
-  if (_surface != nullptr && _layer != nil) {
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    _layer.frame =
-        CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-    [self attachSurface];
-    [CATransaction commit];
-  }
+  const CGRect frame =
+      CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  std::visit(RNSkia::Overloaded{
+                 [](std::monostate) {},
+                 [&](WindowPresentation &window) {
+                   // Out of a superview the view has no layer to attach.
+                   if (window.layer != nil) {
+                     window.layer.frame = frame;
+                     [self attachWindow:window];
+                   }
+                 },
+                 [&](ImagePresentation &images) {
+                   images.imageLayer.frame = frame;
+                   [self attachImagePresenter:images];
+                 },
+             },
+             _presentation);
+  [CATransaction commit];
+}
+
+// The view's size in pixels. The layout is on the pixel grid: rounded rather
+// than truncated, a product like 1169.9999 gives the pixel size it means.
+- (std::pair<int, int>)pixelSize {
+  const float pd = _view->getPlatformContext()->getPixelDensity();
+  return {static_cast<int>(std::lround(self.bounds.size.width * pd)),
+          static_cast<int>(std::lround(self.bounds.size.height * pd))};
 }
 
 // Configures the layer as the Dawn surface of the view at its current size:
 // on every layout, and again when the bit depth changes so that the layer's
 // pixel format follows.
-- (void)attachSurface {
-  auto context = _view->getPlatformContext();
-  // The layout is on the pixel grid: round rather than truncate, so that a
-  // product like 1169.9999 gives the pixel size the layout means.
-  float pd = context->getPixelDensity();
-  int w = static_cast<int>(std::lround(_layer.frame.size.width * pd));
-  int h = static_cast<int>(std::lround(_layer.frame.size.height * pd));
-  _surface->setLayoutSize(w, h);
-  if (w == 0 || h == 0) {
+- (void)attachWindow:(WindowPresentation &)window {
+  const auto [width, height] = [self pixelSize];
+  _surface->setLayoutSize(width, height);
+  if (width == 0 || height == 0) {
     // Dawn refuses an empty surface: without one the frames wait for a size.
     _surface->detach();
     return;
   }
   // The layer is owned by the view: nothing to release with the window.
-  _surface->attach((__bridge void *)_layer, w, h, _highBitDepth,
-                   context->prefersP3ColorSpace(), nullptr);
+  _surface->attach((__bridge void *)window.layer, width, height, _highBitDepth,
+                   _view->getPlatformContext()->prefersP3ColorSpace(),
+                   nullptr);
+}
+
+// A static canvas presents into images of the view's size, and keeps the last
+// one while it has no size.
+- (void)attachImagePresenter:(ImagePresentation &)images {
+  const auto [width, height] = [self pixelSize];
+  _surface->setLayoutSize(width, height);
+  if (width == 0 || height == 0) {
+    return;
+  }
+  if (!_surface->isAttached()) {
+    auto presentedFrame = [self presentedFrameOf:images];
+    _surface->attachImagePresenter(
+        width, height, _view->getPlatformContext()->prefersP3ColorSpace(),
+        [presentedFrame](const sk_sp<SkImage> &frame) {
+          presentedFrame->present(frame);
+        });
+  } else if (_surface->getWidth() != width || _surface->getHeight() != height) {
+    _surface->resize(width, height);
+  }
 }
 
 #pragma mark - Props
@@ -383,6 +554,10 @@ static bool appIsBackgrounded() {
   int nativeId =
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
+  // Read when the native view is made, like the backing view on Android.
+  if (_view == nullptr) {
+    _staticPresentation = newProps.staticPresentation;
+  }
   [self setHighBitDepth:newProps.highBitDepth];
   // The android* props (backing view, opacity, z-order) select and set up the
   // backing view on Android; a CAMetalLayer composites like any other layer.
@@ -403,14 +578,16 @@ static bool appIsBackgrounded() {
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface == nullptr) {
+  // A static canvas's images keep the 8-bit format.
+  auto *window = std::get_if<WindowPresentation>(&_presentation);
+  if (window == nullptr) {
     return;
   }
   // The layer is re-attached with the new format; until then (or without a
   // size), frames are recorded for it.
   _surface->setHighBitDepth(highBitDepth);
   if (_surface->isAttached()) {
-    [self attachSurface];
+    [self attachWindow:*window];
   }
 }
 

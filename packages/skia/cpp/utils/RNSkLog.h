@@ -5,6 +5,9 @@
 #pragma once
 
 #include <jsi/jsi.h>
+
+#include <cstdarg>
+#include <cstdio>
 #include <string>
 
 #if defined(ANDROID) || defined(__ANDROID__)

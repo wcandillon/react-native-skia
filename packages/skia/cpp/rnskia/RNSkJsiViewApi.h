@@ -14,8 +14,10 @@
 #include "RNSkGraphiteProducer.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkPresentedImages.h"
 #include "RNSkView.h"
 #include "api/JsiSkGraphiteContext.h"
+#include "api/JsiSkImage.h"
 #include "api/JsiSkNativeObjects.h"
 
 #include "jsi/ViewProperty.h"
@@ -382,9 +384,47 @@ public:
     return jsi::Value::undefined();
   }
 
+  /** The id a <SkiaImageView> shows an image by: (image). */
+  JSI_HOST_FUNCTION(presentedImageId) {
+    if (count < 1) {
+      throw jsi::JSError(runtime, "presentedImageId: expected (image)");
+    }
+    auto image = JsiSkImage::fromValue(runtime, arguments[0]);
+    return jsi::Value(static_cast<double>(RNSkPresentedImages::idOf(image)));
+  }
+
+  /**
+   Keeps an image presentable while a <SkiaImageView> shows it: (image). The
+   first retain reads it back and hands it to the platform as a bitmap.
+   */
+  JSI_HOST_FUNCTION(retainPresentedImage) {
+    if (count < 1) {
+      throw jsi::JSError(runtime, "retainPresentedImage: expected (image)");
+    }
+    auto image = JsiSkImage::fromValue(runtime, arguments[0]);
+    RNSkPresentedImages::getInstance().retain(this, image, _platformContext);
+    return jsi::Value::undefined();
+  }
+
+  /** Gives back a retain: (id). The last one discards the bitmap. */
+  JSI_HOST_FUNCTION(releasePresentedImage) {
+    if (count < 1 || !arguments[0].isNumber()) {
+      throw jsi::JSError(runtime, "releasePresentedImage: expected (id)");
+    }
+    RNSkPresentedImages::getInstance().release(
+        this, static_cast<uint32_t>(arguments[0].asNumber()), _platformContext);
+    return jsi::Value::undefined();
+  }
+
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "allocateNativeId",
                       &RNSkJsiViewApi::allocateNativeId);
+    installHostMethod(runtime, prototype, "presentedImageId",
+                      &RNSkJsiViewApi::presentedImageId);
+    installHostMethod(runtime, prototype, "retainPresentedImage",
+                      &RNSkJsiViewApi::retainPresentedImage);
+    installHostMethod(runtime, prototype, "releasePresentedImage",
+                      &RNSkJsiViewApi::releasePresentedImage);
     installHostMethod(runtime, prototype, "setJsiProperty",
                       &RNSkJsiViewApi::setJsiProperty);
     installHostMethod(runtime, prototype, "requestRedraw",
@@ -408,6 +448,12 @@ public:
   explicit RNSkJsiViewApi(std::shared_ptr<RNSkPlatformContext> platformContext)
       : JsiSkNativeObject<RNSkJsiViewApi>(platformContext),
         _platformContext(platformContext) {}
+
+  // The runtime that retained presented images is gone (a reload) with its
+  // image views, and none of its retains will be released.
+  ~RNSkJsiViewApi() override {
+    RNSkPresentedImages::getInstance().releaseAll(this, _platformContext);
+  }
 
   /**
    * Registers a skia view

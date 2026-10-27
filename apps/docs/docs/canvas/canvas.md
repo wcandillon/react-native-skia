@@ -16,6 +16,7 @@ Behind the scenes, it is using its own React renderer.
 | onLayout? | `(event: LayoutChangeEvent) => void` | Called with the layout of the canvas whenever it changes (see [canvas size](#canvas-size)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options: the native view behind the canvas and its options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
+| static? | `boolean` | Show each frame as an image, with no surface of its own (see [static canvases](#static-canvases)) |
 
 ## Canvas size
 
@@ -262,6 +263,35 @@ On Android, `highBitDepth` needs a `SurfaceView` (`android={{ backingView: "Surf
 The 10-bit format only has 2 bits of alpha, so a `highBitDepth` canvas is opaque, whatever `android.opaque` says.
 When the device does not support the 10-bit format, the canvas falls back to 8-bit.
 The format is chosen when the canvas mounts: to change it, remount the canvas with a new `key`.
+
+:::
+
+## Static canvases
+
+A canvas whose drawing does not change once it is drawn needs no surface of its own.
+With `static`, each frame is drawn into an image that a plain view shows: there is no surface, swapchain or render loop per canvas, the image is made off the main thread, and the canvas mounts and unmounts without the cost of a surface.
+
+```tsx twoslash
+import {Canvas, Circle} from "react-native-skia";
+
+const Badge = () => {
+  return (
+    <Canvas style={{ width: 32, height: 32 }} static>
+      <Circle cx={16} cy={16} r={16} color="#5856D6" />
+    </Canvas>
+  );
+};
+```
+
+The drawing can still change: each change is drawn again and read back into a new image, which costs more than a frame of a regular canvas, so a drawing that animates belongs in a regular canvas.
+New children count as a change even when they draw the same thing, so a static canvas whose parent renders often takes children made once, with `useMemo`.
+A drawing shown many times at once is cheaper still as one image shown by [Image Views](/docs/canvas/image-view): every view of an image shares one bitmap, where every static canvas has its own.
+
+:::info
+
+`static` is read when the canvas mounts: to change it, remount the canvas with a new `key`.
+It takes precedence over `android.backingView` and `highBitDepth`: a static canvas renders with 8 bits per channel.
+On the Web, `static` has no effect.
 
 :::
 

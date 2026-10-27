@@ -9,7 +9,12 @@ import androidx.annotation.Nullable;
  */
 enum BackingViewKind {
     SURFACE_VIEW,
-    TEXTURE_VIEW;
+    TEXTURE_VIEW,
+    /**
+     * No surface: a static canvas presents each frame as an image, which a plain
+     * view draws inside the window's own drawing (see SkiaImageView).
+     */
+    IMAGE;
 
     /**
      * The kind the androidBackingView prop names. "HardwareBufferView" (a plain
