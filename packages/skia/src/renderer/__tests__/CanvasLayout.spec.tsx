@@ -70,9 +70,16 @@ const mount = (element: ReactElement) => {
   act(() => {
     root.render(element);
   });
-  return () => {
-    act(() => root.unmount());
-    container.remove();
+  return {
+    rerender: (next: ReactElement) => {
+      act(() => {
+        root.render(next);
+      });
+    },
+    unmount: () => {
+      act(() => root.unmount());
+      container.remove();
+    },
   };
 };
 
@@ -90,7 +97,7 @@ describe("Canvas onLayout", () => {
   it("hands onLayout to the view and logs no error", () => {
     const errors = jest.spyOn(console, "error").mockImplementation(() => {});
     const onLayout = jest.fn();
-    const unmount = mount(<Canvas onLayout={onLayout} />);
+    const { unmount } = mount(<Canvas onLayout={onLayout} />);
 
     mockNativeView.props.onLayout?.(layoutEvent);
 
@@ -107,7 +114,7 @@ describe("Canvas onLayout", () => {
       sizes.push(size);
       return <Canvas onLayout={onLayout} />;
     };
-    const unmount = mount(<Demo />);
+    const { unmount } = mount(<Demo />);
     expect(sizes[sizes.length - 1]).toEqual({ width: 0, height: 0 });
 
     act(() => {
@@ -150,7 +157,7 @@ describe("Canvas ref size", () => {
     const { Canvas } = loadCanvas();
     mockNativeView.host = createScaledHost();
     const ref = React.createRef<CanvasRef>();
-    const unmount = mount(<Canvas ref={ref} />);
+    const { unmount } = mount(<Canvas ref={ref} />);
     expect(ref.current?.size).toEqual({ width: 200, height: 100 });
     unmount();
   });
@@ -159,8 +166,26 @@ describe("Canvas ref size", () => {
     const { Canvas } = loadCanvas({ os: "web" });
     mockNativeView.host = { getSize: () => ({ width: 320, height: 240 }) };
     const ref = React.createRef<CanvasRef>();
-    const unmount = mount(<Canvas ref={ref} />);
+    const { unmount } = mount(<Canvas ref={ref} />);
     expect(ref.current?.size).toEqual({ width: 320, height: 240 });
+    unmount();
+  });
+});
+
+// The native view resolves the opacity default for the view it created. React
+// Native's view culling deletes a canvas's native view out of the viewport and
+// creates it again from the current props, the component and its state kept.
+describe("Canvas backing view", () => {
+  it("hands the native view the opacity asked for, not one resolved for a view it may no longer have", () => {
+    const { Canvas } = loadCanvas();
+    const { rerender, unmount } = mount(
+      <Canvas android={{ backingView: "SurfaceView" }} />
+    );
+    rerender(<Canvas android={{ backingView: "TextureView" }} />);
+    expect(mockNativeView.props).toMatchObject({
+      androidBackingView: "TextureView",
+      androidOpacity: "Default",
+    });
     unmount();
   });
 });

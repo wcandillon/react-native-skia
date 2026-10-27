@@ -15,7 +15,7 @@ import type {
 } from "react-native";
 
 import { SkiaViewApi } from "../views/api";
-import { androidNativeProps, useBackingViewWarning } from "../views/android";
+import { androidNativeProps } from "../views/android";
 import type { AndroidCanvasProps, CanvasColorSpace } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
@@ -67,7 +67,7 @@ export interface CanvasProps extends ViewProps {
    * identical to the default 8-bit surface, only with more precision (this is
    * about bit depth, not HDR). On Android it needs a `SurfaceView` (see
    * `android.backingView`), which it makes opaque, as the 10-bit format only
-   * has 2 bits of alpha; it is read once, when the canvas mounts.
+   * has 2 bits of alpha; it is read when the canvas's native view is created.
    */
   highBitDepth?: boolean;
   /**
@@ -80,9 +80,10 @@ export interface CanvasProps extends ViewProps {
   colorSpace?: CanvasColorSpace;
   /**
    * Android-only rendering options: the native view behind the canvas and its
-   * options, see {@link AndroidCanvasProps}. The view is created when the
-   * canvas mounts and kept: a change of `backingView` is ignored, with a
-   * warning in development; remount the canvas, with a `key`, to change it.
+   * options, see {@link AndroidCanvasProps}. The view is created with the
+   * canvas's native view and kept for as long as that lives: a change of
+   * `backingView` is ignored, with a warning; remount the canvas, with a
+   * `key`, to change it.
    * Ignored on iOS and web.
    */
   android?: AndroidCanvasProps;
@@ -177,7 +178,6 @@ export const Canvas = ({
   ...viewProps
 }: CanvasProps) => {
   const { nativeId, viewRef } = useCanvasRoot({ children, ref });
-  useBackingViewWarning({ highBitDepth, android });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}
@@ -185,7 +185,7 @@ export const Canvas = ({
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
       colorSpace={colorSpace ?? ""}
-      {...androidNativeProps({ highBitDepth, android })}
+      {...androidNativeProps(android)}
       {...viewProps}
     />
   );
