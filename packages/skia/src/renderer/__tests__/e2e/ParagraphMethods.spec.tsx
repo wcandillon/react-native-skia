@@ -9,6 +9,11 @@ const RobotoRegular = Array.from(
   resolveFile("skia/__tests__/assets/Roboto-Regular.ttf")
 );
 
+// Roboto Flex (SIL OFL) subset to "Hello", keeping its wght and wdth axes.
+const RobotoFlex = Array.from(
+  resolveFile("skia/__tests__/assets/RobotoFlex-Hello.ttf")
+);
+
 describe("Paragraph Methods", () => {
   describe("paragraph style", () => {
     it("should apply the default textStyle from the paragraph style", async () => {
@@ -56,6 +61,46 @@ describe("Paragraph Methods", () => {
       // Roboto at fontSize 24 has a line height of ~28; the default fontSize
       // (14) would yield ~16.4.
       expect(heights.fromParagraphStyle).toBeGreaterThan(24);
+    });
+  });
+
+  describe("text style", () => {
+    it("should apply fontVariations", async () => {
+      const widths = await surface.eval(
+        (Skia, ctx) => {
+          const robotoFlex = Skia.Typeface.MakeFromData(
+            Skia.Data.fromBytes(new Uint8Array(ctx.RobotoFlex))
+          )!;
+          const provider = Skia.TypefaceFontProvider.Make();
+          provider.registerFont(robotoFlex, "Roboto Flex");
+          const measure = (axis?: string, value?: number) => {
+            const paragraph = Skia.ParagraphBuilder.Make({}, provider)
+              .pushStyle({
+                color: Skia.Color("black"),
+                fontFamilies: ["Roboto Flex"],
+                fontSize: 24,
+                fontVariations: axis ? [{ axis, value: value! }] : undefined,
+              })
+              .addText("Hello")
+              .build();
+            paragraph.layout(512);
+            return paragraph.getLongestLine();
+          };
+          return {
+            regular: measure(),
+            thin: measure("wght", 100),
+            black: measure("wght", 1000),
+            condensed: measure("wdth", 25),
+          };
+        },
+        {
+          RobotoFlex,
+        }
+      );
+
+      expect(widths.thin).toBeLessThan(widths.regular);
+      expect(widths.black).toBeGreaterThan(widths.regular);
+      expect(widths.condensed).toBeLessThan(widths.regular);
     });
   });
 

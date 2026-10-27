@@ -110,6 +110,29 @@ public:
         retVal.addFontFeature(SkString(name), value);
       }
     }
+    // TextStyle::setFontArguments copies the coordinates
+    if (hasValue(runtime, object, "fontVariations")) {
+      auto propValue = object.getProperty(runtime, "fontVariations")
+                           .asObject(runtime)
+                           .asArray(runtime);
+      auto size = propValue.size(runtime);
+      std::vector<SkFontArguments::VariationPosition::Coordinate> coords;
+      for (size_t i = 0; i < size; ++i) {
+        auto element = propValue.getValueAtIndex(runtime, i).asObject(runtime);
+        auto axis = element.getProperty(runtime, "axis")
+                        .asString(runtime)
+                        .utf8(runtime);
+        if (axis.size() != 4)
+          continue;
+        auto value = element.getProperty(runtime, "value").asNumber();
+        coords.push_back({SkSetFourByteTag(axis[0], axis[1], axis[2], axis[3]),
+                          static_cast<float>(value)});
+      }
+      SkFontArguments args;
+      args.setVariationDesignPosition(
+          {coords.data(), static_cast<int>(coords.size())});
+      retVal.setFontArguments(args);
+    }
     if (hasValue(runtime, object, "fontSize")) {
       auto propValue = object.getProperty(runtime, "fontSize");
       retVal.setFontSize(propValue.asNumber());
