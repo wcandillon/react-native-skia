@@ -32,7 +32,7 @@ import {
 // TextureView keeps the clip, the alpha and the stacking order, while a
 // SurfaceView punches through all of them. The zOrderOnTop switch then moves
 // the SurfaceView above the whole window, and zOrderMediaOverlay above the
-// other SurfaceView.
+// other SurfaceView. The mounted switch mounts the canvas afresh.
 
 const backingViews: AndroidBackingView[] = [
   "TextureView",
@@ -75,6 +75,7 @@ export const AndroidViews = () => {
   const [zOrderOnTop, setZOrderOnTop] = useState(false);
   const [zOrderMediaOverlay, setZOrderMediaOverlay] = useState(false);
   const [animate, setAnimate] = useState(true);
+  const [mounted, setMounted] = useState(true);
   const clock = useClock();
   const cx = useDerivedValue(
     () => 100 + 60 * Math.sin(clock.value / 500),
@@ -116,25 +117,30 @@ export const AndroidViews = () => {
         <Stripes />
         <View style={styles.frame}>
           <View style={styles.clip}>
-            <Canvas key={backingKey} style={styles.canvas} android={android}>
-              <Fill>
-                <LinearGradient
-                  start={vec(0, 0)}
-                  end={vec(0, 200)}
-                  colors={["rgba(0, 122, 255, 0.6)", "rgba(88, 86, 214, 0.6)"]}
-                />
-              </Fill>
-              <Circle cx={animate ? cx : 100} cy={100} r={40} color="white" />
-              {animate && font && (
-                <SkiaText
-                  x={24}
-                  y={36}
-                  text={frameRateLabel}
-                  font={font}
-                  color="white"
-                />
-              )}
-            </Canvas>
+            {mounted && (
+              <Canvas key={backingKey} style={styles.canvas} android={android}>
+                <Fill>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(0, 200)}
+                    colors={[
+                      "rgba(0, 122, 255, 0.6)",
+                      "rgba(88, 86, 214, 0.6)",
+                    ]}
+                  />
+                </Fill>
+                <Circle cx={animate ? cx : 100} cy={100} r={40} color="white" />
+                {animate && font && (
+                  <SkiaText
+                    x={24}
+                    y={36}
+                    text={frameRateLabel}
+                    font={font}
+                    color="white"
+                  />
+                )}
+              </Canvas>
+            )}
           </View>
           {surfaceView && (
             <Canvas
@@ -201,6 +207,10 @@ export const AndroidViews = () => {
         <View style={styles.row}>
           <Text style={styles.label}>animate</Text>
           <Switch value={animate} onValueChange={setAnimate} />
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>mounted</Text>
+          <Switch value={mounted} onValueChange={setMounted} />
         </View>
         <Text style={styles.hint}>
           The backing view is created when the canvas mounts: a chip remounts
