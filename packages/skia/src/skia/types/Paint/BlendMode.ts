@@ -60,6 +60,6 @@ export enum BlendMode {
   Luminosity, //!< luminosity of source with hue and saturation of
 
   // Custom blend modes (implemented via SkRuntimeEffect blenders)
-  PlusDarker = 1001, //!< rc = max(0, 1 - ((1-dst) + (1-src))), similar to iOS kCGBlendModePlusDarker
-  PlusLighter = 1002, //!< rc = min(1, dst + src), similar to iOS kCGBlendModePlusLighter
+  PlusDarker = 1001, //!< rc = max(0, ra - ((da - dst) + (sa - src))) on premultiplied colors, ra = sa + da - sa * da, similar to iOS kCGBlendModePlusDarker
+  PlusLighter = 1002, //!< rc = min(1, dst + src) on every premultiplied channel, alpha included, as CSS plus-lighter and iOS kCGBlendModePlusLighter
 }

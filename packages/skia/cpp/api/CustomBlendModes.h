@@ -26,8 +26,8 @@ inline const char *kPlusDarkerSkSL = R"(
 )";
 
 // SkSL for PlusLighter blend mode
-// Formula: rc = min(1, dst + src)
-// On premultiplied colors, so a translucent source lightens proportionally
+// Formula: rc = min(1, dst + src) on every premultiplied channel, alpha
+// included: CSS plus-lighter, the same as SkBlendMode::kPlus
 inline const char *kPlusLighterSkSL = R"(
     vec4 main(vec4 src, vec4 dst) {
         return min(src + dst, vec4(1.0));

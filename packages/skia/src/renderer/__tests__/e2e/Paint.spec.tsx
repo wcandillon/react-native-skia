@@ -426,5 +426,14 @@ describe("Paint", () => {
     expect(await blend("#999999", "rgba(0, 0, 0, 0)", "plusDarker")).toEqual([
       153, 153, 153, 255,
     ]);
+    // With nothing behind them the alphas add up too: 0.6 + 0.6 reaches 1
+    // (0.6 is 153/255 exactly, so every backend stores the same first fill)
+    expect(
+      await blend(
+        "rgba(255, 255, 255, 0.6)",
+        "rgba(255, 255, 255, 0.6)",
+        "plusLighter"
+      )
+    ).toEqual([255, 255, 255, 255]);
   });
 });
