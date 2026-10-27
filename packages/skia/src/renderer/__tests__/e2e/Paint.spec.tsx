@@ -435,5 +435,10 @@ describe("Paint", () => {
         "plusLighter"
       )
     ).toEqual([255, 255, 255, 255]);
+    // plusDarker adds the alphas too: 0.4 + 0.4 = 0.8 (204), where the
+    // source-over union would give 0.64 (163) and [0, 96, 96, 163]
+    expect(
+      await blend("rgba(0, 0, 255, 0.4)", "rgba(0, 255, 0, 0.4)", "plusDarker")
+    ).toEqual([0, 128, 128, 204]);
   });
 });

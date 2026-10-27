@@ -26,11 +26,11 @@ const kBlendModePlusDarker = 1001;
 const kBlendModePlusLighter = 1002;
 
 // SkSL for PlusDarker blend mode
-// Formula: rc = max(0, ra - ((da - dst) + (sa - src))), ra = sa + da - sa * da
+// Formula: rc = max(0, ra - ((da - dst) + (sa - src))), ra = min(1, sa + da)
 // On premultiplied colors, so a translucent source darkens proportionally
 const plusDarkerSkSL = `
     vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
+        float outAlpha = min(1.0, src.a + dst.a);
         vec3 c = max(vec3(0.0), outAlpha - ((dst.a - dst.rgb) + (src.a - src.rgb)));
         return vec4(c, outAlpha);
     }
