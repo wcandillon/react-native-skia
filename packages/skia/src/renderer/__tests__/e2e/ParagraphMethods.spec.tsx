@@ -91,6 +91,8 @@ describe("Paragraph Methods", () => {
             thin: measure("wght", 100),
             black: measure("wght", 1000),
             condensed: measure("wdth", 25),
+            // Axis tags are four characters; others are skipped
+            invalidTag: measure("wg", 100),
           };
         },
         {
@@ -101,6 +103,7 @@ describe("Paragraph Methods", () => {
       expect(widths.thin).toBeLessThan(widths.regular);
       expect(widths.black).toBeGreaterThan(widths.regular);
       expect(widths.condensed).toBeLessThan(widths.regular);
+      expect(widths.invalidTag).toBe(widths.regular);
     });
   });
 
