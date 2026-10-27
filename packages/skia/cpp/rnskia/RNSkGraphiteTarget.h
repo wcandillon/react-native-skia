@@ -177,10 +177,11 @@ public:
    and the recorders of a few threads serve every view, with their caches
    and atlases. finishRecording() snaps it, on the same thread, before the
    thread records anything else (a recorder takes one deferred canvas at a
-   time). The canvas is deleted by finishRecording(). Throws while a
-   recording is already open, or while the view has no size.
+   time). The canvas is deleted by finishRecording(). Returns nullptr while
+   the view has no size: it asks for a frame once it has one. Throws while a
+   recording is already open, or when no deferred canvas can be made.
    */
-  SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
+  SkCanvas *tryBeginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
     std::lock_guard<std::mutex> lock(_stateMutex);
     return openRecordingLocked(recorder.recorder, recorder.generation, nullptr,
@@ -188,11 +189,12 @@ public:
   }
 
   /**
-   Same, on a recorder of the target's own, made on the first call and again
-   once the GPU device it was made for is lost: for JS, which records across
-   calls (SkiaViewApi.makeGraphiteContext) and may open a recording on
-   another target before finishing this one. Throws while a recording is
-   already open, while the view has no size, or when no recorder can be made.
+   Like tryBeginRecording(), on a recorder of the target's own, made on the
+   first call and again once the GPU device it was made for is lost: for JS,
+   which records across calls (SkiaViewApi.makeGraphiteContext) and may open
+   a recording on another target before finishing this one. Throws while a
+   recording is already open, while the view has no size, or when no
+   recorder or deferred canvas can be made.
    */
   SkCanvas *beginRecording() {
     auto target = resolveTargetInfo();
@@ -210,8 +212,13 @@ public:
       }
       _ownRecorder = std::move(recorder);
     }
-    return openRecordingLocked(_ownRecorder->recorder.get(),
-                               _ownRecorder->generation, _ownRecorder, target);
+    auto *canvas =
+        openRecordingLocked(_ownRecorder->recorder.get(),
+                            _ownRecorder->generation, _ownRecorder, target);
+    if (canvas == nullptr) {
+      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
+    }
+    return canvas;
   }
 
   /**
@@ -330,8 +337,8 @@ public:
 private:
   /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
-   recorder alive when it is the target's own. Called with the state lock
-   held.
+   recorder alive when it is the target's own. Returns nullptr while the view
+   has no size. Called with the state lock held.
    */
   SkCanvas *openRecordingLocked(skgpu::graphite::Recorder *recorder,
                                 uint64_t generation,
@@ -342,7 +349,7 @@ private:
                                "call finishRecording() first.");
     }
     if (target.width <= 0 || target.height <= 0) {
-      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
+      return nullptr;
     }
     auto imageInfo = SkImageInfo::Make(
         target.width, target.height, target.colorType, kPremul_SkAlphaType,
