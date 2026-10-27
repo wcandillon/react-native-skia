@@ -57,8 +57,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // The backing view, created by the first prop transaction and kept, with
     // the kind and the buffer format it was created with. The kind is null
     // until then: it is what tells a mounted canvas apart. Written on the
-    // main thread, read on the present thread (see doFrame).
-    private View mView;
+    // main thread, read on the present thread (see doFrame and
+    // onFirstFramePresented).
+    private volatile View mView;
     @Nullable
     private volatile BackingViewKind mKind = null;
     private boolean mSurfaceHighBitDepth = false;
@@ -293,6 +294,21 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     }
 
     // Frames --------------------------------------------------------------
+
+    /**
+     * The first frame was presented into a SurfaceView's surface. Present
+     * thread, while the native side holds the window; called from native. The
+     * draw gate opens on the main thread, unless the surface went meanwhile.
+     */
+    @DoNotStrip
+    public void onFirstFramePresented() {
+        if (mKind != BackingViewKind.SURFACE_VIEW) {
+            return;
+        }
+        final SkiaSurfaceView surfaceView = (SkiaSurfaceView) mView;
+        final int surface = surfaceView.currentSurface();
+        post(() -> surfaceView.onFirstFramePresented(surface));
+    }
 
     /**
      * Runs a task on the present thread, never on the spot (the native side
