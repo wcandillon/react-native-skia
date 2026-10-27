@@ -3,7 +3,7 @@ import React from "react";
 import { checkImage, docPath, itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
 import { Circle } from "../../components";
-import { surface, importSkia } from "../setup";
+import { nameColor, surface, importSkia } from "../setup";
 
 describe("Offscreen Drawings", () => {
   it("Should use the canvas API to build an image", async () => {
@@ -110,22 +110,6 @@ describe("Offscreen Drawings", () => {
   });
 });
 
-// A snapshot's colour pipeline can move a channel by a few units, so the
-// screen's cyan and red are read as colours rather than exact bytes.
-const readScreenColor = (pixel: ArrayLike<number> | null) => {
-  if (pixel === null) {
-    return "unreadable";
-  }
-  const [red, green, blue] = Array.from(pixel);
-  if (red < 60 && green > 200 && blue > 200) {
-    return "cyan";
-  }
-  if (red > 200 && green < 60 && blue < 60) {
-    return "red";
-  }
-  return `rgb(${red}, ${green}, ${blue})`;
-};
-
 describe("isOnMainThread", () => {
   itRunsE2eOnly(
     "is true on the UI thread and false on the JS thread",
@@ -137,7 +121,7 @@ describe("isOnMainThread", () => {
         colorType: ColorType.RGBA_8888,
         alphaType: AlphaType.Unpremul,
       });
-      expect(readScreenColor(pixel)).toBe("cyan");
+      expect(nameColor(pixel)).toBe("cyan");
     }
   );
 });

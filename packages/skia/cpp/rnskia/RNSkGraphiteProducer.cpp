@@ -72,7 +72,7 @@ void RNSkGraphiteProducer::setTarget(
     retiredTarget = std::exchange(_target, std::move(target));
     // A frame still queued on the previous target is not coming through this
     // view anymore (the view unbound itself from it): do not wait for it.
-    _queued = 0;
+    _slots.clear();
     _dirty = true;
     kickLocked();
   }
@@ -177,18 +177,19 @@ bool RNSkGraphiteProducer::requestFrame() {
   return _target != nullptr && hasContentLocked();
 }
 
-void RNSkGraphiteProducer::onFramePresented(size_t presented) {
+void RNSkGraphiteProducer::onRecordingsDone(
+    const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
+    size_t done) {
   std::lock_guard<std::mutex> lock(_mutex);
-  // The view may present recordings that are not this producer's (a client
-  // recording, the last frame shown again), hence the clamp.
-  _queued = presented >= _queued ? 0 : _queued - presented;
+  _slots.giveBack(recordings.begin(),
+                  recordings.begin() + static_cast<long>(done));
   if (_dirty) {
     kickLocked();
   }
 }
 
 void RNSkGraphiteProducer::kickLocked() {
-  if (_inFlight || _queued >= kMaxQueued || _target == nullptr ||
+  if (_inFlight || _slots.count() >= kMaxQueued || _target == nullptr ||
       !hasContentLocked()) {
     return;
   }
@@ -250,12 +251,15 @@ void RNSkGraphiteProducer::produce() {
   if (recording != nullptr) {
     // Queued even if the view was bound to another target while this job
     // ran: a target never drops a recording, a later one on the same
-    // recorder may depend on resources this one uploads. Submitted under the
-    // lock: a frame presented in between (a redraw replaying the last one)
-    // would otherwise clear the flag before the recording is even queued.
+    // recorder may depend on resources this one uploads. Its slot is held
+    // before it is submitted, under the lock: the view may be done with it as
+    // soon as it is queued.
+    const bool forCurrentTarget = target == _target;
+    if (forCurrentTarget) {
+      _slots.hold(recording);
+    }
     target->submit(std::move(recording));
-    if (target == _target) {
-      _queued++;
+    if (forCurrentTarget) {
       // Values that arrived during the replay start the next job right away,
       // while this frame waits for its vsync, as long as there is room.
       if (_dirty) {
