@@ -266,7 +266,7 @@ describe("Pictures", () => {
       canvas.drawCircle(size / 2, size - r, r, paint);
       const picture = recorder.finishRecordingAsPicture();
       const serialized = picture.serialize();
-      const deserialized = Skia.Picture.MakePicture(serialized);
+      const deserialized = Skia.Picture.Make(serialized);
       mainCanvas.drawPicture(deserialized!);
     });
     checkImage(image, "snapshots/pictures/create-picture.png");
@@ -291,9 +291,7 @@ describe("Pictures", () => {
       canvas.drawCircle(size / 2, size - r, r, paint);
       const picture = recorder.finishRecordingAsPicture();
       const serialized = picture.serialize()!;
-      const deserialized = Skia.Picture.MakePicture(
-        serialized.buffer as ArrayBuffer
-      );
+      const deserialized = Skia.Picture.Make(serialized.buffer as ArrayBuffer);
       mainCanvas.drawPicture(deserialized!);
     });
     checkImage(image, "snapshots/pictures/create-picture.png");

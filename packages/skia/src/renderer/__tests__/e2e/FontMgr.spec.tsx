@@ -18,7 +18,7 @@ describe("FontMgr", () => {
               typefaces.forEach((typeface) => {
                 const data = Skia.Data.fromBytes(new Uint8Array(typeface));
                 fontMgr.registerFont(
-                  Skia.Typeface.MakeFreeTypeFaceFromData(data)!,
+                  Skia.Typeface.MakeFromData(data)!,
                   familyName
                 );
               });
@@ -109,10 +109,7 @@ describe("FontMgr", () => {
           const typefaces = fonts[familyName];
           typefaces.forEach((typeface) => {
             const data = Skia.Data.fromBytes(new Uint8Array(typeface));
-            fontMgr.registerFont(
-              Skia.Typeface.MakeFreeTypeFaceFromData(data)!,
-              familyName
-            );
+            fontMgr.registerFont(Skia.Typeface.MakeFromData(data)!, familyName);
           });
         });
         let exists1 = true;

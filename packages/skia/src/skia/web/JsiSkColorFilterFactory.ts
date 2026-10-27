@@ -71,7 +71,7 @@ export class JsiSkColorFilterFactory
     );
   }
 
-  MakeLumaColorFilter(): SkColorFilter {
+  MakeLuma(): SkColorFilter {
     return new JsiSkColorFilter(
       this.CanvasKit,
       this.CanvasKit.ColorFilter.MakeLuma()

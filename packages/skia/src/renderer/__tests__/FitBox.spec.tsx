@@ -40,7 +40,7 @@ describe("FitBox", () => {
   });
   it("Should scale the image (1)", async () => {
     const { Skia, rect } = importSkia();
-    const image = Skia.Image.MakeImageFromEncoded(
+    const image = Skia.Image.MakeFromEncoded(
       Skia.Data.fromBytes(
         fs.readFileSync(
           nodePath.resolve(__dirname, "../../skia/__tests__/assets/box.png")
@@ -68,7 +68,7 @@ describe("FitBox", () => {
   });
   it("Should scale the image (2)", async () => {
     const { Skia, rect } = importSkia();
-    const image = Skia.Image.MakeImageFromEncoded(
+    const image = Skia.Image.MakeFromEncoded(
       Skia.Data.fromBytes(
         fs.readFileSync(
           nodePath.resolve(__dirname, "../../skia/__tests__/assets/box.png")
@@ -97,7 +97,7 @@ describe("FitBox", () => {
   });
   it("Should rotate and scale the image", async () => {
     const { Skia, rect } = importSkia();
-    const image = Skia.Image.MakeImageFromEncoded(
+    const image = Skia.Image.MakeFromEncoded(
       Skia.Data.fromBytes(
         fs.readFileSync(
           nodePath.resolve(__dirname, "../../skia/__tests__/assets/box2.png")

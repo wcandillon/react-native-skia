@@ -28,12 +28,11 @@ import type { Renderer, WebFrame } from "./SkiaWebRenderer";
 
 // The web has no Graphite: the view paints pictures through the WebGL
 // context the page shares (see SkiaWebRenderer). It shows one of two kinds
-// of content. The picture of a <Canvas> or a
-// <SkiaPictureView> is a whole frame: the latest one wins. The recordings
-// submitted through the view's context (SkiaGraphiteView) keep their native
-// semantics, presented in submission order and never dropped, with one
-// difference: the surface starts cleared on every frame, so a recording draws
-// the whole frame rather than a delta.
+// of content. The picture of a <Canvas> is a whole frame: the latest one
+// wins. The recordings submitted through the view's context
+// (SkiaGraphiteView) keep their native semantics, presented in submission
+// order and never dropped, with one difference: the surface starts cleared on
+// every frame, so a recording draws the whole frame rather than a delta.
 
 export type SkiaViewHandle = SkiaWebViewHandle;
 
@@ -146,7 +145,7 @@ class WebGraphiteContext implements SkGraphiteContext {
 export const SkiaView = (props: SkiaViewProps) => {
   const { ref, onLayout } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // The picture of a <Canvas> or a <SkiaPictureView>: a whole frame.
+  // The picture of a <Canvas>: a whole frame.
   const pictureRef = useRef<SkPicture | null>(null);
   // Recordings submitted since the last frame, in order, and the frame on
   // screen, replayed when the surface is recreated.

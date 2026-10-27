@@ -65,7 +65,7 @@ export interface SkGpuLostInfo {
  * resolves once it has. Canvases render again on their own. Everything made
  * on the lost device is gone for good, though safe to use (it draws
  * nothing): offscreen surfaces and the images taken from them, texture
- * images (`makeTextureImage`, `MakeImageFromGPUTexture`), snapshots of views,
+ * images (`makeTextureImage`, `MakeFromGPUTexture`), snapshots of views,
  * and the device `Skia.getNativeDevice()` returned, which WebGPU code
  * imports again. An app that keeps such objects makes them again when `lost`
  * resolves, or with the `useGpu` hook in React. `isAvailable` is false

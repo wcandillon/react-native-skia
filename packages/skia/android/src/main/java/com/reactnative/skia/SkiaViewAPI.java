@@ -12,5 +12,8 @@ public interface SkiaViewAPI {
 
     void onSurfaceTextureChanged(SurfaceTexture surface, int width, int height);
 
+    /** The TextureView drew the frame it was given (see FrameScheduler.onFrameConsumed). */
+    void onSurfaceTextureUpdated();
+
     void onSurfaceDestroyed();
 }

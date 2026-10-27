@@ -10,7 +10,7 @@ export class JsiSkTypefaceFactory extends Host implements TypefaceFactory {
     super(CanvasKit);
   }
 
-  MakeFreeTypeFaceFromData(data: SkData) {
+  MakeFromData(data: SkData) {
     const tf = this.CanvasKit.Typeface.MakeFreeTypeFaceFromData(
       JsiSkTypeface.fromValue(data)
     );

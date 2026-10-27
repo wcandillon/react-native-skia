@@ -22,7 +22,7 @@ describe("Paragraphs", () => {
   it("Should use shader for the foreground and background", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -82,7 +82,7 @@ describe("Paragraphs", () => {
   it("Should use shader for the foreground", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -133,7 +133,7 @@ describe("Paragraphs", () => {
   it("Should use shader for the background", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -188,7 +188,7 @@ describe("Paragraphs", () => {
     const paragraph = new ParagraphAsset(
       Sk,
       (Skia, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -227,7 +227,7 @@ describe("Paragraphs", () => {
     const paragraph = new ParagraphAsset(
       Sk,
       (Skia, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();

@@ -49,7 +49,7 @@ const testColorFilter = (
   colorFilter: SkColorFilter,
   result: string
 ) => {
-  const image = Skia.Image.MakeImageFromEncoded(
+  const image = Skia.Image.MakeFromEncoded(
     Skia.Data.fromBytes(
       fs.readFileSync(path.resolve(__dirname, "./assets/zurich.jpg"))
     )

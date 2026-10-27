@@ -78,7 +78,7 @@ const encodeView = async (view: React.RefObject<View | null>) => {
       { source: view },
       { texture, premultipliedAlpha: true }
     );
-    const image = Skia.Image.MakeImageFromGPUTexture(texture);
+    const image = Skia.Image.MakeFromGPUTexture(texture);
     try {
       return image.encodeToBytes();
     } finally {

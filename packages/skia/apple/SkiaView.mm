@@ -144,7 +144,10 @@ static bool appIsBackgrounded() {
   if (_nativeId != 0) {
     manager->setSkiaView(_nativeId, _view);
   }
-  _view->setFrameScheduler([weakSelf]() { [weakSelf scheduleFrame]; });
+  // The display link presents whatever is waiting on its next tick, a frame
+  // for a resized window included: nothing shows before it anyway.
+  _view->setFrameScheduler(
+      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
 }
 
 - (void)removeFromSuperview {
@@ -224,7 +227,8 @@ static bool appIsBackgrounded() {
   [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
-  if (_view != nullptr && _view->presentFrame()) {
+  if (_view != nullptr &&
+      (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     [self presentAgainLater];
   }
 #endif
@@ -257,7 +261,8 @@ static bool appIsBackgrounded() {
 }
 
 - (void)onFrame:(CADisplayLink *)link {
-  if (_view == nullptr || !_view->presentFrame()) {
+  if (_view == nullptr ||
+      !(_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     link.paused = YES;
   }
 }

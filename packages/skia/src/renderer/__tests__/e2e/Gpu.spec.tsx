@@ -3,8 +3,8 @@ import React from "react";
 import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
 import type { SkImage } from "../../../skia/types";
-import { Fill } from "../../components";
-import { surface } from "../setup";
+import { Fill, Image as SkiaImage } from "../../components";
+import { images, surface } from "../setup";
 
 // A snapshot's colour pipeline can move a channel by a few units, so colours
 // are read as names rather than exact bytes.
@@ -20,6 +20,49 @@ const nameColor = (pixel: Float32Array | Uint8Array | null) => {
     return "red";
   }
   return `rgb(${red}, ${green}, ${blue})`;
+};
+
+const readAll = (image: SkImage) => {
+  const pixels = image.readPixels(0, 0, {
+    width: image.width(),
+    height: image.height(),
+    colorType: ColorType.RGBA_8888,
+    alphaType: AlphaType.Unpremul,
+  });
+  if (pixels === null) {
+    throw new Error("The snapshot has no readable pixels");
+  }
+  return pixels;
+};
+
+// The share of pixels that are not white.
+const paintedShare = (pixels: Float32Array | Uint8Array) => {
+  let painted = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i] < 240 || pixels[i + 1] < 240 || pixels[i + 2] < 240) {
+      painted++;
+    }
+  }
+  return painted / (pixels.length / 4);
+};
+
+// The share of pixels that differ between two snapshots of the same size by
+// more than a few units in a channel.
+const differingShare = (
+  a: Float32Array | Uint8Array,
+  b: Float32Array | Uint8Array
+) => {
+  let differing = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    if (
+      Math.abs(a[i] - b[i]) > 8 ||
+      Math.abs(a[i + 1] - b[i + 1]) > 8 ||
+      Math.abs(a[i + 2] - b[i + 2]) > 8
+    ) {
+      differing++;
+    }
+  }
+  return differing / (a.length / 4);
 };
 
 const readCenter = (image: SkImage) =>
@@ -127,5 +170,42 @@ describe("GPU info", () => {
     // again, and its window is configured on the device.
     const image = await surface.draw(<Fill color="cyan" />);
     expect(readCenter(image)).toBe("cyan");
+  });
+
+  // The texture of a CPU image drawn before the loss was uploaded on the lost
+  // device: the shared image cache lets it go, and the canvas drawing the
+  // image after the replacement uploads it again, on the new device.
+  itRunsE2eOnly("uploads the CPU images again on the new device", async () => {
+    const { width, height } = surface;
+    const drawLogo = () =>
+      surface.draw(
+        <>
+          <Fill color="white" />
+          <SkiaImage
+            image={images.skiaLogoPng}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit="fill"
+          />
+        </>
+      );
+    const before = readAll(await drawLogo());
+    expect(paintedShare(before)).toBeGreaterThan(0.1);
+    const replaced = await surface.eval(
+      (Skia, ctx) => {
+        // No async/await: the code runs through Hermes' eval on the device.
+        const { lost } = Skia.gpu;
+        ctx.forceGpuDeviceLoss();
+        return lost.then(() => Skia.gpu.isAvailable);
+      },
+      {} as { forceGpuDeviceLoss: () => void }
+    );
+    expect(replaced).toBe(true);
+    const after = readAll(await drawLogo());
+    expect(paintedShare(after)).toBeGreaterThan(0.1);
+    expect(after.length).toBe(before.length);
+    expect(differingShare(before, after)).toBeLessThan(0.001);
   });
 });

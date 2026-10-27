@@ -4,7 +4,7 @@ import { surface } from "../setup";
 
 // Covers the pointer-based interop surface with react-native-webgpu:
 // Skia.getNativeDevice(), the
-// MakeGPUTextureFromImage / MakeImageFromGPUTexture round trip, and
+// MakeGPUTextureFromImage / MakeFromGPUTexture round trip, and
 // Surface.MakeFromGPUTexture drawing into a shared texture.
 // The pointers never cross the eval boundary (BigInt is not JSON
 // serializable); everything runs on-device and only plain data comes back.
@@ -49,7 +49,7 @@ describe("Texture interop (Graphite)", () => {
         if (typeof pointer !== "bigint" || pointer === BigInt(0)) {
           return "MakeGPUTextureFromImage did not return a pointer";
         }
-        const roundTripped = Skia.Image.MakeImageFromGPUTexture(pointer);
+        const roundTripped = Skia.Image.MakeFromGPUTexture(pointer);
         if (roundTripped.width() !== size || roundTripped.height() !== size) {
           return `unexpected size ${roundTripped.width()}x${roundTripped.height()}`;
         }
@@ -117,7 +117,7 @@ describe("Texture interop (Graphite)", () => {
 
           // Read the texture back as an image, like a WebGPU consumer would
           // sample it, and check both halves.
-          const image = Skia.Image.MakeImageFromGPUTexture(pointer);
+          const image = Skia.Image.MakeFromGPUTexture(pointer);
           const dst = Skia.Surface.MakeOffscreen(size, size);
           if (!dst) {
             return "could not create the destination surface";

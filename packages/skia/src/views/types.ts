@@ -1,13 +1,7 @@
 import type { ViewProps } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import type {
-  SkGraphiteContext,
-  SkImage,
-  SkPicture,
-  SkRect,
-  SkSize,
-} from "../skia/types";
+import type { SkGraphiteContext, SkImage, SkRect, SkSize } from "../skia/types";
 
 /** The Android view a canvas draws into, see {@link AndroidCanvasProps}. */
 export type AndroidBackingView =
@@ -156,10 +150,6 @@ export interface SkiaBaseViewProps extends ViewProps {
 
   /** @deprecated Does nothing: on web, every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
-}
-
-export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
-  picture?: SkPicture;
 }
 
 export type SkiaGraphiteViewNativeProps = SkiaBaseViewProps;

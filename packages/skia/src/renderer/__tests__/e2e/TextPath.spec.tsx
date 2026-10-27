@@ -52,7 +52,7 @@ describe("Text Paths", () => {
   it("Should draw Arabic text along a path", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const font = Skia.Font(amiri, 24);

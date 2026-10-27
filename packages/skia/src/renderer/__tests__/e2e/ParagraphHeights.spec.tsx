@@ -19,10 +19,10 @@ describe("Paragraph height measurement (#3493)", () => {
   it("draws the reported bounding box around each glyph of 'Hello你好'", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const noto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -69,7 +69,7 @@ describe("Paragraph height measurement (#3493)", () => {
   it("returns the same metrics-based height for 'Hello' and 'Typography'", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const typeface = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -134,10 +134,10 @@ describe("Paragraph height measurement (#3493)", () => {
   it("applies font fallback in Paragraph while the Font API does not", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const noto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -199,7 +199,7 @@ describe("Paragraph height measurement (#3493)", () => {
     async () => {
       const result = await surface.eval(
         (Skia, ctx) => {
-          const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const typeface = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const font = Skia.Font(typeface, 24);

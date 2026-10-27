@@ -175,7 +175,7 @@ The interop surface is small:
 | API | Direction | Description |
 |:--|:--|:--|
 | `Skia.getNativeDevice()` | | Pointer to Skia's device, for `importDevice()` |
-| `Skia.Image.MakeImageFromGPUTexture(texture)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
+| `Skia.Image.MakeFromGPUTexture(texture)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
 | `Skia.Surface.MakeFromGPUTexture(texture)` | Skia to WebGPU | Creates an `SkSurface` that draws into a `GPUTexture`, without copy |
 | `Skia.Image.MakeGPUTextureFromImage(image)` | Skia to WebGPU | Draws an `SkImage` into a new texture, for `adoptTexture()` |
 
@@ -186,7 +186,7 @@ A raw `WGPUTexture` pointer (a `BigInt`) is accepted wherever a texture is, for 
 
 ## From WebGPU to Skia
 
-`Skia.Image.MakeImageFromGPUTexture()` wraps a WebGPU texture into an `SkImage`.
+`Skia.Image.MakeFromGPUTexture()` wraps a WebGPU texture into an `SkImage`.
 The image references the texture, so wrapping it is free.
 The texture must be created on the shared device with the `TEXTURE_BINDING` usage.
 
@@ -263,7 +263,7 @@ export const TriangleInSkia = () => {
     device.queue.submit([encoder.finish()]);
 
     // 4. Wrap the texture into an SkImage, without any copy
-    image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+    image.value = Skia.Image.MakeFromGPUTexture(texture);
 
     return () => {
       // Drop the image before the texture it samples
@@ -298,7 +298,7 @@ The new object is what makes the canvas redraw:
 const render = () => {
   // ...encode and submit the WebGPU commands for this frame
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+  image.value = Skia.Image.MakeFromGPUTexture(texture);
   previous?.dispose();
   frame = requestAnimationFrame(render);
 };
@@ -367,7 +367,7 @@ const toTexture = (image: SkImage): GPUTexture =>
 
 Camera and video frames live in native buffers: an `IOSurface` (usually wrapped in a `CVPixelBuffer`) on Apple platforms, an `AHardwareBuffer` on Android.
 Skia does not import them. React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, ties their lifetime to a [`NativeVideoFrame`](https://wcandillon.github.io/react-native-webgpu/api/video-player#nativevideoframe) object, and renders a frame into a texture of the shared device with [`queue.copyExternalImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/gpu-device-extensions#copyexternalimagetotexture-with-a-native-frame), converting YUV to RGB and applying the rotation of the video or the camera on the GPU.
-`Skia.Image.MakeImageFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
+`Skia.Image.MakeFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
 There is one path on both platforms, whatever the format of the frame. It needs React Native WebGPU 0.11.1 or above.
 
 ### Playing a video
@@ -422,7 +422,7 @@ export const Video = ({ url }: { url: string }) => {
         frame.release();
         // A new image is what makes the canvas redraw
         const previous = image.value;
-        image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+        image.value = Skia.Image.MakeFromGPUTexture(texture);
         previous?.dispose();
       }
       raf = requestAnimationFrame(render);
@@ -469,11 +469,11 @@ Pass the frame's orientation as `rotation` and `mirrored`, and release the frame
 - **Reuse the texture.** Create a new one only when the frame size changes, and dispose the images that sample it before destroying it.
 - **Any runtime.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
 
-On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeImageFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
+On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
 
 ## View snapshots
 
-A snapshot of a React Native view follows the same path as a video frame: React Native WebGPU rasterizes the view into a texture of the shared device with [`queue.drawElementImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture), and `Skia.Image.MakeImageFromGPUTexture()` wraps that texture into an image.
+A snapshot of a React Native view follows the same path as a video frame: React Native WebGPU rasterizes the view into a texture of the shared device with [`queue.drawElementImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture), and `Skia.Image.MakeFromGPUTexture()` wraps that texture into an image.
 Skia has no view snapshot API of its own: `makeImageFromView()` from v2 was removed in favor of this path. It needs React Native WebGPU 0.14.0 or above.
 
 The view is rendered by the platform, so the snapshot includes everything the screen shows: text, images, SVGs, transforms, elevation shadows, and Skia canvases.
@@ -524,7 +524,7 @@ export const Snapshot = () => {
     // Wrap the texture, without any copy. A new image is what makes the
     // canvas redraw; the previous one is dropped before its texture.
     const previous = image.value;
-    image.value = Skia.Image.MakeImageFromGPUTexture(next);
+    image.value = Skia.Image.MakeFromGPUTexture(next);
     previous?.dispose();
     texture.current?.destroy();
     texture.current = next;
@@ -556,7 +556,7 @@ The texture must be created with `COPY_DST`; `RENDER_ATTACHMENT` lets React Nati
 On Android, a `SurfaceView` is composed outside the view hierarchy and comes out blank in a snapshot.
 A Skia `Canvas` is backed by a `TextureView` unless its `android.backingView` asks for a `SurfaceView`: keep the default for a canvas that must appear in snapshots (the same applies to a React Native WebGPU `Canvas`).
 
-On the Web, rasterize the DOM node into a canvas (for instance with [html2canvas](https://html2canvas.hertzen.com/)) and pass the canvas to `Skia.Image.MakeImageFromNativeBuffer()`.
+On the Web, rasterize the DOM node into a canvas (for instance with [html2canvas](https://html2canvas.hertzen.com/)) and pass the canvas to `Skia.Image.MakeFromNativeBuffer()`.
 
 ## Three.js
 
@@ -671,7 +671,7 @@ await renderer.init();
 renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromGPUTexture(target.texture);
+  image.value = Skia.Image.MakeFromGPUTexture(target.texture);
   previous?.dispose();
 });
 ```
@@ -701,7 +701,7 @@ Sharing a texture means sharing its lifetime. A few rules apply:
 - **Dispose Skia objects before destroying the texture.** An `SkImage` or `SkSurface` wrapping a texture holds its own reference to it, so the texture stays valid even if the JavaScript `GPUTexture` is garbage collected. Calling `texture.destroy()` releases the GPU resource regardless of references: dispose the image or surface first.
 - **Flush before sampling.** After drawing into a texture with Skia, call `surface.flush()` before the WebGPU commands that sample it.
 - **Adopt exported textures exactly once.** The pointer returned by `MakeGPUTextureFromImage()` carries one reference, which `adoptTexture()` takes over.
-- **Keep native buffers alive.** An `SkImage` created with `MakeImageFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
+- **Keep native buffers alive.** An `SkImage` created with `MakeFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
 
 ## Examples
 

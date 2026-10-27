@@ -10,8 +10,7 @@ describe("Animated Images", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const animatedImage =
-        Skia.AnimatedImage.MakeAnimatedImageFromEncoded(data);
+      const animatedImage = Skia.AnimatedImage.MakeFromEncoded(data);
       if (!animatedImage) {
         return false;
       }
@@ -32,8 +31,7 @@ describe("Animated Images", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const animatedImage =
-        Skia.AnimatedImage.MakeAnimatedImageFromEncoded(data);
+      const animatedImage = Skia.AnimatedImage.MakeFromEncoded(data);
       if (!animatedImage) {
         return "";
       }
@@ -51,8 +49,7 @@ describe("Animated Images", () => {
     const result = await surface.eval(
       (Skia, { bird }) => {
         const data = Skia.Data.fromBase64(bird);
-        const animatedImage =
-          Skia.AnimatedImage.MakeAnimatedImageFromEncoded(data);
+        const animatedImage = Skia.AnimatedImage.MakeFromEncoded(data);
         if (!animatedImage) {
           return "";
         }
@@ -68,7 +65,7 @@ describe("Animated Images", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(result);
-    const frame = Skia.Image.MakeImageFromEncoded(data);
+    const frame = Skia.Image.MakeFromEncoded(data);
     const { width, height } = surface;
     const img = await surface.draw(
       <>

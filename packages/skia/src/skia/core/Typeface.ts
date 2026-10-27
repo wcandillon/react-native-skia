@@ -3,7 +3,7 @@ import type { DataSourceParam } from "../types";
 
 import { useRawData } from "./Data";
 
-const tfFactory = Skia.Typeface.MakeFreeTypeFaceFromData.bind(Skia.Typeface);
+const tfFactory = Skia.Typeface.MakeFromData.bind(Skia.Typeface);
 
 /**
  * Returns a Skia Typeface object

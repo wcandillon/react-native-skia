@@ -64,7 +64,7 @@ apple_skia_packages = {
 }
 install_apple_skia_libs.call(__dir__, apple_skia_packages)
 
-preprocessor_defs = '$(inherited) SK_GRAPHITE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1 SK_RELEASE=1'
+preprocessor_defs = '$(inherited) SK_GRAPHITE=1 SK_RELEASE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1'
 
 # Define framework names
 framework_names = ['libskia', 'libsvg', 'libskshaper', 'libskparagraph',

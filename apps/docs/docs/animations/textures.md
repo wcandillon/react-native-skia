@@ -41,7 +41,7 @@ const Demo = () => {
 This hook allows you to upload an image to the GPU.
 It accepts an image source as argument.
 It loads and decodes the image off the JS thread, like [`useImage`](/docs/images#useimage), then uploads it with `makeTextureImage()` on the UI thread.
-An image drawn by several canvases is uploaded once this way; see [GPU and CPU images](/docs/images#gpu-and-cpu-images).
+The upload is paid before the first frame that draws the image, and the texture is held for as long as the image; see [GPU and CPU images](/docs/images#gpu-and-cpu-images).
 
 ```tsx twoslash
 import { useWindowDimensions } from "react-native";

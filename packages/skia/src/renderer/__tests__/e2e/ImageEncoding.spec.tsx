@@ -33,11 +33,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -66,11 +62,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -99,11 +91,7 @@ describe("Image Encoding", () => {
           height,
         };
 
-        return Skia.Image.MakeRasterImage(
-          imageInfo,
-          data,
-          width * bytesPerPixel
-        )!
+        return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
           .slice(0, ctx.cutIndex);
       },
@@ -137,7 +125,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -184,7 +172,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -228,7 +216,7 @@ describe("Image Encoding", () => {
           width,
           height,
         };
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           imageInfo,
           data,
           width * bytesPerPixel
@@ -274,7 +262,7 @@ describe("Image Encoding", () => {
         const data = Skia.Data.fromBytes(
           new Uint8Array(width * height * bytesPerPixel)
         );
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           { ...ctx.imageInfoBase, width, height },
           data,
           width * bytesPerPixel
@@ -301,7 +289,7 @@ describe("Image Encoding", () => {
         const data = Skia.Data.fromBytes(
           new Uint8Array(width * height * bytesPerPixel)
         );
-        const image = Skia.Image.MakeRasterImage(
+        const image = Skia.Image.MakeRaster(
           { ...ctx.imageInfoBase, width, height },
           data,
           width * bytesPerPixel

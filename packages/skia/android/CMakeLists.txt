@@ -33,6 +33,12 @@ message("-- SKIA_LIBS_PATH: ${SKIA_LIBS_PATH}")
 
 # Skia's public headers only declare the Graphite API with SK_GRAPHITE set.
 add_definitions(-DSK_GRAPHITE)
+# The Skia binaries are release builds: their inline code is compiled the same
+# way here in every configuration, else a Debug build mixes the SK_DEBUG
+# assertions compiled into this library with the release code of the Skia
+# library on the same objects (a ref-counted object destroyed by Skia then
+# fails the debug destructor's assertion).
+add_definitions(-DSK_RELEASE)
 
 string(APPEND CMAKE_CXX_FLAGS " -DSK_BUILD_FOR_ANDROID -DSK_DISABLE_LEGACY_SHAPER_FACTORY -DSK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API -DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
 

@@ -68,7 +68,7 @@ const testImageTransform = (cb: (canvas: SkCanvas) => void, result: string) => {
     CARD_WIDTH,
     CARD_HEIGHT
   );
-  const image = Skia.Image.MakeImageFromEncoded(
+  const image = Skia.Image.MakeFromEncoded(
     Skia.Data.fromBytes(
       fs.readFileSync(path.resolve(__dirname, "./assets/card.png"))
     )

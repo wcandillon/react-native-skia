@@ -9,7 +9,7 @@ import type { ISkiaViewApi } from "../views/types";
 
 /** What the web view registers under its native id. */
 export interface SkiaWebViewHandle {
-  /** Shows a picture: the frame of a <Canvas> or a <SkiaPictureView>. */
+  /** Shows a picture: the frame of a <Canvas>. */
   setPicture(picture: SkPicture): void;
   /** The recording side of the view, see SkiaGraphiteView. */
   getContext(): SkGraphiteContext;

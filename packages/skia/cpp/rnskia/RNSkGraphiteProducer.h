@@ -27,8 +27,9 @@ class RNSkGraphiteTarget;
  * pending writes: that is the only step that needs a JS runtime, and it never
  * waits for a replay. A pool thread replays the commands (the recorder writes
  * the pending values into them first) into a deferred canvas of the view's
- * target and submits the recording; the main thread presents it on the next
- * vsync.
+ * target, on the Graphite recorder of that thread (a view holds none of its
+ * own, see RNSkGraphiteTarget::beginRecording), and submits the recording;
+ * the main thread presents it on the next vsync.
  *
  * A recording with shared values arrives without their values (recording
  * reads none, see Variables) and is not replayed before the mapper has read
@@ -74,6 +75,13 @@ public:
   void setPicture(sk_sp<SkPicture> picture);
 
   bool hasContent();
+
+  /**
+   Whether a frame is on its way: one is being recorded, or was asked for
+   and starts once there is room for it (see requestFrame). The view drops
+   a frame recorded for a size the surface no longer has when one is.
+   */
+  bool hasFrameComing();
 
   /**
    Reads the shared values on the calling runtime into the recorder and
