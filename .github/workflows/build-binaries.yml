@@ -56,6 +56,10 @@ jobs:
       # The branch the submodule commit is on, without its chrome/ prefix:
       # m154 right after a milestone bump, or the Chromium release branch
       # (m154_8037_58) once chrome/m154 has moved past the pinned commit.
+      # When no branch ends at the commit any more (chrome/m154 moved on
+      # before a release branch was cut from it), the first chrome/ branch
+      # that contains it still names the milestone, which is all the version
+      # derives from.
       - name: Determine Skia branch
         id: skia
         run: |
@@ -67,8 +71,12 @@ jobs:
             if [ -z "$branch" ]; then
               branch=$(git -C externals/skia describe --all --exact-match 2>/dev/null || true)
             fi
+            if [ -z "$branch" ]; then
+              branch=$(git -C externals/skia branch -r --contains HEAD --list 'origin/chrome/m*' | sed 's/^[* ]*//' | sort | head -n 1)
+            fi
           fi
           branch=${branch#remotes/origin/chrome/}
+          branch=${branch#origin/chrome/}
           branch=${branch#chrome/}
           if [ -z "$branch" ]; then
             echo "::error::Could not determine the Skia branch of externals/skia"

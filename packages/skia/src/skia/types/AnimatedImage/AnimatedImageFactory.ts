@@ -11,5 +11,5 @@ export interface AnimatedImageFactory {
    * and makeImageAtCurrentFrame will be referring to the first frame.
    * @param encoded
    */
-  MakeAnimatedImageFromEncoded: (encoded: SkData) => SkAnimatedImage | null;
+  MakeFromEncoded: (encoded: SkData) => SkAnimatedImage | null;
 }

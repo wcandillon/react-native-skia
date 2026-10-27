@@ -60,7 +60,7 @@ const snapshotView = async (
     { source: view },
     { texture, premultipliedAlpha: true }
   );
-  return { texture, image: Skia.Image.MakeImageFromGPUTexture(texture) };
+  return { texture, image: Skia.Image.MakeFromGPUTexture(texture) };
 };
 
 export const ViewSnapshot = () => {

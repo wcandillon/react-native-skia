@@ -106,31 +106,37 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
   }
 
   encodeToBytes(fmt?: ImageFormat, quality?: number) {
-    let result: Uint8Array | null;
+    const bytes = this.encode(fmt, quality);
+    if (!bytes) {
+      throw new Error("encodeToBytes failed");
+    }
+    return bytes;
+  }
+
+  encodeToBase64(fmt?: ImageFormat, quality?: number) {
+    const bytes = this.encode(fmt, quality);
+    if (!bytes) {
+      throw new Error("encodeToBase64 failed");
+    }
+    return toBase64String(bytes);
+  }
+
+  private encode(fmt?: ImageFormat, quality?: number): Uint8Array | null {
     if (fmt !== undefined && quality !== undefined) {
       // CanvasKit's encodeToBytes() applies `quality || 100`, which would
       // turn a valid quality of 0 into 100. The encoders clamp any quality
       // below 1 up to 1 anyway, so pass 1 to get the same output as 0.
-      result = this.ref.encodeToBytes(
+      return this.ref.encodeToBytes(
         getEnum(this.CanvasKit, "ImageFormat", fmt),
         Math.max(quality, 1)
       );
-    } else if (fmt !== undefined) {
-      result = this.ref.encodeToBytes(
+    }
+    if (fmt !== undefined) {
+      return this.ref.encodeToBytes(
         getEnum(this.CanvasKit, "ImageFormat", fmt)
       );
-    } else {
-      result = this.ref.encodeToBytes();
     }
-    if (!result) {
-      throw new Error("encodeToBytes failed");
-    }
-    return result;
-  }
-
-  encodeToBase64(fmt?: ImageFormat, quality?: number) {
-    const bytes = this.encodeToBytes(fmt, quality);
-    return toBase64String(bytes);
+    return this.ref.encodeToBytes();
   }
 
   // TODO: this is leaking on Web

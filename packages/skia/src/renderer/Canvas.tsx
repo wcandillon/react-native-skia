@@ -14,8 +14,8 @@ import type {
   ViewProps,
 } from "react-native";
 
-import { SkiaViewNativeId } from "../views/SkiaViewNativeId";
-import { androidNativeProps } from "../views/android";
+import { SkiaViewApi } from "../views/api";
+import { androidNativeProps, useBackingViewWarning } from "../views/android";
 import type { AndroidCanvasProps } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
@@ -62,22 +62,21 @@ export const useCanvasSize = () => {
 
 export interface CanvasProps extends ViewProps {
   /**
-   * Declares that the canvas covers every pixel of its bounds, so nothing
-   * behind it needs to show through. On Android an opaque canvas is backed by
-   * a `SurfaceView` by default, the cheapest path (see `android.surfaceType`).
-   * Defaults to false.
-   */
-  opaque?: boolean;
-  /**
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. Colors are
    * identical to the default 8-bit surface, only with more precision (this is
-   * about bit depth, not HDR). On Android the extra precision survives
-   * composition only when combined with `opaque`, and the prop must be set
-   * before the canvas is mounted.
+   * about bit depth, not HDR). On Android it needs a `SurfaceView` (see
+   * `android.backingView`), which it makes opaque, as the 10-bit format only
+   * has 2 bits of alpha; it is read once, when the canvas mounts.
    */
   highBitDepth?: boolean;
-  /** Android-only rendering options. Ignored on iOS and web. */
+  /**
+   * Android-only rendering options: the native view behind the canvas and its
+   * options, see {@link AndroidCanvasProps}. The view is created when the
+   * canvas mounts and kept: a change of `backingView` is ignored, with a
+   * warning in development; remount the canvas, with a `key`, to change it.
+   * Ignored on iOS and web.
+   */
   android?: AndroidCanvasProps;
   ref?: React.Ref<CanvasRef>;
 }
@@ -92,9 +91,7 @@ const useCanvasRoot = ({
 }: Pick<CanvasProps, "children" | "ref">) => {
   const viewRef = useRef<NativeView>(null);
   // Native ID
-  const nativeId = useMemo(() => {
-    return SkiaViewNativeId.current++;
-  }, []);
+  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
@@ -115,6 +112,10 @@ const useCanvasRoot = ({
     ref,
     (): CanvasRef => ({
       makeImageSnapshot: (rect?: SkRect) => {
+        // The snapshot draws the current values of the shared values, read
+        // here: the mapper may not have read them yet (a snapshot in the
+        // commit that installed the recording), or not since they changed.
+        root.readSharedValues();
         return SkiaViewApi.makeImageSnapshot(nativeId, rect);
       },
 
@@ -135,7 +136,7 @@ const useCanvasRoot = ({
         return view ? measureLayout(view) : { width: 0, height: 0 };
       },
     }),
-    [nativeId, viewRef]
+    [nativeId, root, viewRef]
   );
   return { nativeId, viewRef };
 };
@@ -145,11 +146,12 @@ const useCanvasRoot = ({
  * renderer; the frames are produced off the JS thread:
  *
  * - the JS thread records the scene graph into a native recorder once per
- *   React commit and hands it to the view;
+ *   React commit that changes it and hands it to the view;
  * - the Reanimated UI runtime only reads the shared values into it (the one
  *   step that needs a JS runtime), it never replays anything;
  * - a dedicated native thread pool replays the recorder into a Graphite
- *   recording whenever the content changed, at most once per presented frame;
+ *   recording whenever the content changed, keeping at most one frame ahead
+ *   of the display;
  * - the view presents the recording on the next vsync.
  *
  * On the web the scene is drawn into a picture on the JS thread and painted
@@ -159,7 +161,6 @@ const useCanvasRoot = ({
  * by `onLayout` (see `useCanvasSize`).
  */
 export const Canvas = ({
-  opaque,
   children,
   highBitDepth = false,
   android,
@@ -167,14 +168,14 @@ export const Canvas = ({
   ...viewProps
 }: CanvasProps) => {
   const { nativeId, viewRef } = useCanvasRoot({ children, ref });
+  useBackingViewWarning({ highBitDepth, android });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}
       collapsable={false}
       nativeID={`${nativeId}`}
-      opaque={opaque}
       highBitDepth={highBitDepth}
-      {...androidNativeProps(android)}
+      {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />
   );

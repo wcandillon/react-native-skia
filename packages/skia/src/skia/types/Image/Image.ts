@@ -100,8 +100,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
      SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
      SkImage.
 
-    Returns nullptr if existing encoded data is missing or invalid, and
-    encoding fails.
+    Throws an Error when the image cannot be encoded.
 
     @param fmt - PNG is the default value.
     @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
@@ -115,8 +114,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
      SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
      SkImage.
 
-    Returns nullptr if existing encoded data is missing or invalid, and
-    encoding fails.
+    Throws an Error when the image cannot be encoded.
 
     @param fmt - PNG is the default value.
     @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
@@ -167,9 +165,11 @@ export interface SkImage extends SkJSIInstance<"Image"> {
   /**
    * Returns a GPU image: the image is uploaded now, on the calling thread,
    * and every canvas draws it afterwards without a copy. A raster image
-   * drawn directly is uploaded once per canvas instead, and an encoded
-   * image is decoded first. Returns the image itself when it already is a
-   * GPU image. Throws if the upload fails.
+   * drawn directly is uploaded on the first frame that draws it instead,
+   * once, shared by every canvas, and held in a cache for as long as it is
+   * drawn;
+   * an encoded image is decoded first. Returns the image itself when it
+   * already is a GPU image. Throws if the upload fails.
    *
    * Native only: on the Web, a texture belongs to the canvas that created
    * it, so the image is returned as is.

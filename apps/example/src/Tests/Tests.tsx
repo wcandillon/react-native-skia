@@ -25,15 +25,44 @@ const errorEnvelope = (error: unknown) =>
     $$error: error instanceof Error ? error.message : String(error),
   });
 
+// JSON.stringify returns undefined for a result JSON cannot carry: undefined, a function, a symbol.
+const resultMessage = (result: unknown) => {
+  const json: string | undefined = JSON.stringify(result);
+  return json === undefined
+    ? errorEnvelope(`The snippet's result has no JSON form: ${typeof result}`)
+    : json;
+};
+
+// The device Skia renders with, as a GPUDevice. Skia replaces a lost device
+// with a new one: the import is let go of when that happens, so that the next
+// use imports the new device.
+let sharedDevice: GPUDevice | null = null;
+const getSharedDevice = () => {
+  if (sharedDevice === null) {
+    const device = importDevice(Skia.getNativeDevice());
+    sharedDevice = device;
+    Skia.gpu.lost.then(() => {
+      if (sharedDevice === device) {
+        sharedDevice = null;
+      }
+    });
+  }
+  return sharedDevice;
+};
+
+// Loses the GPU device on purpose (the Gpu spec): the device is shared with
+// react-native-webgpu, whose test hook asks Dawn to lose it.
+const forceGpuDeviceLoss = () => {
+  (
+    getSharedDevice() as GPUDevice & { forceLossForTesting: () => void }
+  ).forceLossForTesting();
+};
+
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
 // into a texture of the shared device, and Skia wraps that texture. This is
 // the one way to snapshot a view with Skia v3 (see docs/webgpu#view-snapshots).
-let sharedDevice: GPUDevice | null = null;
 const encodeView = async (view: React.RefObject<View | null>) => {
-  if (sharedDevice === null) {
-    sharedDevice = importDevice(Skia.getNativeDevice());
-  }
-  const device = sharedDevice;
+  const device = getSharedDevice();
   const pixels = Math.round(size * PixelRatio.get());
   const texture = device.createTexture({
     size: [pixels, pixels],
@@ -49,7 +78,7 @@ const encodeView = async (view: React.RefObject<View | null>) => {
       { source: view },
       { texture, premultipliedAlpha: true }
     );
-    const image = Skia.Image.MakeImageFromGPUTexture(texture);
+    const image = Skia.Image.MakeFromGPUTexture(texture);
     try {
       return image.encodeToBytes();
     } finally {
@@ -87,17 +116,22 @@ export const Tests = ({ assets }: TestsProps) => {
             ).call({
               Skia,
               // The worklet serializer spec needs app-side worklets (see
-              // workletSerialization.ts); hand them over through the context.
-              ctx: { ...parseProps(tree.ctx, assets), workletSerialization },
+              // workletSerialization.ts), and the Gpu spec a way to lose the
+              // device; hand them over through the context.
+              ctx: {
+                ...parseProps(tree.ctx, assets),
+                workletSerialization,
+                forceGpuDeviceLoss,
+              },
               size: size * PixelRatio.get(),
               scale: s,
             });
             if (result instanceof Promise) {
               result
-                .then((r) => client.send(JSON.stringify(r)))
+                .then((r) => client.send(resultMessage(r)))
                 .catch((error) => client.send(errorEnvelope(error)));
             } else {
-              client.send(JSON.stringify(result));
+              client.send(resultMessage(result));
             }
           } catch (error) {
             client.send(errorEnvelope(error));

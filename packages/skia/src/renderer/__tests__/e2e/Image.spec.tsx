@@ -29,7 +29,7 @@ describe("Image loading from bundles", () => {
   it("should read pixels from an image", async () => {
     const pixels = await surface.eval(
       (Skia, { data }) => {
-        const image = Skia.Image.MakeImageFromEncoded(
+        const image = Skia.Image.MakeFromEncoded(
           Skia.Data.fromBytes(new Uint8Array(data))
         )!;
         return Array.from(

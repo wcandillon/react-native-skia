@@ -2401,7 +2401,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - ReactTestApp-DevSupport (4.4.7):
+  - ReactTestApp-DevSupport (5.4.13):
     - React-Core
     - React-jsi
   - ReactTestApp-Resources (1.0.0-dev)
@@ -2433,7 +2433,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNReanimated (4.3.1):
+  - RNReanimated (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -2460,12 +2460,13 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
-    - RNReanimated/apple (= 4.3.1)
-    - RNReanimated/common (= 4.3.1)
+    - RNReanimated/apple (= 4.6.0)
+    - RNReanimated/common (= 4.6.0)
+    - RNReanimated/view (= 4.6.0)
     - RNWorklets
     - SocketRocket
     - Yoga
-  - RNReanimated/apple (4.3.1):
+  - RNReanimated/apple (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -2495,7 +2496,37 @@ PODS:
     - RNWorklets
     - SocketRocket
     - Yoga
-  - RNReanimated/common (4.3.1):
+  - RNReanimated/common (4.6.0):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - RNWorklets
+    - SocketRocket
+    - Yoga
+  - RNReanimated/view (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -2582,7 +2613,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNWorklets (0.8.3):
+  - RNWorklets (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -2609,11 +2640,11 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
-    - RNWorklets/apple (= 0.8.3)
-    - RNWorklets/common (= 0.8.3)
+    - RNWorklets/apple (= 0.12.2)
+    - RNWorklets/common (= 0.12.2)
     - SocketRocket
     - Yoga
-  - RNWorklets/apple (0.8.3):
+  - RNWorklets/apple (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -2642,7 +2673,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNWorklets/common (0.8.3):
+  - RNWorklets/common (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -2999,12 +3030,12 @@ SPEC CHECKSUMS:
   ReactCodegen: 2154bb0c08c6b946ce06cbd71b40467dbb9ee746
   ReactCommon: 62d3af456abbf3c97076042bc5d06d33532c0036
   ReactNativeHost: e7e0a518b0120f0070b3e1f13c7006d3e0e8ee13
-  ReactTestApp-DevSupport: 6994b53b5b81139a8ce63e0776c726c95de079a1
+  ReactTestApp-DevSupport: 98b0031ca5ccef94741814831d18eb7c1100c393
   ReactTestApp-Resources: 86136e1efe3aa7201759371c03dea3df77079b42
   RNGestureHandler: 77eecab5fd636666ca73a55bb61e2f1a685b7e84
-  RNReanimated: d1a7a4c20eefc371e062990ce1debeaff4f1b9be
+  RNReanimated: b3c0a4dc463265838e4d9f007fb872572ab513c6
   RNSVG: ea9cbf6dcdbebdfff5822b0ad9311bbc4510a0b7
-  RNWorklets: 5f6e5664c1819eac103ca75cc2f36191f55aa110
+  RNWorklets: 299b8c492040c13569bbde731b207b85c19a4867
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: f8fbb5ed063104fccbb72600ec9f3d7269a73afa
 

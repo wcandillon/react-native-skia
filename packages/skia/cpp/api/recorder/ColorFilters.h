@@ -25,11 +25,11 @@ private:
 public:
   MatrixColorFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                        Variables &variables)
-      : Command(CommandType::PushColorFilter, "skMatrixColorFilter") {
+      : Command(CommandType::PushColorFilter) {
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.matrix.size() == 20) {
       auto cf = SkColorFilters::Matrix(props.matrix.data());
       ctx->colorFilters.push_back(cf);
@@ -49,12 +49,12 @@ private:
 public:
   BlendColorFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                       Variables &variables)
-      : Command(CommandType::PushColorFilter, "skBlendColorFilter") {
+      : Command(CommandType::PushColorFilter) {
     convertProperty(runtime, object, "mode", props.mode, variables);
     convertProperty(runtime, object, "color", props.color, variables);
   }
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto cf = SkColorFilters::Blend(props.color, props.mode);
     ctx->colorFilters.push_back(cf);
   }
@@ -65,10 +65,9 @@ public:
   LinearToSRGBGammaColorFilterCmd(jsi::Runtime &runtime,
                                   const jsi::Object &object,
                                   Variables &variables)
-      : Command(CommandType::PushColorFilter,
-                "skLinearToSRGBGammaColorFilter") {}
+      : Command(CommandType::PushColorFilter) {}
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto cf = SkColorFilters::LinearToSRGBGamma();
     ctx->colorFilters.push_back(cf);
   }
@@ -79,10 +78,9 @@ public:
   SRGBToLinearGammaColorFilterCmd(jsi::Runtime &runtime,
                                   const jsi::Object &object,
                                   Variables &variables)
-      : Command(CommandType::PushColorFilter,
-                "skSRGBToLinearGammaColorFilter") {}
+      : Command(CommandType::PushColorFilter) {}
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto cf = SkColorFilters::SRGBToLinearGamma();
     ctx->colorFilters.push_back(cf);
   }
@@ -92,9 +90,9 @@ class LumaColorFilterCmd : public Command {
 public:
   LumaColorFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                      Variables &variables)
-      : Command(CommandType::PushColorFilter, "skLumaColorFilter") {}
+      : Command(CommandType::PushColorFilter) {}
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto cf = SkLumaColorFilter::Make();
     ctx->colorFilters.push_back(cf);
   }
@@ -111,11 +109,11 @@ private:
 public:
   LerpColorFilterCmd(jsi::Runtime &runtime, const jsi::Object &object,
                      Variables &variables)
-      : Command(CommandType::PushColorFilter, "skLerpColorFilter") {
+      : Command(CommandType::PushColorFilter) {
     convertProperty(runtime, object, "t", props.t, variables);
   }
 
-  void pushColorFilter(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (ctx->colorFilters.size() >= 2) {
       auto second = ctx->colorFilters.back();
       ctx->colorFilters.pop_back();

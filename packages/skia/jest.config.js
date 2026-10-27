@@ -10,7 +10,9 @@ module.exports = {
   transform: {
     "^.+\\.(ts|tsx)$": ["ts-jest", { tsconfig: "./tsconfig.test.json" }],
   },
-  globals: {},
+  // The source reads __DEV__, which react-native defines (its jest preset
+  // sets it to true as well).
+  globals: { __DEV__: true },
   globalSetup: "<rootDir>/src/__tests__/globalSetup.ts",
   globalTeardown: "<rootDir>/src/__tests__/globalTeardown.ts",
 };

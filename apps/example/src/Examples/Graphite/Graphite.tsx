@@ -112,7 +112,13 @@ const JSThreadView = ({ image }: { image: SkImage | null }) => {
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
   }, [image]);
-  return <SkiaGraphiteView ref={ref} style={styles.view} opaque />;
+  return (
+    <SkiaGraphiteView
+      ref={ref}
+      style={styles.view}
+      android={{ backingView: "SurfaceView" }}
+    />
+  );
 };
 
 const UIRuntimeView = ({ image }: { image: SkImage | null }) => {
@@ -129,7 +135,13 @@ const UIRuntimeView = ({ image }: { image: SkImage | null }) => {
       drawFrame(ctx.value, image, frame.timestamp / 1000);
     }
   });
-  return <SkiaGraphiteView ref={ref} style={styles.view} opaque />;
+  return (
+    <SkiaGraphiteView
+      ref={ref}
+      style={styles.view}
+      android={{ backingView: "SurfaceView" }}
+    />
+  );
 };
 
 export const Graphite = () => {

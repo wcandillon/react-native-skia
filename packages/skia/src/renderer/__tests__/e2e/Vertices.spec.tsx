@@ -17,9 +17,15 @@ describe("Vertices", () => {
     checkImage(img, "snapshots/vertices/vertices.png");
   });
   it("should draw a single triangle from a Float32Array", async () => {
+    const { Skia } = importSkia();
     // Interleaved x, y pairs
     const vertices = new Float32Array([64, 0, 128, 256, 0, 256]);
-    const colors = ["#61dafb", "#fb61da", "#dafb61"];
+    // Non-string colors: Float32Array, number, and number[]
+    const colors = [
+      Skia.Color("#61dafb"),
+      0xfffb61da,
+      [0xda / 255, 0xfb / 255, 0x61 / 255, 1],
+    ];
     const img = await surface.draw(
       <>
         <Vertices vertices={vertices} colors={colors} />

@@ -14,8 +14,8 @@ import {
   ColorMatrix,
   LinearToSRGBGamma,
   SRGBToLinearGamma,
-  SkiaPictureView,
   createPicture,
+  Picture,
   Fill,
 } from "react-native-skia";
 
@@ -115,9 +115,13 @@ export const ColorFilter = () => {
   return (
     <ScrollView>
       <Title>Color Matrix Filter</Title>
-      <SkiaPictureView style={style} picture={matrixDraw} />
+      <Canvas style={style}>
+        <Picture picture={matrixDraw} />
+      </Canvas>
       <Title>Image Filter</Title>
-      <SkiaPictureView style={style} picture={imageFilterDraw} />
+      <Canvas style={style}>
+        <Picture picture={imageFilterDraw} />
+      </Canvas>
       <Title>Other</Title>
       <Canvas style={style}>
         <Group>

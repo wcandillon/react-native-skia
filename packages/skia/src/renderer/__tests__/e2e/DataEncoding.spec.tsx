@@ -7,7 +7,7 @@ describe("Data Encoding", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const img = Skia.Image.MakeImageFromEncoded(data);
+      const img = Skia.Image.MakeFromEncoded(data);
       if (!img) {
         return [];
       }
@@ -26,7 +26,7 @@ describe("Data Encoding", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const img = Skia.Image.MakeImageFromEncoded(data);
+      const img = Skia.Image.MakeFromEncoded(data);
       if (!img) {
         return "";
       }
@@ -41,7 +41,7 @@ describe("Data Encoding", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const img = Skia.Image.MakeImageFromEncoded(data);
+      const img = Skia.Image.MakeFromEncoded(data);
       if (!img) {
         return [];
       }
@@ -59,7 +59,7 @@ describe("Data Encoding", () => {
       const data = Skia.Data.fromBase64(
         "R0lGODlhAQABAIAAAGGqHwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
       );
-      const img = Skia.Image.MakeImageFromEncoded(data);
+      const img = Skia.Image.MakeFromEncoded(data);
       if (!img) {
         return "";
       }

@@ -176,7 +176,7 @@ jobs:
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@34968b5981d5d170904281aa3df6f3c0d4a28855 # v1.0.249
+        uses: anthropics/claude-code-action@16f9f71ab9c490faf367f94dd294897edc25be33 # v1.0.261
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The workflow's own token instead of the Claude GitHub App, which is
@@ -236,7 +236,7 @@ jobs:
       METRO_PORT: 8081
       ANDROID_AVD: skia-agent
       ANDROID_SYSTEM_IMAGE: system-images;android-35;default;x86_64
-      ANDROID_PACKAGE: com.microsoft.reacttestapp
+      ANDROID_PACKAGE: com.reactnativeskia.example
       AGENT_OUTPUT: ${{ github.workspace }}/agent-output
     steps:
       # The pull request's head when a number is given. The build then runs
@@ -278,7 +278,7 @@ jobs:
           swap-storage: false
 
       - name: Install JDK
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -373,22 +373,49 @@ jobs:
       # agent navigates with go to it as explicit intents (see
       # .github/scripts/agent-screen.sh), which only root may send: adbd is
       # restarted as root, which the default (non Play Store) image allows.
+      #
+      # ANDROID_AVD_HOME is pinned, as the emulator-runner action does: left
+      # unset, avdmanager writes the AVD somewhere the emulator does not look
+      # on the hosted runner, and the emulator exits with "Unknown AVD name".
+      #
+      # The boot is bounded, as the emulator-runner action's is: it fails
+      # after ten minutes, or as soon as the emulator exits, with the end of
+      # the emulator's log. Unbounded, a dead emulator held the job (and the
+      # agent concurrency group) until the job's own timeout.
       - name: Boot Android emulator
+        timeout-minutes: 15
         run: |
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           sdkmanager --install "$ANDROID_SYSTEM_IMAGE" emulator > /dev/null
           echo no | avdmanager create avd --force -n "$ANDROID_AVD" -k "$ANDROID_SYSTEM_IMAGE" -d "Nexus 5X"
           nohup emulator -avd "$ANDROID_AVD" -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot-save \
             > "$AGENT_OUTPUT/emulator.log" 2>&1 &
-          adb wait-for-device
-          until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+          emulator_pid=$!
+          booted=0
+          deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              echo "::error::The emulator exited before it finished booting"
+              break
+            fi
+            if [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              booted=1
+              break
+            fi
             sleep 5
           done
+          if [ "$booted" != 1 ]; then
+            kill -0 "$emulator_pid" 2>/dev/null && echo "::error::The emulator did not finish booting in ten minutes"
+            tail -n 100 "$AGENT_OUTPUT/emulator.log"
+            exit 1
+          fi
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
           adb shell input keyevent 82
           adb root
-          adb wait-for-device
+          timeout 60 adb wait-for-device
           # The app reaches Metro at localhost, which inside the emulator is
           # the guest: reverse the port to the host.
           adb reverse tcp:8081 tcp:$METRO_PORT
@@ -402,12 +429,14 @@ jobs:
           ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
           curl -sf --max-time 900 -o /dev/null \
             "http://localhost:$METRO_PORT/index.bundle?platform=android&dev=true&lazy=true&minify=false"
-          adb shell am start -W -n "$ANDROID_PACKAGE/.MainActivity"
+          # The activity keeps react-native-test-app's own package name: the
+          # application id is the example's, the Java namespace is not.
+          adb shell am start -W -n "$ANDROID_PACKAGE/com.microsoft.reacttestapp.MainActivity"
           sleep 20
           adb exec-out screencap -p > "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@34968b5981d5d170904281aa3df6f3c0d4a28855 # v1.0.249
+        uses: anthropics/claude-code-action@16f9f71ab9c490faf367f94dd294897edc25be33 # v1.0.261
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

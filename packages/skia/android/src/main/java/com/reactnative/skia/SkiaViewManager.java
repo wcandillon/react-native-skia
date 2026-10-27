@@ -43,19 +43,19 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
         ((SkiaView) view).registerView(nativeIdResolved);
     }
 
-    @ReactProp(name = "opaque")
-    public void setOpaque(SkiaView view, boolean value) {
-        view.setOpaque(value);
-    }
-
     @ReactProp(name = "highBitDepth")
     public void setHighBitDepth(SkiaView view, boolean value) {
         view.setHighBitDepth(value);
     }
 
-    @ReactProp(name = "androidSurfaceType")
-    public void setAndroidSurfaceType(SkiaView view, @Nullable String value) {
-        view.setSurfaceType(value);
+    @ReactProp(name = "androidBackingView")
+    public void setAndroidBackingView(SkiaView view, @Nullable String value) {
+        view.setBackingView(value);
+    }
+
+    @ReactProp(name = "androidOpaque")
+    public void setAndroidOpaque(SkiaView view, boolean value) {
+        view.setOpaque(value);
     }
 
     @ReactProp(name = "androidZOrderOnTop")
@@ -63,14 +63,21 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
         view.setZOrderOnTop(value);
     }
 
+    @ReactProp(name = "androidZOrderMediaOverlay")
+    public void setAndroidZOrderMediaOverlay(SkiaView view, boolean value) {
+        view.setZOrderMediaOverlay(value);
+    }
+
     @ReactProp(name = ViewProps.POINTER_EVENTS)
     public void setPointerEvents(SkiaView view, @Nullable String pointerEventsStr) {
         view.setPointerEvents(PointerEvents.parsePointerEvents(pointerEventsStr));
     }
 
-    // The backing view depends on several props (opaque, androidSurfaceType,
-    // androidZOrderOnTop, highBitDepth), so it is resolved once per transaction
-    // rather than in each setter.
+    // The backing view depends on several props (androidBackingView,
+    // androidOpaque, the z-order props, highBitDepth), so it is created after
+    // the first transaction, once every prop has arrived, and kept; later
+    // transactions only apply what the view takes in place (see
+    // SkiaView.updateView).
     @Override
     protected void onAfterUpdateTransaction(@NonNull ReactViewGroup view) {
         super.onAfterUpdateTransaction(view);

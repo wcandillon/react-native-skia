@@ -10,7 +10,6 @@
 #include "Convertor.h"
 #include "DrawingCtx.h"
 #include "ImageFit.h"
-#include "rnskia/RNSkPlatformContext.h"
 
 #include "include/core/SkContourMeasure.h"
 #include "include/core/SkPathBuilder.h"
@@ -38,7 +37,7 @@ public:
     convertProperty(runtime, object, "r", props.r, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto paint = ctx->getPaint();
     if (props.c.has_value()) {
       ctx->canvas->drawCircle(props.c.value(), props.r, paint);
@@ -73,7 +72,7 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [x, y, width, height, rect] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRect(rect.value(), ctx->getPaint());
@@ -106,7 +105,7 @@ public:
     convertProperty(runtime, object, "fillType", props.fillType, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Saturate start and end values (clamp between 0 and 1)
     float start = std::clamp(props.start, 0.0f, 1.0f);
     float end = std::clamp(props.end, 0.0f, 1.0f);
@@ -220,7 +219,7 @@ public:
     convertProperty(runtime, object, "p2", props.p2, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawLine(props.p1.x(), props.p1.y(), props.p2.x(),
                           props.p2.y(), ctx->getPaint());
   }
@@ -247,7 +246,7 @@ public:
                     variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [font, text, path, initialOffset] = props;
     if (font.has_value()) {
       // Get glyphs
@@ -345,7 +344,7 @@ public:
     convertProperty(runtime, object, "y", props.y, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [font, text, x, y] = props;
     auto paint = ctx->getPaint();
     if (font.has_value()) {
@@ -417,7 +416,7 @@ public:
     }
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
 
     // Get current paint properties
     auto paint = ctx->getPaint();
@@ -493,11 +492,10 @@ struct ImageCmdProps {
 class ImageCmd : public Command {
 public:
   ImageCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  ImageCmd(std::shared_ptr<RNSkPlatformContext> context, jsi::Runtime &runtime,
-           const jsi::Object &object, Variables &variables)
-      : Command(CommandType::DrawImage), _context(context) {
+  ImageCmd(jsi::Runtime &runtime, const jsi::Object &object,
+           Variables &variables)
+      : Command(CommandType::DrawImage) {
     convertProperty(runtime, object, "rect", props.rect, variables);
     convertProperty(runtime, object, "image", props.image, variables);
     convertProperty(runtime, object, "sampling", props.sampling, variables);
@@ -510,7 +508,7 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [x, y, width, height, rect, fit, image, sampling] = props;
     if (image.has_value()) {
       auto img = image.value();
@@ -550,7 +548,7 @@ public:
     convertProperty(runtime, object, "mode", props.mode, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto points = SkSpan(props.points.data(), props.points.size());
     ctx->canvas->drawPoints(props.mode, points, ctx->getPaint());
   }
@@ -580,7 +578,7 @@ public:
     convertProperty(runtime, object, "r", props.r, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [rect, x, y, width, height, r] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRRect(rect.value(), ctx->getPaint());
@@ -618,7 +616,7 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto [rect, x, y, width, height] = props;
     if (rect.has_value()) {
       ctx->canvas->drawOval(rect.value(), ctx->getPaint());
@@ -652,7 +650,7 @@ public:
     convertProperty(runtime, object, "blendMode", props.blendMode, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Validate colors array has exactly 4 colors if provided
     if (props.colors.has_value() && props.colors.value().size() != 4) {
       throw std::invalid_argument(
@@ -702,7 +700,7 @@ public:
     convertProperty(runtime, object, "indices", props.indices, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Create vertices using MakeCopy
     auto vertices = SkVertices::MakeCopy(
         props.mode, static_cast<int>(props.vertices.size()),
@@ -742,7 +740,7 @@ public:
     convertProperty(runtime, object, "inner", props.inner, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawDRRect(props.outer, props.inner, ctx->getPaint());
   }
 };
@@ -765,7 +763,7 @@ public:
     convertProperty(runtime, object, "y", props.y, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawTextBlob(props.blob, props.x, props.y, ctx->getPaint());
   }
 };
@@ -790,7 +788,7 @@ public:
     convertProperty(runtime, object, "glyphs", props.glyphs, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.font.has_value()) {
       auto glyphs =
           SkSpan(props.glyphs.glyphIds.data(), props.glyphs.glyphIds.size());
@@ -810,16 +808,14 @@ struct PictureCmdProps {
 class PictureCmd : public Command {
 public:
   PictureCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  PictureCmd(std::shared_ptr<RNSkPlatformContext> context,
-             jsi::Runtime &runtime, const jsi::Object &object,
-             Variables &variables)
-      : Command(CommandType::DrawPicture), _context(context) {
+  PictureCmd(jsi::Runtime &runtime, const jsi::Object &object,
+           Variables &variables)
+      : Command(CommandType::DrawPicture) {
     convertProperty(runtime, object, "picture", props.picture, variables);
   }
 
-  void draw(DrawingCtx *ctx) { ctx->canvas->drawPicture(props.picture); }
+  void play(DrawingCtx *ctx) override { ctx->canvas->drawPicture(props.picture); }
 };
 
 struct ImageSVGCmdProps {
@@ -847,7 +843,7 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.svg != nullptr) {
       ctx->canvas->save();
 
@@ -899,7 +895,7 @@ public:
     convertProperty(runtime, object, "width", props.width, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.paragraph) {
       auto paragraph = props.paragraph->getObject();
       paragraph->layout(props.width);
@@ -924,7 +920,7 @@ public:
     convertProperty(runtime, object, "frame", props.frame, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     props.animation->seekFrame(props.frame);
     props.animation->render(ctx->canvas);
   }
@@ -942,11 +938,10 @@ struct AtlasCmdProps {
 class AtlasCmd : public Command {
 public:
   AtlasCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  AtlasCmd(std::shared_ptr<RNSkPlatformContext> context, jsi::Runtime &runtime,
-           const jsi::Object &object, Variables &variables)
-      : Command(CommandType::DrawAtlas), _context(context) {
+  AtlasCmd(jsi::Runtime &runtime, const jsi::Object &object,
+           Variables &variables)
+      : Command(CommandType::DrawAtlas) {
     convertProperty(runtime, object, "image", props.image, variables);
     convertProperty(runtime, object, "sprites", props.sprites, variables);
     convertProperty(runtime, object, "transforms", props.transforms, variables);
@@ -956,7 +951,7 @@ public:
     convertProperty(runtime, object, "sampling", props.sampling, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.image) {
       // Validate transforms and sprites have the same size
       if (props.transforms.size() != props.sprites.size()) {

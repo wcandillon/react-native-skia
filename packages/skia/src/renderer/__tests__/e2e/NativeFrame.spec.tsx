@@ -5,7 +5,7 @@ import { surface } from "../setup";
 
 // Camera and video frames reach Skia through react-native-webgpu: the frame is
 // rendered into a texture of the shared device with copyExternalImageToTexture,
-// and MakeImageFromGPUTexture wraps that texture. The example app installs
+// and MakeFromGPUTexture wraps that texture. The example app installs
 // react-native-webgpu, whose RNWebGPU global is available to code evaluated on
 // the device. Pointers never cross the eval boundary (BigInt is not JSON
 // serializable): everything runs on-device and only plain data comes back.
@@ -48,10 +48,10 @@ type EvalResult =
   | { kind: "ok"; pixels: number[] };
 
 describe("Native frames", () => {
-  it("MakeImageFromNativeBuffer is a Web API", () => {
+  it("MakeFromNativeBuffer is a Web API", () => {
     const { Skia } = setupSkia();
     expect(() =>
-      Skia.Image.MakeImageFromNativeBuffer(1 as unknown as CanvasImageSource)
+      Skia.Image.MakeFromNativeBuffer(1 as unknown as CanvasImageSource)
     ).toThrow(Error);
   });
 
@@ -87,7 +87,7 @@ describe("Native frames", () => {
           };
         }
         frame.release();
-        const image = Skia.Image.MakeImageFromGPUTexture(texture);
+        const image = Skia.Image.MakeFromGPUTexture(texture);
         if (image.width() !== size || image.height() !== size) {
           return {
             kind: "fail",
@@ -145,7 +145,7 @@ describe("Native frames", () => {
   itRunsE2eOnly("rejects native buffers on native platforms", async () => {
     const result = await surface.eval((Skia) => {
       try {
-        Skia.Image.MakeImageFromNativeBuffer(
+        Skia.Image.MakeFromNativeBuffer(
           BigInt(1) as unknown as CanvasImageSource
         );
         return "did not throw";

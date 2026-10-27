@@ -4,21 +4,23 @@ import { createElement } from "react";
 import { SkiaView } from "../views/SkiaView.web";
 
 export interface NativeProps extends ViewProps {
-  opaque?: boolean;
   highBitDepth?: boolean;
   nativeID: string;
-  androidSurfaceType?: "auto" | "SurfaceView" | "TextureView";
+  androidBackingView?: "TextureView" | "SurfaceView" | "HardwareBufferView";
+  androidOpaque?: boolean;
   androidZOrderOnTop?: boolean;
+  androidZOrderMediaOverlay?: boolean;
 }
 
 const SkiaViewNativeComponent = ({
   nativeID,
   onLayout,
   // Surface settings, never reach the DOM
-  opaque: _opaque,
   highBitDepth: _highBitDepth,
-  androidSurfaceType: _androidSurfaceType,
+  androidBackingView: _androidBackingView,
+  androidOpaque: _androidOpaque,
   androidZOrderOnTop: _androidZOrderOnTop,
+  androidZOrderMediaOverlay: _androidZOrderMediaOverlay,
   ...viewProps
 }: NativeProps) => {
   return createElement(SkiaView, {

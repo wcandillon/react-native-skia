@@ -3,6 +3,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 import type {
   JsiRecorder,
   SkContourMeasureIter,
+  SkGpuLostInfo,
   Skia,
   SkPath,
   SkRect,
@@ -137,5 +138,17 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   },
   getNativeDevice: () => {
     return throwNotImplementedOnRNWeb<bigint>();
+  },
+  // CanvasKit renders on WebGL and falls back to software on its own, so
+  // the device is never reported lost.
+  gpu: {
+    isAvailable: true,
+    backend: "WebGL",
+    vendor: "",
+    architecture: "",
+    device: "",
+    description: "",
+    error: null,
+    lost: new Promise<SkGpuLostInfo>(() => {}),
   },
 });

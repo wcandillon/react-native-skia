@@ -56,9 +56,7 @@ public:
     auto image = _surface->makeImageSnapshot();
     // The snapshot is a copy task on the surface's recorder: submitted here,
     // so that the image is complete for whoever draws it next.
-    if (auto *recorder = _surface->recorder()) {
-      DawnContext::getInstance().submitRecording(recorder->snap().get());
-    }
+    DawnContext::getInstance().submitRecording(_surface->recorder());
     return image;
   }
 
@@ -83,9 +81,7 @@ public:
     }
     // The snapshot is a copy task on the surface's recorder: submitted here,
     // so that the image is complete for whoever draws it next.
-    if (auto *recorder = _surface->recorder()) {
-      DawnContext::getInstance().submitRecording(recorder->snap().get());
-    }
+    DawnContext::getInstance().submitRecording(_surface->recorder());
     if (image == nullptr || !_useP3ColorSpace) {
       return image;
     }
@@ -102,7 +98,7 @@ public:
     }
     srgb->getCanvas()->drawImage(image, 0, 0);
     auto converted = srgb->makeImageSnapshot();
-    context.submitRecording(recorder->snap().get());
+    context.submitRecording(recorder);
     return converted;
   }
 
@@ -129,7 +125,10 @@ public:
     return true;
   }
 
+  // The surface is used by one thread at a time, so it is always the target
+  // the caller read.
   bool presentRecordings(
+      const RNSkGraphiteTargetInfo & /* target */,
       const std::vector<skgpu::graphite::Recording *> &recordings) override {
     auto *recorder = _surface ? _surface->recorder() : nullptr;
     if (recorder == nullptr) {
@@ -141,7 +140,7 @@ public:
     // submit it first (the explicit clear makes sure the pass is emitted).
     if (!_cleared) {
       _surface->getCanvas()->clear(SK_ColorTRANSPARENT);
-      DawnContext::getInstance().submitRecording(recorder->snap().get());
+      DawnContext::getInstance().submitRecording(recorder);
       _cleared = true;
     }
     // A rejected recording is logged and dropped (see RNSkWindowSurface).
@@ -149,11 +148,12 @@ public:
     return true;
   }
 
-  bool presentImage(const sk_sp<SkImage> &image) override {
+  bool presentImage(const RNSkGraphiteTargetInfo & /* target */,
+                    const sk_sp<SkImage> &image) override {
     if (_surface == nullptr) {
       return false;
     }
-    _surface->getCanvas()->drawImage(image, 0, 0);
+    drawOnto(_surface->getCanvas(), image, _width, _height);
     return true;
   }
 

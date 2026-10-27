@@ -25,6 +25,19 @@ struct RNSkGraphiteTargetInfo {
   // recorded, not when it is replayed.
   bool useP3ColorSpace = false;
   skgpu::graphite::TextureInfo textureInfo;
+
+  /** Whether both describe the same texture: size, format, usage, color space.
+   */
+  bool operator==(const RNSkGraphiteTargetInfo &other) const {
+    return width == other.width && height == other.height &&
+           colorType == other.colorType &&
+           useP3ColorSpace == other.useP3ColorSpace &&
+           textureInfo == other.textureInfo;
+  }
+
+  bool operator!=(const RNSkGraphiteTargetInfo &other) const {
+    return !(*this == other);
+  }
 };
 
 } // namespace RNSkia

@@ -6,7 +6,7 @@ import { checkImage, docPath, itRunsE2eOnly } from "../../../__tests__/setup";
 const checkResult = (base64: string, path: string) => {
   const { Skia } = importSkia();
   const rData = Skia.Data.fromBase64(base64);
-  const image = Skia.Image.MakeImageFromEncoded(rData)!;
+  const image = Skia.Image.MakeFromEncoded(rData)!;
   expect(rData).toBeDefined();
   checkImage(image, docPath(path));
 };

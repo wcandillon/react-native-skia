@@ -3,7 +3,7 @@ import type { DataSourceParam } from "../types";
 
 import { useRawData } from "./Data";
 
-const animatedImgFactory = Skia.AnimatedImage.MakeAnimatedImageFromEncoded.bind(
+const animatedImgFactory = Skia.AnimatedImage.MakeFromEncoded.bind(
   Skia.AnimatedImage
 );
 

@@ -39,17 +39,17 @@ describe("Paragraphs", () => {
   it("Should build the first example from the documentation", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
         provider.registerFont(robotoMedium, "Roboto");
         provider.registerFont(robotoRegular, "Roboto");
         if (ctx.OS === "node") {
-          const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const noto = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.Noto))
           )!;
           provider.registerFont(noto, "Noto");
@@ -91,13 +91,13 @@ describe("Paragraphs", () => {
   it("Should build the example from the documentation with text styles", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoBold = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoBold = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoBold))
         )!;
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const robotoItalic = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoItalic = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoItalic))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -152,7 +152,7 @@ describe("Paragraphs", () => {
   it("should render simple paragraph with custom font", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const tf = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const tf = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Pacifico))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -322,7 +322,7 @@ describe("Paragraphs", () => {
   it("should apply letterSpacing and wordSpacing to RTL Arabic text", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -404,10 +404,10 @@ describe("Paragraphs", () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
         const wordSpacing = 40;
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -652,7 +652,7 @@ describe("Paragraphs", () => {
   it("should draw the bounding box (2)", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -686,7 +686,7 @@ describe("Paragraphs", () => {
   it("should draw the bounding box (3)", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();

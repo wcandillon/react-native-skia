@@ -97,7 +97,7 @@ const AnimatedCanvas = ({ image, onSnapshot }: AnimatedCanvasProps) => {
     <Canvas
       ref={ref}
       style={styles.canvas}
-      opaque
+      android={{ backingView: "SurfaceView" }}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
         size.value = { width, height };

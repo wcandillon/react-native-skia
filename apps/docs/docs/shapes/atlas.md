@@ -191,7 +191,7 @@ Because Skia and WebGPU share the same GPU device in v3, you can draw the sprite
 
 1. Export the atlas image as a WebGPU texture with `Skia.Image.MakeGPUTextureFromImage()` (see [exporting an image](/docs/webgpu#exporting-an-image)).
 2. Store the per-sprite data (transform, source rectangle, color) in a vertex buffer with a per-instance step mode and draw all sprites with a single `drawIndexed(6, spriteCount)` call, sampling the atlas texture in the fragment shader.
-3. Render into a texture created with the `TEXTURE_BINDING` usage, wrap it with `Skia.Image.MakeImageFromGPUTexture()`, and draw it with the [`Image`](/docs/images) component (see [from WebGPU to Skia](/docs/webgpu#from-webgpu-to-skia)).
+3. Render into a texture created with the `TEXTURE_BINDING` usage, wrap it with `Skia.Image.MakeFromGPUTexture()`, and draw it with the [`Image`](/docs/images) component (see [from WebGPU to Skia](/docs/webgpu#from-webgpu-to-skia)).
 
 This is what Ganesh did internally in v2, and it scales to a very large number of sprites.
 It is only available on native platforms; on the Web, Skia runs on WebGL through CanvasKit, where `drawAtlas` is batched as it was in v2.

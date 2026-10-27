@@ -61,7 +61,7 @@ public:
     convertProperty(runtime, object, "layer", props.layer, variables);
   }
 
-  void saveCTM(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto clip = props.clip;
     auto invertClip = props.invertClip;
     auto layer = props.layer;
@@ -147,7 +147,7 @@ public:
     convertProperty(runtime, object, "paint", props.paint, variables);
   }
 
-  void savePaint(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.paint.has_value()) {
       ctx->pushPaint(props.paint.value());
       return;

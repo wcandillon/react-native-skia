@@ -15,6 +15,7 @@ const config = {
     "<rootDir>/jestSetup.js",
   ],
   preset: "react-native",
+  resolver: "react-native-reanimated/jest/resolver",
   transformIgnorePatterns: [
     "node_modules/(?!(@react-native|react-native|react-native.*|@?react-navigation.*|three)/)",
   ],

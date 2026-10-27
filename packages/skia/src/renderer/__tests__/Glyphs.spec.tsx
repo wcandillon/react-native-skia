@@ -20,7 +20,7 @@ describe("Glyphs", () => {
         path.resolve(__dirname, "../../skia/__tests__/assets/Roboto-Medium.ttf")
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data);
+    const tf = Skia.Typeface.MakeFromData(data);
     expect(tf !== null).toBe(true);
     font = Skia.Font(tf!, 64);
     expect(font !== null).toBe(true);

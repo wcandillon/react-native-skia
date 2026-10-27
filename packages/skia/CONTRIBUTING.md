@@ -71,6 +71,7 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
    cd packages/skia
    yarn clean-skia
    yarn build-skia          # all platforms, or scope it: yarn build-skia apple-ios android
+                            # or a single target: yarn build-skia apple-ios-arm64-iphonesimulator
    yarn copy-skia-headers   # build-skia also runs this at the end
    ```
    `build-skia` runs `tools/git-sync-deps` first, which fetches third-party deps from `*.googlesource.com`. This can fail with HTTP 429 ("Short term server-time rate limit exceeded"). Re-run it with backoff until it succeeds before retrying the build:

@@ -49,14 +49,22 @@ static bool appIsBackgrounded() {
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
-  // Owned by the module, which outlives its views (see finalizeUpdates:).
-  RNSkia::RNSkManager *_manager;
+  // Owned by the module (see finalizeUpdates:). A view can outlive its
+  // manager: on a reload the module is invalidated on the JS thread while
+  // Fabric still holds the views of the old bundle, which it deallocates
+  // afterwards on the main thread. The weak reference makes that late
+  // unregistration a no-op, and a concurrent one keep the manager alive for
+  // the duration of the call.
+  std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
   bool _highBitDepth;
   // Whether the window can show a frame (see appIsBackgrounded). Main thread.
   bool _canPresent;
 #if !TARGET_OS_OSX
   CADisplayLink *_displayLink;
+  // Whether the display link asked for the display's full rate yet (see
+  // requestFullFrameRate).
+  bool _fullFrameRateRequested;
 #else
   bool _presentAgainScheduled;
 #endif
@@ -64,12 +72,14 @@ static bool appIsBackgrounded() {
 
 - (instancetype)initWithFrame:(CGRect)frame {
   if (self = [super initWithFrame:frame]) {
-    _manager = [RNSkiaModule latestActiveSkManager].get();
+    _manager = [RNSkiaModule latestActiveSkManager];
     _nativeId = 0;
     _highBitDepth = false;
     _canPresent = !appIsBackgrounded();
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
+#else
+    _fullFrameRateRequested = false;
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -109,15 +119,17 @@ static bool appIsBackgrounded() {
 - (void)viewWillMoveToSuperview:(NSView *)newSuperView {
   [super viewWillMoveToSuperview:newSuperView];
 #endif // !TARGET_OS_OSX
-  if (newSuperView == nullptr || _view != nullptr || _manager == nullptr) {
+  auto manager = _manager.lock();
+  if (newSuperView == nullptr || _view != nullptr || manager == nullptr) {
     return;
   }
-  auto context = _manager->getPlatformContext();
+  auto context = manager->getPlatformContext();
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   _layer = [CAMetalLayer layer];
 #pragma clang diagnostic pop
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
+  _surface->setHighBitDepth(_highBitDepth);
   // The window belongs to the main thread, and is left alone while the app
   // is in the background: what the view holds is presented on its next frame
   // once the app is back (see appWillEnterForeground:).
@@ -130,17 +142,21 @@ static bool appIsBackgrounded() {
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
   [self.layer addSublayer:_layer];
   if (_nativeId != 0) {
-    _manager->setSkiaView(_nativeId, _view);
+    manager->setSkiaView(_nativeId, _view);
   }
-  _view->setFrameScheduler([weakSelf]() { [weakSelf scheduleFrame]; });
+  // The display link presents whatever is waiting on its next tick, a frame
+  // for a resized window included: nothing shows before it anyway.
+  _view->setFrameScheduler(
+      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
 }
 
 - (void)removeFromSuperview {
   [self stopDisplayLink];
   if (_view != nullptr) {
     [_layer removeFromSuperlayer];
-    if (_nativeId != 0 && _manager != nullptr) {
-      _manager->setSkiaView(_nativeId, nullptr);
+    auto manager = _manager.lock();
+    if (_nativeId != 0 && manager != nullptr) {
+      manager->setSkiaView(_nativeId, nullptr);
     }
     _view = nullptr;
     _surface = nullptr;
@@ -167,13 +183,14 @@ static bool appIsBackgrounded() {
     // this flag is only set when the view is inserted and we want to set the
     // manager here since the view could be recycled or the app could be
     // refreshed and we would have a stale manager then
-    _manager = [RNSkiaModule latestActiveSkManager].get();
+    _manager = [RNSkiaModule latestActiveSkManager];
   }
 }
 
 - (void)unregisterView {
-  if (_manager != nullptr && _nativeId != 0) {
-    _manager->unregisterSkiaView(_nativeId);
+  auto manager = _manager.lock();
+  if (manager != nullptr && _nativeId != 0) {
+    manager->unregisterSkiaView(_nativeId);
   }
 }
 
@@ -207,17 +224,45 @@ static bool appIsBackgrounded() {
     [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
                        forMode:NSRunLoopCommonModes];
   }
+  [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
-  if (_view != nullptr && _view->presentFrame()) {
+  if (_view != nullptr &&
+      (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     [self presentAgainLater];
   }
 #endif
 }
 
 #if !TARGET_OS_OSX
+// A display link fires at 60 Hz until it asks for more, also while the
+// display already runs at 120 Hz for another link (Reanimated asks for 120):
+// a 120 Hz producer would then be presented every other frame. Ask for the
+// display's full rate once the view knows its screen. On iPhone this needs
+// CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
+// caps every link at 60 Hz. The link is paused while nothing is queued, so an
+// idle view does not keep the display at its full rate.
+- (void)requestFullFrameRate {
+#if !TARGET_OS_VISION
+  if (_fullFrameRateRequested) {
+    return;
+  }
+  UIScreen *screen = self.window.screen;
+  if (screen == nil) {
+    return;
+  }
+  _fullFrameRateRequested = true;
+  const float maxFps = (float)screen.maximumFramesPerSecond;
+  if (maxFps > 60) {
+    _displayLink.preferredFrameRateRange =
+        CAFrameRateRangeMake(60, maxFps, maxFps);
+  }
+#endif
+}
+
 - (void)onFrame:(CADisplayLink *)link {
-  if (_view == nullptr || !_view->presentFrame()) {
+  if (_view == nullptr ||
+      !(_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     link.paused = YES;
   }
 }
@@ -305,16 +350,17 @@ static bool appIsBackgrounded() {
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
   [self setHighBitDepth:newProps.highBitDepth];
-  // opaque, androidSurfaceType and androidZOrderOnTop select the backing view
-  // on Android; a CAMetalLayer composites like any other layer.
+  // The android* props (backing view, opacity, z-order) select and set up the
+  // backing view on Android; a CAMetalLayer composites like any other layer.
 }
 
 // Not setNativeId:, which is the setter of RCTViewComponentView's nativeId
 // (the string Fabric assigns from the nativeID prop).
 - (void)bindNativeId:(size_t)nativeId {
   _nativeId = nativeId;
-  if (_view != nullptr) {
-    _manager->registerSkiaView(nativeId, _view);
+  auto manager = _manager.lock();
+  if (_view != nullptr && manager != nullptr) {
+    manager->registerSkiaView(nativeId, _view);
   }
 }
 
@@ -323,7 +369,13 @@ static bool appIsBackgrounded() {
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface != nullptr && _surface->isAttached()) {
+  if (_surface == nullptr) {
+    return;
+  }
+  // The layer is re-attached with the new format; until then (or without a
+  // size), frames are recorded for it.
+  _surface->setHighBitDepth(highBitDepth);
+  if (_surface->isAttached()) {
     [self attachSurface];
   }
 }

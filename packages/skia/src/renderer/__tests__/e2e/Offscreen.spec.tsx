@@ -26,7 +26,7 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
     checkImage(image, docPath("offscreen/circle.png"));
   });
@@ -53,7 +53,7 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
     checkImage(image, docPath("offscreen/circle.png"));
   });
@@ -93,7 +93,7 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
     checkImage(image, docPath("offscreen/multiple_circles.png"));
   });

@@ -1,0 +1,35 @@
+[vulkan] Use three swapchain images for FIFO on Android
+
+Android's Vulkan loader sizes a swapchain's buffer queue to minImageCount - 1
+plus the buffers its consumer holds (CreateSwapchainKHR in libvulkan's
+swapchain.cpp), so the app can dequeue minImageCount - 1 buffers at once.
+Dawn asks for two images in FIFO mode, so a frame can only start once the
+compositor has given back the buffer shown before it. On Android 10,
+SurfaceFlinger gives a SurfaceView's previous buffer back only after it has
+composited the next one (BufferQueueLayer::releasePendingBuffer), and a
+canvas presenting at the panel's rate waits for that in
+vkAcquireNextImageKHR on every frame: 3.5 ms of each 16.7 ms frame on a
+Mi MIX 3, with nothing else to draw.
+
+Three images is the triple buffering Android gives every window it manages,
+and what Khronos' mobile best practices ask for in FIFO mode.
+
+Drop this patch when Dawn asks for three FIFO images on Android itself.
+
+---
+--- a/src/dawn/native/vulkan/SwapChainVk.cpp
++++ b/src/dawn/native/vulkan/SwapChainVk.cpp
+@@ -73,6 +73,13 @@ uint32_t MinImageCountForPresentMode(VkPresentModeKHR mode) {
+     switch (mode) {
+         case VK_PRESENT_MODE_FIFO_KHR:
+         case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
++#if DAWN_PLATFORM_IS(ANDROID)
++            // Android's loader lets the app dequeue minImageCount - 1 buffers at once, so with two
++            // images each frame waits for the compositor to release the one shown before.
++            return 3;
++#else
++            return 2;
++#endif
+         case VK_PRESENT_MODE_IMMEDIATE_KHR:
+             return 2;
+         case VK_PRESENT_MODE_MAILBOX_KHR:

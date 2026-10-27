@@ -38,8 +38,8 @@ const GradientCanvas = ({
     <View style={styles.column}>
       <Canvas
         style={styles.canvas}
-        opaque
         highBitDepth={highBitDepth}
+        android={{ backingView: "SurfaceView" }}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           size.value = { width, height };

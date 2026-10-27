@@ -7,6 +7,7 @@ import type { IPlatform } from "./IPlatform";
 
 export const Platform: IPlatform = {
   OS: RNPlatform.OS,
+  Version: RNPlatform.Version,
   PixelRatio: PixelRatio.get(),
   resolveAsset: (source: DataModule) => {
     const asset = unwrapModule(source);

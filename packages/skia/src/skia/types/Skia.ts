@@ -34,6 +34,67 @@ import type { JsiRecorder } from "./Recorder";
 import type { SkottieFactory } from "./Skottie";
 
 /**
+ * Why the GPU device was lost (see `SkGpuInfo.lost`).
+ */
+export interface SkGpuLostInfo {
+  /**
+   * In the terms of WebGPU's GPUDeviceLostReason: "unknown" for a loss React
+   * Native Skia did not cause (a driver reset, the GPU out of memory, GPU
+   * work refused while the app was in the background on iOS).
+   */
+  readonly reason: string;
+  /** The graphics driver's account of the loss. */
+  readonly message: string;
+}
+
+/**
+ * The GPU Skia renders with, probed once when the module is installed (on
+ * a native thread; the first read waits for the probe). On Android Skia
+ * renders with Vulkan (1.1 or later), on iOS with Metal. When the device has
+ * none, `isAvailable` is false and `error` says why: every `Canvas` stays
+ * blank, CPU work (paths, decoding, encoding, raster images) still runs, and
+ * the APIs that need the GPU (offscreen surfaces, snapshots, texture images)
+ * throw an Error with the same message. The library's Android manifest
+ * declares Vulkan 1.1 as a required feature, so the Play Store does not
+ * serve the app to such devices unless the app removes that declaration and
+ * handles them itself with this flag.
+ *
+ * The GPU device can be lost while the app runs: a driver reset, the GPU
+ * out of memory, GPU work refused while the app was in the background on
+ * iOS. React Native Skia then replaces it with a new device, and `lost`
+ * resolves once it has. Canvases render again on their own. Everything made
+ * on the lost device is gone for good, though safe to use (it draws
+ * nothing): offscreen surfaces and the images taken from them, texture
+ * images (`makeTextureImage`, `MakeFromGPUTexture`), snapshots of views,
+ * and the device `Skia.getNativeDevice()` returned, which WebGPU code
+ * imports again. An app that keeps such objects makes them again when `lost`
+ * resolves, or with the `useGpu` hook in React. `isAvailable` is false
+ * between the loss and the replacement, and stays false, with `error` saying
+ * why, if no replacement could be made.
+ */
+export interface SkGpuInfo {
+  /** Whether Skia can render on this device, right now. */
+  readonly isAvailable: boolean;
+  /** "Vulkan", "Metal" or "WebGL"; empty when unavailable. */
+  readonly backend: string;
+  /** The adapter in the terms of WebGPU's GPUAdapterInfo (native only). */
+  readonly vendor: string;
+  readonly architecture: string;
+  readonly device: string;
+  readonly description: string;
+  /** Why the GPU is unavailable; null when it is. */
+  readonly error: string | null;
+  /**
+   * Resolves once the device this describes is lost and React Native Skia
+   * has tried to replace it: `Skia.gpu` then describes the new device, or
+   * why there is none. The same promise for every read while the device is
+   * in use, like WebGPU's `GPUDevice.lost`; read `Skia.gpu` again to await
+   * the next loss. Never resolves on the web.
+   */
+  readonly lost: Promise<SkGpuLostInfo>;
+}
+
+/**
  * Declares the interface for the native Skia API
  */
 export interface Skia {
@@ -107,4 +168,8 @@ export interface Skia {
    * device (zero-copy interop). Native only.
    */
   getNativeDevice(): bigint;
+  /**
+   * The GPU Skia renders with, or why there is none. See {@link SkGpuInfo}.
+   */
+  readonly gpu: SkGpuInfo;
 }

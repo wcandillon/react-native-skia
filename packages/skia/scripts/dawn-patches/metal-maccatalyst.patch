@@ -14,19 +14,20 @@ the deprecated feature-set checks. Both Skia's GN build and build-dawn.ts
 apply it to the same Dawn checkout.
 
 ---
+
 --- a/src/dawn/native/metal/PhysicalDeviceMTL.mm
 +++ b/src/dawn/native/metal/PhysicalDeviceMTL.mm
-@@ -248,7 +248,7 @@
+@@ -248,7 +248,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
  ResultOrError<MTLGPUFamily> GetMTLGPUFamily(id<MTLDevice> device) {
      // https://developer.apple.com/documentation/metal/mtldevice/detecting_gpu_features_and_metal_software_versions?language=objc
-
+ 
 -#if !DAWN_PLATFORM_IS(IOS)
 +#if !DAWN_PLATFORM_IS(IOS) || TARGET_OS_MACCATALYST
      if ([device supportsFamily:MTLGPUFamilyMac2]) {
          return MTLGPUFamily::Mac2;
      }
-@@ -402,7 +402,7 @@
-                                                TogglesState* deviceToggles) const {
+@@ -405,7 +405,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
+ 
      {
          bool haveStoreAndMSAAResolve = false;
 -#if DAWN_PLATFORM_IS(MACOS)
@@ -34,16 +35,16 @@ apply it to the same Dawn checkout.
          haveStoreAndMSAAResolve = [*mDevice supportsFamily:MTLGPUFamilyCommon2];
  #elif DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS)
  #if !defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0
-@@ -416,7 +416,7 @@
+@@ -419,7 +419,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
          deviceToggles->Default(Toggle::EmulateStoreAndMSAAResolve, !haveStoreAndMSAAResolve);
-
+ 
          bool haveSamplerCompare = true;
 -#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
 +#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && !TARGET_OS_MACCATALYST && \
      (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
          haveSamplerCompare = [*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1];
  #endif
-@@ -431,7 +431,7 @@
+@@ -434,7 +434,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
          // base vertex/instance draws execute correctly there because Metal commands are serviced
          // by the host GPU, which always supports them.
          // NOTE: TARGET_OS_SIMULATOR can be defined but set to false for MacOS builds.
@@ -52,10 +53,10 @@ apply it to the same Dawn checkout.
      (!defined(TARGET_OS_SIMULATOR) || !TARGET_OS_SIMULATOR) && \
      (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
          haveBaseVertexBaseInstance = [*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1];
-@@ -640,7 +640,7 @@
+@@ -647,7 +647,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
      }
  #endif
-
+ 
 -#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
 +#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && !TARGET_OS_MACCATALYST && \
      (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
