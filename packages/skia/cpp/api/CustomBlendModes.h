@@ -15,28 +15,22 @@ constexpr int kBlendModePlusDarker = 1001;
 constexpr int kBlendModePlusLighter = 1002;
 
 // SkSL for PlusDarker blend mode
-// Formula: rc = max(0, 1 - ((1-dst) + (1-src))) = max(0, src + dst - 1)
-// This darkens the image by subtracting from white
+// Formula: rc = max(0, ra - ((da - dst) + (sa - src))), ra = sa + da - sa * da
+// On premultiplied colors, so a translucent source darkens proportionally
 inline const char *kPlusDarkerSkSL = R"(
     vec4 main(vec4 src, vec4 dst) {
         float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = max(vec3(0.0), srcUnpremul + dstUnpremul - vec3(1.0));
-        return vec4(blended * outAlpha, outAlpha);
+        vec3 c = max(vec3(0.0), outAlpha - ((dst.a - dst.rgb) + (src.a - src.rgb)));
+        return vec4(c, outAlpha);
     }
 )";
 
 // SkSL for PlusLighter blend mode
 // Formula: rc = min(1, dst + src)
-// This lightens the image by adding colors and clamping
+// On premultiplied colors, so a translucent source lightens proportionally
 inline const char *kPlusLighterSkSL = R"(
     vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = min(vec3(1.0), srcUnpremul + dstUnpremul);
-        return vec4(blended * outAlpha, outAlpha);
+        return min(src + dst, vec4(1.0));
     }
 )";
 

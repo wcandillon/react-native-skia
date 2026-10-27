@@ -395,4 +395,36 @@ describe("Paint", () => {
     );
     checkImage(result, "snapshots/paint/plus-lighter-rgb.png");
   });
+  it("should honor the source alpha in plusLighter and plusDarker", async () => {
+    const { width, height } = surface;
+    const blend = async (
+      backdrop: string,
+      color: string,
+      blendMode: "plusLighter" | "plusDarker"
+    ) => {
+      const image = await surface.draw(
+        <Group>
+          <Fill color={backdrop} />
+          <Fill color={color} blendMode={blendMode} />
+        </Group>
+      );
+      return readPixel(
+        image,
+        (width / 2) * PIXEL_RATIO,
+        (height / 2) * PIXEL_RATIO
+      );
+    };
+    // 51 + 0.4 * 255
+    expect(
+      await blend("#333333", "rgba(255, 255, 255, 0.4)", "plusLighter")
+    ).toEqual([153, 153, 153, 255]);
+    // 153 - 0.4 * 255
+    expect(await blend("#999999", "rgba(0, 0, 0, 0.4)", "plusDarker")).toEqual([
+      51, 51, 51, 255,
+    ]);
+    // A fully transparent source leaves the backdrop untouched
+    expect(await blend("#999999", "rgba(0, 0, 0, 0)", "plusDarker")).toEqual([
+      153, 153, 153, 255,
+    ]);
+  });
 });
