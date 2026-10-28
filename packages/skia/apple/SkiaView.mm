@@ -283,8 +283,7 @@ using Presentation =
   return images.presentedFrame;
 }
 
-- (void)showPresentedImage:(uint32_t)imageId
-              ofGeneration:(uint64_t)generation {
+- (void)showPresentedImage:(uint32_t)imageId ofGeneration:(uint64_t)generation {
   auto *images = std::get_if<ImagePresentation>(&_presentation);
   if (images != nullptr && _presentedFrameGeneration == generation) {
     [images->imageLayer showImageId:imageId];
@@ -516,8 +515,7 @@ using Presentation =
   }
   // The layer is owned by the view: nothing to release with the window.
   _surface->attach((__bridge void *)window.layer, width, height, _highBitDepth,
-                   _view->getPlatformContext()->prefersP3ColorSpace(),
-                   nullptr);
+                   _view->getPlatformContext()->prefersP3ColorSpace(), nullptr);
 }
 
 // A static canvas presents into images of the view's size, and keeps the last
