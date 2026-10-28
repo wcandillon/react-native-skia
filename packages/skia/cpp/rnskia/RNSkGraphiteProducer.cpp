@@ -6,7 +6,6 @@
 #include <utility>
 
 #include "RNDawnContext.h"
-#include "RNSkFrameStart.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkThreadPool.h"
 #include "api/recorder/DrawingCtx.h"
@@ -220,17 +219,18 @@ void RNSkGraphiteProducer::produce() {
   }
   std::shared_ptr<RNSkGraphiteRecording> recording;
   if (target && (recorder || picture)) {
-    auto *canvas = beginFrame(
-        DawnContext::tryGetInstance(),
-        [&target](DawnContext &context) {
-          // On the recorder of this pool thread: a view holds no recorder of
-          // its own (see RNSkGraphiteTarget::tryBeginRecording).
-          return target->tryBeginRecording(context.getThreadRecorder());
-        },
-        [](const char *failure) {
-          RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
-                                   failure);
-        });
+    SkCanvas *canvas = nullptr;
+    // Without a GPU nothing records, and Skia.gpu says why.
+    if (auto *context = DawnContext::tryGetInstance()) {
+      try {
+        // On the recorder of this pool thread: a view holds no recorder of
+        // its own (see RNSkGraphiteTarget::beginRecording).
+        canvas = target->beginRecording(context->getThreadRecorder());
+      } catch (const std::exception &e) {
+        RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
+                                 e.what());
+      }
+    }
     if (canvas != nullptr) {
       try {
         // The deferred canvas already draws in points.

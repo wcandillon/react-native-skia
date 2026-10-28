@@ -28,7 +28,7 @@ class RNSkGraphiteTarget;
  * waits for a replay. A pool thread replays the commands (the recorder writes
  * the pending values into them first) into a deferred canvas of the view's
  * target, on the Graphite recorder of that thread (a view holds none of its
- * own, see RNSkGraphiteTarget::tryBeginRecording), and submits the recording;
+ * own, see RNSkGraphiteTarget::beginRecording), and submits the recording;
  * the main thread presents it on the next vsync.
  *
  * A recording with shared values arrives without their values (recording
