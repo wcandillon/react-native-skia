@@ -667,7 +667,8 @@ RNSkWindowSurface::makeImageTargetLocked(skgpu::graphite::Recorder *recorder) {
   auto imageTarget = DawnContext::getInstance().MakeSurfaceFromTexture(
       _device.CreateTexture(&descriptor), recorder,
       DawnUtils::viewColorSpace(_useP3ColorSpace));
-  // The frame waits in the queue for the view's next recording or redraw.
+  // The frame stays queued: the view's next redraw presents it, or its next
+  // recording once the producer has room to make one.
   if (imageTarget == nullptr) {
     RNSkLogger::logToConsole(
         "Canvas: could not make a %dx%d texture for a static frame", _width,
