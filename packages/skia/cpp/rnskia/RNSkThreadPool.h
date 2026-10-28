@@ -9,12 +9,8 @@
 #include <string>
 #include <thread>
 #include <utility>
-#include <variant>
 
 #include <condition_variable>
-
-#include "RNSkIdleTaskSchedule.h"
-#include "utils/RNSkOverloaded.h"
 
 #if defined(__APPLE__)
 #include <pthread.h>
@@ -63,8 +59,7 @@ public:
   /**
    The task every thread runs, on itself, after requestIdleTask(). `idle`
    says whether the thread ran no job for kIdleDelay: it records nothing for
-   now, and whatever it caches can go. A thread that runs it busy runs it
-   again, idle, once it ran no job for kIdleDelay (see RNSkIdleTaskSchedule).
+   now, and whatever it caches can go.
    */
   void setIdleTask(std::function<void(bool idle)> task) {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -87,7 +82,7 @@ public:
   }
 
 private:
-  using Clock = RNSkIdleTaskSchedule::Clock;
+  using Clock = std::chrono::steady_clock;
 
   RNSkThreadPool() {
     auto cores = std::thread::hardware_concurrency();
@@ -113,7 +108,9 @@ private:
 
   void run(unsigned index) {
     configureThread(index);
-    RNSkIdleTaskSchedule schedule(kIdleDelay, Clock::now());
+    // The last idle request this thread served, and when it ran a job last.
+    uint64_t served = 0;
+    auto lastJob = Clock::now();
     for (;;) {
       std::function<void()> job;
       std::function<void(bool)> idleTask;
@@ -126,29 +123,25 @@ private:
             _jobs.pop_front();
             break;
           }
-          const bool runIdleTask = std::visit(
-              Overloaded{[&](const RNSkIdleTaskSchedule::WaitForWork &) {
-                           _condition.wait(lock);
-                           return false;
-                         },
-                         [&](const RNSkIdleTaskSchedule::WaitUntil &wait) {
-                           _condition.wait_until(lock, wait.time);
-                           return false;
-                         },
-                         [&](const RNSkIdleTaskSchedule::RunIdleTask &run) {
-                           idle = run.idle;
-                           return true;
-                         }},
-              schedule.next(_idleRequest, _idleRequestTime, Clock::now()));
-          if (runIdleTask) {
-            idleTask = _idleTask;
-            break;
+          if (_idleRequest == served) {
+            _condition.wait(lock);
+            continue;
           }
+          const auto due = _idleRequestTime + kIdleDelay;
+          const auto now = Clock::now();
+          if (now < due) {
+            _condition.wait_until(lock, due);
+            continue;
+          }
+          served = _idleRequest;
+          idleTask = _idleTask;
+          idle = now - lastJob >= kIdleDelay;
+          break;
         }
       }
       if (job) {
         job();
-        schedule.ranJob(Clock::now());
+        lastJob = Clock::now();
       } else if (idleTask) {
         idleTask(idle);
       }

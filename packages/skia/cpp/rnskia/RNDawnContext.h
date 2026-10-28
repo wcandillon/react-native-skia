@@ -8,13 +8,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -25,9 +23,7 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
-#include "RNSkMemoryReleaseSchedule.h"
 #include "utils/RNSkLog.h"
-#include "utils/RNSkOverloaded.h"
 
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkData.h"
@@ -298,9 +294,9 @@ public:
             delete request;
           },
           request);
-      submitLocked(current, skgpu::graphite::SyncToCpu::kNo);
+      current->context->submit();
     }
-    wakePoller();
+    wakeReadbackPoller();
   }
 
   /**
@@ -460,26 +456,6 @@ public:
   }
 
   /**
-   Asks for the GPU memory Dawn keeps for reuse to be given back: the heaps
-   of the textures and buffers freed since, which it releases only when asked
-   (a static canvas frees a texture with each frame it presents; a render
-   thread once idle asks, see RNSkGraphiteProducer). The poller gives it back
-   once the device ran no work for kMemoryReleaseIdleTime, between frames
-   (see RNSkMemoryReleaseSchedule). Any thread; returns at once.
-   */
-  static void requestMemoryRelease() {
-    auto *instance = tryGetInstance();
-    if (instance == nullptr) {
-      return;
-    }
-    {
-      std::lock_guard<std::mutex> lock(instance->_pollerMutex);
-      instance->_memoryRelease.requested();
-    }
-    instance->wakePoller();
-  }
-
-  /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
    thread's (see getRecorder), also behind the surfaces made on it; any
    other submits nothing. A recording made for a lost device (see
@@ -516,7 +492,7 @@ public:
               static_cast<skgpu::graphite::InsertStatus::V>(status)),
           status.message().c_str());
     }
-    submitLocked(current, syncToCpu);
+    current->context->submit(syncToCpu);
     return inserted;
   }
 
@@ -549,7 +525,7 @@ public:
             status.message().c_str());
       }
     }
-    submitLocked(current, skgpu::graphite::SyncToCpu::kNo);
+    current->context->submit();
   }
 
   // GPU objects --------------------------------------------------------------
@@ -852,7 +828,7 @@ private:
   static const Probe &probe() noexcept {
     // Attempted once: a device without a usable GPU does not get one by
     // asking again, and the attempt enumerates drivers. The context is never
-    // destroyed: the poller is a detached thread using it, which
+    // destroyed: the readback poller is a detached thread using it, which
     // the process takes down at exit instead of a static destructor tearing
     // the context down under it.
     static const Probe *result = []() noexcept {
@@ -1160,11 +1136,11 @@ private:
     _recorders.erase(recorder);
   }
 
-  // The poller ---------------------------------------------------------------
+  // Readbacks ----------------------------------------------------------------
 
-  void wakePoller() {
+  void wakeReadbackPoller() {
     std::call_once(_pollerOnce, [this]() {
-      std::thread([this]() { pollDevice(); }).detach();
+      std::thread([this]() { pollReadbacks(); }).detach();
     });
     // Taken so that a poller between its predicate check and its wait cannot
     // miss the notification.
@@ -1172,59 +1148,28 @@ private:
     _pollerCondition.notify_one();
   }
 
-  /**
-   The poller's thread. While readbacks are pending, it checks the context
-   for finished GPU work every few milliseconds; a memory release asked for
-   runs when its schedule says, between frames (see
-   RNSkMemoryReleaseSchedule). It sleeps otherwise.
-   */
-  void pollDevice() {
+  void pollReadbacks() {
 #if defined(__APPLE__)
-    pthread_setname_np("RNSkia Poller");
+    pthread_setname_np("RNSkia Readback");
 #elif defined(__ANDROID__)
-    pthread_setname_np(pthread_self(), "RNSkia Poller");
+    pthread_setname_np(pthread_self(), "RNSkia Readback");
 #endif
-    using Release = RNSkMemoryReleaseSchedule;
-    // Polls every millisecond at first, then backs off: a short readback is
-    // delivered quickly, a long one does not take the context lock a
-    // thousand times a second.
-    auto interval = std::chrono::milliseconds(1);
-    std::unique_lock<std::mutex> lock(_pollerMutex);
     for (;;) {
-      const bool readbacks =
-          _pendingReadbacks.load(std::memory_order_acquire) > 0;
-      std::optional<Release::RunRound> release;
-      const bool waited = std::visit(
-          Overloaded{[&](const Release::WaitForRequest &) {
-                       if (!readbacks) {
-                         _pollerCondition.wait(lock);
-                       }
-                       return !readbacks;
-                     },
-                     [&](const Release::WaitUntil &wait) {
-                       if (!readbacks) {
-                         _pollerCondition.wait_until(lock, wait.time);
-                       }
-                       return !readbacks;
-                     },
-                     [&](const Release::RunRound &round) {
-                       release = round;
-                       return false;
-                     }},
-          _memoryRelease.next(lastSubmit(), std::chrono::steady_clock::now()));
-      if (waited) {
-        interval = std::chrono::milliseconds(1);
-        continue;
-      }
-      lock.unlock();
-      bool polled = false;
-      auto round = Release::Round::kBusy;
       {
+        std::unique_lock<std::mutex> lock(_pollerMutex);
+        _pollerCondition.wait(lock, [this]() {
+          return _pendingReadbacks.load(std::memory_order_acquire) > 0;
+        });
+      }
+      // Polls every millisecond at first, then backs off: a short readback
+      // is delivered quickly, a long one does not take the context lock a
+      // thousand times a second.
+      auto interval = std::chrono::milliseconds(1);
+      while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
         // A busy context is a view rendering: skip this round rather than
         // hold up its frame.
-        std::unique_lock<std::mutex> contextLock(_mutex, std::try_to_lock);
-        if (contextLock.owns_lock()) {
-          polled = true;
+        std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+        if (lock.owns_lock()) {
           tick();
           _current.load(std::memory_order_acquire)
               ->context->checkAsyncWorkCompletion();
@@ -1233,44 +1178,12 @@ private:
           for (auto *retired : _retired) {
             retired->context->checkAsyncWorkCompletion();
           }
-          if (release.has_value()) {
-            round = dawn::native::ReduceMemoryUsage(getWGPUDevice().Get())
-                        ? Release::Round::kAgain
-                        : Release::Round::kDone;
-          }
-        }
-      }
-      if (readbacks) {
-        if (polled) {
+          lock.unlock();
           interval = std::min(interval * 2, std::chrono::milliseconds(4));
         }
         std::this_thread::sleep_for(interval);
       }
-      lock.lock();
-      if (release.has_value()) {
-        _memoryRelease.ranRound(*release, round,
-                                std::chrono::steady_clock::now());
-      }
     }
-  }
-
-  /** When Skia last submitted work to the device (see submitLocked). */
-  std::chrono::steady_clock::time_point lastSubmit() const {
-    return std::chrono::steady_clock::time_point(
-        std::chrono::steady_clock::duration(
-            _lastSubmit.load(std::memory_order_relaxed)));
-  }
-
-  /**
-   Submits what the context holds, and notes when: a memory release waits
-   for the device to run nothing for a time (see RNSkMemoryReleaseSchedule).
-   Under the context lock.
-   */
-  void submitLocked(Generation *current, skgpu::graphite::SyncToCpu syncToCpu) {
-    current->context->submit(syncToCpu);
-    _lastSubmit.store(
-        std::chrono::steady_clock::now().time_since_epoch().count(),
-        std::memory_order_relaxed);
   }
 
   /**
@@ -1359,22 +1272,10 @@ private:
   std::unordered_map<const skgpu::graphite::Recorder *, uint64_t> _recorders;
   std::vector<std::unique_ptr<skgpu::graphite::Recorder>> _retiredRecorders;
 
-  // The poller, started on the first readback or memory release (see
-  // pollDevice): the readbacks pending (see readPixels), the memory release's
-  // schedule, which _pollerMutex guards (see requestMemoryRelease), and when
-  // Skia last submitted work to the device. The device counts as idle once
-  // it ran nothing for kMemoryReleaseIdleTime: a view drawing frames at any
-  // rate it animates at submits more often. What others submit on the shared
-  // device, react-native-webgpu's work, is not seen; Dawn saying more remains
-  // round after round is, up to kMemoryReleaseRounds.
-  static constexpr std::chrono::milliseconds kMemoryReleaseIdleTime{1000};
-  static constexpr std::chrono::milliseconds kMemoryReleaseRoundInterval{10};
-  static constexpr int kMemoryReleaseRounds = 20;
+  // The readback poller: started on the first readback, it checks the
+  // context for finished GPU work while readbacks are pending and sleeps
+  // otherwise (see readPixels).
   std::atomic<int> _pendingReadbacks{0};
-  RNSkMemoryReleaseSchedule _memoryRelease{kMemoryReleaseIdleTime,
-                                           kMemoryReleaseRoundInterval,
-                                           kMemoryReleaseRounds};
-  std::atomic<std::chrono::steady_clock::rep> _lastSubmit{0};
   std::once_flag _pollerOnce;
   std::mutex _pollerMutex;
   std::condition_variable _pollerCondition;
