@@ -335,6 +335,18 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // accesses; Chrome ships WebGPU with it on.
       "disable_robustness",
 #endif
+#if defined(__ANDROID__)
+      // One VkPipelineCache per device, as Chrome configures Dawn on every
+      // Vulkan device. Without it Dawn creates a VkPipelineCache for each
+      // pipeline it compiles, serializes it (for a blob cache this device
+      // does not have) and destroys it, on each of its worker threads at
+      // once: that destructor is where the Imagination PowerVR driver
+      // (MediaTek mt6855) segfaults while Graphite compiles its pipelines
+      // (#4340). With one cache the only vkDestroyPipelineCache runs at
+      // device teardown, and pipelines that share binaries compile faster.
+      // PerformIdleTasks is not needed: nothing persists the cache.
+      "vulkan_monolithic_pipeline_cache",
+#endif
   };
 #if defined(NDEBUG)
   if (!validate) {
