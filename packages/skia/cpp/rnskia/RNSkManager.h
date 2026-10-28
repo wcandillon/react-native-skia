@@ -47,13 +47,6 @@ public:
   void unregisterSkiaView(size_t nativeId);
 
   /**
-   Sets the view pointed to by nativeId to the provided value.
-   Used when we want to remove a view without unregistering it
-   - this happens typically on iOS.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view);
-
-  /**
    * @return The platform context
    */
   std::shared_ptr<RNSkPlatformContext> getPlatformContext() {
