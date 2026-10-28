@@ -16,6 +16,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkPresentOrKeep.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
@@ -213,9 +214,7 @@ public:
       }
       recordings.push_back(std::move(lastPresented));
     }
-    const size_t taken = recordings.size();
     if (presentOrKeep(*target, targetInfo, std::move(recordings)).allDone) {
-      _producer->onFramePresented(taken);
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
@@ -351,14 +350,12 @@ public:
     if (recordings.empty()) {
       return kNothingPresented;
     }
-    const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
     const int result = presented.shown ? kFramePresented : kNothingPresented;
     if (!presented.allDone) {
       return result | kMoreQueued;
     }
-    _producer->onFramePresented(taken);
     return target->hasQueued() ? result | kMoreQueued : result;
   }
 
@@ -466,46 +463,32 @@ private:
     });
   }
 
-  /** What presentOrKeep() did. */
-  struct Presented {
-    // Every recording is done: shown, or skipped (see present).
-    bool allDone;
-    // A frame went to the window.
-    bool shown;
-  };
-
   /**
    Presents the recordings onto the window, described by targetInfo, and
-   remembers the last one shown. The one the window could not take and the
-   ones behind it go back to the front of the target's queue: the window had
-   no drawable, or it changed under the present (the main thread resized it
-   between the read of its description and the present, see
-   RNSkWindowSurface::presentRecordings). A window that changed is read
-   again and the rest presented onto it as it is now, once, rather than a
-   frame later: what was recorded for the previous size shows stretched to
-   it, or is dropped for a frame behind it (see present).
+   remembers the last one shown (see RNSkPresentOrKeep.h). The one the window
+   could not take and the ones behind it go back to the front of the
+   target's queue: the window had no drawable, or it changed under the
+   present (see RNSkWindowSurface::presentRecordings), in which case the rest
+   is presented once more onto it as it is now: what was recorded for the
+   previous size shows stretched to it, or is dropped for a frame behind it
+   (see present). The recordings done give the producer back the slots they
+   hold (see RNSkGraphiteProducer::onRecordingsDone).
    */
-  Presented presentOrKeep(
-      RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
+  RNSkPresented presentOrKeep(
+      RNSkGraphiteTarget &target, const RNSkGraphiteTargetInfo &targetInfo,
       std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings) {
-    bool shown = false;
-    for (int attempt = 0;; attempt++) {
-      const auto replayed =
-          present(*_surface, targetInfo, recordings, /* remember= */ true);
-      shown = shown || replayed.shown;
-      if (replayed.done == recordings.size()) {
-        return {true, shown};
-      }
-      recordings.erase(recordings.begin(),
-                       recordings.begin() + static_cast<long>(replayed.done));
-      RNSkGraphiteTargetInfo now;
-      if (attempt == 0 && _surface->getTargetInfo(&now) && now != targetInfo) {
-        targetInfo = now;
-        continue;
-      }
-      target.requeue(std::move(recordings));
-      return {false, shown};
-    }
+    return RNSkia::presentOrKeep(
+        targetInfo, std::move(recordings),
+        [this](const RNSkGraphiteTargetInfo &info, const auto &queued) {
+          return present(*_surface, info, queued, /* remember= */ true);
+        },
+        [this](const auto &queued, size_t done) {
+          _producer->onRecordingsDone(queued, done);
+        },
+        [this](RNSkGraphiteTargetInfo *now) {
+          return _surface->getTargetInfo(now);
+        },
+        [&target](auto rest) { target.requeue(std::move(rest)); });
   }
 
   /**
