@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -47,7 +48,9 @@ public:
                           JniSkiaView::setSurfaceHighBitDepth),
          makeNativeMethod("registerView", JniSkiaView::registerView),
          makeNativeMethod("unregisterView", JniSkiaView::unregisterView),
-         makeNativeMethod("presentFrame", JniSkiaView::presentFrame)});
+         makeNativeMethod("presentFrame", JniSkiaView::presentFrame),
+         makeNativeMethod("holdPresents", JniSkiaView::holdPresents),
+         makeNativeMethod("releasePresents", JniSkiaView::releasePresents)});
   }
 
   // The manager is owned by the RNSkiaModule and is destroyed when the module
@@ -132,6 +135,21 @@ protected:
   // keeps this object alive for the call (see SkiaView.dropInstance).
   int presentFrame() { return _view->presentFrame(); }
 
+  // Main thread. The backing view's layer would show a frame before the
+  // window frame that lays it out: nothing is presented until
+  // releasePresents().
+  void holdPresents() { _presentsHeld->store(true); }
+
+  // Main thread. The window frame has committed, or the surface is gone:
+  // what the window declined meanwhile, a redraw or the queued recordings,
+  // is asked for again on the present thread (see
+  // RNSkView::requestDeclinedFrame). Without a window the redraw request is
+  // let go of there, so that the next window's own request is taken.
+  void releasePresents() {
+    _presentsHeld->store(false);
+    _view->requestDeclinedFrame();
+  }
+
 private:
   friend HybridBase;
 
@@ -140,6 +158,8 @@ private:
       : _manager(skiaManager->cthis()->getSkiaManager()) {
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
+    _surface->setCanPresent(
+        [presentsHeld = _presentsHeld]() { return !presentsHeld->load(); });
     _view = std::make_shared<RNSkView>(context, _surface);
     // Tasks for the present thread go through the Java view, which owns the
     // thread. Weak: the Java view owns this object through its hybrid data;
@@ -260,6 +280,10 @@ private:
   }
 
   std::weak_ptr<RNSkManager> _manager;
+  // Read through the surface's canPresent on the present thread. Shared with
+  // the surface, which a present-thread task can keep after this object goes.
+  std::shared_ptr<std::atomic<bool>> _presentsHeld =
+      std::make_shared<std::atomic<bool>>(false);
   // Declared before the view, which unbinds itself from the surface when it
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;
