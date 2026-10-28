@@ -41,8 +41,9 @@ static bool appIsBackgrounded() {
 }
 
 @implementation SkiaView {
-  // The native view, the window surface and the layer it presents into. All
-  // three exist while the view is in the hierarchy (see willMoveToSuperview:).
+  // The native view and its window surface, from the view's first superview
+  // until it is recycled, and the layer the surface presents into, while the
+  // view is in a superview (see willMoveToSuperview:).
   std::shared_ptr<RNSkia::RNSkView> _view;
   std::shared_ptr<RNSkia::RNSkWindowSurface> _surface;
 #pragma clang diagnostic push
@@ -109,9 +110,11 @@ static bool appIsBackgrounded() {
 
 #pragma mark - Lifecycle
 
-// The native view lives while the view is in the hierarchy: it is created
-// when the view gets a superview and torn down when it leaves it, so that a
-// view kept around by a transition does not keep a surface.
+// The native view is created when the view first gets a superview and lives
+// until the view is recycled, as on Android: what it shows stays with it
+// while the view is out of its superview, where a scroll view that clips its
+// subviews keeps the rows scrolled away. The window goes then, the layer with
+// its drawables included, so that a view out of the hierarchy holds none.
 #if !TARGET_OS_OSX
 - (void)willMoveToSuperview:(UIView *)newSuperView {
   [super willMoveToSuperview:newSuperView];
@@ -120,14 +123,37 @@ static bool appIsBackgrounded() {
   [super viewWillMoveToSuperview:newSuperView];
 #endif // !TARGET_OS_OSX
   auto manager = _manager.lock();
-  if (newSuperView == nullptr || _view != nullptr || manager == nullptr) {
+  if (newSuperView == nullptr || manager == nullptr) {
+    return;
+  }
+  if (_layer == nil) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    _layer = [CAMetalLayer layer];
+#pragma clang diagnostic pop
+    [self.layer addSublayer:_layer];
+    // AppKit lays out a view put in a superview only when asked: the layout
+    // attaches the window's surface to the layer (see layoutSubviews).
+    [self setNeedsLayout];
+    // A view put back gets its last frame onto the new layer now: the layout
+    // comes after the Core Animation commit that carries the layer, which
+    // would show it empty for a frame or two.
+    if (_view != nullptr) {
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      _layer.frame =
+          CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+      [self attachSurface];
+      [CATransaction commit];
+      if (!_surface->showsFrame()) {
+        _view->redraw();
+      }
+    }
+  }
+  if (_view != nullptr) {
     return;
   }
   auto context = manager->getPlatformContext();
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-  _layer = [CAMetalLayer layer];
-#pragma clang diagnostic pop
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
   _surface->setHighBitDepth(_highBitDepth);
   // The window belongs to the main thread, and is left alone while the app
@@ -140,9 +166,8 @@ static bool appIsBackgrounded() {
            strongSelf->_canPresent;
   });
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
-  [self.layer addSublayer:_layer];
   if (_nativeId != 0) {
-    manager->setSkiaView(_nativeId, _view);
+    manager->registerSkiaView(_nativeId, _view);
   }
   // The display link presents whatever is waiting on its next tick, a frame
   // for a resized window included: nothing shows before it anyway.
@@ -152,16 +177,11 @@ static bool appIsBackgrounded() {
 
 - (void)removeFromSuperview {
   [self stopDisplayLink];
-  if (_view != nullptr) {
-    [_layer removeFromSuperlayer];
-    auto manager = _manager.lock();
-    if (_nativeId != 0 && manager != nullptr) {
-      manager->setSkiaView(_nativeId, nullptr);
-    }
-    _view = nullptr;
-    _surface = nullptr;
-    _layer = nil;
+  if (_surface != nullptr) {
+    _surface->detach();
   }
+  [_layer removeFromSuperlayer];
+  _layer = nil;
   [super removeFromSuperview];
 }
 
@@ -174,7 +194,13 @@ static bool appIsBackgrounded() {
 - (void)prepareForRecycle {
   [super prepareForRecycle];
   [self stopDisplayLink];
+  // Unregistered first, so that the native view is destroyed here rather than
+  // under the registry's lock.
   [self unregisterView];
+  [_layer removeFromSuperlayer];
+  _view = nullptr;
+  _surface = nullptr;
+  _layer = nil;
 }
 
 - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
@@ -187,11 +213,14 @@ static bool appIsBackgrounded() {
   }
 }
 
+// Once: a recycled view takes its next id from its props, and a pooled one
+// must not unregister an id another view may have since.
 - (void)unregisterView {
   auto manager = _manager.lock();
   if (manager != nullptr && _nativeId != 0) {
     manager->unregisterSkiaView(_nativeId);
   }
+  _nativeId = 0;
 }
 
 #pragma mark - Application state
@@ -217,6 +246,10 @@ static bool appIsBackgrounded() {
 // to them there, and tried again a frame later while some are left (more were
 // submitted meanwhile, or the window could not take one).
 - (void)scheduleFrame {
+  // Without a window the frames wait: attaching one redraws them.
+  if (_surface == nullptr || !_surface->isAttached()) {
+    return;
+  }
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
@@ -305,7 +338,7 @@ static bool appIsBackgrounded() {
 
 - (void)layoutSubviews {
   [super layoutSubviews];
-  if (_surface != nullptr) {
+  if (_surface != nullptr && _layer != nil) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _layer.frame =
