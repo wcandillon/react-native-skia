@@ -80,6 +80,10 @@ void RNSkManager::unregisterSkiaView(size_t nativeId) {
   _viewApi->unregisterSkiaView(nativeId);
 }
 
+void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
+  _viewApi->setSkiaView(nativeId, std::move(view));
+}
+
 void RNSkManager::installBindings() {
   // Create the API objects and install it on the global object in the
   // provided runtime.

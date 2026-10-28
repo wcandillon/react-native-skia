@@ -455,7 +455,6 @@ using Presentation =
   }
   [window->displayLink invalidate];
   window->displayLink = nil;
-  window->fullFrameRateRequested = false;
 #endif
 }
 

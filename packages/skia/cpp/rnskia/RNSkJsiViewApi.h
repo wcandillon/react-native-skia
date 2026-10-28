@@ -456,6 +456,11 @@ public:
   }
 
   /**
+   Call to remove all draw view infos
+   */
+  void unregisterAll() { ViewRegistry::getInstance().clear(); }
+
+  /**
    * Registers a skia view
    * @param nativeId Id of view to register
    * @param view View to register
@@ -482,6 +487,29 @@ public:
   void unregisterSkiaView(size_t nativeId) {
     ViewRegistry::getInstance().removeViewInfo(nativeId);
     RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
+  }
+
+  /**
+   Sets a skia draw view for the given id. This function can be used
+   to mark that an underlying SkiaView is not available (it could be
+   removed due to ex. a transition). The view can be set to a nullptr
+   or a valid view, effectively toggling the view's availability.
+   */
+  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
+    ViewRegistry::getInstance().withViewInfo(
+        nativeId,
+        [&](std::shared_ptr<RNSkViewInfo> info) {
+          if (view != nullptr) {
+            info->view = view;
+            info->view->setNativeId(nativeId);
+            info->view->setJsiProperties(info->props);
+            info->props.clear();
+          } else {
+            info->view = view; // Set to nullptr
+          }
+          return nullptr;
+        },
+        /* revive= */ view != nullptr);
   }
 
 private:
