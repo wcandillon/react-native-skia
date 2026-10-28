@@ -245,14 +245,18 @@ public:
    recording made for a lost GPU device (see RNSkGraphiteRecording::isCurrent):
    it can never be presented, and a client recording on every frame
    regardless would grow the queue without bound, so it is dropped, along
-   with whatever waits in the queue, which was made for that device too.
+   with the queued recordings made for that device. One made for its
+   replacement stays: a client can finish a recording on the lost device
+   after the view recorded for the new one, which the view waits to present
+   (see RNSkReplaySchedule).
    */
   void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
       if (!recording->isCurrent()) {
-        _queue.clear();
+        std::erase_if(_queue,
+                      [](const auto &queued) { return !queued->isCurrent(); });
         return;
       }
       _queue.push_back(std::move(recording));

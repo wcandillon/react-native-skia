@@ -174,10 +174,12 @@ public:
    on its way (see onDeviceLost), or none could be made. Nothing renders
    meanwhile: views keep their last frame (RNSkWindowSurface), recordings
    are dropped (RNSkGraphiteTarget), GPU APIs return nothing, and Skia.gpu
-   reports the loss. Any thread.
+   reports the loss. A device the probe has not made yet is not lost, so
+   this never waits for the probe: the JS and UI threads ask it too (see
+   RNSkGraphiteProducer::kickLocked). Any thread.
    */
   static bool isDeviceLost() noexcept {
-    auto *instance = tryGetInstance();
+    auto *instance = probedInstance().load(std::memory_order_acquire);
     return instance != nullptr &&
            instance->_current.load(std::memory_order_acquire)
                ->lost.load(std::memory_order_acquire);
@@ -515,6 +517,29 @@ public:
     current->context->submit();
   }
 
+  /**
+   A future of everything submitted so far to the device in use, to ask
+   isWorkDone() about. Dawn forgets it once the work is done, so one nobody
+   asks about again (a frame dropped with its swapchain) is not kept for the
+   instance's lifetime, as a WaitAnyOnly future would be. Any thread.
+   */
+  wgpu::Future trackSubmittedWork() {
+    return _current.load(std::memory_order_acquire)
+        ->backendContext.fDevice.GetQueue()
+        .OnSubmittedWorkDone(
+            wgpu::CallbackMode::AllowSpontaneous,
+            [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+  }
+
+  /**
+   Whether the GPU has finished the work `future` tracks. It never waits: on
+   Vulkan, Dawn locks its queue's fences while a wait for the queue blocks.
+   Any thread.
+   */
+  bool isWorkDone(const wgpu::Future &future) {
+    return getWGPUInstance().WaitAny(future, 0) == wgpu::WaitStatus::Success;
+  }
+
   // GPU objects --------------------------------------------------------------
 
   /**
@@ -823,9 +848,19 @@ private:
         probe->info.error = e.what();
         RNSkLogger::logToConsole(probe->info.error);
       }
+      probedInstance().store(probe->instance, std::memory_order_release);
       return probe;
     }();
     return *result;
+  }
+
+  /**
+   The context the probe made, read without waiting for the probe: nullptr
+   until it is done, and on a device without a usable GPU.
+   */
+  static std::atomic<DawnContext *> &probedInstance() noexcept {
+    static std::atomic<DawnContext *> instance{nullptr};
+    return instance;
   }
 
   // Loss and recovery --------------------------------------------------------

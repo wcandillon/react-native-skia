@@ -148,13 +148,18 @@ public:
     return true;
   }
 
-  bool presentImage(const RNSkGraphiteTargetInfo & /* target */,
-                    const sk_sp<SkImage> &image) override {
+  ImagePresent
+  presentImage(const RNSkGraphiteTargetInfo & /* target */,
+               const std::function<sk_sp<SkImage>()> &makeImage) override {
     if (_surface == nullptr) {
-      return false;
+      return ImagePresent::kDeclined;
+    }
+    auto image = makeImage();
+    if (image == nullptr) {
+      return ImagePresent::kConsumed;
     }
     drawOnto(_surface->getCanvas(), image, _width, _height);
-    return true;
+    return ImagePresent::kPresented;
   }
 
 private:

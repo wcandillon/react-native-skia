@@ -1,8 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
+#include "RNSkImagePresent.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -53,14 +55,23 @@ public:
       const RNSkGraphiteTargetInfo &target,
       const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
 
+  using ImagePresent = RNSkia::ImagePresent;
+
   /**
-   Draws an image onto the target texture (see drawOnto) and presents it.
-   Same target, thread and return value as presentRecordings(). Used for a
-   recording whose size or color space differs from the target's: it is
-   replayed into a texture of its own first (see RNSkView::present).
+   Draws the image `makeImage` makes onto the target texture (see drawOnto)
+   and presents it. Same target and thread as presentRecordings(). Used for a
+   recording whose size or color space differs from the target's, which
+   `makeImage` replays into a texture of its own (see RNSkView::present): it
+   is called once the surface can take the frame, so that a surface that
+   declines costs no replay, and before the target texture is acquired, so
+   that none is acquired for a frame nothing is made for. A window makes it
+   outside its lock (see presentMadeImage), so a window that stopped taking
+   frames meanwhile, or a swapchain that then gives no texture, declines with
+   the replay made.
    */
-  virtual bool presentImage(const RNSkGraphiteTargetInfo &target,
-                            const sk_sp<SkImage> &image) = 0;
+  virtual ImagePresent
+  presentImage(const RNSkGraphiteTargetInfo &target,
+               const std::function<sk_sp<SkImage>()> &makeImage) = 0;
 
 protected:
   /**

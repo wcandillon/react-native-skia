@@ -1,12 +1,14 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <utility>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
+#include "RNSkPresentHold.h"
 #include "RNSkSurface.h"
 
 #include "webgpu/webgpu_cpp.h"
@@ -51,6 +53,13 @@ namespace RNSkia {
  * render thread pool) can read it from any thread, also before the window
  * exists (see getLayoutSize).
  *
+ * A frame the window takes is presented, or held for the GPU as the platform
+ * view chose (see RNSkPresentHold); the held frame is presented by a later
+ * frame of the view (see presentHeldFrame), or before its swapchain is
+ * configured again or detached, and goes with a surface that is replaced. A
+ * window that holds a frame, or presented one since the last tick, takes no
+ * other: its recordings stay queued, no image acquired for them.
+ *
  * Locks, innermost last: the list of windows (see releaseSurfacesOn), a
  * window's own mutex, the GPU context's (DawnContext). A thread never holds
  * two windows' mutexes at once: windows may present on different threads
@@ -64,7 +73,11 @@ public:
    */
   using Releaser = std::function<void(void *nativeHandle)>;
 
-  RNSkWindowSurface();
+  /**
+   The platform view chooses whether the window holds a frame's present for
+   the GPU (see RNSkPresentHold).
+   */
+  explicit RNSkWindowSurface(PresentHold presentHold);
 
   ~RNSkWindowSurface() override;
 
@@ -94,10 +107,11 @@ public:
   void resize(int width, int height);
 
   /**
-   Destroys the Dawn surface and gives the native handle back to its
-   releaser, once the present in flight, if any, is done: the platform may
-   destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, or the destructor.
+   Presents the frame the window holds, destroys the Dawn surface and gives
+   the native handle back to its releaser, once the present in flight, if
+   any, is done: the platform may destroy the window right after. The target
+   description goes away with it; the layout size stays. Main thread, or the
+   destructor.
    */
   void detach();
 
@@ -166,6 +180,34 @@ public:
    */
   bool canPresent();
 
+  /**
+   Presents the frame the window holds once the GPU has finished the frame
+   presented before it, without waiting for the GPU. Says what the frame
+   waits for when it stays held: it goes on a later call once the GPU is
+   done, which may come before the next tick. kNone while the window holds no
+   frame or cannot show one. Presenting thread.
+   */
+  HeldFrame presentHeldFrame();
+
+  /**
+   Whether the window holds a frame: it takes no other frame meanwhile.
+   Presenting thread.
+   */
+  bool hasHeldFrame();
+
+  /**
+   A frame of the display asked the view to present, or the view asks for no
+   more frames for now: the window takes a frame again (see
+   RNSkPresentHold::allowNextPresent). Presenting thread.
+   */
+  void allowNextPresent();
+
+  /**
+   How many frames went to the window so far: a frame held is counted when
+   it is presented. Presenting thread.
+   */
+  uint64_t framesPresented();
+
   // RNSkSurface -------------------------------------------------------------
 
   /** Width of the window, in pixels; 0 without a window. Any thread. */
@@ -177,27 +219,35 @@ public:
   bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
   /**
-   Replays the recordings onto the window and presents it, on the thread the
-   view presents on; the swapchain texture is wrapped for the recorder of
-   that thread. Returns false, consuming nothing, when the window cannot
-   present right now: there is none, the app is in the background, the GPU
-   device is lost, the window had no drawable, or the window is no longer
-   the target given: it was resized, or configured again on a new device,
-   since the caller read it (see getTargetInfo), and the recordings chosen
-   for that target would not fit it. The redraw the change asked for presents
-   onto the window as it is now.
+   Replays the recordings onto the window and presents it, or holds the
+   present (see RNSkPresentHold), on the thread the view presents on; the
+   swapchain texture is wrapped for the recorder of that thread. Returns
+   false, consuming nothing, when the window cannot take a frame right now:
+   there is none, the app is in the background, the GPU device is lost, the
+   window holds a frame or presented one since its last tick, the window had
+   no drawable, or the window is no longer the target given: it was resized,
+   or configured again on a new device, since the caller read it (see
+   getTargetInfo), and the recordings chosen for that target would not fit
+   it. The redraw the change asked for presents onto the window as it is now.
    */
   bool presentRecordings(
       const RNSkGraphiteTargetInfo &target,
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
 
   /**
-   Draws an image at the origin of the window and presents it, on the thread
-   the view presents on, with the recorder of that thread. Same target and
-   return value as presentRecordings().
+   Draws the image `makeImage` makes onto the window and presents it, or
+   holds the present, on the thread the view presents on, with the recorder
+   of that thread. Declines, making nothing, where presentRecordings()
+   declines: the window takes the frame only once a resize or a device it
+   applies first leaves no frame held (see configureSurface). A swapchain
+   that gives no texture once the image is made declines it too. The image is
+   made outside the window's mutex, so that an attach or a detach on the main
+   thread never waits for its replay, and the window decides again once it is
+   made (see presentMadeImage).
    */
-  bool presentImage(const RNSkGraphiteTargetInfo &target,
-                    const sk_sp<SkImage> &image) override;
+  ImagePresent
+  presentImage(const RNSkGraphiteTargetInfo &target,
+               const std::function<sk_sp<SkImage>()> &makeImage) override;
 
 private:
   // Lets go of the Dawn surface and the window; see detach(). Called with
@@ -206,6 +256,12 @@ private:
   // Whether a window is attached and can show a frame (see canPresent()).
   // Called with the mutex held.
   bool canPresentLocked();
+  // Presents the frame replayed last. Called with the mutex held.
+  void presentNowLocked();
+  // The window's Dawn surface, or none. A frame held for the surface it
+  // replaces goes with that surface: nothing can present it anymore. Called
+  // with the mutex held.
+  void replaceSurfaceLocked(wgpu::Surface surface);
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
   // see takePendingSizeLocked). It is neither when the main thread resized
@@ -238,8 +294,9 @@ private:
   // surface, or with one made for a device replaced since the sweep (the
   // next frame sweeps again). Called with the mutex held.
   bool ensureDeviceLocked();
-  // Configures the swapchain for the current size, format and usage. Called
-  // with the mutex held.
+  // Configures the swapchain for the current size, format and usage, the
+  // frame it holds presented first (see RNSkPresentHold::releaseFrames).
+  // Called with the mutex held.
   void configureSurface();
   // Configures the swapchain when the window attached or resized since it
   // was last configured (see attach, takePendingSizeLocked), on the
@@ -276,9 +333,18 @@ private:
     }
   }
 
+  // The GPU as RNSkPresentHold asks about it: the work given to Dawn's queue.
+  struct DawnQueue {
+    using Work = wgpu::Future;
+    Work track();
+    bool isDone(const Work &work);
+  };
+
   // Keeps the main thread (attach, resize, detach) and the thread the view
   // presents on apart; see the class comment.
   std::mutex _mutex;
+  RNSkPresentHold<DawnQueue> _presentHold;
+  uint64_t _framesPresented = 0;
   // The device the window is configured on, and its generation (see
   // DawnContext::generation()): a lost device is replaced, and the window
   // configured again on the new one (see retireReplacedDevice). The surface
