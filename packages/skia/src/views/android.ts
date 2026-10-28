@@ -54,10 +54,11 @@ export const resolveHighBitDepth = ({
 }: BackingViewProps) =>
   !!highBitDepth && resolveKind(android) === "SurfaceView";
 
-// Whether the canvas composites as opaque, see BackingViewKind.resolveOpaque():
-// a SurfaceView is opaque unless asked otherwise, and always with the 10-bit
-// format; a TextureView is translucent unless asked otherwise; a
-// HardwareBufferView always composites with alpha.
+// Whether the canvas asks to composite as opaque, see
+// BackingViewKind.resolveOpaque(), which keeps an Android 10 TextureView
+// translucent whatever it asks: a SurfaceView is opaque unless asked
+// otherwise, and always with the 10-bit format; a TextureView is translucent
+// unless asked otherwise; a HardwareBufferView always composites with alpha.
 export const resolveOpaque = (props: BackingViewProps): boolean => {
   const { opaque } = options(props.android);
   switch (resolveBackingView(props.android)) {
@@ -84,6 +85,19 @@ export const androidNativeProps = (
     androidZOrderMediaOverlay: surfaceView && !!zOrderMediaOverlay,
   };
 };
+
+// BackingViewKind.resolveOpaque() keeps an Android 10 TextureView translucent:
+// that release's UI toolkit can leave an opaque one blank.
+const opaqueIsDropped = (mount: BackingViewProps, props: BackingViewProps) =>
+  resolveKind(mount.android) === "TextureView" &&
+  options(props.android).opaque === true &&
+  Number(Platform.Version) === 29;
+
+const warnOpaqueDropped = () =>
+  console.warn(
+    "android.opaque has no effect on a TextureView on Android 10, the canvas " +
+      "blends: that release's UI toolkit can leave an opaque TextureView blank."
+  );
 
 const warnIgnoredChange = (prop: string) =>
   console.warn(
@@ -125,12 +139,16 @@ export const warnBackingViewAtMount = (mount: BackingViewProps) => {
         "Android (the 10-bit format only has 2 bits of alpha)."
     );
   }
+  if (opaqueIsDropped(mount, mount)) {
+    warnOpaqueDropped();
+  }
 };
 
 /**
  * Warns, in development on Android, about a change of these props that the
  * native view ignores: the backing view is created from them when the canvas
- * mounts (see SkiaView.java, whose setters these rules mirror).
+ * mounts (see SkiaView.java, whose setters these rules mirror), and an Android
+ * 10 TextureView stays translucent.
  */
 export const warnBackingViewChange = (
   mount: BackingViewProps,
@@ -169,6 +187,9 @@ export const warnBackingViewChange = (
     (before.opaque !== false) !== (after.opaque !== false)
   ) {
     warnIgnoredChange("android.opaque (a highBitDepth canvas is opaque)");
+  }
+  if (opaqueIsDropped(mount, next) && !opaqueIsDropped(mount, prev)) {
+    warnOpaqueDropped();
   }
 };
 

@@ -1,11 +1,13 @@
 package com.reactnative.skia;
 
+import android.os.Build;
+
 import androidx.annotation.Nullable;
 
 /**
  * The Android view a SkiaView draws into, see SkiaView.updateView(), and the
- * rules the props resolve by. The JS side (views/android.ts) mirrors them to
- * warn in development.
+ * rules the props resolve by. The JS side (views/android.ts) mirrors the ones
+ * it warns about in development.
  */
 enum BackingViewKind {
     SURFACE_VIEW,
@@ -34,9 +36,17 @@ enum BackingViewKind {
     /**
      * Whether the canvas composites as opaque: what the prop asks for, except
      * that the 10-bit format only has 2 bits of alpha, so a canvas that gets it
-     * is opaque.
+     * is opaque, and that an Android 10 TextureView blends: that release draws
+     * an opaque TextureView with SkBlendMode::kSrc, and when such a draw needs
+     * a copy of the destination, the copy splits the render pass and its Skia
+     * (m75) can clear the stencil, the draw's clip with it, at the start of the
+     * next one (fixed in Skia m77,
+     * https://skia-review.googlesource.com/c/skia/+/223970).
      */
-    static boolean resolveOpaque(boolean opaque, boolean surfaceHighBitDepth) {
+    static boolean resolveOpaque(BackingViewKind kind, boolean opaque, boolean surfaceHighBitDepth, int sdkInt) {
+        if (kind == TEXTURE_VIEW && sdkInt == Build.VERSION_CODES.Q) {
+            return false;
+        }
         return opaque || surfaceHighBitDepth;
     }
 }

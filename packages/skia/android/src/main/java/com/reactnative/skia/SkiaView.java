@@ -146,6 +146,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             return;
         }
         mOpaque = value;
+        if (mKind != null) {
+            warnIfOpaqueDropped();
+        }
+    }
+
+    private void warnIfOpaqueDropped() {
+        if (mOpaque && !BackingViewKind.resolveOpaque(mKind, mOpaque, mSurfaceHighBitDepth, Build.VERSION.SDK_INT)) {
+            Log.w(TAG, "android.opaque has no effect on a TextureView on Android 10, the canvas blends");
+        }
     }
 
     public void setZOrderOnTop(boolean value) {
@@ -219,7 +228,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     void updateView() {
         BackingViewKind kind = mKind;
         if (kind != null) {
-            boolean opaque = BackingViewKind.resolveOpaque(mOpaque, mSurfaceHighBitDepth);
+            boolean opaque = BackingViewKind.resolveOpaque(kind, mOpaque, mSurfaceHighBitDepth, Build.VERSION.SDK_INT);
             switch (kind) {
                 case SURFACE_VIEW -> ((SkiaSurfaceView) mView).setOpaque(opaque);
                 case TEXTURE_VIEW -> ((SkiaTextureView) mView).setOpaque(opaque);
@@ -232,7 +241,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (mHighBitDepth && !mSurfaceHighBitDepth) {
             Log.w(TAG, "highBitDepth needs a SurfaceView on Android, keeping the 8-bit format");
         }
-        boolean opaque = BackingViewKind.resolveOpaque(mOpaque, mSurfaceHighBitDepth);
+        warnIfOpaqueDropped();
+        boolean opaque = BackingViewKind.resolveOpaque(kind, mOpaque, mSurfaceHighBitDepth, Build.VERSION.SDK_INT);
         // The surface will have this format: a frame recorded before it
         // exists, or while it is away, is recorded for it.
         if (hasNativeView()) {
