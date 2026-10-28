@@ -6,8 +6,6 @@
 #include <exception>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <queue>
 #include <string>
 
 #include "RNSkPlatformContext.h"
@@ -34,11 +32,11 @@ public:
 
   void raiseError(const std::exception &err);
 
-  void notifyTaskReadyExternal();
-
   void runTaskOnMainThread(std::function<void()> task);
 
-  void notifyTaskReadyNative();
+  static int duplicateMainThreadWakeup(jni::alias_ref<jclass>);
+
+  static void runMainThreadTasks(jni::alias_ref<jclass>);
 
   float getPixelDensity() { return _pixelDensity; }
 
@@ -47,9 +45,6 @@ private:
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
   float _pixelDensity;
-  std::mutex _mainThreadTasksMutex;
-  std::queue<std::function<void()>> _mainThreadTasks;
-  bool _mainThreadDispatchScheduled = false;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,
