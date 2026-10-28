@@ -9,6 +9,8 @@
 #include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
+#include "RNSkThreadPool.h"
+#include "RNSkThreadTrims.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
 #include "api/JsiSkDispatcher.h"
@@ -77,6 +79,18 @@ RNSkManager::RNSkManager(
         [platformContext](Dispatcher::Operation operation) {
           return postToMainThread(platformContext, std::move(operation));
         });
+  });
+  // Those threads, and every other one outside the render pool that runs GPU
+  // work, trim their recorders on themselves through their dispatchers (see
+  // RNSkThreadTrims), with the task the render threads run (see
+  // RNSkGraphiteProducer).
+  RNSkThreadTrims::getInstance().setIdleTask(&DawnContext::trimThreadRecorders);
+  // A texture the image cache lets go of goes back to the upload recorder of
+  // the thread that uploaded it, a render thread or any other, also in an app
+  // that never shows a canvas.
+  ImageProvider::setReleaseListener([]() {
+    RNSkThreadPool::requestIdleTaskIfStarted();
+    RNSkThreadTrims::getInstance().requestAll();
   });
   // Install bindings
   installBindings();

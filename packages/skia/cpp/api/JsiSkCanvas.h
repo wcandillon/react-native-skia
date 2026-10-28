@@ -27,6 +27,7 @@
 #include "utils/RNSkTypedArray.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkThreadTrims.h"
 
 #include <jsi/jsi.h>
 
@@ -642,7 +643,8 @@ public:
   void detach() {
     _canvas = nullptr;
     if (_dispatcher) {
-      _dispatcher->release(std::move(_surface));
+      RNSkThreadTrims::getInstance().releaseSurface(_dispatcher,
+                                                    std::move(_surface));
     }
   }
 

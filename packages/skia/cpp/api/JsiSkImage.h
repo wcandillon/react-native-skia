@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "JsiSkConverters.h"
+#include "JsiSkDispatcher.h"
 #include "JsiSkImageInfo.h"
 #include "JsiSkMatrix.h"
 #include "JsiSkNativeObjects.h"
@@ -17,6 +18,7 @@
 
 #include "include/gpu/graphite/Context.h"
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkThreadTrims.h"
 #include "rnskia/RNSkWorker.h"
 
 #pragma clang diagnostic push
@@ -453,12 +455,38 @@ public:
   /**
    `sharesTexture`: the image is a view of a texture someone else owns (see
    surface.asImage()), which that owner already reports as its memory.
+   `textureThread`: the thread whose recorder made the texture of a
+   texture-backed image, the calling one when none is given.
    */
   JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image,
-             bool sharesTexture = false)
+             bool sharesTexture = false,
+             std::shared_ptr<Dispatcher> textureThread = nullptr)
       : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
                                                             std::move(image)),
-        _sharesTexture(sharesTexture) {}
+        _sharesTexture(sharesTexture) {
+    rememberTextureThread(std::move(textureThread));
+  }
+
+  /**
+   Holds `image` in place of the image it held, whose texture goes back to
+   its thread's recorder (see releaseImage); the same image again (a
+   surface's snapshot with nothing drawn since) stays held. `textureThread`
+   as in the constructor.
+   */
+  void replaceImage(sk_sp<SkImage> image,
+                    std::shared_ptr<Dispatcher> textureThread) {
+    if (image != getObjectUnchecked()) {
+      releaseImage();
+      setObject(std::move(image));
+    }
+    rememberTextureThread(std::move(textureThread));
+  }
+
+  ~JsiSkImage() override {
+    if (!isDisposed()) {
+      releaseImage();
+    }
+  }
 
   size_t getMemoryPressure() override {
     if (isDisposed()) {
@@ -480,8 +508,52 @@ public:
     return 0;
   }
 
+protected:
+  void releaseResources() override { releaseImage(); }
+
 private:
+  // A texture comes back to a recorder of the thread that made it.
+  void rememberTextureThread(std::shared_ptr<Dispatcher> textureThread) {
+    auto image = getObjectUnchecked();
+    if (image == nullptr || !image->isTextureBacked()) {
+      _textureThread.reset();
+      return;
+    }
+    _textureThread =
+        textureThread != nullptr ? textureThread : Dispatcher::getDispatcher();
+  }
+
+  // The GC may finalize this object on any thread: the thread whose recorder
+  // the texture comes back to trims the delay after. A texture another holder
+  // still holds (a shader, a picture) comes back once that holder lets go,
+  // which asks for nothing: the thread keeps the image until it is the last
+  // holder.
+  void releaseImage() {
+    auto image = getObjectUnchecked();
+    setObject(nullptr);
+    if (image == nullptr || !image->isTextureBacked()) {
+      return;
+    }
+    auto textureThread = _textureThread.lock();
+    if (image->unique()) {
+      image = nullptr;
+      RNSkThreadTrims::getInstance().request(textureThread);
+      return;
+    }
+    // Copies of the holding share the one reference it keeps.
+    const void *held = image.get();
+    auto kept = std::make_shared<sk_sp<SkImage>>(std::move(image));
+    RNSkThreadTrims::getInstance().hold(textureThread, held, [kept]() {
+      if (!(*kept)->unique()) {
+        return false;
+      }
+      kept->reset();
+      return true;
+    });
+  }
+
   bool _sharesTexture;
+  std::weak_ptr<Dispatcher> _textureThread;
 };
 
 } // namespace RNSkia

@@ -82,9 +82,10 @@ public:
    * thread calls processQueue(), which a thread bound to a loop does from a
    * run of the queue posted there. A run is posted unless one has been since
    * the queue was last taken, so a burst of operations posts once, and a post
-   * that failed is made again by the next call.
+   * that failed is made again by the next call. Returns false when the post
+   * this call made failed, the operation left queued for that next call.
    */
-  void run(Operation operation) {
+  bool run(Operation operation) {
     Scheduler scheduler;
     {
       std::lock_guard<std::mutex> lock(_mutex);
@@ -94,7 +95,7 @@ public:
       // is the last one.
       operation = nullptr;
       if (_runPosted || !_scheduler) {
-        return;
+        return true;
       }
       _runPosted = true;
       scheduler = _scheduler;
@@ -109,6 +110,7 @@ public:
       std::lock_guard<std::mutex> lock(_mutex);
       _runPosted = false;
     }
+    return posted;
   }
 
   /**

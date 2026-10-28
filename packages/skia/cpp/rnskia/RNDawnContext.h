@@ -23,6 +23,7 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkThreadTrims.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -387,18 +388,21 @@ public:
   /**
    Frees the GPU memory the recorders of the calling thread hold without
    using it, on that thread (a recorder belongs to the thread it records
-   on): what went unused for `unusedFor`, or, with `everything`, all they
-   can let go of, the pages of their atlases included. `everything` is for a
-   thread that records nothing for now (a render thread once idle, see
-   RNSkGraphiteProducer): the atlases lose no content by it, as Graphite
-   empties them at every snap when recordings may be inserted in any order.
-   The upload recorder lets go of everything either way: what it made
-   belongs to the image cache (see makeRecorderLocked). The GPU work that
-   finished releases its resources first, and Dawn runs the deletions it
-   deferred after. Never makes a recorder. Any thread.
+   on): the task a thread runs on itself the idle delay after it was asked
+   to (see RNSkThreadPool and RNSkThreadTrims). With `everything`, for a
+   thread that ran no GPU work for that long, all they can let go of, the
+   pages of their atlases included: Graphite empties the atlases at every
+   snap when recordings may be inserted in any order, and keeps the pages
+   the draws not snapped yet need ("Clear out any pages not in use or needed
+   for any pending work", AtlasProvider::freeGpuResources). Otherwise what
+   went unused for half the delay: what went away with the request is older
+   than that by then, what is still drawn is not. The upload recorder lets
+   go of everything either way: what it made belongs to the image cache (see
+   makeRecorderLocked). The GPU work that finished releases its resources
+   first, and Dawn runs the deletions it deferred after. Never makes a
+   recorder. Any thread.
    */
-  static void trimThreadRecorders(std::chrono::milliseconds unusedFor,
-                                  bool everything) {
+  static void trimThreadRecorders(bool everything) {
     auto *instance = tryGetInstance();
     if (instance == nullptr) {
       return;
@@ -413,7 +417,8 @@ public:
       if (everything) {
         drawing.recorder->freeGpuResources();
       } else {
-        drawing.recorder->performDeferredCleanup(unusedFor);
+        drawing.recorder->performDeferredCleanup(RNSkThreadPool::kIdleDelay /
+                                                 2);
       }
     }
     if (uploads.recorder != nullptr) {
@@ -444,6 +449,7 @@ public:
     if (recording == nullptr) {
       return false;
     }
+    noteWorkOn(recorder);
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (generationOf(recorder) != current->id ||
@@ -476,6 +482,7 @@ public:
   void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
+    noteWorkOn(targetSurface->recorder());
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (current->lost.load(std::memory_order_acquire)) {
@@ -1098,6 +1105,18 @@ private:
   void forgetRecorder(const skgpu::graphite::Recorder *recorder) noexcept {
     std::lock_guard<std::mutex> lock(_mutex);
     _recorders.erase(recorder);
+  }
+
+  /**
+   The calling thread ran GPU work on `recorder`: when the recorder is one of
+   the thread's own, what the work uses comes back to it, and the thread
+   trims once idle (see RNSkThreadTrims).
+   */
+  static void noteWorkOn(const skgpu::graphite::Recorder *recorder) {
+    if (recorder != nullptr && (recorder == threadSlot().recorder.get() ||
+                                recorder == uploadSlot().recorder.get())) {
+      RNSkThreadTrims::getInstance().ranWorkOnCurrentThread();
+    }
   }
 
   // Readbacks ----------------------------------------------------------------
