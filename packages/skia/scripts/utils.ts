@@ -97,9 +97,8 @@ export const build = async (
 };
 
 export var copyRecursiveSync = function (src: string, dest: string) {
-  var exists = existsSync(src);
-  if (!exists) {
-    return;
+  if (!existsSync(src)) {
+    throw new Error(`Cannot copy ${src}: it does not exist`);
   }
   var stats = statSync(src);
   var isDirectory = stats.isDirectory();

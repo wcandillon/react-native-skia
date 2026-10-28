@@ -470,7 +470,58 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
 
+  # Decides whether build-test-macos runs. That job only compiles the example
+  # for macOS, and build-test-ios already compiles the same Apple and C++
+  # sources, yet both share the one self-hosted Mac, so on every pull request
+  # the macOS build queued behind the iOS run and added its own minutes to
+  # the wall clock. A pull request now pays for it only when its diff touches
+  # what can change the outcome: the podspec and the autolinking config, the
+  # Apple and C++ sources, the scripts that copy the headers from the Skia
+  # submodule and the submodule itself, the dependencies that pin the
+  # prebuilt binaries, the example's macOS project, or CI itself. Other
+  # events build unconditionally, so a change this list misses still shows
+  # up in the merge queue.
+  macos-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      # Same shallow diff as spm-changes.
+      - name: Compare the pull request to its base
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --depth=1 origin "$BASE"
+          changed=$(git diff --name-only "$BASE" HEAD)
+          run=false
+          while IFS= read -r file; do
+            case "$file" in
+              packages/skia/react-native-skia.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
+              apps/example/macos/*|apps/example/package.json|apps/example/react-native.config.js|\
+              package.json|yarn.lock|turbo.json|.gitmodules|externals/*|\
+              .github/workflows/ci.yml|.github/actions/setup/*)
+                echo "$file"
+                run=true
+                ;;
+            esac
+          done <<< "$changed"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   build-test-macos:
+    needs: macos-changes
+    if: needs.macos-changes.outputs.run == 'true'
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     steps:
