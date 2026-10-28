@@ -26,26 +26,13 @@ const kBlendModePlusDarker = 1001;
 const kBlendModePlusLighter = 1002;
 
 // SkSL for PlusDarker blend mode
-// Formula: rc = max(0, 1 - ((1-dst) + (1-src))) = max(0, src + dst - 1)
+// Formula: rc = max(0, ra - ((da - dst) + (sa - src))), ra = min(1, sa + da)
+// On premultiplied colors, so a translucent source darkens proportionally
 const plusDarkerSkSL = `
     vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = max(vec3(0.0), srcUnpremul + dstUnpremul - vec3(1.0));
-        return vec4(blended * outAlpha, outAlpha);
-    }
-`;
-
-// SkSL for PlusLighter blend mode
-// Formula: rc = min(1, dst + src)
-const plusLighterSkSL = `
-    vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = min(vec3(1.0), srcUnpremul + dstUnpremul);
-        return vec4(blended * outAlpha, outAlpha);
+        float outAlpha = min(1.0, src.a + dst.a);
+        vec3 c = max(vec3(0.0), outAlpha - ((dst.a - dst.rgb) + (src.a - src.rgb)));
+        return vec4(c, outAlpha);
     }
 `;
 
@@ -53,14 +40,13 @@ const plusLighterSkSL = `
 // Using WeakMap ensures blenders are cleaned up when CanvasKit instance is garbage collected
 interface BlenderCache {
   plusDarker: Blender | null;
-  plusLighter: Blender | null;
 }
 const blenderCache = new WeakMap<CanvasKit, BlenderCache>();
 
 const getBlenderCache = (ck: CanvasKit): BlenderCache => {
   let cache = blenderCache.get(ck);
   if (!cache) {
-    cache = { plusDarker: null, plusLighter: null };
+    cache = { plusDarker: null };
     blenderCache.set(ck, cache);
   }
   return cache;
@@ -139,18 +125,9 @@ export class JsiSkPaint extends HostObject<Paint, "Paint"> implements SkPaint {
         this.ref.setBlender(cache.plusDarker);
       }
     } else if (blendMode === kBlendModePlusLighter) {
-      // Use custom PlusLighter blender via SkRuntimeEffect
-      const cache = getBlenderCache(this.CanvasKit);
-      if (!cache.plusLighter) {
-        const effect =
-          this.CanvasKit.RuntimeEffect.MakeForBlender(plusLighterSkSL);
-        if (effect) {
-          cache.plusLighter = effect.makeBlender([]);
-        }
-      }
-      if (cache.plusLighter) {
-        this.ref.setBlender(cache.plusLighter);
-      }
+      // CSS plus-lighter: min(1, dst + src) on every premultiplied channel,
+      // alpha included, which is BlendMode.Plus
+      this.ref.setBlendMode(this.CanvasKit.BlendMode.Plus);
     } else {
       this.ref.setBlendMode(getEnum(this.CanvasKit, "BlendMode", blendMode));
     }
