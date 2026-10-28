@@ -43,12 +43,14 @@ public:
   }
 
   std::shared_ptr<JsiSkGraphiteRecording> finishRecording() {
-    auto recording = getObject()->finishRecording();
-    // The deferred canvas is deleted by the snap.
+    auto target = getObject();
+    // The snap deletes the deferred canvas: detach it first, which waits for
+    // a draw in flight on another runtime.
     if (auto canvas = _canvas.lock()) {
       canvas->detach();
     }
     _canvas.reset();
+    auto recording = target->finishRecording();
     return std::make_shared<JsiSkGraphiteRecording>(getContext(),
                                                     std::move(recording));
   }

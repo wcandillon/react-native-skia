@@ -55,9 +55,11 @@ public:
   }
 
   std::shared_ptr<JsiSkPicture> finishRecordingAsPicture() {
-    auto picture = getObject()->finishRecordingAsPicture();
-    // The recording is over: drawing on its canvas throws from here on.
+    auto recorder = getObject();
+    // The recording ends: detach its canvas first, which waits for a draw in
+    // flight on another runtime; drawing on it throws from here on.
     detachCanvas();
+    auto picture = recorder->finishRecordingAsPicture();
     return std::make_shared<JsiSkPicture>(getContext(), std::move(picture));
   }
 

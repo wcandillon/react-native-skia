@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -333,13 +334,14 @@ public:
 
   void drawSvg(sk_sp<SkSVGDOM> svgdom, JsiOptional<double> w,
                JsiOptional<double> h) {
+    auto canvas = getCanvas();
     if (w.has_value() && h.has_value()) {
       svgdom->setContainerSize(SkSize::Make(*w, *h));
     } else {
-      auto canvasSize = getCanvas()->getBaseLayerSize();
+      auto canvasSize = canvas->getBaseLayerSize();
       svgdom->setContainerSize(SkSize::Make(canvasSize));
     }
-    svgdom->render(getCanvas());
+    svgdom->render(canvas.get());
   }
 
   void clipPath(std::shared_ptr<SkPathBuilder> path, double op,
@@ -523,6 +525,7 @@ public:
     // submitted so that the texture can be read back). A canvas without an
     // owning surface (a picture-recording canvas) falls through to the raster
     // read below.
+    auto canvas = getCanvas();
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
       if (auto *recorder = _surface->recorder()) {
@@ -535,7 +538,7 @@ public:
       return dest;
     }
 
-    if (!getCanvas()->readPixels(*info, bfrPtr, bytesPerRow, srcX, srcY)) {
+    if (!canvas->readPixels(*info, bfrPtr, bytesPerRow, srcX, srcY)) {
       return jsi::Value::null();
     }
     return dest;
@@ -610,17 +613,44 @@ public:
 
   ~JsiSkCanvas() override { detach(); }
 
-  void setCanvas(SkCanvas *canvas) { _canvas = canvas; }
+  void setCanvas(SkCanvas *canvas) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _canvas = canvas;
+  }
 
-  // Every draw goes through here: once the owner of the SkCanvas has
-  // detached the wrapper (see detach), the call throws instead of drawing
-  // through a dangling pointer.
-  SkCanvas *getCanvas() {
+  // The SkCanvas, held from getCanvas() until this goes: detach() waits for
+  // it.
+  class LockedCanvas {
+  public:
+    LockedCanvas(const LockedCanvas &) = delete;
+    LockedCanvas &operator=(const LockedCanvas &) = delete;
+
+    SkCanvas *operator->() const { return _canvas; }
+    SkCanvas *get() const & { return _canvas; }
+    SkCanvas *get() const && = delete;
+
+  private:
+    friend class JsiSkCanvas;
+
+    LockedCanvas(std::unique_lock<std::mutex> lock, SkCanvas *canvas)
+        : _lock(std::move(lock)), _canvas(canvas) {}
+
+    std::unique_lock<std::mutex> _lock;
+    SkCanvas *_canvas;
+  };
+
+  // Every draw goes through here and holds the canvas until the end of its
+  // statement, or of the scope that keeps the result: the owner can detach
+  // the canvas from another runtime, and detach() waits for the draw. Nothing
+  // that calls into JS may run while the canvas is held. Once detached, the
+  // call throws instead of drawing through a dangling pointer.
+  LockedCanvas getCanvas() {
+    std::unique_lock<std::mutex> lock(_mutex);
     if (_canvas == nullptr) {
       throw std::runtime_error("Attempted to use a canvas whose surface was "
                                "disposed or whose recording has finished.");
     }
-    return _canvas;
+    return LockedCanvas(std::move(lock), _canvas);
   }
 
   // Associates the canvas with its owning surface, keeping it alive as long
@@ -629,24 +659,37 @@ public:
   // one of the thread the surface was created on.
   void setSurface(sk_sp<SkSurface> surface,
                   std::shared_ptr<Dispatcher> dispatcher) {
+    std::lock_guard<std::mutex> lock(_mutex);
     _surface = std::move(surface);
     _dispatcher = std::move(dispatcher);
   }
 
-  // Called by the owner of the SkCanvas (JsiSkSurface, JsiSkPictureRecorder,
-  // JsiSkGraphiteContext) once that canvas is gone, and by the destructor:
-  // forgets the pointer and lets go of the surface. The canvas may hold the
-  // last reference to its surface, and the GC may finalize it on any thread:
-  // a Graphite surface has to be destroyed on the thread of its recorder (see
+  // Waits for a draw in flight on another runtime, then forgets the pointer
+  // and lets go of the surface. Called by the destructor, and before the
+  // SkCanvas ends or goes by JsiSkSurface::releaseResources(),
+  // JsiSkPictureRecorder's beginRecording(), finishRecordingAsPicture(),
+  // releaseResources() and destructor, and
+  // JsiSkGraphiteContext::finishRecording(). The canvas may hold the last
+  // reference to its surface, and the GC may finalize it on any thread: a
+  // Graphite surface has to be destroyed on the thread of its recorder (see
   // Dispatcher).
   void detach() {
-    _canvas = nullptr;
-    if (_dispatcher) {
-      _dispatcher->release(std::move(_surface));
+    sk_sp<SkSurface> surface;
+    std::shared_ptr<Dispatcher> dispatcher;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      _canvas = nullptr;
+      surface = std::move(_surface);
+      dispatcher = std::move(_dispatcher);
+    }
+    if (dispatcher) {
+      dispatcher->release(std::move(surface));
     }
   }
 
 private:
+  // Guards the three below, and is held by every draw (see getCanvas).
+  std::mutex _mutex;
   SkCanvas *_canvas = nullptr;
   sk_sp<SkSurface> _surface;
   std::shared_ptr<Dispatcher> _dispatcher;
