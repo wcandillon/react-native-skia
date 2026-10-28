@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <mutex>
 #include <utility>
@@ -102,8 +101,9 @@ public:
   void detach();
 
   /**
-   Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDeviceLocked). Any thread.
+   Whether a window is attached. Its Dawn surface may be away while the GPU
+   device is replaced, until the window's next frame on the new device (see
+   ensureDeviceLocked). Any thread.
    */
   bool isAttached();
 
@@ -166,6 +166,19 @@ public:
    */
   bool canPresent();
 
+  /**
+   Lets go of every window's Dawn surface made on the given generation (see
+   DawnContext::generation()), one window at a time under its own mutex, so
+   after the window's present in flight, if any: DawnContext::recover calls
+   it before it destroys a lost device, which Dawn does not keep apart from
+   a surface presented or let go of on another thread
+   (https://dawn.googlesource.com/dawn/+/ada567700e13aecf7989d78b21f7d330b522ea80/src/dawn/native/Surface.cpp#371).
+   The windows make their surface again by their next frame (see
+   ensureDeviceLocked). Called with no window's mutex held, nor the context
+   lock.
+   */
+  static void releaseSurfacesOn(uint64_t generation);
+
   // RNSkSurface -------------------------------------------------------------
 
   /** Width of the window, in pixels; 0 without a window. Any thread. */
@@ -213,30 +226,12 @@ private:
   // ensureDeviceLocked), between the read and the present. Called with the
   // mutex held.
   bool isTargetLocked(const RNSkGraphiteTargetInfo &target);
-  // Lets go of the surfaces made on the GPU device this window was
-  // configured on when that device was lost and replaced since (see
-  // DawnContext), the window's own included, and destroys the device: the
-  // surface cannot follow to the new device (a Vulkan swapchain cannot move
-  // to another device, Dawn refuses it), and the VkSurfaceKHR of the old
-  // swapchain keeps the window connected until the lost device runs its
-  // deferred deletions, which only its destruction does. Dawn does not
-  // destroy swapchains with their device, and detaching one afterwards
-  // crashes, so every window on that device lets go of its surface first
-  // (see releaseSurfacesOn), then the device is destroyed, and the windows
-  // get a surface on the new device on their next frame (see
-  // ensureDeviceLocked). Called before taking the mutex: the sweep locks
-  // each window in turn, this one included.
-  void retireReplacedDevice();
-  // Lets go of the Dawn surface of every window configured on the given
-  // generation (see retireReplacedDevice), one window at a time under its
-  // own mutex. Called with no window's mutex held.
-  static void releaseSurfacesOn(uint64_t generation);
-  // Configures the window on the GPU device in use when it has no surface:
-  // when the device it was configured on was lost and replaced since (see
-  // retireReplacedDevice), the surface is made again on the new device, the
-  // window itself stays. Returns false without a context, without a
-  // surface, or with one made for a device replaced since the sweep (the
-  // next frame sweeps again). Called with the mutex held.
+  // Configures the window on the GPU device in use when its surface is not
+  // on it: when the device it was configured on was lost and replaced since
+  // (see releaseSurfacesOn), the surface is made again on the new device
+  // (a Vulkan swapchain cannot move to another device, Dawn refuses it), the
+  // window itself stays. Returns false without a context or without a
+  // surface. Called with the mutex held.
   bool ensureDeviceLocked();
   // Configures the swapchain for the current size, format and usage. Called
   // with the mutex held.
@@ -279,14 +274,14 @@ private:
   // Keeps the main thread (attach, resize, detach) and the thread the view
   // presents on apart; see the class comment.
   std::mutex _mutex;
-  // The device the window is configured on, and its generation (see
-  // DawnContext::generation()): a lost device is replaced, and the window
-  // configured again on the new one (see retireReplacedDevice). The surface
-  // is null between the two, and while the window is detached; the
-  // generation is 0 then, and readable without the mutex, as a hint that a
-  // sweep is due.
+  // The device the window's surface was made on, and its generation (see
+  // DawnContext::generation()): a surface made on a device replaced since is
+  // made again on the device in use by the window's next frame (see
+  // ensureDeviceLocked). The generation is 0 while the window is detached,
+  // and once the replacement of a lost device let go of the surface (see
+  // releaseSurfacesOn).
   wgpu::Device _device;
-  std::atomic<uint64_t> _generation{0};
+  uint64_t _generation = 0;
   wgpu::Surface _surface;
   void *_nativeHandle = nullptr;
   Releaser _releaser;

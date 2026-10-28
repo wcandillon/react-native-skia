@@ -79,6 +79,39 @@ const readCenter = (image: SkImage) =>
     )
   );
 
+// WebGPU's GPUBufferMapState.
+type GpuBufferMapState = "unmapped" | "pending" | "mapped";
+
+// The harness's own canvas holds a window on the device: unmounted until the
+// next drawing.
+const hideHarnessCanvas = () =>
+  surface.eval(
+    (_Skia, ctx) => {
+      ctx.hideCanvas();
+      return null;
+    },
+    {} as { readonly hideCanvas: () => void }
+  );
+
+// Loses the device after mapping a buffer on it, and reads the buffer once
+// Skia.gpu.lost resolves: Dawn unmaps the buffers of a device it destroys,
+// and a loss alone leaves them mapped.
+const loseDeviceWithMappedBuffer = () =>
+  surface.eval(
+    (Skia, ctx) => {
+      // No async/await: the code runs through Hermes' eval on the device.
+      ctx.mapGpuBuffer();
+      const { lost } = Skia.gpu;
+      ctx.forceGpuDeviceLoss();
+      return lost.then(() => ctx.mappedGpuBufferState());
+    },
+    {} as {
+      readonly mapGpuBuffer: () => void;
+      readonly forceGpuDeviceLoss: () => void;
+      readonly mappedGpuBufferState: () => GpuBufferMapState | null;
+    }
+  );
+
 // Skia.gpu describes the GPU probed when the module was installed. The test
 // devices have one; a device without one keeps the app running with blank
 // canvases, which this suite cannot exercise.
@@ -208,4 +241,25 @@ describe("GPU info", () => {
     expect(after.length).toBe(before.length);
     expect(differingShare(before, after)).toBeLessThan(0.001);
   });
+
+  // No window holds a surface on the lost device, and none presents on it
+  // again: the replacement destroys it.
+  itRunsE2eOnly("destroys a lost device as it is replaced", async () => {
+    await hideHarnessCanvas();
+    await surface.screen("Empty");
+    expect(await loseDeviceWithMappedBuffer()).toBe("unmapped");
+  });
+
+  // The canvas holds a surface on the lost device: the replacement lets go
+  // of it before it destroys the device, and the canvas's next frame makes
+  // one on the new device.
+  itRunsE2eOnly(
+    "draws on the new device in a window the lost device held",
+    async () => {
+      await hideHarnessCanvas();
+      expect(readCenter(await surface.screen("GpuReplacement"))).toBe("cyan");
+      expect(await loseDeviceWithMappedBuffer()).toBe("unmapped");
+      expect(readCenter(await surface.screen("GpuReplacement"))).toBe("red");
+    }
+  );
 });
