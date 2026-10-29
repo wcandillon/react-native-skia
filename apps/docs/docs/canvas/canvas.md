@@ -268,24 +268,17 @@ The format is chosen when the canvas mounts: to change it, remount the canvas wi
 
 ## Color space
 
-On Apple devices with a wide color gamut display, the canvas renders in the Display P3 color space.
-On other devices, on Android, and on the Web, it renders in sRGB.
+By default, the canvas renders in Display P3 on Apple devices with a wide color gamut display, and in sRGB everywhere else.
+Colors are managed: a color or an image looks the same in both color spaces, and Display P3 adds the colors that sRGB cannot represent, for instance the ones of a photo with a Display P3 profile.
 
-Colors are managed: a color or an image looks the same in both color spaces.
-Display P3 adds the colors that sRGB cannot represent, for instance the ones of a photo with a Display P3 profile.
+Two things depend on the color space of the canvas:
 
-:::info
+- The colors returned by a [shader](/docs/shaders/overview) are not managed: the same values look more saturated in Display P3 than in sRGB.
+- Blending (blend modes, layers, blurs and other image filters) happens in the color space of the canvas: a `multiply` or a blur gives slightly different colors in Display P3 and in sRGB.
 
-The colors returned by a [shader](/docs/shaders/overview) are not managed. They are interpreted in the color space of the canvas: the same values look more saturated in Display P3 than in sRGB.
-Blending (blend modes, layers, blurs and other image filters) happens in the color space of the canvas as well: the result of a `multiply` or of a blur differs slightly between Display P3 and sRGB.
-
-:::
-
-The `colorSpace` prop picks the color space instead: `"srgb"` renders in sRGB on every device, like `drawAsImage` and `Skia.Surface.MakeOffscreen` do by default (an offscreen surface renders in Display P3 only when asked, with `{ colorSpace: "display-p3" }`).
-An app that previews on screen what it exports offscreen, a photo editor for instance, gets the same colors in both with it.
-[Snapshots](#getting-a-canvas-snapshot) are always in sRGB: a snapshot of a Display P3 canvas is converted to sRGB, so it matches the screen, where the canvas was blended in Display P3.
-`"display-p3"` asks for Display P3 on an Apple device whose display does not have a wide color gamut.
-Android and the Web always render in sRGB: the prop is ignored there.
+The `colorSpace` prop sets the color space of the canvas: `"srgb"` or `"display-p3"`.
+Use `"srgb"` when the canvas must match an offscreen rendering: `drawAsImage`, `Skia.Surface.MakeOffscreen` and [snapshots](#getting-a-canvas-snapshot) render in sRGB.
+A photo editor whose preview must match its export is the typical case.
 
 ```tsx twoslash
 import {Canvas, Fill} from "react-native-skia";
@@ -296,6 +289,8 @@ const Demo = () => (
   </Canvas>
 );
 ```
+
+On Android and on the Web, the canvas always renders in sRGB.
 
 ## Getting a Canvas Snapshot
 
