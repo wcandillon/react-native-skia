@@ -625,7 +625,7 @@ using Presentation =
     return;
   }
   // The window, or a static canvas's image presenter, is attached again in
-  // the new color space; until then, frames are recorded for it.
+  // the new color space: now if it is attached, else when it next is.
   _surface->setUseP3ColorSpace(
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
   if (!_surface->isAttached()) {
