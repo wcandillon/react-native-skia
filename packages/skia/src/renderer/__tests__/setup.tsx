@@ -327,6 +327,16 @@ const serializeSkOjects = async (obj: any): Promise<any> => {
   } else if (obj instanceof Float32Array) {
     return { __typename__: "Float32Array", value: Array.from(obj) };
   } else if (Array.isArray(obj)) {
+    // Font and image bytes come as arrays of millions of numbers: a promise
+    // per element would take minutes and gigabytes, so an array of
+    // primitives is passed through as is.
+    if (
+      obj.every(
+        (item) => typeof item !== "object" && typeof item !== "function"
+      )
+    ) {
+      return obj;
+    }
     return Promise.all(obj.map((item) => serializeSkOjects(item)));
   } else if (obj && typeof obj === "object" && "__typename__" in obj) {
     if (obj instanceof SkiaObject) {
