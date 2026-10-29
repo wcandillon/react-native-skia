@@ -50,7 +50,7 @@ half4 main(float2 xy) {
         <Circle cx={r} cy={r} r={r} color="lightblue" />
       </Group>
     );
-    checkImage(img, "snapshots/runtime-shader/simple.png");
+    await checkImage(img, "snapshots/runtime-shader/simple.png");
   });
   itRunsE2eOnly("should display a green and blue spiral", async () => {
     const { width, height } = surface;
@@ -81,7 +81,7 @@ half4 main(float2 xy) {
         </Group>
       </>
     );
-    checkImage(img, "snapshots/runtime-shader/spiral.png");
+    await checkImage(img, "snapshots/runtime-shader/spiral.png");
   });
   itRunsE2eOnly(
     "should be the reference result for the next test (1)",
@@ -110,7 +110,7 @@ half4 main(float2 xy) {
       const img = Skia.Image.MakeFromEncoded(data)!;
       expect(data).toBeDefined();
 
-      checkImage(img, "snapshots/runtime-shader/scaled-circle.png");
+      await checkImage(img, "snapshots/runtime-shader/scaled-circle.png");
     }
   );
   itRunsE2eOnly("should display display the circle untouched (1)", async () => {
@@ -152,7 +152,7 @@ half4 main(float2 xy) {
     const img = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
 
-    checkImage(img, "snapshots/runtime-shader/scaled-circle.png", {
+    await checkImage(img, "snapshots/runtime-shader/scaled-circle.png", {
       maxPixelDiff: 4,
     });
   });
@@ -192,7 +192,7 @@ half4 main(float2 xy) {
       const img = Skia.Image.MakeFromEncoded(data)!;
       expect(data).toBeDefined();
 
-      checkImage(img, "snapshots/runtime-shader/scaled-circle2.png");
+      await checkImage(img, "snapshots/runtime-shader/scaled-circle2.png");
     }
   );
   itRunsE2eOnly(
@@ -244,7 +244,7 @@ half4 main(float2 xy) {
       const img = Skia.Image.MakeFromEncoded(data)!;
       expect(data).toBeDefined();
 
-      checkImage(img, "snapshots/runtime-shader/scaled-circle2.png");
+      await checkImage(img, "snapshots/runtime-shader/scaled-circle2.png");
     }
   );
   itRunsE2eOnly("should use supersampling", async () => {
@@ -284,7 +284,7 @@ half4 main(float2 xy) {
         </Group>
       </>
     );
-    checkImage(img, docPath("runtime-shader/with-supersampling.png"), {
+    await checkImage(img, docPath("runtime-shader/with-supersampling.png"), {
       maxPixelDiff: 1200,
     });
   });
@@ -316,7 +316,7 @@ half4 main(float2 xy) {
         </Group>
       </>
     );
-    checkImage(img, docPath("runtime-shader/without-supersampling.png"), {
+    await checkImage(img, docPath("runtime-shader/without-supersampling.png"), {
       maxPixelDiff: 500,
     });
   });

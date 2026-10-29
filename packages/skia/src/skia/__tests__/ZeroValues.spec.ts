@@ -16,9 +16,9 @@ import { setupSkia } from "./setup";
 const asset = (name: string) =>
   fs.readFileSync(path.resolve(__dirname, "assets", name));
 
-const rgbaAt = (canvasOwner: SkSurface, x = 0, y = 0) => {
+const rgbaAt = async (canvasOwner: SkSurface, x = 0, y = 0) => {
   const image = canvasOwner.makeImageSnapshot();
-  const pixels = image.readPixels() as Uint8Array;
+  const pixels = (await image.readPixels()) as Uint8Array;
   const i = (y * image.width() + x) * 4;
   return Array.from(pixels.slice(i, i + 4));
 };
@@ -45,12 +45,12 @@ const ckRef = (canvas: SkCanvas) => (canvas as JsiSkCanvas).ref;
 
 describe("Zero is a valid value", () => {
   describe("Canvas", () => {
-    it("drawColor honors BlendMode.Clear", () => {
+    it("drawColor honors BlendMode.Clear", async () => {
       const { Skia, surface, canvas } = setupSkia(4, 4);
       canvas.drawColor(Skia.Color("red"));
       canvas.drawColor(Skia.Color("blue"), BlendMode.Clear);
       surface.flush();
-      expect(rgbaAt(surface)).toEqual([0, 0, 0, 0]);
+      expect(await rgbaAt(surface)).toEqual([0, 0, 0, 0]);
     });
 
     it("drawPatch forwards BlendMode.Clear", () => {
@@ -132,11 +132,11 @@ describe("Zero is a valid value", () => {
   });
 
   describe("Image", () => {
-    it("encodeToBytes honors a quality of 0", () => {
+    it("encodeToBytes honors a quality of 0", async () => {
       const { Skia } = setupSkia();
       const image = makeGradientImage(Skia);
-      const lowest = image.encodeToBytes(ImageFormat.JPEG, 0);
-      const highest = image.encodeToBytes(ImageFormat.JPEG, 100);
+      const lowest = await image.encodeToBytes(ImageFormat.JPEG, 0);
+      const highest = await image.encodeToBytes(ImageFormat.JPEG, 100);
       // Quality 0 used to be dropped and fall back to the encoder default,
       // which produced the same bytes as quality 100.
       expect(lowest.byteLength).toBeLessThan(highest.byteLength);

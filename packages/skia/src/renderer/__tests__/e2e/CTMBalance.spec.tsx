@@ -27,25 +27,25 @@ const drawScene = (inert: Record<string, unknown>) =>
 
 describe("CTM save/restore balance", () => {
   it("Build reference result", async () => {
-    checkImage(await drawScene({}), REF);
+    await checkImage(await drawScene({}), REF);
   });
 
   it("origin without transform or matrix", async () => {
-    checkImage(await drawScene({ origin: { x: 0, y: 0 } }), REF);
+    await checkImage(await drawScene({ origin: { x: 0, y: 0 } }), REF);
   });
 
   it("clip resolved to false by a conditional", async () => {
-    checkImage(await drawScene({ clip: false }), REF);
+    await checkImage(await drawScene({ clip: false }), REF);
   });
 
   it("invertClip without a clip", async () => {
-    checkImage(await drawScene({ invertClip: false }), REF);
+    await checkImage(await drawScene({ invertClip: false }), REF);
   });
 
   it("still restores for a CTM that does save", async () => {
     // The inner group's own translate applies to the red rect only, and is
     // restored before the blue sibling is drawn.
     const image = await drawScene({ transform: [{ translateX: 32 }] });
-    checkImage(image, "snapshots/drawings/ctm-balance-nested.png");
+    await checkImage(image, "snapshots/drawings/ctm-balance-nested.png");
   });
 });

@@ -14,7 +14,9 @@ const mockCalls = { scheduleOnUI: 0, deprecatedRunOnUI: 0 };
 const mockPlatform = { OS: "ios" };
 const mockLoadedImage: { current: SkImage | null } = { current: null };
 const mockRasterSnapshot = {};
-const mockSnapshot = { makeRasterImageSync: () => mockRasterSnapshot };
+const mockSnapshot = {
+  makeRasterImage: () => Promise.resolve(mockRasterSnapshot),
+};
 const mockCanvas = { drawPicture: jest.fn() };
 const mockSurface = {
   getCanvas: () => mockCanvas,
@@ -146,10 +148,12 @@ describe.each([
     mockPlatform.OS = OS;
   });
 
-  it("draws the picture into a texture on the UI thread", () => {
+  it("draws the picture into a texture on the UI thread", async () => {
     const texture = renderTexture(() => usePictureAsTexture(picture, size));
     expect(texture.value).toBeNull();
     flushUIQueue();
+    // On web the snapshot is read back asynchronously.
+    await Promise.resolve();
     expect(mockMakeOffscreen).toHaveBeenCalledWith(32, 16);
     expect(mockCanvas.drawPicture).toHaveBeenCalledWith(picture);
     expect(mockSurface.flush).toHaveBeenCalledTimes(1);

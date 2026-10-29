@@ -41,6 +41,6 @@ describe("Glyphs", () => {
     const surface = await drawOnNode(
       <Glyphs x={0} y={0} font={font} glyphs={glyphs} color="lightblue" />
     );
-    processResult(surface, "snapshots/glyphs/simple.png");
+    await processResult(surface, "snapshots/glyphs/simple.png");
   });
 });

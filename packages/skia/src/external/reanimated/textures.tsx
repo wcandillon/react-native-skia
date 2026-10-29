@@ -38,10 +38,16 @@ const createTexture = (
   const canvas = surface.getCanvas();
   canvas.drawPicture(picture);
   surface.flush();
-  texture.value = surface.makeImageSnapshot();
+  const snapshot = surface.makeImageSnapshot();
   if (Platform.OS === "web") {
-    texture.value = texture.value.makeRasterImageSync();
+    // A WebGL texture belongs to the context that made it: a CPU copy is
+    // drawable by any canvas.
+    snapshot.makeRasterImage().then((raster) => {
+      texture.value = raster;
+    });
+    return;
   }
+  texture.value = snapshot;
 };
 
 export const useTexture = (

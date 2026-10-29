@@ -24,7 +24,7 @@ describe("Test different text examples", () => {
         <Text x={0} y={fontSize} font={font} text="Hello World" />
       </>
     );
-    processResult(surface, docPath("text/hello-world.png"));
+    await processResult(surface, docPath("text/hello-world.png"));
   });
 
   it("Should draw Hello World vertically", async () => {
@@ -39,7 +39,7 @@ describe("Test different text examples", () => {
         <Glyphs font={font} glyphs={glyphs} />
       </>
     );
-    processResult(surface, docPath("text/hello-world-vertical.png"));
+    await processResult(surface, docPath("text/hello-world-vertical.png"));
   });
 
   it("Should render the text around a circle", async () => {
@@ -55,7 +55,7 @@ describe("Test different text examples", () => {
         </Group>
       </>
     );
-    processResult(surface, docPath("text/text-path.png"));
+    await processResult(surface, docPath("text/text-path.png"));
   });
 
   it("Should render a text blob", async () => {
@@ -68,7 +68,7 @@ describe("Test different text examples", () => {
         <TextBlob blob={blob} y={fontSize} x={0} />
       </>
     );
-    processResult(surface, docPath("text/text-blob.png"));
+    await processResult(surface, docPath("text/text-blob.png"));
   });
 
   it("Should render text with Emojis", async () => {
@@ -90,7 +90,7 @@ describe("Test different text examples", () => {
         <Text text="🙋🌎" font={emojiFont} y={fontSize} x={0} />
       </>
     );
-    processResult(surface, docPath("text/text-emoji.png"));
+    await processResult(surface, docPath("text/text-emoji.png"));
   });
 
   it("Should calculate chinese text width correctly", async () => {
@@ -131,6 +131,6 @@ describe("Test different text examples", () => {
         />
       </>
     );
-    processResult(surface, docPath("text/welcome.png"));
+    await processResult(surface, docPath("text/welcome.png"));
   });
 });
