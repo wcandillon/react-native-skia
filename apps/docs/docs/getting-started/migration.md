@@ -133,12 +133,12 @@ In exchange, Skia and WebGPU can now share a device and textures without any cop
 
 ## 3. Update the Canvas props
 
-Five props of `<Canvas>` were removed:
+Four props of `<Canvas>` were removed, and one changed:
 
 | Prop | Replacement |
 |:--|:--|
 | `debug` | None, remove the prop. |
-| `colorSpace` | None, remove the prop. The canvas picks its [color space](/docs/canvas/overview#color-space) itself: Display P3 on Apple devices with a wide color gamut display (the default of v2), sRGB everywhere else. |
+| `colorSpace` | Kept, with `"display-p3"` in place of `"p3"`. By default, the canvas picks its [color space](/docs/canvas/overview#color-space) itself: Display P3 on Apple devices with a wide color gamut display (the default of v2), sRGB everywhere else. `colorSpace="srgb"` renders in sRGB there too, like in v2. |
 | `androidWarmup` | None, remove the prop. To control how the canvas is composited on Android, see the [Android rendering options](/docs/canvas/overview#android-rendering-options). |
 | `opaque` | `android.opaque`: the prop only ever applied to Android, where it is now one of the options of the backing view, applied in place. A canvas that relied on `opaque` to get a `SurfaceView` asks for it with `android={{ backingView: "SurfaceView" }}`, see the [Android rendering options](/docs/canvas/overview#android-rendering-options). |
 | `onSize` | `onLayout`, the view prop: the size of the canvas is the one of its layout. Write the layout into your shared value, see [canvas size](/docs/canvas/overview#canvas-size). |

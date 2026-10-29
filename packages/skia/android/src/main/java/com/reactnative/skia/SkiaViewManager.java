@@ -48,6 +48,11 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
         view.setHighBitDepth(value);
     }
 
+    // Android renders in sRGB whatever the prop says (see
+    // JniSkiaView::attachWindow).
+    @ReactProp(name = "colorSpace")
+    public void setColorSpace(SkiaView view, @Nullable String value) {}
+
     @ReactProp(name = "androidBackingView")
     public void setAndroidBackingView(SkiaView view, @Nullable String value) {
         view.setBackingView(value);
