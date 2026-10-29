@@ -124,11 +124,11 @@ interface FrameProps {
   image: SharedValue<SkImage | null>;
 }
 
-const frame = async ({ image }: FrameProps) => {
+const frame = ({ image }: FrameProps) => {
   const surface = Skia.Surface.MakeOffscreen(400, 400)!;
   const canvas = surface.getCanvas();
   if (image.value) {
-    canvas.drawImage(await image.value.makeRasterImage(), 0, 0);
+    canvas.drawImage(image.value.makeRasterImageSync(), 0, 0);
   }
   surface.flush();
   surface.makeImageSnapshot();

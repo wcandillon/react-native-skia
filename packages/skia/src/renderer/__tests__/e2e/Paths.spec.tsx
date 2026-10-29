@@ -285,7 +285,7 @@ describe("Paths", () => {
         </Group>
       </Group>
     );
-    await checkImage(img, "snapshots/paths/pattern.png");
+    checkImage(img, "snapshots/paths/pattern.png");
   });
   it("typename should be correct", async () => {
     const typename = await surface.eval((Skia) => {
@@ -314,7 +314,7 @@ describe("Paths", () => {
         <Path path={path} color="lightblue" />
       </>
     );
-    await checkImage(img, docPath("paths/default-filltype.png"));
+    checkImage(img, docPath("paths/default-filltype.png"));
   });
   it("Path with even odd fillType", async () => {
     const { Skia } = importSkia();
@@ -326,7 +326,7 @@ describe("Paths", () => {
         <Path path={path} color="lightblue" fillType="evenOdd" />
       </>
     );
-    await checkImage(img, docPath("paths/evenodd-filltype.png"));
+    checkImage(img, docPath("paths/evenodd-filltype.png"));
   });
   it("Should interpolate paths", async () => {
     // https://fiddle.skia.org/c/@Path_isInterpolatable
@@ -345,7 +345,7 @@ describe("Paths", () => {
     const img = await surface.draw(
       <Path path={result} style="stroke" strokeWidth={3} />
     );
-    await checkImage(img, "snapshots/paths/interpolation1.png");
+    checkImage(img, "snapshots/paths/interpolation1.png");
   });
   it("Should interpolate paths and return new path (1)", async () => {
     // https://fiddle.skia.org/c/@Path_isInterpolatable
@@ -365,7 +365,7 @@ describe("Paths", () => {
     const img = await surface.draw(
       <Path path={result!} style="stroke" strokeWidth={3} />
     );
-    await checkImage(img, "snapshots/paths/interpolation1.png");
+    checkImage(img, "snapshots/paths/interpolation1.png");
   });
   it("Should interpolate paths and return new path (2)", async () => {
     const result = await surface.eval((Skia) => {
@@ -405,7 +405,7 @@ describe("Paths", () => {
     const img = await surface.draw(
       <Path path={emptyPath} style="stroke" strokeWidth={3} />
     );
-    await checkImage(img, "snapshots/paths/emptyPath.png");
+    checkImage(img, "snapshots/paths/emptyPath.png");
   });
   it("should render interpolated path with start and end props", async () => {
     const { Skia } = importSkia();
@@ -440,7 +440,7 @@ describe("Paths", () => {
         </Group>
       </>
     );
-    await checkImage(img, "snapshots/paths/interpolated-with-start-end.png");
+    checkImage(img, "snapshots/paths/interpolated-with-start-end.png");
   });
   it("should render same interpolated path multiple times with different start/end", async () => {
     const { Skia } = importSkia();
@@ -491,10 +491,7 @@ describe("Paths", () => {
         </Group>
       </>
     );
-    await checkImage(
-      img,
-      "snapshots/paths/interpolated-multiple-start-end.png"
-    );
+    checkImage(img, "snapshots/paths/interpolated-multiple-start-end.png");
   });
   it("interpolated path with trim should not mutate original", async () => {
     const result = await surface.eval((Skia) => {

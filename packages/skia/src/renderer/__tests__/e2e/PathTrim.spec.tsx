@@ -24,7 +24,7 @@ describe("Path trim", () => {
         />
       </>
     );
-    await checkImage(image, "snapshots/drawings/path-trim-stroke.png");
+    checkImage(image, "snapshots/drawings/path-trim-stroke.png");
   });
 
   it("leaves an untrimmed stroke alone", async () => {
@@ -40,6 +40,6 @@ describe("Path trim", () => {
         />
       </>
     );
-    await checkImage(image, "snapshots/drawings/path-trim-stroke-full.png");
+    checkImage(image, "snapshots/drawings/path-trim-stroke-full.png");
   });
 });

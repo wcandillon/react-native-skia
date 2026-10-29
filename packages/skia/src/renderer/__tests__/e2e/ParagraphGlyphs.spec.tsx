@@ -446,7 +446,7 @@ describe("Paragraph glyph-level APIs", () => {
           width: surface.width,
         }
       );
-      await checkImage(
+      checkImage(
         img,
         `snapshots/paragraph/paragraph-path-segment-${surface.OS}.png`,
         { maxPixelDiff: 300 }
@@ -508,7 +508,7 @@ describe("Paragraph glyph-level APIs", () => {
             width: surface.width,
           }
         );
-        await checkImage(
+        checkImage(
           img,
           `snapshots/paragraph/paragraph-glyph-tight-bounds-${surface.OS}.png`
         );
@@ -553,7 +553,7 @@ describe("Paragraph glyph-level APIs", () => {
           width: surface.width,
         }
       );
-      await checkImage(
+      checkImage(
         img,
         `snapshots/paragraph/paragraph-metrics-bounds-${surface.OS}.png`
       );

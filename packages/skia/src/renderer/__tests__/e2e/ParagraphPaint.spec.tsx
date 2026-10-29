@@ -77,7 +77,7 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    await checkImage(img, docPath(`paragraph/background-${surface.OS}.png`));
+    checkImage(img, docPath(`paragraph/background-${surface.OS}.png`));
   });
   it("Should use shader for the foreground", async () => {
     const img = await surface.drawOffscreen(
@@ -128,7 +128,7 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    await checkImage(img, docPath(`paragraph/foreground-${surface.OS}.png`));
+    checkImage(img, docPath(`paragraph/foreground-${surface.OS}.png`));
   });
   it("Should use shader for the background", async () => {
     const img = await surface.drawOffscreen(
@@ -179,10 +179,7 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    await checkImage(
-      img,
-      docPath(`paragraph/background-only-${surface.OS}.png`)
-    );
+    checkImage(img, docPath(`paragraph/background-only-${surface.OS}.png`));
   });
 
   it("should apply an image filter to the paragraph", async () => {
@@ -221,7 +218,7 @@ describe("Paragraphs", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath(`blurred-paragraph-${surface.OS}.png`));
+    checkImage(image, docPath(`blurred-paragraph-${surface.OS}.png`));
   });
 
   it("should apply an opacity filter to the paragraph", async () => {
@@ -260,6 +257,6 @@ describe("Paragraphs", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath(`opacity-paragraph-${surface.OS}.png`));
+    checkImage(image, docPath(`opacity-paragraph-${surface.OS}.png`));
   });
 });

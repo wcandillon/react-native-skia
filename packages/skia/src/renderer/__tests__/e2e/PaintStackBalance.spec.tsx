@@ -22,10 +22,7 @@ describe("Paint stack balance", () => {
         <Rect x={16} y={144} width={96} height={96} color="blue" />
       </>
     );
-    await checkImage(
-      image,
-      "snapshots/drawings/paint-prop-opacity-balance.png"
-    );
+    checkImage(image, "snapshots/drawings/paint-prop-opacity-balance.png");
   });
 
   it("should not leak a group opacity through a paint declaration", async () => {
@@ -40,7 +37,7 @@ describe("Paint stack balance", () => {
         <Rect x={16} y={144} width={96} height={96} color="blue" />
       </>
     );
-    await checkImage(
+    checkImage(
       image,
       "snapshots/drawings/paint-declaration-opacity-balance.png"
     );

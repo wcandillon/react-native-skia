@@ -34,7 +34,7 @@ describe("Path Effects", () => {
         </Path>
       </>
     );
-    await checkImage(img, "snapshots/path-effects/discrete.png");
+    checkImage(img, "snapshots/path-effects/discrete.png");
   });
   itRunsE2eOnly("should sum two path effects", async () => {
     const { Skia } = importSkia();
@@ -50,10 +50,10 @@ describe("Path Effects", () => {
         </Path>
       </>
     );
-    await checkImage(img, "snapshots/path-effects/discrete.png", {
+    checkImage(img, "snapshots/path-effects/discrete.png", {
       shouldFail: true,
     });
-    await checkImage(img, "snapshots/path-effects/sum.png");
+    checkImage(img, "snapshots/path-effects/sum.png");
     img = await surface.draw(
       <>
         <Fill color="white" />
@@ -66,9 +66,7 @@ describe("Path Effects", () => {
         </Path>
       </>
     );
-    await checkImage(img, "snapshots/path-effects/sum.png", {
-      shouldFail: true,
-    });
-    await checkImage(img, "snapshots/path-effects/sum2.png");
+    checkImage(img, "snapshots/path-effects/sum.png", { shouldFail: true });
+    checkImage(img, "snapshots/path-effects/sum2.png");
   });
 });

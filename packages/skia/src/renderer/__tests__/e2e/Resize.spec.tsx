@@ -8,7 +8,7 @@ import { countColors, surface } from "../setup";
 // tells the two apart.
 describe("Canvas resize on a device", () => {
   itRunsE2eOnly("shows a frame recorded for the size it grew to", async () => {
-    const counts = await countColors(await surface.screen("ResizeGrow"));
+    const counts = countColors(await surface.screen("ResizeGrow"));
     const canvas = counts.red + counts.green;
     expect(canvas).toBeGreaterThan(0);
     // The canvas grew to cover its box.
@@ -22,7 +22,7 @@ describe("Canvas resize on a device", () => {
   itRunsE2eOnly(
     "shows a frame recorded for the size it shrank to",
     async () => {
-      const counts = await countColors(await surface.screen("ResizeShrink"));
+      const counts = countColors(await surface.screen("ResizeShrink"));
       const canvas = counts.red + counts.green;
       expect(canvas).toBeGreaterThan(0);
       // The canvas shrank to a quarter of its box.

@@ -94,7 +94,7 @@ describe("Displays SVGs", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath("svg.png"));
+    checkImage(image, docPath("svg.png"));
   });
 
   itRunsE2eOnly("should set the SVG base layer", async () => {
@@ -105,7 +105,7 @@ describe("Displays SVGs", () => {
         <ImageSVG svg={svgWithoutSize} width={width} height={height} />
       </>
     );
-    await checkImage(image, docPath("svg.png"));
+    checkImage(image, docPath("svg.png"));
   });
 
   itRunsE2eOnly("should set the SVG base layer", async () => {
@@ -122,7 +122,7 @@ describe("Displays SVGs", () => {
         />
       </>
     );
-    await checkImage(image, docPath("svg2.png"));
+    checkImage(image, docPath("svg2.png"));
   });
 
   itRunsE2eOnly(
@@ -139,7 +139,7 @@ describe("Displays SVGs", () => {
           />
         </>
       );
-      await checkImage(image, docPath("svg2.png"));
+      checkImage(image, docPath("svg2.png"));
     }
   );
 
@@ -164,7 +164,7 @@ describe("Displays SVGs", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath("blurred-tiger.png"));
+    checkImage(image, docPath("blurred-tiger.png"));
   });
 
   itRunsE2eOnly("should apply an opacity filter to the svg", async () => {
@@ -189,9 +189,7 @@ describe("Displays SVGs", () => {
       </>
     );
     // TODO: Currently there are artifacts on Graphite/iOS
-    await checkImage(image, docPath("opacity-tiger.png"), {
-      maxPixelDiff: 1000,
-    });
+    checkImage(image, docPath("opacity-tiger.png"), { maxPixelDiff: 1000 });
   });
 
   itRunsE2eOnly("text shouldn't crash on iOS", async () => {
@@ -207,6 +205,6 @@ describe("Displays SVGs", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath("svg.png"));
+    checkImage(image, docPath("svg.png"));
   });
 });

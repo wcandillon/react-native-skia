@@ -79,6 +79,6 @@ describe("Animated Images", () => {
         />
       </>
     );
-    await checkImage(img, "snapshots/animated-images/bird.png");
+    checkImage(img, "snapshots/animated-images/bird.png");
   });
 });

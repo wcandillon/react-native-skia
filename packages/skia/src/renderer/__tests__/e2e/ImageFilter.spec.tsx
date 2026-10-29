@@ -22,7 +22,7 @@ describe("ImageFilter", () => {
       </Group>
     );
 
-    await checkImage(img, docPath("image-filter/blur-filter.png"));
+    checkImage(img, docPath("image-filter/blur-filter.png"));
   });
 
   it("Should render ImageFilter component with offset filter", async () => {
@@ -41,7 +41,7 @@ describe("ImageFilter", () => {
       </Group>
     );
 
-    await checkImage(img, docPath("image-filter/offset-filter.png"));
+    checkImage(img, docPath("image-filter/offset-filter.png"));
   });
 
   it("Should render ImageFilter component with drop shadow filter", async () => {
@@ -68,7 +68,7 @@ describe("ImageFilter", () => {
       </Group>
     );
 
-    await checkImage(img, docPath("image-filter/drop-shadow-filter.png"));
+    checkImage(img, docPath("image-filter/drop-shadow-filter.png"));
   });
 
   it("Should render ImageFilter component with composed filters", async () => {
@@ -94,6 +94,6 @@ describe("ImageFilter", () => {
       </Group>
     );
 
-    await checkImage(img, docPath("image-filter/composed-filters.png"));
+    checkImage(img, docPath("image-filter/composed-filters.png"));
   });
 });

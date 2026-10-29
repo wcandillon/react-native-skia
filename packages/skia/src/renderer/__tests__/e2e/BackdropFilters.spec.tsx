@@ -40,7 +40,7 @@ describe("Backdrop Filters", () => {
         />
       </Group>
     );
-    await checkImage(img, docPath("black-and-white-backdrop-filter.png"));
+    checkImage(img, docPath("black-and-white-backdrop-filter.png"));
   });
   it("Blur backdrop filter", async () => {
     const { oslo } = images;
@@ -65,7 +65,7 @@ describe("Backdrop Filters", () => {
         </BackdropBlur>
       </Group>
     );
-    await checkImage(img, docPath("blur-backdrop-filter.png"));
+    checkImage(img, docPath("blur-backdrop-filter.png"));
   });
   it("should display the Aurora Example", async () => {
     const { width, height } = surface;
@@ -88,7 +88,7 @@ describe("Backdrop Filters", () => {
         </BackdropFilter>
       </>
     );
-    await checkImage(img, docPath("blur-backdrop-aurora.png"));
+    checkImage(img, docPath("blur-backdrop-aurora.png"));
   });
   it("should display the Aurora Example with the BackdropBlur component", async () => {
     const { width, height } = surface;
@@ -111,7 +111,7 @@ describe("Backdrop Filters", () => {
         </BackdropBlur>
       </>
     );
-    await checkImage(img, docPath("blur-backdrop-aurora.png"));
+    checkImage(img, docPath("blur-backdrop-aurora.png"));
   });
   it("should display the Aurora Example with the BackdropBlur component and a string as clipping path", async () => {
     const { width, height } = surface;
@@ -135,7 +135,7 @@ describe("Backdrop Filters", () => {
         </BackdropBlur>
       </>
     );
-    await checkImage(img, docPath("blur-backdrop-aurora.png"));
+    checkImage(img, docPath("blur-backdrop-aurora.png"));
   });
   it("Blur backdrop blur on text with white background", async () => {
     const { width, height } = surface;
@@ -146,7 +146,7 @@ describe("Backdrop Filters", () => {
         <BackdropBlur blur={10 / 3} clip={rect(0, 0, width, height)} />
       </>
     );
-    await checkImage(img, docPath("backdrop-circle.png"));
+    checkImage(img, docPath("backdrop-circle.png"));
   });
   it("Blur backdrop blur on text with opaque background", async () => {
     const { width, height } = surface;
@@ -158,6 +158,6 @@ describe("Backdrop Filters", () => {
         <BackdropBlur blur={10 / 3} clip={rect(0, 0, width, height)} />
       </>
     );
-    await checkImage(img, docPath("backdrop-circle-opaque.png"));
+    checkImage(img, docPath("backdrop-circle-opaque.png"));
   });
 });

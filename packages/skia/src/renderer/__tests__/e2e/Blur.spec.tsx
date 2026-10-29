@@ -33,7 +33,7 @@ describe("Blur Image Filter", () => {
     canvas.concat(m3);
     canvas.drawImageRect(oslo, src, dst, paint);
     canvas.restore();
-    await processResult(ckSurface, docPath("blur.png"));
+    processResult(ckSurface, docPath("blur.png"));
   });
   it("should blur the image with tile mode=decal", async () => {
     const { oslo } = images;
@@ -51,6 +51,6 @@ describe("Blur Image Filter", () => {
         />
       </Group>
     );
-    await checkImage(img, docPath("blur.png"));
+    checkImage(img, docPath("blur.png"));
   });
 });

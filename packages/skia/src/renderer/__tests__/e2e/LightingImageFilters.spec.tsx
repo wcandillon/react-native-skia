@@ -3,12 +3,12 @@ import type { SkColor } from "../../../skia/types";
 import { BlendMode, ClipOp, PaintStyle, TileMode } from "../../../skia/types";
 import { checkImage, docPath, itRunsE2eOnly } from "../../../__tests__/setup";
 
-const checkResult = async (base64: string, path: string) => {
+const checkResult = (base64: string, path: string) => {
   const { Skia } = importSkia();
   const rData = Skia.Data.fromBase64(base64);
   const image = Skia.Image.MakeFromEncoded(rData)!;
   expect(rData).toBeDefined();
-  await checkImage(image, docPath(path));
+  checkImage(image, docPath(path));
 };
 
 describe("Lighting Image Filters", () => {
@@ -136,7 +136,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, TileMode }
     );
-    await checkResult(base64, "lighting-image-filters/distant-lit-diffuse.png");
+    checkResult(base64, "lighting-image-filters/distant-lit-diffuse.png");
   });
 
   itRunsE2eOnly("PointLitDiffuse - Glowing Core", async () => {
@@ -229,7 +229,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, BlendMode }
     );
-    await checkResult(
+    checkResult(
       base64,
       `lighting-image-filters/point-lit-diffuse-${surface.OS}.png`
     );
@@ -362,7 +362,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, TileMode, BlendMode, PaintStyle }
     );
-    await checkResult(
+    checkResult(
       base64,
       `lighting-image-filters/spot-lit-diffuse-${surface.OS}.png`
     );
@@ -564,10 +564,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, TileMode, BlendMode, PaintStyle }
     );
-    await checkResult(
-      base64,
-      "lighting-image-filters/distant-lit-specular.png"
-    );
+    checkResult(base64, "lighting-image-filters/distant-lit-specular.png");
   });
 
   itRunsE2eOnly("PointLitSpecular - Wet Surface", async () => {
@@ -740,7 +737,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, BlendMode, TileMode, PaintStyle }
     );
-    await checkResult(
+    checkResult(
       base64,
       `lighting-image-filters/point-lit-specular-${surface.OS}.png`
     );
@@ -1045,7 +1042,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, BlendMode, TileMode, PaintStyle }
     );
-    await checkResult(
+    checkResult(
       base64,
       `lighting-image-filters/spot-lit-specular-${surface.OS}.png`
     );
@@ -1472,7 +1469,7 @@ describe("Lighting Image Filters", () => {
       },
       { skiaLogoPng, BlendMode, TileMode, PaintStyle, ClipOp }
     );
-    await checkResult(
+    checkResult(
       base64,
       `lighting-image-filters/combined-lighting-fire-ice-${surface.OS}.png`
     );

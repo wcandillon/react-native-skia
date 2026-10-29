@@ -4,7 +4,6 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -223,13 +222,11 @@ public:
   // Readbacks ----------------------------------------------------------------
   //
   // Graphite reads pixels back asynchronously: the request goes to the GPU
-  // with the next submit and the result is delivered by the context once it
-  // sees the GPU done with it, from checkAsyncWorkCompletion() or from any
-  // later submit. A thread of its own waits for the GPU through Dawn and
-  // then has the context deliver (see awaitReadbacks), so that no caller
-  // waits inside the context lock (which would hold up the frames of every
-  // view meanwhile). There is no synchronous readback: JS awaits a Promise
-  // (see RNSkAsync), which is what the GPU offers.
+  // with the next submit and the result is delivered by the context once the
+  // GPU is done, from checkAsyncWorkCompletion() or from any later submit. A
+  // thread of its own polls the context while readbacks are pending, so a
+  // caller never has to wait inside the context lock (which would hold up
+  // the frames of every view meanwhile).
 
   /**
    Reads `srcRect` of a Graphite image back into CPU memory, in the color
@@ -242,11 +239,9 @@ public:
   void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
                   std::function<void(ReadResult)> callback) {
     struct Request {
-      DawnContext *context;
       std::function<void(ReadResult)> callback;
     };
     auto info = image->imageInfo().makeDimensions(srcRect.size());
-    Readback readback;
     {
       std::unique_lock<std::mutex> lock(_mutex);
       auto *current = _current.load(std::memory_order_acquire);
@@ -256,31 +251,48 @@ public:
         callback(nullptr);
         return;
       }
-      auto *request = new Request{this, std::move(callback)};
+      auto *request = new Request{std::move(callback)};
       _pendingReadbacks.fetch_add(1, std::memory_order_acq_rel);
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
           SkImage::RescaleMode::kNearest,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
-            request->context->_pendingReadbacks.fetch_sub(
+            getInstance()._pendingReadbacks.fetch_sub(
                 1, std::memory_order_acq_rel);
             request->callback(std::move(result));
             delete request;
           },
           request);
       current->context->submit();
-      readback.generation = current;
-      readback.done = workDone(current);
     }
-    {
-      std::lock_guard<std::mutex> lock(_readbacksMutex);
-      _readbacks.push_back(readback);
-    }
-    std::call_once(_readbackThreadOnce, [this]() {
-      std::thread([this]() { awaitReadbacks(); }).detach();
+    wakeReadbackPoller();
+  }
+
+  /**
+   Same as readPixels(), waiting for the result. The wait happens outside the
+   context lock; the calling thread blocks for a GPU round trip.
+   */
+  ReadResult readPixelsSync(const sk_sp<SkImage> &image,
+                            const SkIRect &srcRect) {
+    struct Wait {
+      std::mutex mutex;
+      std::condition_variable condition;
+      bool done = false;
+      ReadResult result;
+    };
+    auto wait = std::make_shared<Wait>();
+    readPixels(image, srcRect, [wait](ReadResult result) {
+      {
+        std::lock_guard<std::mutex> lock(wait->mutex);
+        wait->result = std::move(result);
+        wait->done = true;
+      }
+      wait->condition.notify_one();
     });
-    _readbacksCondition.notify_one();
+    std::unique_lock<std::mutex> lock(wait->mutex);
+    wait->condition.wait(lock, [&wait]() { return wait->done; });
+    return std::move(wait->result);
   }
 
   /**
@@ -303,6 +315,20 @@ public:
         },
         const_cast<SkImage::AsyncReadResult *>(raw));
     return SkImages::RasterFromData(info, std::move(data), rowBytes);
+  }
+
+  /**
+   A CPU copy of a Graphite image, read back synchronously; the image itself
+   when it is not texture-backed, which needs no GPU (nor the context: it
+   works on a device without one). Throws without a GPU for a Graphite
+   image, like getInstance().
+   */
+  static sk_sp<SkImage> MakeRasterImage(const sk_sp<SkImage> &image) {
+    if (!image->isTextureBacked()) {
+      return image;
+    }
+    return MakeRasterImage(image->imageInfo(), getInstance().readPixelsSync(
+                                                   image, image->bounds()));
   }
 
   // Recorders ----------------------------------------------------------------
@@ -1076,60 +1102,50 @@ private:
 
   // Readbacks ----------------------------------------------------------------
 
-  // A future that completes once the GPU is done with everything submitted
-  // on the generation's queue so far, waited for with WaitAny (see
-  // awaitReadbacks); right away once the device is lost. Called with the
-  // context lock held.
-  static wgpu::Future workDone(Generation *generation) {
-    return generation->backendContext.fQueue.OnSubmittedWorkDone(
-        wgpu::CallbackMode::WaitAnyOnly,
-        [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+  void wakeReadbackPoller() {
+    std::call_once(_pollerOnce, [this]() {
+      std::thread([this]() { pollReadbacks(); }).detach();
+    });
+    // Taken so that a poller between its predicate check and its wait cannot
+    // miss the notification.
+    { std::lock_guard<std::mutex> lock(_pollerMutex); }
+    _pollerCondition.notify_one();
   }
 
-  // The readback thread: for each readback, in order, waits for the GPU to
-  // be done with it, then has its context deliver the result. The wait is
-  // Dawn's own (Instance::WaitAny, on the queue's completion), so the thread
-  // sleeps until the GPU is done rather than polling the context.
-  void awaitReadbacks() {
+  void pollReadbacks() {
 #if defined(__APPLE__)
     pthread_setname_np("RNSkia Readback");
 #elif defined(__ANDROID__)
     pthread_setname_np(pthread_self(), "RNSkia Readback");
 #endif
-    wgpu::Instance waiter(instance->Get());
     for (;;) {
-      Readback readback;
       {
-        std::unique_lock<std::mutex> lock(_readbacksMutex);
-        _readbacksCondition.wait(lock,
-                                 [this]() { return !_readbacks.empty(); });
-        readback = _readbacks.front();
-        _readbacks.pop_front();
+        std::unique_lock<std::mutex> lock(_pollerMutex);
+        _pollerCondition.wait(lock, [this]() {
+          return _pendingReadbacks.load(std::memory_order_acquire) > 0;
+        });
       }
-      waiter.WaitAny(readback.done, UINT64_MAX);
-      bool delivered;
-      {
-        std::lock_guard<std::mutex> lock(_mutex);
-        tick();
-        readback.generation->context->checkAsyncWorkCompletion();
-        delivered = _pendingReadbacks.load(std::memory_order_acquire) == 0;
-        if (!delivered) {
-          // Dawn may complete the mapping of the read buffer a tick after
-          // the queue's work: the context is asked again after the queue's
-          // next completion (which is immediate when it is idle).
-          readback.done = workDone(readback.generation);
-        }
-      }
-      if (!delivered) {
-        std::unique_lock<std::mutex> lock(_readbacksMutex);
-        if (_readbacks.empty()) {
-          // Nothing else to wait for would ask the context: ask again
-          // shortly.
+      // Polls every millisecond at first, then backs off: a short readback
+      // is delivered quickly, a long one does not take the context lock a
+      // thousand times a second.
+      auto interval = std::chrono::milliseconds(1);
+      while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
+        // A busy context is a view rendering: skip this round rather than
+        // hold up its frame.
+        std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+        if (lock.owns_lock()) {
+          tick();
+          _current.load(std::memory_order_acquire)
+              ->context->checkAsyncWorkCompletion();
+          // A readback requested on a device lost since is failed by Dawn;
+          // its context delivers that like any other result.
+          for (auto *retired : _retired) {
+            retired->context->checkAsyncWorkCompletion();
+          }
           lock.unlock();
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
-          lock.lock();
-          _readbacks.push_back(readback);
+          interval = std::min(interval * 2, std::chrono::milliseconds(4));
         }
+        std::this_thread::sleep_for(interval);
       }
     }
   }
@@ -1220,17 +1236,13 @@ private:
   std::unordered_map<const skgpu::graphite::Recorder *, uint64_t> _recorders;
   std::vector<std::unique_ptr<skgpu::graphite::Recorder>> _retiredRecorders;
 
-  // The readbacks waiting for the GPU, for the readback thread (see
-  // readPixels and awaitReadbacks); the thread is started by the first one.
-  struct Readback {
-    Generation *generation = nullptr;
-    wgpu::Future done;
-  };
+  // The readback poller: started on the first readback, it checks the
+  // context for finished GPU work while readbacks are pending and sleeps
+  // otherwise (see readPixels).
   std::atomic<int> _pendingReadbacks{0};
-  std::once_flag _readbackThreadOnce;
-  std::mutex _readbacksMutex;
-  std::condition_variable _readbacksCondition;
-  std::deque<Readback> _readbacks;
+  std::once_flag _pollerOnce;
+  std::mutex _pollerMutex;
+  std::condition_variable _pollerCondition;
 };
 
 } // namespace RNSkia

@@ -29,7 +29,7 @@ describe("Skottie", () => {
         <Skottie animation={legoAnimation} frame={41} />
       </Group>
     );
-    await checkImage(img, docPath("skottie/skottie-component-lego.png"));
+    checkImage(img, docPath("skottie/skottie-component-lego.png"));
   });
   it("Should render Skottie component with raster effect", async () => {
     const { Skia } = importSkia();
@@ -52,7 +52,7 @@ describe("Skottie", () => {
         <Skottie animation={legoAnimation} frame={41} />
       </Group>
     );
-    await checkImage(img, docPath("skottie/skottie-component-lego-blur.png"));
+    checkImage(img, docPath("skottie/skottie-component-lego-blur.png"));
   });
   it("Should render Skottie component with drinks animation", async () => {
     const { Skia } = importSkia();
@@ -66,7 +66,7 @@ describe("Skottie", () => {
         <Skottie animation={drinksAnimation} frame={200} />
       </Group>
     );
-    await checkImage(img, docPath("skottie/skottie-component-drinks.png"));
+    checkImage(img, docPath("skottie/skottie-component-drinks.png"));
   });
   it("Should render Skottie component with confetti animation", async () => {
     const { Skia } = importSkia();
@@ -82,7 +82,7 @@ describe("Skottie", () => {
         <Skottie animation={confettiAnimation} frame={30} />
       </Group>
     );
-    await checkImage(img, docPath("skottie/skottie-component-confetti.png"));
+    checkImage(img, docPath("skottie/skottie-component-confetti.png"));
   });
   it("Should render Skottie component with basic slots animation", async () => {
     const { Skia } = importSkia();
@@ -112,7 +112,7 @@ describe("Skottie", () => {
         <Skottie animation={animation} frame={0} />
       </Group>
     );
-    await checkImage(img, docPath("skottie/skottie-component-basic-slots.png"));
+    checkImage(img, docPath("skottie/skottie-component-basic-slots.png"));
   });
   it("Get durations", async () => {
     const { lego, drinks, confetti, onboarding } = await surface.eval(
@@ -194,7 +194,7 @@ describe("Skottie", () => {
     const rData = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    await checkImage(image, docPath("skottie/lego.png"));
+    checkImage(image, docPath("skottie/lego.png"));
   });
   it("Get slot information", async () => {
     const slots = await surface.eval(
@@ -325,7 +325,7 @@ describe("Skottie", () => {
     const rData = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    await checkImage(image, docPath("skottie/basic_slots.png"));
+    checkImage(image, docPath("skottie/basic_slots.png"));
   });
   it("load skottie with assets and set color slots", async () => {
     const raw = await surface.eval(
@@ -358,7 +358,7 @@ describe("Skottie", () => {
     const rData = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    await checkImage(image, docPath("skottie/basic_slots-with-colors.png"));
+    checkImage(image, docPath("skottie/basic_slots-with-colors.png"));
   });
   it("has color props", async () => {
     const colorProps = await surface.eval(
@@ -401,7 +401,7 @@ describe("Skottie", () => {
     const rData = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    await checkImage(image, docPath("skottie/fingerprint-color1.png"));
+    checkImage(image, docPath("skottie/fingerprint-color1.png"));
   });
   it("has text props", async () => {
     const colorProps = await surface.eval(
@@ -460,9 +460,9 @@ describe("Skottie", () => {
     const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     if (surface.OS === "node" || surface.OS === "web") {
-      await checkImage(image, docPath("skottie/text-prop-web.png"));
+      checkImage(image, docPath("skottie/text-prop-web.png"));
     } else {
-      await checkImage(image, docPath("skottie/text-prop.png"));
+      checkImage(image, docPath("skottie/text-prop.png"));
     }
   });
   it("loads layers and shapes without a name (nm)", async () => {

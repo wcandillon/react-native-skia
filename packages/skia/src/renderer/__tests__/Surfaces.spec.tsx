@@ -8,7 +8,7 @@ import { AlphaType, ColorType } from "../../skia/types";
 import { drawOnNode } from "./setup";
 
 describe("Surface", () => {
-  it("asImage() draws the content of the surface", async () => {
+  it("asImage() draws the content of the surface", () => {
     const { Skia } = setupSkia();
     const source = Skia.Surface.MakeOffscreen(2, 2)!;
     source.getCanvas().drawColor(Skia.Color("cyan"));
@@ -17,7 +17,7 @@ describe("Surface", () => {
     const target = Skia.Surface.MakeOffscreen(2, 2)!;
     target.getCanvas().drawImage(image, 0, 0);
     target.flush();
-    const pixels = await target.makeImageSnapshot().readPixels(0, 0, {
+    const pixels = target.makeImageSnapshot().readPixels(0, 0, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,
@@ -25,7 +25,7 @@ describe("Surface", () => {
     });
     expect(Array.from(pixels!)).toEqual([0, 255, 255, 255]);
   });
-  it("MakeNonImageTexture on a CPU surface shouldn't leak", async () => {
+  it("MakeNonImageTexture on a CPU surface shouldn't leak", () => {
     const { Skia } = setupSkia();
     // When leaking, the WASM memory limit will be reached quite quickly
     // causing the test to fail
@@ -35,7 +35,7 @@ describe("Surface", () => {
       canvas.clear(Skia.Color("cyan"));
       surface.flush();
       using image = surface.makeImageSnapshot();
-      using copy = await image.makeRasterImage();
+      using copy = image.makeRasterImageSync();
       expect(copy).toBeDefined();
     }
   });
@@ -80,7 +80,7 @@ describe("Surface", () => {
       );
       surface.flush();
       //console.log(`Iteration ${i} took ${Math.floor(performance.now() - t)}ms`);
-      await processResult(surface, "snapshots/leak.png");
+      processResult(surface, "snapshots/leak.png");
     }
   });
 });

@@ -137,8 +137,8 @@ export const nameColor = (pixel: ArrayLike<number> | null) => {
 };
 
 // Every pixel of a snapshot, as unpremultiplied RGBA bytes.
-export const readAllPixels = async (image: SkImage) => {
-  const pixels = await image.readPixels(0, 0, {
+export const readAllPixels = (image: SkImage) => {
+  const pixels = image.readPixels(0, 0, {
     width: image.width(),
     height: image.height(),
     colorType: ColorType.RGBA_8888,
@@ -151,8 +151,8 @@ export const readAllPixels = async (image: SkImage) => {
 };
 
 // The pixels of a screen snapshot in each colour it names.
-export const countColors = async (image: SkImage) => {
-  const pixels = await readAllPixels(image);
+export const countColors = (image: SkImage) => {
+  const pixels = readAllPixels(image);
   const counts = { cyan: 0, red: 0, blue: 0, green: 0 };
   for (let i = 0; i < pixels.length; i += 4) {
     const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
@@ -164,9 +164,9 @@ export const countColors = async (image: SkImage) => {
 };
 
 // The colour of the screen at a fraction of its width and of its height.
-export const readScreenColor = async (image: SkImage, fraction: number) =>
+export const readScreenColor = (image: SkImage, fraction: number) =>
   nameColor(
-    await image.readPixels(
+    image.readPixels(
       Math.round(image.width() * fraction),
       Math.round(image.height() * fraction),
       {
@@ -305,7 +305,7 @@ export const mountCanvas = async (element: ReactNode) => {
 export const serialize = async (element: ReactNode) => {
   const { root, render } = await mountCanvas(element);
   await render();
-  const serialized = await serializeNode(root.sg);
+  const serialized = serializeNode(root.sg);
   return JSON.stringify(serialized);
 };
 
@@ -319,15 +319,13 @@ interface SerializedNode {
   children: SerializedNode[];
 }
 
-// Asynchronous: an image without an asset name is sent encoded, and encoding
-// is a promise.
-const serializeSkOjects = async (obj: any): Promise<any> => {
+const serializeSkOjects = (obj: any): any => {
   if (typeof obj === "function") {
     return { __typename__: "Function", source: `${obj.toString()}` };
   } else if (obj instanceof Float32Array) {
     return { __typename__: "Float32Array", value: Array.from(obj) };
   } else if (Array.isArray(obj)) {
-    return Promise.all(obj.map((item) => serializeSkOjects(item)));
+    return obj.map((item) => serializeSkOjects(item));
   } else if (obj && typeof obj === "object" && "__typename__" in obj) {
     if (obj instanceof SkiaObject) {
       const skObj: SkiaObject<EvalContext, any> = obj;
@@ -368,7 +366,7 @@ const serializeSkOjects = async (obj: any): Promise<any> => {
       if (!asset) {
         return {
           __typename__: "RawImage",
-          data: await obj.encodeToBase64(),
+          data: obj.encodeToBase64(),
         };
       }
       return {
@@ -418,31 +416,31 @@ const serializeSkOjects = async (obj: any): Promise<any> => {
       };
     }
   } else if (obj && typeof obj === "object") {
-    const result: Record<string, any> = {};
-    for (const key of Object.keys(obj)) {
-      result[key] = await serializeSkOjects(obj[key]);
-    }
+    const result = Object.keys(obj).reduce((acc, key) => {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      acc[key] = serializeSkOjects(obj[key]);
+      return acc;
+    }, {});
     return result;
   }
   return obj;
 };
 
-const serializeNode = async (node: Node<any>): Promise<SerializedNode> => {
+const serializeNode = (node: Node<any>): SerializedNode => {
   const props: any = {};
   const ogProps = node.props;
   if (ogProps) {
-    for (const key of Object.keys(ogProps)) {
-      if (key !== "children") {
-        props[key] = await serializeSkOjects(ogProps[key]);
-      }
-    }
+    Object.keys(ogProps)
+      .filter((key) => key !== "children")
+      .forEach((key) => {
+        props[key] = serializeSkOjects(ogProps[key]);
+      });
   }
   return {
     type: node.type,
     props,
-    children: await Promise.all(
-      node.children.map((child) => serializeNode(child))
-    ),
+    children: node.children.map((child) => serializeNode(child)),
   };
 };
 
@@ -517,11 +515,11 @@ export class RemoteSurface implements TestingSurface {
   readonly fontSize = 32;
   readonly OS = global.testOS;
 
-  async eval<Ctx extends EvalContext, R>(
+  eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => any,
     context?: Ctx
   ): Promise<R> {
-    const ctx = await this.prepareContext(context);
+    const ctx = this.prepareContext(context);
     const body = { code: fn.toString(), ctx };
     return this.handleImageResponse<R>(JSON.stringify(body), true);
   }
@@ -530,7 +528,7 @@ export class RemoteSurface implements TestingSurface {
     fn: (Skia: Skia, canvas: SkCanvas, ctx: Ctx) => void,
     context?: Ctx
   ) {
-    const ctx = await this.prepareContext(context);
+    const ctx = this.prepareContext(context);
     const code = `(Skia, ctx, size, scale) => {
 const surface = Skia.Surface.MakeOffscreen(size, size);
 if (!surface) {
@@ -574,14 +572,12 @@ return surface.makeImageSnapshot().encodeToBase64();
     return client;
   }
 
-  private async prepareContext<Ctx extends EvalContext>(
-    context?: Ctx
-  ): Promise<EvalContext> {
+  private prepareContext<Ctx extends EvalContext>(context?: Ctx): EvalContext {
     const ctx: EvalContext = {};
     if (context) {
-      for (const key of Object.keys(context)) {
-        ctx[key] = await serializeSkOjects(context[key]);
-      }
+      Object.keys(context).forEach((key) => {
+        ctx[key] = serializeSkOjects(context[key]);
+      });
     }
     return ctx;
   }

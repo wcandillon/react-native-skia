@@ -7,10 +7,10 @@ import type { SkColorFilter } from "../types/ColorFilter/ColorFilter";
 import { setupSkia } from "./setup";
 
 describe("Color Filters", () => {
-  it("Duotone Color Matrix", async () => {
+  it("Duotone Color Matrix", () => {
     const ctx = setupSkia();
     const { Skia } = ctx;
-    await testColorFilter(
+    testColorFilter(
       ctx,
       Skia.ColorFilter.MakeMatrix([
         -0.578, 0.99, 0.588, 0, 0, 0.469, 0.535, -0.003, 0, 0, 0.015, 1.69,
@@ -19,10 +19,10 @@ describe("Color Filters", () => {
       "snapshots/color-filter/matrix1.png"
     );
   });
-  it("Sepia Color Matrix", async () => {
+  it("Sepia Color Matrix", () => {
     const ctx = setupSkia();
     const { Skia } = ctx;
-    await testColorFilter(
+    testColorFilter(
       ctx,
       Skia.ColorFilter.MakeMatrix([
         0.393, 0.768, 0.188, 0, 0, 0.349, 0.685, 0.167, 0, 0, 0.272, 0.533,
@@ -31,10 +31,10 @@ describe("Color Filters", () => {
       "snapshots/color-filter/zurich-sepia.png"
     );
   });
-  it("Exposure Color Matrix", async () => {
+  it("Exposure Color Matrix", () => {
     const ctx = setupSkia();
     const { Skia } = ctx;
-    await testColorFilter(
+    testColorFilter(
       ctx,
       Skia.ColorFilter.MakeMatrix([
         1, 0, 0, 0, 0.262, 0, 1, 0, 0, 0.262, 0, 0, 1, 0, 0.262, 0, 0, 0, 1, 0,
@@ -44,7 +44,7 @@ describe("Color Filters", () => {
   });
 });
 
-const testColorFilter = async (
+const testColorFilter = (
   { Skia, canvas, surface, width, height }: ReturnType<typeof setupSkia>,
   colorFilter: SkColorFilter,
   result: string
@@ -63,5 +63,5 @@ const testColorFilter = async (
     Skia.XYWHRect(0, 0, width, height),
     paint
   );
-  await processResult(surface, result);
+  processResult(surface, result);
 };

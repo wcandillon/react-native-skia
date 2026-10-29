@@ -60,7 +60,7 @@ describe("Paragraph height measurement (#3493)", () => {
         height: surface.height,
       }
     );
-    await checkImage(
+    checkImage(
       img,
       `snapshots/paragraph/paragraph-glyph-bounding-boxes-${surface.OS}.png`
     );

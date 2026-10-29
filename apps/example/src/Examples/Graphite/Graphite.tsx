@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import type {
   SkGraphiteContext,
@@ -70,13 +70,12 @@ const drawFrame = (
 
 // A GPU-backed image: drawn into an offscreen surface on the JS thread and
 // sampled by both views.
-export const useGpuImage = () => {
-  const [image, setImage] = useState<SkImage | null>(null);
-  useEffect(() => {
+export const useGpuImage = () =>
+  useMemo(() => {
     const size = 256;
     const surface = Skia.Surface.MakeOffscreen(size, size);
     if (!surface) {
-      return;
+      return null;
     }
     const canvas = surface.getCanvas();
     const paint = Skia.Paint();
@@ -92,17 +91,11 @@ export const useGpuImage = () => {
     );
     canvas.drawCircle(size / 2, size / 2, size / 2, paint);
     surface.flush();
-    const snapshot = surface.makeImageSnapshot();
+    const image = surface.makeImageSnapshot();
     // On the web a texture belongs to the WebGL context that made it; the
     // views have their own, so they need a CPU copy.
-    if (Platform.OS === "web") {
-      snapshot.makeRasterImage().then(setImage);
-    } else {
-      setImage(snapshot);
-    }
+    return Platform.OS === "web" ? image.makeRasterImageSync() : image;
   }, []);
-  return image;
-};
 
 const JSThreadView = ({ image }: { image: SkImage | null }) => {
   const ref = useRef<SkiaGraphiteViewRef>(null);

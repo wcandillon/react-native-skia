@@ -82,9 +82,7 @@ describe("P3 Color Space", () => {
           offscreen.flush();
           const img = Skia.Image.MakeNull();
           offscreen.makeImageSnapshot(undefined, img);
-          return img
-            .encodeToBytes(ctx.format, 90)
-            .then((bytes) => Array.from(bytes));
+          return Array.from(img.encodeToBytes(ctx.format, 90));
         },
         { colorSpace: ColorSpace.DisplayP3, format: ImageFormat.JPEG }
       );

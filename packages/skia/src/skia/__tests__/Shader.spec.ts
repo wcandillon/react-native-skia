@@ -6,7 +6,7 @@ import { BlendMode } from "../types/Paint/BlendMode";
 import { setupSkia } from "./setup";
 
 describe("Shader", () => {
-  it("Simple color interpolation", async () => {
+  it("Simple color interpolation", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();
     const source = Skia.RuntimeEffect.Make(`
@@ -17,9 +17,9 @@ vec4 main(vec2 pos) {
 }`)!;
     paint.setShader(source.makeShader([]));
     canvas.drawPaint(paint);
-    await processResult(surface, "snapshots/shader/shader1.png");
+    processResult(surface, "snapshots/shader/shader1.png");
   });
-  it("Half circle to the right", async () => {
+  it("Half circle to the right", () => {
     const { surface, canvas, Skia, width } = setupSkia();
     const paint = Skia.Paint();
     const source = Skia.RuntimeEffect.Make(`
@@ -34,10 +34,10 @@ vec4 main(vec2 pos) {
     const r = width / 2;
     paint.setShader(source.makeShader([2 * r, r, r, 1]));
     canvas.drawPaint(paint);
-    await processResult(surface, "snapshots/shader/shader2.png");
+    processResult(surface, "snapshots/shader/shader2.png");
   });
 
-  it("Sweep Gradient", async () => {
+  it("Sweep Gradient", () => {
     const { surface, canvas, center, Skia } = setupSkia();
     const paint = Skia.Paint();
     const colors = ["#61DAFB", "#fb61da", "#dafb61", "#61fbcf"].map((c) =>
@@ -54,10 +54,10 @@ vec4 main(vec2 pos) {
       )
     );
     canvas.drawPaint(paint);
-    await processResult(surface, "snapshots/shader/sweep-gradient.png");
+    processResult(surface, "snapshots/shader/sweep-gradient.png");
   });
 
-  it("color blend shaders", async () => {
+  it("color blend shaders", () => {
     const { surface, canvas, Skia } = setupSkia(size, size);
     const r = size / 2;
     const c = Skia.Point(r, r);
@@ -91,9 +91,6 @@ vec4 main(vec2 pos) {
       )
     );
     canvas.drawPaint(paint);
-    await processResult(
-      surface,
-      "snapshots/runtime-effects/blend-color-burn3.png"
-    );
+    processResult(surface, "snapshots/runtime-effects/blend-color-burn3.png");
   });
 });

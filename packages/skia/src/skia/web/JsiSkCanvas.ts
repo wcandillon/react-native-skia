@@ -488,10 +488,6 @@ export class JsiSkCanvas
       alphaType: getEnum(this.CanvasKit, "AlphaType", imageInfo.alphaType),
       colorType: getEnum(this.CanvasKit, "ColorType", imageInfo.colorType),
     };
-    // CanvasKit reads synchronously; a promise like on native, where the GPU
-    // is asynchronous.
-    return new Promise<Float32Array | Uint8Array | null>((resolve) =>
-      resolve(this.ref.readPixels(srcX, srcY, pxInfo))
-    );
+    return this.ref.readPixels(srcX, srcY, pxInfo);
   }
 }

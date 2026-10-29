@@ -80,7 +80,7 @@ const encodeView = async (view: React.RefObject<View | null>) => {
     );
     const image = Skia.Image.MakeFromGPUTexture(texture);
     try {
-      return await image.encodeToBytes();
+      return image.encodeToBytes();
     } finally {
       image.dispose();
     }
@@ -161,7 +161,7 @@ export const Tests = ({ assets }: TestsProps) => {
 
   useEffect(() => {
     if (drawing && client) {
-      const it = setTimeout(async () => {
+      const it = setTimeout(() => {
         if (ref.current) {
           try {
             const image = ref.current.makeImageSnapshot({
@@ -170,7 +170,7 @@ export const Tests = ({ assets }: TestsProps) => {
               width: size,
               height: size,
             });
-            client.send(await image.encodeToBytes());
+            client.send(image.encodeToBytes());
           } catch (e) {
             console.error(e);
             client.send(errorEnvelope(e));

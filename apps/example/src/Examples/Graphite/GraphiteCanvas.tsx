@@ -70,9 +70,7 @@ const AnimatedCanvas = ({ image, onSnapshot }: AnimatedCanvasProps) => {
     const timeout = setTimeout(() => {
       const snapshot = ref.current?.makeImageSnapshot();
       if (snapshot) {
-        snapshot.encodeToBase64().then((base64) => {
-          onSnapshot(`data:image/png;base64,${base64}`);
-        });
+        onSnapshot(`data:image/png;base64,${snapshot.encodeToBase64()}`);
       }
     }, 1000);
     return () => clearTimeout(timeout);

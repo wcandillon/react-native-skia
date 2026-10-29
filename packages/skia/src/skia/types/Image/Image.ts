@@ -95,56 +95,70 @@ export interface SkImage extends SkJSIInstance<"Image"> {
     localMatrix?: SkMatrix
   ): SkShader;
 
-  /**
-   * Resolves to the pixels of the image encoded in `fmt` (PNG by default),
-   * as a Uint8Array. A GPU image is read back first; the encoding runs on
-   * a background thread. Returns existing encoded data if present.
-   *
-   * Rejects when the image cannot be read back or encoded.
-   *
-   * @param fmt - PNG is the default value.
-   * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
-   */
-  encodeToBytes(fmt?: ImageFormat, quality?: number): Promise<Uint8Array>;
+  /** Encodes Image pixels, returning result as UInt8Array. Returns existing
+     encoded data if present; otherwise, SkImage is encoded with
+     SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
+     SkImage.
 
-  /**
-   * Resolves to the pixels of the image encoded in `fmt` (PNG by default),
-   * as a base64 string. A GPU image is read back first; the encoding runs
-   * on a background thread. Returns existing encoded data if present.
-   *
-   * Rejects when the image cannot be read back or encoded.
-   *
-   * @param fmt - PNG is the default value.
-   * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
-   */
-  encodeToBase64(fmt?: ImageFormat, quality?: number): Promise<string>;
+    Throws an Error when the image cannot be encoded.
 
-  /**
-   * Resolves to the pixels of the image, converted to `imageInfo` (the
-   * image's own by default): a Float32Array for an F32 color type, else a
-   * Uint8Array; to null when nothing could be read. On a GPU image, only
-   * the requested rectangle is read back; the part of the rectangle
-   * outside the image stays zero.
+    @param fmt - PNG is the default value.
+    @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
+
+    @return  Uint8Array with data
+  */
+  encodeToBytes(fmt?: ImageFormat, quality?: number): Uint8Array;
+
+  /** Encodes Image pixels, returning result as a base64 encoded string. Returns existing
+     encoded data if present; otherwise, SkImage is encoded with
+     SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
+     SkImage.
+
+    Throws an Error when the image cannot be encoded.
+
+    @param fmt - PNG is the default value.
+    @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
+
+    @return  base64 encoded string of data
+  */
+  encodeToBase64(fmt?: ImageFormat, quality?: number): string;
+
+  /** Read Image pixels
+   *
+   * On a GPU image, only the requested rectangle is read back from the GPU,
+   * and the call waits for it. To read back without blocking, call
+   * {@link makeRasterImage} first.
    *
    * @param srcX - optional x-axis upper left corner of the rectangle to read from
    * @param srcY - optional y-axis upper left corner of the rectangle to read from
    * @param imageInfo - optional describes the pixel format and dimensions of the data to read into
+   * @return Float32Array or Uint8Array with data or null if the read failed.
    */
   readPixels(
     srcX?: number,
     srcY?: number,
     imageInfo?: ImageInfo
-  ): Promise<Float32Array | Uint8Array | null>;
+  ): Float32Array | Uint8Array | null;
 
   /**
-   * Resolves to a CPU image: a GPU image is read back from the GPU, an
-   * encoded image is decoded on a background thread, and a raster image
-   * resolves to itself. Rejects when the readback fails.
+   * Returns a CPU image, blocking the calling thread: a GPU image is read
+   * back from the GPU, waiting for it, and an encoded image is decoded.
+   * Returns the image itself when it already is a raster image.
+   * Throws if the readback fails.
    *
-   * Readbacks are asynchronous, as the GPU is: there is no synchronous
-   * counterpart. The promise settles on the runtime that called, the React
-   * Native or the Reanimated UI runtime; on a worklet runtime of your own
-   * the call completes before returning.
+   * This is the synchronous counterpart of {@link makeRasterImage}, for
+   * worklets and scripts; on the JS thread, prefer `makeRasterImage()`.
+   */
+  makeRasterImageSync(): SkImage;
+
+  /**
+   * Resolves to a CPU image, without blocking the calling thread: a GPU
+   * image is read back from the GPU, an encoded image is decoded on a
+   * background thread, and a raster image resolves to itself.
+   *
+   * Encoding or reading the pixels of the result is then a CPU operation.
+   * The promise resolves on the JS thread: call it from there, not from a
+   * worklet (see {@link makeRasterImageSync}).
    */
   makeRasterImage(): Promise<SkImage>;
 

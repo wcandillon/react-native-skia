@@ -24,7 +24,7 @@ describe("Test Blending", () => {
         <Fill />
       </Group>
     );
-    await checkImage(image, "snapshots/runtime-effects/linear-gradient.png");
+    checkImage(image, "snapshots/runtime-effects/linear-gradient.png");
   });
 
   it("should display a color", async () => {
@@ -33,7 +33,7 @@ describe("Test Blending", () => {
         <ColorShader color="lightblue" />
       </Fill>
     );
-    await checkImage(image, docPath("shaders/color.png"));
+    checkImage(image, docPath("shaders/color.png"));
   });
 
   it("should blend cyan/magenta/yellow to black (multiply)", async () => {
@@ -50,7 +50,7 @@ describe("Test Blending", () => {
         </Blend>
       </Fill>
     );
-    await checkImage(image, "snapshots/runtime-effects/blend-multiply.png");
+    checkImage(image, "snapshots/runtime-effects/blend-multiply.png");
   });
 
   it("should blend using color burn", async () => {
@@ -67,7 +67,7 @@ describe("Test Blending", () => {
         </Blend>
       </Fill>
     );
-    await checkImage(image, "snapshots/runtime-effects/blend-color-burn.png", {
+    checkImage(image, "snapshots/runtime-effects/blend-color-burn.png", {
       maxPixelDiff: 324,
     });
     image = await surface.draw(
@@ -79,7 +79,7 @@ describe("Test Blending", () => {
         </Blend>
       </Fill>
     );
-    await checkImage(image, "snapshots/runtime-effects/blend-color-burn2.png", {
+    checkImage(image, "snapshots/runtime-effects/blend-color-burn2.png", {
       maxPixelDiff: 324,
     });
   });
@@ -98,7 +98,7 @@ describe("Test Blending", () => {
         </Blend>
       </Fill>
     );
-    await checkImage(image, "snapshots/runtime-effects/blend-color-burn3.png");
+    checkImage(image, "snapshots/runtime-effects/blend-color-burn3.png");
     image = await surface.draw(
       <Fill>
         <Blend mode="colorBurn">
@@ -110,6 +110,6 @@ describe("Test Blending", () => {
         </Blend>
       </Fill>
     );
-    await checkImage(image, "snapshots/runtime-effects/blend-color-burn3.png");
+    checkImage(image, "snapshots/runtime-effects/blend-color-burn3.png");
   });
 });

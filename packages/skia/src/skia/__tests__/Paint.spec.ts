@@ -3,7 +3,7 @@ import { processResult } from "../../__tests__/setup";
 import { setupSkia } from "./setup";
 
 describe("Paint", () => {
-  it("should have anti-aliasing is true by default but the value be preserved when using copy()", async () => {
+  it("should have anti-aliasing is true by default but the value be preserved when using copy()", () => {
     const { surface, canvas, Skia, width } = setupSkia();
     const size = width;
     const p1 = Skia.Paint();
@@ -13,13 +13,13 @@ describe("Paint", () => {
       size / 4
     );
     canvas.drawRRect(rct, p1);
-    await processResult(surface, "snapshots/drawings/rrect-aa.png");
+    processResult(surface, "snapshots/drawings/rrect-aa.png");
     const p2 = Skia.Paint();
     p2.setAntiAlias(false);
     canvas.drawRRect(rct, p2);
-    await processResult(surface, "snapshots/drawings/rrect-no-aa.png");
+    processResult(surface, "snapshots/drawings/rrect-no-aa.png");
     const p3 = p2.copy();
     canvas.drawRRect(rct, p3);
-    await processResult(surface, "snapshots/drawings/rrect-no-aa.png");
+    processResult(surface, "snapshots/drawings/rrect-no-aa.png");
   });
 });

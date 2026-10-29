@@ -83,7 +83,7 @@ half4 main(float2 p) {
         </Group>
       </>
     );
-    await checkImage(img, "snapshots/runtime-effects/int-uniform.png");
+    checkImage(img, "snapshots/runtime-effects/int-uniform.png");
   });
   it("should display a green and red spiral", async () => {
     const { width, height } = surface;
@@ -108,7 +108,7 @@ half4 main(float2 p) {
         </Group>
       </>
     );
-    await checkImage(img, "snapshots/runtime-effects/spiral.png");
+    checkImage(img, "snapshots/runtime-effects/spiral.png");
   });
 
   it("should flatten shader uniforms", async () => {
@@ -130,7 +130,7 @@ half4 main(float2 p) {
         <Fill />
       </Group>
     );
-    await checkImage(img, "snapshots/shader/bilinear-interpolation.png");
+    checkImage(img, "snapshots/shader/bilinear-interpolation.png");
   });
 
   it("should display a hue wheel", async () => {
@@ -150,7 +150,7 @@ half4 main(float2 p) {
         <Fill />
       </Group>
     );
-    await checkImage(img, "snapshots/shader/hue.png");
+    checkImage(img, "snapshots/shader/hue.png");
   });
 
   it("should display a hue wheel with transform", async () => {
@@ -172,7 +172,7 @@ half4 main(float2 p) {
         <Fill />
       </Group>
     );
-    await checkImage(img, "snapshots/shader/hue2.png");
+    checkImage(img, "snapshots/shader/hue2.png");
   });
 
   it("should display a linear gradient", async () => {
@@ -187,7 +187,7 @@ half4 main(float2 p) {
         <Fill />
       </Group>
     );
-    await checkImage(img, "snapshots/runtime-effects/linear-gradient.png");
+    checkImage(img, "snapshots/runtime-effects/linear-gradient.png");
   });
 
   it("should display a linear gradient with transform", async () => {
@@ -205,7 +205,7 @@ half4 main(float2 p) {
         <Fill />
       </Group>
     );
-    await checkImage(img, "snapshots/runtime-effects/linear-gradient2.png");
+    checkImage(img, "snapshots/runtime-effects/linear-gradient2.png");
   });
 
   it("should display a color", async () => {
@@ -214,7 +214,7 @@ half4 main(float2 p) {
         <ColorShader color="lightblue" />
       </Fill>
     );
-    await checkImage(img, docPath("shaders/color.png"));
+    checkImage(img, docPath("shaders/color.png"));
   });
 
   it("should display an image and respect the transform", async () => {
@@ -236,7 +236,7 @@ half4 main(float2 p) {
         />
       </Fill>
     );
-    await checkImage(img, docPath("shaders/image-with-transform.png"));
+    checkImage(img, docPath("shaders/image-with-transform.png"));
   });
 
   it("should display a lightblue color", async () => {
@@ -255,7 +255,7 @@ vec4 main(vec2 pos) {
         </Shader>
       </Fill>
     );
-    await checkImage(img, docPath("shaders/color.png"));
+    checkImage(img, docPath("shaders/color.png"));
   });
   it("should display a mix of red and lightblue color", async () => {
     const { Skia } = importSkia();
@@ -275,7 +275,7 @@ vec4 main(vec2 pos) {
         </Shader>
       </Fill>
     );
-    await checkImage(img, docPath("shaders/mixed-colors.png"));
+    checkImage(img, docPath("shaders/mixed-colors.png"));
   });
   it("should display a mix of red and lightblue from custom shaders", async () => {
     const { Skia } = importSkia();
@@ -310,7 +310,7 @@ vec4 main(vec2 pos) {
         </Shader>
       </Fill>
     );
-    await checkImage(img, docPath("shaders/mixed-colors.png"));
+    checkImage(img, docPath("shaders/mixed-colors.png"));
   });
 
   it("should display different results based on children order", async () => {
@@ -348,6 +348,6 @@ vec4 main(vec2 pos) {
         </Shader>
       </Fill>
     );
-    await checkImage(img, docPath("shaders/order-dependent.png"));
+    checkImage(img, docPath("shaders/order-dependent.png"));
   });
 });

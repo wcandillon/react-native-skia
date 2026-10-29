@@ -4,16 +4,16 @@ import { BlendMode, PaintStyle, StrokeCap } from "../types";
 import { setupSkia } from "./setup";
 
 describe("Drawings", () => {
-  it("Lightblue rectangle", async () => {
+  it("Lightblue rectangle", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("lightblue"));
     const rct = Skia.XYWHRect(64, 64, 128, 128);
     canvas.drawRect(rct, paint);
-    await processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
+    processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
   });
 
-  it("Multiply blend mode", async () => {
+  it("Multiply blend mode", () => {
     const { surface, canvas, width, height, Skia } = setupSkia();
     const r = 0.37 * width;
 
@@ -33,10 +33,10 @@ describe("Drawings", () => {
     yellow.setColor(Skia.Color("yellow"));
     canvas.drawCircle(width / 2, height - r, r, yellow);
 
-    await processResult(surface, "snapshots/drawings/blend-modes.png");
+    processResult(surface, "snapshots/drawings/blend-modes.png");
   });
 
-  it("Cyan Circle", async () => {
+  it("Cyan Circle", () => {
     const { surface, canvas, Skia } = setupSkia();
 
     const r = 128;
@@ -47,10 +47,10 @@ describe("Drawings", () => {
     paint.setColor(Skia.Color("cyan"));
     canvas.drawCircle(r, r, r, paint);
 
-    await processResult(surface, "snapshots/drawings/cyan-circle.png");
+    processResult(surface, "snapshots/drawings/cyan-circle.png");
   });
 
-  it("Rectangle Stroke", async () => {
+  it("Rectangle Stroke", () => {
     const { surface, canvas, Skia } = setupSkia();
 
     const paint = Skia.Paint();
@@ -62,10 +62,10 @@ describe("Drawings", () => {
     const rect = Skia.XYWHRect(64, 64, 128, 128);
     canvas.drawRect(rect, paint);
 
-    await processResult(surface, "snapshots/drawings/stroke.png");
+    processResult(surface, "snapshots/drawings/stroke.png");
   });
 
-  it("Cyan line with rounded stroke cap", async () => {
+  it("Cyan line with rounded stroke cap", () => {
     const { surface, canvas, width, height, Skia } = setupSkia();
 
     const paint = Skia.Paint();
@@ -77,24 +77,24 @@ describe("Drawings", () => {
     paint.setStrokeCap(StrokeCap.Round);
     canvas.drawLine(32, 32, width - 32, height - 32, paint);
 
-    await processResult(surface, "snapshots/drawings/line.png");
+    processResult(surface, "snapshots/drawings/line.png");
   });
 
-  it("Purple", async () => {
+  it("Purple", () => {
     const { surface, canvas, Skia } = setupSkia();
     canvas.drawColor(Skia.Color("purple"));
-    await processResult(surface, "snapshots/drawings/purple.png");
+    processResult(surface, "snapshots/drawings/purple.png");
   });
 
-  it("Should accept object implementation of SkRect", async () => {
+  it("Should accept object implementation of SkRect", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("lightblue"));
     canvas.drawRect({ x: 64, y: 64, width: 128, height: 128 }, paint);
-    await processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
+    processResult(surface, "snapshots/drawings/small-lightblue-rect.png");
   });
 
-  it("Should draw an arc", async () => {
+  it("Should draw an arc", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("lightblue"));
@@ -105,15 +105,15 @@ describe("Drawings", () => {
       true,
       paint
     );
-    await processResult(surface, "snapshots/drawings/arc.png");
+    processResult(surface, "snapshots/drawings/arc.png");
   });
 
-  it("Transparent Circle", async () => {
+  it("Transparent Circle", () => {
     const { surface, canvas, Skia } = setupSkia(100, 100);
     const paint = Skia.Paint();
     const rct = Skia.XYWHRect(0, 0, 100, 100);
     paint.setColor(Float32Array.of(1, 0, 0, 0));
     canvas.drawRect(rct, paint);
-    await processResult(surface, "snapshots/drawings/transparent.png");
+    processResult(surface, "snapshots/drawings/transparent.png");
   });
 });

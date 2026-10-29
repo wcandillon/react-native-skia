@@ -10,7 +10,7 @@ const size = width;
 const r = size * 0.33;
 
 describe("Getting Started / Hello World", () => {
-  it("Hello world with the imperative API", async () => {
+  it("Hello world with the imperative API", () => {
     const { Skia } = importSkia();
     const { surface, canvas } = setupSkia(width, height);
 
@@ -30,7 +30,7 @@ describe("Getting Started / Hello World", () => {
     yellow.setColor(Skia.Color("yellow"));
     canvas.drawCircle(size / 2, size - r, r, yellow);
 
-    await processResult(
+    processResult(
       surface,
       docPath("getting-started/hello-world/blend-modes.png")
     );
@@ -43,7 +43,7 @@ describe("Getting Started / Hello World", () => {
         <Circle cx={size / 2} cy={size - r} r={r} color="yellow" />
       </Group>
     );
-    await processResult(
+    processResult(
       surface,
       docPath("getting-started/hello-world/blend-modes.png")
     );

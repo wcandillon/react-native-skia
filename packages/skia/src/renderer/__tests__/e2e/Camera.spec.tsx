@@ -146,7 +146,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/perspective.png");
+    checkImage(image, "snapshots/matrix4/perspective.png");
   });
   it("Camera movement", async () => {
     const { Skia } = importSkia();
@@ -169,7 +169,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/rect.png");
+    checkImage(image, "snapshots/matrix4/rect.png");
   });
   it("Camera movement (2)", async () => {
     const { Skia } = importSkia();
@@ -207,7 +207,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/full-rect.png");
+    checkImage(image, "snapshots/matrix4/full-rect.png");
   });
   it("Camera movement (3)", async () => {
     const { Skia } = importSkia();
@@ -245,7 +245,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/scaled-rect.png");
+    checkImage(image, "snapshots/matrix4/scaled-rect.png");
   });
   it("Camera coordinate system visualization", async () => {
     const { Skia } = importSkia();
@@ -281,7 +281,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/camera-offset.png");
+    checkImage(image, "snapshots/matrix4/camera-offset.png");
   });
 
   it("Camera zoom out - rectangle appears half size", async () => {
@@ -318,7 +318,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/camera-zoom-out.png");
+    checkImage(image, "snapshots/matrix4/camera-zoom-out.png");
   });
 
   it("Camera positioned at corner - look at corner", async () => {
@@ -355,7 +355,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/camera-corner.png");
+    checkImage(image, "snapshots/matrix4/camera-corner.png");
   });
 
   it("Camera centered - top-left corner at center", async () => {
@@ -392,7 +392,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/camera-top-left-center.png");
+    checkImage(image, "snapshots/matrix4/camera-top-left-center.png");
   });
   it("test perspective (1)", async () => {
     const { Skia } = importSkia();
@@ -428,7 +428,7 @@ describe("Camera", () => {
         <Path path={path} color="cyan" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/test-perspective.png");
+    checkImage(image, "snapshots/matrix4/test-perspective.png");
   });
   it("test perspective (2)", async () => {
     const { Skia } = importSkia();
@@ -481,6 +481,6 @@ describe("Camera", () => {
         <Path path={path1} color="red" opacity={0.5} />
       </Group>
     );
-    await checkImage(image, "snapshots/matrix4/test-perspective2.png");
+    checkImage(image, "snapshots/matrix4/test-perspective2.png");
   });
 });

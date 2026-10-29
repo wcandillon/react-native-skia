@@ -39,7 +39,7 @@ describe("Mask composition", () => {
         {twoChildren}
       </>
     );
-    await checkImage(image, REF_PLAIN);
+    checkImage(image, REF_PLAIN);
   });
 
   it("should not alter the drawing when the mask is opaque everywhere", async () => {
@@ -53,7 +53,7 @@ describe("Mask composition", () => {
         <Mask mask={<Fill color="white" />}>{twoChildren}</Mask>
       </>
     );
-    await checkImage(image, REF_PLAIN);
+    checkImage(image, REF_PLAIN);
   });
 
   it("Build clipped reference result", async () => {
@@ -64,7 +64,7 @@ describe("Mask composition", () => {
         <Group clip={rect(0, 0, 128, 256)}>{twoChildren}</Group>
       </>
     );
-    await checkImage(image, REF_CLIPPED);
+    checkImage(image, REF_CLIPPED);
   });
 
   it("should select the drawing without recompositing it", async () => {
@@ -83,7 +83,7 @@ describe("Mask composition", () => {
         </Mask>
       </>
     );
-    await checkImage(image, REF_CLIPPED);
+    checkImage(image, REF_CLIPPED);
   });
 
   it("should select the drawing by luminance", async () => {
@@ -105,7 +105,7 @@ describe("Mask composition", () => {
         </Mask>
       </>
     );
-    await checkImage(image, REF_CLIPPED);
+    checkImage(image, REF_CLIPPED);
   });
 
   it("Build visible mask reference result", async () => {
@@ -119,7 +119,7 @@ describe("Mask composition", () => {
         </Group>
       </>
     );
-    await checkImage(image, REF_VISIBLE);
+    checkImage(image, REF_VISIBLE);
   });
 
   it("should keep the mask artwork visible with clip={false}", async () => {
@@ -137,7 +137,7 @@ describe("Mask composition", () => {
         </Mask>
       </>
     );
-    await checkImage(image, REF_VISIBLE);
+    checkImage(image, REF_VISIBLE);
   });
 
   it("should composite every draw of a single child correctly", async () => {
@@ -152,6 +152,6 @@ describe("Mask composition", () => {
         </Mask>
       </>
     );
-    await checkImage(image, REF_PLAIN);
+    checkImage(image, REF_PLAIN);
   });
 });

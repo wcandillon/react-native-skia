@@ -4,14 +4,14 @@ import { loadFont } from "../../renderer/__tests__/setup";
 import { setupSkia } from "./setup";
 
 describe("Text API", () => {
-  it("Hello world text", async () => {
+  it("Hello world text", () => {
     const { surface, canvas, Skia } = setupSkia();
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("#16161d"));
     const font = loadFont("skia/__tests__/assets/Roboto-Medium.ttf", 32);
     canvas.drawColor(Skia.Color("white"));
     canvas.drawText("Hello World", 64, 64, paint, font);
-    await processResult(surface, "snapshots/drawings/hello-world.png");
+    processResult(surface, "snapshots/drawings/hello-world.png");
   });
 
   it("can get the intercepts of glyphs", () => {

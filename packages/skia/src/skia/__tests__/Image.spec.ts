@@ -12,7 +12,7 @@ describe("Image", () => {
     const raster = await snapshot.makeRasterImage();
     expect(raster.width()).toBe(4);
     expect(raster.height()).toBe(4);
-    const pixels = await raster.readPixels(0, 0, {
+    const pixels = raster.readPixels(0, 0, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,
@@ -21,7 +21,7 @@ describe("Image", () => {
     expect(Array.from(pixels!)).toEqual([0, 255, 255, 255]);
   });
 
-  it("makeTextureImage() returns an image that draws", async () => {
+  it("makeTextureImage() returns an image that draws", () => {
     const { Skia } = setupSkia();
     const info = {
       width: 1,
@@ -35,7 +35,7 @@ describe("Image", () => {
     const surface = Skia.Surface.MakeOffscreen(1, 1)!;
     surface.getCanvas().drawImage(texture, 0, 0);
     surface.flush();
-    const pixels = await surface.makeImageSnapshot().readPixels(0, 0, info);
+    const pixels = surface.makeImageSnapshot().readPixels(0, 0, info);
     expect(Array.from(pixels!)).toEqual([0, 0, 255, 255]);
   });
 
@@ -55,9 +55,7 @@ describe("Image", () => {
     const image = Skia.Image.MakeRaster(info, data, 8)!;
     const raster = await image.makeRasterImage();
     expect(
-      Array.from(
-        (await raster.readPixels(1, 0, { ...info, width: 1, height: 1 }))!
-      )
+      Array.from(raster.readPixels(1, 0, { ...info, width: 1, height: 1 })!)
     ).toEqual([0, 255, 0, 255]);
   });
 });

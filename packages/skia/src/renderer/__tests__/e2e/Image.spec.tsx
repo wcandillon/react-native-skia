@@ -23,7 +23,7 @@ describe("Image loading from bundles", () => {
         />
       </>
     );
-    await checkImage(image, `snapshots/images/bundle-${surface.OS}.png`);
+    checkImage(image, `snapshots/images/bundle-${surface.OS}.png`);
   });
 
   it("should read pixels from an image", async () => {
@@ -32,18 +32,18 @@ describe("Image loading from bundles", () => {
         const image = Skia.Image.MakeFromEncoded(
           Skia.Data.fromBytes(new Uint8Array(data))
         )!;
-        return image
-          .readPixels(0, 0, {
+        return Array.from(
+          image.readPixels(0, 0, {
             width: 2,
             height: 2,
             colorType: image.getImageInfo().colorType,
             alphaType: image.getImageInfo().alphaType,
-          })
-          .then((read) => Array.from(read!));
+          })!
+        );
       },
       {
         data: Array.from(
-          await loadImage("skia/__tests__/assets/oslo-mini.jpg").encodeToBytes()
+          loadImage("skia/__tests__/assets/oslo-mini.jpg").encodeToBytes()
         ),
       }
     );
@@ -60,14 +60,14 @@ describe("Image loading from bundles", () => {
         const offscreen = Skia.Surface.MakeOffscreen(10, 10)!;
         const canvas = offscreen.getCanvas();
         canvas.drawColor(Skia.Color("red"));
-        return canvas
-          .readPixels(0, 0, {
+        return Array.from(
+          canvas.readPixels(0, 0, {
             width: 1,
             height: 1,
             colorType,
             alphaType,
-          })
-          .then((read) => Array.from(read!));
+          })!
+        );
       },
       { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
     );

@@ -79,7 +79,7 @@ export const ImageLoading = () => {
     let snapshot = offscreen.makeImageSnapshot();
 
     console.log("Step 3");
-    let imageBase64 = await snapshot.encodeToBase64(ImageFormat.JPEG, 100);
+    let imageBase64 = snapshot.encodeToBase64(ImageFormat.JPEG, 100);
     console.log("image encoded to base64", imageBase64.length);
     return imageBase64;
   };

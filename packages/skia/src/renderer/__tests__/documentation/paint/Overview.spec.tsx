@@ -33,7 +33,7 @@ describe("Paint", () => {
         </Circle>
       </>
     );
-    await processResult(surface, docPath("paint/stroke.png"));
+    processResult(surface, docPath("paint/stroke.png"));
   });
 
   it("should use paint inheritance properly", async () => {
@@ -47,12 +47,12 @@ describe("Paint", () => {
         </Group>
       </Group>
     );
-    await processResult(surface, docPath("paint/inheritance.png"));
+    processResult(surface, docPath("paint/inheritance.png"));
   });
 
   it("should use paint assignement properly", async () => {
     const surface = await drawOnNode(<TestPaintAssignment />);
-    await processResult(surface, docPath("paint/assignement.png"));
+    processResult(surface, docPath("paint/assignement.png"));
   });
 
   it("should use the opacity property properly", async () => {
@@ -79,6 +79,6 @@ describe("Paint", () => {
         />
       </Group>
     );
-    await processResult(surface, docPath("paint/opacity.png"));
+    processResult(surface, docPath("paint/opacity.png"));
   });
 });

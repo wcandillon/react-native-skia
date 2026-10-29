@@ -22,7 +22,7 @@ describe("Mask Documentation Examples", () => {
         </Mask>
       </>
     );
-    await checkImage(image, docPath("mask/alpha-mask.png"));
+    checkImage(image, docPath("mask/alpha-mask.png"));
   });
   it("should draw an luminance mask", async () => {
     const { width } = surface;
@@ -42,7 +42,7 @@ describe("Mask Documentation Examples", () => {
         </Mask>
       </>
     );
-    await checkImage(image, docPath("mask/luminance-mask.png"));
+    checkImage(image, docPath("mask/luminance-mask.png"));
   });
   it("should blend a mask", async () => {
     const { width, height } = surface;
@@ -80,6 +80,6 @@ describe("Mask Documentation Examples", () => {
         </Group>
       </>
     );
-    await checkImage(image, docPath("mask/blend-mode-mask.png"));
+    checkImage(image, docPath("mask/blend-mode-mask.png"));
   });
 });

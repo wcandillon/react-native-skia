@@ -7,8 +7,8 @@ describe("SkiaGraphiteView", () => {
     async () => {
       const image = await surface.screen("GraphiteView");
       expect({
-        topLeft: await readScreenColor(image, 1 / 4),
-        bottomRight: await readScreenColor(image, 3 / 4),
+        topLeft: readScreenColor(image, 1 / 4),
+        bottomRight: readScreenColor(image, 3 / 4),
       }).toEqual({ topLeft: "cyan", bottomRight: "cyan" });
     }
   );
@@ -20,8 +20,8 @@ describe("SkiaGraphiteView", () => {
       // Scaled to the middle half of the screen: 3/8 is in its top-left
       // quarter and 5/8 in its bottom-right one.
       expect({
-        topLeft: await readScreenColor(image, 3 / 8),
-        bottomRight: await readScreenColor(image, 5 / 8),
+        topLeft: readScreenColor(image, 3 / 8),
+        bottomRight: readScreenColor(image, 5 / 8),
       }).toEqual({ topLeft: "cyan", bottomRight: "cyan" });
     }
   );

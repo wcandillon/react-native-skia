@@ -28,7 +28,7 @@ describe("Group", () => {
         </Group>
       </>
     );
-    await checkImage(img, docPath("group/clip-rect.png"));
+    checkImage(img, docPath("group/clip-rect.png"));
   });
   it("Should use a rounded rectangle as a clip", async () => {
     const { oslo } = images;
@@ -54,7 +54,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    await checkImage(img, docPath("group/clip-rrect.png"));
+    checkImage(img, docPath("group/clip-rrect.png"));
   });
   it("Should use a path as a clip", async () => {
     const { oslo } = images;
@@ -76,7 +76,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    await checkImage(img, docPath("group/clip-path.png"));
+    checkImage(img, docPath("group/clip-path.png"));
   });
   it("Should invert a clip", async () => {
     const { oslo } = images;
@@ -99,7 +99,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    await checkImage(img, docPath("group/invert-clip.png"));
+    checkImage(img, docPath("group/invert-clip.png"));
   });
   it("Should scale an SVG Path properly", async () => {
     const { width, height } = surface;
@@ -121,6 +121,6 @@ describe("Group", () => {
         />
       </FitBox>
     );
-    await checkImage(img, docPath("group/scale-path.png"));
+    checkImage(img, docPath("group/scale-path.png"));
   });
 });

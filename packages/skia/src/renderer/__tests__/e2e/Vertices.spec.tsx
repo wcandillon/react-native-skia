@@ -14,7 +14,7 @@ describe("Vertices", () => {
         <Vertices vertices={vertices} colors={colors} />
       </>
     );
-    await checkImage(img, "snapshots/vertices/vertices.png");
+    checkImage(img, "snapshots/vertices/vertices.png");
   });
   it("should draw a single triangle from a Float32Array", async () => {
     const { Skia } = importSkia();
@@ -31,7 +31,7 @@ describe("Vertices", () => {
         <Vertices vertices={vertices} colors={colors} />
       </>
     );
-    await checkImage(img, "snapshots/vertices/vertices.png");
+    checkImage(img, "snapshots/vertices/vertices.png");
   });
   it("should draw a single triangle strip", async () => {
     const { vec } = importSkia();
@@ -42,6 +42,6 @@ describe("Vertices", () => {
         <Vertices vertices={vertices} colors={colors} mode="triangleStrip" />
       </>
     );
-    await checkImage(img, "snapshots/vertices/strip.png");
+    checkImage(img, "snapshots/vertices/strip.png");
   });
 });

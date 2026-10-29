@@ -46,7 +46,7 @@ describe("Text Paths", () => {
         </Group>
       </>
     );
-    await checkImage(image, `snapshots/text/text-path-bug-${surface.OS}.png`);
+    checkImage(image, `snapshots/text/text-path-bug-${surface.OS}.png`);
   });
 
   it("Should draw Arabic text along a path", async () => {
@@ -110,7 +110,7 @@ describe("Text Paths", () => {
         width: surface.width,
       }
     );
-    await checkImage(img, `snapshots/text/text-path-arabic-${surface.OS}.png`);
+    checkImage(img, `snapshots/text/text-path-arabic-${surface.OS}.png`);
   });
 
   it("Should draw Arabic text along a path with TextPath component", async () => {
@@ -132,7 +132,7 @@ describe("Text Paths", () => {
         />
       </>
     );
-    await checkImage(
+    checkImage(
       image,
       `snapshots/text/text-path-arabic-component-${surface.OS}.png`
     );

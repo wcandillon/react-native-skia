@@ -75,7 +75,7 @@ describe("Atlas", () => {
       const paint = Skia.Paint();
       canvas.drawAtlas(tex, srcs, dsts, paint);
     });
-    await checkImage(img, "snapshots/atlas/simple.png");
+    checkImage(img, "snapshots/atlas/simple.png");
   });
   // it("should test the RSXforms (1)", async () => {
   //   const { Skia } = importSkia();
@@ -134,7 +134,7 @@ describe("Atlas", () => {
         <Circle r={5} color="red" cx={px} cy={py} />
       </Group>
     );
-    await checkImage(img, "snapshots/atlas/rsxform1.png", {
+    checkImage(img, "snapshots/atlas/rsxform1.png", {
       maxPixelDiff: 500,
     });
   });
@@ -166,7 +166,7 @@ describe("Atlas", () => {
         ]}
       />
     );
-    await checkImage(img, "snapshots/atlas/rsxform.png", {
+    checkImage(img, "snapshots/atlas/rsxform.png", {
       maxPixelDiff: 500,
     });
   });
@@ -185,7 +185,7 @@ describe("Atlas", () => {
         transforms={[Skia.RSXform(0.5, 0, 0, 0), Skia.RSXform(0, 0.5, 50, 50)]}
       />
     );
-    await checkImage(img, "snapshots/atlas/simple2.png", {
+    checkImage(img, "snapshots/atlas/simple2.png", {
       maxPixelDiff: 500,
     });
   });
@@ -206,7 +206,7 @@ describe("Atlas", () => {
         transforms={[Skia.RSXform(1, 0, 0, 0), Skia.RSXform(1, 0, 0, 0)]}
       />
     );
-    await checkImage(img, "snapshots/atlas/identity.png");
+    checkImage(img, "snapshots/atlas/identity.png");
   });
   it("Atlas documentation example", async () => {
     const { Skia, rect, drawAsImage } = importSkia();
@@ -247,7 +247,7 @@ describe("Atlas", () => {
     const img = await surface.draw(
       <Atlas image={texture} sprites={sprites} transforms={transforms} />
     );
-    await checkImage(img, docPath("atlas/hello-world.png"), {
+    checkImage(img, docPath("atlas/hello-world.png"), {
       maxPixelDiff: 500,
     });
   });
@@ -319,7 +319,7 @@ describe("Atlas", () => {
         colors={colors}
       />
     );
-    await checkImage(img, docPath("atlas/colors.png"), {
+    checkImage(img, docPath("atlas/colors.png"), {
       maxPixelDiff: 500,
     });
   });
@@ -364,7 +364,7 @@ describe("Atlas", () => {
         blendMode="screen"
       />
     );
-    await checkImage(img, docPath("atlas/colors-and-blend-mode.png"), {
+    checkImage(img, docPath("atlas/colors-and-blend-mode.png"), {
       maxPixelDiff: 500,
     });
   });
@@ -391,7 +391,7 @@ describe("Atlas", () => {
         colorBlendMode="dstIn"
       />
     );
-    await checkImage(img, docPath("atlas/color-blend-mode.png"), {
+    checkImage(img, docPath("atlas/color-blend-mode.png"), {
       maxPixelDiff: 500,
     });
   });
@@ -419,13 +419,9 @@ describe("Atlas", () => {
         colorBlendMode="dstIn"
       />
     );
-    await checkImage(
-      img,
-      docPath("atlas/color-blend-mode-and-blend-mode.png"),
-      {
-        maxPixelDiff: 500,
-      }
-    );
+    checkImage(img, docPath("atlas/color-blend-mode-and-blend-mode.png"), {
+      maxPixelDiff: 500,
+    });
   });
   it("should accept null as a texture", async () => {
     const { Skia, rect } = importSkia();
@@ -458,7 +454,7 @@ describe("Atlas", () => {
         blendMode="screen"
       />
     );
-    await checkImage(img, docPath("atlas/null.png"), {
+    checkImage(img, docPath("atlas/null.png"), {
       maxPixelDiff: 500,
     });
   });

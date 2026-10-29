@@ -161,8 +161,7 @@ The following APIs were removed in favor of it:
 | `image.getNativeTextureUnstable()` and `surface.getNativeTextureUnstable()` | `Skia.Image.MakeGPUTextureFromImage()` and `Skia.Surface.MakeFromGPUTexture()`: textures are shared as WebGPU textures. |
 | `makeImageFromView()` and `Skia.Image.MakeImageFromViewTag()` | React Native WebGPU's `queue.drawElementImageToTexture()` draws the view into a texture, which `Skia.Image.MakeFromGPUTexture()` wraps. The snapshot is a GPU image, and on iOS and Android 13+ it never leaves the GPU. See [view snapshots](/docs/webgpu#view-snapshots). |
 | `Skia.Image.MakeImageFromNativeBuffer(pointer)` on native platforms | React Native WebGPU's `copyExternalImageToTexture()` renders the frame into a texture, which `Skia.Image.MakeFromGPUTexture()` wraps. See [native buffers](/docs/webgpu#native-buffers). The method remains on Web as `Skia.Image.MakeFromNativeBuffer()`, where it takes a `CanvasImageSource`. |
-| `ref.current.makeImageSnapshotAsync()` on a `Canvas` | `makeImageSnapshot()`: with Graphite the snapshot is taken on the calling thread and returns a GPU image. Encoding it or reading its pixels is asynchronous. See [snapshots](/docs/canvas/overview#getting-a-canvas-snapshot). |
-| `image.encodeToBytes()`, `image.encodeToBase64()`, `image.readPixels()` and `canvas.readPixels()` returning their result | They return a promise of it: the pixels are read back from the GPU and encoded off the calling thread. `encodeToBytes()` and `encodeToBase64()` reject instead of throwing. See [GPU and CPU images](/docs/images#gpu-and-cpu-images). |
+| `ref.current.makeImageSnapshotAsync()` on a `Canvas` | `makeImageSnapshot()`: with Graphite the snapshot is taken on the calling thread and returns a GPU image. To encode it or read its pixels without blocking, read it back with `image.makeRasterImage()`. See [snapshots](/docs/canvas/overview#getting-a-canvas-snapshot). |
 | `useCanvasSize()` returning `{ ref, size }` | It returns `{ size, onLayout }` and no longer takes a ref: pass `onLayout` to the canvas instead of `ref`, and `size` follows every layout change instead of being measured once. Keep `useCanvasRef()` for the ref: its `size` property reads the layout synchronously. See [canvas size](/docs/canvas/overview#canvas-size). |
 
 `<SkiaPictureView picture={picture} />` was removed as well. Draw the picture in a canvas instead, which renders it the same way:
@@ -185,7 +184,7 @@ A few methods were renamed so that the name says whether the result lives on the
 |:--|:--|
 | `Skia.Surface.Make(width, height)` | `Skia.Surface.MakeRaster(width, height)`: a CPU surface. |
 | `Skia.Image.MakeImage(info, data, bytesPerRow)` | `Skia.Image.MakeRaster(info, data, bytesPerRow)`: a CPU image. |
-| `image.makeNonTextureImage()` | `image.makeRasterImage()`: it resolves to the CPU copy and rejects when the readback fails instead of returning `null`. There is no synchronous readback, in a worklet either: `await` it, or chain `then()`. |
+| `image.makeNonTextureImage()` | `image.makeRasterImageSync()`: the synchronous counterpart of `image.makeRasterImage()`, for worklets. It now throws when the readback fails instead of returning `null`. |
 
 Factory methods no longer repeat the name of their namespace: `Skia.Image.MakeImageFromEncoded()` is now `Skia.Image.MakeFromEncoded()`, in line with `Skia.Surface.MakeFromGPUTexture()` or `Skia.SVG.MakeFromString()`.
 

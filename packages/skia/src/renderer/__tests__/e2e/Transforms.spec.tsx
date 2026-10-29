@@ -20,7 +20,7 @@ describe("Transform", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/transform-origin.png");
+    checkImage(image, "snapshots/drawings/transform-origin.png");
   });
 
   it("Should use radians for the skewX transformation", async () => {
@@ -39,7 +39,7 @@ describe("Transform", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/skew-transform.png");
+    checkImage(image, "snapshots/drawings/skew-transform.png");
   });
 
   it("Should use radians for the skewY transformation", async () => {
@@ -58,6 +58,6 @@ describe("Transform", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/skew-transform2.png");
+    checkImage(image, "snapshots/drawings/skew-transform2.png");
   });
 });

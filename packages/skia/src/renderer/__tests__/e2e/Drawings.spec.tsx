@@ -25,7 +25,7 @@ describe("Drawings", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/blend-mode-multiply.png");
+    checkImage(image, "snapshots/drawings/blend-mode-multiply.png");
   });
 
   it("Should use a blur image filter", async () => {
@@ -39,7 +39,7 @@ describe("Drawings", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/blur2.png");
+    checkImage(image, "snapshots/drawings/blur2.png");
   });
 
   it("Should render a transform with the correct origin", async () => {
@@ -62,7 +62,7 @@ describe("Drawings", () => {
         />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/transform-origin.png");
+    checkImage(image, "snapshots/drawings/transform-origin.png");
   });
 
   it("Should do rect marshalling properly", async () => {
@@ -112,7 +112,7 @@ describe("Drawings", () => {
         </Group>
       </FitBox>
     );
-    await checkImage(image, "snapshots/paths/skia.png");
+    checkImage(image, "snapshots/paths/skia.png");
   });
 
   it("Should trim a path properly", async () => {
@@ -137,7 +137,7 @@ describe("Drawings", () => {
         </Group>
       </FitBox>
     );
-    await checkImage(image, "snapshots/paths/skia-trimmed.png");
+    checkImage(image, "snapshots/paths/skia-trimmed.png");
   });
 
   it("Should clamp the trim values automatically (1)", async () => {
@@ -180,7 +180,7 @@ describe("Drawings", () => {
         </Group>
       </FitBox>
     );
-    await checkImage(image, "snapshots/paths/skia.png");
+    checkImage(image, "snapshots/paths/skia.png");
   });
 
   it("Should clamp the trim values automatically (2)", async () => {
@@ -228,7 +228,7 @@ describe("Drawings", () => {
         </Group>
       </FitBox>
     );
-    await checkImage(image, "snapshots/paths/skia.png");
+    checkImage(image, "snapshots/paths/skia.png");
   });
 
   it("should use default props (1)", async () => {
@@ -238,7 +238,7 @@ describe("Drawings", () => {
         <Circle r={128} color="rgba(100, 200, 300, 0.5)" />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/default-props.png");
+    checkImage(image, "snapshots/drawings/default-props.png");
   });
 
   it("should use default props for Images (2)", async () => {
@@ -249,7 +249,7 @@ describe("Drawings", () => {
         <Image image={oslo} x={0} y={0} width={width} height={height} />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/image-default-props.png");
+    checkImage(image, "snapshots/drawings/image-default-props.png");
   });
   it("Should use the zIndex (1)", async () => {
     const { width, height } = surface;
@@ -268,7 +268,7 @@ describe("Drawings", () => {
         />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/zIndex.png");
+    checkImage(image, "snapshots/drawings/zIndex.png");
   });
 
   it("Should use the zIndex (2)", async () => {
@@ -284,7 +284,7 @@ describe("Drawings", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/zIndex2.png");
+    checkImage(image, "snapshots/drawings/zIndex2.png");
   });
   it("Should use negative zIndex", async () => {
     const { width, height } = surface;
@@ -302,7 +302,7 @@ describe("Drawings", () => {
         />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-negative.png");
+    checkImage(image, "snapshots/drawings/zIndex-negative.png");
   });
   it("Should use mixed zIndex", async () => {
     const { width, height } = surface;
@@ -321,7 +321,7 @@ describe("Drawings", () => {
         <Circle cx={width / 2} cy={r} r={r} color="red" zIndex={5} />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-mixed.png");
+    checkImage(image, "snapshots/drawings/zIndex-mixed.png");
   });
   it("Should preserve Paint context when zIndex is applied", async () => {
     const { width, height } = surface;
@@ -335,7 +335,7 @@ describe("Drawings", () => {
         <Rect x={half} y={0} width={half} height={height} zIndex={0} />
       </Group>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-paint.png");
+    checkImage(image, "snapshots/drawings/zIndex-paint.png");
   });
   it("Should respect zIndex scoping in sibling Groups", async () => {
     const { width, height } = surface;
@@ -362,7 +362,7 @@ describe("Drawings", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-nested.png");
+    checkImage(image, "snapshots/drawings/zIndex-nested.png");
   });
 
   it("Should respect zIndex on sibling Groups", async () => {
@@ -380,7 +380,7 @@ describe("Drawings", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-groups.png");
+    checkImage(image, "snapshots/drawings/zIndex-groups.png");
   });
 
   it("Should respect zIndex scoping with internal zIndex in sibling Groups", async () => {
@@ -414,7 +414,7 @@ describe("Drawings", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-groups-internal.png");
+    checkImage(image, "snapshots/drawings/zIndex-groups-internal.png");
   });
 
   it("Should respect zIndex in deeply nested Groups", async () => {
@@ -462,6 +462,6 @@ describe("Drawings", () => {
         </Group>
       </>
     );
-    await checkImage(image, "snapshots/drawings/zIndex-nested-deep.png");
+    checkImage(image, "snapshots/drawings/zIndex-nested-deep.png");
   });
 });

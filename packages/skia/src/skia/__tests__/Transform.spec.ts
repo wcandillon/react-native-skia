@@ -7,26 +7,26 @@ import type { SkCanvas } from "../types/Canvas";
 import { setupSkia } from "./setup";
 
 describe("Test transforms", () => {
-  it("Scale and rotate image", async () => {
-    await testImageTransform((canvas) => {
+  it("Scale and rotate image", () => {
+    testImageTransform((canvas) => {
       canvas.scale(0.75, 0.75);
       canvas.rotate(-30, 0, 0);
     }, "snapshots/transform/rotate.png");
   });
 
-  it("Skew image", async () => {
-    await testImageTransform((canvas) => {
+  it("Skew image", () => {
+    testImageTransform((canvas) => {
       canvas.skew(-Math.PI / 6, 0);
     }, "snapshots/transform/skew.png");
   });
 
-  it("Scale image", async () => {
-    await testImageTransform((canvas) => {
+  it("Scale image", () => {
+    testImageTransform((canvas) => {
       canvas.scale(2, 1);
     }, "snapshots/transform/scale.png");
   });
 
-  it("4 scaled and translated rounded rectangles", async () => {
+  it("4 scaled and translated rounded rectangles", () => {
     const { canvas, surface, width, height, center, Skia } = setupSkia();
     const paints = ["#61DAFB", "#fb61da", "#dafb61", "#61fbcf"].map((color) => {
       const paint = Skia.Paint();
@@ -53,14 +53,11 @@ describe("Test transforms", () => {
     canvas.scale(0.5, 0.5);
     canvas.drawRRect(rect, paints[3]);
     canvas.restore();
-    await processResult(surface, "snapshots/transform/rectangles.png");
+    processResult(surface, "snapshots/transform/rectangles.png");
   });
 });
 
-const testImageTransform = async (
-  cb: (canvas: SkCanvas) => void,
-  result: string
-) => {
+const testImageTransform = (cb: (canvas: SkCanvas) => void, result: string) => {
   const { canvas, surface, center, width, Skia } = setupSkia();
   const aspectRatio = 836 / 1324;
   const CARD_WIDTH = width - 64;
@@ -88,5 +85,5 @@ const testImageTransform = async (
   canvas.drawImageRect(image, imgRect, rect, paint);
   canvas.restore();
 
-  await processResult(surface, result);
+  processResult(surface, result);
 };

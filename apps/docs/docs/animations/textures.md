@@ -192,7 +192,7 @@ Never draw the image onto its own surface: use a second surface for a feedback l
 :::info
 
 On the Web, a texture belongs to the WebGL context that created it, and each canvas has its own context.
-Read the snapshot back with `makeRasterImage()` before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
+Call `makeRasterImageSync()` on the snapshot before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
 
 :::
 

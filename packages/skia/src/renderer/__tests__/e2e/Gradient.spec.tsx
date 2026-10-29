@@ -18,7 +18,7 @@ describe("Gradient", () => {
         <LinearGradient colors={colors} start={start} end={end} />
       </Fill>
     );
-    await checkImage(img, "snapshots/gradient/linear.png");
+    checkImage(img, "snapshots/gradient/linear.png");
   });
   it("should display a simple linear gradient with opacity", async () => {
     const vec = (x: number, y: number) => ({ x, y });
@@ -35,6 +35,6 @@ describe("Gradient", () => {
         </Fill>
       </>
     );
-    await checkImage(img, "snapshots/gradient/linear-with-opacity.png");
+    checkImage(img, "snapshots/gradient/linear-with-opacity.png");
   });
 });

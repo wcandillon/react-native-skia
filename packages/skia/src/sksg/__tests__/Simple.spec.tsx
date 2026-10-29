@@ -50,7 +50,7 @@ describe("Simple", () => {
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    await checkImage(image, "snapshots/sksg/simple.png");
+    checkImage(image, "snapshots/sksg/simple.png");
   });
   it("should have a simple render (2)", async () => {
     const { Skia } = importSkia();
@@ -68,7 +68,7 @@ describe("Simple", () => {
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    await checkImage(image, "snapshots/sksg/simple2.png");
+    checkImage(image, "snapshots/sksg/simple2.png");
   });
   it("simple demo", async () => {
     const { Skia } = importSkia();
@@ -105,7 +105,7 @@ describe("Simple", () => {
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    await checkImage(image, "snapshots/sksg/breathe.png");
+    checkImage(image, "snapshots/sksg/breathe.png");
   });
 
   it("simple demo (2)", async () => {
@@ -143,6 +143,6 @@ describe("Simple", () => {
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    await checkImage(image, "snapshots/sksg/breathe-0.png");
+    checkImage(image, "snapshots/sksg/breathe-0.png");
   });
 });

@@ -19,7 +19,7 @@ describe("Renderer", () => {
         <Rect x={0} y={0} width={size} height={size} color="lightblue" />
       </Group>
     );
-    await processResult(surface, "snapshots/transform/scale-origin.png");
+    processResult(surface, "snapshots/transform/scale-origin.png");
   });
   it("Scale with origin using a matrix", async () => {
     const { Skia } = importSkia();
@@ -36,7 +36,7 @@ describe("Renderer", () => {
         <Rect x={0} y={0} width={size} height={size} color="lightblue" />
       </Group>
     );
-    await processResult(surface, "snapshots/transform/scale-origin.png");
+    processResult(surface, "snapshots/transform/scale-origin.png");
   });
   it("Scale with matrix and origin", async () => {
     const { Skia } = importSkia();
@@ -49,7 +49,7 @@ describe("Renderer", () => {
         <Rect x={0} y={0} width={size} height={size} color="lightblue" />
       </Group>
     );
-    await processResult(surface, "snapshots/transform/scale-origin.png");
+    processResult(surface, "snapshots/transform/scale-origin.png");
   });
   it("Should rotate a rectangle to 180deg", async () => {
     const { Skia } = importSkia();
@@ -67,6 +67,6 @@ describe("Renderer", () => {
         />
       </Group>
     );
-    await processResult(surface, "snapshots/transform/rotate-radiants.png");
+    processResult(surface, "snapshots/transform/rotate-radiants.png");
   });
 });

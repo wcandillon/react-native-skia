@@ -29,7 +29,7 @@ describe("Inner shadow", () => {
         />
       </>
     );
-    await checkImage(image, "snapshots/drawings/inner-shadow-translucent.png");
+    checkImage(image, "snapshots/drawings/inner-shadow-translucent.png");
   });
 
   it("should be a no-op without blur and offset on a translucent shape", async () => {
@@ -50,7 +50,7 @@ describe("Inner shadow", () => {
         </RoundedRect>
       </>
     );
-    await checkImage(image, "snapshots/drawings/inner-shadow-translucent.png");
+    checkImage(image, "snapshots/drawings/inner-shadow-translucent.png");
   });
 
   it("Build opaque reference result", async () => {
@@ -67,7 +67,7 @@ describe("Inner shadow", () => {
         />
       </>
     );
-    await checkImage(image, "snapshots/drawings/inner-shadow-opaque.png");
+    checkImage(image, "snapshots/drawings/inner-shadow-opaque.png");
   });
 
   it("should be a no-op without blur and offset on an opaque shape", async () => {
@@ -80,7 +80,7 @@ describe("Inner shadow", () => {
         </RoundedRect>
       </>
     );
-    await checkImage(image, "snapshots/drawings/inner-shadow-opaque.png");
+    checkImage(image, "snapshots/drawings/inner-shadow-opaque.png");
   });
 
   it("Build centered reference result", async () => {
@@ -100,10 +100,7 @@ describe("Inner shadow", () => {
         </Group>
       </>
     );
-    await checkImage(
-      image,
-      "snapshots/drawings/inner-shadow-translucent-center.png"
-    );
+    checkImage(image, "snapshots/drawings/inner-shadow-translucent-center.png");
   });
 
   it("should stay within reach of the blur on a translucent shape", async () => {
@@ -127,10 +124,7 @@ describe("Inner shadow", () => {
         </Group>
       </>
     );
-    await checkImage(
-      image,
-      "snapshots/drawings/inner-shadow-translucent-center.png"
-    );
+    checkImage(image, "snapshots/drawings/inner-shadow-translucent-center.png");
   });
 
   it("should draw the blurred shadow along the edges of a translucent shape", async () => {
@@ -149,9 +143,6 @@ describe("Inner shadow", () => {
         </RoundedRect>
       </>
     );
-    await checkImage(
-      image,
-      "snapshots/drawings/inner-shadow-translucent-blur.png"
-    );
+    checkImage(image, "snapshots/drawings/inner-shadow-translucent-blur.png");
   });
 });
