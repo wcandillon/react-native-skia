@@ -114,16 +114,18 @@ private:
   RNSkPresentedImages() = default;
 
   // Premultiplied 8-bit RGBA, what an Android ARGB_8888 bitmap and a CGImage
-  // both take as they are: in Display P3 where the platform renders in it
-  // (see RNSkPlatformContext::prefersP3ColorSpace) and the image has colors
-  // outside sRGB to keep, as a canvas's frame there does; in sRGB otherwise.
-  // At most as large as the platform draws (see presentedBitmapSize).
+  // both take as they are: in Display P3 where the platform's bitmap can be
+  // (see RNSkPlatformContext::canPresentP3Bitmaps) and the image has colors
+  // outside sRGB to keep, as a static canvas's frame does where its
+  // colorSpace asks for Display P3, whatever the main screen; in sRGB
+  // otherwise. At most as large as the platform draws (see
+  // presentedBitmapSize).
   static SkImageInfo
   presentedInfo(const sk_sp<SkImage> &image,
                 const std::shared_ptr<RNSkPlatformContext> &context) {
     auto colorSpace = SkColorSpace::MakeSRGB();
     auto *imageColorSpace = image->colorSpace();
-    if (context->prefersP3ColorSpace() && imageColorSpace != nullptr &&
+    if (context->canPresentP3Bitmaps() && imageColorSpace != nullptr &&
         !imageColorSpace->isSRGB()) {
       colorSpace = DawnUtils::viewColorSpace(/* useP3ColorSpace= */ true);
     }

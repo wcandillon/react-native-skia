@@ -65,6 +65,8 @@ public:
   std::unique_ptr<PresentedBitmapWriter>
   makePresentedBitmap(const SkImageInfo &info) override;
 
+  bool canPresentP3Bitmaps() override { return true; }
+
   void discardPresentedBitmap(uint32_t id) override;
 
 private:

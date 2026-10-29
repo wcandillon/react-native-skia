@@ -213,8 +213,8 @@ public:
       return nullptr;
     }
     _memory = nullptr;
-    // The pixels are in sRGB or, where the views render in it, Display P3
-    // (see RNSkPresentedImages::presentedInfo).
+    // The pixels are in sRGB or Display P3 (see
+    // RNSkPresentedImages::presentedInfo).
     const bool displayP3 =
         info.colorSpace() != nullptr && !info.colorSpace()->isSRGB();
     CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(

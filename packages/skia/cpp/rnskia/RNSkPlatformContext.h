@@ -179,15 +179,22 @@ public:
 
   /**
    A bitmap the platform draws, of `info`, to write (see
-   PresentedBitmapWriter): premultiplied 8-bit RGBA, in sRGB or Display P3
-   (see prefersP3ColorSpace). nullptr when it could not be made, and on a
-   platform without <SkiaImageView>. Never called on the main thread or a JS
-   thread.
+   PresentedBitmapWriter): premultiplied 8-bit RGBA, in sRGB, or in Display
+   P3 where the platform's bitmap can be (see canPresentP3Bitmaps). nullptr
+   when it could not be made, and on a platform without <SkiaImageView>.
+   Never called on the main thread or a JS thread.
    */
   virtual std::unique_ptr<PresentedBitmapWriter>
   makePresentedBitmap(const SkImageInfo &info) {
     return nullptr;
   }
+
+  /**
+   Whether a presented bitmap can be in Display P3: on Apple platforms,
+   whose CGImage carries its color space on any screen. An Android bitmap
+   is in sRGB, as Android's views render.
+   */
+  virtual bool canPresentP3Bitmaps() { return false; }
 
   /**
    The most bytes one presented bitmap may hold: the platform draws none
