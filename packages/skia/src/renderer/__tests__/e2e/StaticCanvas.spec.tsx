@@ -83,19 +83,23 @@ describe("A static canvas", () => {
     expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "red" });
   });
 
-  // Static canvases present on the worker and a canvas on its window's own
-  // thread: once a lost device is replaced, each presents again, and the
-  // canvas's window takes a surface on the new device only once the lost one
-  // has let go of it (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR otherwise). Whether
-  // the two threads meet there is a matter of timing, hence several losses.
+  // Static canvases present on the worker and the harness's canvas on its
+  // window's own thread: once a lost device is replaced, each presents again,
+  // and the canvas's window takes a surface on the new device only once the
+  // lost one has let go of it (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR otherwise).
+  // The canvas draws before the first loss, since a spec before this one may
+  // have unmounted it, and the second loss finds the surface the first
+  // replacement made.
   itRunsE2eOnly(
     "lets a canvas beside it draw after GPU device losses",
     async () => {
       await surface.screen("StaticCanvas");
-      for (let loss = 0; loss < 4; loss++) {
+      const drawLime = async () =>
+        readScreenColor(await surface.draw(<Fill color="lime" />), 1 / 2);
+      expect(await drawLime()).toBe("green");
+      for (let loss = 0; loss < 2; loss++) {
         expect(await loseGpuDevice()).toEqual([]);
-        const image = await surface.draw(<Fill color="lime" />);
-        expect(readScreenColor(image, 1 / 2)).toBe("green");
+        expect(await drawLime()).toBe("green");
       }
     }
   );
