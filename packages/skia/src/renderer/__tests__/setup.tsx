@@ -11,7 +11,7 @@ import type * as SkiaExports from "../../index";
 import { JsiSkApi } from "../../skia/web/JsiSkia";
 import { Group } from "../components";
 import type { SkImage, SkFont, Skia, SkCanvas } from "../../skia/types";
-import { isPath } from "../../skia/types";
+import { AlphaType, ColorType, isPath } from "../../skia/types";
 import { E2E } from "../../__tests__/setup";
 import { LoadSkiaWeb } from "../../web/LoadSkiaWeb";
 import { SkiaSGRoot } from "../../sksg/Reconciler";
@@ -109,6 +109,74 @@ beforeAll(async () => {
 
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+// A snapshot's colour pipeline can move a channel by a few units, so colours
+// are read as names rather than exact bytes.
+const classifyColor = (red: number, green: number, blue: number) => {
+  if (red < 60 && green > 200 && blue > 200) {
+    return "cyan";
+  }
+  if (red > 200 && green < 60 && blue < 60) {
+    return "red";
+  }
+  if (red < 60 && green < 60 && blue > 200) {
+    return "blue";
+  }
+  if (red < 60 && green > 200 && blue < 60) {
+    return "green";
+  }
+  return null;
+};
+
+export const nameColor = (pixel: ArrayLike<number> | null) => {
+  if (pixel === null) {
+    return "unreadable";
+  }
+  const [red, green, blue] = [pixel[0], pixel[1], pixel[2]];
+  return classifyColor(red, green, blue) ?? `rgb(${red}, ${green}, ${blue})`;
+};
+
+// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
+export const readAllPixels = (image: SkImage) => {
+  const pixels = image.readPixels(0, 0, {
+    width: image.width(),
+    height: image.height(),
+    colorType: ColorType.RGBA_8888,
+    alphaType: AlphaType.Unpremul,
+  });
+  if (pixels === null) {
+    throw new Error("The snapshot has no readable pixels");
+  }
+  return pixels;
+};
+
+// The pixels of a screen snapshot in each colour it names.
+export const countColors = (image: SkImage) => {
+  const pixels = readAllPixels(image);
+  const counts = { cyan: 0, red: 0, blue: 0, green: 0 };
+  for (let i = 0; i < pixels.length; i += 4) {
+    const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
+    if (color !== null) {
+      counts[color]++;
+    }
+  }
+  return counts;
+};
+
+// The colour of the screen at a fraction of its width and of its height.
+export const readScreenColor = (image: SkImage, fraction: number) =>
+  nameColor(
+    image.readPixels(
+      Math.round(image.width() * fraction),
+      Math.round(image.height() * fraction),
+      {
+        width: 1,
+        height: 1,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Unpremul,
+      }
+    )
+  );
 
 // Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start
 // with the 0x89 signature and base64/other JSON responses won't carry $$error,
