@@ -11,6 +11,8 @@ import {
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
 } from "./ClippedSubviews";
+import { Empty } from "./Empty";
+import { GpuReplacement } from "./GpuReplacement";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { CanvasAboveImageView, ImageView, ImageViewRounded } from "./ImageView";
 import { ImageViewMinified, ImageViewMinifiedOdd } from "./ImageViewMinified";
@@ -55,6 +57,8 @@ export const Screens: Readonly<Record<string, Screen>> = {
   ),
   ClippedSubviewsStateChanged: settling(ClippedSubviewsStateChanged),
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
+  Empty: shown(Empty),
+  GpuReplacement: shown(GpuReplacement),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
   ImageView: shown(ImageView),

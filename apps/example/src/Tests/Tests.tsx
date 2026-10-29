@@ -5,7 +5,12 @@ import { PixelRatio, Text, View } from "react-native";
 
 import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
-import { forceGpuDeviceLoss, getSharedDevice } from "./GpuDevice";
+import {
+  forceGpuDeviceLoss,
+  getSharedDevice,
+  mapGpuBuffer,
+  mappedGpuBufferState,
+} from "./GpuDevice";
 import { ScreenDoneContext } from "./ScreenDone";
 import type { Screen } from "./Screens";
 import { Screens } from "./Screens";
@@ -86,6 +91,9 @@ export const Tests = ({ assets }: TestsProps) => {
   // Whether the screen shown has settled (see useScreenDone).
   const [screenDone, setScreenDone] = useState(false);
   const markScreenDone = useCallback(() => setScreenDone(true), []);
+  // The harness's own canvas holds a window on the GPU device: the Gpu spec
+  // unmounts it until the next drawing, to lose a device no window holds.
+  const [canvasShown, setCanvasShown] = useState(true);
 
   useEffect(() => {
     if (client !== null) {
@@ -104,11 +112,15 @@ export const Tests = ({ assets }: TestsProps) => {
               Skia,
               // The worklet serializer spec needs app-side worklets (see
               // workletSerialization.ts), and the Gpu spec a way to lose the
-              // device; hand them over through the context.
+              // device and to tell whether it was destroyed; hand them over
+              // through the context.
               ctx: {
                 ...parseProps(tree.ctx, assets),
                 workletSerialization,
                 forceGpuDeviceLoss,
+                mapGpuBuffer,
+                mappedGpuBufferState,
+                hideCanvas: () => setCanvasShown(false),
               },
               size: size * PixelRatio.get(),
               scale: s,
@@ -136,6 +148,7 @@ export const Tests = ({ assets }: TestsProps) => {
         } else {
           const node = parseNode(tree, assets);
           setDrawing(node as SerializedNode);
+          setCanvasShown(true);
         }
       };
 
@@ -203,9 +216,11 @@ export const Tests = ({ assets }: TestsProps) => {
           ? `⚪️ Connecting to ${hostname}. Use yarn e2e to run tests.`
           : "🟢 Waiting for the server to send tests"}
       </Text>
-      <Canvas style={{ width: size, height: size }} ref={ref}>
-        <Group transform={[{ scale }]}>{drawing}</Group>
-      </Canvas>
+      {canvasShown ? (
+        <Canvas style={{ width: size, height: size }} ref={ref}>
+          <Group transform={[{ scale }]}>{drawing}</Group>
+        </Canvas>
+      ) : null}
       <View
         style={{ width: size, height: size }}
         ref={viewRef}

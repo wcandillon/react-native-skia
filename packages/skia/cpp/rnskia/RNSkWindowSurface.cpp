@@ -33,18 +33,19 @@ namespace {
 
 // The windows alive, so that every surface made on a lost GPU device can be
 // let go of at once before the device is destroyed (see
-// RNSkWindowSurface::retireReplacedDevice). The mutex guards the list, and
+// RNSkWindowSurface::releaseSurfacesOn). The mutex guards the list, and
 // is held for the whole sweep over it, so that no window goes away under
 // the sweep; it is never taken with a window's mutex held (see the class
-// comment on locks).
+// comment on locks). Never destroyed: the thread replacing a lost device
+// sweeps the list, and a loss can be reported during process teardown.
 std::mutex &windowsMutex() {
-  static std::mutex mutex;
-  return mutex;
+  static auto *mutex = new std::mutex();
+  return *mutex;
 }
 
 std::vector<RNSkWindowSurface *> &windows() {
-  static std::vector<RNSkWindowSurface *> list;
-  return list;
+  static auto *list = new std::vector<RNSkWindowSurface *>();
+  return *list;
 }
 
 } // namespace
@@ -56,8 +57,8 @@ RNSkWindowSurface::RNSkWindowSurface() {
 
 RNSkWindowSurface::~RNSkWindowSurface() {
   // Out of the list before letting go of the surface: the destructor may run
-  // on any thread, and the list is swept by the presenting threads (see
-  // releaseSurfacesOn).
+  // on any thread, and the list is swept by the thread replacing a lost
+  // device (see releaseSurfacesOn).
   {
     std::lock_guard<std::mutex> lock(windowsMutex());
     auto &list = windows();
@@ -89,7 +90,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     return;
   }
   _device = context->getWGPUDevice();
-  _generation.store(DawnContext::generation(), std::memory_order_release);
+  _generation = DawnContext::generation();
   window.surface = context->MakeWGPUSurface(nativeHandle);
   if (!window.surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -187,7 +188,7 @@ void RNSkWindowSurface::detachLocked() {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
   }
-  _generation.store(0, std::memory_order_release);
+  _generation = 0;
   updateTargetInfo();
   if (window != nullptr && window->releaser &&
       window->nativeHandle != nullptr) {
@@ -425,48 +426,15 @@ bool RNSkWindowSurface::isTargetLocked(const RNSkGraphiteTargetInfo &target) {
   return describeLocked() == target;
 }
 
-void RNSkWindowSurface::retireReplacedDevice() {
-  const auto generation = _generation.load(std::memory_order_acquire);
-  if (generation == 0 || generation == DawnContext::generation()) {
-    return;
-  }
-  auto *context = DawnContext::tryGetInstance();
-  if (context == nullptr) {
-    return;
-  }
-  // Once the sweep is through, no window holds a surface on that device:
-  // a window attached meanwhile is configured on the device in use. Two
-  // threads retiring the same device both sweep before either destroys it.
-  releaseSurfacesOn(generation);
-  context->destroyRetiredDevice(generation);
-}
-
-void RNSkWindowSurface::retireUnheldDevice(uint64_t generation) {
-  {
-    std::lock_guard<std::mutex> listLock(windowsMutex());
-    for (auto *window : windows()) {
-      // Under the window's mutex, so that an attach in progress on that
-      // device is through.
-      std::lock_guard<std::mutex> lock(window->_mutex);
-      if (window->_generation.load(std::memory_order_acquire) == generation) {
-        return;
-      }
-    }
-  }
-  if (auto *context = DawnContext::tryGetInstance()) {
-    context->destroyRetiredDevice(generation);
-  }
-}
-
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
     std::lock_guard<std::mutex> lock(window->_mutex);
-    if (window->_generation.load(std::memory_order_acquire) == generation) {
+    if (window->_generation == generation) {
       if (auto *attached = std::get_if<Window>(&window->_attachment)) {
         attached->surface = nullptr;
       }
-      window->_generation.store(0, std::memory_order_release);
+      window->_generation = 0;
     }
   }
 }
@@ -487,18 +455,19 @@ bool RNSkWindowSurface::ensureDeviceLocked() {
 
 bool RNSkWindowSurface::ensureDeviceLocked(Window &window,
                                            uint64_t generation) {
-  if (window.surface) {
-    // A surface on a device replaced since the sweep (see
-    // retireReplacedDevice) is let go of on the next frame, not configured
-    // on a device that is gone.
-    return _generation.load(std::memory_order_acquire) == generation;
+  if (window.surface && _generation == generation) {
+    return true;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
+  // A surface attach() made while its device was being replaced, after the
+  // sweep (see releaseSurfacesOn), is made again: it was never configured,
+  // since nothing presents on a lost device.
+  window.surface = nullptr;
   _device = context->getWGPUDevice();
-  _generation.store(generation, std::memory_order_release);
+  _generation = generation;
   window.surface = context->MakeWGPUSurface(window.nativeHandle);
   if (!window.surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -538,7 +507,6 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
 bool RNSkWindowSurface::presentRecordings(
     const RNSkGraphiteTargetInfo &target,
     const std::vector<skgpu::graphite::Recording *> &recordings) {
-  retireReplacedDevice();
   std::lock_guard<std::mutex> lock(_mutex);
   // The device check first: it may configure the window again.
   if (readStateLocked(nullptr) != RNSkWindowState::kReady ||
@@ -607,7 +575,6 @@ bool RNSkWindowSurface::presentRecordingsLocked(
 
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
                                      const sk_sp<SkImage> &image) {
-  retireReplacedDevice();
   std::lock_guard<std::mutex> lock(_mutex);
   if (readStateLocked(nullptr) != RNSkWindowState::kReady ||
       !ensureDeviceLocked() || !isTargetLocked(target)) {

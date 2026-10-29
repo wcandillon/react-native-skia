@@ -138,7 +138,7 @@ private:
   // hold up every view's frame. A CPU image is scaled into the bitmap. A
   // readback's mapped memory goes with the GPU device that made it, which a
   // loss may destroy as soon as the readback's callback returns (see
-  // DawnContext::destroyRetiredDevice), so its rows are copied into the
+  // DawnContext::recover), so its rows are copied into the
   // bitmap in the callback, the one thing done there.
   void produce(uint32_t id, uint64_t generation, const sk_sp<SkImage> &image,
                const std::weak_ptr<RNSkPlatformContext> &weakContext) {

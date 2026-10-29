@@ -25,3 +25,16 @@ export const forceGpuDeviceLoss = () => {
     getSharedDevice() as GPUDevice & { forceLossForTesting: () => void }
   ).forceLossForTesting();
 };
+
+// A buffer of the device Skia renders with, mapped as it is made, which tells
+// a destroyed device from a lost one (the Gpu spec): Dawn unmaps the buffers
+// of a destroyed device, and a loss alone leaves them mapped.
+let mappedBuffer: GPUBuffer | null = null;
+export const mapGpuBuffer = () => {
+  mappedBuffer = getSharedDevice().createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+    mappedAtCreation: true,
+  });
+};
+export const mappedGpuBufferState = () => mappedBuffer?.mapState ?? null;
