@@ -26,6 +26,36 @@ describe("SkiaGraphiteView", () => {
     }
   );
 
+  // A canvas waits for its size before it records; JS, which asks for the
+  // recording itself, is told why it cannot have one yet.
+  itRunsE2eOnly(
+    "tells JS that a view without a size cannot record",
+    async () => {
+      const outcome = await surface.eval(() => {
+        // An id no view takes: theirs count up from 1000, one per mount.
+        const nativeId = 2 ** 31;
+        const { SkiaViewApi } = globalThis;
+        const context = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          0,
+          0,
+          false,
+          false
+        );
+        try {
+          context.beginRecording();
+          context.finishRecording();
+          return "recorded";
+        } catch (e) {
+          return (e as Error).message;
+        } finally {
+          SkiaViewApi.destroyGraphiteContext(nativeId);
+        }
+      });
+      expect(outcome).toContain("SkiaGraphiteView: the view has no size yet.");
+    }
+  );
+
   // StrictMode runs the view's unmount cleanup once right after mount and
   // keeps the context the first effect run made. A native view registering
   // after that cleanup binds the target that context holds, not a new one:
