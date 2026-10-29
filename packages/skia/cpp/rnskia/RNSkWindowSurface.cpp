@@ -90,7 +90,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     return;
   }
   _device = context->getWGPUDevice();
-  _generation = DawnContext::generation();
+  window.generation = DawnContext::generation();
   window.surface = context->MakeWGPUSurface(nativeHandle);
   if (!window.surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -188,7 +188,6 @@ void RNSkWindowSurface::detachLocked() {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
   }
-  _generation = 0;
   updateTargetInfo();
   if (window != nullptr && window->releaser &&
       window->nativeHandle != nullptr) {
@@ -430,11 +429,10 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
     std::lock_guard<std::mutex> lock(window->_mutex);
-    if (window->_generation == generation) {
-      if (auto *attached = std::get_if<Window>(&window->_attachment)) {
-        attached->surface = nullptr;
-      }
-      window->_generation = 0;
+    auto *attached = std::get_if<Window>(&window->_attachment);
+    if (attached != nullptr && attached->generation == generation) {
+      attached->surface = nullptr;
+      attached->generation = 0;
     }
   }
 }
@@ -455,7 +453,7 @@ bool RNSkWindowSurface::ensureDeviceLocked() {
 
 bool RNSkWindowSurface::ensureDeviceLocked(Window &window,
                                            uint64_t generation) {
-  if (window.surface && _generation == generation) {
+  if (window.surface && window.generation == generation) {
     return true;
   }
   auto *context = DawnContext::tryGetInstance();
@@ -467,7 +465,7 @@ bool RNSkWindowSurface::ensureDeviceLocked(Window &window,
   // since nothing presents on a lost device.
   window.surface = nullptr;
   _device = context->getWGPUDevice();
-  _generation = generation;
+  window.generation = generation;
   window.surface = context->MakeWGPUSurface(window.nativeHandle);
   if (!window.surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");

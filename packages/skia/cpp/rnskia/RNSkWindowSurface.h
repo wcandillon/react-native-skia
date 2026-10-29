@@ -275,6 +275,11 @@ private:
     // Null from a device's replacement until the next frame makes it again
     // on the new device (see releaseSurfacesOn).
     wgpu::Surface surface;
+    // The generation of the device the surface was made on (see
+    // DawnContext::generation()), 0 once the replacement of a lost device let
+    // go of it: a surface made on a device replaced since is made again on
+    // the device in use (see ensureDeviceLocked).
+    uint64_t generation = 0;
     // Attached or resized since the swapchain was configured (see
     // configureIfNeededLocked).
     bool needsConfigure = false;
@@ -386,14 +391,8 @@ private:
   // canvas.
   std::variant<std::monostate, Window, ImageFrames> _attachment;
   // The device the window's surface was made on, or the image presenter
-  // makes its frames on, and the generation of the window's surface (see
-  // DawnContext::generation()): a surface made on a device replaced since is
-  // made again on the device in use by the window's next frame (see
-  // ensureDeviceLocked). The generation is 0 while no window is attached,
-  // and once the replacement of a lost device let go of the surface (see
-  // releaseSurfacesOn). Only a window's surface sets it.
+  // makes its frames on (see ensureDeviceLocked).
   wgpu::Device _device;
-  uint64_t _generation = 0;
   bool _showsFrame = false;
   // isAttachedLocked() as the last attach or detach left it (see
   // isAttached).
