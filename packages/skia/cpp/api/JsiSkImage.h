@@ -407,9 +407,9 @@ public:
                                                        std::move(result)));
                 });
           } else {
-            RNSkWorker::getInstance().post([image, deliver]() {
-              deliver(image->makeRasterImage(nullptr));
-            });
+            RNSkWorker::getInstance().post(
+                [image]() { return image->makeRasterImage(nullptr); },
+                std::move(deliver));
           }
         });
   }
