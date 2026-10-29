@@ -38,8 +38,8 @@ public:
 
   /**
    A promise of the work's result. Rejected when the work throws before it
-   started, when its settling throws on the runtime (a typed array too large
-   for it, say), and right away on a runtime nothing can settle on.
+   started, and when its settling throws on the runtime (a typed array too
+   large for it, say).
    */
   static jsi::Value run(jsi::Runtime &runtime,
                         std::shared_ptr<RNSkPlatformContext> context,
@@ -48,13 +48,6 @@ public:
         runtime, [context = std::move(context), work = std::move(work)](
                      jsi::Runtime &runtime, std::shared_ptr<Promise> promise) {
           auto scheduler = RNSkRuntimeScheduler::get(runtime, context);
-          if (!scheduler->canPost()) {
-            promise->reject(
-                "React Native Skia: nothing can settle a promise on this "
-                "runtime, react-native-worklets did not install "
-                "__skiaScheduleOnUI.");
-            return;
-          }
           scheduler->expectPost(runtime);
           // Completed once: the post expected above is made exactly once,
           // whether by the work or, when the work throws before completing,

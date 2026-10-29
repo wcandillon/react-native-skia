@@ -8,10 +8,12 @@ declare global {
 }
 
 // A promise created on the Reanimated UI runtime (image.makeRasterImage()
-// in a worklet, for instance) is settled there: native hands the settling
-// function, a host function, to this hook on the React Native runtime, and
-// worklets runs it on the UI runtime (see cpp/rnskia/RNSkAsync.h). Without
-// react-native-worklets there is no UI runtime to settle on.
+// in a worklet, for instance) settles there through a timer the runtime
+// arms on itself; this hook settles it sooner, and delivers a lost GPU
+// device right away: native hands a function that drains the runtime's
+// mailbox, a host function, to this hook on the React Native runtime, and
+// worklets runs it on the UI runtime (see cpp/rnskia/RNSkRuntimeScheduler.h).
+// Without react-native-worklets there is no UI runtime to settle on.
 const registerUIRuntimeScheduler = () => {
   try {
     const worklets = require("react-native-worklets");

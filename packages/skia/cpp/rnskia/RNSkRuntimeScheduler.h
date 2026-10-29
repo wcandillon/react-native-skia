@@ -28,19 +28,23 @@ namespace jsi = facebook::jsi;
 
  - The React Native runtime, marked by install() when the bindings are
    installed on it: the CallInvoker, like every native module.
+ - Any other runtime (the Reanimated UI runtime, createWorkletRuntime, a
+   Vision Camera frame processor, a runtime without worklets' marker):
+   nothing can post to it from native, but the runtime has a setTimeout. A
+   job goes into a mailbox, and a timer armed on the runtime itself (see
+   expectPost, called on its thread when the work starts) drains the
+   mailbox, re-arming itself while a job is still to come. The runtime polls
+   its mailbox meanwhile, which only lasts as long as the work does, and
+   never waits for the React Native JS thread: on the UI runtime the timer
+   is one frame of worklets' requestAnimationFrame. A job nobody expects
+   (see postEvent) waits in the mailbox for the next one that is.
  - The Reanimated UI runtime (the `__RUNTIME_KIND` global
-   react-native-worklets sets on each of its runtimes is 2): through the
-   React Native runtime, where `__skiaScheduleOnUI` (installed by
-   src/skia/NativeSetup.ts) hands a native function to worklets'
-   scheduleOnUI, which runs it on the UI runtime.
- - Any other runtime (createWorkletRuntime, a Vision Camera frame processor,
-   a runtime without worklets' marker): nothing can post to it from native,
-   but the runtime has a setTimeout. A job goes into a mailbox, and a timer
-   armed on the runtime itself (see expectPost, called on its thread when
-   the work starts) drains the mailbox, re-arming itself while a job is
-   still to come. The runtime polls its mailbox meanwhile, which only lasts
-   as long as the work does; a job nobody expects (see postEvent) waits in
-   the mailbox for the next one that is.
+   react-native-worklets sets on each of its runtimes is 2), ahead of its
+   timer: through the React Native runtime, where `__skiaScheduleOnUI`
+   (installed by src/skia/NativeSetup.ts) hands a native function to
+   worklets' scheduleOnUI, which drains the mailbox on the UI runtime right
+   away (wakeUI). Best effort, and what delivers a job nobody expects there
+   while none is; a busy JS thread only delays this wake, never the timer.
  */
 class RNSkRuntimeScheduler
     : public std::enable_shared_from_this<RNSkRuntimeScheduler> {
@@ -74,22 +78,13 @@ public:
   }
 
   /**
-   Whether a job posted here reaches the runtime at all. False on the UI
-   runtime once a job found that react-native-worklets did not install
-   `__skiaScheduleOnUI` (that job was lost, and said so): a promise made
-   there has nothing to settle it, so it is rejected right away instead.
-   */
-  bool canPost() const {
-    return _kind != Kind::UI || !sUIUnreachable.load(std::memory_order_acquire);
-  }
-
-  /**
    Tells the scheduler that a post() is coming, from the runtime's thread,
    before the work that will post it starts. A runtime that polls its
-   mailbox starts doing so now; the others have nothing to prepare.
+   mailbox starts doing so now; the React Native runtime has nothing to
+   prepare.
    */
   void expectPost(jsi::Runtime &runtime) {
-    if (_kind != Kind::Mailbox) {
+    if (_kind == Kind::ReactNative) {
       return;
     }
     _expected.fetch_add(1, std::memory_order_acq_rel);
@@ -131,58 +126,76 @@ private:
   // react-native-worklets' RuntimeKind: 1 for React Native, 2 for the UI
   // runtime, more for the runtimes of the app. The React Native runtime is
   // marked by install() and never gets here; any other runtime, marked or
-  // not, can only be reached through its own setTimeout. (A runtime
-  // settling through the CallInvoker would be settled with the React Native
-  // runtime while its promise lives on another: never that by default.)
+  // not, is reached through its own setTimeout, the UI runtime also through
+  // worklets. (A runtime settling through the CallInvoker would be settled
+  // with the React Native runtime while its promise lives on another: never
+  // that by default.)
   static Kind runtimeKind(jsi::Runtime &runtime) {
     auto kind = runtime.global().getProperty(runtime, "__RUNTIME_KIND");
     return kind.isNumber() && kind.asNumber() == 2 ? Kind::UI : Kind::Mailbox;
   }
 
   void enqueue(Job job, bool expected) {
-    switch (_kind) {
-    case Kind::ReactNative:
+    if (_kind == Kind::ReactNative) {
       _context->runOnJavascriptThread(std::move(job));
       return;
-    case Kind::UI:
-      _context->runOnJavascriptThread(
-          [job = std::move(job)](jsi::Runtime &reactNativeRuntime) mutable {
-            scheduleOnUI(reactNativeRuntime, std::move(job));
-          });
-      return;
-    case Kind::Mailbox: {
+    }
+    {
       std::lock_guard<std::mutex> lock(_mailboxMutex);
       _mailbox.push_back({std::move(job), expected});
-      return;
     }
+    if (_kind == Kind::UI) {
+      wakeUI();
     }
   }
 
-  // On the React Native runtime: has worklets run `job` on the UI runtime.
-  // The function handed over is a host function, which worklets passes to
-  // the UI runtime by reference.
-  static void scheduleOnUI(jsi::Runtime &runtime, Job job) {
-    auto schedule = runtime.global().getProperty(runtime, "__skiaScheduleOnUI");
-    if (!schedule.isObject() ||
-        !schedule.asObject(runtime).isFunction(runtime)) {
-      // Nothing can run this job; the promises made on the UI runtime from
-      // now on are rejected instead (see canPost).
-      if (!sUIUnreachable.exchange(true, std::memory_order_acq_rel)) {
-        RNSkLogger::logToConsole(
-            "React Native Skia: nothing can run on the UI runtime, "
-            "react-native-worklets did not install __skiaScheduleOnUI.");
-      }
+  // Best effort, and coalesced (one wake in flight at a time): on the React
+  // Native runtime, worklets runs the function handed to __skiaScheduleOnUI
+  // on the UI runtime, where it drains the mailbox ahead of the next tick.
+  // The function is a host function, which worklets passes by reference.
+  // Without the hook the tick alone runs the expected jobs, and a job nobody
+  // expects waits for the next one that is.
+  void wakeUI() {
+    if (sUIUnreachable.load(std::memory_order_acquire)) {
       return;
     }
-    auto function = jsi::Function::createFromHostFunction(
-        runtime, jsi::PropNameID::forAscii(runtime, "skiaJob"), 0,
-        [job = std::move(job)](jsi::Runtime &uiRuntime, const jsi::Value &,
-                               const jsi::Value *, size_t) -> jsi::Value {
-          job(uiRuntime);
-          return jsi::Value::undefined();
-        });
-    schedule.asObject(runtime).asFunction(runtime).call(runtime,
-                                                        std::move(function));
+    bool expected = false;
+    if (!_wakePending.compare_exchange_strong(expected, true,
+                                              std::memory_order_acq_rel)) {
+      return;
+    }
+    auto self = shared_from_this();
+    _context->runOnJavascriptThread([self](jsi::Runtime &runtime) {
+      auto schedule =
+          runtime.global().getProperty(runtime, "__skiaScheduleOnUI");
+      if (!schedule.isObject() ||
+          !schedule.asObject(runtime).isFunction(runtime)) {
+        self->_wakePending.store(false, std::memory_order_release);
+        if (!sUIUnreachable.exchange(true, std::memory_order_acq_rel)) {
+          RNSkLogger::logToConsole(
+              "React Native Skia: react-native-worklets did not install "
+              "__skiaScheduleOnUI, so the UI runtime settles its promises on "
+              "its own timer alone, and a lost GPU device reaches it with "
+              "its next awaited operation only.");
+        }
+        return;
+      }
+      auto wake = jsi::Function::createFromHostFunction(
+          runtime, jsi::PropNameID::forAscii(runtime, "skiaWake"), 0,
+          [self](jsi::Runtime &uiRuntime, const jsi::Value &,
+                 const jsi::Value *, size_t) -> jsi::Value {
+            // Cleared before the drain: a job posted meanwhile is either in
+            // this drain or gets a wake of its own.
+            self->_wakePending.store(false, std::memory_order_release);
+            auto error = self->drain(uiRuntime);
+            if (error != nullptr) {
+              std::rethrow_exception(error);
+            }
+            return jsi::Value::undefined();
+          });
+      schedule.asObject(runtime).asFunction(runtime).call(runtime,
+                                                          std::move(wake));
+    });
   }
 
   // Schedules a drain of the mailbox on the runtime, through its setTimeout,
@@ -252,12 +265,15 @@ private:
 
   const Kind _kind;
   std::shared_ptr<RNSkPlatformContext> _context;
-  // The mailbox and its timer (Kind::Mailbox only).
+  // The mailbox and its timer (Kind::UI and Kind::Mailbox).
   std::mutex _mailboxMutex;
   std::vector<Entry> _mailbox;
   std::atomic<int> _expected{0};
   std::atomic<bool> _tickArmed{false};
-  // Set once a job for the UI runtime found no way to run there.
+  // A wake through __skiaScheduleOnUI not run yet (Kind::UI).
+  std::atomic<bool> _wakePending{false};
+  // Set once a wake for the UI runtime found no way to run there: the UI
+  // runtime then settles its promises on its own timer alone.
   static inline std::atomic<bool> sUIUnreachable{false};
 };
 
