@@ -532,9 +532,9 @@ using Presentation =
     return;
   }
   // The layer is owned by the view: nothing to release with the window.
-  _surface->attach(
-      (__bridge void *)window.layer, width, height, _highBitDepth,
-      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()), nullptr);
+  _surface->attach((__bridge void *)window.layer, width, height, _highBitDepth,
+                   usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
+                   nullptr);
 }
 
 // A static canvas presents into images of the view's size, and keeps the last
@@ -631,16 +631,17 @@ using Presentation =
   if (!_surface->isAttached()) {
     return;
   }
-  std::visit(RNSkia::Overloaded{
-                 [](std::monostate) {},
-                 [&](WindowPresentation &window) { [self attachWindow:window]; },
-                 [&](ImagePresentation &images) {
-                   [self attachImagePresenter:images
-                                        width:_surface->getWidth()
-                                       height:_surface->getHeight()];
-                 },
-             },
-             _presentation);
+  std::visit(
+      RNSkia::Overloaded{
+          [](std::monostate) {},
+          [&](WindowPresentation &window) { [self attachWindow:window]; },
+          [&](ImagePresentation &images) {
+            [self attachImagePresenter:images
+                                 width:_surface->getWidth()
+                                height:_surface->getHeight()];
+          },
+      },
+      _presentation);
 }
 
 @end
