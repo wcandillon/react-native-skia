@@ -272,8 +272,7 @@ public:
     return RNSkAsync::run(
         runtime, getContext(),
         [image, format, quality, method,
-         resolve = std::move(resolve)](jsi::Runtime &, RNSkAsync::Promise &,
-                                       RNSkAsync::Complete complete) {
+         resolve = std::move(resolve)](RNSkAsync::Complete complete) {
           withRasterImage(image, [=](sk_sp<SkImage> raster) {
             if (raster == nullptr) {
               complete([method](jsi::Runtime &, RNSkAsync::Promise &promise) {
@@ -347,8 +346,7 @@ public:
       sk_sp<SkImage> image, SkImageInfo dstInfo, int srcX, int srcY) {
     return RNSkAsync::run(
         runtime, std::move(context),
-        [image, dstInfo, srcX, srcY](jsi::Runtime &, RNSkAsync::Promise &,
-                                     RNSkAsync::Complete complete) {
+        [image, dstInfo, srcX, srcY](RNSkAsync::Complete complete) {
           // The pixels land in a buffer of their own, copied into the typed
           // array once on the runtime: a JS object cannot be filled from
           // another thread.
@@ -461,17 +459,16 @@ public:
   JSI_HOST_FUNCTION(makeRasterImage) {
     auto image = getObject();
     auto context = getContext();
-    return RNSkAsync::run(
-        runtime, context,
-        [&thisValue, image, context](jsi::Runtime &runtime,
-                                     RNSkAsync::Promise &promise,
-                                     RNSkAsync::Complete complete) {
-          if (!image->isTextureBacked() && !image->isLazyGenerated()) {
-            // Settled right away, on the calling runtime: thisValue is
-            // still valid.
+    if (!image->isTextureBacked() && !image->isLazyGenerated()) {
+      // Already on the CPU: resolves to itself, right away.
+      return RNSkAsync::settled(
+          runtime,
+          [&thisValue](jsi::Runtime &runtime, RNSkAsync::Promise &promise) {
             promise.resolve(jsi::Value(runtime, thisValue));
-            return;
-          }
+          });
+    }
+    return RNSkAsync::run(
+        runtime, context, [image, context](RNSkAsync::Complete complete) {
           auto settle = [context](sk_sp<SkImage> raster) {
             return [context, raster = std::move(raster)](
                        jsi::Runtime &runtime, RNSkAsync::Promise &promise) {

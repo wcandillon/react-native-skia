@@ -142,9 +142,10 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * resolves to itself. Rejects when the readback fails.
    *
    * Readbacks are asynchronous, as the GPU is: there is no synchronous
-   * counterpart. The promise settles on the runtime that called, the React
-   * Native or the Reanimated UI runtime; on a worklet runtime of your own
-   * the call completes before returning.
+   * counterpart. The promise settles on the runtime that called: the React
+   * Native runtime, the Reanimated UI runtime, or a worklet runtime of your
+   * own (which polls for the result through its own setTimeout while it
+   * waits).
    */
   makeRasterImage(): Promise<SkImage>;
 

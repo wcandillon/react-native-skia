@@ -26,9 +26,7 @@ public:
     auto uri = arguments[0].asString(runtime).utf8(runtime);
     auto context = getContext();
     return RNSkAsync::run(
-        runtime, context,
-        [context, uri](jsi::Runtime &, RNSkAsync::Promise &,
-                       RNSkAsync::Complete complete) {
+        runtime, context, [context, uri](RNSkAsync::Complete complete) {
           context->performStreamOperation(
               uri, [context, uri, complete = std::move(complete)](
                        std::unique_ptr<SkStreamAsset> stream) {

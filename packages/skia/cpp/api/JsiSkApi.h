@@ -1,14 +1,17 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "rnskia/RNSkPlatformContext.h"
 
 #include "JsiSkNativeObjects.h"
 #include "jsi/JsiPromises.h"
+#include "rnskia/RNSkRuntimeScheduler.h"
 
 #include "rnskia/RNDawnContext.h"
 
@@ -200,12 +203,6 @@ public:
     return result;
   }
 
-  ~JsiSkApi() override {
-    if (_lossListener != 0) {
-      DawnContext::removeLossListener(_lossListener);
-    }
-  }
-
   // Factory properties: like the legacy HostObject implementation, each
   // property access returns a fresh JS wrapper around the shared factory
   // instance.
@@ -322,31 +319,39 @@ public:
 private:
   /**
    Skia.gpu.lost: the promise of the loss of the device in use, one per
-   device (like WebGPU's GPUDevice.lost, the same promise for every read
-   while the device is in use), resolved on this runtime's thread once React
-   Native Skia has tried to replace the device (see resolveLostPromise).
-   `generation` is the device Skia.gpu describes (see
-   DawnContext::generation()); 0 without a GPU, whose promise never resolves.
+   device and per runtime (like WebGPU's GPUDevice.lost, the same promise for
+   every read while the device is in use), resolved on the runtime that read
+   it once React Native Skia has tried to replace the device. `generation` is
+   the device Skia.gpu describes (see DawnContext::generation()); 0 without
+   a GPU, whose promise never resolves. The pending promise is kept in the
+   runtime's runtimeData, so that it goes with the runtime, and settled
+   through the runtime's scheduler (see RNSkRuntimeScheduler); on a worklet
+   runtime of the app's own, which polls for its results only while it waits
+   for some, the loss is delivered with the next such wait.
    */
   jsi::Value getLostPromise(jsi::Runtime &runtime, uint64_t generation) {
-    if (_lostPromiseValue.has_value() && _lostPromiseGeneration == generation) {
-      return jsi::Value(runtime, *_lostPromiseValue);
+    static const jsi::UUID kSlot(0x7c2a3b4e, 0x6b5f, 0x11f0, 0x8d4b,
+                                 0x0242ac120003ULL);
+    auto slot =
+        std::static_pointer_cast<LostPromise>(runtime.getRuntimeData(kSlot));
+    if (slot == nullptr) {
+      slot = std::make_shared<LostPromise>();
+      runtime.setRuntimeData(kSlot, slot);
+      auto &registry = lostPromises();
+      std::lock_guard<std::mutex> lock(registry.mutex);
+      registry.entries.push_back(
+          {slot, RNSkRuntimeScheduler::get(runtime, getContext())});
+      if (!registry.listening) {
+        // Told of every loss, on the thread that replaced the device: each
+        // runtime settles its own promise on its own thread.
+        registry.listening = true;
+        DawnContext::addLossListener([](const DawnContext::LossInfo &info) {
+          notifyLostPromises(info);
+        });
+      }
     }
-    // The listener is told of every loss, on the thread that replaced the
-    // device: the promise is settled on this runtime's thread, if this
-    // object is still around by then (a reload may have taken it).
-    if (_lossListener == 0) {
-      std::weak_ptr<JsiSkApi> weakThis = this->weak_from_this();
-      auto context = getContext();
-      _lossListener = DawnContext::addLossListener(
-          [weakThis, context](const DawnContext::LossInfo &info) {
-            context->runOnJavascriptThread(
-                [weakThis, info](jsi::Runtime &runtime) {
-                  if (auto self = weakThis.lock()) {
-                    self->resolveLostPromise(runtime, info);
-                  }
-                });
-          });
+    if (slot->value.has_value() && slot->generation == generation) {
+      return jsi::Value(runtime, *slot->value);
     }
     std::shared_ptr<RNJsi::JsiPromises::Promise> promise;
     auto value = RNJsi::JsiPromises::createPromiseAsJSIValue(
@@ -355,33 +360,66 @@ private:
                    std::shared_ptr<RNJsi::JsiPromises::Promise> created) {
           promise = std::move(created);
         });
-    _lostPromiseGeneration = generation;
-    _lostPromise = std::move(promise);
-    _lostPromiseValue.emplace(runtime, value);
+    slot->generation = generation;
+    slot->promise = std::move(promise);
+    slot->value.emplace(runtime, value);
     return value;
   }
 
-  /** Settles Skia.gpu.lost for the device that was lost, if it is pending. */
-  void resolveLostPromise(jsi::Runtime &runtime,
-                          const DawnContext::LossInfo &info) {
-    if (_lostPromise == nullptr || _lostPromiseGeneration != info.generation ||
-        &_lostPromise->runtime_ != &runtime) {
-      return;
-    }
-    auto promise = std::move(_lostPromise);
-    _lostPromiseValue.reset();
-    jsi::Object result(runtime);
-    result.setProperty(runtime, "reason",
-                       jsi::String::createFromUtf8(runtime, info.reason));
-    result.setProperty(runtime, "message",
-                       jsi::String::createFromUtf8(runtime, info.message));
-    promise->resolve(jsi::Value(runtime, result));
+private:
+  /** The pending Skia.gpu.lost of one runtime; owned by the runtime. */
+  struct LostPromise {
+    uint64_t generation = 0;
+    std::shared_ptr<RNJsi::JsiPromises::Promise> promise;
+    std::optional<jsi::Value> value;
+  };
+
+  struct LostPromises {
+    std::mutex mutex;
+    bool listening = false;
+    std::vector<std::pair<std::weak_ptr<LostPromise>,
+                          std::weak_ptr<RNSkRuntimeScheduler>>>
+        entries;
+  };
+
+  // Never destroyed: a loss may be reported during process teardown.
+  static LostPromises &lostPromises() {
+    static auto *registry = new LostPromises();
+    return *registry;
   }
 
-  size_t _lossListener = 0;
-  uint64_t _lostPromiseGeneration = 0;
-  std::shared_ptr<RNJsi::JsiPromises::Promise> _lostPromise;
-  std::optional<jsi::Value> _lostPromiseValue;
+  // Settles the promise of the lost device on every runtime that holds one.
+  // Any thread; the slots and schedulers of runtimes gone since are skipped
+  // and forgotten.
+  static void notifyLostPromises(const DawnContext::LossInfo &info) {
+    auto &registry = lostPromises();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    for (auto it = registry.entries.begin(); it != registry.entries.end();) {
+      auto scheduler = it->second.lock();
+      if (it->first.expired() || scheduler == nullptr) {
+        it = registry.entries.erase(it);
+        continue;
+      }
+      // The slot is captured weakly: it dies with its runtime, on that
+      // runtime's thread, not with a job dropped elsewhere.
+      scheduler->post([weakSlot = it->first, info](jsi::Runtime &runtime) {
+        auto slot = weakSlot.lock();
+        if (slot == nullptr || slot->promise == nullptr ||
+            slot->generation != info.generation) {
+          return;
+        }
+        auto promise = std::move(slot->promise);
+        slot->value.reset();
+        jsi::Object result(runtime);
+        result.setProperty(runtime, "reason",
+                           jsi::String::createFromUtf8(runtime, info.reason));
+        result.setProperty(runtime, "message",
+                           jsi::String::createFromUtf8(runtime, info.message));
+        promise->resolve(jsi::Value(runtime, result));
+      });
+      ++it;
+    }
+  }
 
   std::shared_ptr<JsiSkSVGFactory> _svgFactory;
   std::shared_ptr<JsiSkImageFactory> _imageFactory;

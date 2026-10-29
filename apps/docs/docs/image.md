@@ -107,7 +107,7 @@ image.encodeToBase64().then((base64) => {
 });
 ```
 
-The promise settles on the runtime that called: the JS thread, or the Reanimated UI runtime inside a worklet. On a worklet runtime of your own (`createWorkletRuntime`, a frame processor), nothing can post back to the runtime, so the call completes before it returns and the promise is already settled.
+The promise settles on the runtime that called: the JS thread, the Reanimated UI runtime inside a worklet, or a worklet runtime of your own (`createWorkletRuntime`, a frame processor). Nothing can post to a runtime of your own from native, so while it waits for a result it polls for it through its own `setTimeout`, and only then.
 
 On the Web, a texture belongs to the canvas that created it: `makeTextureImage()` returns the image as is, and `surface.asImage()` is a snapshot.
 

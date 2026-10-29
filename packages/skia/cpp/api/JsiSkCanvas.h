@@ -517,9 +517,8 @@ public:
     auto pixels = SkData::MakeUninitialized(info->computeByteSize(rowBytes));
     if (!canvas->readPixels(*info, pixels->writable_data(), rowBytes, srcX,
                             srcY)) {
-      return RNSkAsync::run(
-          runtime, getContext(),
-          [](jsi::Runtime &, RNSkAsync::Promise &promise, RNSkAsync::Complete) {
+      return RNSkAsync::settled(
+          runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
             promise.resolve(jsi::Value::null());
           });
     }
