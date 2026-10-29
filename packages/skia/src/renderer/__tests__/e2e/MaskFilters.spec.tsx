@@ -2,8 +2,7 @@ import React from "react";
 
 import { BlurMask, Circle, Fill, Group } from "../../components";
 import type { SkImage } from "../../../skia/types";
-import { AlphaType, ColorType } from "../../../skia/types";
-import { surface } from "../setup";
+import { readAllPixels, surface } from "../setup";
 
 // `respectCTM` decides whether the blur sigma is scaled by the current
 // transformation matrix, so it is only observable under a scaled CTM - hence
@@ -29,14 +28,7 @@ const Scene = ({ respectCTM }: { respectCTM?: boolean }) => {
 // Number of pixels the shape and its blur cover: a blur whose sigma follows the
 // CTM reaches considerably further than one that ignores it.
 const coveredArea = (image: SkImage) => {
-  const width = image.width();
-  const height = image.height();
-  const pixels = image.readPixels(0, 0, {
-    width,
-    height,
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Unpremul,
-  })!;
+  const pixels = readAllPixels(image);
   let count = 0;
   for (let i = 0; i < pixels.length; i += 4) {
     if (pixels[i] < 250) {
