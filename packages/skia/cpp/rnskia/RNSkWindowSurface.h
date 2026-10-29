@@ -3,6 +3,7 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -267,19 +268,22 @@ private:
   // Lets go of the Dawn surface and the window, or of the image presenter;
   // see detach(). Called with the mutex held.
   void detachLocked();
+  // A Dawn surface over a window, and the generation of the device it was
+  // made on (see DawnContext::generation()): a surface made on a device
+  // replaced since is made again on the device in use (see
+  // ensureDeviceLocked).
+  struct DawnSurface {
+    wgpu::Surface handle;
+    uint64_t generation;
+  };
   // A window: the native handle, the releaser that gives it back, and the
   // Dawn surface over it (see attach).
   struct Window {
     void *nativeHandle = nullptr;
     Releaser releaser;
-    // Null from a device's replacement until the next frame makes it again
-    // on the new device (see releaseSurfacesOn).
-    wgpu::Surface surface;
-    // The generation of the device the surface was made on (see
-    // DawnContext::generation()), 0 once the replacement of a lost device let
-    // go of it: a surface made on a device replaced since is made again on
-    // the device in use (see ensureDeviceLocked).
-    uint64_t generation = 0;
+    // None from a device's replacement, or a make that failed, until the
+    // next frame makes it on the device in use (see releaseSurfacesOn).
+    std::optional<DawnSurface> surface;
     // Attached or resized since the swapchain was configured (see
     // configureIfNeededLocked).
     bool needsConfigure = false;

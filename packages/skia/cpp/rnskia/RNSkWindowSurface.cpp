@@ -90,21 +90,21 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     return;
   }
   _device = context->getWGPUDevice();
-  window.generation = DawnContext::generation();
-  window.surface = context->MakeWGPUSurface(nativeHandle);
-  if (!window.surface) {
+  const auto generation = DawnContext::generation();
+  auto surface = context->MakeWGPUSurface(nativeHandle);
+  if (!surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     detachLocked();
     return;
   }
+  window.surface = DawnSurface{surface, generation};
   _width = width;
   _height = height;
   _useP3ColorSpace = useP3ColorSpace;
   _format = DawnUtils::PreferredTextureFormat;
   _colorType = DawnUtils::PreferedColorType;
   if (highBitDepth) {
-    if (surfaceSupportsFormat(window.surface,
-                              DawnUtils::HighBitDepthTextureFormat)) {
+    if (surfaceSupportsFormat(surface, DawnUtils::HighBitDepthTextureFormat)) {
       _format = DawnUtils::HighBitDepthTextureFormat;
       _colorType = DawnUtils::HighBitDepthColorType;
     } else {
@@ -113,7 +113,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
           "it, falling back to the 8-bit format");
     }
   }
-  _usage = supportedSurfaceUsage(window.surface);
+  _usage = supportedSurfaceUsage(surface);
   window.needsConfigure = true;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
@@ -182,7 +182,7 @@ void RNSkWindowSurface::detachLocked() {
   auto *window = std::get_if<Window>(&_attachment);
   if (window != nullptr) {
     // The surface goes before the window it draws into.
-    window->surface = nullptr;
+    window->surface.reset();
   }
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
@@ -344,7 +344,7 @@ void RNSkWindowSurface::configureSurface(Window &window) {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
-  window.surface.Configure(&config);
+  window.surface->handle.Configure(&config);
 #ifdef __APPLE__
   // The layer is tagged with the gamut the window renders in; float formats
   // need the (gamma-encoded) extended variant so the values display
@@ -430,9 +430,9 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   for (auto *window : windows()) {
     std::lock_guard<std::mutex> lock(window->_mutex);
     auto *attached = std::get_if<Window>(&window->_attachment);
-    if (attached != nullptr && attached->generation == generation) {
-      attached->surface = nullptr;
-      attached->generation = 0;
+    if (attached != nullptr && attached->surface &&
+        attached->surface->generation == generation) {
+      attached->surface.reset();
     }
   }
 }
@@ -453,7 +453,7 @@ bool RNSkWindowSurface::ensureDeviceLocked() {
 
 bool RNSkWindowSurface::ensureDeviceLocked(Window &window,
                                            uint64_t generation) {
-  if (window.surface && window.generation == generation) {
+  if (window.surface && window.surface->generation == generation) {
     return true;
   }
   auto *context = DawnContext::tryGetInstance();
@@ -463,15 +463,15 @@ bool RNSkWindowSurface::ensureDeviceLocked(Window &window,
   // A surface attach() made while its device was being replaced, after the
   // sweep (see releaseSurfacesOn), is made again: it was never configured,
   // since nothing presents on a lost device.
-  window.surface = nullptr;
+  window.surface.reset();
   _device = context->getWGPUDevice();
-  window.generation = generation;
-  window.surface = context->MakeWGPUSurface(window.nativeHandle);
-  if (!window.surface) {
+  auto surface = context->MakeWGPUSurface(window.nativeHandle);
+  if (!surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     return false;
   }
-  _usage = supportedSurfaceUsage(window.surface);
+  window.surface = DawnSurface{surface, generation};
+  _usage = supportedSurfaceUsage(surface);
   configureSurface(window);
   window.needsConfigure = false;
   updateTargetInfo();
@@ -528,7 +528,7 @@ bool RNSkWindowSurface::presentRecordingsLocked(
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   configureIfNeededLocked(window);
   wgpu::SurfaceTexture surfaceTexture;
-  window.surface.GetCurrentTexture(&surfaceTexture);
+  window.surface->handle.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
     return false;
@@ -553,7 +553,7 @@ bool RNSkWindowSurface::presentRecordingsLocked(
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  window.surface.Present();
+  window.surface->handle.Present();
   _showsFrame = true;
   return true;
 }
@@ -593,7 +593,7 @@ bool RNSkWindowSurface::presentImageLocked(Window &window,
                                            const sk_sp<SkImage> &image) {
   configureIfNeededLocked(window);
   wgpu::SurfaceTexture surfaceTexture;
-  window.surface.GetCurrentTexture(&surfaceTexture);
+  window.surface->handle.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
     return false;
@@ -615,7 +615,7 @@ bool RNSkWindowSurface::presentImageLocked(Window &window,
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  window.surface.Present();
+  window.surface->handle.Present();
   _showsFrame = true;
   return true;
 }
