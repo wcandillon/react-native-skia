@@ -281,8 +281,9 @@ Blending (blend modes, layers, blurs and other image filters) happens in the col
 
 :::
 
-The `colorSpace` prop picks the color space instead: `"srgb"` renders in sRGB on every device, like an offscreen surface (`drawAsImage`, `Skia.Surface.MakeOffscreen`) and [snapshots](#getting-a-canvas-snapshot), which are always in sRGB.
+The `colorSpace` prop picks the color space instead: `"srgb"` renders in sRGB on every device, like `drawAsImage` and `Skia.Surface.MakeOffscreen` do by default (an offscreen surface renders in Display P3 only when asked, with `{ colorSpace: "display-p3" }`).
 An app that previews on screen what it exports offscreen, a photo editor for instance, gets the same colors in both with it.
+[Snapshots](#getting-a-canvas-snapshot) are always in sRGB: a snapshot of a Display P3 canvas is converted to sRGB, so it matches the screen, where the canvas was blended in Display P3.
 `"display-p3"` asks for Display P3 on an Apple device whose display does not have a wide color gamut.
 Android and the Web always render in sRGB: the prop is ignored there.
 

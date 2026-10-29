@@ -73,10 +73,10 @@ export interface CanvasProps extends ViewProps {
   /**
    * The color space the canvas renders in. By default, Display P3 on Apple
    * devices with a wide color gamut display and sRGB everywhere else.
-   * `"srgb"` renders in sRGB on every device, like an offscreen surface
-   * (`drawAsImage`, `Skia.Surface.MakeOffscreen`): blending, blurs and
-   * shaders then give the same colors on screen and in a snapshot. Android
-   * and the web always render in sRGB.
+   * `"srgb"` renders in sRGB on every device, like `drawAsImage` and
+   * `Skia.Surface.MakeOffscreen` do by default: blending, blurs and shaders
+   * then give the same colors on screen and offscreen. Android and the web
+   * always render in sRGB.
    */
   colorSpace?: CanvasColorSpace;
   /**
