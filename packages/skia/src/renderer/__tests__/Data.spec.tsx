@@ -16,9 +16,13 @@ const CheckData = ({}: EmptyProps) => {
   return <Fill color="red" />;
 };
 
-const CheckFont = ({}: EmptyProps) => {
+const CheckFont = ({
+  source = "skia/__tests__/assets/Roboto-Medium.ttf",
+}: {
+  source?: string;
+}) => {
   const { useFont } = importSkia();
-  const font = useFont("skia/__tests__/assets/Roboto-Medium.ttf");
+  const font = useFont(source);
   if (!font) {
     return <Fill color="red" />;
   }
@@ -53,6 +57,30 @@ describe("Data Loading", () => {
     await wait(1500);
     await draw();
     processResult(surface, "snapshots/font/green.png");
+  });
+
+  it("shares a font load and serves later mounts on the first render", async () => {
+    const source = "skia/__tests__/assets/Avenir-Heavy.ttf";
+    const fetchMock = jest.mocked(global.fetch);
+    fetchMock.mockClear();
+    const first = await mountCanvas(
+      <>
+        <CheckFont source={source} />
+        <CheckFont source={source} />
+      </>
+    );
+    await first.draw();
+    await wait(1500);
+    await first.draw();
+    processResult(first.surface, "snapshots/font/green.png");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    first.root.unmount();
+
+    const second = await mountCanvas(<CheckFont source={source} />);
+    await second.draw();
+    processResult(second.surface, "snapshots/font/green.png");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    second.root.unmount();
   });
 
   it("Should load an image", async () => {
