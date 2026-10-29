@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -33,12 +34,23 @@ import {
 // SurfaceView punches through all of them. The zOrderOnTop switch then moves
 // the SurfaceView above the whole window, and zOrderMediaOverlay above the
 // other SurfaceView.
+//
+// The other controls reproduce what happens around a canvas. mounted mounts
+// it afresh, and parent clips takes the clip away, so the stripes around a
+// SurfaceView must survive its hole. shown puts a plain screen in the
+// canvases' place and swaps them back in one frame; they mount again while
+// hidden, so they have their pictures before the swap gives them surfaces,
+// as on a screen navigated to. animate shows the frame rate of the UI thread
+// while the canvas animates, and extra shapes make every frame slower to
+// record.
 
 const backingViews: AndroidBackingView[] = [
   "TextureView",
   "SurfaceView",
   "HardwareBufferView",
 ];
+const extraShapeCounts = [0, 4000, 12000];
+const extraShapeSpacing = 4;
 
 // The options of each kind of view, see AndroidCanvasProps.
 const androidProps = (
@@ -68,13 +80,86 @@ const Stripes = () => (
   </View>
 );
 
+// Every shape is one more command the canvas replays on each frame.
+const ExtraShapes = ({ count }: { count: number }) => {
+  const positions = useMemo(() => {
+    const columns = styles.canvas.width / extraShapeSpacing;
+    const rows = styles.canvas.height / extraShapeSpacing;
+    return Array.from({ length: count }, (_, i) => ({
+      x: extraShapeSpacing / 2 + (i % columns) * extraShapeSpacing,
+      y:
+        extraShapeSpacing / 2 +
+        (Math.floor(i / columns) % rows) * extraShapeSpacing,
+    }));
+  }, [count]);
+  return (
+    <>
+      {positions.map(({ x, y }, i) => (
+        <Circle
+          key={i}
+          cx={x}
+          cy={y}
+          r={1.5}
+          color="rgba(255, 255, 255, 0.4)"
+        />
+      ))}
+    </>
+  );
+};
+
+interface ChipsProps<T extends string | number> {
+  options: T[];
+  value: T;
+  onChange: (value: T) => void;
+}
+
+const Chips = <T extends string | number>({
+  options,
+  value,
+  onChange,
+}: ChipsProps<T>) => (
+  <View style={styles.row}>
+    {options.map((option) => (
+      <Pressable
+        key={option}
+        onPress={() => onChange(option)}
+        style={[styles.chip, option === value && styles.chipActive]}
+      >
+        <Text
+          style={[styles.chipText, option === value && styles.chipTextActive]}
+        >
+          {option}
+        </Text>
+      </Pressable>
+    ))}
+  </View>
+);
+
+interface SwitchRowProps {
+  label: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}
+
+const SwitchRow = ({ label, value, onValueChange }: SwitchRowProps) => (
+  <View style={styles.row}>
+    <Text style={styles.label}>{label}</Text>
+    <Switch value={value} onValueChange={onValueChange} />
+  </View>
+);
+
 export const AndroidViews = () => {
   const [backingView, setBackingView] =
     useState<AndroidBackingView>("TextureView");
   const [opaque, setOpaque] = useState(false);
   const [zOrderOnTop, setZOrderOnTop] = useState(false);
   const [zOrderMediaOverlay, setZOrderMediaOverlay] = useState(false);
+  const [mounted, setMounted] = useState(true);
+  const [shown, setShown] = useState(true);
+  const [hiddenCount, setHiddenCount] = useState(0);
+  const [parentClips, setParentClips] = useState(true);
   const [animate, setAnimate] = useState(true);
+  const [extraShapes, setExtraShapes] = useState(0);
   const clock = useClock();
   const cx = useDerivedValue(
     () => 100 + 60 * Math.sin(clock.value / 500),
@@ -114,27 +199,34 @@ export const AndroidViews = () => {
     <View style={styles.container}>
       <View style={styles.stage}>
         <Stripes />
-        <View style={styles.frame}>
-          <View style={styles.clip}>
-            <Canvas key={backingKey} style={styles.canvas} android={android}>
-              <Fill>
-                <LinearGradient
-                  start={vec(0, 0)}
-                  end={vec(0, 200)}
-                  colors={["rgba(0, 122, 255, 0.6)", "rgba(88, 86, 214, 0.6)"]}
-                />
-              </Fill>
-              <Circle cx={animate ? cx : 100} cy={100} r={40} color="white" />
-              {animate && font && (
-                <SkiaText
-                  x={24}
-                  y={36}
-                  text={frameRateLabel}
-                  font={font}
-                  color="white"
-                />
-              )}
-            </Canvas>
+        {!shown && <View style={styles.plainScreen} />}
+        <View key={hiddenCount} style={[styles.frame, !shown && styles.hidden]}>
+          <View style={[styles.clip, !parentClips && styles.unclipped]}>
+            {mounted && (
+              <Canvas key={backingKey} style={styles.canvas} android={android}>
+                <Fill>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(0, 200)}
+                    colors={[
+                      "rgba(0, 122, 255, 0.6)",
+                      "rgba(88, 86, 214, 0.6)",
+                    ]}
+                  />
+                </Fill>
+                <ExtraShapes count={extraShapes} />
+                <Circle cx={animate ? cx : 100} cy={100} r={40} color="white" />
+                {animate && font && (
+                  <SkiaText
+                    x={24}
+                    y={36}
+                    text={frameRateLabel}
+                    font={font}
+                    color="white"
+                  />
+                )}
+              </Canvas>
+            )}
           </View>
           {surfaceView && (
             <Canvas
@@ -159,49 +251,54 @@ export const AndroidViews = () => {
           <Text style={styles.overlayText}>RN view above the canvas</Text>
         </View>
       </View>
-      <View style={styles.controls}>
+      <ScrollView
+        style={styles.controls}
+        contentContainerStyle={styles.controlsContent}
+      >
         <Text style={styles.label}>android.backingView</Text>
-        <View style={styles.row}>
-          {backingViews.map((view) => (
-            <Pressable
-              key={view}
-              onPress={() => setBackingView(view)}
-              style={[styles.chip, view === backingView && styles.chipActive]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  view === backingView && styles.chipTextActive,
-                ]}
-              >
-                {view}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>android.opaque</Text>
-          <Switch value={opaque} onValueChange={setOpaque} />
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>
-            android.zOrderOnTop (SurfaceView only)
-          </Text>
-          <Switch value={zOrderOnTop} onValueChange={setZOrderOnTop} />
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>
-            android.zOrderMediaOverlay (SurfaceView only)
-          </Text>
-          <Switch
-            value={zOrderMediaOverlay}
-            onValueChange={setZOrderMediaOverlay}
-          />
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>animate</Text>
-          <Switch value={animate} onValueChange={setAnimate} />
-        </View>
+        <Chips
+          options={backingViews}
+          value={backingView}
+          onChange={setBackingView}
+        />
+        <SwitchRow
+          label="android.opaque"
+          value={opaque}
+          onValueChange={setOpaque}
+        />
+        <SwitchRow
+          label="android.zOrderOnTop (SurfaceView only)"
+          value={zOrderOnTop}
+          onValueChange={setZOrderOnTop}
+        />
+        <SwitchRow
+          label="android.zOrderMediaOverlay (SurfaceView only)"
+          value={zOrderMediaOverlay}
+          onValueChange={setZOrderMediaOverlay}
+        />
+        <SwitchRow label="mounted" value={mounted} onValueChange={setMounted} />
+        <SwitchRow
+          label="shown"
+          value={shown}
+          onValueChange={(value) => {
+            setShown(value);
+            if (!value) {
+              setHiddenCount((count) => count + 1);
+            }
+          }}
+        />
+        <SwitchRow
+          label="parent clips"
+          value={parentClips}
+          onValueChange={setParentClips}
+        />
+        <SwitchRow label="animate" value={animate} onValueChange={setAnimate} />
+        <Text style={styles.label}>extra shapes</Text>
+        <Chips
+          options={extraShapeCounts}
+          value={extraShapes}
+          onChange={setExtraShapes}
+        />
         <Text style={styles.hint}>
           The backing view is created when the canvas mounts: a chip remounts
           the canvas (HardwareBufferView is not available in Skia yet and falls
@@ -211,7 +308,7 @@ export const AndroidViews = () => {
           covers the controls when they overlap, and with zOrderMediaOverlay it
           moves above the other SurfaceView.
         </Text>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -222,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
   },
   stage: {
-    flex: 1,
+    height: 260,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -239,6 +336,16 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: "hidden",
     transform: [{ rotate: "-6deg" }],
+  },
+  unclipped: {
+    overflow: "visible",
+  },
+  hidden: {
+    display: "none",
+  },
+  plainScreen: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#ff9500",
   },
   canvas: {
     width: 260,
@@ -263,6 +370,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   controls: {
+    flex: 1,
+  },
+  controlsContent: {
     padding: 16,
     gap: 12,
   },
