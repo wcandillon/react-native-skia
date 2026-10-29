@@ -242,8 +242,8 @@ public:
   void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
                   std::function<void(ReadResult)> callback) {
     struct Request {
-      DawnContext *context;
       std::function<void(ReadResult)> callback;
+      std::shared_ptr<std::atomic<bool>> delivered;
     };
     auto info = image->imageInfo().makeDimensions(srcRect.size());
     Readback readback;
@@ -256,16 +256,15 @@ public:
         callback(nullptr);
         return;
       }
-      auto *request = new Request{this, std::move(callback)};
-      _pendingReadbacks.fetch_add(1, std::memory_order_acq_rel);
+      readback.delivered = std::make_shared<std::atomic<bool>>(false);
+      auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
           SkImage::RescaleMode::kNearest,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
-            request->context->_pendingReadbacks.fetch_sub(
-                1, std::memory_order_acq_rel);
             request->callback(std::move(result));
+            request->delivered->store(true, std::memory_order_release);
             delete request;
           },
           request);
@@ -1087,7 +1086,8 @@ private:
   }
 
   // The readback thread: for each readback, in order, waits for the GPU to
-  // be done with it, then has its context deliver the result. The wait is
+  // be done with it, then has its context (the one it was asked of: a
+  // generation since lost delivers its own) deliver the result. The wait is
   // Dawn's own (Instance::WaitAny, on the queue's completion), so the thread
   // sleeps until the GPU is done rather than polling the context.
   void awaitReadbacks() {
@@ -1106,31 +1106,37 @@ private:
         readback = _readbacks.front();
         _readbacks.pop_front();
       }
-      waiter.WaitAny(readback.done, UINT64_MAX);
-      bool delivered;
+      auto status = waiter.WaitAny(readback.done, UINT64_MAX);
+      if (status != wgpu::WaitStatus::Success) {
+        // Not waited for (an error, or a timed wait Dawn turned down): the
+        // context is asked all the same, and again shortly if need be.
+        RNSkLogger::logToConsole(
+            "React Native Skia: waiting for a readback failed (%d).",
+            static_cast<int>(status));
+      }
       {
         std::lock_guard<std::mutex> lock(_mutex);
         tick();
         readback.generation->context->checkAsyncWorkCompletion();
-        delivered = _pendingReadbacks.load(std::memory_order_acquire) == 0;
-        if (!delivered) {
-          // Dawn may complete the mapping of the read buffer a tick after
-          // the queue's work: the context is asked again after the queue's
-          // next completion (which is immediate when it is idle).
-          readback.done = workDone(readback.generation);
+        if (readback.delivered->load(std::memory_order_acquire)) {
+          continue;
         }
+        // Dawn may complete the mapping of the read buffer a tick after the
+        // queue's work: the context is asked again after the queue's next
+        // completion (which is immediate when it is idle).
+        readback.done = workDone(readback.generation);
       }
-      if (!delivered) {
-        std::unique_lock<std::mutex> lock(_readbacksMutex);
-        if (_readbacks.empty()) {
-          // Nothing else to wait for would ask the context: ask again
-          // shortly.
-          lock.unlock();
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
-          lock.lock();
-          _readbacks.push_back(readback);
-        }
+      std::unique_lock<std::mutex> lock(_readbacksMutex);
+      if (_readbacks.empty()) {
+        // Nothing else to wait for in between: ask again shortly, less
+        // often the longer it takes.
+        lock.unlock();
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(readback.retries < 2 ? 1 : 4));
+        lock.lock();
       }
+      readback.retries++;
+      _readbacks.push_back(readback);
     }
   }
 
@@ -1225,8 +1231,11 @@ private:
   struct Readback {
     Generation *generation = nullptr;
     wgpu::Future done;
+    // Set by the readback's callback (see readPixels), once it ran.
+    std::shared_ptr<std::atomic<bool>> delivered;
+    // The times the context was asked without the callback having run.
+    int retries = 0;
   };
-  std::atomic<int> _pendingReadbacks{0};
   std::once_flag _readbackThreadOnce;
   std::mutex _readbacksMutex;
   std::condition_variable _readbacksCondition;
