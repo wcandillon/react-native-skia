@@ -25,6 +25,7 @@ import {
   CanvasAboveStaticCanvas,
   StaticCanvas,
   StaticCanvasChurn,
+  StaticCanvasColorSpace,
 } from "./StaticCanvas";
 
 // When Tests snapshots a screen: once it is mounted, or once it says it has
@@ -70,4 +71,5 @@ export const Screens: Readonly<Record<string, Screen>> = {
   SharedValueReads: shown(SharedValueReads),
   StaticCanvas: shown(StaticCanvas),
   StaticCanvasChurn: settling(StaticCanvasChurn),
+  StaticCanvasColorSpace: shown(StaticCanvasColorSpace),
 };

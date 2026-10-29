@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useWindowDimensions, View } from "react-native";
-import { Canvas, Fill, Rect } from "react-native-skia";
+import type { CanvasColorSpace } from "react-native-skia";
+import { Canvas, Fill, Rect, Shader, Skia } from "react-native-skia";
 
 import { useScreenDone } from "../ScreenDone";
 
@@ -31,6 +32,41 @@ export const CanvasAboveStaticCanvas = () => {
     </View>
   );
 };
+
+// A shader's colours are not managed: each canvas reads these values in its
+// own color space.
+const unmanagedColor = Skia.RuntimeEffect.Make(`
+half4 main(float2 p) {
+  return half4(0.5, 0.75, 0.25, 1.0);
+}`)!;
+
+interface UnmanagedColorProps {
+  readonly colorSpace: CanvasColorSpace;
+  readonly static?: boolean;
+}
+
+const UnmanagedColor = (props: UnmanagedColorProps) => (
+  <Canvas style={{ flex: 1 }} {...props}>
+    <Fill>
+      <Shader source={unmanagedColor} />
+    </Fill>
+  </Canvas>
+);
+
+// Canvases in sRGB on the left and in Display P3 on the right, regular ones
+// above and static ones below, each filled with the shader's colour.
+export const StaticCanvasColorSpace = () => (
+  <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <UnmanagedColor colorSpace="srgb" />
+      <UnmanagedColor colorSpace="display-p3" />
+    </View>
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <UnmanagedColor colorSpace="srgb" static />
+      <UnmanagedColor colorSpace="display-p3" static />
+    </View>
+  </View>
+);
 
 const CHURNED_CANVASES = 60;
 const CHURN_CYCLES = 24;

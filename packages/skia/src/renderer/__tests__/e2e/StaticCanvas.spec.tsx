@@ -6,9 +6,11 @@ import {
 } from "../../../__tests__/setup";
 import { Fill } from "../../components";
 import {
+  largestChannelDifference,
   loseGpuDevice,
   readScreenColor,
   readScreenHalves,
+  readScreenQuarterPixels,
   readScreenQuarters,
   surface,
 } from "../setup";
@@ -54,6 +56,22 @@ describe("A static canvas", () => {
         bottomLeft: "white",
         bottomRight: "black",
       });
+    }
+  );
+
+  // The screen's shader colour is not managed: it looks more saturated in
+  // Display P3 than in sRGB, which the snapshot, in sRGB, shows. Android
+  // renders in sRGB whatever the prop says.
+  itRunsE2eOnly(
+    "renders in the color space colorSpace asks for, as a canvas does",
+    async () => {
+      const { topLeft, topRight, bottomLeft, bottomRight } =
+        readScreenQuarterPixels(await surface.screen("StaticCanvasColorSpace"));
+      expect(largestChannelDifference(bottomLeft, topLeft)).toBeLessThan(5);
+      expect(largestChannelDifference(bottomRight, topRight)).toBeLessThan(5);
+      expect(largestChannelDifference(topLeft, topRight) >= 5).toBe(
+        surface.OS !== "android"
+      );
     }
   );
 

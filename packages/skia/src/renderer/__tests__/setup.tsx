@@ -201,6 +201,25 @@ const readScreenColorAt = (image: SkImage, x: number, y: number) =>
     )
   );
 
+// The red, green and blue bytes of the screen at fractions of its width and
+// of its height.
+const readScreenPixelAt = (image: SkImage, x: number, y: number) => {
+  const [red, green, blue] = readRegion(
+    image,
+    Math.round(image.width() * x),
+    Math.round(image.height() * y),
+    1,
+    1
+  );
+  return [red, green, blue] as const;
+};
+
+// The largest difference between two pixels' channels.
+export const largestChannelDifference = (
+  pixel: readonly number[],
+  other: readonly number[]
+) => Math.max(...pixel.map((value, index) => Math.abs(value - other[index])));
+
 // The colour of the screen at a fraction of its width and of its height.
 export const readScreenColor = (image: SkImage, fraction: number) =>
   readScreenColorAt(image, fraction, fraction);
@@ -211,14 +230,20 @@ export const readScreenHalves = (image: SkImage) => ({
   bottom: readScreenColor(image, 3 / 4),
 });
 
-// The left and right of the top and bottom halves of a screen whose views
-// split it in two.
-export const readScreenQuarters = (image: SkImage) => ({
-  topLeft: readScreenColorAt(image, 1 / 4, 1 / 4),
-  topRight: readScreenColorAt(image, 3 / 4, 1 / 4),
-  bottomLeft: readScreenColorAt(image, 1 / 4, 3 / 4),
-  bottomRight: readScreenColorAt(image, 3 / 4, 3 / 4),
+// What `read` answers at the left and right of the top and bottom halves of a
+// screen whose views split it in two.
+const atQuarters = <Reading,>(read: (x: number, y: number) => Reading) => ({
+  topLeft: read(1 / 4, 1 / 4),
+  topRight: read(3 / 4, 1 / 4),
+  bottomLeft: read(1 / 4, 3 / 4),
+  bottomRight: read(3 / 4, 3 / 4),
 });
+
+export const readScreenQuarters = (image: SkImage) =>
+  atQuarters((x, y) => readScreenColorAt(image, x, y));
+
+export const readScreenQuarterPixels = (image: SkImage) =>
+  atQuarters((x, y) => readScreenPixelAt(image, x, y));
 
 // The luminance of the middle of a screen, the central half of its width and
 // of its height: its mean and its standard deviation, from 0 to 255.
