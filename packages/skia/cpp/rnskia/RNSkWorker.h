@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include <condition_variable>
@@ -46,6 +47,19 @@ public:
     _condition.notify_one();
   }
 
+  /**
+   * Runs `make` and hands what it returns to `deliver`, both on the worker:
+   * null when `make` throws, which is logged, so `deliver` runs either way.
+   */
+  template <typename Make, typename Deliver>
+  void post(Make make, Deliver deliver) {
+    post([make = std::move(make), deliver = std::move(deliver)]() {
+      std::invoke_result_t<const Make &> result = nullptr;
+      runLoggingFailure([&result, &make]() { result = make(); });
+      deliver(std::move(result));
+    });
+  }
+
 private:
   RNSkWorker() {
     std::thread([this]() { run(); }).detach();
@@ -65,14 +79,17 @@ private:
         job = std::move(_jobs.front());
         _jobs.pop_front();
       }
-      try {
-        job();
-      } catch (const std::exception &error) {
-        RNSkLogger::logToConsole("RNSkia Worker: a job failed: %s",
-                                 error.what());
-      } catch (...) {
-        RNSkLogger::logToConsole("RNSkia Worker: a job failed");
-      }
+      runLoggingFailure(job);
+    }
+  }
+
+  template <typename Work> static void runLoggingFailure(const Work &work) {
+    try {
+      work();
+    } catch (const std::exception &error) {
+      RNSkLogger::logToConsole("RNSkia Worker: a job failed: %s", error.what());
+    } catch (...) {
+      RNSkLogger::logToConsole("RNSkia Worker: a job failed");
     }
   }
 

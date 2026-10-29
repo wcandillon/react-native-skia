@@ -155,6 +155,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * Resolves to a CPU image, without blocking the calling thread: a GPU
    * image is read back from the GPU, an encoded image is decoded on a
    * background thread, and a raster image resolves to itself.
+   * Rejects if the readback or the decode fails.
    *
    * Encoding or reading the pixels of the result is then a CPU operation.
    * The promise resolves on the JS thread: call it from there, not from a
