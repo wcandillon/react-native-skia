@@ -69,9 +69,9 @@ public:
   /**
    The GPU Skia renders with, or why there is none: a device without a
    Vulkan 1.1 driver on Android, a driver short of the WebGPU core
-   requirements, a device creation failure. Probed once per process, the
-   first time the context is asked for (RNSkManager does so when the module
-   is installed), and reported to JS as Skia.gpu.
+   requirements, a device creation failure. Probed once per process, on
+   whichever thread asks for the context first (a view's window, a GPU call,
+   Skia.gpu), and reported to JS as Skia.gpu.
    */
   struct GpuInfo {
     bool available = false;
@@ -135,23 +135,6 @@ public:
                         : " " + current->recoveryFailure;
     }
     return info;
-  }
-
-  /**
-   Starts the probe on a thread of its own, so that installing the module
-   does not wait for the GPU (drivers load, a device and a Graphite context
-   are created). Whoever needs the context first (a view's window, a GPU
-   call, Skia.gpu) waits for the probe to finish instead.
-   */
-  static void probeInBackground() {
-    std::thread([]() {
-#if defined(__APPLE__)
-      pthread_setname_np("RNSkia GPU Probe");
-#elif defined(__ANDROID__)
-      pthread_setname_np(pthread_self(), "RNSkia GPU Probe");
-#endif
-      probe();
-    }).detach();
   }
 
   // Generations ---------------------------------------------------------------
