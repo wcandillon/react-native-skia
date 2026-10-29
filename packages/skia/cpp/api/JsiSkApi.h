@@ -401,8 +401,9 @@ private:
         continue;
       }
       // The slot is captured weakly: it dies with its runtime, on that
-      // runtime's thread, not with a job dropped elsewhere.
-      scheduler->post([weakSlot = it->first, info](jsi::Runtime &runtime) {
+      // runtime's thread, not with a job dropped elsewhere. Nothing expects
+      // this job (see RNSkRuntimeScheduler::postEvent).
+      scheduler->postEvent([weakSlot = it->first, info](jsi::Runtime &runtime) {
         auto slot = weakSlot.lock();
         if (slot == nullptr || slot->promise == nullptr ||
             slot->generation != info.generation) {
