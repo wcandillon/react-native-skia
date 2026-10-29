@@ -1,5 +1,7 @@
 #import "RNSkMetalCanvasProvider.h"
 
+#import <cmath>
+
 #import "RNSkLog.h"
 
 #if defined(SK_GRAPHITE)
@@ -116,10 +118,12 @@ bool RNSkMetalCanvasProvider::presentRecordings(
 }
 #endif
 
-void RNSkMetalCanvasProvider::setSize(int width, int height) {
+void RNSkMetalCanvasProvider::setSize(CGFloat width, CGFloat height) {
   _layer.frame = CGRectMake(0, 0, width, height);
-  auto w = width * _context->getPixelDensity();
-  auto h = height * _context->getPixelDensity();
+  // The layout is on the pixel grid: round rather than truncate, so that a
+  // view whose size comes out as e.g. 169.9999pt still gets all its pixels.
+  int w = static_cast<int>(std::lround(width * _context->getPixelDensity()));
+  int h = static_cast<int>(std::lround(height * _context->getPixelDensity()));
 #if defined(SK_GRAPHITE)
   _ctx = RNSkia::DawnContext::getInstance().MakeWindow((__bridge void *)_layer,
                                                        w, h, _highBitDepth);

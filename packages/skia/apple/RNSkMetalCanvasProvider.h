@@ -36,7 +36,7 @@ public:
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
 #endif
 
-  void setSize(int width, int height);
+  void setSize(CGFloat width, CGFloat height);
   void setUseP3ColorSpace(bool useP3ColorSpace);
   void setHighBitDepth(bool highBitDepth);
   CALayer *getLayer();
