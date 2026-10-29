@@ -370,7 +370,9 @@ private:
    JS measured; in the last two cases with the format and the color space
    the surface has, or will have: the bit depth the platform view knows
    (the one of its backing view, which keeps it, see SkiaView.java), else
-   the one the props call for, following the same rules.
+   the one the props call for, following the same rules; the color space
+   the platform view knows (the colorSpace prop, see SkiaView.mm), else
+   the platform's default.
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkWindowSurface> surface;
@@ -417,7 +419,11 @@ private:
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
-    info.useP3ColorSpace = _context->prefersP3ColorSpace();
+    bool useP3ColorSpace = _context->prefersP3ColorSpace();
+    if (surface) {
+      surface->getUseP3ColorSpace(&useP3ColorSpace);
+    }
+    info.useP3ColorSpace = useP3ColorSpace;
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,

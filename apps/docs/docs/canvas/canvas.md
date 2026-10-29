@@ -16,6 +16,7 @@ Behind the scenes, it is using its own React renderer.
 | onLayout? | `(event: LayoutChangeEvent) => void` | Called with the layout of the canvas whenever it changes (see [canvas size](#canvas-size)) |
 | android? | `AndroidCanvasProps` | Android-only rendering options: the native view behind the canvas and its options, ignored on iOS and web (see [Android rendering options](#android-rendering-options)) |
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
+| colorSpace? | `"srgb" \| "display-p3"` | The color space the canvas renders in, by default the one of the display (see [color space](#color-space)) |
 
 ## Canvas size
 
@@ -276,10 +277,24 @@ Display P3 adds the colors that sRGB cannot represent, for instance the ones of 
 :::info
 
 The colors returned by a [shader](/docs/shaders/overview) are not managed. They are interpreted in the color space of the canvas: the same values look more saturated in Display P3 than in sRGB.
+Blending (blend modes, layers, blurs and other image filters) happens in the color space of the canvas as well: the result of a `multiply` or of a blur differs slightly between Display P3 and sRGB.
 
 :::
 
-[Snapshots](#getting-a-canvas-snapshot) are always in sRGB.
+The `colorSpace` prop picks the color space instead: `"srgb"` renders in sRGB on every device, like an offscreen surface (`drawAsImage`, `Skia.Surface.MakeOffscreen`) and [snapshots](#getting-a-canvas-snapshot), which are always in sRGB.
+An app that previews on screen what it exports offscreen, a photo editor for instance, gets the same colors in both with it.
+`"display-p3"` asks for Display P3 on an Apple device whose display does not have a wide color gamut.
+Android and the Web always render in sRGB: the prop is ignored there.
+
+```tsx twoslash
+import {Canvas, Fill} from "react-native-skia";
+
+const Demo = () => (
+  <Canvas style={{ flex: 1 }} colorSpace="srgb">
+    <Fill color="cyan" />
+  </Canvas>
+);
+```
 
 ## Getting a Canvas Snapshot
 

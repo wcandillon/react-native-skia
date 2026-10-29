@@ -16,7 +16,7 @@ import type {
 
 import { SkiaViewApi } from "../views/api";
 import { androidNativeProps, useBackingViewWarning } from "../views/android";
-import type { AndroidCanvasProps } from "../views/types";
+import type { AndroidCanvasProps, CanvasColorSpace } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
 import type { NativeView } from "../views/measureLayout";
@@ -70,6 +70,15 @@ export interface CanvasProps extends ViewProps {
    * has 2 bits of alpha; it is read once, when the canvas mounts.
    */
   highBitDepth?: boolean;
+  /**
+   * The color space the canvas renders in. By default, Display P3 on Apple
+   * devices with a wide color gamut display and sRGB everywhere else.
+   * `"srgb"` renders in sRGB on every device, like an offscreen surface
+   * (`drawAsImage`, `Skia.Surface.MakeOffscreen`): blending, blurs and
+   * shaders then give the same colors on screen and in a snapshot. Android
+   * and the web always render in sRGB.
+   */
+  colorSpace?: CanvasColorSpace;
   /**
    * Android-only rendering options: the native view behind the canvas and its
    * options, see {@link AndroidCanvasProps}. The view is created when the
@@ -163,6 +172,7 @@ const useCanvasRoot = ({
 export const Canvas = ({
   children,
   highBitDepth = false,
+  colorSpace,
   android,
   ref,
   ...viewProps
@@ -175,6 +185,7 @@ export const Canvas = ({
       collapsable={false}
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
+      colorSpace={colorSpace ?? ""}
       {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />
