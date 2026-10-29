@@ -1,30 +1,5 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
-import { AlphaType, ColorType } from "../../../skia/types";
-import type { SkImage } from "../../../skia/types";
-import { surface } from "../setup";
-
-// A snapshot's colour pipeline can move a channel by a few units, so the
-// screen's cyan is read as a colour rather than exact bytes.
-const readScreenColor = (image: SkImage, fraction: number) => {
-  const pixel = image.readPixels(
-    Math.round(image.width() * fraction),
-    Math.round(image.height() * fraction),
-    {
-      width: 1,
-      height: 1,
-      colorType: ColorType.RGBA_8888,
-      alphaType: AlphaType.Unpremul,
-    }
-  );
-  if (pixel === null) {
-    return "unreadable";
-  }
-  const [red, green, blue] = Array.from(pixel);
-  if (red < 60 && green > 200 && blue > 200) {
-    return "cyan";
-  }
-  return `rgb(${red}, ${green}, ${blue})`;
-};
+import { readScreenColor, surface } from "../setup";
 
 describe("SkiaGraphiteView", () => {
   itRunsE2eOnly(
