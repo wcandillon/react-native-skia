@@ -496,7 +496,7 @@ public:
   // canvas has no readback of its own: the canvas of a surface reads from a
   // snapshot of the surface (a copy task on its recorder, submitted so that
   // the texture can be read back). A canvas without an owning surface (a
-  // picture-recording canvas) reads its raster pixels, on the worker thread.
+  // picture-recording canvas) has its pixels at hand, read right here.
   JSI_HOST_FUNCTION(readPixels) {
     auto srcX = static_cast<int>(arguments[0].asNumber());
     auto srcY = static_cast<int>(arguments[1].asNumber());
@@ -514,17 +514,14 @@ public:
     }
     auto canvas = getCanvas();
     auto rowBytes = info->minRowBytes();
-    auto pixels = SkData::MakeUninitialized(info->computeByteSize(rowBytes));
-    if (!canvas->readPixels(*info, pixels->writable_data(), rowBytes, srcX,
-                            srcY)) {
-      return RNSkAsync::settled(
-          runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
-            promise.resolve(jsi::Value::null());
-          });
+    auto pixels = JsiSkImage::allocatePixels(*info, rowBytes);
+    if (pixels == nullptr) {
+      return JsiSkImage::unreadable(runtime, *info);
     }
-    auto raster = SkImages::RasterFromData(*info, pixels, rowBytes);
-    return JsiSkImage::readPixelsAsync(runtime, getContext(), std::move(raster),
-                                       *info, 0, 0);
+    auto read = canvas->readPixels(*info, pixels->writable_data(), rowBytes,
+                                   srcX, srcY);
+    return RNSkAsync::settled(
+        runtime, JsiSkImage::settlePixels(read ? pixels : nullptr, *info));
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {

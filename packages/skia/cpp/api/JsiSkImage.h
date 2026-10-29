@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,6 +32,7 @@
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/encode/SkWebpEncoder.h"
+#include "include/private/SkMalloc.h"
 
 #pragma clang diagnostic pop
 
@@ -333,49 +336,95 @@ public:
   }
 
   /**
+   Zeroed memory for the pixels of `info` at `rowBytes` (zero is what a read
+   leaves outside the image); nullptr when there is nothing to read into
+   (an empty `info`, an unknown color type) or no memory for it (a size
+   that overflows, or more than there is), where SkData's own constructors
+   would abort the process.
+   */
+  static sk_sp<SkData> allocatePixels(const SkImageInfo &info,
+                                      size_t rowBytes) {
+    if (info.isEmpty() || info.colorType() == kUnknown_SkColorType) {
+      return nullptr;
+    }
+    auto size = info.computeByteSize(rowBytes);
+    if (size == 0 || size == SIZE_MAX) {
+      return nullptr;
+    }
+    auto *memory = sk_calloc_canfail(size);
+    if (memory == nullptr) {
+      return nullptr;
+    }
+    return SkData::MakeFromMalloc(memory, size);
+  }
+
+  /** A promise rejected for a read that no pixels can be allocated for. */
+  static jsi::Value unreadable(jsi::Runtime &runtime, const SkImageInfo &info) {
+    return RNSkAsync::settled(runtime, [info](jsi::Runtime &,
+                                              RNSkAsync::Promise &promise) {
+      promise.reject("readPixels: no pixels can be read into " +
+                     std::to_string(info.width()) + "x" +
+                     std::to_string(info.height()) + " of this color type.");
+    });
+  }
+
+  /**
+   The settling of a promise with `pixels` under `info`: a typed array of
+   the color type of `info` (Float32Array for F32, else Uint8Array), filled
+   on the runtime (a JS object cannot be filled from another thread); null
+   for no pixels.
+   */
+  static RNSkAsync::Settle settlePixels(sk_sp<SkData> pixels,
+                                        SkImageInfo info) {
+    return [pixels = std::move(pixels), info](jsi::Runtime &runtime,
+                                              RNSkAsync::Promise &promise) {
+      if (pixels == nullptr) {
+        promise.resolve(jsi::Value::null());
+        return;
+      }
+      auto dstInfo = info;
+      auto array =
+          RNSkTypedArray::getTypedArray(runtime, jsi::Value::null(), dstInfo);
+      if (!array.isObject()) {
+        promise.resolve(jsi::Value::null());
+        return;
+      }
+      jsi::ArrayBuffer buffer =
+          array.asObject(runtime)
+              .getProperty(runtime,
+                           jsi::PropNameID::forAscii(runtime, "buffer"))
+              .asObject(runtime)
+              .getArrayBuffer(runtime);
+      memcpy(buffer.data(runtime), pixels->data(),
+             std::min(pixels->size(), buffer.size(runtime)));
+      promise.resolve(std::move(array));
+    };
+  }
+
+  /**
    Resolves to the pixels of `image` under `dstInfo` at (srcX, srcY), in a
    typed array of the color type of `dstInfo` (Float32Array for F32, else
    Uint8Array), converted from the image's color and alpha types; to null
-   when nothing could be read. A CPU image is read on the worker thread
-   (decoded if needed). A Graphite image is read back from the GPU, only
-   the requested rectangle: like SkImage::readPixels(), the part of the
-   rectangle outside the image is left untouched, zero.
+   when nothing could be read; rejected for a `dstInfo` no pixels can be
+   allocated for. A CPU image is read on the worker thread (decoded if
+   needed). A Graphite image is read back from the GPU, only the requested
+   rectangle: like SkImage::readPixels(), the part of the rectangle outside
+   the image is left untouched, zero.
    */
   static jsi::Value readPixelsAsync(
       jsi::Runtime &runtime, std::shared_ptr<RNSkPlatformContext> context,
       sk_sp<SkImage> image, SkImageInfo dstInfo, int srcX, int srcY) {
+    auto rowBytes = dstInfo.minRowBytes();
+    auto pixels = allocatePixels(dstInfo, rowBytes);
+    if (pixels == nullptr) {
+      return unreadable(runtime, dstInfo);
+    }
     return RNSkAsync::run(
         runtime, std::move(context),
-        [image, dstInfo, srcX, srcY](RNSkAsync::Complete complete) {
-          // The pixels land in a buffer of their own, copied into the typed
-          // array once on the runtime: a JS object cannot be filled from
-          // another thread.
-          auto rowBytes = dstInfo.minRowBytes();
-          auto pixels =
-              SkData::MakeZeroInitialized(dstInfo.computeByteSize(rowBytes));
+        [image, dstInfo, srcX, srcY, rowBytes,
+         pixels](RNSkAsync::Complete complete) {
           auto settle = [pixels, dstInfo](bool read) {
-            return [pixels, dstInfo, read](jsi::Runtime &runtime,
-                                           RNSkAsync::Promise &promise) {
-              if (!read) {
-                promise.resolve(jsi::Value::null());
-                return;
-              }
-              auto info = dstInfo;
-              auto array = RNSkTypedArray::getTypedArray(
-                  runtime, jsi::Value::null(), info);
-              if (!array.isObject()) {
-                promise.resolve(jsi::Value::null());
-                return;
-              }
-              jsi::ArrayBuffer buffer =
-                  array.asObject(runtime)
-                      .getProperty(runtime,
-                                   jsi::PropNameID::forAscii(runtime, "buffer"))
-                      .asObject(runtime)
-                      .getArrayBuffer(runtime);
-              memcpy(buffer.data(runtime), pixels->data(), pixels->size());
-              promise.resolve(std::move(array));
-            };
+            return settlePixels(read ? pixels : nullptr, dstInfo);
           };
           if (!image->isTextureBacked()) {
             RNSkWorker::getInstance().post([=]() {
@@ -397,15 +446,21 @@ public:
               complete(settle(false));
               return;
             }
-            // The rectangle read, into the matching part of the destination.
-            SkPixmap source(image->imageInfo().makeDimensions(srcRect.size()),
-                            result->data(0), result->rowBytes(0));
-            SkPixmap destination(dstInfo, pixels->writable_data(), rowBytes);
-            SkPixmap subset;
-            auto read = destination.extractSubset(
-                            &subset, srcRect.makeOffset(-srcX, -srcY)) &&
-                        source.readPixels(subset);
-            complete(settle(read));
+            // The callback runs inside the context lock (see
+            // DawnContext::readPixels), which every view's frame waits for:
+            // the conversion of the rectangle read, into the matching part
+            // of the destination, runs on the worker thread instead.
+            auto shared = std::make_shared<ReadResult>(std::move(result));
+            RNSkWorker::getInstance().post([=]() {
+              SkPixmap source(image->imageInfo().makeDimensions(srcRect.size()),
+                              (*shared)->data(0), (*shared)->rowBytes(0));
+              SkPixmap destination(dstInfo, pixels->writable_data(), rowBytes);
+              SkPixmap subset;
+              auto read = destination.extractSubset(
+                              &subset, srcRect.makeOffset(-srcX, -srcY)) &&
+                          source.readPixels(subset);
+              complete(settle(read));
+            });
           });
         });
   }
