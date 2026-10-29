@@ -46,6 +46,21 @@ static bool appIsBackgrounded() {
 #endif // !TARGET_OS_OSX
 }
 
+// The color space the colorSpace prop asks for: "srgb" or "display-p3",
+// else (the prop is not set) the display's: Display P3 on a wide color gamut
+// display, sRGB otherwise (see RNSkPlatformContext::prefersP3ColorSpace).
+static bool
+usesP3ColorSpace(const std::string &colorSpace,
+                 const std::shared_ptr<RNSkia::RNSkPlatformContext> &context) {
+  if (colorSpace == "srgb") {
+    return false;
+  }
+  if (colorSpace == "display-p3") {
+    return true;
+  }
+  return context->prefersP3ColorSpace();
+}
+
 namespace {
 
 #pragma clang diagnostic push
@@ -95,6 +110,8 @@ using Presentation =
   std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
   bool _highBitDepth;
+  // The colorSpace prop, see usesP3ColorSpace.
+  std::string _colorSpace;
   // Whether the native view presents as images, a static canvas: read from
   // the props when the native view is made.
   bool _staticPresentation;
@@ -181,6 +198,7 @@ using Presentation =
 - (void)makeNativeView:(const std::shared_ptr<RNSkia::RNSkManager> &)manager {
   auto context = manager->getPlatformContext();
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
+  _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
   auto canPresent = _canPresent;
   if (_staticPresentation) {
     // The images are 8-bit whatever the prop says, and the frames are
@@ -503,8 +521,8 @@ using Presentation =
 }
 
 // Configures the layer as the Dawn surface of the view at its current size:
-// on every layout, and again when the bit depth changes so that the layer's
-// pixel format follows.
+// on every layout, and again when the bit depth or the color space changes so
+// that the layer's pixel format and color space follow.
 - (void)attachWindow:(WindowPresentation &)window {
   const auto [width, height] = [self pixelSize];
   _surface->setLayoutSize(width, height);
@@ -514,8 +532,9 @@ using Presentation =
     return;
   }
   // The layer is owned by the view: nothing to release with the window.
-  _surface->attach((__bridge void *)window.layer, width, height, _highBitDepth,
-                   _view->getPlatformContext()->prefersP3ColorSpace(), nullptr);
+  _surface->attach(
+      (__bridge void *)window.layer, width, height, _highBitDepth,
+      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()), nullptr);
 }
 
 // A static canvas presents into images of the view's size, and keeps the last
@@ -527,15 +546,23 @@ using Presentation =
     return;
   }
   if (!_surface->isAttached()) {
-    auto presentedFrame = [self presentedFrameOf:images];
-    _surface->attachImagePresenter(
-        width, height, _view->getPlatformContext()->prefersP3ColorSpace(),
-        [presentedFrame](const sk_sp<SkImage> &frame) {
-          presentedFrame->present(frame);
-        });
+    [self attachImagePresenter:images width:width height:height];
   } else if (_surface->getWidth() != width || _surface->getHeight() != height) {
     _surface->resize(width, height);
   }
+}
+
+// The presenter of a static canvas's images, at a size in pixels and in the
+// color space the props ask for.
+- (void)attachImagePresenter:(ImagePresentation &)images
+                       width:(int)width
+                      height:(int)height {
+  auto presentedFrame = [self presentedFrameOf:images];
+  _surface->attachImagePresenter(
+      width, height, usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
+      [presentedFrame](const sk_sp<SkImage> &frame) {
+        presentedFrame->present(frame);
+      });
 }
 
 #pragma mark - Props
@@ -556,6 +583,7 @@ using Presentation =
     _staticPresentation = newProps.staticPresentation;
   }
   [self setHighBitDepth:newProps.highBitDepth];
+  [self setColorSpace:newProps.colorSpace];
   // The android* props (backing view, opacity, z-order) select and set up the
   // backing view on Android; a CAMetalLayer composites like any other layer.
 }
@@ -586,6 +614,33 @@ using Presentation =
   if (_surface->isAttached()) {
     [self attachWindow:*window];
   }
+}
+
+- (void)setColorSpace:(const std::string &)colorSpace {
+  if (_colorSpace == colorSpace) {
+    return;
+  }
+  _colorSpace = colorSpace;
+  if (_surface == nullptr) {
+    return;
+  }
+  // The window, or a static canvas's image presenter, is attached again in
+  // the new color space; until then, frames are recorded for it.
+  _surface->setUseP3ColorSpace(
+      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
+  if (!_surface->isAttached()) {
+    return;
+  }
+  std::visit(RNSkia::Overloaded{
+                 [](std::monostate) {},
+                 [&](WindowPresentation &window) { [self attachWindow:window]; },
+                 [&](ImagePresentation &images) {
+                   [self attachImagePresenter:images
+                                        width:_surface->getWidth()
+                                       height:_surface->getHeight()];
+                 },
+             },
+             _presentation);
 }
 
 @end

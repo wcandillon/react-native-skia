@@ -151,6 +151,11 @@ export interface SkiaImageViewProps extends ViewProps {
   image: SkImage | null;
 }
 
+/**
+ * The color space a canvas renders in, see {@link SkiaBaseViewProps.colorSpace}.
+ */
+export type CanvasColorSpace = "srgb" | "display-p3";
+
 /** The props every Skia view takes, whichever way it is drawn. */
 export interface SkiaBaseViewProps extends ViewProps {
   /**
@@ -161,6 +166,15 @@ export interface SkiaBaseViewProps extends ViewProps {
    * when the canvas mounts.
    */
   highBitDepth?: boolean;
+
+  /**
+   * The color space the canvas renders in. By default, Display P3 on Apple
+   * devices with a wide color gamut display, sRGB everywhere else. Use
+   * `"srgb"` to match offscreen rendering (`drawAsImage`,
+   * `Skia.Surface.MakeOffscreen`, snapshots). Android and the web always
+   * render in sRGB.
+   */
+  colorSpace?: CanvasColorSpace;
 
   /**
    * Draws each frame into an image that a plain view shows, with no surface,

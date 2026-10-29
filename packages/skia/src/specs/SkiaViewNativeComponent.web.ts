@@ -5,6 +5,7 @@ import { SkiaView } from "../views/SkiaView.web";
 
 export interface NativeProps extends ViewProps {
   highBitDepth?: boolean;
+  colorSpace?: string;
   staticPresentation?: boolean;
   nativeID: string;
   androidBackingView?: "TextureView" | "SurfaceView" | "HardwareBufferView";
@@ -18,6 +19,7 @@ const SkiaViewNativeComponent = ({
   onLayout,
   // Surface settings, never reach the DOM
   highBitDepth: _highBitDepth,
+  colorSpace: _colorSpace,
   staticPresentation: _staticPresentation,
   androidBackingView: _androidBackingView,
   androidOpaque: _androidOpaque,
