@@ -633,11 +633,13 @@ public:
     _dispatcher = std::move(dispatcher);
   }
 
-  // Called by the owner of the SkCanvas (JsiSkSurface, JsiSkPictureRecorder,
-  // JsiSkGraphiteContext) once that canvas is gone, and by the destructor:
-  // forgets the pointer and lets go of the surface. The canvas may hold the
-  // last reference to its surface, and the GC may finalize it on any thread:
-  // a Graphite surface has to be destroyed on the thread of its recorder (see
+  // Forgets the pointer and lets go of the surface. Called by the destructor,
+  // and as the SkCanvas ends or goes by JsiSkSurface::releaseResources(),
+  // JsiSkPictureRecorder's beginRecording(), finishRecordingAsPicture(),
+  // releaseResources() and destructor, and RNSkGraphiteTarget's
+  // finishRecording() and destructor. The canvas may hold the last reference
+  // to its surface, and the GC may finalize it on any thread: a Graphite
+  // surface has to be destroyed on the thread of its recorder (see
   // Dispatcher).
   void detach() {
     _canvas = nullptr;

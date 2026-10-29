@@ -104,4 +104,116 @@ describe("SkiaGraphiteView", () => {
       expect(shared).toBe("shares the open recording");
     }
   );
+
+  // Every context made for a view records the view's one recording, so
+  // whichever context finishes it ends the canvas another one began it with.
+  itRunsE2eOnly(
+    "throws when drawing on the canvas of a recording another context finished",
+    async () => {
+      const outcome = await surface.eval((Skia) => {
+        // An id no view and no other case takes: theirs count up from 1000.
+        const nativeId = 2 ** 31 + 1;
+        const { SkiaViewApi } = globalThis;
+        const beginning = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          16,
+          16,
+          false,
+          false
+        );
+        const finishing = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          16,
+          16,
+          false,
+          false
+        );
+        const canvas = beginning.beginRecording();
+        finishing.finishRecording().dispose();
+        try {
+          canvas.drawColor(Skia.Color("cyan"));
+          return "drew";
+        } catch (error) {
+          return (error as Error).message;
+        } finally {
+          beginning.dispose();
+          finishing.dispose();
+          SkiaViewApi.destroyGraphiteContext(nativeId);
+        }
+      });
+      expect(outcome).toContain("recording has finished");
+    }
+  );
+
+  // The context and the registry are the only holders of the target of an id
+  // no view binds: once the context is disposed and the id retired, the target
+  // goes, and its recorder frees the deferred canvas of the open recording.
+  itRunsE2eOnly(
+    "throws when drawing on the canvas of a recording whose target is gone",
+    async () => {
+      const outcome = await surface.eval((Skia) => {
+        // An id no view and no other case takes: theirs count up from 1000.
+        const nativeId = 2 ** 31 + 2;
+        const { SkiaViewApi } = globalThis;
+        const context = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          16,
+          16,
+          false,
+          false
+        );
+        const canvas = context.beginRecording();
+        context.dispose();
+        SkiaViewApi.destroyGraphiteContext(nativeId);
+        try {
+          canvas.drawColor(Skia.Color("cyan"));
+          return "drew";
+        } catch (error) {
+          return (error as Error).message;
+        }
+      });
+      expect(outcome).toContain("recording has finished");
+    }
+  );
+
+  // The view owns its recording state, whether or not JS keeps the context it
+  // began the recording on. Until JS retires an id no view binds, the registry
+  // keeps its target, as it keeps a mounted view's.
+  itRunsE2eOnly(
+    "keeps the recording open when the context that began it is disposed",
+    async () => {
+      const outcome = await surface.eval((Skia) => {
+        // An id no view and no other case takes: theirs count up from 1000.
+        const nativeId = 2 ** 31 + 3;
+        const { SkiaViewApi } = globalThis;
+        const beginning = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          16,
+          16,
+          false,
+          false
+        );
+        const canvas = beginning.beginRecording();
+        beginning.dispose();
+        const finishing = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          16,
+          16,
+          false,
+          false
+        );
+        try {
+          canvas.drawColor(Skia.Color("cyan"));
+          finishing.finishRecording().dispose();
+          return "finished";
+        } catch (error) {
+          return (error as Error).message;
+        } finally {
+          finishing.dispose();
+          SkiaViewApi.destroyGraphiteContext(nativeId);
+        }
+      });
+      expect(outcome).toBe("finished");
+    }
+  );
 });
