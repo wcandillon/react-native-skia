@@ -277,9 +277,13 @@ export const readMiddleLuminance = (image: SkImage) => {
 // (see the Gpu spec), and resolves once Skia has replaced it, with the account
 // of every further loss Skia reports while the views present on the new
 // device: a view that takes a surface on it over a window the lost one still
-// holds loses it too. Such a loss is reported once its own replacement is
-// made, a second after it at the earliest, as a device lost right after it
-// was made counts as an attempt that did not take.
+// holds loses it too, as it first presents there. A device lost within 5 s of
+// being made counts as a replacement that did not take (kShortLived in
+// RNDawnContext.h): the next one waits a second, and twice as long for each
+// such loss in a row, and Skia reports the loss once that replacement is made.
+// The watch lasts those 5 s: a loss a view causes as it first presents is
+// reported within it, and the loss the next test forces finds a device that
+// took.
 export const loseGpuDevice = () =>
   surface.eval(
     // No async/await: the code runs through Hermes' eval on the device.
@@ -299,9 +303,9 @@ export const loseGpuDevice = () =>
         );
       });
     },
-    { watchMilliseconds: 3000 } as {
-      forceGpuDeviceLoss: () => void;
-      watchMilliseconds: number;
+    { watchMilliseconds: 5000 } as {
+      readonly forceGpuDeviceLoss: () => void;
+      readonly watchMilliseconds: number;
     }
   );
 
