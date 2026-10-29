@@ -11,10 +11,10 @@ void JsiPromises::Promise::resolve(const jsi::Value &result) {
 }
 
 void JsiPromises::Promise::reject(const std::string &message) {
-  jsi::Object error(runtime_);
-  error.setProperty(runtime_, "message",
-                    jsi::String::createFromUtf8(runtime_, message));
-  reject_.call(runtime_, error);
+  // A real Error, like a rejection thrown from JS: `instanceof Error` holds
+  // and String(error) carries the message (see the encode rejections in the
+  // ImageEncoding spec).
+  reject_.call(runtime_, jsi::JSError(runtime_, message).value());
 }
 
 jsi::Value
