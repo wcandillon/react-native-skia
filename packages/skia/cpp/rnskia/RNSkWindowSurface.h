@@ -52,9 +52,10 @@ namespace RNSkia {
  * exists (see getLayoutSize).
  *
  * Locks, innermost last: the list of windows (see releaseSurfacesOn), a
- * window's own mutex, the GPU context's (DawnContext). A thread never holds
- * two windows' mutexes at once: windows may present on different threads
- * (every Android canvas shares one, Apple views present on the main thread).
+ * window's own mutex, the GPU context's or its memory release's (DawnContext,
+ * see requestMemoryRelease). A thread never holds two windows' mutexes at
+ * once: windows may present on different threads (every Android canvas shares
+ * one, Apple views present on the main thread).
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
@@ -97,7 +98,9 @@ public:
    Destroys the Dawn surface and gives the native handle back to its
    releaser, once the present in flight, if any, is done: the platform may
    destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, or the destructor.
+   it; the layout size stays. Dawn is then asked for the swapchain's memory
+   back (see DawnContext::requestMemoryRelease). Main thread, or the
+   destructor.
    */
   void detach();
 
