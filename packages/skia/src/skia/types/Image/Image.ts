@@ -139,7 +139,7 @@ export interface SkImage extends SkJSIInstance<"Image"> {
   /**
    * Resolves to a CPU image: a GPU image is read back from the GPU, an
    * encoded image is decoded on a background thread, and a raster image
-   * resolves to itself. Rejects when the readback fails.
+   * resolves to itself. Rejects when the readback or the decode fails.
    *
    * Readbacks are asynchronous, as the GPU is: there is no synchronous
    * counterpart. The promise settles on the runtime that called: the React
