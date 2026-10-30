@@ -332,7 +332,9 @@ const serializeSkOjects = async (obj: any): Promise<any> => {
     // primitives is passed through as is.
     if (
       obj.every(
-        (item) => typeof item !== "object" && typeof item !== "function"
+        (item) =>
+          item === null ||
+          (typeof item !== "object" && typeof item !== "function")
       )
     ) {
       return obj;
