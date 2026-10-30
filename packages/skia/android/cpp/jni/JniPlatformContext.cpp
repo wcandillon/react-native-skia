@@ -9,6 +9,8 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkTypes.h"
 
+#include "RNDawnContext.h"
+
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
@@ -20,7 +22,14 @@ void JniPlatformContext::registerNatives() {
       makeNativeMethod("initHybrid", JniPlatformContext::initHybrid),
       makeNativeMethod("notifyTaskReadyNative",
                        JniPlatformContext::notifyTaskReadyNative),
+      makeNativeMethod("setForegroundNative",
+                       JniPlatformContext::setForegroundNative),
   });
+}
+
+void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
+                                             jboolean foreground) {
+  DawnContext::setForeground(foreground == JNI_TRUE);
 }
 
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,

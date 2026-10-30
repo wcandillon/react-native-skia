@@ -37,6 +37,7 @@ public class SkiaManager {
     }
 
     public void destroy() {
+        mPlatformContext.destroy();
         mHybridData.resetNative();
     }
 

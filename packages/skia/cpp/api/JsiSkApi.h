@@ -200,6 +200,7 @@ public:
                                      : jsi::Value(runtime, string(gpu.error)));
     result.setProperty(runtime, "lost",
                        getLostPromise(runtime, gpu.generation));
+    result.setProperty(runtime, "foreground", DawnContext::isForeground());
     return result;
   }
 

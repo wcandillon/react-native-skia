@@ -56,6 +56,8 @@ describe("GPU info", () => {
     expect(typeof gpu.device).toBe("string");
     expect(typeof gpu.description).toBe("string");
     expect(gpu.lostIsPromise).toBe(true);
+    // The test app is in front while the suite runs.
+    expect(gpu.foreground).toBe(true);
   });
 
   // The device harness forces the loss through react-native-webgpu's

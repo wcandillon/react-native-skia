@@ -28,6 +28,11 @@ public:
 
   static void registerNatives();
 
+  // Whether the app is in the foreground (see DawnContext::isForeground),
+  // from the host activity's lifecycle. Static: it does not need the context,
+  // and outlives it.
+  static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);

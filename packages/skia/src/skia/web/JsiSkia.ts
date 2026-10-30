@@ -150,5 +150,10 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
     description: "",
     error: null,
     lost: new Promise<SkGpuLostInfo>(() => {}),
+    get foreground() {
+      return (
+        typeof document === "undefined" || document.visibilityState !== "hidden"
+      );
+    },
   },
 });
