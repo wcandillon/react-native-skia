@@ -284,16 +284,18 @@ public:
               });
               return;
             }
-            RNSkWorker::getInstance().post([=]() {
-              auto data = encodeImageData(raster, format, quality);
-              complete([=](jsi::Runtime &runtime, RNSkAsync::Promise &promise) {
-                if (data == nullptr) {
-                  promise.reject(std::string(method) + " failed");
-                  return;
-                }
-                resolve(runtime, promise, data);
-              });
-            });
+            RNSkWorker::getInstance().post(
+                [=]() { return encodeImageData(raster, format, quality); },
+                [=](sk_sp<SkData> data) {
+                  complete(
+                      [=](jsi::Runtime &runtime, RNSkAsync::Promise &promise) {
+                        if (data == nullptr) {
+                          promise.reject(std::string(method) + " failed");
+                          return;
+                        }
+                        resolve(runtime, promise, data);
+                      });
+                });
           });
         });
   }
@@ -423,27 +425,31 @@ public:
         runtime, std::move(context),
         [image, dstInfo, srcX, srcY, rowBytes,
          pixels](RNSkAsync::Complete complete) {
-          auto settle = [pixels, dstInfo](bool read) {
-            return settlePixels(read ? pixels : nullptr, dstInfo);
+          auto deliver = [complete, dstInfo](sk_sp<SkData> pixelsRead) {
+            complete(settlePixels(std::move(pixelsRead), dstInfo));
           };
           if (!image->isTextureBacked()) {
-            RNSkWorker::getInstance().post([=]() {
-              complete(settle(image->readPixels(nullptr, dstInfo,
-                                                pixels->writable_data(),
-                                                rowBytes, srcX, srcY)));
-            });
+            RNSkWorker::getInstance().post(
+                [=]() {
+                  return image->readPixels(nullptr, dstInfo,
+                                           pixels->writable_data(), rowBytes,
+                                           srcX, srcY)
+                             ? pixels
+                             : nullptr;
+                },
+                deliver);
             return;
           }
           auto srcRect =
               SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
           auto *dawn = DawnContext::tryGetInstance();
           if (!srcRect.intersect(image->bounds()) || dawn == nullptr) {
-            complete(settle(false));
+            deliver(nullptr);
             return;
           }
           dawn->readPixels(image, srcRect, [=](ReadResult result) {
             if (result == nullptr) {
-              complete(settle(false));
+              deliver(nullptr);
               return;
             }
             // The callback runs inside the context lock (see
@@ -451,16 +457,20 @@ public:
             // the conversion of the rectangle read, into the matching part
             // of the destination, runs on the worker thread instead.
             auto shared = std::make_shared<ReadResult>(std::move(result));
-            RNSkWorker::getInstance().post([=]() {
-              SkPixmap source(image->imageInfo().makeDimensions(srcRect.size()),
-                              (*shared)->data(0), (*shared)->rowBytes(0));
-              SkPixmap destination(dstInfo, pixels->writable_data(), rowBytes);
-              SkPixmap subset;
-              auto read = destination.extractSubset(
-                              &subset, srcRect.makeOffset(-srcX, -srcY)) &&
-                          source.readPixels(subset);
-              complete(settle(read));
-            });
+            RNSkWorker::getInstance().post(
+                [=]() {
+                  SkPixmap source(
+                      image->imageInfo().makeDimensions(srcRect.size()),
+                      (*shared)->data(0), (*shared)->rowBytes(0));
+                  SkPixmap destination(dstInfo, pixels->writable_data(),
+                                       rowBytes);
+                  SkPixmap subset;
+                  auto read = destination.extractSubset(
+                                  &subset, srcRect.makeOffset(-srcX, -srcY)) &&
+                              source.readPixels(subset);
+                  return read ? pixels : nullptr;
+                },
+                deliver);
           });
         });
   }
