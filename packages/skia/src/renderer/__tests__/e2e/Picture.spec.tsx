@@ -162,18 +162,20 @@ describe("Pictures", () => {
               // corner.
               const replay = Skia.Surface.MakeRaster(ctx.side, ctx.side)!;
               replay.getCanvas().drawPicture(picture);
-              const corner = replay
+              return replay
                 .makeImageSnapshot()
                 .readPixels(ctx.side - 1, ctx.side - 1, {
                   width: 1,
                   height: 1,
                   ...ctx.pixel,
+                })
+                .then((corner) => {
+                  replay.dispose();
+                  picture.dispose();
+                  recorder.dispose();
+                  svg.dispose();
+                  return { draw, finish, next, corner: Array.from(corner!) };
                 });
-              replay.dispose();
-              picture.dispose();
-              recorder.dispose();
-              svg.dispose();
-              return { draw, finish, next, corner: Array.from(corner!) };
             });
         },
         {
