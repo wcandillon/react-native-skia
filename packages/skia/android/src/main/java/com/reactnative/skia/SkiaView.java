@@ -65,6 +65,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private final SurfaceFrameRateVote mFrameRateVote = new SurfaceFrameRateVote(this);
     private final Runnable mOnFrameConsumed = this::onFrameConsumed;
+    private final Runnable mOnHeldFrameRetry = this::onHeldFrameRetry;
     // A TextureView records its draw on the main thread before the render
     // thread takes the frame, at the sync that ends the traversal: the
     // signal is posted behind the traversal, so that the frame presented on
@@ -89,14 +90,66 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
                 }
                 result = SkiaView.this.presentFrame();
             }
-            // Only a SurfaceView votes (attached in onSurfaceCreated): a
-            // TextureView is composited into its window, which votes for it.
-            if ((result & FrameScheduler.PRESENTED) != 0) {
-                mFrameRateVote.onFramePresented();
+            return voteIfPresented(result);
+        }
+
+        @Override
+        public int presentFrameOnVsync() {
+            int result;
+            synchronized (mNativeLock) {
+                if (!hasNativeView()) {
+                    return 0;
+                }
+                result = SkiaView.this.presentFrameOnVsync();
             }
-            return result;
+            return voteIfPresented(result);
+        }
+
+        @Override
+        public int presentFrameOnWindowDraw() {
+            int result;
+            synchronized (mNativeLock) {
+                if (!hasNativeView()) {
+                    return 0;
+                }
+                result = SkiaView.this.presentFrameOnWindowDraw();
+            }
+            return voteIfPresented(result);
+        }
+
+        @Override
+        public int presentHeldFrame() {
+            int result;
+            synchronized (mNativeLock) {
+                if (!hasNativeView()) {
+                    return 0;
+                }
+                result = SkiaView.this.presentHeldFrame();
+            }
+            return voteIfPresented(result);
+        }
+
+        @Override
+        public int tickOnVsync() {
+            synchronized (mNativeLock) {
+                return hasNativeView() ? SkiaView.this.tickOnVsync() : 0;
+            }
+        }
+
+        @Override
+        public void postHeldFrameRetry(long delayMillis) {
+            PresentThread.handler().postDelayed(mOnHeldFrameRetry, delayMillis);
         }
     });
+
+    // Only a SurfaceView votes (attached in onSurfaceCreated): a TextureView
+    // is composited into its window, which votes for it.
+    private int voteIfPresented(int result) {
+        if ((result & FrameScheduler.PRESENTED) != 0) {
+            mFrameRateVote.onFramePresented();
+        }
+        return result;
+    }
 
     public SkiaView(Context context) {
         super(context);
@@ -313,6 +366,18 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mFrameScheduler.requestFrame(mKind, forResizedWindow);
     }
 
+    /**
+     * The view presented on its own, for a redraw: what it did, as a present
+     * of the frame scheduler says (see FrameScheduler.onRedrawn). It casts no
+     * vote: a mount or a rotation redraws, and with the frame recorded again a
+     * vsync later a static canvas would vote as animating. Present thread;
+     * called from native.
+     */
+    @DoNotStrip
+    public void onRedrawPresented(int result) {
+        mFrameScheduler.onRedrawn(mKind, result);
+    }
+
     @Override
     public void doFrame(long frameTimeNanos) {
         mFrameScheduler.onFrame(mKind);
@@ -331,11 +396,17 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mFrameScheduler.onFrameConsumed(mKind);
     }
 
-    // Drops the frame callback, the frame the window took and the scheduler's
-    // requests, on the present thread, where they live.
+    private void onHeldFrameRetry() {
+        mFrameScheduler.onHeldFrameRetry(mKind);
+    }
+
+    // Drops the frame callback, the frame the window took, the retry of a
+    // frame held for the GPU and the scheduler's requests, on the present
+    // thread, where they live.
     private void cancelFrames() {
         Choreographer.getInstance().removeFrameCallback(this);
         PresentThread.handler().removeCallbacks(mOnFrameConsumed);
+        PresentThread.handler().removeCallbacks(mOnHeldFrameRetry);
         mFrameScheduler.cancel();
     }
 
@@ -434,9 +505,37 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private native void unregisterView();
 
     /**
-     * Presents the queued recordings: FrameScheduler.PRESENTED when a frame
-     * went to the window, FrameScheduler.MORE_QUEUED when recordings are left.
+     * Presents what is waiting, for a submitted recording: FrameScheduler.PRESENTED
+     * when a frame went to the window, FrameScheduler.MORE_QUEUED when one is left,
+     * FrameScheduler.HELD_FOR_GPU when the window holds it until the GPU finishes
+     * the frame before it, FrameScheduler.REPLAY_COMING when a replay is in flight.
      * Present thread, under mNativeLock.
      */
     private native int presentFrame();
+
+    /**
+     * Presents what is waiting on a vsync, its present tick: as presentFrame().
+     * Present thread, under mNativeLock.
+     */
+    private native int presentFrameOnVsync();
+
+    /**
+     * The TextureView's window drew the frame it was given, so the next may go to
+     * it: presents what is waiting, as presentFrame(). Present thread, under
+     * mNativeLock.
+     */
+    private native int presentFrameOnWindowDraw();
+
+    /**
+     * Presents the frame the window holds for the GPU once the GPU is done, and
+     * nothing else, as presentFrame() says. Present thread, under mNativeLock.
+     */
+    private native int presentHeldFrame();
+
+    /**
+     * The present tick of a vsync while the window has yet to draw its frame:
+     * FrameScheduler.REPLAY_COMING when a replay is in flight. Present thread,
+     * under mNativeLock.
+     */
+    private native int tickOnVsync();
 }

@@ -47,7 +47,8 @@ std::vector<RNSkWindowSurface *> &windows() {
 
 } // namespace
 
-RNSkWindowSurface::RNSkWindowSurface() {
+RNSkWindowSurface::RNSkWindowSurface(PresentHold presentHold)
+    : _presentHold(presentHold, DawnQueue()) {
   std::lock_guard<std::mutex> lock(windowsMutex());
   windows().push_back(this);
 }
@@ -82,7 +83,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   }
   _device = context->getWGPUDevice();
   _generation.store(DawnContext::generation(), std::memory_order_release);
-  _surface = context->MakeWGPUSurface(nativeHandle);
+  replaceSurfaceLocked(context->MakeWGPUSurface(nativeHandle));
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     detachLocked();
@@ -137,8 +138,10 @@ void RNSkWindowSurface::detach() {
 }
 
 void RNSkWindowSurface::detachLocked() {
-  // The surface goes before the window it draws into.
-  _surface = nullptr;
+  // The frame the window holds goes to it first, and the surface before the
+  // window it draws into (see RNSkPresentHold::releaseFrames).
+  _presentHold.releaseFrames([this]() { presentNowLocked(); });
+  replaceSurfaceLocked(nullptr);
   _needsConfigure = false;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
@@ -287,6 +290,7 @@ void RNSkWindowSurface::configureIfNeededLocked() {
 }
 
 void RNSkWindowSurface::configureSurface() {
+  _presentHold.releaseFrames([this]() { presentNowLocked(); });
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -352,6 +356,43 @@ bool RNSkWindowSurface::canPresentLocked() {
          (!_canPresent || _canPresent());
 }
 
+void RNSkWindowSurface::presentNowLocked() {
+  _surface.Present();
+  _framesPresented++;
+}
+
+void RNSkWindowSurface::replaceSurfaceLocked(wgpu::Surface surface) {
+  _presentHold.dropFrames();
+  _surface = std::move(surface);
+}
+
+HeldFrame RNSkWindowSurface::presentHeldFrame() {
+  // A frame held on a device replaced since goes with the surface it was
+  // replayed into.
+  retireReplacedDevice();
+  std::lock_guard<std::mutex> lock(_mutex);
+  if (!_presentHold.hasHeldFrame() || !canPresentLocked() ||
+      !ensureDeviceLocked()) {
+    return HeldFrame::kNone;
+  }
+  return _presentHold.presentHeldFrame([this]() { presentNowLocked(); });
+}
+
+bool RNSkWindowSurface::hasHeldFrame() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _presentHold.hasHeldFrame();
+}
+
+void RNSkWindowSurface::allowNextPresent() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _presentHold.allowNextPresent();
+}
+
+uint64_t RNSkWindowSurface::framesPresented() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _framesPresented;
+}
+
 bool RNSkWindowSurface::isTargetLocked(const RNSkGraphiteTargetInfo &target) {
   if (describeLocked() == target) {
     return true;
@@ -383,7 +424,7 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   for (auto *window : windows()) {
     std::lock_guard<std::mutex> lock(window->_mutex);
     if (window->_generation.load(std::memory_order_acquire) == generation) {
-      window->_surface = nullptr;
+      window->replaceSurfaceLocked(nullptr);
       window->_generation.store(0, std::memory_order_release);
     }
   }
@@ -403,7 +444,7 @@ bool RNSkWindowSurface::ensureDeviceLocked() {
   }
   _device = context->getWGPUDevice();
   _generation.store(generation, std::memory_order_release);
-  _surface = context->MakeWGPUSurface(_nativeHandle);
+  replaceSurfaceLocked(context->MakeWGPUSurface(_nativeHandle));
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     return false;
@@ -434,7 +475,12 @@ bool RNSkWindowSurface::presentRecordings(
   if (!canPresentLocked() || !ensureDeviceLocked() || !isTargetLocked(target)) {
     return false;
   }
-  configureIfNeededLocked();
+  // A swapchain configured again presents the frame it held first (see
+  // configureSurface): only a frame for the same swapchain waits behind it.
+  if (!_presentHold.takesFrameOnceConfigured(
+          [this]() { configureIfNeededLocked(); })) {
+    return false;
+  }
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
@@ -461,43 +507,67 @@ bool RNSkWindowSurface::presentRecordings(
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  _surface.Present();
+  _presentHold.presentOrHold([this]() { presentNowLocked(); });
   return true;
 }
 
-bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
-                                     const sk_sp<SkImage> &image) {
+RNSkSurface::ImagePresent RNSkWindowSurface::presentImage(
+    const RNSkGraphiteTargetInfo &target,
+    const std::function<sk_sp<SkImage>()> &makeImage) {
   retireReplacedDevice();
-  std::lock_guard<std::mutex> lock(_mutex);
-  if (!canPresentLocked() || !ensureDeviceLocked() || !isTargetLocked(target)) {
-    return false;
-  }
-  configureIfNeededLocked();
-  wgpu::SurfaceTexture surfaceTexture;
-  _surface.GetCurrentTexture(&surfaceTexture);
-  auto texture = surfaceTexture.texture;
-  if (!texture) {
-    return false;
-  }
-  auto *recorder = presentRecorder();
-  if (recorder == nullptr) {
-    return false;
-  }
-  auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-  SkSurfaceProps surfaceProps;
-  auto surface = SkSurfaces::WrapBackendTexture(
-      recorder, backendTex, _colorType,
-      DawnUtils::viewColorSpace(_useP3ColorSpace), &surfaceProps);
-  if (!surface) {
-    return false;
-  }
-  drawOnto(surface->getCanvas(), image, surface->width(), surface->height());
-  DawnContext::getInstance().submitRecording(recorder);
+  return presentMadeImage(
+      _mutex,
+      [&]() {
+        // A swapchain configured again presents the frame it held first (see
+        // configureSurface): only a frame for the same swapchain waits behind
+        // it.
+        return canPresentLocked() && ensureDeviceLocked() &&
+               isTargetLocked(target) &&
+               _presentHold.takesFrameOnceConfigured(
+                   [this]() { configureIfNeededLocked(); }) &&
+               presentRecorder() != nullptr;
+      },
+      makeImage,
+      // The image is made before the window's image is acquired: an image
+      // acquired for a frame nothing is made for would stay acquired into the
+      // window's teardown.
+      [&](const sk_sp<SkImage> &image) {
+        auto *recorder = presentRecorder();
+        if (recorder == nullptr) {
+          return ImagePresent::kDeclined;
+        }
+        wgpu::SurfaceTexture surfaceTexture;
+        _surface.GetCurrentTexture(&surfaceTexture);
+        auto texture = surfaceTexture.texture;
+        if (!texture) {
+          return ImagePresent::kDeclined;
+        }
+        auto backendTex =
+            skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+        SkSurfaceProps surfaceProps;
+        auto surface = SkSurfaces::WrapBackendTexture(
+            recorder, backendTex, _colorType,
+            DawnUtils::viewColorSpace(_useP3ColorSpace), &surfaceProps);
+        if (!surface) {
+          return ImagePresent::kDeclined;
+        }
+        drawOnto(surface->getCanvas(), image, surface->width(),
+                 surface->height());
+        DawnContext::getInstance().submitRecording(recorder);
 #ifdef __APPLE__
-  dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
+        dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  _surface.Present();
-  return true;
+        _presentHold.presentOrHold([this]() { presentNowLocked(); });
+        return ImagePresent::kPresented;
+      });
+}
+
+RNSkWindowSurface::DawnQueue::Work RNSkWindowSurface::DawnQueue::track() {
+  return DawnContext::getInstance().trackSubmittedWork();
+}
+
+bool RNSkWindowSurface::DawnQueue::isDone(const Work &work) {
+  return DawnContext::getInstance().isWorkDone(work);
 }
 
 } // namespace RNSkia
