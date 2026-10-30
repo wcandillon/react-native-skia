@@ -46,7 +46,7 @@ public:
     va_list args;
     va_start(args, fmt);
 
-    static char buffer[512];
+    char buffer[512];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
 #if defined(ANDROID) || defined(__ANDROID__)
     __android_log_write(ANDROID_LOG_INFO, "RNSkia", buffer);

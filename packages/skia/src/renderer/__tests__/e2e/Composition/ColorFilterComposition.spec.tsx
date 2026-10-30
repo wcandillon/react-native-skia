@@ -63,7 +63,7 @@ describe("Color Filter Composition", () => {
       rect
     );
     canvas.drawImageRect(oslo, src, dst, paint);
-    processResult(
+    await processResult(
       ckSurface,
       "snapshots/color-filter/color-filter-composition.png"
     );
@@ -83,7 +83,10 @@ describe("Color Filter Composition", () => {
         </LinearToSRGBGamma>
       </Image>
     );
-    checkImage(image, "snapshots/color-filter/color-filter-composition.png");
+    await checkImage(
+      image,
+      "snapshots/color-filter/color-filter-composition.png"
+    );
   });
   it("should use composition", async () => {
     const { width } = surface;
@@ -97,6 +100,6 @@ describe("Color Filter Composition", () => {
         <Circle cx={2 * r} cy={r} r={r} color="red" />
       </Group>
     );
-    checkImage(img, docPath("color-filters/composition.png"));
+    await checkImage(img, docPath("color-filters/composition.png"));
   });
 });

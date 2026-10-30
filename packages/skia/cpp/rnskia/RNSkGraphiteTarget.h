@@ -177,8 +177,9 @@ public:
    and the recorders of a few threads serve every view, with their caches
    and atlases. finishRecording() snaps it, on the same thread, before the
    thread records anything else (a recorder takes one deferred canvas at a
-   time). The canvas is deleted by finishRecording(). Throws while a
-   recording is already open, or while the view has no size.
+   time). The canvas is deleted by finishRecording(). Returns nullptr while
+   the view has no size. Throws while a recording is already open, or when
+   no deferred canvas can be made.
    */
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
@@ -192,7 +193,7 @@ public:
    once the GPU device it was made for is lost: for JS, which records across
    calls (SkiaViewApi.makeGraphiteContext) and may open a recording on
    another target before finishing this one. Throws while a recording is
-   already open, while the view has no size, or when no recorder can be made.
+   already open, or when no recorder or deferred canvas can be made.
    */
   SkCanvas *beginRecording() {
     auto target = resolveTargetInfo();
@@ -330,8 +331,8 @@ public:
 private:
   /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
-   recorder alive when it is the target's own. Called with the state lock
-   held.
+   recorder alive when it is the target's own. Returns nullptr while the view
+   has no size. Called with the state lock held.
    */
   SkCanvas *openRecordingLocked(skgpu::graphite::Recorder *recorder,
                                 uint64_t generation,
@@ -342,7 +343,7 @@ private:
                                "call finishRecording() first.");
     }
     if (target.width <= 0 || target.height <= 0) {
-      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
+      return nullptr;
     }
     auto imageInfo = SkImageInfo::Make(
         target.width, target.height, target.colorType, kPremul_SkAlphaType,
@@ -369,7 +370,9 @@ private:
    JS measured; in the last two cases with the format and the color space
    the surface has, or will have: the bit depth the platform view knows
    (the one of its backing view, which keeps it, see SkiaView.java), else
-   the one the props call for, following the same rules.
+   the one the props call for, following the same rules; the color space
+   the platform view knows (the colorSpace prop, see SkiaView.mm), else
+   the platform's default.
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkWindowSurface> surface;
@@ -416,7 +419,11 @@ private:
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
-    info.useP3ColorSpace = _context->prefersP3ColorSpace();
+    bool useP3ColorSpace = _context->prefersP3ColorSpace();
+    if (surface) {
+      surface->getUseP3ColorSpace(&useP3ColorSpace);
+    }
+    info.useP3ColorSpace = useP3ColorSpace;
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,

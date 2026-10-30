@@ -40,6 +40,21 @@ static bool appIsBackgrounded() {
 #endif // !TARGET_OS_OSX
 }
 
+// The color space the colorSpace prop asks for: "srgb" or "display-p3",
+// else (the prop is not set) the display's: Display P3 on a wide color gamut
+// display, sRGB otherwise (see RNSkPlatformContext::prefersP3ColorSpace).
+static bool
+usesP3ColorSpace(const std::string &colorSpace,
+                 const std::shared_ptr<RNSkia::RNSkPlatformContext> &context) {
+  if (colorSpace == "srgb") {
+    return false;
+  }
+  if (colorSpace == "display-p3") {
+    return true;
+  }
+  return context->prefersP3ColorSpace();
+}
+
 @implementation SkiaView {
   // The native view, the window surface and the layer it presents into. All
   // three exist while the view is in the hierarchy (see willMoveToSuperview:).
@@ -58,6 +73,8 @@ static bool appIsBackgrounded() {
   std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
   bool _highBitDepth;
+  // The colorSpace prop, see usesP3ColorSpace.
+  std::string _colorSpace;
   // Whether the window can show a frame (see appIsBackgrounded). Main thread.
   bool _canPresent;
 #if !TARGET_OS_OSX
@@ -130,6 +147,7 @@ static bool appIsBackgrounded() {
 #pragma clang diagnostic pop
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
   _surface->setHighBitDepth(_highBitDepth);
+  _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
   // The window belongs to the main thread, and is left alone while the app
   // is in the background: what the view holds is presented on its next frame
   // once the app is back (see appWillEnterForeground:).
@@ -333,7 +351,7 @@ static bool appIsBackgrounded() {
   }
   // The layer is owned by the view: nothing to release with the window.
   _surface->attach((__bridge void *)_layer, w, h, _highBitDepth,
-                   context->prefersP3ColorSpace(), nullptr);
+                   usesP3ColorSpace(_colorSpace, context), nullptr);
 }
 
 #pragma mark - Props
@@ -350,6 +368,7 @@ static bool appIsBackgrounded() {
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
   [self setHighBitDepth:newProps.highBitDepth];
+  [self setColorSpace:newProps.colorSpace];
   // The android* props (backing view, opacity, z-order) select and set up the
   // backing view on Android; a CAMetalLayer composites like any other layer.
 }
@@ -375,6 +394,23 @@ static bool appIsBackgrounded() {
   // The layer is re-attached with the new format; until then (or without a
   // size), frames are recorded for it.
   _surface->setHighBitDepth(highBitDepth);
+  if (_surface->isAttached()) {
+    [self attachSurface];
+  }
+}
+
+- (void)setColorSpace:(const std::string &)colorSpace {
+  if (_colorSpace == colorSpace) {
+    return;
+  }
+  _colorSpace = colorSpace;
+  if (_surface == nullptr) {
+    return;
+  }
+  // Like the bit depth: the layer is re-attached in the new color space;
+  // until then, frames are recorded for it.
+  _surface->setUseP3ColorSpace(
+      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
   if (_surface->isAttached()) {
     [self attachSurface];
   }
