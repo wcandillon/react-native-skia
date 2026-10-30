@@ -199,6 +199,21 @@ bool RNSkWindowSurface::getHighBitDepth(bool *highBitDepth) {
   return true;
 }
 
+void RNSkWindowSurface::setUseP3ColorSpace(bool useP3ColorSpace) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _knownUseP3ColorSpace = useP3ColorSpace;
+  _hasKnownUseP3ColorSpace = true;
+}
+
+bool RNSkWindowSurface::getUseP3ColorSpace(bool *useP3ColorSpace) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  if (!_hasKnownUseP3ColorSpace) {
+    return false;
+  }
+  *useP3ColorSpace = _knownUseP3ColorSpace;
+  return true;
+}
+
 bool RNSkWindowSurface::getTargetInfo(RNSkGraphiteTargetInfo *info) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   if (!_hasTargetInfo) {
@@ -228,6 +243,8 @@ void RNSkWindowSurface::updateTargetInfo() {
   // the window comes back with.
   _knownHighBitDepth = _colorType == DawnUtils::HighBitDepthColorType;
   _hasKnownHighBitDepth = true;
+  _knownUseP3ColorSpace = _useP3ColorSpace;
+  _hasKnownUseP3ColorSpace = true;
 }
 
 RNSkGraphiteTargetInfo RNSkWindowSurface::describeLocked() const {

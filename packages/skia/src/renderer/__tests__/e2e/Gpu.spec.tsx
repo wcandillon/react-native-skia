@@ -2,38 +2,14 @@ import React from "react";
 
 import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
-import type { SkImage } from "../../../skia/types";
 import { Fill, Image as SkiaImage } from "../../components";
-import { images, surface } from "../setup";
-
-// A snapshot's colour pipeline can move a channel by a few units, so colours
-// are read as names rather than exact bytes.
-const nameColor = (pixel: Float32Array | Uint8Array | null) => {
-  if (pixel === null) {
-    return "unreadable";
-  }
-  const [red, green, blue] = Array.from(pixel);
-  if (red < 60 && green > 200 && blue > 200) {
-    return "cyan";
-  }
-  if (red > 200 && green < 60 && blue < 60) {
-    return "red";
-  }
-  return `rgb(${red}, ${green}, ${blue})`;
-};
-
-const readAll = (image: SkImage) => {
-  const pixels = image.readPixels(0, 0, {
-    width: image.width(),
-    height: image.height(),
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Unpremul,
-  });
-  if (pixels === null) {
-    throw new Error("The snapshot has no readable pixels");
-  }
-  return pixels;
-};
+import {
+  images,
+  nameColor,
+  readAllPixels,
+  readScreenColor,
+  surface,
+} from "../setup";
 
 // The share of pixels that are not white.
 const paintedShare = (pixels: Float32Array | Uint8Array) => {
@@ -64,20 +40,6 @@ const differingShare = (
   }
   return differing / (a.length / 4);
 };
-
-const readCenter = (image: SkImage) =>
-  nameColor(
-    image.readPixels(
-      Math.round(image.width() / 2),
-      Math.round(image.height() / 2),
-      {
-        width: 1,
-        height: 1,
-        colorType: ColorType.RGBA_8888,
-        alphaType: AlphaType.Unpremul,
-      }
-    )
-  );
 
 // Skia.gpu describes the GPU probed when the module was installed. The test
 // devices have one; a device without one keeps the app running with blank
@@ -119,18 +81,19 @@ describe("GPU info", () => {
           stale.getCanvas().drawColor(Skia.Color("cyan"));
           stale.flush();
           const staleSnapshot = stale.makeImageSnapshot();
-          const stalePixels = staleSnapshot ? staleSnapshot.readPixels() : null;
           // The new device renders.
           const fresh = Skia.Surface.MakeOffscreen(16, 16)!;
           fresh.getCanvas().drawColor(Skia.Color("cyan"));
           fresh.flush();
-          const pixel = fresh.makeImageSnapshot().readPixels(8, 8, {
-            width: 1,
-            height: 1,
-            colorType: ctx.colorType,
-            alphaType: ctx.alphaType,
-          });
-          return {
+          return Promise.all([
+            staleSnapshot ? staleSnapshot.readPixels() : null,
+            fresh.makeImageSnapshot().readPixels(8, 8, {
+              width: 1,
+              height: 1,
+              colorType: ctx.colorType,
+              alphaType: ctx.alphaType,
+            }),
+          ]).then(([stalePixels, pixel]) => ({
             sameLostPromise,
             reason: info.reason,
             message: info.message,
@@ -140,7 +103,7 @@ describe("GPU info", () => {
             newLostPromise: after.lost !== lost,
             stalePixels: stalePixels === null ? null : Array.from(stalePixels),
             pixel: pixel === null ? null : Array.from(pixel),
-          };
+          }));
         });
       },
       {
@@ -169,7 +132,7 @@ describe("GPU info", () => {
     // Views render on the new device too: the canvas records its content
     // again, and its window is configured on the device.
     const image = await surface.draw(<Fill color="cyan" />);
-    expect(readCenter(image)).toBe("cyan");
+    expect(await readScreenColor(image, 1 / 2)).toBe("cyan");
   });
 
   // The texture of a CPU image drawn before the loss was uploaded on the lost
@@ -191,7 +154,7 @@ describe("GPU info", () => {
           />
         </>
       );
-    const before = readAll(await drawLogo());
+    const before = await readAllPixels(await drawLogo());
     expect(paintedShare(before)).toBeGreaterThan(0.1);
     const replaced = await surface.eval(
       (Skia, ctx) => {
@@ -203,7 +166,7 @@ describe("GPU info", () => {
       {} as { forceGpuDeviceLoss: () => void }
     );
     expect(replaced).toBe(true);
-    const after = readAll(await drawLogo());
+    const after = await readAllPixels(await drawLogo());
     expect(paintedShare(after)).toBeGreaterThan(0.1);
     expect(after.length).toBe(before.length);
     expect(differingShare(before, after)).toBeLessThan(0.001);

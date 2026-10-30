@@ -1,7 +1,7 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library), the Android build without its emulator run, and the SwiftPM
-# build. The native builds and the emulator/simulator runs happen on pull
+# build-library), the Android build (with its emulator run on main only), and
+# the SwiftPM build. The native builds and the emulator/simulator runs happen on pull
 # requests and in the merge queue, so a merge does not pay for the full suite
 # twice. The Android build runs on push because a pull request can only
 # restore caches saved by its own earlier runs or by its base branch (see
@@ -129,9 +129,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # On pull requests and in the merge queue this builds the example app and
-  # runs the e2e suite on the emulator. On push it stops after the build: its
-  # only purpose there is to save the Gradle cache and the ccache on the base
-  # branch, where every pull request can restore them. Without that producer
+  # runs the e2e suite on the emulator. On push it saves the Gradle cache and
+  # the ccache on the base branch, where every pull request can restore them,
+  # and on main it also runs the emulator suite, so main itself has Android
+  # e2e coverage; on next it stops after the build. Without that producer
   # each pull request started cold (0 ccache hits, 28 minutes of C++) and saved
   # its own 1.8 GB Gradle cache, which kept the repository above its 10 GB
   # cache limit and evicted every entry within hours.
@@ -252,24 +253,24 @@ jobs:
           path: ~/.cache/ccache
           key: ${{ runner.os }}-ccache-android-${{ github.sha }}
 
-      # Everything below is the emulator run, skipped on push (see the job
-      # comment).
+      # Everything below is the emulator run, skipped on pushes other than to
+      # main (see the job comment).
       - name: Unit test the Android library
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         working-directory: apps/example/android
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
         run: ./gradlew :react-native-skia:testDebugUnitTest
 
       - name: Upload Android APK artifact
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         with:
           name: android-example-apk
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Enable KVM group perms
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -280,7 +281,7 @@ jobs:
       # while the emulator boots, so the app's own first request is served in
       # seconds instead of minutes.
       - name: Start Package Manager
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         working-directory: apps/example/
         run: |
           E2E=true yarn start &
@@ -297,7 +298,7 @@ jobs:
       # harness uses CanvasKit in Node and never talks to the app. Paragraphs
       # stays excluded, as it was before the Graphite switch.
       - name: Run Android Emulator Tests
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -322,21 +323,21 @@ jobs:
       # The *.test.png images of failed checks: a failed comparison's, and
       # the image of a check without a reference.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && github.event_name != 'push'
+        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: packages/skia/src/__tests__/snapshots/**/*.test.png
           name: tests-snapshots-screenshots
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && github.event_name != 'push'
+        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: logcat.txt
           name: android-logcat
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: failure() && github.event_name != 'push'
+        if: failure() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: apps/docs/static/
           name: tests-docs-screenshots
@@ -470,7 +471,58 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
 
+  # Decides whether build-test-macos runs. That job only compiles the example
+  # for macOS, and build-test-ios already compiles the same Apple and C++
+  # sources, yet both share the one self-hosted Mac, so on every pull request
+  # the macOS build queued behind the iOS run and added its own minutes to
+  # the wall clock. A pull request now pays for it only when its diff touches
+  # what can change the outcome: the podspec and the autolinking config, the
+  # Apple and C++ sources, the scripts that copy the headers from the Skia
+  # submodule and the submodule itself, the dependencies that pin the
+  # prebuilt binaries, the example's macOS project, or CI itself. Other
+  # events build unconditionally, so a change this list misses still shows
+  # up in the merge queue.
+  macos-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      # Same shallow diff as spm-changes.
+      - name: Compare the pull request to its base
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --depth=1 origin "$BASE"
+          changed=$(git diff --name-only "$BASE" HEAD)
+          run=false
+          while IFS= read -r file; do
+            case "$file" in
+              packages/skia/react-native-skia.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
+              apps/example/macos/*|apps/example/package.json|apps/example/react-native.config.js|\
+              package.json|yarn.lock|turbo.json|.gitmodules|externals/*|\
+              .github/workflows/ci.yml|.github/actions/setup/*)
+                echo "$file"
+                run=true
+                ;;
+            esac
+          done <<< "$changed"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   build-test-macos:
+    needs: macos-changes
+    if: needs.macos-changes.outputs.run == 'true'
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     steps:

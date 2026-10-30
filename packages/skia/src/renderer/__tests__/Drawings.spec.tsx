@@ -39,7 +39,7 @@ describe("Test introductionary examples from our documentation", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/blend-mode-multiply.png");
+    await processResult(surface, "snapshots/drawings/blend-mode-multiply.png");
   });
 
   it("Should use a blur image filter", async () => {
@@ -52,7 +52,7 @@ describe("Test introductionary examples from our documentation", () => {
         <Circle cx={width / 2} cy={height - r} r={r} color="yellow" />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/blur-node.png");
+    await processResult(surface, "snapshots/drawings/blur-node.png");
   });
 
   it("Should use multiple paint definitions for one drawing command", async () => {
@@ -67,7 +67,7 @@ describe("Test introductionary examples from our documentation", () => {
         </Circle>
       </>
     );
-    processResult(surface, "snapshots/drawings/multiple-paints.png");
+    await processResult(surface, "snapshots/drawings/multiple-paints.png");
   });
 
   it("Should draw DRect", async () => {
@@ -82,15 +82,15 @@ describe("Test introductionary examples from our documentation", () => {
     const surface = await drawOnNode(
       <DiffRect inner={inner} outer={outer} color="lightblue" />
     );
-    processResult(surface, docPath("shapes/drect.png"));
+    await processResult(surface, docPath("shapes/drect.png"));
   });
 
   it("should clear the canvas even if it's empty", async () => {
     const { surface, draw } = await mountCanvas(<CheckEmptyCanvas />);
     await draw();
-    processResult(surface, "snapshots/green.png");
+    await processResult(surface, "snapshots/green.png");
     await wait(1000);
     await draw();
-    processResult(surface, "snapshots/transparent.png");
+    await processResult(surface, "snapshots/transparent.png");
   });
 });
