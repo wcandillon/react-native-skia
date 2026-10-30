@@ -48,8 +48,8 @@ export interface SkGpuLostInfo {
 }
 
 /**
- * The GPU Skia renders with, probed once when the module is installed (on
- * a native thread; the first read waits for the probe). On Android Skia
+ * The GPU Skia renders with, probed once, the first time something needs
+ * it (a canvas, a GPU call, or reading this property). On Android Skia
  * renders with Vulkan (1.1 or later), on iOS with Metal. When the device has
  * none, `isAvailable` is false and `error` says why: every `Canvas` stays
  * blank, CPU work (paths, decoding, encoding, raster images) still runs, and

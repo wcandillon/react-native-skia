@@ -27,7 +27,7 @@ describe("Pictures", () => {
       },
       { size: surface.width }
     );
-    checkImage(image, "snapshots/pictures/simple-picture.png");
+    await checkImage(image, "snapshots/pictures/simple-picture.png");
   });
   itRunsNodeOnly("Should use createPicture", async () => {
     const { createPicture, Skia } = importSkia();
@@ -53,7 +53,7 @@ describe("Pictures", () => {
       },
       { picture }
     );
-    checkImage(image, "snapshots/pictures/create-picture.png");
+    await checkImage(image, "snapshots/pictures/create-picture.png");
   });
   it("Should draw the hello world example as picture", async () => {
     const image = await surface.drawOffscreen(
@@ -77,7 +77,7 @@ describe("Pictures", () => {
       },
       { BlendMode: BlendMode.Multiply, size: surface.width }
     );
-    checkImage(image, "snapshots/pictures/hello-world.png");
+    await checkImage(image, "snapshots/pictures/hello-world.png");
   });
   it("Simple picture example", async () => {
     const img = await surface.drawOffscreen(
@@ -104,7 +104,7 @@ describe("Pictures", () => {
       },
       { BlendMode: BlendMode.Multiply, size: surface.width }
     );
-    checkImage(img, docPath("simple-picture.png"));
+    await checkImage(img, docPath("simple-picture.png"));
   });
   it("throws when drawing on the canvas of a finished recording", async () => {
     // CanvasKit keeps the recorder's canvas around: nothing to observe on
@@ -225,7 +225,7 @@ describe("Pictures", () => {
       },
       { size: surface.width, progress, n }
     );
-    checkImage(image, docPath("pictures/circle-trail-0.png"));
+    await checkImage(image, docPath("pictures/circle-trail-0.png"));
   });
   it("Should draw animated circle trail t=0.25", async () => {
     const n = 20;
@@ -250,7 +250,7 @@ describe("Pictures", () => {
       },
       { size: surface.width, progress, n }
     );
-    checkImage(image, docPath("pictures/circle-trail-0.25.png"));
+    await checkImage(image, docPath("pictures/circle-trail-0.25.png"));
   });
   it("Should draw animated circle trail t=0.5", async () => {
     const n = 20;
@@ -275,7 +275,7 @@ describe("Pictures", () => {
       },
       { size: surface.width, progress, n }
     );
-    checkImage(image, docPath("pictures/circle-trail-0.5.png"));
+    await checkImage(image, docPath("pictures/circle-trail-0.5.png"));
   });
   it("Should draw animated circle trail t=0.75", async () => {
     const n = 20;
@@ -300,7 +300,7 @@ describe("Pictures", () => {
       },
       { size: surface.width, progress, n }
     );
-    checkImage(image, docPath("pictures/circle-trail-0.75.png"));
+    await checkImage(image, docPath("pictures/circle-trail-0.75.png"));
   });
   it("Should draw animated circle trail t=1", async () => {
     const n = 20;
@@ -325,7 +325,7 @@ describe("Pictures", () => {
       },
       { size: surface.width, progress, n }
     );
-    checkImage(image, docPath("pictures/circle-trail-1.png"));
+    await checkImage(image, docPath("pictures/circle-trail-1.png"));
   });
   it("Should serialize and deserialize a picture (1)", async () => {
     const image = await surface.drawOffscreen((Skia, mainCanvas) => {
@@ -350,7 +350,7 @@ describe("Pictures", () => {
       const deserialized = Skia.Picture.Make(serialized);
       mainCanvas.drawPicture(deserialized!);
     });
-    checkImage(image, "snapshots/pictures/create-picture.png");
+    await checkImage(image, "snapshots/pictures/create-picture.png");
   });
   it("Should serialize and deserialize a picture (2)", async () => {
     const image = await surface.drawOffscreen((Skia, mainCanvas) => {
@@ -375,7 +375,7 @@ describe("Pictures", () => {
       const deserialized = Skia.Picture.Make(serialized.buffer as ArrayBuffer);
       mainCanvas.drawPicture(deserialized!);
     });
-    checkImage(image, "snapshots/pictures/create-picture.png");
+    await checkImage(image, "snapshots/pictures/create-picture.png");
   });
   itRunsNodeOnly("Blur Picture", async () => {
     const { Skia, createPicture } = importSkia();
@@ -408,6 +408,6 @@ describe("Pictures", () => {
         </Group>
       </>
     );
-    checkImage(img, docPath("blurred-picture.png"));
+    await checkImage(img, docPath("blurred-picture.png"));
   });
 });

@@ -14,7 +14,12 @@ const mockCalls = { scheduleOnUI: 0, deprecatedRunOnUI: 0 };
 const mockPlatform = { OS: "ios" };
 const mockLoadedImage: { current: SkImage | null } = { current: null };
 const mockRasterSnapshot = {};
-const mockSnapshot = { makeRasterImageSync: () => mockRasterSnapshot };
+// The web readback of the snapshot: resolved right away unless a test says
+// otherwise (mockReturnValueOnce).
+const mockMakeRasterImage = jest.fn(() => Promise.resolve(mockRasterSnapshot));
+const mockSnapshot = {
+  makeRasterImage: () => mockMakeRasterImage(),
+};
 const mockCanvas = { drawPicture: jest.fn() };
 const mockSurface = {
   getCanvas: () => mockCanvas,
@@ -120,6 +125,46 @@ const renderTexture = (useTexture: () => SharedValue<SkImage | null>) => {
   return texture;
 };
 
+// A picture texture whose picture a test changes.
+const mountPictureTexture = (initial: SkPicture) => {
+  const rendered: { texture: SharedValue<SkImage | null> | null } = {
+    texture: null,
+  };
+  const Probe = ({ pic }: { pic: SkPicture }) => {
+    rendered.texture = usePictureAsTexture(pic, size);
+    return null;
+  };
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  act(() => {
+    root.render(<Probe pic={initial} />);
+  });
+  const { texture } = rendered;
+  if (texture === null) {
+    throw new Error("The texture hook did not render");
+  }
+  return {
+    texture,
+    setPicture: (pic: SkPicture) =>
+      act(() => {
+        root.render(<Probe pic={pic} />);
+      }),
+    unmount: () => act(() => root.unmount()),
+  };
+};
+
+// Lets every settled promise run its callbacks.
+const flushPromises = () =>
+  new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 });
@@ -133,34 +178,99 @@ beforeEach(() => {
   mockMakeOffscreen.mockClear();
   mockCanvas.drawPicture.mockClear();
   mockSurface.flush.mockClear();
+  mockMakeRasterImage.mockReset();
+  mockMakeRasterImage.mockImplementation(() =>
+    Promise.resolve(mockRasterSnapshot)
+  );
 });
 
 const picture = {} as SkPicture;
 const size = { width: 32, height: 16 };
 
+// On the web the texture is a CPU copy of the snapshot, read back on the JS
+// thread, asynchronously: nothing goes through the UI queue.
 describe.each([
-  ["ios", mockSnapshot],
-  ["web", mockRasterSnapshot],
-])("usePictureAsTexture on %s", (OS, expectedTexture) => {
+  ["ios", mockSnapshot, 1],
+  ["web", mockRasterSnapshot, 0],
+])("usePictureAsTexture on %s", (OS, expectedTexture, scheduledOnUI) => {
   beforeEach(() => {
-    mockPlatform.OS = OS;
+    mockPlatform.OS = OS as string;
   });
 
-  it("draws the picture into a texture on the UI thread", () => {
-    const texture = renderTexture(() => usePictureAsTexture(picture, size));
+  it("draws the picture into a texture", async () => {
+    const { texture, unmount } = mountTexture(() =>
+      usePictureAsTexture(picture, size)
+    );
     expect(texture.value).toBeNull();
     flushUIQueue();
+    // On web the snapshot is read back asynchronously.
+    await flushPromises();
     expect(mockMakeOffscreen).toHaveBeenCalledWith(32, 16);
     expect(mockCanvas.drawPicture).toHaveBeenCalledWith(picture);
     expect(mockSurface.flush).toHaveBeenCalledTimes(1);
     expect(texture.value).toBe(expectedTexture);
-    expect(mockCalls).toEqual({ scheduleOnUI: 1, deprecatedRunOnUI: 0 });
+    expect(mockCalls).toEqual({
+      scheduleOnUI: scheduledOnUI,
+      deprecatedRunOnUI: 0,
+    });
+    unmount();
   });
 
   it("schedules nothing until there is a picture", () => {
     const texture = renderTexture(() => usePictureAsTexture(null, size));
     expect(mockCalls).toEqual({ scheduleOnUI: 0, deprecatedRunOnUI: 0 });
     expect(mockUIQueue).toHaveLength(0);
+    expect(texture.value).toBeNull();
+  });
+});
+
+describe("usePictureAsTexture on web", () => {
+  beforeEach(() => {
+    mockPlatform.OS = "web";
+  });
+
+  it("keeps the latest picture's texture when an earlier readback settles later", async () => {
+    const first = deferred<SkImage>();
+    const second = deferred<SkImage>();
+    mockMakeRasterImage
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const picture2 = {} as SkPicture;
+    const { texture, setPicture, unmount } = mountPictureTexture(picture);
+    setPicture(picture2);
+    expect(mockMakeRasterImage).toHaveBeenCalledTimes(2);
+    const raster2 = {} as SkImage;
+    second.resolve(raster2);
+    await flushPromises();
+    expect(texture.value).toBe(raster2);
+    // The first picture's readback lands after the second's: it is stale.
+    first.resolve({} as SkImage);
+    await flushPromises();
+    expect(texture.value).toBe(raster2);
+    unmount();
+  });
+
+  it("leaves no texture when the readback fails", async () => {
+    mockMakeRasterImage.mockReturnValueOnce(
+      Promise.reject(new Error("Could not read pixels from image"))
+    );
+    const { texture, unmount } = mountTexture(() =>
+      usePictureAsTexture(picture, size)
+    );
+    await flushPromises();
+    expect(texture.value).toBeNull();
+    unmount();
+  });
+
+  it("drops the readback of a texture unmounted meanwhile", async () => {
+    const readback = deferred<SkImage>();
+    mockMakeRasterImage.mockReturnValueOnce(readback.promise);
+    const { texture, unmount } = mountTexture(() =>
+      usePictureAsTexture(picture, size)
+    );
+    unmount();
+    readback.resolve({} as SkImage);
+    await flushPromises();
     expect(texture.value).toBeNull();
   });
 });

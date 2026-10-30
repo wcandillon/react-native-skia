@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 #include <jsi/jsi.h>
@@ -37,6 +38,9 @@ public:
 
   std::shared_ptr<JsiSkCanvas> beginRecording() {
     auto *canvas = getObject()->beginRecording();
+    if (canvas == nullptr) {
+      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
+    }
     auto jsiCanvas = std::make_shared<JsiSkCanvas>(getContext(), canvas);
     _canvas = jsiCanvas;
     return jsiCanvas;

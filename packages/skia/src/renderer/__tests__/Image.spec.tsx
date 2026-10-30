@@ -40,6 +40,6 @@ half4 main(float2 xy) {
         </Shader>
       </Fill>
     );
-    processResult(surface, "snapshots/images/filter.png");
+    await processResult(surface, "snapshots/images/filter.png");
   });
 });

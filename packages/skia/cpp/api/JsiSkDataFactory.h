@@ -9,7 +9,7 @@
 #include "JsiSkData.h"
 #include "JsiSkNativeObjects.h"
 #include "api/third_party/base64.h"
-#include "jsi/JsiPromises.h"
+#include "rnskia/RNSkAsync.h"
 
 namespace RNSkia {
 
@@ -19,33 +19,31 @@ class JsiSkDataFactory : public JsiSkNativeObject<JsiSkDataFactory> {
 public:
   static constexpr const char *CLASS_NAME = "DataFactory";
 
+  // Resolves to the bytes at the URI, loaded on a thread of the platform's
+  // (see RNSkPlatformContext::performStreamOperation); rejects when they
+  // cannot be loaded. Settled on the calling runtime (RNSkAsync).
   JSI_HOST_FUNCTION(fromURI) {
-    auto jsiLocalUri = arguments[0].asString(runtime);
-    auto localUri = jsiLocalUri.utf8(runtime);
+    auto uri = arguments[0].asString(runtime).utf8(runtime);
     auto context = getContext();
-    return RNJsi::JsiPromises::createPromiseAsJSIValue(
-        runtime,
-        [context = std::move(context), localUri = std::move(localUri)](
-            jsi::Runtime &runtime,
-            std::shared_ptr<RNJsi::JsiPromises::Promise> promise) -> void {
-          // Create a stream operation - this will be run in a
-          // separate thread
+    return RNSkAsync::run(
+        runtime, context, [context, uri](RNSkAsync::Complete complete) {
           context->performStreamOperation(
-              localUri,
-              [context = std::move(context), promise = std::move(promise)](
-                  std::unique_ptr<SkStreamAsset> stream) -> void {
-                // Schedule drawCallback on the Javascript thread, with the
-                // runtime it runs on: a reload may have destroyed the one
-                // this load started on.
-                auto result =
-                    SkData::MakeFromStream(stream.get(), stream->getLength());
-                context->runOnJavascriptThread(
-                    [context = std::move(context), promise = std::move(promise),
-                     result = std::move(result)](jsi::Runtime &runtime) {
-                      promise->resolve(makeJsiObject(
-                          runtime, std::make_shared<JsiSkData>(
-                                       context, std::move(result))));
-                    });
+              uri, [context, uri, complete = std::move(complete)](
+                       std::unique_ptr<SkStreamAsset> stream) {
+                auto data = stream == nullptr
+                                ? nullptr
+                                : SkData::MakeFromStream(stream.get(),
+                                                         stream->getLength());
+                complete([context, uri,
+                          data = std::move(data)](jsi::Runtime &runtime,
+                                                  RNSkAsync::Promise &promise) {
+                  if (data == nullptr) {
+                    promise.reject("fromURI: could not load " + uri);
+                    return;
+                  }
+                  promise.resolve(makeJsiObject(
+                      runtime, std::make_shared<JsiSkData>(context, data)));
+                });
               });
         });
   };

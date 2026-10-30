@@ -4,7 +4,7 @@ import { BlendMode, VertexMode } from "../types";
 import { setupSkia } from "./setup";
 
 describe("Vertices", () => {
-  it("Billinear gradient", () => {
+  it("Billinear gradient", async () => {
     const { surface, canvas, width, Skia } = setupSkia();
     const vertices = [
       Skia.Point(0, 0),
@@ -35,9 +35,9 @@ describe("Vertices", () => {
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("purple"));
     canvas.drawVertices(vert, BlendMode.DstOver, paint);
-    processResult(surface, "snapshots/vertices/billinear-gradient.png");
+    await processResult(surface, "snapshots/vertices/billinear-gradient.png");
   });
-  it("Billinear gradient from a Float32Array", () => {
+  it("Billinear gradient from a Float32Array", async () => {
     const { surface, canvas, width, Skia } = setupSkia();
     // Interleaved x, y pairs
     const vertices = new Float32Array([0, 0, width, 0, width, width, 0, width]);
@@ -60,7 +60,7 @@ describe("Vertices", () => {
     const paint = Skia.Paint();
     paint.setColor(Skia.Color("purple"));
     canvas.drawVertices(vert, BlendMode.DstOver, paint);
-    processResult(surface, "snapshots/vertices/billinear-gradient.png");
+    await processResult(surface, "snapshots/vertices/billinear-gradient.png");
   });
   it("Texture coordinates from a Float32Array", () => {
     const { Skia } = setupSkia();
