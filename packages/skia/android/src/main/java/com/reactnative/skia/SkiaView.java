@@ -10,6 +10,7 @@ import android.view.Surface;
 import android.view.View;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
@@ -62,6 +63,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     @Nullable
     private volatile BackingViewKind mKind = null;
     private boolean mSurfaceHighBitDepth = false;
+
+    // What lets go of the presents held for the window frame that lays the
+    // canvas out (see holdPresentsForWindowFrame), null while none are held.
+    // Main thread.
+    @Nullable
+    private Runnable mHeldPresentsRelease = null;
+    // Set while SurfaceView recreates the surface under a canvas on screen
+    // (see updateView), whose window frame is not the one laying it out.
+    private boolean mRecreatingSurfaceInPlace = false;
 
     private final SurfaceFrameRateVote mFrameRateVote = new SurfaceFrameRateVote(this);
     private final Runnable mOnFrameConsumed = this::onFrameConsumed;
@@ -221,7 +231,11 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (kind != null) {
             boolean opaque = BackingViewKind.resolveOpaque(mOpaque, mSurfaceHighBitDepth);
             switch (kind) {
-                case SURFACE_VIEW -> ((SkiaSurfaceView) mView).setOpaque(opaque);
+                case SURFACE_VIEW -> {
+                    mRecreatingSurfaceInPlace = true;
+                    ((SkiaSurfaceView) mView).setOpaque(opaque);
+                    mRecreatingSurfaceInPlace = false;
+                }
                 case TEXTURE_VIEW -> ((SkiaTextureView) mView).setOpaque(opaque);
             }
             return;
@@ -366,6 +380,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (!hasNativeView()) {
             return;
         }
+        // The frame-commit callback arrives in Android 10, and only
+        // hardware-rendered frames commit: before it, a canvas presents at once.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isHardwareAccelerated()
+                && !mRecreatingSurfaceInPlace
+                && BackingViewKind.showsLayerBeforeWindowFrame(Build.VERSION.SDK_INT, mZOrderOnTop)) {
+            holdPresentsForWindowFrame();
+        }
         surfaceAvailable(surface, width, height, true, mSurfaceHighBitDepth);
     }
 
@@ -411,6 +432,42 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             return;
         }
         surfaceDestroyed();
+        // A surface recreated in place takes over what this one waited for.
+        if (!mRecreatingSurfaceInPlace) {
+            releaseHeldPresents();
+        }
+    }
+
+    // Presents nothing until the window frame that lays the canvas out has
+    // committed, and asks for that frame, since a surface can arrive outside
+    // a traversal (a visibility change). Each hold has a callback of its own,
+    // so one left from an earlier surface lets go of nothing.
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private void holdPresentsForWindowFrame() {
+        Runnable release = new Runnable() {
+            @Override
+            public void run() {
+                if (mHeldPresentsRelease == this) {
+                    releaseHeldPresents();
+                }
+            }
+        };
+        mHeldPresentsRelease = release;
+        holdPresents();
+        getViewTreeObserver().registerFrameCommitCallback(release);
+        invalidate();
+    }
+
+    // The window frame committed, or the surface is gone: what the window
+    // declined meanwhile is asked for again (see releasePresents).
+    private void releaseHeldPresents() {
+        if (mHeldPresentsRelease == null) {
+            return;
+        }
+        mHeldPresentsRelease = null;
+        if (hasNativeView()) {
+            releasePresents();
+        }
     }
 
     // Native ---------------------------------------------------------------
@@ -439,4 +496,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
      * Present thread, under mNativeLock.
      */
     private native int presentFrame();
+
+    /** Declines every present until releasePresents(). Main thread. */
+    private native void holdPresents();
+
+    /**
+     * Lets go of holdPresents(): what the window declined meanwhile is asked
+     * for again on the present thread, with or without a window. Main thread.
+     */
+    private native void releasePresents();
 }
