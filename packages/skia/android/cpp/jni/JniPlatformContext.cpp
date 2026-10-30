@@ -51,7 +51,8 @@ void JniPlatformContext::performStreamOperation(
     auto array = method(javaPart_.get(), jstr);
 
     if (array == nullptr) {
-      printf("Calling getJniStreamFromSource failed\n");
+      // Nothing at the uri: the caller is told rather than left waiting.
+      op(nullptr);
       return;
     }
 
@@ -60,15 +61,15 @@ void JniPlatformContext::performStreamOperation(
     char *buffer = reinterpret_cast<char *>(malloc(num_bytes + 1));
 
     if (!buffer) {
-      printf("Buff Fail\n");
+      op(nullptr);
       return;
     }
 
     jbyte *elements =
         jni::Environment::current()->GetByteArrayElements(array.get(), nullptr);
     if (!elements) {
-      printf("Element Fail\n");
       free(buffer);
+      op(nullptr);
       return;
     }
 

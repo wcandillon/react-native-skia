@@ -1,36 +1,5 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
-import type { SkImage } from "../../../skia/types";
-import { AlphaType, ColorType } from "../../../skia/types";
-import { surface } from "../setup";
-
-// Pixels of a screen snapshot in each colour the Resize screens paint: red
-// and a green square for the canvas, cyan for its box where the canvas does
-// not reach.
-const countColors = (image: SkImage) => {
-  const pixels = image.readPixels(0, 0, {
-    width: image.width(),
-    height: image.height(),
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Unpremul,
-  });
-  if (pixels === null) {
-    throw new Error("The screen snapshot has no readable pixels");
-  }
-  const counts = { red: 0, green: 0, cyan: 0 };
-  for (let i = 0; i < pixels.length; i += 4) {
-    const red = pixels[i];
-    const green = pixels[i + 1];
-    const blue = pixels[i + 2];
-    if (red > 200 && green < 60 && blue < 60) {
-      counts.red++;
-    } else if (red < 60 && green > 200 && blue < 60) {
-      counts.green++;
-    } else if (red < 60 && green > 200 && blue > 200) {
-      counts.cyan++;
-    }
-  }
-  return counts;
-};
+import { countColors, surface } from "../setup";
 
 // The canvas resizes a few points per frame while it presents (see the Resize
 // screens of the example app): the frame shown once it settles must be one
@@ -39,7 +8,7 @@ const countColors = (image: SkImage) => {
 // tells the two apart.
 describe("Canvas resize on a device", () => {
   itRunsE2eOnly("shows a frame recorded for the size it grew to", async () => {
-    const counts = countColors(await surface.screen("ResizeGrow"));
+    const counts = await countColors(await surface.screen("ResizeGrow"));
     const canvas = counts.red + counts.green;
     expect(canvas).toBeGreaterThan(0);
     // The canvas grew to cover its box.
@@ -53,7 +22,7 @@ describe("Canvas resize on a device", () => {
   itRunsE2eOnly(
     "shows a frame recorded for the size it shrank to",
     async () => {
-      const counts = countColors(await surface.screen("ResizeShrink"));
+      const counts = await countColors(await surface.screen("ResizeShrink"));
       const canvas = counts.red + counts.green;
       expect(canvas).toBeGreaterThan(0);
       // The canvas shrank to a quarter of its box.

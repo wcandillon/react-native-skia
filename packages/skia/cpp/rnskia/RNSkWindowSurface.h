@@ -140,6 +140,19 @@ public:
   bool getHighBitDepth(bool *highBitDepth);
 
   /**
+   The color space the platform view will attach the window with (Display P3
+   or sRGB, see attach()), known before it does. Any thread.
+   */
+  void setUseP3ColorSpace(bool useP3ColorSpace);
+
+  /**
+   Whether the window renders in Display P3 rather than sRGB: as it was last
+   attached, else as the platform view said it would be (see
+   setUseP3ColorSpace). Returns false until either is known. Any thread.
+   */
+  bool getUseP3ColorSpace(bool *useP3ColorSpace);
+
+  /**
    Installed by the view owning the surface: asks it for a frame when the
    window appears or changes size. Called from the main thread, with the
    window's mutex held when it appears, so it must not present on the spot:
@@ -315,6 +328,8 @@ private:
   // The bit depth the window has, or will have (see getHighBitDepth).
   bool _knownHighBitDepth = false;
   bool _hasKnownHighBitDepth = false;
+  bool _knownUseP3ColorSpace = false;
+  bool _hasKnownUseP3ColorSpace = false;
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;

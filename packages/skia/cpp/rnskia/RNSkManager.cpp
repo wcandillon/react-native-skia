@@ -8,6 +8,7 @@
 #include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
+#include "RNSkRuntimeScheduler.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
 #include "api/JsiSkPicture.h"
@@ -25,12 +26,6 @@ RNSkManager::RNSkManager(
     : _jsRuntime(jsRuntime), _platformContext(platformContext),
       _jsCallInvoker(jsCallInvoker),
       _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
-  // The GPU is probed now, once, rather than by whichever view or image call
-  // comes first: a device without one (no Vulkan 1.1 on Android) is logged
-  // and reported to JS as Skia.gpu, instead of failing in different places
-  // depending on what the app does first. On a thread of its own: the
-  // module installs during JS startup, which does not wait for the GPU.
-  DawnContext::probeInBackground();
   // A lost GPU device is replaced by a new one (see DawnContext), on which
   // the windows hold nothing yet: every view records its content again for
   // it. The redraw waits for the main thread, and for the window to be able
@@ -81,6 +76,10 @@ void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
 }
 
 void RNSkManager::installBindings() {
+  // The runtime the bindings go on is the React Native runtime, reached
+  // through the CallInvoker: promises made on it settle that way (see
+  // RNSkRuntimeScheduler).
+  RNSkRuntimeScheduler::install(*_jsRuntime, _platformContext);
   // Create the API objects and install it on the global object in the
   // provided runtime.
   auto skiaApi = std::make_shared<JsiSkApi>(_platformContext);

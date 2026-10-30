@@ -35,7 +35,7 @@ describe("Image Encoding", () => {
 
         return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
-          .slice(0, ctx.cutIndex);
+          .then((base64) => base64.slice(0, ctx.cutIndex));
       },
       {
         cutIndex: MAGIC_BYTES.WEBP.length,
@@ -64,7 +64,7 @@ describe("Image Encoding", () => {
 
         return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
-          .slice(0, ctx.cutIndex);
+          .then((base64) => base64.slice(0, ctx.cutIndex));
       },
       {
         cutIndex: MAGIC_BYTES.PNG.length,
@@ -93,7 +93,7 @@ describe("Image Encoding", () => {
 
         return Skia.Image.MakeRaster(imageInfo, data, width * bytesPerPixel)!
           .encodeToBase64(ctx.format)
-          .slice(0, ctx.cutIndex);
+          .then((base64) => base64.slice(0, ctx.cutIndex));
       },
       {
         cutIndex: MAGIC_BYTES.JPEG.length,
@@ -130,17 +130,20 @@ describe("Image Encoding", () => {
           data,
           width * bytesPerPixel
         )!;
-        const minQuality = image.encodeToBase64(ctx.format, 1e-8).length;
-        const midQuality = image.encodeToBase64(ctx.format, 50).length;
-        const defaultQuality = image.encodeToBase64(ctx.format).length;
-        const maxQuality = image.encodeToBase64(ctx.format, 100).length;
-
-        return {
-          minQuality,
-          midQuality,
-          defaultQuality,
-          maxQuality,
-        };
+        return Promise.all([
+          image.encodeToBase64(ctx.format, 1e-8),
+          image.encodeToBase64(ctx.format, 50),
+          image.encodeToBase64(ctx.format),
+          image.encodeToBase64(ctx.format, 100),
+        ]).then(([minQuality, midQuality, defaultQuality, maxQuality]) => {
+          const length = (base64: string) => base64.length;
+          return {
+            minQuality: length(minQuality),
+            midQuality: length(midQuality),
+            defaultQuality: length(defaultQuality),
+            maxQuality: length(maxQuality),
+          };
+        });
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
     );
@@ -177,17 +180,20 @@ describe("Image Encoding", () => {
           data,
           width * bytesPerPixel
         )!;
-        const minQuality = image.encodeToBase64(ctx.format, 1e-8).length;
-        const midQuality = image.encodeToBase64(ctx.format, 50).length;
-        const defaultQuality = image.encodeToBase64(ctx.format).length;
-        const maxQuality = image.encodeToBase64(ctx.format, 100).length;
-
-        return {
-          minQuality,
-          midQuality,
-          defaultQuality,
-          maxQuality,
-        };
+        return Promise.all([
+          image.encodeToBase64(ctx.format, 1e-8),
+          image.encodeToBase64(ctx.format, 50),
+          image.encodeToBase64(ctx.format),
+          image.encodeToBase64(ctx.format, 100),
+        ]).then(([minQuality, midQuality, defaultQuality, maxQuality]) => {
+          const length = (base64: string) => base64.length;
+          return {
+            minQuality: length(minQuality),
+            midQuality: length(midQuality),
+            defaultQuality: length(defaultQuality),
+            maxQuality: length(maxQuality),
+          };
+        });
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.PNG }
     );
@@ -221,25 +227,30 @@ describe("Image Encoding", () => {
           data,
           width * bytesPerPixel
         )!;
-        const minQualityLossy = image.encodeToBase64(ctx.format, 1e-8).length;
-        const midQualityLossy = image.encodeToBase64(ctx.format, 50).length;
-        const maxQualityLossy = image.encodeToBase64(
-          ctx.format,
-          100 - 1e-8
-        ).length;
-        const defaultQualityLossless = image.encodeToBase64(
-          ctx.format,
-          undefined
-        ).length;
-        const maxQualityLossless = image.encodeToBase64(ctx.format, 100).length;
-
-        return {
-          minQualityLossy,
-          midQualityLossy,
-          maxQualityLossy,
-          defaultQualityLossless,
-          maxQualityLossless,
-        };
+        return Promise.all([
+          image.encodeToBase64(ctx.format, 1e-8),
+          image.encodeToBase64(ctx.format, 50),
+          image.encodeToBase64(ctx.format, 100 - 1e-8),
+          image.encodeToBase64(ctx.format, undefined),
+          image.encodeToBase64(ctx.format, 100),
+        ]).then(
+          ([
+            minQualityLossy,
+            midQualityLossy,
+            maxQualityLossy,
+            defaultQualityLossless,
+            maxQualityLossless,
+          ]) => {
+            const length = (base64: string) => base64.length;
+            return {
+              minQualityLossy: length(minQualityLossy),
+              midQualityLossy: length(midQualityLossy),
+              maxQualityLossy: length(maxQualityLossy),
+              defaultQualityLossless: length(defaultQualityLossless),
+              maxQualityLossless: length(maxQualityLossless),
+            };
+          }
+        );
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.WEBP }
     );
@@ -252,7 +263,7 @@ describe("Image Encoding", () => {
     expect(result.maxQualityLossy).not.toEqual(result.maxQualityLossless);
     expect(result.defaultQualityLossless).toEqual(result.maxQualityLossless);
   });
-  it("SkImage.encodeToBytes: throws for an image the encoder cannot encode", async () => {
+  it("SkImage.encodeToBytes: rejects for an image the encoder cannot encode", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
         // JPEG cannot hold an image wider than 65500 pixels.
@@ -267,11 +278,10 @@ describe("Image Encoding", () => {
           data,
           width * bytesPerPixel
         )!;
-        try {
-          return `returned ${String(image.encodeToBytes(ctx.format))}`;
-        } catch (error) {
-          return error instanceof Error ? error.message : String(error);
-        }
+        return image.encodeToBytes(ctx.format).then(
+          (encoded) => `resolved ${String(encoded)}`,
+          (error) => (error instanceof Error ? error.message : String(error))
+        );
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
     );
@@ -279,7 +289,7 @@ describe("Image Encoding", () => {
     expect(result).toContain("encodeToBytes failed");
   });
 
-  it("SkImage.encodeToBase64: throws for an image the encoder cannot encode", async () => {
+  it("SkImage.encodeToBase64: rejects for an image the encoder cannot encode", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
         // JPEG cannot hold an image wider than 65500 pixels.
@@ -294,11 +304,10 @@ describe("Image Encoding", () => {
           data,
           width * bytesPerPixel
         )!;
-        try {
-          return `returned ${String(image.encodeToBase64(ctx.format))}`;
-        } catch (error) {
-          return error instanceof Error ? error.message : String(error);
-        }
+        return image.encodeToBase64(ctx.format).then(
+          (encoded) => `resolved ${String(encoded)}`,
+          (error) => (error instanceof Error ? error.message : String(error))
+        );
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
     );

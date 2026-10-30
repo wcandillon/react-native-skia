@@ -22,7 +22,7 @@ describe("Renderer", () => {
         color="lightblue"
       />
     );
-    processResult(surface, "snapshots/drawings/lightblue-rect.png");
+    await processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
   it("Scaled light blue rectangle", async () => {
     const scale = 2;
@@ -38,7 +38,7 @@ describe("Renderer", () => {
         />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/lightblue-rect.png");
+    await processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
   it("Points", async () => {
     const { vec } = importSkia();
@@ -76,6 +76,6 @@ describe("Renderer", () => {
         <Points mode="points" points={cubics} color="red" />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/points.png");
+    await processResult(surface, "snapshots/drawings/points.png");
   });
 });
