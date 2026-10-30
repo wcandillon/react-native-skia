@@ -914,11 +914,10 @@ int checkTrims() {
   std::shared_ptr<Dispatcher> failingDispatcher;
   auto posts = std::make_shared<std::atomic<int>>(0);
   failingThread.runAndWait([&]() {
-    Dispatcher::bindCurrentThread(
-        [scheduler = failingThread.scheduler(),
-         posts](Dispatcher::Operation operation) {
-          return posts->fetch_add(1) != 0 && scheduler(std::move(operation));
-        });
+    Dispatcher::bindCurrentThread([scheduler = failingThread.scheduler(),
+                                   posts](Dispatcher::Operation operation) {
+      return posts->fetch_add(1) != 0 && scheduler(std::move(operation));
+    });
     failingDispatcher = Dispatcher::getDispatcher();
   });
   trims->request(failingDispatcher);
