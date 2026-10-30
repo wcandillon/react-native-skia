@@ -146,16 +146,20 @@ describe("Offscreen Drawings", () => {
       );
       const { Skia } = importSkia();
       const image = Skia.Image.MakeFromEncoded(Skia.Data.fromBase64(raw))!;
-      const colorOfSquare = (square: number) =>
+      const colorOfSquare = async (square: number) =>
         nameColor(
-          image.readPixels(square * size + size / 2, size / 2, {
+          await image.readPixels(square * size + size / 2, size / 2, {
             width: 1,
             height: 1,
             colorType: ColorType.RGBA_8888,
             alphaType: AlphaType.Unpremul,
           })
         );
-      expect([0, 1, 2].map(colorOfSquare)).toEqual(["cyan", "cyan", "red"]);
+      expect(await Promise.all([0, 1, 2].map(colorOfSquare))).toEqual([
+        "cyan",
+        "cyan",
+        "red",
+      ]);
     }
   );
 });
