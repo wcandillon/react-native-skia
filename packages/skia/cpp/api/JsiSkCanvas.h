@@ -491,6 +491,12 @@ public:
     return jsi::Value::undefined();
   }
 
+  // Resolves to the pixels of the canvas under `imageInfo` at (srcX, srcY),
+  // like image.readPixels(); to null when nothing could be read. A Graphite
+  // canvas has no readback of its own: the canvas of a surface reads from a
+  // snapshot of the surface (a copy task on its recorder, submitted so that
+  // the texture can be read back). A canvas without an owning surface (a
+  // picture-recording canvas) has its pixels at hand, read right here.
   JSI_HOST_FUNCTION(readPixels) {
     auto srcX = static_cast<int>(arguments[0].asNumber());
     auto srcY = static_cast<int>(arguments[1].asNumber());
@@ -498,47 +504,24 @@ public:
     if (!info) {
       return jsi::Value::null();
     }
-    size_t bytesPerRow = 0;
-    if (count > 4 && !arguments[4].isUndefined()) {
-      bytesPerRow = static_cast<size_t>(arguments[4].asNumber());
-    } else {
-      bytesPerRow = info->minRowBytes();
-    }
-    auto dest =
-        count > 3
-            ? RNSkTypedArray::getTypedArray(runtime, arguments[3], *info)
-            : RNSkTypedArray::getTypedArray(runtime, jsi::Value::null(), *info);
-    if (!dest.isObject()) {
-      return jsi::Value::null();
-    }
-    jsi::ArrayBuffer buffer =
-        dest.asObject(runtime)
-            .getProperty(runtime, jsi::PropNameID::forAscii(runtime, "buffer"))
-            .asObject(runtime)
-            .getArrayBuffer(runtime);
-    auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
-
-    // A Graphite canvas has no readback of its own: the canvas of a surface
-    // reads from a snapshot of the surface (a copy task on its recorder,
-    // submitted so that the texture can be read back). A canvas without an
-    // owning surface (a picture-recording canvas) falls through to the raster
-    // read below.
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
       if (auto *recorder = _surface->recorder()) {
         DawnContext::getInstance().submitRecording(recorder);
       }
-      if (!JsiSkImage::readPixelsInto(snapshot, *info, bfrPtr, bytesPerRow,
-                                      srcX, srcY)) {
-        return jsi::Value::null();
-      }
-      return dest;
+      return JsiSkImage::readPixelsAsync(
+          runtime, getContext(), std::move(snapshot), *info, srcX, srcY);
     }
-
-    if (!getCanvas()->readPixels(*info, bfrPtr, bytesPerRow, srcX, srcY)) {
-      return jsi::Value::null();
+    auto canvas = getCanvas();
+    auto rowBytes = info->minRowBytes();
+    auto pixels = JsiSkImage::allocatePixels(*info, rowBytes);
+    if (pixels == nullptr) {
+      return JsiSkImage::unreadable(runtime, *info);
     }
-    return dest;
+    auto read = canvas->readPixels(*info, pixels->writable_data(), rowBytes,
+                                   srcX, srcY);
+    return RNSkAsync::settled(
+        runtime, JsiSkImage::settlePixels(read ? pixels : nullptr, *info));
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {

@@ -50,11 +50,13 @@ void RNSkApplePlatformContext::performStreamOperation(
       data = [NSData dataWithContentsOfURL:url];
     }
 
-    auto bytes = [data bytes];
-    auto skData = SkData::MakeWithCopy(bytes, [data length]);
-    auto stream = SkMemoryStream::Make(skData);
-
-    op(std::move(stream));
+    if (data == nil) {
+      // Nothing at the uri: the caller is told rather than handed no bytes.
+      op(nullptr);
+      return;
+    }
+    auto skData = SkData::MakeWithCopy([data bytes], [data length]);
+    op(SkMemoryStream::Make(skData));
   };
 
   // Fire and forget the thread - will be resolved on completion

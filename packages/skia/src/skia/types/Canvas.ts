@@ -534,16 +534,18 @@ export interface SkCanvas {
     sampling?: SamplingOptions | null
   ): void;
 
-  /** Read Image pixels
+  /**
+   * Resolves to the pixels of the canvas, like `image.readPixels()` on a
+   * snapshot of it: a Float32Array for an F32 color type, else a
+   * Uint8Array; to null when nothing could be read.
    *
    * @param srcX - x-axis upper left corner of the rectangle to read from
    * @param srcY - y-axis upper left corner of the rectangle to read from
    * @param imageInfo - describes the pixel format and dimensions of the data to read into
-   * @return Float32Array or Uint8Array with data or null if the read failed.
    */
   readPixels(
     srcX: number,
     srcY: number,
     imageInfo: ImageInfo
-  ): Float32Array | Uint8Array | null;
+  ): Promise<Float32Array | Uint8Array | null>;
 }

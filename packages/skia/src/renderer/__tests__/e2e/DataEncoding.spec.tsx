@@ -11,7 +11,7 @@ describe("Data Encoding", () => {
       if (!img) {
         return [];
       }
-      return Array.from(img.encodeToBytes());
+      return img.encodeToBytes().then((bytes) => Array.from(bytes));
     });
     expect(result).toEqual([
       137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1,
@@ -50,7 +50,7 @@ describe("Data Encoding", () => {
       canvas.drawImage(img, 0, 0);
       const snapshotImage = Skia.Image.MakeNull();
       offscreen.makeImageSnapshot(undefined, snapshotImage);
-      return Array.from(snapshotImage.encodeToBytes());
+      return snapshotImage.encodeToBytes().then((bytes) => Array.from(bytes));
     });
     expect(result.length).toBeGreaterThan(0);
   });
