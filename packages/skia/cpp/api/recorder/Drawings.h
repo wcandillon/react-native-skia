@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -897,6 +898,8 @@ public:
 
   void play(DrawingCtx *ctx) override {
     if (props.paragraph) {
+      // Other canvases can draw the same paragraph on other threads.
+      std::lock_guard<std::recursive_mutex> lock(props.paragraph->getMutex());
       auto paragraph = props.paragraph->getObject();
       paragraph->layout(props.width);
       paragraph->paint(ctx->canvas, props.x, props.y);

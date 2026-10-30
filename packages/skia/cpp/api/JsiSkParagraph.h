@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <variant>
@@ -37,37 +38,60 @@ class JsiSkParagraph
 public:
   static constexpr const char *CLASS_NAME = "Paragraph";
 
-  void layout(double width) { getObject()->layout(width); }
+  /**
+   * Canvases replay their recordings on several threads, so one paragraph can
+   * be drawn by more than one canvas at a time. skia::textlayout::Paragraph
+   * is not thread-safe: layout() rebuilds its lines (on every call for a
+   * single-line paragraph) and paint() fills per-line caches. Every access to
+   * the paragraph holds this lock. It is recursive because extendedVisit()
+   * calls back into JavaScript, which can use the paragraph again.
+   */
+  std::recursive_mutex &getMutex() { return _mutex; }
+
+  void layout(double width) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    getObject()->layout(width);
+  }
 
   void paint(std::shared_ptr<JsiSkCanvas> jsiCanvas, double x, double y) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     getObject()->paint(jsiCanvas->getCanvas(), x, y);
   }
 
-  double getHeight() { return static_cast<double>(getObject()->getHeight()); }
+  double getHeight() {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    return static_cast<double>(getObject()->getHeight());
+  }
 
   double getMaxWidth() {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     return static_cast<double>(getObject()->getMaxWidth());
   }
 
   double getMaxIntrinsicWidth() {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     return static_cast<double>(getObject()->getMaxIntrinsicWidth());
   }
 
   double getMinIntrinsicWidth() {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     return static_cast<double>(getObject()->getMinIntrinsicWidth());
   }
 
   double getLongestLine() {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     return static_cast<double>(getObject()->getLongestLine());
   }
 
   int getGlyphPositionAtCoordinate(double dx, double dy) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     auto result = getObject()->getGlyphPositionAtCoordinate(dx, dy);
     return result.position;
   }
 
   std::vector<std::shared_ptr<JsiSkRect>> getRectsForRange(double start,
                                                            double end) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     auto result =
         getObject()->getRectsForRange(start, end, para::RectHeightStyle::kTight,
                                       para::RectWidthStyle::kTight);
@@ -80,6 +104,7 @@ public:
   }
 
   JSI_HOST_FUNCTION(getLineMetrics) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     std::vector<para::LineMetrics> metrics;
     getObject()->getLineMetrics(metrics);
     auto returnValue = jsi::Array(runtime, metrics.size());
@@ -131,6 +156,7 @@ public:
 
   std::variant<std::nullptr_t, std::shared_ptr<JsiSkPath>>
   getPath(int lineNumber) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     auto paragraph = getObject();
     // Paragraph::getPath does not bounds-check the line number.
     if (lineNumber < 0 ||
@@ -175,6 +201,7 @@ public:
     auto visitorObject = getArgumentAsFunction(runtime, arguments, count, 0);
     auto visitor = visitorObject.asFunction(runtime);
     auto context = getContext();
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     getObject()->extendedVisit(
         [&runtime, &visitor, &context](
             int lineNumber, const para::Paragraph::ExtendedVisitorInfo *info) {
@@ -236,6 +263,7 @@ public:
   }
 
   JSI_HOST_FUNCTION(getRectsForPlaceholders) {
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
     std::vector<para::TextBox> placeholderInfos =
         getObject()->getRectsForPlaceholders();
     auto returnValue = jsi::Array(runtime, placeholderInfos.size());
@@ -284,6 +312,9 @@ public:
                           para::ParagraphBuilder *paragraphBuilder)
       : JsiSkWrappingSharedPtrNativeObject<JsiSkParagraph, para::Paragraph>(
             std::move(context), paragraphBuilder->Build()) {}
+
+private:
+  std::recursive_mutex _mutex;
 };
 
 } // namespace RNSkia
