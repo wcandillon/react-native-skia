@@ -147,15 +147,14 @@ public:
   // Producer side ------------------------------------------------------------
 
   /**
-   The layout size (points) and the props the format follows from, as known
-   to JS. Used until the platform view knows better: the pixel size it was
-   laid out with, and the bit depth of its surface (see resolveTargetInfo).
+   The layout size (points) and the bit depth JS resolved from the props.
+   Used until the platform view knows better: the pixel size it was laid out
+   with, and the bit depth of its surface (see resolveTargetInfo).
    */
-  void setLayout(float width, float height, bool opaque, bool highBitDepth) {
+  void setLayout(float width, float height, bool highBitDepth) {
     std::lock_guard<std::mutex> lock(_stateMutex);
     _layoutWidth = width;
     _layoutHeight = height;
-    _opaque = opaque;
     _highBitDepth = highBitDepth;
   }
 
@@ -370,37 +369,26 @@ private:
    JS measured; in the last two cases with the format and the color space
    the surface has, or will have: the bit depth the platform view knows
    (the one of its backing view, which keeps it, see SkiaView.java), else
-   the one the props call for, following the same rules; the color space
-   the platform view knows (the colorSpace prop, see SkiaView.mm), else
-   the platform's default.
+   the one JS resolved from the props (see views/android.ts); the color
+   space the platform view knows (the colorSpace prop, see SkiaView.mm),
+   else the platform's default.
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkWindowSurface> surface;
     float width;
     float height;
-    bool opaque;
     bool highBitDepth;
     {
       std::lock_guard<std::mutex> lock(_stateMutex);
       surface = _surface.lock();
       width = _layoutWidth;
       height = _layoutHeight;
-      opaque = _opaque;
       highBitDepth = _highBitDepth;
     }
     RNSkGraphiteTargetInfo info;
     if (surface && surface->getTargetInfo(&info)) {
       return info;
     }
-#if defined(__ANDROID__)
-    // The 10-bit buffer format only has 2 bits of alpha: translucent views
-    // stay 8-bit.
-    if (!opaque) {
-      highBitDepth = false;
-    }
-#else
-    (void)opaque;
-#endif
     if (surface) {
       // The window keeps the bit depth it was attached with, whatever the
       // props say later (on Android they are read at mount): a frame
@@ -415,7 +403,6 @@ private:
       double pd = _context->getPixelDensity();
       info.width = static_cast<int>(std::lround(width * pd));
       info.height = static_cast<int>(std::lround(height * pd));
-    } else {
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
@@ -449,7 +436,6 @@ private:
   std::weak_ptr<RNSkWindowSurface> _surface;
   float _layoutWidth = 0;
   float _layoutHeight = 0;
-  bool _opaque = false;
   bool _highBitDepth = false;
 
   // Hand-off to the main thread.

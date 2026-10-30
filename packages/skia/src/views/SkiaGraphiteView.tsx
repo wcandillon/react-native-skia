@@ -6,8 +6,8 @@ import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { SkiaViewApi } from "./api";
 import {
   androidNativeProps,
-  resolveOpaque,
-  useBackingViewWarning,
+  resolveBackingView,
+  resolveHighBitDepth,
 } from "./android";
 import type { SkiaGraphiteViewNativeProps } from "./types";
 import { measureLayout } from "./measureLayout";
@@ -39,9 +39,10 @@ export const SkiaGraphiteView = ({
   const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
-  useBackingViewWarning({ highBitDepth, android });
-  // What the surface format follows from on Android, see makeGraphiteContext.
-  const opaque = resolveOpaque({ highBitDepth, android });
+  const surfaceHighBitDepth = resolveHighBitDepth(
+    highBitDepth,
+    resolveBackingView(android)
+  );
   // Retires the native target made for this id on unmount, in case no native
   // view ever bound to it; a bound target is retired by the view's teardown.
   // StrictMode runs this cleanup right after mount too, possibly before the
@@ -72,12 +73,11 @@ export const SkiaGraphiteView = ({
           nativeId,
           size.width,
           size.height,
-          opaque,
-          highBitDepth
+          surfaceHighBitDepth
         );
       },
     }),
-    [nativeId, opaque, highBitDepth]
+    [nativeId, surfaceHighBitDepth]
   );
   return (
     <SkiaViewNativeComponent
@@ -86,7 +86,7 @@ export const SkiaGraphiteView = ({
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
       colorSpace={colorSpace ?? ""}
-      {...androidNativeProps({ highBitDepth, android })}
+      {...androidNativeProps(android)}
       {...viewProps}
     />
   );
