@@ -37,6 +37,7 @@ import {
   Graphite,
   GraphiteCanvasExample,
   AndroidViews,
+  ImageViews,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -86,6 +87,7 @@ const linking: LinkingOptions<StackParamList> = {
       Graphite: "graphite",
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
+      ImageViews: "image-views",
     },
   },
   // react-native-test-app registers its bundle id as the iOS URL scheme, and
@@ -257,6 +259,7 @@ const App = () => {
               component={GraphiteCanvasExample}
             />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
+            <Stack.Screen name="ImageViews" component={ImageViews} />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

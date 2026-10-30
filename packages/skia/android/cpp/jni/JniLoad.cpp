@@ -1,5 +1,6 @@
 #include "JniPlatformContext.h"
 #include "JniSkiaManager.h"
+#include "JniSkiaPresentedImages.h"
 #include "JniSkiaView.h"
 #include <fbjni/NativeRunnable.h>
 #include <fbjni/fbjni.h>
@@ -17,5 +18,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     // with the app's loader in use, resolves every class on that path once;
     // fbjni keeps them.
     facebook::jni::JNativeRunnable::newObjectCxxArgs([] {});
+    // The image views' bitmaps are made and published on the worker, a
+    // thread the JVM did not create either: their store's class, the same
+    // way, resolved as its native methods are registered.
+    RNSkia::JniSkiaPresentedImages::registerNatives();
   });
 }

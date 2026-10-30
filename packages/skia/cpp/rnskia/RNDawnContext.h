@@ -24,6 +24,7 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkWindowSurface.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -241,11 +242,23 @@ public:
    */
   void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
                   std::function<void(ReadResult)> callback) {
+    readPixels(image, srcRect,
+               image->imageInfo().makeDimensions(srcRect.size()),
+               std::move(callback));
+  }
+
+  /**
+   Same as readPixels(), into `info`: a color type, alpha type or color space
+   of the caller's rather than the image's, and the size of `srcRect` or a
+   smaller one, which the GPU scales the pixels down to.
+   */
+  void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
+                  const SkImageInfo &info,
+                  std::function<void(ReadResult)> callback) {
     struct Request {
       std::function<void(ReadResult)> callback;
       std::shared_ptr<std::atomic<bool>> delivered;
     };
-    auto info = image->imageInfo().makeDimensions(srcRect.size());
     Readback readback;
     {
       std::unique_lock<std::mutex> lock(_mutex);
@@ -258,9 +271,10 @@ public:
       }
       readback.delivered = std::make_shared<std::atomic<bool>>(false);
       auto *request = new Request{std::move(callback), readback.delivered};
+      // Graphite ignores the mode when `info` has the size of `srcRect`.
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
-          SkImage::RescaleMode::kNearest,
+          SkImage::RescaleMode::kRepeatedLinear,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
             request->callback(std::move(result));
@@ -578,6 +592,13 @@ public:
   // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
   // The surface retains the texture for its lifetime.
   sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+    return MakeSurfaceFromTexture(std::move(texture), getRecorder(), nullptr);
+  }
+
+  // The same, on `recorder` and in `colorSpace`.
+  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture,
+                                          skgpu::graphite::Recorder *recorder,
+                                          sk_sp<SkColorSpace> colorSpace) {
     if (!texture) {
       return nullptr;
     }
@@ -596,8 +617,7 @@ public:
 
     // The color type is derived from the texture format.
     return SkSurfaces::WrapBackendTexture(
-        getRecorder(), backendTexture,
-        nullptr, // colorspace
+        recorder, backendTexture, std::move(colorSpace),
         nullptr, // surfaceProps
         [](void *context) {
           auto ref = static_cast<TextureRef *>(context);
@@ -675,31 +695,6 @@ public:
     return wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
   }
 
-  /**
-   Destroys the Dawn device of a replaced generation (see generation()), so
-   that Dawn runs the deletions it deferred on it: a lost device never ticks
-   again, and on Android the VkSurfaceKHR of a window's old swapchain keeps
-   the window connected until then, so that no swapchain can be made over it
-   on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR). The Generation, its
-   device handle and its Graphite context stay: what still points at them
-   keeps failing validation, as destroyed rather than lost. Every
-   wgpu::Surface configured on the device must be gone first: Dawn does not
-   destroy swapchains with their device, and detaching one afterwards
-   dereferences the device's deleted fenced deleter (see
-   RNSkWindowSurface::ensureDevice). Nothing happens for the device in use,
-   or for one destroyed already. Any thread.
-   */
-  void destroyRetiredDevice(uint64_t generation) {
-    std::lock_guard<std::mutex> lock(_mutex);
-    for (auto *retired : _retired) {
-      if (retired->id == generation && !retired->deviceDestroyed) {
-        retired->deviceDestroyed = true;
-        retired->backendContext.fDevice.Destroy();
-        return;
-      }
-    }
-  }
-
 private:
   struct Probe {
     DawnContext *instance = nullptr;
@@ -710,8 +705,8 @@ private:
    A device and the Graphite context on it (see generation()). Never
    destroyed: Dawn reports its loss from any of its threads, at any time,
    and the recorders, surfaces and images made on it keep pointing at it.
-   The Dawn device itself is destroyed once replaced and let go of by the
-   windows (see destroyRetiredDevice); the handle stays valid.
+   The Dawn device itself is destroyed when it is replaced (see recover);
+   the handle stays valid.
    */
   struct Generation {
     uint64_t id = 0;
@@ -720,9 +715,6 @@ private:
     DawnUtils::DeviceLostListener listener;
     skgpu::graphite::DawnBackendContext backendContext;
     std::unique_ptr<skgpu::graphite::Context> context;
-    // Whether the device was destroyed (see destroyRetiredDevice). Guarded
-    // by _mutex.
-    bool deviceDestroyed = false;
     // Set once, by the loss callback (any thread, see onDeviceLost); the
     // strings are guarded by _lostMutex.
     std::atomic<bool> lost{false};
@@ -856,14 +848,23 @@ private:
   }
 
   /**
-   Replaces `lost` with a new device and Graphite context, unless it was
-   replaced meanwhile, then tells the loss listeners. The new device is
-   validated (see DawnUtils::requestDevice): a resource of the lost device
-   that reaches it is refused with an error rather than handed to the
-   driver. A replacement that could not be made, or that was lost before it
-   was in place, is tried again (see scheduleRecovery).
+   Destroys `lost` once every window has let go of its surface on it (see
+   RNSkWindowSurface::releaseSurfacesOn), then replaces it with a new device
+   and Graphite context, unless it was replaced meanwhile, and tells the
+   loss listeners. The new device is validated (see
+   DawnUtils::requestDevice): a resource of the lost device that reaches it
+   is refused with an error rather than handed to the driver. A replacement
+   that could not be made, or that was lost before it was in place, is
+   tried again (see scheduleRecovery).
    */
   void recover(Generation *lost) noexcept {
+    // Replaced meanwhile by another recovery (see requestRecovery): no sweep.
+    if (_current.load(std::memory_order_acquire) != lost) {
+      return;
+    }
+    // Outside the context lock, which comes after a window's mutex (see
+    // RNSkWindowSurface).
+    RNSkWindowSurface::releaseSurfacesOn(lost->id);
     LossInfo info;
     Generation *next = nullptr;
     {
@@ -877,6 +878,16 @@ private:
         info.reason = lost->lostReason;
         info.message = lost->lostMessage;
       }
+      // Dawn runs the deletions it deferred on a lost device, which never
+      // ticks again, once it is destroyed: those of the swapchains the
+      // windows let go of included, whose VkSurfaceKHRs keep their windows
+      // connected until then. Destroyed before the new device is made, its
+      // memory is free for it (a loss can be the GPU running out of memory),
+      // and before it is published, it holds no window by the time one makes
+      // a swapchain on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR
+      // otherwise). Destroying it again, after a failed replacement, does
+      // nothing.
+      lost->backendContext.fDevice.Destroy();
       try {
         next = createGeneration(/* validate= */ true);
         _retired.push_back(lost);

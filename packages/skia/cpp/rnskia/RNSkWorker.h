@@ -1,9 +1,11 @@
 #pragma once
 
 #include <deque>
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include <condition_variable>
@@ -14,12 +16,16 @@
 #include <pthread.h>
 #endif
 
+#include "utils/RNSkLog.h"
+
 namespace RNSkia {
 
 /**
  * One background thread for work that neither a frame nor JS should wait
- * for: decoding an image, for instance. Jobs run in submission order, one at
- * a time, so a burst of them never fans out into as many threads.
+ * for: decoding an image, or presenting a static canvas's frame, for
+ * instance. Jobs run in submission order, one at a time, so a burst of them
+ * never fans out into as many threads. A job that throws is logged and the
+ * worker goes on: an exception leaving a detached thread ends the process.
  */
 class RNSkWorker {
 public:
@@ -41,6 +47,19 @@ public:
     _condition.notify_one();
   }
 
+  /**
+   * Runs `make` and hands what it returns to `deliver`, both on the worker:
+   * null when `make` throws, which is logged, so `deliver` runs either way.
+   */
+  template <typename Make, typename Deliver>
+  void post(Make make, Deliver deliver) {
+    post([make = std::move(make), deliver = std::move(deliver)]() {
+      std::invoke_result_t<const Make &> result = nullptr;
+      runLoggingFailure([&result, &make]() { result = make(); });
+      deliver(std::move(result));
+    });
+  }
+
 private:
   RNSkWorker() {
     std::thread([this]() { run(); }).detach();
@@ -60,7 +79,17 @@ private:
         job = std::move(_jobs.front());
         _jobs.pop_front();
       }
-      job();
+      runLoggingFailure(job);
+    }
+  }
+
+  template <typename Work> static void runLoggingFailure(const Work &work) {
+    try {
+      work();
+    } catch (const std::exception &error) {
+      RNSkLogger::logToConsole("RNSkia Worker: a job failed: %s", error.what());
+    } catch (...) {
+      RNSkLogger::logToConsole("RNSkia Worker: a job failed");
     }
   }
 

@@ -4,7 +4,7 @@ import { Skia, SkiaGraphiteView } from "react-native-skia";
 import type { SkiaGraphiteViewRef } from "react-native-skia";
 
 // Fills itself in cyan with the one frame it records once mounted.
-const CyanGraphiteView = ({ style }: { style: ViewStyle }) => {
+export const CyanGraphiteView = ({ style }: { style: ViewStyle }) => {
   const ref = useRef<SkiaGraphiteViewRef>(null);
   useEffect(() => {
     const view = ref.current;

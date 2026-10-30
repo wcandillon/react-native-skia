@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -16,6 +17,7 @@
 #include "include/core/SkData.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
 
@@ -26,6 +28,48 @@
 namespace RNSkia {
 
 namespace react = facebook::react;
+
+/**
+ A bitmap of the platform's own, which a <SkiaImageView> draws inside the
+ window's drawing (see RNSkPresentedImages).
+ */
+class PresentedBitmap {
+public:
+  virtual ~PresentedBitmap() = default;
+
+  /**
+   Shows this bitmap in every <SkiaImageView> showing the image `id`, and in
+   any that starts to. Any thread: the views change on the main thread, in the
+   order presents and discards were made.
+   */
+  virtual void present(uint32_t id) = 0;
+};
+
+/**
+ A presented bitmap before it is drawn: its pixels are the platform's own
+ memory, which no GPU device owns, in the rows the platform lays out. They are
+ written once, from any thread, then finish() makes the bitmap the views draw.
+ A writer let go of unfinished frees the bitmap.
+ */
+class PresentedBitmapWriter {
+public:
+  virtual ~PresentedBitmapWriter() = default;
+
+  /** The pixels to write. */
+  const SkPixmap &getPixels() const { return _pixels; }
+
+  /**
+   The bitmap of the pixels as written, once; nullptr when the platform could
+   not make it. Never called on the main thread or a JS thread.
+   */
+  virtual std::shared_ptr<PresentedBitmap> finish() = 0;
+
+protected:
+  explicit PresentedBitmapWriter(const SkPixmap &pixels) : _pixels(pixels) {}
+
+private:
+  SkPixmap _pixels;
+};
 
 class RNSkPlatformContext {
 public:
@@ -134,6 +178,38 @@ public:
    * for a view before its surface exists.
    */
   virtual bool prefersP3ColorSpace() { return false; }
+
+  /**
+   A bitmap the platform draws, of `info`, to write (see
+   PresentedBitmapWriter): premultiplied 8-bit RGBA, in sRGB, or in Display
+   P3 where the platform's bitmap can be (see canPresentP3Bitmaps). nullptr
+   when it could not be made, and on a platform without <SkiaImageView>.
+   Never called on the main thread or a JS thread.
+   */
+  virtual std::unique_ptr<PresentedBitmapWriter>
+  makePresentedBitmap(const SkImageInfo &info) {
+    return nullptr;
+  }
+
+  /**
+   Whether a presented bitmap can be in Display P3: on Apple platforms,
+   whose CGImage carries its color space on any screen. An Android bitmap
+   is in sRGB, as Android's views render.
+   */
+  virtual bool canPresentP3Bitmaps() { return false; }
+
+  /**
+   The most bytes one presented bitmap may hold: the platform draws none
+   larger, so an image past it is presented scaled down to fit. No limit by
+   default.
+   */
+  virtual size_t getMaxPresentedBitmapBytes() { return SIZE_MAX; }
+
+  /**
+   Forgets the bitmap of the image `id`. A view still showing it keeps it until
+   it shows something else. Any thread, ordered with PresentedBitmap::present.
+   */
+  virtual void discardPresentedBitmap(uint32_t id) {}
 
 private:
   float _pixelDensity;

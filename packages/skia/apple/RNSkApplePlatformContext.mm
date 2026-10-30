@@ -1,16 +1,19 @@
 #import "RNSkApplePlatformContext.h"
 
 #import <React/RCTUtils.h>
+#include <cstdlib>
 #include <set>
 #include <thread>
 #include <utility>
 
 #include "RNDawnContext.h"
+#import "SkiaPresentedImages.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
 #include "include/core/SkFontMgr.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkSurface.h"
 
 #include "include/ports/SkFontMgr_mac_ct.h"
@@ -166,6 +169,93 @@ RNSkApplePlatformContext::resolveFontFamily(const std::string &familyName) {
 void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();
+  });
+}
+
+namespace {
+
+// A CGImage the image views set as their layer's contents (see
+// RNSkPresentedImages). Presents and discards are queued on the main queue in
+// the order they are made.
+class ApplePresentedBitmap : public PresentedBitmap {
+public:
+  // Takes ownership of `image`.
+  explicit ApplePresentedBitmap(CGImageRef image) : _image(image) {}
+
+  ~ApplePresentedBitmap() override { CGImageRelease(_image); }
+
+  void present(uint32_t id) override {
+    CGImageRef image = CGImageRetain(_image);
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [SkiaPresentedImages publishImage:image forId:id];
+      CGImageRelease(image);
+    });
+  }
+
+private:
+  CGImageRef _image;
+};
+
+// Memory a CGImage takes over once it is written (see finish).
+class ApplePresentedBitmapWriter : public PresentedBitmapWriter {
+public:
+  // Takes ownership of `memory`, which `pixels` lays out.
+  ApplePresentedBitmapWriter(const SkPixmap &pixels, void *memory)
+      : PresentedBitmapWriter(pixels), _memory(memory) {}
+
+  ~ApplePresentedBitmapWriter() override { free(_memory); }
+
+  std::shared_ptr<PresentedBitmap> finish() override {
+    const auto &pixels = getPixels();
+    const auto &info = pixels.info();
+    CGDataProviderRef provider = CGDataProviderCreateWithData(
+        _memory, _memory, pixels.computeByteSize(),
+        [](void *memory, const void *, size_t) { free(memory); });
+    if (provider == nullptr) {
+      return nullptr;
+    }
+    _memory = nullptr;
+    // The pixels are in sRGB or Display P3 (see
+    // RNSkPresentedImages::presentedInfo).
+    const bool displayP3 =
+        info.colorSpace() != nullptr && !info.colorSpace()->isSRGB();
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(
+        displayP3 ? kCGColorSpaceDisplayP3 : kCGColorSpaceSRGB);
+    // Premultiplied RGBA, in the byte order of the pixels' color type.
+    CGImageRef image = CGImageCreate(
+        info.width(), info.height(), 8, 32, pixels.rowBytes(), colorSpace,
+        static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedLast) |
+            kCGBitmapByteOrder32Big,
+        provider, nullptr, false, kCGRenderingIntentDefault);
+    CGColorSpaceRelease(colorSpace);
+    CGDataProviderRelease(provider);
+    if (image == nullptr) {
+      return nullptr;
+    }
+    return std::make_shared<ApplePresentedBitmap>(image);
+  }
+
+private:
+  void *_memory;
+};
+
+} // namespace
+
+std::unique_ptr<PresentedBitmapWriter>
+RNSkApplePlatformContext::makePresentedBitmap(const SkImageInfo &info) {
+  const size_t rowBytes = info.minRowBytes();
+  // Uninitialized: every byte is written, by the scale or the copy.
+  void *memory = malloc(info.computeByteSize(rowBytes));
+  if (memory == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<ApplePresentedBitmapWriter>(
+      SkPixmap(info, memory, rowBytes), memory);
+}
+
+void RNSkApplePlatformContext::discardPresentedBitmap(uint32_t id) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [SkiaPresentedImages discardImageForId:id];
   });
 }
 

@@ -1,11 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Canvas, Group, Skia, useCanvasRef } from "react-native-skia";
-import { importDevice } from "react-native-webgpu";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { PixelRatio, Text, View } from "react-native";
 
 import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
+import {
+  forceGpuDeviceLoss,
+  getSharedDevice,
+  mapGpuBuffer,
+  mappedGpuBufferState,
+} from "./GpuDevice";
+import { ScreenDoneContext } from "./ScreenDone";
+import type { Screen } from "./Screens";
 import { Screens } from "./Screens";
 import { useClient } from "./useClient";
 import { workletSerialization } from "./workletSerialization";
@@ -31,31 +38,6 @@ const resultMessage = (result: unknown) => {
   return json === undefined
     ? errorEnvelope(`The snippet's result has no JSON form: ${typeof result}`)
     : json;
-};
-
-// The device Skia renders with, as a GPUDevice. Skia replaces a lost device
-// with a new one: the import is let go of when that happens, so that the next
-// use imports the new device.
-let sharedDevice: GPUDevice | null = null;
-const getSharedDevice = () => {
-  if (sharedDevice === null) {
-    const device = importDevice(Skia.getNativeDevice());
-    sharedDevice = device;
-    Skia.gpu.lost.then(() => {
-      if (sharedDevice === device) {
-        sharedDevice = null;
-      }
-    });
-  }
-  return sharedDevice;
-};
-
-// Loses the GPU device on purpose (the Gpu spec): the device is shared with
-// react-native-webgpu, whose test hook asks Dawn to lose it.
-const forceGpuDeviceLoss = () => {
-  (
-    getSharedDevice() as GPUDevice & { forceLossForTesting: () => void }
-  ).forceLossForTesting();
 };
 
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
@@ -98,7 +80,21 @@ export const Tests = ({ assets }: TestsProps) => {
   const ref = useCanvasRef();
   const [client, hostname] = useClient();
   const [drawing, setDrawing] = useState<any>(null);
-  const [screen, setScreen] = useState<any>(null);
+  // The screen shown and the key it is mounted with. Requested again, a
+  // screen that settles is mounted again, so that it settles again; any other
+  // keeps its instance and what it shows.
+  const [shown, setShown] = useState<{
+    readonly screen: Screen;
+    readonly key: number;
+  } | null>(null);
+  const screenMounts = useRef(0);
+  // Whether the screen shown has settled (see useScreenDone).
+  const [screenDone, setScreenDone] = useState(false);
+  const markScreenDone = useCallback(() => setScreenDone(true), []);
+  // The harness's own canvas holds a window on the GPU device: the Gpu spec
+  // unmounts it while it loses a device no window holds, and mounts it again
+  // after. A drawing mounts it too, as it draws in it.
+  const [canvasShown, setCanvasShown] = useState(true);
 
   useEffect(() => {
     if (client !== null) {
@@ -117,11 +113,16 @@ export const Tests = ({ assets }: TestsProps) => {
               Skia,
               // The worklet serializer spec needs app-side worklets (see
               // workletSerialization.ts), and the Gpu spec a way to lose the
-              // device; hand them over through the context.
+              // device, to tell whether it was destroyed and to unmount the
+              // harness's canvas; hand them over through the context.
               ctx: {
                 ...parseProps(tree.ctx, assets),
                 workletSerialization,
                 forceGpuDeviceLoss,
+                mapGpuBuffer,
+                mappedGpuBufferState,
+                hideCanvas: () => setCanvasShown(false),
+                showCanvas: () => setCanvasShown(true),
               },
               size: size * PixelRatio.get(),
               scale: s,
@@ -137,14 +138,19 @@ export const Tests = ({ assets }: TestsProps) => {
             client.send(errorEnvelope(error));
           }
         } else if (typeof tree.screen === "string") {
-          const Screen = Screens[tree.screen];
-          if (!Screen) {
+          const screen = Screens[tree.screen];
+          if (!screen) {
             throw new Error(`Unknown screen: ${tree.screen}`);
           }
-          setScreen(React.createElement(Screen));
+          if (screen.snapshot === "onDone") {
+            screenMounts.current += 1;
+          }
+          setScreenDone(false);
+          setShown({ screen, key: screenMounts.current });
         } else {
           const node = parseNode(tree, assets);
           setDrawing(node as SerializedNode);
+          setCanvasShown(true);
         }
       };
 
@@ -185,7 +191,11 @@ export const Tests = ({ assets }: TestsProps) => {
   }, [client, drawing, ref]);
 
   useEffect(() => {
-    if (screen && client) {
+    if (
+      shown !== null &&
+      client !== null &&
+      (shown.screen.snapshot === "onMount" || screenDone)
+    ) {
       const it = setTimeout(async () => {
         try {
           client.send(await encodeView(viewRef));
@@ -199,7 +209,7 @@ export const Tests = ({ assets }: TestsProps) => {
       };
     }
     return;
-  }, [client, screen]);
+  }, [client, shown, screenDone]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
@@ -208,15 +218,21 @@ export const Tests = ({ assets }: TestsProps) => {
           ? `⚪️ Connecting to ${hostname}. Use yarn e2e to run tests.`
           : "🟢 Waiting for the server to send tests"}
       </Text>
-      <Canvas style={{ width: size, height: size }} ref={ref}>
-        <Group transform={[{ scale }]}>{drawing}</Group>
-      </Canvas>
+      {canvasShown ? (
+        <Canvas style={{ width: size, height: size }} ref={ref}>
+          <Group transform={[{ scale }]}>{drawing}</Group>
+        </Canvas>
+      ) : null}
       <View
         style={{ width: size, height: size }}
         ref={viewRef}
         collapsable={false}
       >
-        {screen}
+        <ScreenDoneContext.Provider value={markScreenDone}>
+          {shown === null
+            ? null
+            : React.createElement(shown.screen.component, { key: shown.key })}
+        </ScreenDoneContext.Provider>
       </View>
     </View>
   );

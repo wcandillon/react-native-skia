@@ -8,6 +8,8 @@ export interface NativeProps extends ViewProps {
   // "srgb", "display-p3", or empty for the display's color space (see
   // views/types.ts)
   colorSpace?: string;
+  // The `static` prop: frames presented as images, with no surface.
+  staticPresentation?: WithDefault<boolean, false>;
   // The `android` prop, resolved (see views/android.ts)
   androidBackingView?: WithDefault<
     "TextureView" | "SurfaceView" | "HardwareBufferView",
