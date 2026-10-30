@@ -37,9 +37,10 @@ public:
   using Work = std::function<void(Complete)>;
 
   /**
-   A promise of the work's result. Rejected when the work throws before it
-   started, and when its settling throws on the runtime (a typed array too
-   large for it, say).
+   A promise of the work's result. Rejected when nothing could ever settle
+   it on this runtime (one without setTimeout), when the work throws before
+   it started, and when its settling throws on the runtime (a typed array
+   too large for it, say).
    */
   static jsi::Value run(jsi::Runtime &runtime,
                         std::shared_ptr<RNSkPlatformContext> context,
@@ -48,7 +49,11 @@ public:
         runtime, [context = std::move(context), work = std::move(work)](
                      jsi::Runtime &runtime, std::shared_ptr<Promise> promise) {
           auto scheduler = RNSkRuntimeScheduler::get(runtime, context);
-          scheduler->expectPost(runtime);
+          if (!scheduler->expectPost(runtime)) {
+            promise->reject("Nothing can settle a promise on this runtime: "
+                            "it has no setTimeout.");
+            return;
+          }
           // Completed once: the post expected above is made exactly once,
           // whether by the work or, when the work throws before completing,
           // by an empty job in its place (the executor's exception rejects
@@ -62,6 +67,10 @@ public:
                 [promise, settle = std::move(settle)](jsi::Runtime &runtime) {
                   try {
                     settle(runtime, *promise);
+                  } catch (const jsi::JSError &error) {
+                    // The JS error itself (a RangeError for a typed array
+                    // too large, say), name and stack kept.
+                    promise->reject(error);
                   } catch (const std::exception &error) {
                     promise->reject(error.what());
                   }

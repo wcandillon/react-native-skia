@@ -17,6 +17,10 @@ void JsiPromises::Promise::reject(const std::string &message) {
   reject_.call(runtime_, jsi::JSError(runtime_, message).value());
 }
 
+void JsiPromises::Promise::reject(const jsi::JSError &error) {
+  reject_.call(runtime_, error.value());
+}
+
 jsi::Value
 JsiPromises::createPromiseAsJSIValue(jsi::Runtime &rt,
                                      PromiseSetupFunctionType &&func) {
