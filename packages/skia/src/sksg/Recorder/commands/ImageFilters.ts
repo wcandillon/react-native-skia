@@ -92,6 +92,9 @@ const declareBlurImageFilter = (
   "worklet";
   const { mode, blur } = props;
   const sigma = processRadius(ctx.Skia, blur);
+  if (sigma.x <= 0 && sigma.y <= 0) {
+    return;
+  }
   const imgf = ctx.Skia.ImageFilter.MakeBlur(
     sigma.x,
     sigma.y,
