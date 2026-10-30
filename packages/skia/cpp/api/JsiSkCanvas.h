@@ -529,9 +529,8 @@ public:
       }
     }
     if (ownedBySurface) {
-      return JsiSkImage::readPixelsAsync(runtime, getContext(),
-                                         std::move(snapshot), *info, srcX,
-                                         srcY);
+      return JsiSkImage::readPixelsAsync(
+          runtime, getContext(), std::move(snapshot), *info, srcX, srcY);
     }
     if (pixels == nullptr) {
       return JsiSkImage::unreadable(runtime, *info);
