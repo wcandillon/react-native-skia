@@ -1,4 +1,5 @@
 #include "JniPlatformContext.h"
+#include "JniPresentThread.h"
 #include "JniSkiaManager.h"
 #include "JniSkiaView.h"
 #include <fbjni/NativeRunnable.h>
@@ -10,6 +11,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     RNSkia::JniSkiaManager::registerNatives();
     RNSkia::JniSkiaView::registerNatives();
     RNSkia::JniPlatformContext::registerNatives();
+    RNSkia::JniPresentThread::registerNatives();
     // A view posts to the thread it presents on through a NativeRunnable (see
     // JniSkiaView), from the render thread pool among others. A thread the
     // JVM did not create has only the system class loader, which does not

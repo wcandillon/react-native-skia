@@ -29,13 +29,7 @@ namespace {
 RNSkThreadPool &renderPool() {
   static RNSkThreadPool &pool = []() -> RNSkThreadPool & {
     auto &threads = RNSkThreadPool::getInstance();
-    threads.setIdleTask([](bool idle) {
-      // What went away with the request is older than this by the time the
-      // task runs, what the views still drawing use is not.
-      DawnContext::trimThreadRecorders(RNSkThreadPool::kIdleDelay / 2, idle);
-    });
-    ImageProvider::setReleaseListener(
-        []() { RNSkThreadPool::getInstance().requestIdleTask(); });
+    threads.setIdleTask(&DawnContext::trimThreadRecorders);
     return threads;
   }();
   return pool;
