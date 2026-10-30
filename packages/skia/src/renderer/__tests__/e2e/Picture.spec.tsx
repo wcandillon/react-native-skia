@@ -1,9 +1,17 @@
 import React from "react";
 
 import { importSkia, surface } from "../setup";
-import { checkImage, docPath, itRunsNodeOnly } from "../../../__tests__/setup";
+import {
+  checkImage,
+  docPath,
+  itRunsE2eOnly,
+  itRunsNodeOnly,
+} from "../../../__tests__/setup";
 import { Blur, Group, Paint, Picture } from "../../components";
-import { BlendMode } from "../../../skia/types";
+import { AlphaType, BlendMode, ColorType } from "../../../skia/types";
+
+import type { WorkletThread } from "./setup";
+import { slowSvg, slowSvgSide } from "./setup";
 
 describe("Pictures", () => {
   it("Should draw a simple picture", async () => {
@@ -121,6 +129,81 @@ describe("Pictures", () => {
     });
     expect(result).toContain("recording has finished");
   });
+  itRunsE2eOnly(
+    "finishing the recording on another runtime waits for the draw in flight on its canvas",
+    async () => {
+      const levels = 9;
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          // No async/await: the code runs through Hermes' eval on the device.
+          const { workletThread } = ctx;
+          const svg = Skia.SVG.MakeFromString(ctx.svg)!;
+          const bounds = Skia.XYWHRect(0, 0, ctx.side, ctx.side);
+          // How long the draw takes here, on a recording of this thread.
+          const reference = Skia.PictureRecorder();
+          const referenceStart = Date.now();
+          reference.beginRecording(bounds).drawSvg(svg);
+          const drawDuration = Date.now() - referenceStart;
+          reference.dispose();
+          const recorder = Skia.PictureRecorder();
+          const canvas = recorder.beginRecording(bounds);
+          return workletThread
+            .finishRecordingDuring(recorder, drawDuration / 4, () =>
+              canvas.drawSvg(svg)
+            )
+            .then(({ draw, finish, picture }) => {
+              let next: string | null = null;
+              try {
+                canvas.drawSvg(svg);
+              } catch (error) {
+                next = (error as Error).message;
+              }
+              // The picture holds the whole draw: its last square fills the
+              // corner.
+              const replay = Skia.Surface.MakeRaster(ctx.side, ctx.side)!;
+              replay.getCanvas().drawPicture(picture);
+              return replay
+                .makeImageSnapshot()
+                .readPixels(ctx.side - 1, ctx.side - 1, {
+                  width: 1,
+                  height: 1,
+                  ...ctx.pixel,
+                })
+                .then((corner) => {
+                  replay.dispose();
+                  picture.dispose();
+                  recorder.dispose();
+                  svg.dispose();
+                  return { draw, finish, next, corner: Array.from(corner!) };
+                });
+            });
+        },
+        {
+          svg: slowSvg(levels),
+          side: slowSvgSide(levels),
+          pixel: {
+            colorType: ColorType.RGBA_8888,
+            alphaType: AlphaType.Unpremul,
+          },
+        } as {
+          svg: string;
+          side: number;
+          pixel: { colorType: ColorType; alphaType: AlphaType };
+          workletThread: WorkletThread;
+        }
+      );
+      // finishRecordingAsPicture() started while the draw was in flight, and
+      // returned once the draw had: it took about as long as what was left of
+      // the draw.
+      const left = result.draw.ended - result.finish.started;
+      expect(left).toBeGreaterThan(0);
+      expect(
+        result.finish.ended - result.finish.started
+      ).toBeGreaterThanOrEqual(left / 2);
+      expect(result.corner).toEqual([0, 255, 255, 255]);
+      expect(result.next).toContain("recording has finished");
+    }
+  );
   it("Should draw animated circle trail t=0", async () => {
     const n = 20;
     const progress = 0;

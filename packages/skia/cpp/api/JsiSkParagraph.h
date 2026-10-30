@@ -40,7 +40,8 @@ public:
   void layout(double width) { getObject()->layout(width); }
 
   void paint(std::shared_ptr<JsiSkCanvas> jsiCanvas, double x, double y) {
-    getObject()->paint(jsiCanvas->getCanvas(), x, y);
+    auto canvas = jsiCanvas->getCanvas();
+    getObject()->paint(canvas.get(), x, y);
   }
 
   double getHeight() { return static_cast<double>(getObject()->getHeight()); }

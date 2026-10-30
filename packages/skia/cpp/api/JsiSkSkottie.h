@@ -204,9 +204,9 @@ public:
               std::optional<std::shared_ptr<SkRect>> rect) {
     auto canvas = jsiCanvas->getCanvas();
     if (rect.has_value()) {
-      getObject()->_animation->render(canvas, rect->get());
+      getObject()->_animation->render(canvas.get(), rect->get());
     } else {
-      getObject()->_animation->render(canvas);
+      getObject()->_animation->render(canvas.get());
     }
   }
 

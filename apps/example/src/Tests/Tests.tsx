@@ -9,6 +9,7 @@ import { parseNode, parseProps } from "./deserialize";
 import { Screens } from "./Screens";
 import { useClient } from "./useClient";
 import { workletSerialization } from "./workletSerialization";
+import { workletThread } from "./workletThread";
 
 export const CI = process.env.CI === "true";
 const s = 3;
@@ -115,12 +116,14 @@ export const Tests = ({ assets }: TestsProps) => {
                 })`
             ).call({
               Skia,
-              // The worklet serializer spec needs app-side worklets (see
-              // workletSerialization.ts), and the Gpu spec a way to lose the
+              // The worklet serializer, surface and picture specs need
+              // app-side worklets (see workletSerialization.ts and
+              // workletThread.ts), and the Gpu spec a way to lose the
               // device; hand them over through the context.
               ctx: {
                 ...parseProps(tree.ctx, assets),
                 workletSerialization,
+                workletThread,
                 forceGpuDeviceLoss,
               },
               size: size * PixelRatio.get(),
