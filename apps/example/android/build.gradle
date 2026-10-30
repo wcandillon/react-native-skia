@@ -13,12 +13,14 @@ buildscript {
     repositories {
         mavenCentral()
         google()
+        maven { url "https://packages.rnrepo.org/releases" }
     }
 
     dependencies {
         getReactNativeDependencies().each { dependency ->
             classpath(dependency)
         }
+        classpath("org.rnrepo.tools:prebuilds-plugin:0.1.0")
     }
 }
 
@@ -27,5 +29,10 @@ allprojects {
         // React Native artifacts are now published to Maven Central (since RN 0.71+)
         mavenCentral()
         google()
+        maven { url "https://packages.rnrepo.org/releases" }
     }
+}
+
+project(":app") {
+    apply plugin: "org.rnrepo.tools.prebuilds-plugin"
 }
