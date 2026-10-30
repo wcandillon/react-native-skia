@@ -15,6 +15,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkWindowSurface.h"
+#include "api/JsiSkCanvas.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -144,6 +145,13 @@ public:
   explicit RNSkGraphiteTarget(std::shared_ptr<RNSkPlatformContext> context)
       : _context(std::move(context)) {}
 
+  ~RNSkGraphiteTarget() {
+    // A recording left open can no longer be finished, and the recorder that
+    // holds its deferred canvas may go with the target.
+    std::lock_guard<std::mutex> lock(_recordingMutex);
+    detachOpenCanvasLocked();
+  }
+
   // Producer side ------------------------------------------------------------
 
   /**
@@ -183,7 +191,7 @@ public:
    */
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
-    std::lock_guard<std::mutex> lock(_stateMutex);
+    std::lock_guard<std::mutex> lock(_recordingMutex);
     return openRecordingLocked(recorder.recorder, recorder.generation, nullptr,
                                target);
   }
@@ -192,12 +200,16 @@ public:
    Same, on a recorder of the target's own, made on the first call and again
    once the GPU device it was made for is lost: for JS, which records across
    calls (SkiaViewApi.makeGraphiteContext) and may open a recording on
-   another target before finishing this one. Throws while a recording is
-   already open, or when no recorder or deferred canvas can be made.
+   another target before finishing this one. Returns the canvas JS draws the
+   recording on, which the target detaches before the deferred canvas goes,
+   in finishRecording(), whichever context of the view calls it, and when the
+   target goes with the recording open: drawing on it throws from then on.
+   Throws while a recording is already open, or when no recorder or deferred
+   canvas can be made.
    */
-  SkCanvas *beginRecording() {
+  std::shared_ptr<JsiSkCanvas> beginRecording() {
     auto target = resolveTargetInfo();
-    std::lock_guard<std::mutex> lock(_stateMutex);
+    std::lock_guard<std::mutex> lock(_recordingMutex);
     // A recorder made for a GPU device that was lost since is replaced: the
     // recordings still holding it keep it alive until they are dropped.
     const auto generation = DawnContext::generation();
@@ -211,8 +223,15 @@ public:
       }
       _ownRecorder = std::move(recorder);
     }
-    return openRecordingLocked(_ownRecorder->recorder.get(),
-                               _ownRecorder->generation, _ownRecorder, target);
+    auto *canvas =
+        openRecordingLocked(_ownRecorder->recorder.get(),
+                            _ownRecorder->generation, _ownRecorder, target);
+    if (canvas == nullptr) {
+      return nullptr;
+    }
+    auto jsiCanvas = std::make_shared<JsiSkCanvas>(_context, canvas);
+    _openCanvas = jsiCanvas;
+    return jsiCanvas;
   }
 
   /**
@@ -220,11 +239,13 @@ public:
    recording is open.
    */
   std::shared_ptr<RNSkGraphiteRecording> finishRecording() {
-    std::lock_guard<std::mutex> lock(_stateMutex);
+    std::lock_guard<std::mutex> lock(_recordingMutex);
     if (!_recording) {
       throw std::runtime_error("SkiaGraphiteView: no recording is open, call "
                                "beginRecording() first.");
     }
+    // The snap deletes the deferred canvas.
+    detachOpenCanvasLocked();
     _recording = false;
     auto *recorder = std::exchange(_openRecorder, nullptr);
     auto owner = std::move(_openOwner);
@@ -332,7 +353,7 @@ private:
   /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
    recorder alive when it is the target's own. Returns nullptr while the view
-   has no size. Called with the state lock held.
+   has no size. Called with the recording lock held.
    */
   SkCanvas *openRecordingLocked(skgpu::graphite::Recorder *recorder,
                                 uint64_t generation,
@@ -362,6 +383,16 @@ private:
     _openOwner = std::move(owner);
     _recordingTarget = target;
     return canvas;
+  }
+
+  /**
+   Detaches the canvas JS draws the open recording on, if JS still holds it:
+   drawing on it throws from then on. Called with the recording lock held.
+   */
+  void detachOpenCanvasLocked() {
+    if (auto canvas = std::exchange(_openCanvas, {}).lock()) {
+      canvas->detach();
+    }
   }
 
   /**
@@ -435,17 +466,23 @@ private:
 
   std::shared_ptr<RNSkPlatformContext> _context;
 
-  // The target's own recorder (JS, see beginRecording()), the open recording
-  // (its recorder, the generation it was made for, the owner keeping the
-  // recorder alive when it is the target's own, and the target it was opened
-  // against) and the target description.
-  std::mutex _stateMutex;
+  // The target's own recorder (JS, see beginRecording()) and the open
+  // recording (its recorder, the generation it was made for, the owner keeping
+  // the recorder alive when it is the target's own, the canvas JS draws it on,
+  // and the target it was opened against), under a lock apart from the target
+  // description's: a finish holds it while it detaches the canvas and snaps,
+  // which the view's bind need not wait for.
+  std::mutex _recordingMutex;
   std::shared_ptr<RNSkGraphiteRecorder> _ownRecorder;
   bool _recording = false;
   skgpu::graphite::Recorder *_openRecorder = nullptr;
   uint64_t _openGeneration = 0;
   std::shared_ptr<RNSkGraphiteRecorder> _openOwner;
+  std::weak_ptr<JsiSkCanvas> _openCanvas;
   RNSkGraphiteTargetInfo _recordingTarget;
+
+  // The target description.
+  std::mutex _stateMutex;
   std::weak_ptr<RNSkWindowSurface> _surface;
   float _layoutWidth = 0;
   float _layoutHeight = 0;
