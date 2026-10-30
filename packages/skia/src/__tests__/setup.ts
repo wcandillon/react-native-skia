@@ -24,7 +24,9 @@ export const itRunsCIAndNodeOnly = CI || !E2E ? it : it.skip;
 export const docPath = (relPath: string) =>
   path.resolve(process.cwd(), `../../apps/docs/static/img/${relPath}`);
 
-export const processResult = (
+// Asynchronous: the snapshot is encoded by a promise, and it must not be
+// disposed before then.
+export const processResult = async (
   surface: SkSurface,
   relPath: string,
   overwrite = false
@@ -32,7 +34,7 @@ export const processResult = (
   surface.flush();
   using image = surface.makeImageSnapshot();
   surface.getCanvas().clear(Float32Array.of(0, 0, 0, 0));
-  const result = checkImage(image, relPath, { overwrite });
+  const result = await checkImage(image, relPath, { overwrite });
   return result;
 };
 
@@ -54,19 +56,19 @@ const defaultCheckImageOptions = {
   shouldFail: false,
 };
 
-export const checkImage = (
+export const checkImage = async (
   image: SkImage,
   relPath: string,
   opts?: CheckImageOptions
 ) => {
   const options = { ...defaultCheckImageOptions, ...opts };
   const { overwrite, threshold, mute, maxPixelDiff, shouldFail } = options;
-  const png = image.encodeToBytes();
+  const png = await image.encodeToBytes();
   const p = path.resolve(__dirname, relPath);
   if (fs.existsSync(p) && !overwrite) {
     const ref = fs.readFileSync(p);
     const baseline = PNG.sync.read(ref);
-    const toTest = PNG.sync.read(Buffer.from(image.encodeToBytes()));
+    const toTest = PNG.sync.read(Buffer.from(png));
     const diffImage = new PNG({
       width: baseline.width,
       height: baseline.height,

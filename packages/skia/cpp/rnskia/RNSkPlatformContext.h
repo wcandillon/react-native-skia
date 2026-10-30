@@ -108,9 +108,11 @@ public:
   virtual void runOnMainThread(std::function<void()> func) = 0;
 
   /**
-   * Returns an SkStream wrapping the require uri provided.
+   * Loads the resource at the uri on a thread of the platform's and hands
+   * `op` a stream over its bytes, or nullptr when it could not be loaded.
+   * `op` is called exactly once, on that thread.
    * @param sourceUri Uri for the resource to load as a string
-   * @op Operation to execute when the stream has successfuly been loaded.
+   * @param op Operation to execute with the stream.
    */
   virtual void performStreamOperation(
       const std::string &sourceUri,

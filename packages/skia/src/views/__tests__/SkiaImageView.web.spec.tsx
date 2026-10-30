@@ -23,7 +23,7 @@ const mockMakeOffscreen = jest.fn(() => ({
   getCanvas: () => ({ drawImageRectOptions: mockDrawImageRectOptions }),
   flush: () => {},
   makeImageSnapshot: () => ({
-    readPixels: () => new Uint8Array(4),
+    readPixels: () => Promise.resolve(new Uint8Array(4)),
     dispose: () => {},
   }),
   dispose: () => {},
@@ -87,9 +87,11 @@ beforeEach(() => {
 
 const makeImage = (width = 2, height = 2, readable = true) => {
   const readPixels = jest.fn(() =>
-    readable ? new Uint8Array(width * height * 4) : null
+    Promise.resolve(readable ? new Uint8Array(width * height * 4) : null)
   );
-  const encodeToBytes = jest.fn(() => Uint8Array.of(137, 80, 78, 71));
+  const encodeToBytes = jest.fn(() =>
+    Promise.resolve(Uint8Array.of(137, 80, 78, 71))
+  );
   const image = {
     width: () => width,
     height: () => height,
@@ -99,7 +101,11 @@ const makeImage = (width = 2, height = 2, readable = true) => {
   return { image, readPixels, encodeToBytes };
 };
 
+// The browser's encode starts once the image's pixels are read back.
+const startEncodes = flushMicrotasks;
+
 const finishEncodes = async () => {
+  await startEncodes();
   await act(async () => {
     const encodes = pendingEncodes;
     pendingEncodes = [];
@@ -138,6 +144,7 @@ describe("SkiaImageView on the web", () => {
       </>
     );
     expect(readPixels).toHaveBeenCalledTimes(1);
+    await startEncodes();
     expect(toBlob).toHaveBeenCalledTimes(1);
     expect(encodedSizes).toEqual([[2, 2]]);
     expect(encodeToBytes).not.toHaveBeenCalled();
@@ -164,6 +171,7 @@ describe("SkiaImageView on the web", () => {
         MipmapMode.Linear,
       ],
     ]);
+    await startEncodes();
     expect(encodedSizes).toEqual([[5792, 2896]]);
     await finishEncodes();
     expect(sources(view.container)).toEqual(["blob:image-0"]);
@@ -174,6 +182,7 @@ describe("SkiaImageView on the web", () => {
     const { image } = makeImage(30000000, 1);
     const view = mount(<SkiaImageView image={image} />);
     expect(mockMakeOffscreen.mock.calls).toEqual([[32767, 1]]);
+    await startEncodes();
     expect(encodedSizes).toEqual([[32767, 1]]);
     await view.unmount();
     await finishEncodes();

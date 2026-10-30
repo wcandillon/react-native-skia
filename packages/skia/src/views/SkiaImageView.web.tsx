@@ -40,7 +40,11 @@ const encodedSizeOf = (image: SkImage) => {
   };
 };
 
-const readEncodedPixels = (image: SkImage, width: number, height: number) => {
+const readEncodedPixels = async (
+  image: SkImage,
+  width: number,
+  height: number
+) => {
   const info = {
     width,
     height,
@@ -68,39 +72,40 @@ const readEncodedPixels = (image: SkImage, width: number, height: number) => {
     );
   surface.flush();
   const scaled = surface.makeImageSnapshot();
-  const pixels = scaled.readPixels(0, 0, info);
-  scaled.dispose();
-  surface.dispose();
-  return pixels;
+  try {
+    return await scaled.readPixels(0, 0, info);
+  } finally {
+    scaled.dispose();
+    surface.dispose();
+  }
 };
 
 // The browser encodes asynchronously; Skia's encoder blocks the main thread for seconds on a photo.
-const encodeImage = (image: SkImage) =>
-  new Promise<Blob>((resolve, reject) => {
-    const { width, height } = encodedSizeOf(image);
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    const pixels =
-      context === null ? null : readEncodedPixels(image, width, height);
-    if (
-      context === null ||
-      !(pixels instanceof Uint8Array) ||
-      !(pixels.buffer instanceof ArrayBuffer)
-    ) {
-      reject(new Error("SkiaImageView: could not read the image's pixels"));
-      return;
-    }
-    context.putImageData(
-      new ImageData(
-        new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.length),
-        width,
-        height
-      ),
-      0,
-      0
-    );
+const encodeImage = async (image: SkImage) => {
+  const { width, height } = encodedSizeOf(image);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  const pixels =
+    context === null ? null : await readEncodedPixels(image, width, height);
+  if (
+    context === null ||
+    !(pixels instanceof Uint8Array) ||
+    !(pixels.buffer instanceof ArrayBuffer)
+  ) {
+    throw new Error("SkiaImageView: could not read the image's pixels");
+  }
+  context.putImageData(
+    new ImageData(
+      new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.length),
+      width,
+      height
+    ),
+    0,
+    0
+  );
+  return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((png) => {
       if (png === null) {
         reject(new Error("SkiaImageView: could not encode the image"));
@@ -109,6 +114,7 @@ const encodeImage = (image: SkImage) =>
       }
     }, "image/png");
   });
+};
 
 const retainImageUrl = (image: SkImage) => {
   let shown = shownImages.get(image);

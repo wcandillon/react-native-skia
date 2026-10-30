@@ -158,14 +158,14 @@ const readRegionOrNull = (
     alphaType: AlphaType.Unpremul,
   });
 
-const readRegion = (
+const readRegion = async (
   image: SkImage,
   x: number,
   y: number,
   width: number,
   height: number
 ) => {
-  const pixels = readRegionOrNull(image, x, y, width, height);
+  const pixels = await readRegionOrNull(image, x, y, width, height);
   if (pixels === null) {
     throw new Error("The snapshot has no readable pixels");
   }
@@ -177,8 +177,8 @@ export const readAllPixels = (image: SkImage) =>
   readRegion(image, 0, 0, image.width(), image.height());
 
 // The pixels of a screen snapshot in each colour it names.
-export const countColors = (image: SkImage) => {
-  const pixels = readAllPixels(image);
+export const countColors = async (image: SkImage) => {
+  const pixels = await readAllPixels(image);
   const counts = { cyan: 0, red: 0, blue: 0, green: 0, white: 0, black: 0 };
   for (let i = 0; i < pixels.length; i += 4) {
     const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
@@ -190,9 +190,9 @@ export const countColors = (image: SkImage) => {
 };
 
 // The colour of the screen at fractions of its width and of its height.
-const readScreenColorAt = (image: SkImage, x: number, y: number) =>
+const readScreenColorAt = async (image: SkImage, x: number, y: number) =>
   nameColor(
-    readRegionOrNull(
+    await readRegionOrNull(
       image,
       Math.round(image.width() * x),
       Math.round(image.height() * y),
@@ -203,8 +203,8 @@ const readScreenColorAt = (image: SkImage, x: number, y: number) =>
 
 // The red, green and blue bytes of the screen at fractions of its width and
 // of its height.
-const readScreenPixelAt = (image: SkImage, x: number, y: number) => {
-  const [red, green, blue] = readRegion(
+const readScreenPixelAt = async (image: SkImage, x: number, y: number) => {
+  const [red, green, blue] = await readRegion(
     image,
     Math.round(image.width() * x),
     Math.round(image.height() * y),
@@ -225,18 +225,20 @@ export const readScreenColor = (image: SkImage, fraction: number) =>
   readScreenColorAt(image, fraction, fraction);
 
 // The top and bottom halves of a screen whose views split it in two.
-export const readScreenHalves = (image: SkImage) => ({
-  top: readScreenColor(image, 1 / 4),
-  bottom: readScreenColor(image, 3 / 4),
+export const readScreenHalves = async (image: SkImage) => ({
+  top: await readScreenColor(image, 1 / 4),
+  bottom: await readScreenColor(image, 3 / 4),
 });
 
 // What `read` answers at the left and right of the top and bottom halves of a
 // screen whose views split it in two.
-const atQuarters = <Reading,>(read: (x: number, y: number) => Reading) => ({
-  topLeft: read(1 / 4, 1 / 4),
-  topRight: read(3 / 4, 1 / 4),
-  bottomLeft: read(1 / 4, 3 / 4),
-  bottomRight: read(3 / 4, 3 / 4),
+const atQuarters = async <Reading,>(
+  read: (x: number, y: number) => Promise<Reading>
+) => ({
+  topLeft: await read(1 / 4, 1 / 4),
+  topRight: await read(3 / 4, 1 / 4),
+  bottomLeft: await read(1 / 4, 3 / 4),
+  bottomRight: await read(3 / 4, 3 / 4),
 });
 
 export const readScreenQuarters = (image: SkImage) =>
@@ -247,10 +249,10 @@ export const readScreenQuarterPixels = (image: SkImage) =>
 
 // The luminance of the middle of a screen, the central half of its width and
 // of its height: its mean and its standard deviation, from 0 to 255.
-export const readMiddleLuminance = (image: SkImage) => {
+export const readMiddleLuminance = async (image: SkImage) => {
   const width = Math.round(image.width() / 2);
   const height = Math.round(image.height() / 2);
-  const pixels = readRegion(
+  const pixels = await readRegion(
     image,
     Math.round(image.width() / 4),
     Math.round(image.height() / 4),
@@ -436,7 +438,7 @@ export const mountCanvas = async (element: ReactNode) => {
 export const serialize = async (element: ReactNode) => {
   const { root, render } = await mountCanvas(element);
   await render();
-  const serialized = serializeNode(root.sg);
+  const serialized = await serializeNode(root.sg);
   return JSON.stringify(serialized);
 };
 
@@ -450,13 +452,27 @@ interface SerializedNode {
   children: SerializedNode[];
 }
 
-const serializeSkOjects = (obj: any): any => {
+// Asynchronous: an image without an asset name is sent encoded, and encoding
+// is a promise.
+const serializeSkOjects = async (obj: any): Promise<any> => {
   if (typeof obj === "function") {
     return { __typename__: "Function", source: `${obj.toString()}` };
   } else if (obj instanceof Float32Array) {
     return { __typename__: "Float32Array", value: Array.from(obj) };
   } else if (Array.isArray(obj)) {
-    return obj.map((item) => serializeSkOjects(item));
+    // Font and image bytes come as arrays of millions of numbers: a promise
+    // per element would take minutes and gigabytes, so an array of
+    // primitives is passed through as is.
+    if (
+      obj.every(
+        (item) =>
+          item === null ||
+          (typeof item !== "object" && typeof item !== "function")
+      )
+    ) {
+      return obj;
+    }
+    return Promise.all(obj.map((item) => serializeSkOjects(item)));
   } else if (obj && typeof obj === "object" && "__typename__" in obj) {
     if (obj instanceof SkiaObject) {
       const skObj: SkiaObject<EvalContext, any> = obj;
@@ -497,7 +513,7 @@ const serializeSkOjects = (obj: any): any => {
       if (!asset) {
         return {
           __typename__: "RawImage",
-          data: obj.encodeToBase64(),
+          data: await obj.encodeToBase64(),
         };
       }
       return {
@@ -547,31 +563,31 @@ const serializeSkOjects = (obj: any): any => {
       };
     }
   } else if (obj && typeof obj === "object") {
-    const result = Object.keys(obj).reduce((acc, key) => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      acc[key] = serializeSkOjects(obj[key]);
-      return acc;
-    }, {});
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = await serializeSkOjects(obj[key]);
+    }
     return result;
   }
   return obj;
 };
 
-const serializeNode = (node: Node<any>): SerializedNode => {
+const serializeNode = async (node: Node<any>): Promise<SerializedNode> => {
   const props: any = {};
   const ogProps = node.props;
   if (ogProps) {
-    Object.keys(ogProps)
-      .filter((key) => key !== "children")
-      .forEach((key) => {
-        props[key] = serializeSkOjects(ogProps[key]);
-      });
+    for (const key of Object.keys(ogProps)) {
+      if (key !== "children") {
+        props[key] = await serializeSkOjects(ogProps[key]);
+      }
+    }
   }
   return {
     type: node.type,
     props,
-    children: node.children.map((child) => serializeNode(child)),
+    children: await Promise.all(
+      node.children.map((child) => serializeNode(child))
+    ),
   };
 };
 
@@ -646,11 +662,11 @@ export class RemoteSurface implements TestingSurface {
   readonly fontSize = 32;
   readonly OS = global.testOS;
 
-  eval<Ctx extends EvalContext, R>(
+  async eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => any,
     context?: Ctx
   ): Promise<R> {
-    const ctx = this.prepareContext(context);
+    const ctx = await this.prepareContext(context);
     const body = { code: fn.toString(), ctx };
     return this.handleImageResponse<R>(JSON.stringify(body), true);
   }
@@ -659,7 +675,7 @@ export class RemoteSurface implements TestingSurface {
     fn: (Skia: Skia, canvas: SkCanvas, ctx: Ctx) => void,
     context?: Ctx
   ) {
-    const ctx = this.prepareContext(context);
+    const ctx = await this.prepareContext(context);
     const code = `(Skia, ctx, size, scale) => {
 const surface = Skia.Surface.MakeOffscreen(size, size);
 if (!surface) {
@@ -703,12 +719,14 @@ return surface.makeImageSnapshot().encodeToBase64();
     return client;
   }
 
-  private prepareContext<Ctx extends EvalContext>(context?: Ctx): EvalContext {
+  private async prepareContext<Ctx extends EvalContext>(
+    context?: Ctx
+  ): Promise<EvalContext> {
     const ctx: EvalContext = {};
     if (context) {
-      Object.keys(context).forEach((key) => {
-        ctx[key] = serializeSkOjects(context[key]);
-      });
+      for (const key of Object.keys(context)) {
+        ctx[key] = await serializeSkOjects(context[key]);
+      }
     }
     return ctx;
   }

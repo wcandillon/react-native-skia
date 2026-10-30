@@ -13,8 +13,8 @@ import {
   surface,
 } from "../setup";
 
-const expectEvenGreyMiddle = (image: SkImage) => {
-  const { mean, deviation } = readMiddleLuminance(image);
+const expectEvenGreyMiddle = async (image: SkImage) => {
+  const { mean, deviation } = await readMiddleLuminance(image);
   expect(deviation).toBeLessThan(30);
   expect(mean).toBeGreaterThan(60);
   expect(mean).toBeLessThan(200);
@@ -22,27 +22,34 @@ const expectEvenGreyMiddle = (image: SkImage) => {
 
 // Where readScreenHalves reads: a view that has drawn nothing there yet
 // leaves the snapshot transparent.
-const hasUndrawnHalf = (image: SkImage) =>
-  [1 / 4, 3 / 4].some((fraction) => {
-    const pixel = image.readPixels(
-      Math.round(image.width() * fraction),
-      Math.round(image.height() * fraction),
-      {
-        width: 1,
-        height: 1,
-        colorType: ColorType.RGBA_8888,
-        alphaType: AlphaType.Unpremul,
-      }
-    );
-    return pixel !== null && pixel[3] === 0;
-  });
+const hasUndrawnHalf = async (image: SkImage) => {
+  const pixels = await Promise.all(
+    [1 / 4, 3 / 4].map((fraction) =>
+      image.readPixels(
+        Math.round(image.width() * fraction),
+        Math.round(image.height() * fraction),
+        {
+          width: 1,
+          height: 1,
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        }
+      )
+    )
+  );
+  return pixels.some((pixel) => pixel !== null && pixel[3] === 0);
+};
 
 // A screen whose images are read back and scaled down natively, which can
 // outlast one capture's wait on a slow phone: captured again, the same views,
 // while a half still shows nothing, at most `captures` times.
 const captureHalvesOnceDrawn = async (screen: string, captures = 4) => {
   let image = await surface.screen(screen);
-  for (let taken = 1; taken < captures && hasUndrawnHalf(image); taken++) {
+  for (
+    let taken = 1;
+    taken < captures && (await hasUndrawnHalf(image));
+    taken++
+  ) {
     image = await surface.screen(screen);
   }
   return readScreenHalves(image);
@@ -53,7 +60,10 @@ describe("SkiaImageView", () => {
     "fills its box with a GPU image and with a CPU image",
     async () => {
       const image = await surface.screen("ImageView");
-      expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "red" });
+      expect(await readScreenHalves(image)).toEqual({
+        top: "cyan",
+        bottom: "red",
+      });
     }
   );
 
@@ -63,14 +73,17 @@ describe("SkiaImageView", () => {
     await surface.screen("ImageView");
     expect(await loseGpuDevice()).toEqual([]);
     const image = await surface.screen("ImageView");
-    expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "red" });
+    expect(await readScreenHalves(image)).toEqual({
+      top: "cyan",
+      bottom: "red",
+    });
   });
 
   itRunsE2eOnly(
     "fills its box with a CPU image wider than the largest texture",
     async () => {
       const image = await surface.screen("ImageViewWide");
-      expect(readScreenColor(image, 1 / 2)).toBe("red");
+      expect(await readScreenColor(image, 1 / 2)).toBe("red");
     }
   );
 
@@ -80,18 +93,17 @@ describe("SkiaImageView", () => {
   // (https://developer.android.com/develop/ui/views/theming/darktheme#force-dark).
   itRunsE2eOnly("clips its image to its rounded corners", async () => {
     const image = await surface.screen("ImageViewRounded");
-    const { top, bottom: background } = readScreenHalves(image);
+    const { top, bottom: background } = await readScreenHalves(image);
     expect(top).toBe("cyan");
     expect(background).not.toBe("cyan");
-    expect(readScreenColor(image, 1 / 100)).toBe(background);
+    expect(await readScreenColor(image, 1 / 100)).toBe(background);
   });
 
   itRunsE2eOnly(
     "shows a light image and its background as a canvas does",
     async () => {
-      const { topLeft, topRight, bottomLeft, bottomRight } = readScreenQuarters(
-        await surface.screen("CanvasAboveImageView")
-      );
+      const { topLeft, topRight, bottomLeft, bottomRight } =
+        await readScreenQuarters(await surface.screen("CanvasAboveImageView"));
       expect(topLeft).toBe("white");
       expect(bottomLeft).toBe(topLeft);
       expect(bottomRight).toBe(topRight);
@@ -105,7 +117,7 @@ describe("SkiaImageView", () => {
     "keeps a light image's colours under force dark, as a canvas does",
     async () => {
       expect(
-        readScreenQuarters(await surface.screen("CanvasAboveImageView"))
+        await readScreenQuarters(await surface.screen("CanvasAboveImageView"))
       ).toEqual({
         topLeft: "white",
         topRight: "black",
@@ -128,7 +140,7 @@ describe("SkiaImageView", () => {
   // where sampling the full-size bitmap aliases them into bands of black and
   // white; iOS draws them averaged as it stands.
   itRunsE2eOnly("smooths an image it draws smaller than it is", async () => {
-    expectEvenGreyMiddle(await surface.screen("ImageViewMinified"));
+    await expectEvenGreyMiddle(await surface.screen("ImageViewMinified"));
   });
 
   // Each level of an image with odd sides has odd sides: a level scaled by
@@ -137,7 +149,7 @@ describe("SkiaImageView", () => {
   itRunsE2eOnly(
     "smooths an image with odd sides it draws smaller than it is",
     async () => {
-      expectEvenGreyMiddle(await surface.screen("ImageViewMinifiedOdd"));
+      await expectEvenGreyMiddle(await surface.screen("ImageViewMinifiedOdd"));
     }
   );
 });

@@ -18,7 +18,10 @@ import {
 describe("A static canvas", () => {
   itRunsE2eOnly("shows its frame, with no surface of its own", async () => {
     const image = await surface.screen("StaticCanvas");
-    expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "red" });
+    expect(await readScreenHalves(image)).toEqual({
+      top: "cyan",
+      bottom: "red",
+    });
   });
 
   // The worker presents a static canvas's frames, and can still hold one
@@ -27,16 +30,20 @@ describe("A static canvas", () => {
     "survives being dropped while its frame is presented",
     async () => {
       const image = await surface.screen("StaticCanvasChurn");
-      expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "cyan" });
+      expect(await readScreenHalves(image)).toEqual({
+        top: "cyan",
+        bottom: "cyan",
+      });
     }
   );
 
   itRunsE2eOnly(
     "shows a light frame and its background as a canvas does",
     async () => {
-      const { topLeft, topRight, bottomLeft, bottomRight } = readScreenQuarters(
-        await surface.screen("CanvasAboveStaticCanvas")
-      );
+      const { topLeft, topRight, bottomLeft, bottomRight } =
+        await readScreenQuarters(
+          await surface.screen("CanvasAboveStaticCanvas")
+        );
       expect(topLeft).toBe("white");
       expect(bottomLeft).toBe(topLeft);
       expect(bottomRight).toBe(topRight);
@@ -49,7 +56,9 @@ describe("A static canvas", () => {
     "keeps a light frame's colours under force dark, as a canvas does",
     async () => {
       expect(
-        readScreenQuarters(await surface.screen("CanvasAboveStaticCanvas"))
+        await readScreenQuarters(
+          await surface.screen("CanvasAboveStaticCanvas")
+        )
       ).toEqual({
         topLeft: "white",
         topRight: "black",
@@ -66,7 +75,9 @@ describe("A static canvas", () => {
     "renders in the color space colorSpace asks for, as a canvas does",
     async () => {
       const { topLeft, topRight, bottomLeft, bottomRight } =
-        readScreenQuarterPixels(await surface.screen("StaticCanvasColorSpace"));
+        await readScreenQuarterPixels(
+          await surface.screen("StaticCanvasColorSpace")
+        );
       expect(largestChannelDifference(bottomLeft, topLeft)).toBeLessThan(5);
       expect(largestChannelDifference(bottomRight, topRight)).toBeLessThan(5);
       expect(largestChannelDifference(topLeft, topRight) >= 5).toBe(
@@ -80,7 +91,10 @@ describe("A static canvas", () => {
     await surface.screen("StaticCanvas");
     expect(await loseGpuDevice()).toEqual([]);
     const image = await surface.screen("StaticCanvas");
-    expect(readScreenHalves(image)).toEqual({ top: "cyan", bottom: "red" });
+    expect(await readScreenHalves(image)).toEqual({
+      top: "cyan",
+      bottom: "red",
+    });
   });
 
   // Static canvases present on the worker and the harness's canvas on its
