@@ -79,9 +79,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   bool _canPresent;
 #if !TARGET_OS_OSX
   CADisplayLink *_displayLink;
-  // Whether the display link asked for the display's full rate yet (see
-  // requestFullFrameRate).
-  bool _fullFrameRateRequested;
 #else
   bool _presentAgainScheduled;
 #endif
@@ -95,8 +92,6 @@ usesP3ColorSpace(const std::string &colorSpace,
     _canPresent = !appIsBackgrounded();
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
-#else
-    _fullFrameRateRequested = false;
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -241,8 +236,8 @@ usesP3ColorSpace(const std::string &colorSpace,
                                                selector:@selector(onFrame:)];
     [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
                        forMode:NSRunLoopCommonModes];
+    [self requestFullFrameRate];
   }
-  [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
   if (_view != nullptr &&
@@ -253,29 +248,35 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 #if !TARGET_OS_OSX
-// A display link fires at 60 Hz until it asks for more, also while the
-// display already runs at 120 Hz for another link (Reanimated asks for 120):
-// a 120 Hz producer would then be presented every other frame. Ask for the
-// display's full rate once the view knows its screen. On iPhone this needs
-// CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
-// caps every link at 60 Hz. The link is paused while nothing is queued, so an
-// idle view does not keep the display at its full rate.
+// On a ProMotion iPhone a display link fires at 60 Hz until it asks for more,
+// also while the display already runs at 120 Hz for another link (Reanimated
+// asks for 120): a 120 Hz producer would then be presented every other frame.
+// A link asks for the display's full rate when it is made and when the view
+// moves to a window, rather than on every frame, which would read the window's
+// screen each time. On iPhone this needs CADisableMinimumFrameDurationOnPhone
+// in the app's Info.plist too, else iOS caps every link at 60 Hz. The link is
+// paused while nothing is queued, so an idle view does not keep the display at
+// its full rate.
 - (void)requestFullFrameRate {
 #if !TARGET_OS_VISION
-  if (_fullFrameRateRequested) {
+  if (_displayLink == nil) {
     return;
   }
   UIScreen *screen = self.window.screen;
   if (screen == nil) {
     return;
   }
-  _fullFrameRateRequested = true;
   const float maxFps = (float)screen.maximumFramesPerSecond;
   if (maxFps > 60) {
     _displayLink.preferredFrameRateRange =
         CAFrameRateRangeMake(60, maxFps, maxFps);
   }
 #endif
+}
+
+- (void)didMoveToWindow {
+  [super didMoveToWindow];
+  [self requestFullFrameRate];
 }
 
 - (void)onFrame:(CADisplayLink *)link {
