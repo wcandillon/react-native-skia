@@ -5,7 +5,9 @@ import android.os.Looper;
 
 import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
+import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.common.LifecycleState;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -17,7 +19,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 
-public class PlatformContext {
+public class PlatformContext implements LifecycleEventListener {
     @DoNotStrip
     private final HybridData mHybridData;
 
@@ -30,6 +32,28 @@ public class PlatformContext {
     public PlatformContext(ReactContext reactContext) {
         mContext = reactContext;
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
+        // Skia.gpu.foreground follows the host activity: resumed, or not.
+        setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
+        reactContext.addLifecycleEventListener(this);
+    }
+
+    /** Stops following the host activity; the manager is going away. */
+    public void destroy() {
+        mContext.removeLifecycleEventListener(this);
+    }
+
+    @Override
+    public void onHostResume() {
+        setForegroundNative(true);
+    }
+
+    @Override
+    public void onHostPause() {
+        setForegroundNative(false);
+    }
+
+    @Override
+    public void onHostDestroy() {
     }
 
     private byte[] getStreamAsBytes(InputStream is) throws IOException {
@@ -116,6 +140,9 @@ public class PlatformContext {
 
     // Private c++ native methods
     private native HybridData initHybrid(float pixelDensity);
+
+    // Whether the app is in the foreground (DawnContext::setForeground).
+    private static native void setForegroundNative(boolean foreground);
 
     private native void notifyTaskReadyNative();
 }

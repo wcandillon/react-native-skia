@@ -163,6 +163,30 @@ RNSkApplePlatformContext::resolveFontFamily(const std::string &familyName) {
   return familyName;
 }
 
+void RNSkApplePlatformContext::observeApplicationState() {
+#if !TARGET_OS_OSX
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    DawnContext::setForeground(
+        UIApplication.sharedApplication.applicationState ==
+        UIApplicationStateActive);
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    [center addObserverForName:UIApplicationWillResignActiveNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      DawnContext::setForeground(false);
+                    }];
+    [center addObserverForName:UIApplicationDidBecomeActiveNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      DawnContext::setForeground(true);
+                    }];
+  });
+#endif // !TARGET_OS_OSX
+}
+
 void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();

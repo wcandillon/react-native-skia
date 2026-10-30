@@ -39,11 +39,42 @@ const { isAvailable, backend, device, description, error } = Skia.gpu;
 | `vendor`, `architecture`, `device`, `description` | The adapter, in the terms of WebGPU's `GPUAdapterInfo` (native only) |
 | `error` | Why the GPU is unavailable; `null` when it is |
 | `lost` | The promise of the loss of the device, see [device loss](#device-loss) |
+| `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [the background](#the-background) |
 
 ### Availability
 
 On a device without a GPU Skia can render with (on Android, one without Vulkan 1.1, see [the Vulkan section of the installation guide](/docs/getting-started/installation#vulkan)), the app still runs.
 `Skia.gpu.isAvailable` is false and `Skia.gpu.error` says why: every canvas stays blank, CPU work (paths, decoding, raster images) still runs, and the APIs that need the GPU (offscreen surfaces, snapshots, texture images) throw an error with the same message.
+
+### The background
+
+iOS refuses GPU work from an app in the background, and refused work used to lose the device.
+React Native Skia now holds the GPU work submitted while the app is in the background and runs it when the app comes back: nothing is lost and nothing is refused.
+This holds for the device `Skia.getNativeDevice()` shares with React Native WebGPU too.
+Canvases present nothing meanwhile and catch up on return.
+
+Holding is not free: every frame drawn in the background keeps what it uses in memory until the return.
+A frame callback or a video player that keeps drawing while the app is in the background should stop instead.
+`Skia.gpu.foreground` says whether the app is in the foreground and active, synchronously, on every runtime: it is false from the moment the app starts to resign active (a lock, a swipe home, an incoming call) until it is active again, before any `AppState` event reaches JS.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+import { useFrameCallback } from "react-native-reanimated";
+
+const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+
+useFrameCallback(() => {
+  "worklet";
+  if (!Skia.gpu.foreground) {
+    // Nothing to show: skip the frame rather than queue it.
+    return;
+  }
+  surface.getCanvas().drawColor(Skia.Color("cyan"));
+  surface.flush();
+});
+```
+
+On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.
 
 ### Device loss
 

@@ -1,0 +1,631 @@
+[metal] Hold command buffer commits while the app is in the background
+
+iOS and tvOS refuse GPU work from an application in the background, and
+Dawn 157 turns the refused command buffer (MTLCommandBufferErrorNotPermitted)
+into a device loss (wcandillon/react-native-skia#4290). Dropping the work
+instead is not safe either: Dawn marks the resources it writes initialized
+while encoding, and a one-shot upload refused in the background (a glyph
+atlas page, an image) would stay garbage for the session.
+
+This patch holds the work instead, behind a device toggle,
+metal_suspend_submissions_in_background. While the application is in the
+background, submitted command buffers are encoded into the pending Metal
+command buffer but not committed; presents are dropped. On entering the
+background, the pending work is committed first and waited on to be
+scheduled, which is what Apple asks before applicationDidEnterBackground
+returns; on returning to the foreground, the held work is committed as one
+command buffer. Nothing is lost or reordered: Dawn's bookkeeping, Skia
+Graphite's completion tracking and the application's promises all describe
+work that does run, later. A warning names a producer that keeps
+submitting in the background, since each held submission pins what it
+uses until the return.
+
+The mechanism (SetSubmissionSuspended / IsSubmissionSuspended in
+MetalBackend.h) is independent of the toggle, which only wires it to
+UIApplication's notifications, and is what the white-box tests exercise.
+
+Proposed upstream as the non-blocking form of the sleep suggested in
+https://dawn-review.googlesource.com/c/dawn/+/352435. Drop this patch once
+Dawn carries an equivalent.
+
+---
+
+diff --git a/include/dawn/native/MetalBackend.h b/include/dawn/native/MetalBackend.h
+index 61fb64fcae..e3a84885b2 100644
+--- a/include/dawn/native/MetalBackend.h
++++ b/include/dawn/native/MetalBackend.h
+@@ -46,6 +46,17 @@ namespace dawn::native::metal {
+ // TODO(crbug.com/444702048): Remove after migrating Chromium to commands scheduled futures.
+ DAWN_NATIVE_EXPORT void WaitForCommandsToBeScheduled(WGPUDevice device);
+ 
++// Holds (suspended) or resumes the commit of command buffers on the device's queue. Suspending
++// first commits the pending commands and waits for them to be scheduled, which is what Apple asks
++// of an iOS application before it returns from applicationDidEnterBackground: command buffers
++// scheduled by then may complete, later ones are refused and would lose the device. While
++// suspended, submitted work is encoded into the pending command buffer but not committed, so it
++// completes (and its callbacks run) only once resumed, and presents are dropped. Resuming commits
++// what was held. Thread-safe. The metal_suspend_submissions_in_background toggle does this from
++// the application's own notifications.
++DAWN_NATIVE_EXPORT void SetSubmissionSuspended(WGPUDevice device, bool suspended);
++DAWN_NATIVE_EXPORT bool IsSubmissionSuspended(WGPUDevice device);
++
+ #if defined(__OBJC__)
+ // Return the MTLDevice corresponding to the WGPUDevice.
+ DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
+diff --git a/src/dawn/native/ExecutionQueue.cpp b/src/dawn/native/ExecutionQueue.cpp
+index 7dd279f01c..84ff0dff7c 100644
+--- a/src/dawn/native/ExecutionQueue.cpp
++++ b/src/dawn/native/ExecutionQueue.cpp
+@@ -340,7 +340,7 @@ MaybeError ExecutionQueueBase::EnsureCommandsFlushed(ExecutionSerial serial) {
+     if (serial > GetLastSubmittedCommandSerial()) {
+         ForceEventualFlushOfCommands();
+         DAWN_TRY(SubmitPendingCommands());
+-        DAWN_CHECK(serial <= GetLastSubmittedCommandSerial());
++        DAWN_CHECK(serial <= GetLastSubmittedCommandSerial() || IsSubmissionSuspended());
+     }
+     return {};
+ }
+@@ -349,6 +349,10 @@ MaybeError ExecutionQueueBase::SubmitPendingCommands() {
+     return SubmitPendingCommandsImpl();
+ }
+ 
++bool ExecutionQueueBase::IsSubmissionSuspended() const {
++    return false;
++}
++
+ void ExecutionQueueBase::AssumeCommandsComplete() {
+     mState.Use<NotifyType::None>([](auto state) { state->mAssumeCompleted = true; });
+ 
+diff --git a/src/dawn/native/ExecutionQueue.h b/src/dawn/native/ExecutionQueue.h
+index 59f17850a8..bfe42bd473 100644
+--- a/src/dawn/native/ExecutionQueue.h
++++ b/src/dawn/native/ExecutionQueue.h
+@@ -120,6 +120,11 @@ class ExecutionQueueBase : public ApiObjectBase {
+     // Submit any pending commands that are enqueued.
+     MaybeError SubmitPendingCommands();
+ 
++    // Whether the backend holds the commands it is asked to submit, to commit them later (see
++    // dawn::native::metal::SetSubmissionSuspended): a serial flushed meanwhile stays pending until
++    // the hold is lifted, and whoever waits for it waits until then.
++    virtual bool IsSubmissionSuspended() const;
++
+     // During shut down of device, some operations might have been started since the last submit
+     // and waiting on a serial that doesn't have a corresponding fence enqueued. Fake serials to
+     // make all commands look completed.
+diff --git a/src/dawn/native/Toggles.cpp b/src/dawn/native/Toggles.cpp
+index 26584c560a..18f92a69ea 100644
+--- a/src/dawn/native/Toggles.cpp
++++ b/src/dawn/native/Toggles.cpp
+@@ -408,6 +408,17 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
+       "an occlusion query is empty. Workaround this by explicitly filling it with zero if there "
+       "are no draw calls.",
+       "https://crbug.com/dawn/1707", ToggleStage::Device}},
++    {Toggle::MetalSuspendSubmissionsInBackground,
++     {"metal_suspend_submissions_in_background",
++      "On iOS and tvOS, hold the commit of command buffers while the application is in the "
++      "background, where the system refuses GPU work and a refused command buffer loses the "
++      "device. The work submitted meanwhile is encoded into the pending command buffer and "
++      "committed when the application returns to the foreground; presents meanwhile are dropped. "
++      "When the application enters the background, the pending work is committed first and waited "
++      "on to be scheduled, as Apple asks, so that it may complete. Nothing is lost or reordered, "
++      "but every submission made in the background keeps what it uses alive until the return. No "
++      "effect on other platforms.",
++      "https://github.com/wcandillon/react-native-skia/issues/4290", ToggleStage::Device}},
+     {Toggle::UseBlitForBufferToDepthTextureCopy,
+      {"use_blit_for_buffer_to_depth_texture_copy",
+       "Use a blit instead of a copy command to copy buffer data to the depth aspect of a "
+diff --git a/src/dawn/native/Toggles.h b/src/dawn/native/Toggles.h
+index 1f99a705a6..577d3535fd 100644
+--- a/src/dawn/native/Toggles.h
++++ b/src/dawn/native/Toggles.h
+@@ -110,6 +110,7 @@ enum class Toggle {
+     VulkanPolyfillFloatNegation,
+     VulkanPolyfillFloatAbs,
+     MetalFillEmptyOcclusionQueriesWithZero,
++    MetalSuspendSubmissionsInBackground,
+     UseBlitForBufferToDepthTextureCopy,
+     UseBlitForBufferToStencilTextureCopy,
+     UseBlitForStencilTextureWrite,
+diff --git a/src/dawn/native/metal/DeviceMTL.mm b/src/dawn/native/metal/DeviceMTL.mm
+index 1eaa6c0c37..55782beb46 100644
+--- a/src/dawn/native/metal/DeviceMTL.mm
++++ b/src/dawn/native/metal/DeviceMTL.mm
+@@ -56,6 +56,23 @@
+ #include "src/dawn/platform/tracing/TraceEvent.h"
+ #include "src/utils/platform.h"
+ 
++#include <TargetConditionals.h>
++
++#include <mutex>
++#include <utility>
++#include <vector>
++
++#include "src/dawn/common/WeakRef.h"
++
++// iOS and tvOS refuse GPU work from an application in the background (Mac Catalyst and macOS do
++// not): there, the metal_suspend_submissions_in_background toggle follows the application's state.
++#if (TARGET_OS_IOS || TARGET_OS_TV) && !TARGET_OS_MACCATALYST
++#define DAWN_METAL_OBSERVES_APPLICATION_STATE 1
++#import <UIKit/UIKit.h>
++#else
++#define DAWN_METAL_OBSERVES_APPLICATION_STATE 0
++#endif
++
+ namespace dawn::native::metal {
+ 
+ struct KalmanInfo {
+@@ -118,6 +135,95 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
+     }
+ }
+ 
++#if DAWN_METAL_OBSERVES_APPLICATION_STATE
++// Holds the submissions of the devices that enable Toggle::MetalSuspendSubmissionsInBackground
++// while the application is in the background, see Queue::SetSubmissionSuspended. One for the
++// process: UIKit posts the notifications on the main thread, synchronously, so the devices are
++// drained inside UIApplicationDidEnterBackgroundNotification, before the application returns to
++// the system, and resumed on UIApplicationWillEnterForegroundNotification. Devices are kept
++// weakly: a device that goes away unregisters itself (see Device::DestroyImpl), and one being
++// destroyed is skipped.
++class BackgroundSubmissionObserver {
++  public:
++    static BackgroundSubmissionObserver& Get() {
++        static auto* instance = new BackgroundSubmissionObserver();
++        return *instance;
++    }
++
++    void Add(Device* device) {
++        bool backgrounded;
++        {
++            std::lock_guard<std::mutex> lock(mMutex);
++            mDevices.emplace_back(device, GetWeakRef(static_cast<DeviceBase*>(device)));
++            backgrounded = mBackgrounded;
++        }
++        if (backgrounded) {
++            // Made in the background: nothing is committed until the return.
++            ToBackend(device->GetQueue())->SetSubmissionSuspended(true);
++        }
++    }
++
++    void Remove(Device* device) {
++        std::lock_guard<std::mutex> lock(mMutex);
++        std::erase_if(mDevices, [device](const auto& entry) { return entry.first == device; });
++    }
++
++  private:
++    BackgroundSubmissionObserver() {
++        NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
++        [center addObserverForName:UIApplicationDidEnterBackgroundNotification
++                            object:nil
++                             queue:nil
++                        usingBlock:^(NSNotification*) {
++                          SetBackgrounded(true);
++                        }];
++        [center addObserverForName:UIApplicationWillEnterForegroundNotification
++                            object:nil
++                             queue:nil
++                        usingBlock:^(NSNotification*) {
++                          SetBackgrounded(false);
++                        }];
++        // The state the application is in now, which only the main thread may ask for. Until it
++        // is known, the application is taken to be in the foreground.
++        void (^readState)(void) = ^{
++          SetBackgrounded(UIApplication.sharedApplication.applicationState ==
++                          UIApplicationStateBackground);
++        };
++        if ([NSThread isMainThread]) {
++            readState();
++        } else {
++            dispatch_async(dispatch_get_main_queue(), readState);
++        }
++    }
++
++    void SetBackgrounded(bool backgrounded) {
++        std::vector<Ref<DeviceBase>> devices;
++        {
++            std::lock_guard<std::mutex> lock(mMutex);
++            if (mBackgrounded == backgrounded) {
++                return;
++            }
++            mBackgrounded = backgrounded;
++            for (const auto& entry : mDevices) {
++                if (Ref<DeviceBase> device = entry.second.Promote()) {
++                    devices.push_back(std::move(device));
++                }
++            }
++        }
++        // Outside the registry lock: a device may be destroyed, and unregister itself, while the
++        // Refs go away.
++        for (const Ref<DeviceBase>& device : devices) {
++            auto deviceGuard = device->GetGuard();
++            ToBackend(device->GetQueue())->SetSubmissionSuspended(backgrounded);
++        }
++    }
++
++    std::mutex mMutex;
++    bool mBackgrounded = false;
++    std::vector<std::pair<Device*, WeakRef<DeviceBase>>> mDevices;
++};
++#endif  // DAWN_METAL_OBSERVES_APPLICATION_STATE
++
+ }  // namespace
+ 
+ // static
+@@ -187,7 +293,15 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
+ 
+     mCounterSampleBufferAllocator = std::make_unique<CounterSampleBufferAllocator>(this);
+ 
+-    return DeviceBase::Initialize(descriptor, std::move(queue));
++    DAWN_TRY(DeviceBase::Initialize(descriptor, std::move(queue)));
++
++#if DAWN_METAL_OBSERVES_APPLICATION_STATE
++    if (IsToggleEnabled(Toggle::MetalSuspendSubmissionsInBackground)) {
++        BackgroundSubmissionObserver::Get().Add(this);
++    }
++#endif
++
++    return {};
+ }
+ 
+ ResultOrError<Ref<BindGroupBase>> Device::CreateBindGroupImpl(
+@@ -379,6 +493,9 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
+     // - It may be called when the last ref to the device is dropped and the device
+     //   is implicitly destroyed. This case is thread-safe because there are no
+     //   other threads using the device since there are no other live refs.
++#if DAWN_METAL_OBSERVES_APPLICATION_STATE
++    BackgroundSubmissionObserver::Get().Remove(this);
++#endif
+     mCounterSampleBufferAllocator = nullptr;
+     mMtlDevice = nullptr;
+     mMockBlitMtlBuffer = nullptr;
+diff --git a/src/dawn/native/metal/MetalBackend.mm b/src/dawn/native/metal/MetalBackend.mm
+index 567994b94b..8570743f8c 100644
+--- a/src/dawn/native/metal/MetalBackend.mm
++++ b/src/dawn/native/metal/MetalBackend.mm
+@@ -42,6 +42,17 @@ void WaitForCommandsToBeScheduled(WGPUDevice device) {
+     ToBackend(backendDevice->GetQueue())->WaitForCommandsToBeScheduled();
+ }
+ 
++void SetSubmissionSuspended(WGPUDevice device, bool suspended) {
++    Device* backendDevice = ToBackend(FromAPI(device));
++    auto deviceGuard = backendDevice->GetGuard();
++    ToBackend(backendDevice->GetQueue())->SetSubmissionSuspended(suspended);
++}
++
++bool IsSubmissionSuspended(WGPUDevice device) {
++    Device* backendDevice = ToBackend(FromAPI(device));
++    return ToBackend(backendDevice->GetQueue())->IsSubmissionSuspended();
++}
++
+ id<MTLDevice> GetMTLDevice(WGPUDevice device) {
+     Device* backendDevice = ToBackend(FromAPI(device));
+     return backendDevice->GetMTLDevice();
+diff --git a/src/dawn/native/metal/QueueMTL.h b/src/dawn/native/metal/QueueMTL.h
+index a4cc455471..1fca1f4cfb 100644
+--- a/src/dawn/native/metal/QueueMTL.h
++++ b/src/dawn/native/metal/QueueMTL.h
+@@ -30,6 +30,8 @@
+ 
+ #import <Metal/Metal.h>
+ 
++#include <atomic>
++#include <cstdint>
+ #include <map>
+ #include <optional>
+ #include <string>
+@@ -58,6 +60,11 @@ class Queue final : public QueueBase {
+ 
+     FutureID GetCommandsScheduledFuture();
+ 
++    // Holds (suspended) or resumes the commit of command buffers, see
++    // dawn::native::metal::SetSubmissionSuspended. Called with the device lock held.
++    void SetSubmissionSuspended(bool suspended);
++    bool IsSubmissionSuspended() const override;
++
+     id<MTLSharedEvent> GetMTLSharedEvent() const;
+     ResultOrUnknownError<Ref<SharedFence>> GetOrCreateSharedFence();
+ 
+@@ -93,6 +100,14 @@ class Queue final : public QueueBase {
+     // - Error message from the Metal command-buffer-completed handler if completion failed.
+     MutexProtected<std::optional<std::string>> mExecutionError;
+ 
++    // Whether commits are held (see SetSubmissionSuspended). Written with the device lock held;
++    // read without it by whoever asks whether to present or wait.
++    std::atomic<bool> mSubmissionSuspended = false;
++    // The submissions encoded since the hold began, to warn once about a producer that keeps
++    // submitting while the application is in the background.
++    std::atomic<uint32_t> mHeldSubmissions = 0;
++    static constexpr uint32_t kHeldSubmissionsWarning = 600;
++
+     // A shared event that can be exported for synchronization with other users of Metal.
+     // MTLSharedEvent is not available until macOS 10.14+ so use just `id`.
+     NSPRef<id> mMtlSharedEvent;
+diff --git a/src/dawn/native/metal/QueueMTL.mm b/src/dawn/native/metal/QueueMTL.mm
+index 9002271a2e..c81a352654 100644
+--- a/src/dawn/native/metal/QueueMTL.mm
++++ b/src/dawn/native/metal/QueueMTL.mm
+@@ -174,6 +174,34 @@ void Complete(EventCompletionType completionType) override {
+     [*lastSubmittedCommands waitUntilScheduled];
+ }
+ 
++void Queue::SetSubmissionSuspended(bool suspended) {
++    if (mSubmissionSuspended.load(std::memory_order_acquire) == suspended) {
++        return;
++    }
++    if (suspended) {
++        // Commit what is pending while commits are still allowed, and make sure it is scheduled:
++        // iOS lets the command buffers scheduled by the time the application returns from
++        // applicationDidEnterBackground complete, and refuses the ones committed after that. No
++        // other thread commits meanwhile, since the caller holds the device lock.
++        WaitForCommandsToBeScheduled();
++        mHeldSubmissions.store(0, std::memory_order_relaxed);
++        mSubmissionSuspended.store(true, std::memory_order_release);
++        return;
++    }
++    mSubmissionSuspended.store(false, std::memory_order_release);
++    if (!IsAlive()) {
++        return;
++    }
++    // What was held goes out now, as one command buffer.
++    if (GetDevice()->ConsumedError(SubmitPendingCommandBuffer())) {
++        return;
++    }
++}
++
++bool Queue::IsSubmissionSuspended() const {
++    return mSubmissionSuspended.load(std::memory_order_acquire);
++}
++
+ FutureID Queue::GetCommandsScheduledFuture() {
+     if (!IsAlive()) {
+         return kNullFutureID;
+@@ -236,6 +264,12 @@ void Complete(EventCompletionType completionType) override {
+         return {};
+     }
+ 
++    if (mSubmissionSuspended.load(std::memory_order_acquire)) [[unlikely]] {
++        // Held (see SetSubmissionSuspended): the commands stay encoded in the pending command
++        // buffer, which the resume commits. Whoever waits for their serial waits until then.
++        return {};
++    }
++
+     // Acquire the pending command buffer, which is retained. It must be released later.
+     NSPRef<id<MTLCommandBuffer>> pendingCommands = mCommandContext.AcquireCommands();
+ 
+@@ -362,6 +396,25 @@ void Complete(EventCompletionType completionType) override {
+             }
+         }
+ 
++        if (mSubmissionSuspended.load(std::memory_order_acquire)) [[unlikely]] {
++            // Encoded, and committed once resumed (see SetSubmissionSuspended). Every submission
++            // held keeps what it uses alive until then, so a producer that keeps submitting while
++            // the application is in the background is worth finding: say so, once per hold.
++            if (mHeldSubmissions.fetch_add(1, std::memory_order_relaxed) + 1 ==
++                kHeldSubmissionsWarning) {
++                GetDevice()->EmitLog(
++                    wgpu::LoggingType::Warning,
++                    absl::StrFormat(
++                        "%u submissions have been held since the application entered the "
++                        "background (metal_suspend_submissions_in_background). They are committed "
++                        "when it returns to the foreground, and each keeps the resources it uses "
++                        "alive until then: stop submitting GPU work while the application is in "
++                        "the background.",
++                        kHeldSubmissionsWarning));
++            }
++            return {};
++        }
++
+         DAWN_TRY(SubmitPendingCommandBuffer());
+ 
+         return {};
+diff --git a/src/dawn/native/metal/SwapChainMTL.mm b/src/dawn/native/metal/SwapChainMTL.mm
+index b9a9d07b3a..f512d708d9 100644
+--- a/src/dawn/native/metal/SwapChainMTL.mm
++++ b/src/dawn/native/metal/SwapChainMTL.mm
+@@ -95,9 +95,17 @@
+     DAWN_ASSERT(mCurrentDrawable != nullptr);
+ 
+     Queue* queue = ToBackend(GetDevice()->GetQueue());
+-    CommandRecordingContext* commandContext = queue->GetPendingCommandContext();
+-    [commandContext->GetCommands() presentDrawable:*mCurrentDrawable];
+-    DAWN_TRY(queue->SubmitPendingCommandBuffer());
++    if (queue->IsSubmissionSuspended()) {
++        // The application is in the background (see Queue::SetSubmissionSuspended), where the
++        // layer shows nothing: the frame is dropped rather than held, since a drawable kept until
++        // the return would starve the layer's few drawables for the frames rendered meanwhile. The
++        // work encoded into its texture is committed with the rest on the return, and the first
++        // frame drawn then replaces it.
++    } else {
++        CommandRecordingContext* commandContext = queue->GetPendingCommandContext();
++        [commandContext->GetCommands() presentDrawable:*mCurrentDrawable];
++        DAWN_TRY(queue->SubmitPendingCommandBuffer());
++    }
+ 
+     mTexture->APIDestroy();
+     mTexture = nullptr;
+diff --git a/src/dawn/tests/white_box/MetalBackendTests.cpp b/src/dawn/tests/white_box/MetalBackendTests.cpp
+index f2986a5392..3e95e74871 100644
+--- a/src/dawn/tests/white_box/MetalBackendTests.cpp
++++ b/src/dawn/tests/white_box/MetalBackendTests.cpp
+@@ -25,6 +25,12 @@
+ // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <limits>
++#include <thread>
++
+ #include "dawn/native/DawnNative.h"
+ #include "dawn/native/MetalBackend.h"
+ #include "src/dawn/tests/DawnTest.h"
+@@ -33,7 +39,7 @@ namespace dawn::native {
+ namespace {
+ 
+ class MetalBackendTests : public DawnTest {
+-  private:
++  protected:
+     void SetUp() override {
+         DawnTest::SetUp();
+         DAWN_TEST_UNSUPPORTED_IF(UsesWire());
+@@ -61,6 +67,152 @@ TEST_P(MetalBackendTests, WaitForCommandsToBeScheduledOnDestroyedDevice) {
+     metal::WaitForCommandsToBeScheduled(device.Get());
+ }
+ 
++class MetalSuspendedSubmissionTests : public MetalBackendTests {
++  protected:
++    static constexpr uint32_t kValue = 0x12345678u;
++    static constexpr uint64_t kShortWaitNs = 50'000'000;  // 50 ms
++    static constexpr uint64_t kForeverNs = std::numeric_limits<uint64_t>::max();
++
++    void TearDown() override {
++        // Never leave the queue held: the device waits for its work to be destroyed.
++        metal::SetSubmissionSuspended(device.Get(), false);
++        MetalBackendTests::TearDown();
++    }
++
++    // A command buffer copying kValue (written to a source buffer and already on the GPU) into
++    // `dst`, a buffer of the given usage.
++    wgpu::CommandBuffer MakeCopyOfValue(wgpu::Buffer* dst, wgpu::BufferUsage dstUsage) {
++        wgpu::BufferDescriptor srcDesc;
++        srcDesc.size = 4;
++        srcDesc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
++        wgpu::Buffer src = device.CreateBuffer(&srcDesc);
++        queue.WriteBuffer(src, 0, &kValue, sizeof(kValue));
++        WaitForAllOperations();
++
++        wgpu::BufferDescriptor dstDesc;
++        dstDesc.size = 4;
++        dstDesc.usage = dstUsage;
++        *dst = device.CreateBuffer(&dstDesc);
++
++        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
++        encoder.CopyBufferToBuffer(src, 0, *dst, 0, 4);
++        return encoder.Finish();
++    }
++
++    wgpu::Future WorkDone() {
++        return queue.OnSubmittedWorkDone(
++            wgpu::CallbackMode::WaitAnyOnly,
++            [](wgpu::QueueWorkDoneStatus status, wgpu::StringView) {
++                EXPECT_EQ(status, wgpu::QueueWorkDoneStatus::Success);
++            });
++    }
++};
++
++// Work submitted while the queue is suspended is held, and completes once the queue is resumed.
++TEST_P(MetalSuspendedSubmissionTests, SubmissionCompletesOnceResumed) {
++    wgpu::Buffer dst;
++    wgpu::CommandBuffer commands =
++        MakeCopyOfValue(&dst, wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst);
++
++    metal::SetSubmissionSuspended(device.Get(), true);
++    EXPECT_TRUE(metal::IsSubmissionSuspended(device.Get()));
++    queue.Submit(1, &commands);
++    wgpu::Future done = WorkDone();
++    // Held: nothing completes, and the wait does not deadlock on the flush it asks for.
++    EXPECT_EQ(GetInstance().WaitAny(done, kShortWaitNs), wgpu::WaitStatus::TimedOut);
++
++    metal::SetSubmissionSuspended(device.Get(), false);
++    EXPECT_FALSE(metal::IsSubmissionSuspended(device.Get()));
++    EXPECT_EQ(GetInstance().WaitAny(done, kForeverNs), wgpu::WaitStatus::Success);
++    EXPECT_BUFFER_U32_EQ(kValue, dst, 0);
++}
++
++// Suspending commits the work pending at that point: it completes while the queue is suspended.
++TEST_P(MetalSuspendedSubmissionTests, PendingWorkIsCommittedOnSuspend) {
++    wgpu::Buffer dst;
++    wgpu::CommandBuffer commands =
++        MakeCopyOfValue(&dst, wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst);
++    queue.Submit(1, &commands);
++    wgpu::Future done = WorkDone();
++
++    metal::SetSubmissionSuspended(device.Get(), true);
++    EXPECT_EQ(GetInstance().WaitAny(done, kForeverNs), wgpu::WaitStatus::Success);
++    metal::SetSubmissionSuspended(device.Get(), false);
++    EXPECT_BUFFER_U32_EQ(kValue, dst, 0);
++}
++
++// A thread waiting for held work, like a readback or a promise waiter, wakes once the queue is
++// resumed from another thread. The wait flushes the queue before sleeping, which only the device
++// lock keeps apart from the resume.
++TEST_P(MetalSuspendedSubmissionTests, WaiterWakesOnceResumed) {
++    DAWN_TEST_UNSUPPORTED_IF(!IsImplicitDeviceSyncEnabled());
++
++    wgpu::Buffer dst;
++    wgpu::CommandBuffer commands =
++        MakeCopyOfValue(&dst, wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst);
++
++    metal::SetSubmissionSuspended(device.Get(), true);
++    queue.Submit(1, &commands);
++    wgpu::Future done = WorkDone();
++
++    std::atomic<bool> woke = false;
++    std::thread waiter([&] {
++        EXPECT_EQ(GetInstance().WaitAny(done, kForeverNs), wgpu::WaitStatus::Success);
++        woke.store(true);
++    });
++    std::this_thread::sleep_for(std::chrono::milliseconds(50));
++    EXPECT_FALSE(woke.load());
++
++    metal::SetSubmissionSuspended(device.Get(), false);
++    waiter.join();
++    EXPECT_TRUE(woke.load());
++    EXPECT_BUFFER_U32_EQ(kValue, dst, 0);
++}
++
++// A mapping requested while the queue is suspended resolves, with the held work's result, once
++// the queue is resumed.
++TEST_P(MetalSuspendedSubmissionTests, MapAsyncResolvesOnceResumed) {
++    wgpu::Buffer dst;
++    wgpu::CommandBuffer commands =
++        MakeCopyOfValue(&dst, wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst);
++
++    metal::SetSubmissionSuspended(device.Get(), true);
++    queue.Submit(1, &commands);
++
++    bool mapped = false;
++    dst.MapAsync(wgpu::MapMode::Read, 0, 4, wgpu::CallbackMode::AllowProcessEvents,
++                 [&](wgpu::MapAsyncStatus status, wgpu::StringView) {
++                     EXPECT_EQ(status, wgpu::MapAsyncStatus::Success);
++                     mapped = true;
++                 });
++    for (int i = 0; i < 5 && !mapped; ++i) {
++        WaitABit();
++    }
++    EXPECT_FALSE(mapped);
++
++    metal::SetSubmissionSuspended(device.Get(), false);
++    while (!mapped) {
++        WaitABit();
++    }
++    EXPECT_EQ(*static_cast<const uint32_t*>(dst.GetConstMappedRange(0, 4)), kValue);
++    dst.Unmap();
++}
++
++// Suspending or resuming twice changes nothing, and neither crashes on a destroyed device.
++TEST_P(MetalSuspendedSubmissionTests, RepeatedAndOnDestroyedDevice) {
++    metal::SetSubmissionSuspended(device.Get(), true);
++    metal::SetSubmissionSuspended(device.Get(), true);
++    EXPECT_TRUE(metal::IsSubmissionSuspended(device.Get()));
++    metal::SetSubmissionSuspended(device.Get(), false);
++    metal::SetSubmissionSuspended(device.Get(), false);
++    EXPECT_FALSE(metal::IsSubmissionSuspended(device.Get()));
++
++    DestroyDevice(device);
++    metal::SetSubmissionSuspended(device.Get(), true);
++    EXPECT_TRUE(metal::IsSubmissionSuspended(device.Get()));
++    metal::SetSubmissionSuspended(device.Get(), false);
++}
++
+ #if defined(DAWN_ENABLE_ERROR_INJECTION)
+ 
+ // Test that a command buffer execution failure causes the device to be lost cleanly and
+@@ -217,6 +369,7 @@ TEST_P(MetalBackendTests, MapAsyncOnFailedCommandBuffer) {
+ #endif  // defined(DAWN_ENABLE_ERROR_INJECTION)
+ 
+ DAWN_INSTANTIATE_TEST(MetalBackendTests, MetalBackend());
++DAWN_INSTANTIATE_TEST(MetalSuspendedSubmissionTests, MetalBackend());
+ 
+ }  // anonymous namespace
+ }  // namespace dawn::native

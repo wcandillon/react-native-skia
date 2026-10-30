@@ -347,6 +347,16 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // PerformIdleTasks is not needed: nothing persists the cache.
       "vulkan_monolithic_pipeline_cache",
 #endif
+#ifdef __APPLE__
+      // iOS refuses GPU work from an app in the background, and Dawn loses
+      // the device over a refused command buffer (#4290). With this toggle
+      // Dawn holds the commits while the app is in the background, from the
+      // application's own notifications, and commits them when it comes back:
+      // nothing is lost, nothing is refused. Dawn applies it on iOS and tvOS
+      // only, and a Dawn without it (react-native-webgpu-dawn before the
+      // patch) drops the name. See scripts/dawn-patches.
+      "metal_suspend_submissions_in_background",
+#endif
   };
 #if defined(NDEBUG)
   if (!validate) {

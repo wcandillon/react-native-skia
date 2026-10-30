@@ -37,6 +37,7 @@ const mockAddDevice = (info: MockDeviceOverrides = {}) => {
       device: `device ${mockDevices.length}`,
       description: "",
       error: null,
+      foreground: true,
       ...info,
     },
     lost,
