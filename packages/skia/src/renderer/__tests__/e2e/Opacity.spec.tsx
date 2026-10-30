@@ -28,7 +28,7 @@ describe("Opacity", () => {
         <Fill color="rgba(0, 0, 255, 0.25)" />
       </>
     );
-    checkImage(image, "snapshots/drawings/violet.png");
+    await checkImage(image, "snapshots/drawings/violet.png");
   });
   it("Should multiply multiply the color opacity (1)", async () => {
     const image = await surface.draw(
@@ -39,7 +39,7 @@ describe("Opacity", () => {
         </Group>
       </>
     );
-    checkImage(image, "snapshots/drawings/violet.png");
+    await checkImage(image, "snapshots/drawings/violet.png");
   });
   it("Should multiply multiply the color opacity (2)", async () => {
     const image = await surface.draw(
@@ -52,7 +52,7 @@ describe("Opacity", () => {
         </Group>
       </>
     );
-    checkImage(image, "snapshots/drawings/violet.png");
+    await checkImage(image, "snapshots/drawings/violet.png");
   });
   it("Should multiply the opacity to 0", async () => {
     const { rect, rrect } = importSkia();
@@ -73,9 +73,9 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(image, "snapshots/drawings/opacity-multiplication.png");
+    await checkImage(image, "snapshots/drawings/opacity-multiplication.png");
   });
-  it("Should build a reference result for the opacity", () => {
+  it("Should build a reference result for the opacity", async () => {
     const { surface: ckSurface, canvas, Skia } = setupSkia(wWidth, wHeight);
     const { rect, rrect } = importSkia();
     const p1 = Skia.Paint();
@@ -95,7 +95,10 @@ describe("Opacity", () => {
     p3.setAlphaf(0.5 * 0.5);
     canvas.drawRRect(rrect(rect(0, 0, r / 2, r / 2), r, r), p3);
 
-    processResult(ckSurface, "snapshots/drawings/opacity-multiplication2.png");
+    await processResult(
+      ckSurface,
+      "snapshots/drawings/opacity-multiplication2.png"
+    );
   });
   it("Should multiply the opacity to 0.25", async () => {
     const { rect, rrect } = importSkia();
@@ -116,16 +119,19 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(image, "snapshots/drawings/opacity-multiplication2.png");
+    await checkImage(image, "snapshots/drawings/opacity-multiplication2.png");
   });
-  it("Should build a reference result for shader opacity", () => {
+  it("Should build a reference result for shader opacity", async () => {
     const { surface: ckSurface, Skia, canvas } = setupSkia(wWidth, wHeight);
     canvas.drawColor(Skia.Color("white"));
     const paint = Skia.Paint();
     paint.setShader(Skia.Shader.MakeColor(Skia.Color("lightblue")));
     paint.setAlphaf(0.5);
     canvas.drawPaint(paint);
-    processResult(ckSurface, "snapshots/drawings/shader-opacity-reference.png");
+    await processResult(
+      ckSurface,
+      "snapshots/drawings/shader-opacity-reference.png"
+    );
   });
   it("Should set shader opacity (1)", async () => {
     let image = await surface.draw(
@@ -137,7 +143,7 @@ describe("Opacity", () => {
         </Group>
       </>
     );
-    checkImage(image, "snapshots/drawings/shader-opacity-reference.png");
+    await checkImage(image, "snapshots/drawings/shader-opacity-reference.png");
     image = await surface.draw(
       <>
         <Fill color="white" />
@@ -146,7 +152,7 @@ describe("Opacity", () => {
         </Fill>
       </>
     );
-    checkImage(image, "snapshots/drawings/shader-opacity-reference.png");
+    await checkImage(image, "snapshots/drawings/shader-opacity-reference.png");
   });
   it("Should multiply the opacity to 0.25 using a Shader", async () => {
     const { rect, rrect } = importSkia();
@@ -166,9 +172,9 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(image, "snapshots/drawings/opacity-multiplication2.png");
+    await checkImage(image, "snapshots/drawings/opacity-multiplication2.png");
   });
-  it("Build reference result (2)", () => {
+  it("Build reference result (2)", async () => {
     const {
       surface: ckSurface,
       Skia,
@@ -191,7 +197,7 @@ describe("Opacity", () => {
       { x: 0, y: 0, width, height }
     );
     canvas.drawImageRect(oslo, src, dst, paint);
-    processResult(ckSurface, "snapshots/drawings/opacity-image.png");
+    await processResult(ckSurface, "snapshots/drawings/opacity-image.png");
   });
   it("Should apply opacity to an image (1)", async () => {
     const { oslo } = images;
@@ -211,7 +217,7 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(img, "snapshots/drawings/opacity-image.png");
+    await checkImage(img, "snapshots/drawings/opacity-image.png");
   });
   it("Should apply opacity to an image (2)", async () => {
     const { oslo } = images;
@@ -231,7 +237,7 @@ describe("Opacity", () => {
         />
       </Group>
     );
-    checkImage(img, "snapshots/drawings/opacity-image.png");
+    await checkImage(img, "snapshots/drawings/opacity-image.png");
   });
   it("Should apply opacity to an image shader (1)", async () => {
     const { oslo } = images;
@@ -251,7 +257,7 @@ describe("Opacity", () => {
         </Fill>
       </Group>
     );
-    checkImage(img, "snapshots/drawings/opacity-image.png");
+    await checkImage(img, "snapshots/drawings/opacity-image.png");
   });
   it("Should apply opacity to an image shader (2)", async () => {
     const { oslo } = images;
@@ -274,7 +280,7 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(img, "snapshots/drawings/opacity-image.png");
+    await checkImage(img, "snapshots/drawings/opacity-image.png");
   });
   it("Should apply opacity on a layer (1)", async () => {
     const {} = importSkia();
@@ -285,7 +291,7 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(img, "snapshots/drawings/semi-transparent-layer.png");
+    await checkImage(img, "snapshots/drawings/semi-transparent-layer.png");
   });
   it("Should apply opacity on a layer (2)", async () => {
     const {} = importSkia();
@@ -296,6 +302,6 @@ describe("Opacity", () => {
         </Group>
       </Group>
     );
-    checkImage(img, "snapshots/drawings/transparent-layer.png");
+    await checkImage(img, "snapshots/drawings/transparent-layer.png");
   });
 });

@@ -9,6 +9,7 @@
 #include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
+#include "RNSkRuntimeScheduler.h"
 #include "RNSkThreadPool.h"
 #include "RNSkThreadTrims.h"
 #include "RNSkView.h"
@@ -130,6 +131,10 @@ void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
 }
 
 void RNSkManager::installBindings() {
+  // The runtime the bindings go on is the React Native runtime, reached
+  // through the CallInvoker: promises made on it settle that way (see
+  // RNSkRuntimeScheduler).
+  RNSkRuntimeScheduler::install(*_jsRuntime, _platformContext);
   // Create the API objects and install it on the global object in the
   // provided runtime.
   auto skiaApi = std::make_shared<JsiSkApi>(_platformContext);

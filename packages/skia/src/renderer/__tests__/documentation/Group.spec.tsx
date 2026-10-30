@@ -71,7 +71,7 @@ describe("Group", () => {
         </Group>
       </>
     );
-    processResult(surface, docPath("group/clip-rect.png"));
+    await processResult(surface, docPath("group/clip-rect.png"));
   });
   it("Should use a rounded rectangle as a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
@@ -94,7 +94,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    processResult(surface, docPath("group/clip-rrect.png"));
+    await processResult(surface, docPath("group/clip-rrect.png"));
   });
   it("Should use a path as a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
@@ -119,7 +119,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    processResult(surface, docPath("group/clip-path.png"));
+    await processResult(surface, docPath("group/clip-path.png"));
   });
   it("Should invert a clip", async () => {
     const image = loadImage("skia/__tests__/assets/oslo.jpg");
@@ -144,7 +144,7 @@ describe("Group", () => {
         />
       </Group>
     );
-    processResult(surface, docPath("group/invert-clip.png"));
+    await processResult(surface, docPath("group/invert-clip.png"));
   });
   it("Should scale an SVG Path properly", async () => {
     const { rect, Skia } = importSkia();
@@ -165,10 +165,10 @@ describe("Group", () => {
         />
       </FitBox>
     );
-    processResult(surface, docPath("group/scale-path.png"));
+    await processResult(surface, docPath("group/scale-path.png"));
   });
   it("Should use saveLayer() properly", async () => {
     const surface = await drawOnNode(<TestRasterization />);
-    processResult(surface, docPath("group/rasterize.png"));
+    await processResult(surface, docPath("group/rasterize.png"));
   });
 });

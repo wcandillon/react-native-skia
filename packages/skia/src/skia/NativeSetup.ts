@@ -3,6 +3,35 @@ import NativeSkiaModule from "../specs/NativeSkiaModule";
 
 import { registerSkiaWorkletSerialization } from "./SkiaWorkletSerialization";
 
+declare global {
+  var __skiaScheduleOnUI: ((settle: () => void) => void) | undefined;
+}
+
+// A promise created on the Reanimated UI runtime (image.makeRasterImage()
+// in a worklet, for instance) settles there through a timer the runtime
+// arms on itself; this hook settles it sooner, and delivers a lost GPU
+// device right away: native hands a function that drains the runtime's
+// mailbox, a host function, to this hook on the React Native runtime, and
+// worklets runs it on the UI runtime (see cpp/rnskia/RNSkRuntimeScheduler.h).
+// Without react-native-worklets there is no UI runtime to settle on.
+const registerUIRuntimeScheduler = () => {
+  try {
+    const worklets = require("react-native-worklets");
+    if (typeof worklets.scheduleOnUI !== "function") {
+      return;
+    }
+    globalThis.__skiaScheduleOnUI = (settle: () => void) => {
+      worklets.scheduleOnUI(() => {
+        "worklet";
+        settle();
+      });
+    };
+  } catch (e) {
+    // react-native-worklets is not installed: Skia runs on the React Native
+    // runtime only.
+  }
+};
+
 if (Platform.OS !== "web" && global.SkiaApi == null) {
   // Initialize RN Skia
   const SkiaModule = NativeSkiaModule;
@@ -21,6 +50,7 @@ if (Platform.OS !== "web" && global.SkiaApi == null) {
   // Skia objects use the JSI NativeState pattern and need a custom
   // serializer to be transferable to worklet runtimes (Reanimated).
   registerSkiaWorkletSerialization();
+  registerUIRuntimeScheduler();
   // No GPU (no Vulkan 1.1 on Android, for instance): the module is installed
   // and the app runs, but every canvas stays blank and the GPU APIs throw.
   // Said once, with the reason, rather than left to the first blank screen.

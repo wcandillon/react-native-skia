@@ -28,7 +28,7 @@ describe("Offscreen Drawings", () => {
     const data = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/circle.png"));
+    await checkImage(image, docPath("offscreen/circle.png"));
   });
   it("Should transfer one surface image to another", async () => {
     const { width, height } = surface;
@@ -55,7 +55,7 @@ describe("Offscreen Drawings", () => {
     const data = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/circle.png"));
+    await checkImage(image, docPath("offscreen/circle.png"));
   });
 
   it("Should render to multiple offscreen surfaces at once (1)", async () => {
@@ -95,7 +95,7 @@ describe("Offscreen Drawings", () => {
     const data = Skia.Data.fromBase64(raw);
     const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/multiple_circles.png"));
+    await checkImage(image, docPath("offscreen/multiple_circles.png"));
   });
   it("Should use the React API to build an image", async () => {
     const { width, height } = surface;
@@ -106,7 +106,7 @@ describe("Offscreen Drawings", () => {
       { width, height }
     );
     expect(image).not.toBeNull();
-    checkImage(image!, docPath("offscreen/circle.png"));
+    await checkImage(image!, docPath("offscreen/circle.png"));
   });
   itRunsE2eOnly(
     "Should draw what it still holds after its thread was idle long enough to trim",
@@ -165,7 +165,7 @@ describe("isOnMainThread", () => {
     "is true on the UI thread and false on the JS thread",
     async () => {
       const image = await surface.screen("IsOnMainThread");
-      const pixel = image.readPixels(10, 10, {
+      const pixel = await image.readPixels(10, 10, {
         width: 1,
         height: 1,
         colorType: ColorType.RGBA_8888,

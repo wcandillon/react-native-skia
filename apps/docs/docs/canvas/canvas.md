@@ -297,7 +297,7 @@ On Android and on the Web, the canvas always renders in sRGB.
 You can save your drawings as an image by using the `makeImageSnapshot` method, which returns an [Image](/docs/images).
 The drawing is rendered into an offscreen surface with its latest animation values, on the calling thread: the snapshot does not wait for the next frame.
 The image lives on the GPU: drawing it in another canvas costs no copy, and [textures](/docs/animations/textures) in the drawing are supported.
-Encoding it or reading its pixels waits for the GPU; to do that without blocking, read it back first with `makeRasterImage()` (see [images](/docs/images#gpu-and-cpu-images)).
+Encoding it or reading its pixels reads it back from the GPU, asynchronously: `encodeToBytes()`, `encodeToBase64()`, `readPixels()` and `makeRasterImage()` return promises (see [images](/docs/images#gpu-and-cpu-images)).
 
 ### Example
 
@@ -314,9 +314,10 @@ export const Demo = () => {
       const image = ref.current?.makeImageSnapshot();
       if (image) {
         // you can use image in an <Image> component
-        // Or save to file using encodeToBytes -> Uint8Array
-        const bytes = image.encodeToBytes();
-        console.log({ bytes });
+        // Or save to file using encodeToBytes -> Promise<Uint8Array>
+        image.encodeToBytes().then((bytes) => {
+          console.log({ bytes });
+        });
       }
     }, 1000)
   });
