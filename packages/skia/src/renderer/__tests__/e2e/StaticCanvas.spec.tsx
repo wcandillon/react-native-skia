@@ -101,9 +101,9 @@ describe("A static canvas", () => {
   // window's own thread: once a lost device is replaced, each presents again,
   // and the canvas's window takes a surface on the new device only once the
   // lost one has let go of it (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR otherwise).
-  // The canvas draws before the first loss, since a spec before this one may
-  // have unmounted it, and the second loss finds the surface the first
-  // replacement made.
+  // The canvas draws before the first loss, so that its window holds a
+  // surface on the lost device, and the second loss finds the surface the
+  // first replacement made.
   itRunsE2eOnly(
     "lets a canvas beside it draw after GPU device losses",
     async () => {

@@ -92,7 +92,8 @@ export const Tests = ({ assets }: TestsProps) => {
   const [screenDone, setScreenDone] = useState(false);
   const markScreenDone = useCallback(() => setScreenDone(true), []);
   // The harness's own canvas holds a window on the GPU device: the Gpu spec
-  // unmounts it until the next drawing, to lose a device no window holds.
+  // unmounts it while it loses a device no window holds, and mounts it again
+  // after. A drawing mounts it too, as it draws in it.
   const [canvasShown, setCanvasShown] = useState(true);
 
   useEffect(() => {
@@ -112,8 +113,8 @@ export const Tests = ({ assets }: TestsProps) => {
               Skia,
               // The worklet serializer spec needs app-side worklets (see
               // workletSerialization.ts), and the Gpu spec a way to lose the
-              // device and to tell whether it was destroyed; hand them over
-              // through the context.
+              // device, to tell whether it was destroyed and to unmount the
+              // harness's canvas; hand them over through the context.
               ctx: {
                 ...parseProps(tree.ctx, assets),
                 workletSerialization,
@@ -121,6 +122,7 @@ export const Tests = ({ assets }: TestsProps) => {
                 mapGpuBuffer,
                 mappedGpuBufferState,
                 hideCanvas: () => setCanvasShown(false),
+                showCanvas: () => setCanvasShown(true),
               },
               size: size * PixelRatio.get(),
               scale: s,
