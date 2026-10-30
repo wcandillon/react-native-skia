@@ -179,6 +179,16 @@ public:
    */
   bool canPresent();
 
+  /**
+   Installed by the platform view: called after each frame the window
+   presents, on the thread that presented it, with the window's mutex held,
+   so that detach() returns only once it has run. It must neither block nor
+   call back into this surface.
+   */
+  void setDidPresent(std::function<void()> didPresent) {
+    _didPresent = std::move(didPresent);
+  }
+
   // RNSkSurface -------------------------------------------------------------
 
   /** Width of the window, in pixels; 0 without a window. Any thread. */
@@ -288,6 +298,11 @@ private:
       _requestRedraw();
     }
   }
+  void didPresent() {
+    if (_didPresent) {
+      _didPresent();
+    }
+  }
 
   // Keeps the main thread (attach, resize, detach) and the thread the view
   // presents on apart; see the class comment.
@@ -333,6 +348,7 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+  std::function<void()> _didPresent;
 };
 
 } // namespace RNSkia
