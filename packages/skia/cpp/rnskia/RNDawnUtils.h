@@ -20,7 +20,78 @@
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
 #include "utils/RNSkLog.h"
 
+#ifdef __ANDROID__
+#include <algorithm>
+#include <sys/system_properties.h>
+#endif
+
 namespace DawnUtils {
+
+#ifdef __ANDROID__
+// Diagnostics for wcandillon/react-native-skia#4371 (PowerVR, Pixel 10/11).
+// Not meant for main: one build runs every Dawn feature variant through
+// Android system properties, read once when the device is created, so set
+// them, then force-stop and relaunch the app:
+//   adb shell setprop debug.rnskia.dawn.drop transient,loadresolve
+// Tokens: transient (TransientAttachments), loadresolve
+// (DawnLoadResolveTexture and DawnPartialLoadResolveTexture), msrtss
+// (MSAARenderToSingleSampled). Clear with `setprop debug.rnskia.dawn.drop ""`.
+inline std::string readSystemProperty(const char *name) {
+  char value[PROP_VALUE_MAX] = {0};
+  __system_property_get(name, value);
+  return std::string(value);
+}
+
+inline void applyDebugFeatureDrops(std::vector<wgpu::FeatureName> &features) {
+  const std::string drops = readSystemProperty("debug.rnskia.dawn.drop");
+  if (drops.empty()) {
+    return;
+  }
+  auto drop = [&features](wgpu::FeatureName feature) {
+    features.erase(std::remove(features.begin(), features.end(), feature),
+                   features.end());
+  };
+  size_t start = 0;
+  while (start <= drops.size()) {
+    size_t end = drops.find(',', start);
+    if (end == std::string::npos) {
+      end = drops.size();
+    }
+    std::string token = drops.substr(start, end - start);
+    token.erase(std::remove(token.begin(), token.end(), ' '), token.end());
+    if (token == "transient") {
+      drop(wgpu::FeatureName::TransientAttachments);
+    } else if (token == "loadresolve") {
+      drop(wgpu::FeatureName::DawnLoadResolveTexture);
+      drop(wgpu::FeatureName::DawnPartialLoadResolveTexture);
+    } else if (token == "msrtss") {
+      drop(wgpu::FeatureName::MSAARenderToSingleSampled);
+    } else if (!token.empty()) {
+      RNSkia::RNSkLogger::logToConsole(
+          "debug.rnskia.dawn.drop: unknown token '%s' ignored", token.c_str());
+    }
+    start = end + 1;
+  }
+  RNSkia::RNSkLogger::logToConsole("debug.rnskia.dawn.drop=%s applied",
+                                   drops.c_str());
+}
+
+// Logs the features that decide how Graphite renders MSAA onto the window.
+inline void logResolveFeatures(const wgpu::Adapter &adapter,
+                               const wgpu::Device &device) {
+  auto report = [&](const char *name, wgpu::FeatureName feature) {
+    RNSkia::RNSkLogger::logToConsole("Dawn feature %s: adapter=%d device=%d",
+                                     name, adapter.HasFeature(feature) ? 1 : 0,
+                                     device.HasFeature(feature) ? 1 : 0);
+  };
+  report("MSAARenderToSingleSampled",
+         wgpu::FeatureName::MSAARenderToSingleSampled);
+  report("TransientAttachments", wgpu::FeatureName::TransientAttachments);
+  report("DawnLoadResolveTexture", wgpu::FeatureName::DawnLoadResolveTexture);
+  report("DawnPartialLoadResolveTexture",
+         wgpu::FeatureName::DawnPartialLoadResolveTexture);
+}
+#endif
 
 #ifdef __APPLE__
 static const SkColorType PreferedColorType = kBGRA_8888_SkColorType;
@@ -503,8 +574,17 @@ createDawnBackendContext(dawn::native::Instance *instance,
 #endif
   };
 
+#ifdef __ANDROID__
+  applyDebugFeatureDrops(features); // #4371 diagnostics, see above
+#endif
+
   wgpu::Device device =
       requestDevice(matchedAdapter, features, listener, validate);
+#ifdef __ANDROID__
+  if (device) {
+    logResolveFeatures(adapter, device);
+  }
+#endif
   if (!device) {
     std::string error =
         "React Native Skia could not create a GPU device on the " +

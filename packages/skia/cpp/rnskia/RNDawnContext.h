@@ -930,6 +930,17 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+#ifdef __ANDROID__
+    // Diagnostics for #4371 (see RNDawnUtils.h): `adb shell setprop
+    // debug.rnskia.graphite.msaa 1` turns Graphite's internal MSAA off, so
+    // paths are rasterized into the coverage atlas instead of drawn through
+    // an MSAA attachment plus resolve. Any other value keeps the default (4).
+    if (DawnUtils::readSystemProperty("debug.rnskia.graphite.msaa") == "1") {
+      ctxOptions.fInternalMultisampleCount = skgpu::graphite::SampleCount::k1;
+      RNSkia::RNSkLogger::logToConsole(
+          "debug.rnskia.graphite.msaa=1: Graphite internal MSAA off");
+    }
+#endif
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {

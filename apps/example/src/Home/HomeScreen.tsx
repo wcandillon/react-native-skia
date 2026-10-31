@@ -158,6 +158,11 @@ export const HomeScreen = () => {
         description="SurfaceView vs TextureView"
         route="AndroidViews"
       />
+      <HomeScreenButton
+        title="🐛 Issue 4371"
+        description="PowerVR MSAA resolve diagnostics"
+        route="Issue4371"
+      />
     </ScrollView>
   );
 };
