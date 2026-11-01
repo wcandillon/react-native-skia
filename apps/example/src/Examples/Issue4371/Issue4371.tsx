@@ -371,6 +371,42 @@ export const Issue4371 = () => {
         </Canvas>
       </Case>
 
+      <Case
+        title="L. Onscreen SurfaceView: red fill + stroked path"
+        expect="Case A on a SurfaceView instead of the default TextureView: a different window producer behind the same Vulkan swapchain."
+      >
+        <Canvas style={styles.canvas} android={{ backingView: "SurfaceView" }}>
+          <Fill color={RED} />
+          <Path
+            path={LINE}
+            style="stroke"
+            strokeWidth={4}
+            strokeCap="round"
+            strokeJoin="round"
+            color={BLUE}
+          />
+        </Canvas>
+      </Case>
+
+      <Case
+        title="M. Onscreen SurfaceView: red fill + stroked path inside a layer"
+        expect="Case D on a SurfaceView."
+      >
+        <Canvas style={styles.canvas} android={{ backingView: "SurfaceView" }}>
+          <Fill color={RED} />
+          <Group layer>
+            <Path
+              path={LINE}
+              style="stroke"
+              strokeWidth={4}
+              strokeCap="round"
+              strokeJoin="round"
+              color={BLUE}
+            />
+          </Group>
+        </Canvas>
+      </Case>
+
       {OFFSCREEN_CASES.map((testCase) => (
         <Case key={testCase.id} title={testCase.title} expect={testCase.expect}>
           <Text style={styles.mono}>{verdict(results[testCase.id])}</Text>

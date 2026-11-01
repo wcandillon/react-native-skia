@@ -1,6 +1,7 @@
 #include "RNSkWindowSurface.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <exception>
 #include <utility>
 #include <vector>
@@ -26,6 +27,119 @@
 #pragma clang diagnostic pop
 
 namespace RNSkia {
+
+#ifdef __ANDROID__
+namespace {
+// Diagnostics for #4371 (see RNDawnUtils.h): `adb shell setprop
+// debug.rnskia.dawn.dummymsaa N` makes every presented frame submit one extra
+// command buffer of its own, made with plain Dawn calls and nothing from
+// Graphite: a 64x64 pass that clears a 4x MSAA color attachment, draws one
+// triangle and resolves it into a texture nobody reads. 1: the MSAA
+// attachment has TransientAttachment usage, submitted before the frame's
+// recordings. 2: a plain MSAA attachment, submitted before (control). 3: as
+// 1, submitted after Present(). Anything else does nothing.
+struct DummyMsaaPass {
+  wgpu::Device device;
+  bool transient = false;
+  wgpu::RenderPipeline pipeline;
+  wgpu::TextureView msaaView;
+  wgpu::TextureView resolveView;
+
+  bool prepare(const wgpu::Device &dev, bool wantTransient) {
+    if (device.Get() == dev.Get() && transient == wantTransient && pipeline) {
+      return true;
+    }
+    device = dev;
+    transient = wantTransient;
+    wgpu::ShaderSourceWGSL wgsl;
+    wgsl.code = R"wgsl(
+      @vertex fn vs(@builtin(vertex_index) i : u32) -> @builtin(position) vec4f {
+        var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+        return vec4f(p[i], 0.0, 1.0);
+      }
+      @fragment fn fs() -> @location(0) vec4f { return vec4f(0.0, 0.6, 1.0, 1.0); }
+    )wgsl";
+    wgpu::ShaderModuleDescriptor moduleDesc;
+    moduleDesc.nextInChain = &wgsl;
+    wgpu::ShaderModule module = device.CreateShaderModule(&moduleDesc);
+    wgpu::ColorTargetState target;
+    target.format = wgpu::TextureFormat::RGBA8Unorm;
+    wgpu::FragmentState fragment;
+    fragment.module = module;
+    fragment.entryPoint = "fs";
+    fragment.targetCount = 1;
+    fragment.targets = &target;
+    wgpu::RenderPipelineDescriptor pipelineDesc;
+    pipelineDesc.vertex.module = module;
+    pipelineDesc.vertex.entryPoint = "vs";
+    pipelineDesc.fragment = &fragment;
+    pipelineDesc.multisample.count = 4;
+    pipeline = device.CreateRenderPipeline(&pipelineDesc);
+    wgpu::TextureDescriptor textureDesc;
+    textureDesc.size = {64, 64, 1};
+    textureDesc.format = wgpu::TextureFormat::RGBA8Unorm;
+    textureDesc.sampleCount = 4;
+    textureDesc.usage = wgpu::TextureUsage::RenderAttachment |
+                        (wantTransient ? wgpu::TextureUsage::TransientAttachment
+                                       : wgpu::TextureUsage::None);
+    msaaView = device.CreateTexture(&textureDesc).CreateView();
+    textureDesc.sampleCount = 1;
+    textureDesc.usage = wgpu::TextureUsage::RenderAttachment;
+    resolveView = device.CreateTexture(&textureDesc).CreateView();
+    return pipeline && msaaView && resolveView;
+  }
+
+  void submit() {
+    wgpu::RenderPassColorAttachment attachment;
+    attachment.view = msaaView;
+    attachment.resolveTarget = resolveView;
+    attachment.loadOp = wgpu::LoadOp::Clear;
+    attachment.storeOp = wgpu::StoreOp::Discard;
+    attachment.clearValue = {1.0, 0.0, 0.0, 1.0};
+    wgpu::RenderPassDescriptor passDesc;
+    passDesc.colorAttachmentCount = 1;
+    passDesc.colorAttachments = &attachment;
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&passDesc);
+    pass.SetPipeline(pipeline);
+    pass.Draw(3);
+    pass.End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    device.GetQueue().Submit(1, &commands);
+  }
+};
+
+int dummyMsaaVariant() {
+  static const int variant = [] {
+    const std::string value =
+        DawnUtils::readSystemProperty("debug.rnskia.dawn.dummymsaa");
+    const int parsed =
+        value.empty()
+            ? 0
+            : static_cast<int>(std::strtol(value.c_str(), nullptr, 10));
+    if (parsed != 0) {
+      RNSkLogger::logToConsole(
+          "debug.rnskia.dawn.dummymsaa=%d: extra %s MSAA pass %s each frame",
+          parsed, parsed == 2 ? "plain" : "transient",
+          parsed == 3 ? "after Present()" : "before the recordings");
+    }
+    return parsed;
+  }();
+  return variant;
+}
+
+void submitDummyMsaaPass(const wgpu::Device &device, bool transient) {
+  static std::mutex mutex;
+  static DummyMsaaPass pass;
+  std::lock_guard<std::mutex> lock(mutex);
+  if (pass.prepare(device, transient)) {
+    pass.submit();
+  } else {
+    RNSkLogger::logToConsole("debug.rnskia.dawn.dummymsaa: pass setup failed");
+  }
+}
+} // namespace
+#endif
 
 namespace {
 
@@ -455,6 +569,12 @@ bool RNSkWindowSurface::presentRecordings(
   if (!surface) {
     return false;
   }
+#ifdef __ANDROID__
+  const int dummyMsaa = dummyMsaaVariant(); // #4371 diagnostics, see above
+  if (dummyMsaa == 1 || dummyMsaa == 2) {
+    submitDummyMsaaPass(_device, dummyMsaa == 1);
+  }
+#endif
   // A recording Graphite rejects is logged there and dropped: it would be
   // rejected again on every frame, and the frames behind it would never come.
   DawnContext::getInstance().insertRecordings(recordings, surface.get());
@@ -462,6 +582,11 @@ bool RNSkWindowSurface::presentRecordings(
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
   _surface.Present();
+#ifdef __ANDROID__
+  if (dummyMsaa == 3) {
+    submitDummyMsaaPass(_device, true);
+  }
+#endif
   return true;
 }
 

@@ -28,6 +28,8 @@ Every box should show a red background with a blue shape:
 | I | fill + stroked path in a layer on an offscreen GPU surface | two passes in one recording like D, no swapchain, no render thread |
 | J | I at the onscreen pixel size | as I, with D's attachment size |
 | K | fill + bars in a layer onscreen (control) | a layer whose pass has no MSAA draw |
+| L | A on a SurfaceView | same swapchain path, a different window producer |
+| M | D on a SurfaceView | as L, with the layer |
 
 How to read it (F and G must PASS, otherwise the other verdicts cannot be
 trusted):
@@ -52,6 +54,33 @@ else is needed:
 | PASS | BLANK | BLANK | ok | a second pass in the same recording is enough: reproducible in a Dawn end2end test with two passes and no surface |
 | PASS | PASS | PASS | ok | the remaining ingredients are the swapchain image and the render thread; next is a Dawn surface test |
 | any | any | any | blank | layers fail on their own, not an MSAA problem |
+
+The second Pixel 11 run (2026-11-01) gave H, I, J PASS and K drawing: neither
+the size nor a second pass in the recording is the trigger. What is left is
+what only the onscreen frame does: the recordings are replayed onto the
+wrapped swapchain texture by the render thread and presented right after. L
+and M repeat A and D on a SurfaceView.
+
+## 2b. A transient MSAA pass without Graphite
+
+The patch also reads `debug.rnskia.dawn.dummymsaa` on every presented frame.
+Before the frame's recordings are submitted, the window surface submits one
+extra command buffer of its own, made with plain Dawn calls: a 64x64 render
+pass that clears a 4x MSAA color attachment, draws one blue triangle and
+resolves into a 64x64 texture nobody reads. The value picks the variant:
+
+| Value | Extra pass |
+| --- | --- |
+| `1` | MSAA attachment created with `TransientAttachment` usage, submitted before the frame |
+| `2` | same pass with a plain MSAA attachment (control) |
+| `3` | as `1`, but submitted after `Present()` |
+
+Run the screen with each value (set it, force-stop, relaunch) and look at
+the canvases that draw fills only, B, C and K. If they go blank under `1`
+and stay under `2`, a transient MSAA pass in the same frame as a swapchain
+present is enough on its own, with no Graphite involved: that is the Dawn
+bug report. If they stay under `1` and `3`, the trigger is inside Graphite's
+own pass for the window.
 
 On the property runs: `dawn.drop loadresolve` with TransientAttachments still
 on makes Graphite load and sample a transient MSAA attachment, which Dawn
