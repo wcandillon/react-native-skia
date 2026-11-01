@@ -169,6 +169,15 @@ inline bool isSwiftShader(const wgpu::Adapter &adapter) {
          toString(info.device).find("SwiftShader") != std::string::npos;
 }
 
+// Dawn's own Imagination test (gpu_info::IsImgTec): the PCI vendor ID of
+// Imagination Technologies, whose PowerVR GPUs ship in the Pixel 10 and 11.
+inline bool isImagination(const wgpu::Adapter &adapter) {
+  wgpu::AdapterInfo info;
+  adapter.GetInfo(&info);
+  constexpr uint32_t kVendorIDImagination = 0x1010;
+  return info.vendorID == kVendorIDImagination;
+}
+
 // The backend Skia renders with: Metal on Apple, Vulkan on Android.
 #ifdef __APPLE__
 constexpr auto kPlatformBackendType = wgpu::BackendType::Metal;
@@ -502,6 +511,19 @@ createDawnBackendContext(dawn::native::Instance *instance,
       wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
+#ifdef __ANDROID__
+  // Not on Imagination: with transient attachments, MSAA passes in onscreen
+  // frames present nothing on the PowerVR driver (Pixel 11, driver 25.3),
+  // whether they resolve into the window or into a layer, while the same
+  // pass on an offscreen surface works, and no error is reported (#4371). It
+  // surfaced when #4177 stopped requesting MSAARenderToSingleSampled on
+  // Android. Without the feature Graphite resolves MSAA through its emulated
+  // load/store path, keeping 4x MSAA, and everything draws. Remove once the
+  // failing path is understood.
+  if (isImagination(adapter)) {
+    std::erase(features, wgpu::FeatureName::TransientAttachments);
+  }
+#endif
 
   wgpu::Device device =
       requestDevice(matchedAdapter, features, listener, validate);
