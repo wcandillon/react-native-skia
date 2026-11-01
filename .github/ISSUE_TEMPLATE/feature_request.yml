@@ -2,6 +2,11 @@ name: 🆕 Feature Request
 description: React Native Skia feature request
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Write this issue yourself first, in your own words. A partial understanding is fine; what matters is that you own the problem. Agentic content after that is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
+
   - type: textarea
     id: description
     attributes:
