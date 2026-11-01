@@ -24,6 +24,10 @@ Every box should show a red background with a blue shape:
 | E | fill + stroked path on an offscreen GPU surface | MSAA pass into an ordinary texture, read back and counted |
 | F | fill + bars on an offscreen GPU surface (control) | single-sampled pass into a texture, read back |
 | G | fill + stroked path on a CPU surface (control) | no GPU |
+| H | E at the onscreen pixel size | MSAA attachment of the same size as A's |
+| I | fill + stroked path in a layer on an offscreen GPU surface | two passes in one recording like D, no swapchain, no render thread |
+| J | I at the onscreen pixel size | as I, with D's attachment size |
+| K | fill + bars in a layer onscreen (control) | a layer whose pass has no MSAA draw |
 
 How to read it (F and G must PASS, otherwise the other verdicts cannot be
 trusted):
@@ -32,9 +36,29 @@ trusted):
 | --- | --- | --- | --- | --- |
 | blank | ok | ok | PASS | the failure needs the swapchain image as the resolve target |
 | blank | ok | blank | BLANK | the MSAA attachment plus resolve path fails for every target; Dawn's own transient attachment tests should reproduce it |
-| blank | ok | blank | PASS | onscreen frames fail even into layer textures but a standalone surface works; needs the Dawn tests to split further |
+| blank | ok | blank | PASS | onscreen frames fail even into layer textures but a standalone surface works (the Pixel 11 result on 2026-11-01, see below) |
 | red, no line | ok | any | RED ONLY | the MSAA draw itself is lost, not the resolve: a different bug |
 | blank | blank | any | any | not limited to MSAA passes |
+
+The Pixel 11 gave the third row: A and D blank, B, C, E, F, G fine. D is
+the telling one: its main pass has no MSAA draw at all, yet the whole canvas
+is lost, so the loss happens at the level of the recording (one Dawn command
+buffer per recording) rather than of the MSAA pass. Cases H to K split what
+else is needed:
+
+| H | I | J | K | Meaning |
+| --- | --- | --- | --- | --- |
+| BLANK | PASS | any | ok | the attachment size is the trigger (E is 300x80, A is the onscreen pixel size) |
+| PASS | BLANK | BLANK | ok | a second pass in the same recording is enough: reproducible in a Dawn end2end test with two passes and no surface |
+| PASS | PASS | PASS | ok | the remaining ingredients are the swapchain image and the render thread; next is a Dawn surface test |
+| any | any | any | blank | layers fail on their own, not an MSAA problem |
+
+On the property runs: `dawn.drop loadresolve` with TransientAttachments still
+on makes Graphite load and sample a transient MSAA attachment, which Dawn
+rejects with validation errors on any GPU (Graphite's caps only switch to the
+emulated resolve when transient attachments are off as well). That run says
+nothing about PowerVR; it is a Graphite inconsistency that no shipped
+configuration reaches.
 
 ## 2. Dawn feature variants without rebuilding
 

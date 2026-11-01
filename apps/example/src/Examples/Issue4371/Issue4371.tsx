@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Image,
+  PixelRatio,
   Platform,
   ScrollView,
   StyleSheet,
@@ -33,6 +34,10 @@ import {
 
 const W = 300;
 const H = 80;
+// The pixel size of an onscreen box, so an offscreen surface can get an MSAA
+// attachment of the same size as case A.
+const PW = Math.round(W * PixelRatio.get());
+const PH = Math.round(H * PixelRatio.get());
 const RED = "#f4212e";
 const BLUE = "#1d9bf0";
 const LINE = "M 10 60 L 70 20 L 130 50 L 190 15 L 250 45 L 290 25";
@@ -132,6 +137,29 @@ const drawBars = (surface: SkSurface) => {
   surface.flush();
 };
 
+// Like case D, offscreen: the stroke goes through a layer, so the recording
+// holds two render passes, the layer's MSAA pass and the single-sampled main
+// pass that composites it over the red fill.
+const drawStrokeInLayer = (surface: SkSurface) => {
+  const canvas = surface.getCanvas();
+  canvas.drawColor(Skia.Color(RED));
+  canvas.saveLayer();
+  const path = Skia.Path.MakeFromSVGString(LINE);
+  if (path) {
+    canvas.drawPath(path, strokePaint());
+  }
+  canvas.restore();
+  surface.flush();
+};
+
+// Scales the drawing so the same shapes fill a surface of a different size.
+const scaled =
+  (draw: (surface: SkSurface) => void, scale: number) =>
+  (surface: SkSurface) => {
+    surface.getCanvas().scale(scale, scale);
+    draw(surface);
+  };
+
 const readBack = async (surface: SkSurface): Promise<OffscreenResult> => {
   const image = surface.makeImageSnapshot();
   const info = image.getImageInfo();
@@ -170,6 +198,29 @@ const OFFSCREEN_CASES = [
     expect: "No GPU involved, expected PASS everywhere.",
     make: () => Skia.Surface.MakeRaster(W, H),
     draw: drawStroke,
+  },
+  {
+    id: "H",
+    title: `H. Offscreen GPU surface at the onscreen pixel size (${PW}x${PH}): red fill + stroked path`,
+    expect:
+      "Same drawing as E with an MSAA attachment of the same size as case A. BLANK here with E PASS means the size matters.",
+    make: () => Skia.Surface.MakeOffscreen(PW, PH),
+    draw: scaled(drawStroke, PixelRatio.get()),
+  },
+  {
+    id: "I",
+    title: "I. Offscreen GPU surface: red fill + stroked path inside a layer",
+    expect:
+      "Two passes in one recording like case D (layer MSAA pass, then the main pass), but no swapchain and no render thread. BLANK here means the extra pass is enough to lose the recording.",
+    make: () => Skia.Surface.MakeOffscreen(W, H),
+    draw: drawStrokeInLayer,
+  },
+  {
+    id: "J",
+    title: `J. Offscreen GPU surface at the onscreen pixel size (${PW}x${PH}): stroked path inside a layer`,
+    expect: "I at the size of case D.",
+    make: () => Skia.Surface.MakeOffscreen(PW, PH),
+    draw: scaled(drawStrokeInLayer, PixelRatio.get()),
   },
 ];
 
@@ -220,7 +271,10 @@ export const Issue4371 = () => {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Issue 4371 diagnostics</Text>
-      <Text style={styles.body}>{deviceLine()}</Text>
+      <Text style={styles.body}>
+        {deviceLine()}, pixel ratio {PixelRatio.get()}, onscreen box {PW}x{PH}
+        px
+      </Text>
       <Text style={styles.body}>
         Every box below should show a red background with a blue shape. Take a
         screenshot of the whole screen (scroll for the rest) and post it on the
@@ -299,6 +353,20 @@ export const Issue4371 = () => {
               strokeJoin="round"
               color={BLUE}
             />
+          </Group>
+        </Canvas>
+      </Case>
+
+      <Case
+        title="K. Onscreen: red fill + bars inside a layer (control)"
+        expect="A layer whose pass has no MSAA draw. Visible here with D blank means the layer mechanism is fine and D fails because of its MSAA pass."
+      >
+        <Canvas style={styles.canvas}>
+          <Fill color={RED} />
+          <Group layer>
+            {BARS.map((bar, i) => (
+              <RoundedRect key={i} {...bar} r={4} color={BLUE} />
+            ))}
           </Group>
         </Canvas>
       </Case>
