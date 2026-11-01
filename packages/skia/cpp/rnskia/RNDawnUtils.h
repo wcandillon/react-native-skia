@@ -512,14 +512,29 @@ createDawnBackendContext(dawn::native::Instance *instance,
 #endif
   };
 #ifdef __ANDROID__
-  // Not on Imagination: with transient attachments, MSAA passes in onscreen
-  // frames present nothing on the PowerVR driver (Pixel 11, driver 25.3),
-  // whether they resolve into the window or into a layer, while the same
-  // pass on an offscreen surface works, and no error is reported (#4371). It
-  // surfaced when #4177 stopped requesting MSAARenderToSingleSampled on
-  // Android. Without the feature Graphite resolves MSAA through its emulated
-  // load/store path, keeping 4x MSAA, and everything draws. Remove once the
-  // failing path is understood.
+  // Not on Imagination: with transient attachments, a frame whose recording
+  // holds an MSAA pass presents nothing on the PowerVR driver (Pixel 11,
+  // driver 25.3@6908880), whether the pass resolves into the window or into
+  // a layer, while the same pass on an offscreen surface works and no error
+  // is reported (#4371). It surfaced when #4177 stopped requesting
+  // MSAARenderToSingleSampled on Android. Without the feature, and because
+  // Dawn's Vulkan backend never advertises DawnPartialLoadResolveTexture,
+  // Graphite takes its emulated load/store resolve (DawnCaps
+  // fEmulateLoadStoreResolve): the MSAA texture gets real memory and
+  // TextureBinding usage, the resolve is a draw, 4x MSAA stays on.
+  //
+  // Stopgap. Revisit it when:
+  // - Dawn stops advertising TransientAttachments on ImgTec itself
+  //   (PhysicalDeviceVk.cpp, IsImgTec), which makes this redundant;
+  // - MSAARenderToSingleSampled is requested on Android again
+  //   (https://issues.chromium.org/issues/571594984), which makes it moot;
+  // - a Skia bump changes the fEmulateLoadStoreResolve condition in
+  //   DawnCaps, or Dawn's Vulkan backend starts advertising
+  //   DawnPartialLoadResolveTexture: PowerVR would then move to a plain
+  //   MSAA texture with a native resolve, untested there.
+  // Verify any change with the Issue 4371 diagnostics screen on a Pixel
+  // 10 or 11 with this block disabled; a driver fix shows up there, not in
+  // any log.
   if (isImagination(adapter)) {
     std::erase(features, wgpu::FeatureName::TransientAttachments);
   }
