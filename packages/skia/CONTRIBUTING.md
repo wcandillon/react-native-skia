@@ -11,6 +11,10 @@
 `2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend and the platforms Graphite does not support (Android TV).
 Open pull requests against `main`, unless the change only applies to v2.
 
+## Contributing with coding agents
+
+We happily accept contributions made with coding agents. Our ask is simple: if you send us agent-written content, start with a few sentences in your own words. It will speed things up. A partial understanding is fine; any attempt at owning the change goes a long way. Agent-written content after that is welcome. We will deeply appreciate the effort.
+
 ## Library Development
 
 To develop react-native-skia, you can build the skia libraries on your computer. Alternatively, you can use the pre-built binaries.
