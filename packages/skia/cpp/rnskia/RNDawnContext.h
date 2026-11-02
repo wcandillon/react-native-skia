@@ -168,6 +168,24 @@ public:
   }
 
   /**
+   Whether the app is in the foreground and active, where the GPU work it
+   submits runs (Skia.gpu.foreground): false from the moment it starts to
+   resign active (a lock, a swipe home, an incoming call; the inactive and
+   background states of iOS) until it is active again. A frame callback or a
+   player reads it to skip its work meanwhile. Set by the platform on its main
+   thread (see setForeground), read from any thread; true where the platform
+   says nothing.
+   */
+  static bool isForeground() noexcept {
+    return foregroundFlag().load(std::memory_order_acquire);
+  }
+
+  /** Sets isForeground(); the platform calls it from its main thread. */
+  static void setForeground(bool foreground) noexcept {
+    foregroundFlag().store(foreground, std::memory_order_release);
+  }
+
+  /**
    Whether something made for the given generation can be used right now:
    it is the device in use, and that device is not lost. Any thread.
    */
@@ -518,15 +536,19 @@ public:
     return _current.load(std::memory_order_acquire)->backendContext.fDevice;
   }
 
-  // Create a secondary Dawn device from the same adapter.
-  // Has its own command queue and does NOT enable
-  // ImplicitDeviceSynchronization, so it won't contend with the primary
-  // rendering device's mutex. Safe for concurrent GPU work (e.g. ML inference)
-  // alongside Skia rendering.
+  // Create a secondary Dawn device from the same adapter, with its own command
+  // queue: GPU work of the app's own (ML inference, the camera) runs alongside
+  // Skia rendering without waiting for it. It has a device lock of its own
+  // (ImplicitDeviceSynchronization), which never contends with the primary
+  // device's: Dawn relies on it to use a device from several threads, and the
+  // hold of its submissions while the app is in the background (see
+  // DawnUtils::requestDevice) is only atomic against an in-flight submit
+  // through it.
   wgpu::Device createSecondaryDevice() {
     auto adapter = DawnUtils::getMatchedAdapter(instance.get());
 
     std::vector<wgpu::FeatureName> features = {
+        wgpu::FeatureName::ImplicitDeviceSynchronization,
         wgpu::FeatureName::BufferMapExtendedUsages,
 #ifdef __APPLE__
         wgpu::FeatureName::SharedTextureMemoryIOSurface,
@@ -760,6 +782,13 @@ private:
   static LossListeners &lossListeners() noexcept {
     static auto *registry = new LossListeners();
     return *registry;
+  }
+
+  // Whether the app is in the foreground and active (see isForeground). Not
+  // tied to the context: the platform sets it before the GPU is probed.
+  static std::atomic<bool> &foregroundFlag() noexcept {
+    static std::atomic<bool> foreground{true};
+    return foreground;
   }
 
   static const Probe &probe() noexcept {
