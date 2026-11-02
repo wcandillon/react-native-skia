@@ -34,7 +34,6 @@
   "packageManager": "yarn@3.6.4",
   "resolutions": {
     "@webgpu/types": "^0.1.69",
-    "react-native-webgpu-dawn": "157.1.0",
     "react-native-reanimated@4.6.0": "patch:react-native-reanimated@npm%3A4.6.0#./.yarn/patches/react-native-reanimated-npm-4.6.0-f4226872a0.patch"
   },
   "devDependencies": {

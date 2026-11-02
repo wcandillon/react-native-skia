@@ -134,7 +134,8 @@ Pick the versions of the two packages from one row of this table; the [React Nat
 
 | react-native-skia | react-native-webgpu |
 | --- | --- |
-| 3.7.0 and later | 0.17.0 and later |
+| 3.9.0 and later | 0.20.0 and later |
+| 3.7.0 to 3.8.1 | 0.17.0 to 0.19.2 |
 | 3.4.0 to 3.6.3 | 0.13.1 to 0.16.1, or 0.12.1 |
 | 3.1.0 to 3.3.0 | 0.13.0, or 0.12.1 |
 | 3.0.6 to 3.0.8 | 0.12.1, or 0.13.0 and later with react-native-skia 3.0.8 |
