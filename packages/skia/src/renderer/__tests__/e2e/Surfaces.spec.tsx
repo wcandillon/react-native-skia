@@ -1,4 +1,8 @@
+import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { surface } from "../setup";
+
+import type { WorkletThread } from "./setup";
+import { slowSvg, slowSvgSide } from "./setup";
 
 describe("Surfaces", () => {
   it("surface has width and height", async () => {
@@ -69,4 +73,57 @@ describe("Surfaces", () => {
     expect(result.draw).toContain("surface was disposed");
     expect(result.getCanvas).toContain("disposed object");
   });
+
+  itRunsE2eOnly(
+    "disposing the surface on another runtime waits for the draw in flight on its canvas",
+    async () => {
+      const levels = 9;
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          // No async/await: the code runs through Hermes' eval on the device.
+          const { workletThread } = ctx;
+          const svg = Skia.SVG.MakeFromString(ctx.svg)!;
+          // How long the draw takes here, on a surface of this thread.
+          const reference = Skia.Surface.MakeRaster(ctx.side, ctx.side)!;
+          const referenceStart = Date.now();
+          reference.getCanvas().drawSvg(svg);
+          const drawDuration = Date.now() - referenceStart;
+          reference.dispose();
+          // Made on the worklet's thread, which destroys it in dispose().
+          return workletThread
+            .makeRasterSurface(ctx.side, ctx.side)
+            .then((workletSurface) => {
+              const canvas = workletSurface.getCanvas();
+              return workletThread
+                .disposeDuring(workletSurface, drawDuration / 4, () =>
+                  canvas.drawSvg(svg)
+                )
+                .then(({ draw, dispose }) => {
+                  let next: string | null = null;
+                  try {
+                    canvas.drawSvg(svg);
+                  } catch (error) {
+                    next = (error as Error).message;
+                  }
+                  svg.dispose();
+                  return { draw, dispose, next };
+                });
+            });
+        },
+        { svg: slowSvg(levels), side: slowSvgSide(levels) } as {
+          svg: string;
+          side: number;
+          workletThread: WorkletThread;
+        }
+      );
+      // dispose() started while the draw was in flight, and returned once the
+      // draw had: it took about as long as what was left of the draw.
+      const left = result.draw.ended - result.dispose.started;
+      expect(left).toBeGreaterThan(0);
+      expect(
+        result.dispose.ended - result.dispose.started
+      ).toBeGreaterThanOrEqual(left / 2);
+      expect(result.next).toContain("surface was disposed");
+    }
+  );
 });
