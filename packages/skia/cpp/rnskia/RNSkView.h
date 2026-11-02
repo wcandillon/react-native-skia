@@ -154,10 +154,11 @@ public:
   }
 
   /**
-   Schedules redraw() on the present thread, once. A redraw the window could
-   not show (the app in the background) stays requested until onCanPresent()
-   schedules it again. Any thread: the window surface asks for one from the
-   main thread, with its own mutex held, so nothing is presented on the spot.
+   Schedules redraw() on the present thread, once. A redraw the platform view
+   declined (see RNSkWindowSurface::setCanPresent) stays requested until
+   askForDeclinedFrame() schedules it again. Any thread: the window surface
+   asks for one from the main thread, with its own mutex held, so nothing is
+   presented on the spot.
    */
   void requestRedraw() {
     if (_redrawRequested.exchange(true)) {
@@ -170,12 +171,12 @@ public:
    Present thread. Presents everything submitted since the last frame; with
    nothing queued, presents the last frame again (a redraw after a resize or
    on a new surface). Without a surface the queue is left alone: the surface
-   presents it when it appears. While the window cannot show a frame (the
-   app in the background, see RNSkWindowSurface::setCanPresent) nothing is
-   replayed either: the redraw stays requested, and onCanPresent() schedules
-   it again. A frame the window could not take (no drawable) is queued again
-   and handed to the frame scheduler, which tries it on the view's next frame
-   (see setFrameScheduler).
+   presents it when it appears. While the platform view says the window
+   cannot show a frame (see RNSkWindowSurface::setCanPresent) nothing is
+   replayed either: the redraw stays requested, and askForDeclinedFrame()
+   schedules it again. A frame the window could not take (no drawable) is
+   queued again and handed to the frame scheduler, which tries it on the
+   view's next frame (see setFrameScheduler).
    */
   void redraw() {
     RNSkGraphiteTargetInfo targetInfo;
@@ -334,9 +335,10 @@ public:
    waiting, so that the platform view asks again: also when the window could
    not take one (no drawable), so that it is tried again on the next frame
    rather than left waiting for a redraw. Without a surface the queue is
-   left alone: the surface presents it when it appears. While the window
-   cannot show a frame (the app in the background) the queue is left alone
-   too, and nobody asks again before onCanPresent().
+   left alone: the surface presents it when it appears. While the platform
+   view says the window cannot show a frame (see
+   RNSkWindowSurface::setCanPresent) the queue is left alone too, and nobody
+   asks again before askForDeclinedFrame().
    */
   int presentFrame() {
     auto target = getTarget();
@@ -363,15 +365,39 @@ public:
   }
 
   /**
-   Main thread. The window can show frames again (the app came back to the
-   foreground, see RNSkWindowSurface::setCanPresent): a redraw it could not
-   show is scheduled again, else the recordings queued meanwhile are handed
-   to the frame scheduler. Nothing is replayed on the spot. A GPU device
-   lost in the background (where iOS refuses GPU work) is replaced now that
-   the app is back, and the view is asked for a frame once it is.
+   Main thread, the Apple view's present thread. The window can show frames
+   again (the app came back to the foreground, see
+   RNSkWindowSurface::setCanPresent): what it could not show meanwhile is
+   asked for again (see askForDeclinedFrame). A GPU device lost in the
+   background (where iOS refuses GPU work) is replaced now that the app is
+   back, and the view is asked for a frame once it is.
    */
   void onCanPresent() {
     DawnContext::requestRecovery();
+    askForDeclinedFrame();
+  }
+
+  /**
+   The platform view says the window can show frames again (see
+   RNSkWindowSurface::setCanPresent): what it declined is asked for again on
+   the present thread (see askForDeclinedFrame). Any thread.
+   */
+  void requestDeclinedFrame() {
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    _runOnPresentThread([weakThis]() {
+      if (auto view = weakThis.lock()) {
+        view->askForDeclinedFrame();
+      }
+    });
+  }
+
+  /**
+   Present thread. What the window declined is asked for again: a redraw it
+   could not show is posted again, and lets go of its request there without
+   a window (see redraw); else the recordings queued meanwhile are handed to
+   the frame scheduler, which may present them at once.
+   */
+  void askForDeclinedFrame() {
     if (_redrawRequested) {
       postRedraw();
     } else if (hasQueuedRecordings()) {

@@ -22,8 +22,9 @@ public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         getHolder().addCallback(this);
     }
 
-    // The format drives the compositor's opaque flag for this layer. It can
-    // change on a live surface: SurfaceView reports it through surfaceChanged.
+    // The format drives the compositor's opaque flag for this layer. A change
+    // on a live surface recreates it: SurfaceView's updateSurface(), which
+    // setFormat() runs at once, destroys the surface and creates it again.
     public void setOpaque(boolean opaque) {
         getHolder().setFormat(opaque ? PixelFormat.OPAQUE : PixelFormat.TRANSLUCENT);
     }

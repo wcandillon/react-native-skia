@@ -164,9 +164,13 @@ public:
 
   /**
    Installed by the platform view: whether the window can show a frame right
-   now (not while the app is in the background). The view presents nothing
-   while it returns false, and asks again once told that it can (see
-   RNSkView::onCanPresent). Without one, an attached window always can.
+   now (not while the app is in the background, nor while an Android layer
+   that shows before its window frame waits for that frame to commit). The
+   view presents nothing while it returns false, and asks again once told
+   that it can (see RNSkView::askForDeclinedFrame). Without one, an attached
+   window always can. Installed before the window attaches, and called with
+   the window's mutex held on the thread that asks, so it must not call back
+   into this surface.
    */
   void setCanPresent(std::function<bool()> canPresent) {
     _canPresent = std::move(canPresent);
@@ -193,12 +197,12 @@ public:
    Replays the recordings onto the window and presents it, on the thread the
    view presents on; the swapchain texture is wrapped for the recorder of
    that thread. Returns false, consuming nothing, when the window cannot
-   present right now: there is none, the app is in the background, the GPU
-   device is lost, the window had no drawable, or the window is no longer
-   the target given: it was resized, or configured again on a new device,
-   since the caller read it (see getTargetInfo), and the recordings chosen
-   for that target would not fit it. The redraw the change asked for presents
-   onto the window as it is now.
+   present right now: there is none, the platform view says it cannot (see
+   setCanPresent), the GPU device is lost, the window had no drawable, or the
+   window is no longer the target given: it was resized, or configured again
+   on a new device, since the caller read it (see getTargetInfo), and the
+   recordings chosen for that target would not fit it. The redraw the change
+   asked for presents onto the window as it is now.
    */
   bool presentRecordings(
       const RNSkGraphiteTargetInfo &target,

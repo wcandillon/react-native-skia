@@ -1,5 +1,7 @@
 package com.reactnative.skia;
 
+import android.os.Build;
+
 import androidx.annotation.Nullable;
 
 /**
@@ -38,5 +40,18 @@ enum BackingViewKind {
      */
     static boolean resolveOpaque(boolean opaque, boolean surfaceHighBitDepth) {
         return opaque || surfaceHighBitDepth;
+    }
+
+    /**
+     * Whether a SurfaceView's new layer reaches the screen before the window
+     * frame that lays the canvas out: up to Android 12, SurfaceView shows it in
+     * a transaction of its own before surfaceCreated (SurfaceView.updateSurface()
+     * from android-8.0.0_r1 to android-12.0.0_r1), so a layer above the window
+     * shows a frame presented at once over the screen that window frame
+     * replaces. Android 12L shows it with the window's frame, and a layer
+     * behind the window shows only through the hole the window frame punches.
+     */
+    static boolean showsLayerBeforeWindowFrame(int sdkInt, boolean zOrderOnTop) {
+        return zOrderOnTop && sdkInt <= Build.VERSION_CODES.S;
     }
 }

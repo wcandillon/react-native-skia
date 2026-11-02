@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.os.Build;
+
 import org.junit.Test;
 
 public class BackingViewKindTest {
@@ -36,5 +38,17 @@ public class BackingViewKindTest {
         assertTrue(BackingViewKind.resolveOpaque(false, true));
         assertTrue(BackingViewKind.resolveOpaque(true, false));
         assertFalse(BackingViewKind.resolveOpaque(false, false));
+    }
+
+    @Test
+    public void aLayerAboveTheWindowShowsBeforeTheWindowFrameUpToAndroid12() {
+        assertTrue(BackingViewKind.showsLayerBeforeWindowFrame(Build.VERSION_CODES.O, true));
+        assertTrue(BackingViewKind.showsLayerBeforeWindowFrame(Build.VERSION_CODES.S, true));
+        assertFalse(BackingViewKind.showsLayerBeforeWindowFrame(Build.VERSION_CODES.S_V2, true));
+    }
+
+    @Test
+    public void aLayerBehindTheWindowShowsOnlyThroughTheWindowFrame() {
+        assertFalse(BackingViewKind.showsLayerBeforeWindowFrame(Build.VERSION_CODES.R, false));
     }
 }
