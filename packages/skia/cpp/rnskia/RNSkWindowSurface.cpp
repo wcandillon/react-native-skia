@@ -137,6 +137,7 @@ void RNSkWindowSurface::detach() {
 }
 
 void RNSkWindowSurface::detachLocked() {
+  const bool releasesSurface = static_cast<bool>(_surface);
   // The surface goes before the window it draws into.
   _surface = nullptr;
   _needsConfigure = false;
@@ -151,6 +152,9 @@ void RNSkWindowSurface::detachLocked() {
   }
   _releaser = nullptr;
   _nativeHandle = nullptr;
+  if (releasesSurface) {
+    DawnContext::requestMemoryRelease();
+  }
 }
 
 bool RNSkWindowSurface::isAttached() {
