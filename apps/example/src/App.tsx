@@ -36,6 +36,7 @@ import {
   HighBitDepth,
   Graphite,
   GraphiteCanvasExample,
+  BackgroundGpu,
   AndroidViews,
   ImageViews,
 } from "./Examples";
@@ -88,6 +89,7 @@ const linking: LinkingOptions<StackParamList> = {
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
       ImageViews: "image-views",
+      BackgroundGpu: "background-gpu",
     },
   },
   // react-native-test-app registers its bundle id as the iOS URL scheme, and
@@ -99,6 +101,9 @@ const linking: LinkingOptions<StackParamList> = {
     "rnskia://",
     "com.microsoft.ReactTestApp://",
     "com.microsoft.reacttestapp://",
+    // Device builds signed with another bundle id register that id instead.
+    "com.microsoft.ReactTestAppSkia42://",
+    "com.microsoft.reacttestappskia42://",
   ],
 };
 
@@ -260,6 +265,11 @@ const App = () => {
             />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
             <Stack.Screen name="ImageViews" component={ImageViews} />
+            <Stack.Screen
+              name="BackgroundGpu"
+              component={BackgroundGpu}
+              options={{ title: "🌙 Background GPU" }}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

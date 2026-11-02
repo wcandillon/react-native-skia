@@ -163,6 +163,11 @@ export const HomeScreen = () => {
         description="Canvas vs SkiaImageView, mounting and unmounting"
         route="ImageViews"
       />
+      <HomeScreenButton
+        title="🌙 Background GPU"
+        description="GPU work while the app is in the background (#4290)"
+        route="BackgroundGpu"
+      />
     </ScrollView>
   );
 };
