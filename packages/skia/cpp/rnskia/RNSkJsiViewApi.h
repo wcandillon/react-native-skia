@@ -246,9 +246,9 @@ public:
           if (view != nullptr) {
             return;
           }
-          // The view has not registered yet (or is detached, which on iOS
-          // destroys it): the recording waits in the registry and is drawn,
-          // with whatever values it holds by then, once a view registers.
+          // The view has not registered yet: the recording waits in the
+          // registry and is drawn, with whatever values it holds by then,
+          // once the view registers.
           // Keep it current, under the registry lock so that a registration
           // cannot slip in between; the recording would otherwise wait,
           // unready (it reads no value while recording), until the next
@@ -410,11 +410,6 @@ public:
         _platformContext(platformContext) {}
 
   /**
-   Call to remove all draw view infos
-   */
-  void unregisterAll() { ViewRegistry::getInstance().clear(); }
-
-  /**
    * Registers a skia view
    * @param nativeId Id of view to register
    * @param view View to register
@@ -441,29 +436,6 @@ public:
   void unregisterSkiaView(size_t nativeId) {
     ViewRegistry::getInstance().removeViewInfo(nativeId);
     RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
-  }
-
-  /**
-   Sets a skia draw view for the given id. This function can be used
-   to mark that an underlying SkiaView is not available (it could be
-   removed due to ex. a transition). The view can be set to a nullptr
-   or a valid view, effectively toggling the view's availability.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
-    ViewRegistry::getInstance().withViewInfo(
-        nativeId,
-        [&](std::shared_ptr<RNSkViewInfo> info) {
-          if (view != nullptr) {
-            info->view = view;
-            info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
-            info->props.clear();
-          } else {
-            info->view = view; // Set to nullptr
-          }
-          return nullptr;
-        },
-        /* revive= */ view != nullptr);
   }
 
 private:
