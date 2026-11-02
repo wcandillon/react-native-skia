@@ -42,6 +42,9 @@ RCT_EXPORT_MODULE()
     // asked for its color gamut here, where UIKit may be used. The platform
     // context is created on the JS thread and only reads the answer.
     RNSkia::RNSkApplePlatformContext::mainScreenSupportsP3();
+    // Also where the application's state may be read: Skia.gpu.foreground
+    // follows it from here on.
+    RNSkia::RNSkApplePlatformContext::observeApplicationState();
   }
   return self;
 }

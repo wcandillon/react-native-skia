@@ -169,6 +169,15 @@ inline bool isSwiftShader(const wgpu::Adapter &adapter) {
          toString(info.device).find("SwiftShader") != std::string::npos;
 }
 
+// Dawn's own Imagination test (gpu_info::IsImgTec): the PCI vendor ID of
+// Imagination Technologies, whose PowerVR GPUs ship in the Pixel 10 and 11.
+inline bool isImagination(const wgpu::Adapter &adapter) {
+  wgpu::AdapterInfo info;
+  adapter.GetInfo(&info);
+  constexpr uint32_t kVendorIDImagination = 0x1010;
+  return info.vendorID == kVendorIDImagination;
+}
+
 // The backend Skia renders with: Metal on Apple, Vulkan on Android.
 #ifdef __APPLE__
 constexpr auto kPlatformBackendType = wgpu::BackendType::Metal;
@@ -347,6 +356,16 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // PerformIdleTasks is not needed: nothing persists the cache.
       "vulkan_monolithic_pipeline_cache",
 #endif
+#ifdef __APPLE__
+      // iOS refuses GPU work from an app in the background, and Dawn loses
+      // the device over a refused command buffer (#4290). With this toggle
+      // Dawn holds the commits while the app is in the background, from the
+      // application's own notifications, and commits them when it comes back:
+      // nothing is lost, nothing is refused. Dawn applies it on iOS and tvOS
+      // only, and a Dawn without it (react-native-webgpu-dawn before the
+      // patch) drops the name. See scripts/dawn-patches.
+      "metal_suspend_submissions_in_background",
+#endif
   };
 #if defined(NDEBUG)
   if (!validate) {
@@ -502,6 +521,34 @@ createDawnBackendContext(dawn::native::Instance *instance,
       wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
+#ifdef __ANDROID__
+  // Not on Imagination: with transient attachments, a frame whose recording
+  // holds an MSAA pass presents nothing on the PowerVR driver (Pixel 11,
+  // driver 25.3@6908880), whether the pass resolves into the window or into
+  // a layer, while the same pass on an offscreen surface works and no error
+  // is reported (#4371). It surfaced when #4177 stopped requesting
+  // MSAARenderToSingleSampled on Android. Without the feature, and because
+  // Dawn's Vulkan backend never advertises DawnPartialLoadResolveTexture,
+  // Graphite takes its emulated load/store resolve (DawnCaps
+  // fEmulateLoadStoreResolve): the MSAA texture gets real memory and
+  // TextureBinding usage, the resolve is a draw, 4x MSAA stays on.
+  //
+  // Stopgap. Revisit it when:
+  // - Dawn stops advertising TransientAttachments on ImgTec itself
+  //   (PhysicalDeviceVk.cpp, IsImgTec), which makes this redundant;
+  // - MSAARenderToSingleSampled is requested on Android again
+  //   (https://issues.chromium.org/issues/571594984), which makes it moot;
+  // - a Skia bump changes the fEmulateLoadStoreResolve condition in
+  //   DawnCaps, or Dawn's Vulkan backend starts advertising
+  //   DawnPartialLoadResolveTexture: PowerVR would then move to a plain
+  //   MSAA texture with a native resolve, untested there.
+  // Verify any change with the Issue 4371 diagnostics screen on a Pixel
+  // 10 or 11 with this block disabled; a driver fix shows up there, not in
+  // any log.
+  if (isImagination(adapter)) {
+    std::erase(features, wgpu::FeatureName::TransientAttachments);
+  }
+#endif
 
   wgpu::Device device =
       requestDevice(matchedAdapter, features, listener, validate);

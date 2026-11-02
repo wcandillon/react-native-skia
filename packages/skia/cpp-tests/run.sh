@@ -11,6 +11,6 @@ OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 for test in cpp-tests/*.cpp; do
   name="$(basename "$test" .cpp)"
-  "$CXX" -std=c++20 -I "$SKIA_INCLUDE" -I cpp -I "$JSI_INCLUDE" "$test" -o "$OUT/$name"
+  "$CXX" -std=c++20 -I "$SKIA_INCLUDE" -I cpp -I android/cpp -I "$JSI_INCLUDE" "$test" -o "$OUT/$name"
   "$OUT/$name"
 done

@@ -41,8 +41,8 @@ const differingShare = (
   return differing / (a.length / 4);
 };
 
-// Skia.gpu describes the GPU probed when the module was installed. The test
-// devices have one; a device without one keeps the app running with blank
+// Skia.gpu describes the GPU probed the first time the GPU is asked for. The
+// test devices have one; a device without one keeps the app running with blank
 // canvases, which this suite cannot exercise.
 describe("GPU info", () => {
   itRunsE2eOnly("reports the GPU Skia renders with", async () => {
@@ -56,6 +56,8 @@ describe("GPU info", () => {
     expect(typeof gpu.device).toBe("string");
     expect(typeof gpu.description).toBe("string");
     expect(gpu.lostIsPromise).toBe(true);
+    // The test app is in front while the suite runs.
+    expect(gpu.foreground).toBe(true);
   });
 
   // The device harness forces the loss through react-native-webgpu's
