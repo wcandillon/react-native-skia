@@ -2,8 +2,11 @@
 
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #include <jsi/jsi.h>
+
+#include "RNSkRecordingSlots.h"
 
 #include "include/core/SkRefCnt.h"
 
@@ -15,6 +18,7 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class Recorder;
+class RNSkGraphiteRecording;
 class RNSkGraphiteTarget;
 
 /**
@@ -107,10 +111,13 @@ public:
   bool requestFrame();
 
   /**
-   The view presented `presented` recordings (every one it had taken from the
-   queue): as many slots free up for the next jobs.
+   The view is done with the first `done` of these recordings: it presented
+   them, or skipped them. The slots of the ones this producer queued free up
+   for the next jobs (see RNSkRecordingSlots).
    */
-  void onFramePresented(size_t presented);
+  void onRecordingsDone(
+      const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
+      size_t done);
 
   /**
    Replays the current content into a canvas, on the calling thread (a
@@ -147,12 +154,13 @@ private:
   std::shared_ptr<RNSkGraphiteTarget> _target;
   std::shared_ptr<Recorder> _recorder;
   sk_sp<SkPicture> _picture;
-  // Recordings submitted to the current target and not presented yet. A job
-  // starts while there is room for its recording in the queue.
+  // The recordings submitted to the current target that the view is not done
+  // with yet. A job starts while there is room for its recording in the
+  // queue.
   static constexpr size_t kMaxQueued = 2;
   bool _dirty = false;
   bool _inFlight = false;
-  size_t _queued = 0;
+  RNSkRecordingSlots<RNSkGraphiteRecording> _slots;
 };
 
 } // namespace RNSkia
