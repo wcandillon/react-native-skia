@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
@@ -53,14 +54,37 @@ public:
       const RNSkGraphiteTargetInfo &target,
       const std::vector<skgpu::graphite::Recording *> &recordings) = 0;
 
+  /** What became of an image presented onto the surface (see presentImage). */
+  enum class ImagePresent {
+    /** The image went to the surface. */
+    kPresented,
+    /**
+     The surface could take a frame but no image was made for it: what the
+     image was to be made from is consumed.
+     */
+    kConsumed,
+    /**
+     The surface could not take a frame right now, as presentRecordings()
+     declines one: nothing is consumed.
+     */
+    kDeclined,
+  };
+
   /**
-   Draws an image onto the target texture (see drawOnto) and presents it.
-   Same target, thread and return value as presentRecordings(). Used for a
-   recording whose size or color space differs from the target's: it is
-   replayed into a texture of its own first (see RNSkView::present).
+   Draws the image `makeImage` makes onto the target texture (see drawOnto)
+   and presents it. Same target and thread as presentRecordings(). Used for a
+   recording whose size or color space differs from the target's, which
+   `makeImage` replays into a texture of its own (see RNSkView::present): it
+   is called once the surface can take the frame, so that a surface that
+   declines costs no replay, and before the target texture is acquired, so
+   that none is acquired for a frame nothing is made for. A window makes it
+   outside its lock (see RNSkWindowSurface::presentImage), so a window that
+   stopped taking frames meanwhile, a GPU device replaced meanwhile, or a
+   swapchain that then gives no texture declines with the replay made.
    */
-  virtual bool presentImage(const RNSkGraphiteTargetInfo &target,
-                            const sk_sp<SkImage> &image) = 0;
+  virtual ImagePresent
+  presentImage(const RNSkGraphiteTargetInfo &target,
+               const std::function<sk_sp<SkImage>()> &makeImage) = 0;
 
 protected:
   /**

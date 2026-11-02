@@ -47,7 +47,13 @@ public:
                           JniSkiaView::setSurfaceHighBitDepth),
          makeNativeMethod("registerView", JniSkiaView::registerView),
          makeNativeMethod("unregisterView", JniSkiaView::unregisterView),
-         makeNativeMethod("presentFrame", JniSkiaView::presentFrame)});
+         makeNativeMethod("presentFrame", JniSkiaView::presentFrame),
+         makeNativeMethod("presentFrameOnVsync",
+                          JniSkiaView::presentFrameOnVsync),
+         makeNativeMethod("presentFrameOnWindowDraw",
+                          JniSkiaView::presentFrameOnWindowDraw),
+         makeNativeMethod("presentHeldFrame", JniSkiaView::presentHeldFrame),
+         makeNativeMethod("tickOnVsync", JniSkiaView::tickOnVsync)});
   }
 
   // The manager is owned by the RNSkiaModule and is destroyed when the module
@@ -126,11 +132,30 @@ protected:
     manager->unregisterSkiaView(_view->getNativeId());
   }
 
-  // The Java view's frame scheduler, on the thread the view presents on:
-  // presents the queued recordings, says whether a frame went to the window
-  // and whether more are waiting (see RNSkView::presentFrame). The Java view
-  // keeps this object alive for the call (see SkiaView.dropInstance).
+  // The Java view's frame scheduler, on the thread the view presents on, for
+  // a submitted recording: presents what is waiting, says whether a frame went
+  // to the window, whether one is left, whether the window holds it for the
+  // GPU and whether a replay is coming (see RNSkView::presentFrame). The Java
+  // view keeps this object alive for the call (see SkiaView.dropInstance).
   int presentFrame() { return _view->presentFrame(); }
+
+  // The same on a vsync, its present tick (see
+  // RNSkView::presentFrameOnVsync).
+  int presentFrameOnVsync() { return _view->presentFrameOnVsync(); }
+
+  // The same once the TextureView's window drew the frame it was given (see
+  // RNSkView::presentFrameOnWindowDraw).
+  int presentFrameOnWindowDraw() { return _view->presentFrameOnWindowDraw(); }
+
+  // The Java view's frame scheduler, a moment after a present left a frame
+  // held for the GPU: presents that frame alone once the GPU is done, and
+  // says as presentFrame() does (see RNSkView::presentHeldFrame).
+  int presentHeldFrame() { return _view->presentHeldFrame(); }
+
+  // The Java view's frame scheduler, on a vsync while the TextureView's
+  // window has yet to draw its frame: the present tick alone (see
+  // RNSkView::tickOnVsync).
+  int tickOnVsync() { return _view->tickOnVsync(); }
 
 private:
   friend HybridBase;
@@ -139,7 +164,13 @@ private:
                        jni::alias_ref<JniSkiaManager::javaobject> skiaManager)
       : _manager(skiaManager->cthis()->getSkiaManager()) {
     auto context = skiaManager->cthis()->getPlatformContext();
-    _surface = std::make_shared<RNSkWindowSurface>();
+    // A window's present waits, on the thread that presents, until the GPU
+    // has finished the frame presented before it (libgui's queueBuffer, for
+    // every Vulkan swapchain), and holds Dawn's device lock meanwhile; its
+    // compositor takes one frame a vsync: a frame replayed that early is
+    // held, and the window takes no second one in a tick.
+    _surface = std::make_shared<RNSkWindowSurface>(
+        PresentHold::kOncePerTickAfterPreviousFrame);
     _view = std::make_shared<RNSkView>(context, _surface);
     // Tasks for the present thread go through the Java view, which owns the
     // thread. Weak: the Java view owns this object through its hybrid data;
@@ -169,6 +200,18 @@ private:
       static const auto method =
           javaPart->getClass()->getMethod<void(jboolean)>("scheduleFrame");
       method(javaPart, static_cast<jboolean>(forResizedWindow));
+    });
+    // What a redraw presented goes to the Java view's frame scheduler, as
+    // what its own presents did: a frame it left over or holds for the GPU is
+    // presented as after those (see RNSkView::setRedrawPresented).
+    _view->setRedrawPresented([javaView](int result) {
+      auto javaPart = javaView->weak->lockLocal();
+      if (!javaPart) {
+        return;
+      }
+      static const auto method =
+          javaPart->getClass()->getMethod<void(jint)>("onRedrawPresented");
+      method(javaPart, static_cast<jint>(result));
     });
   }
 
