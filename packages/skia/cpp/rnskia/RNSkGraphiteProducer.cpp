@@ -43,6 +43,8 @@ RNSkThreadPool &renderPool() {
 
 } // namespace
 
+RNSkGraphiteProducer::RNSkGraphiteProducer() : _schedule(kReplaysToKeepUp) {}
+
 RNSkGraphiteProducer::~RNSkGraphiteProducer() {
   // The content goes away with the view: what the recorders of the render
   // threads still cache for it is freed once they are idle.
@@ -70,9 +72,11 @@ void RNSkGraphiteProducer::setTarget(
   {
     std::lock_guard<std::mutex> lock(_mutex);
     retiredTarget = std::exchange(_target, std::move(target));
-    // A frame still queued on the previous target is not coming through this
-    // view anymore (the view unbound itself from it): do not wait for it.
-    _queued = 0;
+    // A target never drops a recording (see produce()): the deferred one goes
+    // to the target it was made for.
+    if (auto deferred = _schedule.retarget()) {
+      retiredTarget->submit(std::move(*deferred));
+    }
     _dirty = true;
     kickLocked();
   }
@@ -115,7 +119,8 @@ bool RNSkGraphiteProducer::hasContent() {
 
 bool RNSkGraphiteProducer::hasFrameComing() {
   std::lock_guard<std::mutex> lock(_mutex);
-  return _inFlight || (_dirty && _target != nullptr && hasContentLocked());
+  return _schedule.hasJobInFlight() || _schedule.hasDeferredRecording() ||
+         (_dirty && _target != nullptr && hasContentLocked());
 }
 
 bool RNSkGraphiteProducer::hasContentLocked() const {
@@ -177,22 +182,52 @@ bool RNSkGraphiteProducer::requestFrame() {
   return _target != nullptr && hasContentLocked();
 }
 
-void RNSkGraphiteProducer::onFramePresented(size_t presented) {
+void RNSkGraphiteProducer::onRecordingsPresented(
+    const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
   std::lock_guard<std::mutex> lock(_mutex);
-  // The view may present recordings that are not this producer's (a client
-  // recording, the last frame shown again), hence the clamp.
-  _queued = presented >= _queued ? 0 : _queued - presented;
+  for (const auto &recording : recordings) {
+    if (auto deferred = _schedule.recordingPresented(recording)) {
+      _target->submit(std::move(*deferred));
+    }
+  }
   if (_dirty) {
     kickLocked();
   }
 }
 
+void RNSkGraphiteProducer::onPresentTick() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _schedule.presentTick();
+}
+
+void RNSkGraphiteProducer::onTicksEnded() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _schedule.ticksEnded();
+}
+
+bool RNSkGraphiteProducer::isReplaying() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _schedule.hasJobInFlight();
+}
+
 void RNSkGraphiteProducer::kickLocked() {
-  if (_inFlight || _queued >= kMaxQueued || _target == nullptr ||
-      !hasContentLocked()) {
+  // While the device in use is lost, a job would replay a frame nothing can
+  // present. The content stays dirty: the loss listener's redraw and the next
+  // update kick the producer once a replacement is in place.
+  if (DawnContext::isDeviceLost()) {
     return;
   }
-  _inFlight = true;
+  if (_target != nullptr) {
+    while (auto deferred = _schedule.forgetUnpresentable(
+               [](const std::shared_ptr<RNSkGraphiteRecording> &recording) {
+                 return !recording->isCurrent();
+               })) {
+      _target->submit(std::move(*deferred));
+    }
+  }
+  if (_target == nullptr || !hasContentLocked() || !_schedule.tryStartJob()) {
+    return;
+  }
   std::weak_ptr<RNSkGraphiteProducer> weakThis = weak_from_this();
   renderPool().post([weakThis]() {
     if (auto self = weakThis.lock()) {
@@ -248,24 +283,27 @@ void RNSkGraphiteProducer::produce() {
     }
   }
   std::lock_guard<std::mutex> lock(_mutex);
-  _inFlight = false;
+  // Submitted under the lock: a present of the recording reported before
+  // finishJob() made it the view's recording on the target would be ignored,
+  // and the schedule would wait for it forever.
+  if (recording != nullptr && target == _target) {
+    if (auto ready = _schedule.finishJob(std::move(recording))) {
+      target->submit(std::move(*ready));
+    }
+    // Values that arrived during the replay start the next job as soon as
+    // the pacing lets it.
+    if (_dirty) {
+      kickLocked();
+    }
+    return;
+  }
+  _schedule.endJob();
   if (recording != nullptr) {
     // Queued even if the view was bound to another target while this job
     // ran: a target never drops a recording, a later one on the same
-    // recorder may depend on resources this one uploads. Submitted under the
-    // lock: a frame presented in between (a redraw replaying the last one)
-    // would otherwise clear the flag before the recording is even queued.
+    // recorder may depend on resources this one uploads. The new target has
+    // none yet.
     target->submit(std::move(recording));
-    if (target == _target) {
-      _queued++;
-      // Values that arrived during the replay start the next job right away,
-      // while this frame waits for its vsync, as long as there is room.
-      if (_dirty) {
-        kickLocked();
-      }
-      return;
-    }
-    // The frame went to the previous target; the new one has none yet.
   }
   // Nothing was recorded for the current target: keep the content dirty so
   // that the next request (a surface, a resize) records it. A request that
