@@ -38,6 +38,7 @@ import {
   GraphiteCanvasExample,
   BackgroundGpu,
   AndroidViews,
+  ImageViews,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -87,6 +88,7 @@ const linking: LinkingOptions<StackParamList> = {
       Graphite: "graphite",
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
+      ImageViews: "image-views",
       BackgroundGpu: "background-gpu",
     },
   },
@@ -262,6 +264,7 @@ const App = () => {
               component={GraphiteCanvasExample}
             />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
+            <Stack.Screen name="ImageViews" component={ImageViews} />
             <Stack.Screen
               name="BackgroundGpu"
               component={BackgroundGpu}

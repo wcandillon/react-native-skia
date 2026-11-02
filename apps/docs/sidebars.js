@@ -40,6 +40,7 @@ const sidebars = {
         "canvas/rendering-modes",
         "canvas/contexts",
         "canvas/graphite",
+        "canvas/image-view",
       ],
     },
     {

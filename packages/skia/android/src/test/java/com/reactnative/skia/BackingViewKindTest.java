@@ -28,6 +28,7 @@ public class BackingViewKindTest {
     public void onlyASurfaceViewGetsTheTenBitFormat() {
         assertTrue(BackingViewKind.resolveHighBitDepth(BackingViewKind.SURFACE_VIEW, true));
         assertFalse(BackingViewKind.resolveHighBitDepth(BackingViewKind.TEXTURE_VIEW, true));
+        assertFalse(BackingViewKind.resolveHighBitDepth(BackingViewKind.IMAGE, true));
         assertFalse(BackingViewKind.resolveHighBitDepth(BackingViewKind.SURFACE_VIEW, false));
     }
 

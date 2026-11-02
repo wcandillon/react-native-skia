@@ -65,6 +65,7 @@ add_library(
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaManager.cpp"
 
         "${PROJECT_SOURCE_DIR}/cpp/jni/JniPlatformContext.cpp"
+        "${PROJECT_SOURCE_DIR}/cpp/jni/JniSkiaPresentedImages.cpp"
 
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JSICache.cpp"
         "${PROJECT_SOURCE_DIR}/../cpp/jsi/JsiPromises.cpp"
@@ -187,6 +188,7 @@ target_link_libraries(${PACKAGE_NAME}
     ${SKIA_LIB}
     webgpu_dawn
     -landroid
+    -ljnigraphics
 )
 
 # Enable Android 16kb native library alignment

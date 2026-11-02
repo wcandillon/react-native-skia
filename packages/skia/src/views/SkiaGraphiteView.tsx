@@ -32,6 +32,7 @@ export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
 export const SkiaGraphiteView = ({
   highBitDepth = false,
   colorSpace,
+  static: staticPresentation = false,
   android,
   ref,
   ...viewProps
@@ -39,9 +40,12 @@ export const SkiaGraphiteView = ({
   const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
-  useBackingViewWarning({ highBitDepth, android });
+  useBackingViewWarning({ highBitDepth, android, static: staticPresentation });
+  // A static view's images are 8-bit whatever the prop says, and its frames
+  // are recorded for them from the first.
+  const rendersHighBitDepth = highBitDepth && !staticPresentation;
   // What the surface format follows from on Android, see makeGraphiteContext.
-  const opaque = resolveOpaque({ highBitDepth, android });
+  const opaque = resolveOpaque({ highBitDepth: rendersHighBitDepth, android });
   // Retires the native target made for this id on unmount, in case no native
   // view ever bound to it; a bound target is retired by the view's teardown.
   // StrictMode runs this cleanup right after mount too, possibly before the
@@ -73,11 +77,11 @@ export const SkiaGraphiteView = ({
           size.width,
           size.height,
           opaque,
-          highBitDepth
+          rendersHighBitDepth
         );
       },
     }),
-    [nativeId, opaque, highBitDepth]
+    [nativeId, opaque, rendersHighBitDepth]
   );
   return (
     <SkiaViewNativeComponent
@@ -86,6 +90,7 @@ export const SkiaGraphiteView = ({
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
       colorSpace={colorSpace ?? ""}
+      staticPresentation={staticPresentation}
       {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />
