@@ -50,12 +50,13 @@ On a device without a GPU Skia can render with (on Android, one without Vulkan 1
 
 iOS refuses GPU work from an app in the background, and refused work used to lose the device.
 React Native Skia now holds the GPU work submitted while the app is in the background and runs it when the app comes back: nothing is lost and nothing is refused.
-This holds for the device `Skia.getNativeDevice()` shares with React Native WebGPU too.
+The same applies to the device `Skia.getNativeDevice()` shares with React Native WebGPU.
 Canvases present nothing meanwhile and catch up on return.
 
 Holding is not free: every frame drawn in the background keeps what it uses in memory until the return.
 A frame callback or a video player that keeps drawing while the app is in the background should stop instead.
-`Skia.gpu.foreground` says whether the app is in the foreground and active, synchronously, on every runtime: it is false from the moment the app starts to resign active (a lock, a swipe home, an incoming call) until it is active again, before any `AppState` event reaches JS.
+`Skia.gpu.foreground` is false from the moment the app starts to resign active (a lock, a swipe home, an incoming call) until it is active again.
+It can be read synchronously on every runtime, a worklet included, and it flips before any `AppState` event reaches JS.
 
 ```tsx twoslash
 import { Skia } from "react-native-skia";
@@ -78,7 +79,7 @@ On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on th
 
 ### Device loss
 
-The device can be lost while the app runs: a driver reset, the GPU out of memory, or GPU work refused while the app was in the background on iOS.
+The device can be lost while the app runs: a driver reset, or the GPU out of memory.
 React Native Skia then replaces it with a new device, and canvases render again on their own.
 Everything made on the lost device is gone for good, though safe to use (it draws nothing): offscreen surfaces and the images taken from them, texture images, snapshots of views, and the device `Skia.getNativeDevice()` returned.
 
