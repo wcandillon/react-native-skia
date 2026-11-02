@@ -39,14 +39,14 @@ const { isAvailable, backend, device, description, error } = Skia.gpu;
 | `vendor`, `architecture`, `device`, `description` | The adapter, in the terms of WebGPU's `GPUAdapterInfo` (native only) |
 | `error` | Why the GPU is unavailable; `null` when it is |
 | `lost` | The promise of the loss of the device, see [device loss](#device-loss) |
-| `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [the background](#the-background) |
+| `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [background and foreground](#background-and-foreground) |
 
 ### Availability
 
 On a device without a GPU Skia can render with (on Android, one without Vulkan 1.1, see [the Vulkan section of the installation guide](/docs/getting-started/installation#vulkan)), the app still runs.
 `Skia.gpu.isAvailable` is false and `Skia.gpu.error` says why: every canvas stays blank, CPU work (paths, decoding, raster images) still runs, and the APIs that need the GPU (offscreen surfaces, snapshots, texture images) throw an error with the same message.
 
-### The background
+### Background and foreground
 
 iOS refuses GPU work from an app in the background, and refused work used to lose the device.
 React Native Skia now holds the GPU work submitted while the app is in the background and runs it when the app comes back: nothing is lost and nothing is refused.
