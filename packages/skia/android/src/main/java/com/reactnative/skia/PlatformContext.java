@@ -2,6 +2,8 @@ package com.reactnative.skia;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.MessageQueue;
+import android.os.ParcelFileDescriptor;
 
 import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
@@ -27,9 +29,30 @@ public class PlatformContext {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    // The native side's main-thread queue signals its tasks on this
+    // descriptor, one for the process, so queuing one from another thread
+    // calls no Java there.
+    private static ParcelFileDescriptor sMainThreadWakeup;
+
     public PlatformContext(ReactContext reactContext) {
+        listenForMainThreadTasks();
         mContext = reactContext;
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
+    }
+
+    private static synchronized void listenForMainThreadTasks() {
+        if (sMainThreadWakeup != null) {
+            return;
+        }
+        ParcelFileDescriptor wakeup = ParcelFileDescriptor.adoptFd(duplicateMainThreadWakeup());
+        Looper.getMainLooper().getQueue().addOnFileDescriptorEventListener(
+                wakeup.getFileDescriptor(),
+                MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT,
+                (descriptor, events) -> {
+                    runMainThreadTasks();
+                    return MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT;
+                });
+        sMainThreadWakeup = wakeup;
     }
 
     private byte[] getStreamAsBytes(InputStream is) throws IOException {
@@ -105,17 +128,10 @@ public class PlatformContext {
         });
     }
 
-    @DoNotStrip
-    public void notifyTaskReady() {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            notifyTaskReadyNative();
-        } else {
-            mainHandler.post(this::notifyTaskReadyNative);
-        }
-    }
-
     // Private c++ native methods
     private native HybridData initHybrid(float pixelDensity);
 
-    private native void notifyTaskReadyNative();
+    private static native int duplicateMainThreadWakeup();
+
+    private static native void runMainThreadTasks();
 }

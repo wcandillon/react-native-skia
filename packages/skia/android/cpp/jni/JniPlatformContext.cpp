@@ -1,8 +1,14 @@
 #include "JniPlatformContext.h"
 
+#include <fcntl.h>
+
+#include <cerrno>
 #include <exception>
+#include <system_error>
 #include <thread>
 #include <utility>
+
+#include "RNSkMainThreadTasks.h"
 
 #include "include/core/SkData.h"
 #include "include/core/SkRefCnt.h"
@@ -18,8 +24,10 @@ using TSelf = jni::local_ref<JniPlatformContext::jhybriddata>;
 void JniPlatformContext::registerNatives() {
   registerHybrid({
       makeNativeMethod("initHybrid", JniPlatformContext::initHybrid),
-      makeNativeMethod("notifyTaskReadyNative",
-                       JniPlatformContext::notifyTaskReadyNative),
+      makeNativeMethod("duplicateMainThreadWakeup",
+                       JniPlatformContext::duplicateMainThreadWakeup),
+      makeNativeMethod("runMainThreadTasks",
+                       JniPlatformContext::runMainThreadTasks),
   });
 }
 
@@ -85,44 +93,20 @@ void JniPlatformContext::performStreamOperation(
 }
 
 void JniPlatformContext::runTaskOnMainThread(std::function<void()> task) {
-  bool shouldSchedule = false;
-  {
-    std::lock_guard<std::mutex> lock(_mainThreadTasksMutex);
-    _mainThreadTasks.push(std::move(task));
-    if (!_mainThreadDispatchScheduled) {
-      _mainThreadDispatchScheduled = true;
-      shouldSchedule = true;
-    }
-  }
-
-  if (shouldSchedule) {
-    notifyTaskReadyExternal();
-  }
+  MainThreadTasks::getInstance().post(std::move(task));
 }
 
-void JniPlatformContext::notifyTaskReadyExternal() {
-  jni::ThreadScope ts;
-
-  static auto method =
-      javaPart_->getClass()->getMethod<void()>("notifyTaskReady");
-  method(javaPart_.get());
+int JniPlatformContext::duplicateMainThreadWakeup(jni::alias_ref<jclass>) {
+  int duplicate =
+      fcntl(MainThreadTasks::getInstance().wakeup(), F_DUPFD_CLOEXEC, 0);
+  if (duplicate == -1) {
+    throw std::system_error(errno, std::generic_category(), "dup");
+  }
+  return duplicate;
 }
 
-void JniPlatformContext::notifyTaskReadyNative() {
-  std::queue<std::function<void()>> tasks;
-  {
-    std::lock_guard<std::mutex> lock(_mainThreadTasksMutex);
-    std::swap(tasks, _mainThreadTasks);
-    _mainThreadDispatchScheduled = false;
-  }
-
-  while (!tasks.empty()) {
-    auto handler = std::move(tasks.front());
-    tasks.pop();
-    if (handler) {
-      handler();
-    }
-  }
+void JniPlatformContext::runMainThreadTasks(jni::alias_ref<jclass>) {
+  MainThreadTasks::getInstance().run();
 }
 
 void JniPlatformContext::raiseError(const std::exception &err) {
