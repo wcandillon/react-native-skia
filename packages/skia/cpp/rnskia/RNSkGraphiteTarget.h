@@ -466,9 +466,9 @@ private:
  * retired entry lets go of its target without forgetting it: for as long as
  * a context JS made holds the target, whoever comes for the id next, the view
  * binding to it or another context, takes it over (see removeIfUnbound). A
- * reload clears the registry, as native ids start over with the next bundle
- * (see ~RNSkManager). The same ownership as the SurfaceRegistry of
- * react-native-webgpu.
+ * reload drops the entries of the bundle going away, by the range of ids it
+ * was handed (see ~RNSkManager and ViewRegistry::endBundle). The same
+ * ownership as the SurfaceRegistry of react-native-webgpu.
  */
 class RNSkGraphiteTargetRegistry {
 public:
@@ -554,13 +554,26 @@ public:
     // outside of the lock, when no context holds it.
   }
 
-  /** Drops every entry: the bundle is going away (see ~RNSkManager). */
-  void clear() {
-    std::unordered_map<size_t, Entry> entries;
+  /**
+   Drops the entries of the ids in [floor, ceiling): the bundle they were
+   handed to is going away (see ~RNSkManager). The entries of the next
+   bundle, whose views may have bound to their targets already, are left.
+   */
+  void clearRange(size_t floor, size_t ceiling) {
+    std::vector<std::shared_ptr<RNSkGraphiteTarget>> targets;
     {
       std::lock_guard<std::mutex> lock(_mutex);
-      entries.swap(_entries);
+      for (auto it = _entries.begin(); it != _entries.end();) {
+        if (it->first >= floor && it->first < ceiling) {
+          targets.push_back(std::move(it->second.target));
+          it = _entries.erase(it);
+        } else {
+          ++it;
+        }
+      }
     }
+    // The targets, and the GPU resources of their queues, may be destroyed
+    // here, outside of the lock.
   }
 
 private:
