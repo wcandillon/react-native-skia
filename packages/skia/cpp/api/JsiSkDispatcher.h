@@ -64,6 +64,13 @@ public:
     return std::this_thread::get_id() == _threadId;
   }
 
+  /** Whether the thread runs its queue from its loop (see bindCurrentThread).
+   */
+  bool isBound() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return static_cast<bool>(_scheduler);
+  }
+
   /**
    * Lets go of `object` on the dispatcher's thread: right away when called
    * from it, otherwise once that thread runs its queue (see run). Pass the

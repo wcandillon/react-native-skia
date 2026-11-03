@@ -22,20 +22,15 @@ namespace {
 /**
  The render thread pool, set up on first use to trim the recorders of its
  threads once GPU resources went away (see DawnContext::trimThreadRecorders):
- a view torn down with its content, or textures the image cache let go of.
- A thread that ran no job for RNSkThreadPool::kIdleDelay lets go of all it
- can; one still recording, of what went unused that long.
+ a view torn down with its content, or textures the image cache let go of
+ (see RNSkManager). A thread that ran no job for RNSkThreadPool::kIdleDelay
+ lets go of all it can; one still recording, of what went unused for half
+ that time.
  */
 RNSkThreadPool &renderPool() {
   static RNSkThreadPool &pool = []() -> RNSkThreadPool & {
     auto &threads = RNSkThreadPool::getInstance();
-    threads.setIdleTask([](bool idle) {
-      // What went away with the request is older than this by the time the
-      // task runs, what the views still drawing use is not.
-      DawnContext::trimThreadRecorders(RNSkThreadPool::kIdleDelay / 2, idle);
-    });
-    ImageProvider::setReleaseListener(
-        []() { RNSkThreadPool::getInstance().requestIdleTask(); });
+    threads.setIdleTask(&DawnContext::trimThreadRecorders);
     return threads;
   }();
   return pool;
