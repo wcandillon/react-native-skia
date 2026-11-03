@@ -307,6 +307,9 @@ usesP3ColorSpace(const std::string &colorSpace,
 #if !TARGET_OS_OSX
   [_displayLink invalidate];
   _displayLink = nil;
+  // The request belonged to that link: the next one (a recycled view mounting
+  // again) must ask for the full rate too, or it stays at 60 Hz.
+  _fullFrameRateRequested = false;
 #endif
 }
 
