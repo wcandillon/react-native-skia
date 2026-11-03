@@ -23,6 +23,8 @@
 
 #include <ReactCommon/CallInvoker.h>
 
+#include "api/JsiSkDispatcher.h"
+
 namespace RNSkia {
 
 namespace react = facebook::react;
@@ -55,6 +57,18 @@ public:
   void
   runOnJavascriptThread(std::function<void(facebook::jsi::Runtime &)> func) {
     _callInvoker->invokeAsync(react::CallFunc(std::move(func)));
+  }
+
+  /**
+   * How the JS thread's dispatcher posts to the thread's loop (see
+   * Dispatcher::bindCurrentThread). Called on the JS thread, whose loop a
+   * platform that wakes it itself starts watching for the thread's life
+   * (Android); through the CallInvoker otherwise.
+   */
+  virtual Dispatcher::Scheduler makeJavascriptThreadScheduler() {
+    return [callInvoker = _callInvoker](Dispatcher::Operation operation) {
+      callInvoker->invokeAsync(std::move(operation));
+    };
   }
 
   /**

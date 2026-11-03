@@ -44,14 +44,12 @@ RNSkManager::RNSkManager(
   // on that thread (see Dispatcher): the JS thread, which installs the
   // module, and the main thread, where the UI runtime runs, destroy it when
   // their loop runs the queue. The main thread is bound by a task posted to it.
-  // Each binding keeps the context it posts through, as the main thread's
-  // must: that thread outlives this manager, and another instance may still
-  // let go, from another thread, of the surfaces its UI runtime made there,
-  // until the next install binds the main thread again.
+  // The main thread's binding keeps the context it posts through: that thread
+  // outlives this manager, and another instance may still let go, from
+  // another thread, of the surfaces its UI runtime made there, until the next
+  // install binds the main thread again.
   Dispatcher::bindCurrentThread(
-      [platformContext](Dispatcher::Operation operation) {
-        platformContext->runOnJavascriptThread(std::move(operation));
-      });
+      platformContext->makeJavascriptThreadScheduler());
   platformContext->runOnMainThread([platformContext]() {
     Dispatcher::bindCurrentThread(
         [platformContext](Dispatcher::Operation operation) {
