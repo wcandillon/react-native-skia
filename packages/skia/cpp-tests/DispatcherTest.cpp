@@ -27,6 +27,14 @@ static int fail(const char *message) {
   return 1;
 }
 
+// libc++ leaves a moved-from std::function holding a small target it copied
+// (__functional/function.h); libstdc++ leaves it empty.
+static bool movedFromFunctionKeepsItsTarget() {
+  std::function<void()> source = [held = std::make_shared<int>()]() {};
+  std::function<void()> destination = std::move(source);
+  return static_cast<bool>(source);
+}
+
 namespace {
 
 // A thread that runs what is posted to it, in order, as the JS thread and the
@@ -209,7 +217,11 @@ int main() {
   // A run that takes the queue before run() returns, as a loop already
   // waiting for it does, leaves no reference to the surface on the thread
   // that let go of it.
-  {
+  if (!movedFromFunctionKeepsItsTarget()) {
+    std::printf("DispatcherTest: this standard library empties a moved-from "
+                "std::function, so a reference run() could leave behind "
+                "goes unchecked\n");
+  } else {
     Loop waitingThread;
     std::shared_ptr<Dispatcher> waitingDispatcher;
     waitingThread.runAndWait([&]() {
