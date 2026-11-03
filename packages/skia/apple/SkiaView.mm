@@ -447,6 +447,7 @@ static NSRunLoop *presentRunLoop() {
   [RNSkPresentThread post:^{
     [strongSelf->_displayLink invalidate];
     strongSelf->_displayLink = nil;
+    // The request belonged to that link: the next one must ask again.
     strongSelf->_fullFrameRateRequested = false;
   }];
 #endif
