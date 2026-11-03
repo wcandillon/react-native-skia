@@ -172,13 +172,14 @@ public:
   /**
    Returns a canvas that records the next frame, in points, on the recorder
    of the calling thread (see DawnContext::getThreadRecorder): the render
-   thread pool records the declarative content of every view this way, each
-   job on whichever thread is free, so a view holds no recorder of its own
-   and the recorders of a few threads serve every view, with their caches
-   and atlases. finishRecording() snaps it, on the same thread, before the
-   thread records anything else (a recorder takes one deferred canvas at a
-   time). The canvas is deleted by finishRecording(). Throws while a
-   recording is already open, or while the view has no size.
+   thread pool records the declarative content of every view this way, a
+   view always on the same thread (see RNSkThreadPool::acquireLane), so a
+   view holds no recorder of its own and the recorders of a few threads
+   serve every view, each with a warm cache and atlases for its views.
+   finishRecording() snaps it, on the same thread, before the thread records
+   anything else (a recorder takes one deferred canvas at a time). The canvas is
+   deleted by finishRecording(). Throws while a recording is already open, or
+   while the view has no size.
    */
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
