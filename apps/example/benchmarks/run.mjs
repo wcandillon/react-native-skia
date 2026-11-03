@@ -4,6 +4,12 @@
 //   node benchmarks/run.mjs --platform android|ios [--scenes shapes,paths]
 //        [--reps 2] [--gap 20] [--backing surface|texture] [--label main]
 //        [--no-build] [--compare benchmarks/results/<file>.json]
+//   node benchmarks/run.mjs --cold --platform android|ios|ios-simulator
+//        [--scenes ...] [--reps 3] [--settle 10] [--label main] [--compare ...]
+//
+// --cold measures the first draw of each scene after a fresh install instead
+// of present FPS: the longest UI thread gap while it mounts, then again for a
+// second mount (see src/Examples/Benchmark/cold.tsx and runCold below).
 //
 // Builds a Release example app whose bundle carries the run plan (SKIA_BENCH,
 // see src/Examples/Benchmark/plan.ts), installs it, launches it, and measures
@@ -55,6 +61,11 @@ const GAP = Number(arg("gap", "0"));
 const BACKING = arg("backing", "surface");
 const LABEL = arg("label", "local");
 const COMPARE = arg("compare", null);
+const COLD = flag("cold");
+// Cold mode: seconds the app idles with no canvas after launch, and seconds
+// a rebooted simulator settles before the install.
+const SETTLE = Number(arg("settle", "10"));
+const BOOT_SETTLE = Number(arg("boot-settle", "40"));
 // The app's schedule (src/Examples/Benchmark/index.tsx): 28 s per scene, the
 // rotation starts at 3.5 s. Measurements start once it has run for a while.
 const SCENE_SECONDS = 28;
@@ -63,8 +74,14 @@ const TRACE_AT_SECONDS = 9;
 const SETTLE_TICKS = 4;
 const HZ = 100; // Linux USER_HZ
 
-if (!["android", "ios"].includes(PLATFORM)) {
-  throw new Error("--platform must be android or ios");
+if (!["android", "ios", "ios-simulator"].includes(PLATFORM)) {
+  throw new Error("--platform must be android, ios or ios-simulator");
+}
+if (PLATFORM === "ios-simulator" && !COLD) {
+  // The simulator renders through the host's GPU behind SimMetalHost: its
+  // frame rate says nothing about a phone. A first draw stalls the same way
+  // though, and only there can the shader cache be wiped between runs.
+  throw new Error("--platform ios-simulator only measures --cold");
 }
 for (const scene of SCENES) {
   if (!ALL_SCENES.includes(scene)) {
@@ -112,7 +129,10 @@ const PYTHON =
 
 // ---- build -----------------------------------------------------------------
 
-const plan = `scenes=${SCENES.join(",")}&reps=${REPS}&gap=${GAP}&backing=${BACKING}&autostart=1`;
+// Cold mode: one pass per install, the runner installs again for every rep.
+const plan = COLD
+  ? `scenes=${SCENES.join(",")}&reps=1&backing=${BACKING}&mode=cold&settle=${SETTLE}&autostart=1`
+  : `scenes=${SCENES.join(",")}&reps=${REPS}&gap=${GAP}&backing=${BACKING}&autostart=1`;
 
 // Bundles the plan into dist/, where the native build embeds it, and returns
 // a function that puts back the bundle that was there: dist/ also feeds the
@@ -161,7 +181,12 @@ async function buildAndroid() {
   } finally {
     restore();
   }
-  const apk = join(exampleDir, "android/app/build/outputs/apk/release/app-release.apk");
+}
+
+const APK = join(exampleDir, "android/app/build/outputs/apk/release/app-release.apk");
+
+async function installAndroid() {
+  const apk = APK;
   console.log("[bench] installing");
   // Pixel phones may hold `adb install` behind a Play Protect dialog ("Send
   // app for a security check?"): answer "Don't send" when it shows up.
@@ -244,6 +269,15 @@ async function threadsAndroid() {
   return groups;
 }
 
+// The launcher activity, whatever its class: react-native-test-app's lives
+// in its own Java package.
+async function launchAndroid() {
+  await adb("shell", "input", "keyevent", "KEYCODE_WAKEUP");
+  await adb("shell", "wm", "dismiss-keyguard");
+  const out = await adb("shell", "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", PACKAGE);
+  await adb("shell", "am", "start", "-n", out.trim().split("\n").at(-1).trim());
+}
+
 async function measureAndroid() {
   const sdk = Number((await adb("shell", "getprop", "ro.build.version.sdk"))?.trim());
   if (!(sdk >= 37)) {
@@ -306,12 +340,7 @@ async function measureAndroid() {
         }
       }
     });
-    adb("shell", "input", "keyevent", "KEYCODE_WAKEUP")
-      .then(() => adb("shell", "wm", "dismiss-keyguard"))
-      // The launcher activity, whatever its class: react-native-test-app's
-      // lives in its own Java package.
-      .then(() => adb("shell", "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", PACKAGE))
-      .then((out) => adb("shell", "am", "start", "-n", out.trim().split("\n").at(-1).trim()));
+    launchAndroid();
   });
   await Promise.all(pendingWork);
   return {
@@ -386,6 +415,9 @@ async function buildIos(device) {
   } finally {
     restore();
   }
+}
+
+async function installIos(device) {
   console.log("[bench] installing");
   await sh("xcrun", ["devicectl", "device", "install", "app", "--device", device.id, IOS_APP]);
 }
@@ -446,6 +478,178 @@ async function measureIos(device) {
   return { device: device.label, runs };
 }
 
+// ---- cold ------------------------------------------------------------------
+
+// What the app logs in cold mode (src/Examples/Benchmark/cold.tsx), in
+// whatever the platform's log tool prints around it.
+const MOUNT_LINE = /\[bench\] mount scene=(\w+) kind=(first|warm) gap=(\d+)/;
+// The app's cold schedule: settle, then 2 x (5 s mounted + 1 s pause) per
+// scene, with a margin for the launch.
+const coldSeconds = () => SETTLE + SCENES.length * 12 + 30;
+
+// Collects the mount lines from a log stream until the app says it is done.
+function collectMounts(child, rep) {
+  return new Promise((resolve, reject) => {
+    const mounts = [];
+    let buffer = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error("timed out waiting for [bench] done"));
+    }, coldSeconds() * 1000);
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const m = line.match(MOUNT_LINE);
+        if (m) {
+          mounts.push({ scene: m[1], kind: m[2], gap: Number(m[3]), rep });
+          console.log(`[bench]    ${m[1]} ${m[2]} mount: longest UI thread gap ${m[3]} ms`);
+        } else if (line.includes("[bench] done")) {
+          clearTimeout(timeout);
+          child.kill();
+          resolve(mounts);
+        }
+      }
+    });
+  });
+}
+
+// Android: uninstalling drops the app's caches, the driver's and Dawn's
+// pipeline caches with them.
+async function coldAndroid(rep) {
+  await adb("uninstall", PACKAGE);
+  await installAndroid();
+  await adb("logcat", "-c");
+  const logcat = spawn("adb", ["logcat", "-s", "ReactNativeJS:I"]);
+  const mounts = collectMounts(logcat, rep);
+  await launchAndroid();
+  return mounts;
+}
+
+// iOS simulator: SimMetalHost keeps compiled shaders in memory until a
+// reboot, and on disk in the host's cache directory, across installs.
+async function simulatorDevice() {
+  const { devices } = JSON.parse(await sh("xcrun", ["simctl", "list", "devices", "available", "--json"]));
+  const all = Object.entries(devices).flatMap(([runtime, list]) => list.map((d) => ({ ...d, runtime })));
+  const wanted = arg("device", null);
+  const d = wanted ? all.find((x) => x.udid === wanted) : all.find((x) => x.name === "iPhone 17 Pro") ?? all.find((x) => x.name.startsWith("iPhone"));
+  if (!d) {
+    throw new Error("no iPhone simulator (xcrun simctl list devices available)");
+  }
+  return { udid: d.udid, label: `${d.name} simulator (${d.runtime.split(".").at(-1)})` };
+}
+
+const SIM_APP = join(exampleDir, "ios/build/Build/Products/Release-iphonesimulator/ReactTestApp.app");
+
+async function buildSimulator(device) {
+  const restore = await bundle("ios");
+  console.log("[bench] xcodebuild Release (simulator)");
+  try {
+    await sh(
+      "xcodebuild",
+      ["-workspace", "ios/example.xcworkspace", "-scheme", "example", "-configuration", "Release", "-sdk", "iphonesimulator",
+        "-destination", `id=${device.udid}`, "-derivedDataPath", "ios/build", "build"],
+      { cwd: exampleDir }
+    );
+  } finally {
+    restore();
+  }
+}
+
+const bundleIdOf = async (app) =>
+  (await sh("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleIdentifier", join(app, "Info.plist")])).trim();
+
+async function coldSimulator(device, rep) {
+  const bundleId = await bundleIdOf(SIM_APP);
+  console.log("[bench] rebooting the simulator, wiping its shader cache");
+  await quiet(sh("xcrun", ["simctl", "shutdown", device.udid]));
+  await sh("xcrun", ["simctl", "boot", device.udid]);
+  await sh("xcrun", ["simctl", "bootstatus", device.udid]);
+  const cache = join(
+    (await sh("getconf", ["DARWIN_USER_CACHE_DIR"])).trim(),
+    "com.apple.CoreSimulator.SimRenderingServices.SimMetalHost"
+  );
+  await quiet(sh("/bin/sh", ["-c", `rm -rf "${cache}"/com.apple.metal*`]));
+  await sleep(BOOT_SETTLE);
+  await quiet(sh("xcrun", ["simctl", "uninstall", device.udid, bundleId]));
+  await sh("xcrun", ["simctl", "install", device.udid, SIM_APP]);
+  const log = spawn("xcrun", ["simctl", "spawn", device.udid, "log", "stream", "--style", "compact",
+    "--predicate", 'subsystem == "com.facebook.react.log" AND eventMessage CONTAINS "[bench]"']);
+  const mounts = collectMounts(log, rep);
+  await sleep(2);
+  await sh("xcrun", ["simctl", "launch", device.udid, bundleId]);
+  return mounts;
+}
+
+// iOS device: uninstalling drops the app's shader cache. The app logs
+// through os_log (React Native's console.error), read back from a trace with
+// the Logging template: the phone's log stream does not reach the host.
+async function coldIos(device, rep) {
+  const bundleId = await bundleIdOf(IOS_APP);
+  await quiet(sh("xcrun", ["devicectl", "device", "uninstall", "app", "--device", device.id, bundleId]));
+  await installIos(device);
+  const dir = mkdtempSync(join(tmpdir(), "skia-bench-"));
+  try {
+    const json = join(dir, "launch.json");
+    await sh("xcrun", ["devicectl", "device", "process", "launch", "--device", device.id, "--terminate-existing", "--json-output", json, bundleId]);
+    const pid = JSON.parse(readFileSync(json, "utf8")).result?.process?.processIdentifier;
+    const trace = join(dir, "cold.trace");
+    await sh("xcrun", ["xctrace", "record", "--template", "Logging", "--device", device.udid,
+      "--attach", String(pid), "--time-limit", `${coldSeconds()}s`, "--output", trace]);
+    const xml = await sh("xcrun", ["xctrace", "export", "--input", trace,
+      "--xpath", '/trace-toc/run[@number="1"]/data/table[@schema="os-log"]']);
+    const mounts = [];
+    for (const m of xml.matchAll(new RegExp(MOUNT_LINE, "g"))) {
+      mounts.push({ scene: m[1], kind: m[2], gap: Number(m[3]), rep });
+      console.log(`[bench]    ${m[1]} ${m[2]} mount: longest UI thread gap ${m[3]} ms`);
+    }
+    return mounts;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function runCold() {
+  let device = null;
+  let label;
+  if (PLATFORM === "android") {
+    if (!flag("no-build")) {
+      await buildAndroid();
+    }
+    const model = (await adb("shell", "getprop", "ro.product.model"))?.trim();
+    const sdk = (await adb("shell", "getprop", "ro.build.version.sdk"))?.trim();
+    label = `${model} (Android SDK ${sdk})`;
+  } else if (PLATFORM === "ios-simulator") {
+    device = await simulatorDevice();
+    label = device.label;
+    if (!flag("no-build")) {
+      await buildSimulator(device);
+    }
+  } else {
+    device = await iosDevice();
+    label = device.label;
+    if (!flag("no-build")) {
+      await buildIos(device);
+    }
+  }
+  const mounts = [];
+  for (let rep = 1; rep <= REPS; rep++) {
+    console.log(`[bench] >> cold install ${rep}/${REPS}`);
+    const run =
+      PLATFORM === "android" ? coldAndroid(rep) : PLATFORM === "ios-simulator" ? coldSimulator(device, rep) : coldIos(device, rep);
+    mounts.push(...(await run.catch((e) => (console.log(`[bench] install ${rep} failed: ${e.message}`), []))));
+  }
+  const runs = [];
+  for (const scene of SCENES) {
+    for (let rep = 1; rep <= REPS; rep++) {
+      const of = (kind) => mounts.find((m) => m.scene === scene && m.rep === rep && m.kind === kind)?.gap ?? null;
+      runs.push({ scene, rep, first: of("first"), warm: of("warm") });
+    }
+  }
+  return { device: label, mode: "cold", runs };
+}
+
 // ---- report ----------------------------------------------------------------
 
 function summarize(result) {
@@ -472,7 +676,67 @@ function summarize(result) {
   }));
 }
 
+// A first mount is a regression when its stall grows by more than 25% and
+// more than 50 ms: below that, simulator and phone noise.
+function reportCold(result, previous) {
+  const scenes = [...new Set(result.runs.map((r) => r.scene))];
+  const row = (res, scene) => {
+    const runs = res.runs.filter((r) => r.scene === scene);
+    return {
+      first: median(runs.map((r) => r.first).filter((v) => v != null)),
+      warm: median(runs.map((r) => r.warm).filter((v) => v != null)),
+      reps: runs.map((r) => r.first ?? "?").join(" / "),
+    };
+  };
+  const ms = (v) => (v == null ? "?" : `${Math.round(v)} ms`);
+  const lines = [
+    `# React Native Skia cold first draw: ${result.label}, ${result.platform}`,
+    "",
+    `${result.device}, react-native-skia ${result.skia}, ${result.date}. Plan: \`${result.plan}\`.`,
+    "The longest UI thread gap while a scene draws for the first time after a fresh install (median over installs), and again on its second mount. The scenes run in order in one process: later ones find what they share with earlier ones compiled.",
+    "",
+  ];
+  if (previous) {
+    lines.push(
+      `Compared with ${previous.label} (${previous.skia}, ${previous.date}); a first mount more than 25% and 50 ms longer is flagged.`,
+      "",
+      "| scene | before | after | change | |",
+      "|---|---|---|---|---|",
+      ...scenes.map((scene) => {
+        const b = row(previous, scene).first;
+        const a = row(result, scene).first;
+        let verdict = "";
+        if (a != null && b != null) {
+          if (a > b * 1.25 && a - b > 50) {
+            verdict = "regression";
+          } else if (a < b * 0.8 && b - a > 50) {
+            verdict = "improvement";
+          }
+        }
+        const change = a != null && b != null ? `${a - b >= 0 ? "+" : ""}${Math.round(a - b)} ms` : "?";
+        return `| ${scene} | ${ms(b)} | ${ms(a)} | ${change} | ${verdict} |`;
+      }),
+      ""
+    );
+  }
+  lines.push(
+    "| scene | first mount | per install | second mount |",
+    "|---|---|---|---|",
+    ...scenes.map((scene) => {
+      const r = row(result, scene);
+      return `| ${scene} | ${ms(r.first)} | ${r.reps} | ${ms(r.warm)} |`;
+    })
+  );
+  return lines.join("\n");
+}
+
 function report(result, previous) {
+  if (previous && (previous.mode ?? "fps") !== (result.mode ?? "fps")) {
+    throw new Error("--compare needs a result of the same mode (cold or fps)");
+  }
+  if (result.mode === "cold") {
+    return reportCold(result, previous);
+  }
   const rows = summarize(result);
   const before = previous ? new Map(summarize(previous).map((r) => [r.scene, r])) : null;
   const fmt = (v, digits = 1) => (v == null ? "?" : v.toFixed(digits));
@@ -520,15 +784,19 @@ const dirty = (await quiet(sh("git", ["status", "--porcelain", "--", "../../pack
 const skiaVersion = `${git ?? "?"}${dirty ? "+dirty" : ""}`;
 
 let measured;
-if (PLATFORM === "android") {
+if (COLD) {
+  measured = await runCold();
+} else if (PLATFORM === "android") {
   if (!flag("no-build")) {
     await buildAndroid();
+    await installAndroid();
   }
   measured = await measureAndroid();
 } else {
   const device = await iosDevice();
   if (!flag("no-build")) {
     await buildIos(device);
+    await installIos(device);
   }
   measured = await measureIos(device);
 }

@@ -37,7 +37,8 @@ drop of more than 10% as a regression and then exits with status 1.
 
 | flag | default | |
 |---|---|---|
-| `--platform` | `android` | `ios` needs a paired iPhone |
+| `--platform` | `android` | `ios` needs a paired iPhone; `ios-simulator` with `--cold` only |
+| `--cold` | | measure the first draw after a fresh install instead of FPS (see below) |
 | `--scenes` | all six | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
@@ -50,6 +51,42 @@ drop of more than 10% as a regression and then exits with status 1.
 Results land in `benchmarks/results/` (git-ignored) as JSON and Markdown.
 The screen is also on the Home screen ("Benchmark"); opened from there it runs
 the default plan, without measurements.
+
+## Cold first draw
+
+`--cold` measures something else: what the first draw of a canvas costs the
+UI thread after a fresh install, when no pipeline is cached. Where the view
+presents on the main thread, that first present waits for its pipelines to
+compile and freezes every animation of the app
+([#4384](https://github.com/wcandillon/react-native-skia/issues/4384)).
+
+```sh
+node benchmarks/run.mjs --cold --platform ios-simulator --reps 3 --label main
+node benchmarks/run.mjs --cold --platform ios --reps 3 --label main
+node benchmarks/run.mjs --cold --platform android --reps 3 --label main
+```
+
+For every rep the runner installs the app again (and on the simulator
+reboots it and wipes `SimMetalHost`'s shader cache, which outlives an
+install), and the app runs on its own: `--settle` seconds (10) with no
+canvas, then each scene mounts for 5 s, unmounts, and mounts again for 5 s.
+It logs the longest gap between two UI thread frames for each mount, from a
+Reanimated frame callback (the main thread on iOS). The report gives the
+first mount, as the median over installs, and the second mount as the
+baseline. `--compare` against an earlier cold result flags a first mount
+more than 25% and 50 ms longer.
+
+The scenes run in order in one process, so a later scene finds the
+pipelines it shares with an earlier one compiled; only the first is entirely
+cold. Pass `--scenes` to measure one on its own.
+
+Unlike the FPS numbers, a cold first draw is worth measuring on the
+simulator: its shader compiler is slow, but the stall has the same cause, and
+it is the only place where the shader cache can be wiped from a script.
+`--platform ios-simulator` takes `--device <udid>` (default: an iPhone 17
+Pro) and `--boot-settle` seconds (40) for the simulator to settle after its
+reboot. On an iPhone the app's os_log lines come back through an `xctrace`
+Logging trace.
 
 ## What is measured
 
