@@ -32,7 +32,7 @@ export interface ImageFactory {
    * @returns If the encoded format is not supported, or subset is outside of the bounds of the decoded
    *  image, nullptr is returned.
    */
-  MakeImageFromEncoded: (encoded: SkData) => SkImage | null;
+  MakeFromEncoded: (encoded: SkData) => SkImage | null;
 
   /**
    * Web only. Creates an image from a `CanvasImageSource`: an
@@ -41,11 +41,11 @@ export interface ImageFactory {
    * On native platforms, camera and video frames are rendered into a texture
    * of the shared device by React Native WebGPU
    * (`queue.copyExternalImageToTexture()`), and the texture is wrapped with
-   * {@link MakeImageFromGPUTexture}. Calling this method there throws.
+   * {@link MakeFromGPUTexture}. Calling this method there throws.
    *
    * @param source The image source
    */
-  MakeImageFromNativeBuffer: (source: CanvasImageSource) => SkImage;
+  MakeFromNativeBuffer: (source: CanvasImageSource) => SkImage;
 
   /**
    * Returns a raster (CPU) image with the given pixel data and format.
@@ -58,7 +58,7 @@ export interface ImageFactory {
    * @param data - bytes representing the pixel data.
    * @param bytesPerRow
    */
-  MakeRasterImage(
+  MakeRaster(
     info: ImageInfo,
     data: SkData,
     bytesPerRow: number
@@ -78,7 +78,7 @@ export interface ImageFactory {
    * @param texture - The GPUTexture (see {@link GPUTextureHandle})
    * @returns An SkImage sampling the texture, or throws if the texture is invalid
    */
-  MakeImageFromGPUTexture(texture: GPUTextureHandle): SkImage;
+  MakeFromGPUTexture(texture: GPUTextureHandle): SkImage;
 
   /**
    * Draws an SkImage into a new WebGPU texture on the shared device.

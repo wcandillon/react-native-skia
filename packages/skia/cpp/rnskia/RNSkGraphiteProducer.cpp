@@ -118,6 +118,11 @@ bool RNSkGraphiteProducer::hasContent() {
   return hasContentLocked();
 }
 
+bool RNSkGraphiteProducer::hasFrameComing() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _inFlight || (_dirty && _target != nullptr && hasContentLocked());
+}
+
 bool RNSkGraphiteProducer::hasContentLocked() const {
   // A recording whose shared values have not been read yet is not content:
   // its animated properties are unset, and replaying it would draw them wrong.
@@ -222,15 +227,17 @@ void RNSkGraphiteProducer::produce() {
   std::shared_ptr<RNSkGraphiteRecording> recording;
   if (target && (recorder || picture)) {
     SkCanvas *canvas = nullptr;
-    try {
-      // On the recorder of this pool thread, the same for every frame of
-      // the view: a view holds no recorder of its own (see
-      // RNSkGraphiteTarget::beginRecording).
-      canvas = target->beginRecording(
-          DawnContext::getInstance().getThreadRecorder());
-    } catch (const std::exception &) {
-      // No surface and no layout yet: the view asks for a frame once it
-      // has a size. Or no GPU at all.
+    // Without a GPU nothing records, and Skia.gpu says why.
+    if (auto *context = DawnContext::tryGetInstance()) {
+      try {
+        // On the recorder of this pool thread, the same for every frame of
+        // the view: a view holds no recorder of its own (see
+        // RNSkGraphiteTarget::beginRecording).
+        canvas = target->beginRecording(context->getThreadRecorder());
+      } catch (const std::exception &e) {
+        RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
+                                 e.what());
+      }
     }
     if (canvas != nullptr) {
       try {

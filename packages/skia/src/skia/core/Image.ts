@@ -5,7 +5,7 @@ import type { DataSourceParam, SkData } from "../types";
 import { loadData, useLoading } from "./Data";
 
 const decode = (data: SkData) => {
-  const image = Skia.Image.MakeImageFromEncoded(data);
+  const image = Skia.Image.MakeFromEncoded(data);
   if (image === null) {
     throw new Error("Could not decode the image");
   }

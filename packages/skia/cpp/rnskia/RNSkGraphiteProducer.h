@@ -79,6 +79,13 @@ public:
   bool hasContent();
 
   /**
+   Whether a frame is on its way: one is being recorded, or was asked for
+   and starts once there is room for it (see requestFrame). The view drops
+   a frame recorded for a size the surface no longer has when one is.
+   */
+  bool hasFrameComing();
+
+  /**
    Reads the shared values on the calling runtime into the recorder and
    schedules a frame. Returns false when there is no recorder to update, or
    another recording than recorderId (a stale mapper).

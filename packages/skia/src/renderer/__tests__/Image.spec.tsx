@@ -11,7 +11,7 @@ import { drawOnNode, width, height, importSkia } from "./setup";
 describe("Test Image Component", () => {
   it("Should display the image with a filter", async () => {
     const { Skia } = importSkia();
-    const image = Skia.Image.MakeImageFromEncoded(
+    const image = Skia.Image.MakeFromEncoded(
       Skia.Data.fromBytes(
         fs.readFileSync(
           path.resolve(__dirname, "../../skia/__tests__/assets/zurich.jpg")
@@ -40,6 +40,6 @@ half4 main(float2 xy) {
         </Shader>
       </Fill>
     );
-    processResult(surface, "snapshots/images/filter.png");
+    await processResult(surface, "snapshots/images/filter.png");
   });
 });

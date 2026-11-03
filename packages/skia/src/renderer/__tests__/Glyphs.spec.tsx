@@ -20,7 +20,7 @@ describe("Glyphs", () => {
         path.resolve(__dirname, "../../skia/__tests__/assets/Roboto-Medium.ttf")
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data);
+    const tf = Skia.Typeface.MakeFromData(data);
     expect(tf !== null).toBe(true);
     font = Skia.Font(tf!, 64);
     expect(font !== null).toBe(true);
@@ -41,6 +41,6 @@ describe("Glyphs", () => {
     const surface = await drawOnNode(
       <Glyphs x={0} y={0} font={font} glyphs={glyphs} color="lightblue" />
     );
-    processResult(surface, "snapshots/glyphs/simple.png");
+    await processResult(surface, "snapshots/glyphs/simple.png");
   });
 });

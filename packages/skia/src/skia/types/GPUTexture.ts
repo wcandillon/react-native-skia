@@ -1,5 +1,5 @@
 /**
- * A WebGPU texture, as accepted by `Skia.Image.MakeImageFromGPUTexture` and
+ * A WebGPU texture, as accepted by `Skia.Image.MakeFromGPUTexture` and
  * `Skia.Surface.MakeFromGPUTexture`: a `GPUTexture` created with React Native
  * WebGPU on the shared device, whose `nativePointer` (a non-spec extension)
  * holds the `WGPUTexture` handle. The handle itself, as a `BigInt`, is

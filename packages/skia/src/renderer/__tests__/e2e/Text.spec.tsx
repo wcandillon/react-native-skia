@@ -98,7 +98,7 @@ describe("Text", () => {
         </Group>
       </>
     );
-    checkImage(image, `snapshots/text/text-bounds-${surface.OS}.png`);
+    await checkImage(image, `snapshots/text/text-bounds-${surface.OS}.png`);
   });
 
   it("Should draw text along a circle", async () => {
@@ -114,7 +114,7 @@ describe("Text", () => {
         </Group>
       </>
     );
-    checkImage(image, `snapshots/text/text-path1-${surface.OS}.png`);
+    await checkImage(image, `snapshots/text/text-path1-${surface.OS}.png`);
   });
 
   itSkipsCanvasKit("Should draw text along a path", async () => {
@@ -131,7 +131,7 @@ describe("Text", () => {
         </Group>
       </>
     );
-    checkImage(image, `snapshots/text/text-path2-${surface.OS}.png`);
+    await checkImage(image, `snapshots/text/text-path2-${surface.OS}.png`);
   });
 
   itSkipsCanvasKit(
@@ -139,7 +139,7 @@ describe("Text", () => {
     async () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
-          const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const roboto = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
           )!;
           const font = Skia.Font(roboto, 64);
@@ -155,7 +155,7 @@ describe("Text", () => {
           RobotoMedium,
         }
       );
-      checkImage(img, `snapshots/text/path-from-text-${surface.OS}.png`);
+      await checkImage(img, `snapshots/text/path-from-text-${surface.OS}.png`);
     }
   );
 
@@ -164,7 +164,7 @@ describe("Text", () => {
     async () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
-          const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const amiri = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
           )!;
           const font = Skia.Font(amiri, 64);
@@ -180,7 +180,10 @@ describe("Text", () => {
           Amiri,
         }
       );
-      checkImage(img, `snapshots/text/path-from-arabic-text-${surface.OS}.png`);
+      await checkImage(
+        img,
+        `snapshots/text/path-from-arabic-text-${surface.OS}.png`
+      );
     }
   );
 });

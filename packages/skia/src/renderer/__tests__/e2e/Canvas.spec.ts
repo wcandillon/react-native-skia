@@ -91,7 +91,7 @@ describe("SkCanvas", () => {
       },
       { BlendMode }
     );
-    checkImage(img, "snapshots/canvas/drawpatch-optional-args.png");
+    await checkImage(img, "snapshots/canvas/drawpatch-optional-args.png");
   });
 
   it("drawAtlas works when colors are omitted", async () => {
@@ -116,7 +116,7 @@ describe("SkCanvas", () => {
       },
       { BlendMode }
     );
-    checkImage(img, "snapshots/canvas/drawatlas-no-colors.png");
+    await checkImage(img, "snapshots/canvas/drawatlas-no-colors.png");
   });
 
   it("drawAtlas accepts null for blendMode, colors and sampling", async () => {
@@ -141,7 +141,7 @@ describe("SkCanvas", () => {
         null
       );
     });
-    checkImage(img, "snapshots/canvas/drawatlas-no-colors.png");
+    await checkImage(img, "snapshots/canvas/drawatlas-no-colors.png");
   });
 
   it("drawImage accepts null or omitted paint", async () => {
@@ -158,7 +158,7 @@ describe("SkCanvas", () => {
       // drawImage with null paint
       canvas.drawImage(image, 40, 10, null);
     });
-    checkImage(img, "snapshots/canvas/drawimage-optional-paint.png");
+    await checkImage(img, "snapshots/canvas/drawimage-optional-paint.png");
   });
 
   it("saveLayer accepts null paint and a plain-object rect for bounds", async () => {
@@ -174,7 +174,7 @@ describe("SkCanvas", () => {
       canvas.drawRect(Skia.XYWHRect(10, 10, 30, 30), paint);
       canvas.restoreToCount(count);
     });
-    checkImage(img, "snapshots/canvas/savelayer-plain-rect-bounds.png");
+    await checkImage(img, "snapshots/canvas/savelayer-plain-rect-bounds.png");
   });
 
   it("drawPoints does not throw when the points array is empty", async () => {
@@ -202,7 +202,7 @@ describe("SkCanvas", () => {
       },
       { PointMode }
     );
-    checkImage(img, "snapshots/canvas/drawpoints-empty-array.png");
+    await checkImage(img, "snapshots/canvas/drawpoints-empty-array.png");
   });
 
   it("drawPatch defaults to Modulate blend mode when omitted, matching the web/CanvasKit default", async () => {
@@ -283,7 +283,7 @@ describe("SkCanvas", () => {
       },
       { BlendMode, size, gap }
     );
-    checkImage(img, "snapshots/canvas/drawpatch-default-blendmode.png");
+    await checkImage(img, "snapshots/canvas/drawpatch-default-blendmode.png");
 
     // Pin down the regression precisely: render the *same* patch, at the
     // *same* absolute position, once with mode omitted and once with mode
@@ -346,8 +346,8 @@ describe("SkCanvas", () => {
 
     const omitted = await renderSinglePatch(null);
     const explicitModulate = await renderSinglePatch(BlendMode.Modulate);
-    expect(Array.from(omitted.encodeToBytes()!)).toEqual(
-      Array.from(explicitModulate.encodeToBytes()!)
+    expect(Array.from(await omitted.encodeToBytes())).toEqual(
+      Array.from(await explicitModulate.encodeToBytes())
     );
   });
 });

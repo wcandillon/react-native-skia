@@ -28,8 +28,8 @@ import {
   canvasSize,
 } from "./web-setup";
 
-// The picture path of the web view, driven the way <Canvas> and
-// <SkiaPictureView> drive it: through SkiaViewApi.setJsiProperty. The view
+// The picture path of the web view, driven the way <Canvas> drives it:
+// through SkiaViewApi.setJsiProperty. The view
 // must paint without ever receiving a layout event (#3829): these tests mount
 // it with a mocked CanvasKit and never fire the ResizeObserver unless the
 // test does so explicitly.

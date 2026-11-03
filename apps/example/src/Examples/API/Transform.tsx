@@ -5,7 +5,8 @@ import {
   PaintStyle,
   useImage,
   createPicture,
-  SkiaPictureView,
+  Canvas,
+  Picture,
 } from "react-native-skia";
 
 import { Title } from "./components/Title";
@@ -138,13 +139,21 @@ export const Transform = () => {
   return (
     <ScrollView>
       <Title>Rotate & Scale</Title>
-      <SkiaPictureView style={style} picture={rotateDraw} />
+      <Canvas style={style}>
+        <Picture picture={rotateDraw} />
+      </Canvas>
       <Title>Skew</Title>
-      <SkiaPictureView style={style} picture={skewDraw} />
+      <Canvas style={style}>
+        <Picture picture={skewDraw} />
+      </Canvas>
       <Title>Matrix</Title>
-      <SkiaPictureView style={style} picture={matrixDraw} />
+      <Canvas style={style}>
+        <Picture picture={matrixDraw} />
+      </Canvas>
       <Title>Matrix 2</Title>
-      <SkiaPictureView style={style} picture={matrixDraw2} />
+      <Canvas style={style}>
+        <Picture picture={matrixDraw2} />
+      </Canvas>
     </ScrollView>
   );
 };

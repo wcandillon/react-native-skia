@@ -45,7 +45,7 @@ describe("Recording errors", () => {
     actEnvironment(false);
     root.drawOnCanvas(canvas);
     surface.flush();
-    const pixels = surface.makeImageSnapshot().readPixels(0, 0, {
+    const pixels = await surface.makeImageSnapshot().readPixels(0, 0, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,

@@ -10493,8 +10493,8 @@ __metadata:
   linkType: hard
 
 "body-parser@npm:~1.20.5":
-  version: 1.20.8
-  resolution: "body-parser@npm:1.20.8"
+  version: 1.20.9
+  resolution: "body-parser@npm:1.20.9"
   dependencies:
     bytes: ~3.1.2
     content-type: ~1.0.5
@@ -10508,7 +10508,7 @@ __metadata:
     raw-body: ~2.5.3
     type-is: ~1.6.18
     unpipe: ~1.0.0
-  checksum: 7add892e93070136dc3fab558f8f77cc9b8cee360e8660cc724c7162d70cebe0c5ca94a0346a60e2e7442600c2357c0758bd3e4eb4d4e3a92420c9b8c90912a0
+  checksum: c3ef15619b0fb8538fb8c02737011ad07b942c6fc87604a5c92e01e239d80244383820ac63f394eb7f25b5ca07a7acc9406bb4e02d57923da6b69083bbcb6fdf
   languageName: node
   linkType: hard
 
@@ -14277,7 +14277,7 @@ __metadata:
     its-fine: ^2.0.0
     jest: ^29.6.3
     jest-transform-stub: ^2.0.0
-    playwright: 1.59.0
+    playwright: 1.64.1
     prettier: 2.8.8
     react: 19.2.0
     react-dom: 19.2.0
@@ -14291,7 +14291,7 @@ __metadata:
     react-native-svg: "patch:react-native-svg@npm%3A15.14.0#../../.yarn/patches/react-native-svg-npm-15.14.0-macos-uiimage-fix.patch&../../.yarn/patches/react-native-svg-npm-15.14.0-position-props.patch"
     react-native-test-app: 5.4.13
     react-native-web: ^0.21.2
-    react-native-webgpu: 0.17.0
+    react-native-webgpu: 0.20.0
     react-native-windows: ^0.75.0
     react-native-worklets: 0.12.2
     react-test-renderer: 19.2.0
@@ -14635,9 +14635,9 @@ __metadata:
   linkType: hard
 
 "fast-uri@npm:^3.0.1":
-  version: 3.1.8
-  resolution: "fast-uri@npm:3.1.8"
-  checksum: 3319c50163d6d1265d1fd06f677e0d24a4cc4312c48c7222a0dc6641b90463c4476cb83f3c7444e0d1d0cd123d330d300ea46c48386f6924f35c34f6dd865416
+  version: 3.1.9
+  resolution: "fast-uri@npm:3.1.9"
+  checksum: 4f882cff34cb1c4099b07285e5c7a628c62ff06d91f1a5b0aeb12d8ec002080bd2095ce5eec0855949d649dd8aeeff959a6f1db0f584f29b2e3e08fbb99d37fc
   languageName: node
   linkType: hard
 
@@ -15061,12 +15061,12 @@ __metadata:
   linkType: hard
 
 "follow-redirects@npm:^1.0.0":
-  version: 1.16.1
-  resolution: "follow-redirects@npm:1.16.1"
+  version: 1.16.2
+  resolution: "follow-redirects@npm:1.16.2"
   peerDependenciesMeta:
     debug:
       optional: true
-  checksum: d42ff9158fe6c66692567b712fd4bba25ef8736253c1436439642884f9c218df05fe946928d1944367b1b72f7ca5e5d277c26608159e2adf1bad9e42b12d2c30
+  checksum: 08f5c20c94945cd35d1b135b560cce7eb597c5f7b758f196467ac75b99ab7c28cb4fe28030467ed5ba386499a48030d804d47f559d32f103ad11336ed5402086
   languageName: node
   linkType: hard
 
@@ -15221,31 +15221,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fsevents@npm:2.3.2":
-  version: 2.3.2
-  resolution: "fsevents@npm:2.3.2"
-  dependencies:
-    node-gyp: latest
-  checksum: 97ade64e75091afee5265e6956cb72ba34db7819b4c3e94c431d4be2b19b8bb7a2d4116da417950c3425f17c8fe693d25e20212cac583ac1521ad066b77ae31f
-  conditions: os=darwin
-  languageName: node
-  linkType: hard
-
 "fsevents@npm:^2.3.2, fsevents@npm:^2.3.3, fsevents@npm:~2.3.2, fsevents@npm:~2.3.3":
   version: 2.3.3
   resolution: "fsevents@npm:2.3.3"
   dependencies:
     node-gyp: latest
   checksum: 11e6ea6fea15e42461fc55b4b0e4a0a3c654faa567f1877dbd353f39156f69def97a69936d1746619d656c4b93de2238bf731f6085a03a50cabf287c9d024317
-  conditions: os=darwin
-  languageName: node
-  linkType: hard
-
-"fsevents@patch:fsevents@2.3.2#~builtin<compat/fsevents>":
-  version: 2.3.2
-  resolution: "fsevents@patch:fsevents@npm%3A2.3.2#~builtin<compat/fsevents>::version=2.3.2&hash=df0bf1"
-  dependencies:
-    node-gyp: latest
   conditions: os=darwin
   languageName: node
   linkType: hard
@@ -16814,9 +16795,9 @@ __metadata:
   linkType: hard
 
 "ip-address@npm:^10.1.1":
-  version: 10.7.2
-  resolution: "ip-address@npm:10.7.2"
-  checksum: 4b734e61a63e4301221fb5e1cd8a4a7e44114a80268825799c54fbd3df13bc536acc3e0b4129bec2ee860e26985faf370b00a2ac9bdab05d1f61698315395fdd
+  version: 10.7.5
+  resolution: "ip-address@npm:10.7.5"
+  checksum: 1c3502a815f224cc74c2f230439a52437bf9ace20fd2e0f48fb8f2e9654920988901c93a7c482cde37c946309544ab24ab0edafc9ba1b61eb9a0269311e1b894
   languageName: node
   linkType: hard
 
@@ -23581,27 +23562,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"playwright-core@npm:1.59.0":
-  version: 1.59.0
-  resolution: "playwright-core@npm:1.59.0"
+"playwright-core@npm:1.64.1":
+  version: 1.64.1
+  resolution: "playwright-core@npm:1.64.1"
   bin:
     playwright-core: cli.js
-  checksum: 1266bf7e5fd53601afdc1b0b5f5d6c7f6ef9f968fe5e21e6d1af7bc9c6888f483bba034d4ebf3b5e96b1eed1fa462a064cd29fbe480db7161ab5741f9e1cac16
+  checksum: 614007bcdeaad5c6ff46465b623a81e0dbcae060f04022ba37e325d10c2eb618a9b70c44da2eb7b0857c80f83fca6db73c53f0600dcdf1d922c7942af1e0b701
   languageName: node
   linkType: hard
 
-"playwright@npm:1.59.0":
-  version: 1.59.0
-  resolution: "playwright@npm:1.59.0"
+"playwright@npm:1.64.1":
+  version: 1.64.1
+  resolution: "playwright@npm:1.64.1"
   dependencies:
-    fsevents: 2.3.2
-    playwright-core: 1.59.0
-  dependenciesMeta:
-    fsevents:
-      optional: true
+    playwright-core: 1.64.1
   bin:
     playwright: cli.js
-  checksum: 142298cdb76a68b712021211017278b0a977a066aad9bc0e1fa585d50a3272bc1a1099d83892ad68d5125a765501cc8187ab7bd0cc133cb738500b62e3608d1e
+  checksum: 74861fdf4087b6d4c33dce1779c977390591d4e76bb590a904018b3823d35b20737b3b8f8bddf8bf32969953b1e9a37f72ab3e33b4b1cebed4b1bcc4a5e62738
   languageName: node
   linkType: hard
 
@@ -24389,12 +24366,12 @@ __metadata:
   linkType: hard
 
 "postcss-selector-parser@npm:^6.0.11, postcss-selector-parser@npm:^6.0.16":
-  version: 6.1.4
-  resolution: "postcss-selector-parser@npm:6.1.4"
+  version: 6.1.5
+  resolution: "postcss-selector-parser@npm:6.1.5"
   dependencies:
     cssesc: ^3.0.0
     util-deprecate: ^1.0.2
-  checksum: 6dac8996778480a4cd274d2588cccfd989f38c40853b7b83dc31c90ce6ba32e1e1b89811ad3beafdee72887fac9ddf9f1fca3876dc17467eed62d6a825d54bfb
+  checksum: 48092b9e8d6b0b7470e460e5dd8922dad59404e73c7f3423e1bc32e14ad76140fc50812d38023259225f306e4a316c49528c75b2171955bbaa0b56894c0135f7
   languageName: node
   linkType: hard
 
@@ -24837,12 +24814,12 @@ __metadata:
   linkType: hard
 
 "qs@npm:~6.16.0":
-  version: 6.16.0
-  resolution: "qs@npm:6.16.0"
+  version: 6.16.2
+  resolution: "qs@npm:6.16.2"
   dependencies:
     es-define-property: ^1.0.1
     side-channel: ^1.1.1
-  checksum: fb97665d1b481fadbcb17cc056f1af95ae93328195bf9536a56142137f4d9cc16fe2a1dab9cd17186c9fa69a7e6fa64a3766f71ffaa7c248ec5555f34d21047b
+  checksum: 79403d27a8763c591d22dfbb6e53351f2f6989ed777f4b082e5dd2d580b23c8b98d5b5ce26054a9889ef2718e1da673c88c34f5b42a781bd7b3f8573e7367e29
   languageName: node
   linkType: hard
 
@@ -25195,31 +25172,31 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-android@npm:157.0.0":
-  version: 157.0.0
-  resolution: "react-native-skia-graphite-android@npm:157.0.0"
-  checksum: 3c776d672fa4868344f03e2e4a9ae5099e68780ea2dc0cdf8bd1f000848df2609589efb95e681bd89d27d458020317fcb94c7a166b6fd2395d007f12243f8975
+"react-native-skia-graphite-android@npm:157.1.0":
+  version: 157.1.0
+  resolution: "react-native-skia-graphite-android@npm:157.1.0"
+  checksum: e6d1048ac54e1512d05a75023e8e2e71362eec816e68efc7cc9e543724e09b0c54d5470eb10cf6b6228f4e7b40d8bb62229520c6d2209bcb1d10d3ea11d78d0e
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-ios@npm:157.0.0":
-  version: 157.0.0
-  resolution: "react-native-skia-graphite-apple-ios@npm:157.0.0"
-  checksum: b80f2c85b6aedd49bbf77c87681806f17448b308bb61d11d76201ed5c69cb5ced0a1efd0d88034d06639aae17409a47870ce8270c08e1243df4f3a148a277524
+"react-native-skia-graphite-apple-ios@npm:157.1.0":
+  version: 157.1.0
+  resolution: "react-native-skia-graphite-apple-ios@npm:157.1.0"
+  checksum: ae08656060887b0902b74e9cc31b22c6a61246050224e5aeb3bb9a90c7cf97be6fd49eaddd9efe79a4fc68ad8687837a0424de021d26999272b7a42b618cb25c
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-macos@npm:157.0.0":
-  version: 157.0.0
-  resolution: "react-native-skia-graphite-apple-macos@npm:157.0.0"
-  checksum: 4604dad35c8fe33e729f7740a9494895d905847ca8db5d6d49fee7b366002626a1a2d6fb9885fd600f19db91d76b479a8a71ecc1b7f12968c7f03a3b06397746
+"react-native-skia-graphite-apple-macos@npm:157.1.0":
+  version: 157.1.0
+  resolution: "react-native-skia-graphite-apple-macos@npm:157.1.0"
+  checksum: fa55f2534083c846912eee78a8a5a7a2e9979548cfaf43e42a466d8daed58254c43c58ee4d47297027415e042578a48050d2e7ae071f4386e2ca458110fd0ef9
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-tvos@npm:157.0.0":
-  version: 157.0.0
-  resolution: "react-native-skia-graphite-apple-tvos@npm:157.0.0"
-  checksum: 2c98013f843d6c969039a176f5ab83067ba5cce1a3dd9a0207465fdae6626a0b4b868250e1dd8bdf20a6623018b03a3240453fac4794407d6b6165b91b59b9a6
+"react-native-skia-graphite-apple-tvos@npm:157.1.0":
+  version: 157.1.0
+  resolution: "react-native-skia-graphite-apple-tvos@npm:157.1.0"
+  checksum: 9de24bce00205d127c6a948bd68e02a7c9c8280255df93b050d536e7e57ad01da4da0edad5c3aa190e5d159dc21a88779aab3730af0f56a6ea8e1b72b214c17a
   languageName: node
   linkType: hard
 
@@ -25228,7 +25205,7 @@ __metadata:
   resolution: "react-native-skia-monorepo@workspace:."
   dependencies:
     eas-cli: 18.4.0
-    playwright: 1.59.0
+    playwright: 1.64.1
     react-native-test-app: ^4.2.0
     turbo: ^2.9.14
   languageName: unknown
@@ -25273,11 +25250,11 @@ __metadata:
     react-native: 0.83.1
     react-native-builder-bob: 0.18.2
     react-native-reanimated: 4.6.0
-    react-native-skia-graphite-android: 157.0.0
-    react-native-skia-graphite-apple-ios: 157.0.0
-    react-native-skia-graphite-apple-macos: 157.0.0
-    react-native-skia-graphite-apple-tvos: 157.0.0
-    react-native-webgpu-dawn: 157.0.0
+    react-native-skia-graphite-android: 157.1.0
+    react-native-skia-graphite-apple-ios: 157.1.0
+    react-native-skia-graphite-apple-macos: 157.1.0
+    react-native-skia-graphite-apple-tvos: 157.1.0
+    react-native-webgpu-dawn: 157.1.0
     react-native-worklets: 0.12.2
     react-reconciler: 0.33.0
     rimraf: 3.0.2
@@ -25425,18 +25402,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webgpu-dawn@npm:157.0.0":
-  version: 157.0.0
-  resolution: "react-native-webgpu-dawn@npm:157.0.0"
-  checksum: 2fbebac05e083a4d0ecd258e459ddb6a41c1755f1720b9361a43af31c37d8e67aac60904f2731535b52e9fb19dfb0ced05d3011861635786a449e8a3835cbb20
+"react-native-webgpu-dawn@npm:157.1.0":
+  version: 157.1.0
+  resolution: "react-native-webgpu-dawn@npm:157.1.0"
+  checksum: c938c4d0c1f1b5bc9eb8b8f2f3580df1babb7e02151262a3ff1cd4dfe4954c7ee6e56408403e715730eed5b00c33189095639f990befe9ad759632c82605ed1a
   languageName: node
   linkType: hard
 
-"react-native-webgpu@npm:0.17.0":
-  version: 0.17.0
-  resolution: "react-native-webgpu@npm:0.17.0"
+"react-native-webgpu@npm:0.20.0":
+  version: 0.20.0
+  resolution: "react-native-webgpu@npm:0.20.0"
   dependencies:
-    react-native-webgpu-dawn: 157.0.0
+    react-native-webgpu-dawn: 157.1.0
   peerDependencies:
     react: "*"
     react-native: ">=0.81.0"
@@ -25447,7 +25424,7 @@ __metadata:
       optional: true
     react-native-worklets:
       optional: true
-  checksum: 2ee6f94ab781d76675bc0fba9dcbac5032fe0025dd73671d7a2b0382b3c20c722c54b6c1f8fe749e202283579f3a35b625adfbb12c2562a656ac454ce9df4ddf
+  checksum: 3eff7b0821bf292749f39e4a1e5239f38ffb3db3eac8225144fceccdaf765d9de3edf73b5272568be7d768dc0a5455c40f0228cdbec2fb8a67edbda5bd3ae578
   languageName: node
   linkType: hard
 
@@ -29142,9 +29119,9 @@ __metadata:
   linkType: hard
 
 "undici@npm:^8.4.1":
-  version: 8.11.2
-  resolution: "undici@npm:8.11.2"
-  checksum: 12a3fbd6690cb6d9229a4e66d3d1b267cd5fd4864f911f784c66e5403b04884931a4ced5c68ed7cba21c4ed8126aae7a00ee896cb3ed7ecd8763f9fa3db24d1b
+  version: 8.12.3
+  resolution: "undici@npm:8.12.3"
+  checksum: e82687e13fa22dac7765b05fba613e0a7917a02e1a13764dbccd816811dca4f7a7d58baf4970dc5ca38b1a9e3d47defd7936ab4301672fb111006257ce7e53fc
   languageName: node
   linkType: hard
 

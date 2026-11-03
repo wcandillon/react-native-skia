@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 
 import { $, fileOps } from "./utils";
@@ -310,10 +311,43 @@ const copyModule = (module: string) => {
   fileOps.cp(srcDir, destDir);
 };
 
+// Dawn headers: from the Dawn built locally with `yarn build-dawn` when there is
+// one (it is what the native builds then link), otherwise from the
+// react-native-webgpu-dawn package, the same way Gradle and the podspec pick the
+// library.
+const resolveDawnInclude = () => {
+  const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
+  if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
+    console.log(
+      "   📦 Copying Dawn headers from the local build (libs/dawn)..."
+    );
+    return localDawnInclude;
+  }
+  let dawnPackage: string;
+  try {
+    dawnPackage = path.dirname(
+      require.resolve("react-native-webgpu-dawn/package.json")
+    );
+  } catch (e) {
+    throw new Error(
+      "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
+    );
+  }
+  console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
+  return path.join(dawnPackage, "include");
+};
+
 export const copyHeaders = () => {
-  const fs = require("fs");
   console.log("⚙️ Copying Skia headers...");
   process.chdir(PackageRoot);
+
+  // Sources first: a run that cannot copy leaves the current headers in place.
+  if (!fs.existsSync("../../externals/skia/include")) {
+    throw new Error(
+      "No Skia headers found in externals/skia: check out the submodules with `git submodule update --init --recursive`"
+    );
+  }
+  const dawnInclude = resolveDawnInclude();
 
   console.log("   Cleaning up existing directories...");
   fileOps.rm("./cpp/skia");
@@ -338,32 +372,7 @@ export const copyHeaders = () => {
     );
   }
 
-  // Dawn headers: from the Dawn built locally with `yarn build-dawn` when there
-  // is one (it is what the native builds then link), otherwise from the
-  // react-native-webgpu-dawn package, the same way Gradle and the podspec pick
-  // the library.
   {
-    const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
-    let dawnInclude: string;
-    if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
-      console.log(
-        "   📦 Copying Dawn headers from the local build (libs/dawn)..."
-      );
-      dawnInclude = localDawnInclude;
-    } else {
-      let dawnPackage: string;
-      try {
-        dawnPackage = path.dirname(
-          require.resolve("react-native-webgpu-dawn/package.json")
-        );
-      } catch (e) {
-        throw new Error(
-          "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
-        );
-      }
-      console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
-      dawnInclude = path.join(dawnPackage, "include");
-    }
     fileOps.mkdir("./cpp/dawn/include");
     fileOps.cp(path.join(dawnInclude, "dawn"), "./cpp/dawn/include/dawn");
     fileOps.cp(path.join(dawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");

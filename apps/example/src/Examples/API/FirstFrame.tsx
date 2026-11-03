@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Canvas, Circle, Skia, SkiaPictureView } from "react-native-skia";
+import { Canvas, Circle, Picture, Skia } from "react-native-skia";
 import { ScrollView } from "react-native-gesture-handler";
 
 import { AnimationWithTouchHandler } from "../Reanimated/AnimationWithTouchHandler";
@@ -48,11 +48,9 @@ export const FirstFrame = () => {
           title={isRunning ? "PAUSE" : "START"}
         />
         <Text>{count}</Text>
-        <SkiaPictureView
-          key={`picture-${count}`}
-          picture={picture}
-          style={styles.canvas}
-        />
+        <Canvas style={styles.canvas} key={`picture-${count}`}>
+          <Picture picture={picture} />
+        </Canvas>
         <Canvas style={styles.canvas} key={`canvas-${count}`}>
           <Circle cx={100} cy={100} r={50} color="red" />
         </Canvas>

@@ -15,28 +15,13 @@ constexpr int kBlendModePlusDarker = 1001;
 constexpr int kBlendModePlusLighter = 1002;
 
 // SkSL for PlusDarker blend mode
-// Formula: rc = max(0, 1 - ((1-dst) + (1-src))) = max(0, src + dst - 1)
-// This darkens the image by subtracting from white
+// Formula: rc = max(0, ra - ((da - dst) + (sa - src))), ra = min(1, sa + da)
+// On premultiplied colors, so a translucent source darkens proportionally
 inline const char *kPlusDarkerSkSL = R"(
     vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = max(vec3(0.0), srcUnpremul + dstUnpremul - vec3(1.0));
-        return vec4(blended * outAlpha, outAlpha);
-    }
-)";
-
-// SkSL for PlusLighter blend mode
-// Formula: rc = min(1, dst + src)
-// This lightens the image by adding colors and clamping
-inline const char *kPlusLighterSkSL = R"(
-    vec4 main(vec4 src, vec4 dst) {
-        float outAlpha = src.a + dst.a - src.a * dst.a;
-        vec3 srcUnpremul = src.a > 0.0 ? src.rgb / src.a : vec3(0.0);
-        vec3 dstUnpremul = dst.a > 0.0 ? dst.rgb / dst.a : vec3(0.0);
-        vec3 blended = min(vec3(1.0), srcUnpremul + dstUnpremul);
-        return vec4(blended * outAlpha, outAlpha);
+        float outAlpha = min(1.0, src.a + dst.a);
+        vec3 c = max(vec3(0.0), outAlpha - ((dst.a - dst.rgb) + (src.a - src.rgb)));
+        return vec4(c, outAlpha);
     }
 )";
 
@@ -59,17 +44,6 @@ public:
     return _plusDarkerBlender;
   }
 
-  sk_sp<SkBlender> getPlusLighterBlender() {
-    if (!_plusLighterBlender) {
-      auto [effect, err] =
-          SkRuntimeEffect::MakeForBlender(SkString(kPlusLighterSkSL));
-      if (effect) {
-        _plusLighterBlender = effect->makeBlender(nullptr);
-      }
-    }
-    return _plusLighterBlender;
-  }
-
 private:
   CustomBlenders() = default;
   ~CustomBlenders() = default;
@@ -77,7 +51,6 @@ private:
   CustomBlenders &operator=(const CustomBlenders &) = delete;
 
   sk_sp<SkBlender> _plusDarkerBlender;
-  sk_sp<SkBlender> _plusLighterBlender;
 };
 
 // Helper function to apply custom blend mode to a paint
@@ -88,10 +61,9 @@ inline void applyBlendMode(SkPaint &paint, int blendModeValue) {
       paint.setBlender(blender);
     }
   } else if (blendModeValue == kBlendModePlusLighter) {
-    auto blender = CustomBlenders::getInstance().getPlusLighterBlender();
-    if (blender) {
-      paint.setBlender(blender);
-    }
+    // CSS plus-lighter: min(1, dst + src) on every premultiplied channel,
+    // alpha included, which is SkBlendMode::kPlus
+    paint.setBlendMode(SkBlendMode::kPlus);
   } else {
     paint.setBlendMode(static_cast<SkBlendMode>(blendModeValue));
   }
@@ -99,9 +71,9 @@ inline void applyBlendMode(SkPaint &paint, int blendModeValue) {
 
 // Converts a JS blend mode value to an SkBlendMode for the Skia entry points
 // that take a plain SkBlendMode rather than a paint (drawPatch, drawVertices,
-// drawAtlas, drawColor). The custom blend modes above are implemented as
-// blenders on an SkPaint and have no SkBlendMode equivalent, so they - and any
-// other out of range value - are rejected instead of being cast blindly.
+// drawAtlas, drawColor). The custom blend modes above only go through a paint
+// (applyBlendMode), so they - and any other out of range value - are rejected
+// instead of being cast blindly.
 inline SkBlendMode toBlendMode(double blendModeValue) {
   auto value = static_cast<int>(blendModeValue);
   if (value < 0 || value > static_cast<int>(SkBlendMode::kLastMode)) {

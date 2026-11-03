@@ -146,7 +146,7 @@ export const PictureExample = () => {
 
   // Create a copy from serialized data
   const copyOfPicture = useMemo(
-    () => (serialized ? Skia.Picture.MakePicture(serialized) : null),
+    () => (serialized ? Skia.Picture.Make(serialized) : null),
     [serialized]
   );
 

@@ -12,6 +12,7 @@ const onboardingJSON = require("./setup/skottie/onboarding.json");
 const basicSlotsJSON = require("./setup/skottie/basic_slots.json");
 const fingerprintJSON = require("./setup/skottie/fingerprint.json");
 const textLayerJSON = require("./setup/skottie/text-layer.json");
+const unnamedLayersJSON = require("./setup/skottie/unnamed-layers.json");
 
 describe("Skottie", () => {
   it("Should render Skottie component with lego animation", async () => {
@@ -28,7 +29,7 @@ describe("Skottie", () => {
         <Skottie animation={legoAnimation} frame={41} />
       </Group>
     );
-    checkImage(img, docPath("skottie/skottie-component-lego.png"));
+    await checkImage(img, docPath("skottie/skottie-component-lego.png"));
   });
   it("Should render Skottie component with raster effect", async () => {
     const { Skia } = importSkia();
@@ -51,7 +52,7 @@ describe("Skottie", () => {
         <Skottie animation={legoAnimation} frame={41} />
       </Group>
     );
-    checkImage(img, docPath("skottie/skottie-component-lego-blur.png"));
+    await checkImage(img, docPath("skottie/skottie-component-lego-blur.png"));
   });
   it("Should render Skottie component with drinks animation", async () => {
     const { Skia } = importSkia();
@@ -65,7 +66,7 @@ describe("Skottie", () => {
         <Skottie animation={drinksAnimation} frame={200} />
       </Group>
     );
-    checkImage(img, docPath("skottie/skottie-component-drinks.png"));
+    await checkImage(img, docPath("skottie/skottie-component-drinks.png"));
   });
   it("Should render Skottie component with confetti animation", async () => {
     const { Skia } = importSkia();
@@ -81,7 +82,7 @@ describe("Skottie", () => {
         <Skottie animation={confettiAnimation} frame={30} />
       </Group>
     );
-    checkImage(img, docPath("skottie/skottie-component-confetti.png"));
+    await checkImage(img, docPath("skottie/skottie-component-confetti.png"));
   });
   it("Should render Skottie component with basic slots animation", async () => {
     const { Skia } = importSkia();
@@ -111,7 +112,7 @@ describe("Skottie", () => {
         <Skottie animation={animation} frame={0} />
       </Group>
     );
-    checkImage(img, docPath("skottie/skottie-component-basic-slots.png"));
+    await checkImage(img, docPath("skottie/skottie-component-basic-slots.png"));
   });
   it("Get durations", async () => {
     const { lego, drinks, confetti, onboarding } = await surface.eval(
@@ -191,9 +192,9 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    checkImage(image, docPath("skottie/lego.png"));
+    await checkImage(image, docPath("skottie/lego.png"));
   });
   it("Get slot information", async () => {
     const slots = await surface.eval(
@@ -322,9 +323,9 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    checkImage(image, docPath("skottie/basic_slots.png"));
+    await checkImage(image, docPath("skottie/basic_slots.png"));
   });
   it("load skottie with assets and set color slots", async () => {
     const raw = await surface.eval(
@@ -355,9 +356,9 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    checkImage(image, docPath("skottie/basic_slots-with-colors.png"));
+    await checkImage(image, docPath("skottie/basic_slots-with-colors.png"));
   });
   it("has color props", async () => {
     const colorProps = await surface.eval(
@@ -398,9 +399,9 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
-    checkImage(image, docPath("skottie/fingerprint-color1.png"));
+    await checkImage(image, docPath("skottie/fingerprint-color1.png"));
   });
   it("has text props", async () => {
     const colorProps = await surface.eval(
@@ -456,12 +457,41 @@ describe("Skottie", () => {
     );
     const { Skia } = importSkia();
     const rData = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(rData)!;
+    const image = Skia.Image.MakeFromEncoded(rData)!;
     expect(rData).toBeDefined();
     if (surface.OS === "node" || surface.OS === "web") {
-      checkImage(image, docPath("skottie/text-prop-web.png"));
+      await checkImage(image, docPath("skottie/text-prop-web.png"));
     } else {
-      checkImage(image, docPath("skottie/text-prop.png"));
+      await checkImage(image, docPath("skottie/text-prop.png"));
     }
+  });
+  it("loads layers and shapes without a name (nm)", async () => {
+    // Lottie exporters such as Jitter omit "nm" everywhere; the property
+    // observer used to receive a null node name and crash on native.
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        const animation = Skia.Skottie.Make(ctx.unnamedLayers);
+        const sur = Skia.Surface.MakeOffscreen(100, 100);
+        if (!sur) {
+          throw new Error("Failed to create surface");
+        }
+        animation.seekFrame(0);
+        animation.render(sur.getCanvas());
+        sur.flush();
+        return {
+          size: animation.size(),
+          fps: Math.round(animation.fps()),
+          colorProps: animation.getColorProps().length,
+          image: sur.makeImageSnapshot().encodeToBase64(),
+        };
+      },
+      {
+        unnamedLayers: JSON.stringify(unnamedLayersJSON),
+      }
+    );
+    expect(result.size).toEqual({ width: 100, height: 100 });
+    expect(result.fps).toEqual(30);
+    expect(result.colorProps).toEqual(0);
+    expect(result.image).toBeDefined();
   });
 });

@@ -24,7 +24,7 @@ describe("Box", () => {
         </Box>
       </>
     );
-    checkImage(img, docPath("box/box-shadow.png"));
+    await checkImage(img, docPath("box/box-shadow.png"));
   });
   it("should render negative values", async () => {
     const { rect } = importSkia();
@@ -42,7 +42,7 @@ describe("Box", () => {
         </Box>
       </FitBox>
     );
-    checkImage(img, "snapshots/box/box-shadow2.png");
+    await checkImage(img, "snapshots/box/box-shadow2.png");
   });
   it("should render have rounded corners", async () => {
     const { rect } = importSkia();
@@ -61,7 +61,7 @@ describe("Box", () => {
         </Box>
       </FitBox>
     );
-    checkImage(img, "snapshots/box/box-shadow3.png");
+    await checkImage(img, "snapshots/box/box-shadow3.png");
   });
 
   it("should draw a box with red stroke", async () => {
@@ -78,7 +78,7 @@ describe("Box", () => {
         />
       </>
     );
-    checkImage(img, "snapshots/box/box-stroke.png");
+    await checkImage(img, "snapshots/box/box-stroke.png");
   });
 
   it("should draw a shadow with opacity", async () => {
@@ -100,6 +100,6 @@ describe("Box", () => {
         </Box>
       </>
     );
-    checkImage(img, "snapshots/box/box-shadow-opacity.png");
+    await checkImage(img, "snapshots/box/box-shadow-opacity.png");
   });
 });

@@ -43,7 +43,7 @@ describe("Rects and rounded rects", () => {
         color="lightblue"
       />
     );
-    checkImage(image, docPath("rrect/uniform.png"));
+    await checkImage(image, docPath("rrect/uniform.png"));
   });
   it("Should draw a rounded rect with uniform values (2)", async () => {
     const { Skia } = importSkia();
@@ -53,7 +53,7 @@ describe("Rects and rounded rects", () => {
     const image = await surface.draw(
       <RoundedRect rect={rrct} color="lightblue" />
     );
-    checkImage(image, docPath("rrect/uniform.png"));
+    await checkImage(image, docPath("rrect/uniform.png"));
   });
   it("Should draw a rounded rect with uniform values (3)", async () => {
     const { width } = surface;
@@ -68,7 +68,7 @@ describe("Rects and rounded rects", () => {
     const image = await surface.draw(
       <RoundedRect rect={rrct} color="lightblue" />
     );
-    checkImage(image, docPath("rrect/uniform.png"));
+    await checkImage(image, docPath("rrect/uniform.png"));
   });
   it("Should draw a rounded rect with uniform values (4)", async () => {
     const { width } = surface;
@@ -77,7 +77,7 @@ describe("Rects and rounded rects", () => {
     const rrct = Skia.RRectXY(Skia.XYWHRect(0, 0, width, width), r, r);
     const path = Skia.Path.RRect(rrct);
     const image = await surface.draw(<Path path={path} color="lightblue" />);
-    checkImage(image, docPath("rrect/uniform.png"));
+    await checkImage(image, docPath("rrect/uniform.png"));
   });
   it("Should draw a rounded rect with non-uniform values (1)", async () => {
     const { width } = surface;
@@ -92,7 +92,7 @@ describe("Rects and rounded rects", () => {
     const image = await surface.draw(
       <RoundedRect rect={rrct} color="lightblue" />
     );
-    checkImage(image, docPath("rrect/nonuniform.png"));
+    await checkImage(image, docPath("rrect/nonuniform.png"));
   });
   it("Should draw a rounded rect with non-uniform values (2)", async () => {
     const { Skia } = importSkia();
@@ -107,7 +107,7 @@ describe("Rects and rounded rects", () => {
     };
     const path = Skia.Path.RRect(rrct);
     const image = await surface.draw(<Path path={path} color="lightblue" />);
-    checkImage(image, docPath("rrect/nonuniform.png"));
+    await checkImage(image, docPath("rrect/nonuniform.png"));
   });
   it("Should draw a rounded rect with non-uniform values (3)", async () => {
     const { Skia } = importSkia();
@@ -121,16 +121,16 @@ describe("Rects and rounded rects", () => {
       bottomRight: { x: 0, y: 0 },
     });
     const image = await surface.draw(<Path path={barPath} color="lightblue" />);
-    checkImage(image, docPath("rrect/test.png"));
+    await checkImage(image, docPath("rrect/test.png"));
   });
   /*
    */
   it("Supports CSS3 colors (1)", async () => {
     const image = await surface.draw(<Fill color="hsl(120, 100%, 50%)" />);
-    checkImage(image, docPath("fill/green.png"));
+    await checkImage(image, docPath("fill/green.png"));
   });
   it("Supports CSS3 colors (2)", async () => {
     const image = await surface.draw(<Fill color="hsla(120, 100%, 50%, 1)" />);
-    checkImage(image, docPath("fill/green.png"));
+    await checkImage(image, docPath("fill/green.png"));
   });
 });

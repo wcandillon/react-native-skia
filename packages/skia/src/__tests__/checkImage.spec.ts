@@ -8,8 +8,9 @@ import type { SkImage } from "../skia/types";
 
 import type * as Setup from "./setup";
 
+const png = PNG.sync.write(new PNG({ width: 1, height: 1 }));
 const image = {
-  encodeToBytes: () => PNG.sync.write(new PNG({ width: 1, height: 1 })),
+  encodeToBytes: () => Promise.resolve(png),
 } as unknown as SkImage;
 
 // setup reads CI once, as it loads.
@@ -41,29 +42,29 @@ describe("checkImage", () => {
     fs.rmSync(directory, { recursive: true, force: true });
   });
 
-  it("fails a check without a reference on CI, keeping its image as a failed check's", () => {
+  it("fails a check without a reference on CI, keeping its image as a failed check's", async () => {
     const checkImage = loadCheckImage("true");
     const reference = path.join(directory, "missing.png");
-    expect(() => checkImage(image, reference)).toThrow(
+    await expect(checkImage(image, reference)).rejects.toThrow(
       "has no reference image"
     );
     expect(fs.existsSync(reference)).toBe(false);
     expect(fs.existsSync(`${reference}.test.png`)).toBe(true);
   });
 
-  it("writes the reference of a check without one outside CI", () => {
+  it("writes the reference of a check without one outside CI", async () => {
     const checkImage = loadCheckImage(undefined);
     const reference = path.join(directory, "missing.png");
-    expect(checkImage(image, reference)).toBe(0);
+    expect(await checkImage(image, reference)).toBe(0);
     expect(fs.existsSync(reference)).toBe(true);
     expect(fs.existsSync(`${reference}.test.png`)).toBe(false);
   });
 
-  it("compares against an existing reference on CI", () => {
+  it("compares against an existing reference on CI", async () => {
     const checkImage = loadCheckImage("true");
     const reference = path.join(directory, "present.png");
-    fs.writeFileSync(reference, image.encodeToBytes());
-    expect(checkImage(image, reference)).toBe(0);
+    fs.writeFileSync(reference, png);
+    expect(await checkImage(image, reference)).toBe(0);
     expect(fs.existsSync(`${reference}.test.png`)).toBe(false);
   });
 });

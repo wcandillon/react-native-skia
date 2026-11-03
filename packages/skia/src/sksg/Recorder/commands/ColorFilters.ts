@@ -75,7 +75,7 @@ export const pushColorFilter = (
     }
     cf = ctx.Skia.ColorFilter.MakeLerp(t, first, second);
   } else if (isColorFilter(command, NodeType.LumaColorFilter)) {
-    cf = ctx.Skia.ColorFilter.MakeLumaColorFilter();
+    cf = ctx.Skia.ColorFilter.MakeLuma();
   } else if (isColorFilter(command, NodeType.LinearToSRGBGammaColorFilter)) {
     cf = ctx.Skia.ColorFilter.MakeLinearToSRGBGamma();
   } else if (isColorFilter(command, NodeType.SRGBToLinearGammaColorFilter)) {

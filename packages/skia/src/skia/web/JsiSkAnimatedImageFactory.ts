@@ -15,7 +15,7 @@ export class JsiSkAnimatedImageFactory
     super(CanvasKit);
   }
 
-  MakeAnimatedImageFromEncoded(encoded: SkData) {
+  MakeFromEncoded(encoded: SkData) {
     const image = this.CanvasKit.MakeAnimatedImageFromEncoded(
       JsiSkData.fromValue(encoded)
     );

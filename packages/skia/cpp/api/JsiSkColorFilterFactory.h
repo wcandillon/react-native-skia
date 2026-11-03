@@ -48,8 +48,7 @@ public:
         SkColorFilters::Compose(std::move(outer), std::move(inner)));
   }
 
-  std::shared_ptr<JsiSkColorFilter> MakeLerp(double t,
-                                             sk_sp<SkColorFilter> dst,
+  std::shared_ptr<JsiSkColorFilter> MakeLerp(double t, sk_sp<SkColorFilter> dst,
                                              sk_sp<SkColorFilter> src) {
     return std::make_shared<JsiSkColorFilter>(
         getContext(), SkColorFilters::Lerp(t, std::move(dst), std::move(src)));
@@ -65,7 +64,7 @@ public:
         getContext(), SkColorFilters::LinearToSRGBGamma());
   }
 
-  std::shared_ptr<JsiSkColorFilter> MakeLumaColorFilter() {
+  std::shared_ptr<JsiSkColorFilter> MakeLuma() {
     return std::make_shared<JsiSkColorFilter>(getContext(),
                                               SkLumaColorFilter::Make());
   }
@@ -85,8 +84,8 @@ public:
                   &JsiSkColorFilterFactory::MakeSRGBToLinearGamma);
     installMethod(runtime, prototype, "MakeLinearToSRGBGamma",
                   &JsiSkColorFilterFactory::MakeLinearToSRGBGamma);
-    installMethod(runtime, prototype, "MakeLumaColorFilter",
-                  &JsiSkColorFilterFactory::MakeLumaColorFilter);
+    installMethod(runtime, prototype, "MakeLuma",
+                  &JsiSkColorFilterFactory::MakeLuma);
   }
 
   explicit JsiSkColorFilterFactory(std::shared_ptr<RNSkPlatformContext> context)

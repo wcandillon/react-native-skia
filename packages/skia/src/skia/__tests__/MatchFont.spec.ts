@@ -57,7 +57,7 @@ beforeAll(async () => {
   const data = Skia.Data.fromBytes(
     fs.readFileSync(path.resolve(__dirname, "./assets/Roboto-Medium.ttf"))
   );
-  typeface = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+  typeface = Skia.Typeface.MakeFromData(data)!;
   expect(typeface).toBeTruthy();
 });
 

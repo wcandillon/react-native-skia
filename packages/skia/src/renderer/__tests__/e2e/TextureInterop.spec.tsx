@@ -4,7 +4,7 @@ import { surface } from "../setup";
 
 // Covers the pointer-based interop surface with react-native-webgpu:
 // Skia.getNativeDevice(), the
-// MakeGPUTextureFromImage / MakeImageFromGPUTexture round trip, and
+// MakeGPUTextureFromImage / MakeFromGPUTexture round trip, and
 // Surface.MakeFromGPUTexture drawing into a shared texture.
 // The pointers never cross the eval boundary (BigInt is not JSON
 // serializable); everything runs on-device and only plain data comes back.
@@ -49,7 +49,7 @@ describe("Texture interop (Graphite)", () => {
         if (typeof pointer !== "bigint" || pointer === BigInt(0)) {
           return "MakeGPUTextureFromImage did not return a pointer";
         }
-        const roundTripped = Skia.Image.MakeImageFromGPUTexture(pointer);
+        const roundTripped = Skia.Image.MakeFromGPUTexture(pointer);
         if (roundTripped.width() !== size || roundTripped.height() !== size) {
           return `unexpected size ${roundTripped.width()}x${roundTripped.height()}`;
         }
@@ -62,19 +62,25 @@ describe("Texture interop (Graphite)", () => {
         }
         dst.getCanvas().drawImage(roundTripped, 0, 0);
         dst.flush();
-        const pixels = dst.getCanvas().readPixels(0, 0, {
-          width: size,
-          height: size,
-          colorType: ctx.colorType,
-          alphaType: ctx.alphaType,
-        });
-        if (!pixels) {
-          return "readPixels returned null";
-        }
-        const px = (x: number, y: number) =>
-          Array.from(pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4));
-        // One sample from the center of each half.
-        return [...px(16, 32), ...px(48, 32)];
+        return dst
+          .getCanvas()
+          .readPixels(0, 0, {
+            width: size,
+            height: size,
+            colorType: ctx.colorType,
+            alphaType: ctx.alphaType,
+          })
+          .then((pixels) => {
+            if (!pixels) {
+              return "readPixels returned null";
+            }
+            const px = (x: number, y: number) =>
+              Array.from(
+                pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+              );
+            // One sample from the center of each half.
+            return [...px(16, 32), ...px(48, 32)];
+          });
       },
       { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
     );
@@ -117,27 +123,31 @@ describe("Texture interop (Graphite)", () => {
 
           // Read the texture back as an image, like a WebGPU consumer would
           // sample it, and check both halves.
-          const image = Skia.Image.MakeImageFromGPUTexture(pointer);
+          const image = Skia.Image.MakeFromGPUTexture(pointer);
           const dst = Skia.Surface.MakeOffscreen(size, size);
           if (!dst) {
             return "could not create the destination surface";
           }
           dst.getCanvas().drawImage(image, 0, 0);
           dst.flush();
-          const pixels = dst.getCanvas().readPixels(0, 0, {
-            width: size,
-            height: size,
-            colorType: ctx.colorType,
-            alphaType: ctx.alphaType,
-          });
-          if (!pixels) {
-            return "readPixels returned null";
-          }
-          const px = (x: number, y: number) =>
-            Array.from(
-              pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
-            );
-          return [...px(16, 32), ...px(48, 32)];
+          return dst
+            .getCanvas()
+            .readPixels(0, 0, {
+              width: size,
+              height: size,
+              colorType: ctx.colorType,
+              alphaType: ctx.alphaType,
+            })
+            .then((pixels) => {
+              if (!pixels) {
+                return "readPixels returned null";
+              }
+              const px = (x: number, y: number) =>
+                Array.from(
+                  pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+                );
+              return [...px(16, 32), ...px(48, 32)];
+            });
         },
         { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
       );

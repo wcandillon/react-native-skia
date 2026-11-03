@@ -22,7 +22,7 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const typeface = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -77,10 +77,10 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const roboto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
-            const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const noto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -118,7 +118,7 @@ describe("Paragraph glyph-level APIs", () => {
     itRunsE2eOnly("should return a path for every line", async () => {
       const result = await surface.eval(
         (Skia, ctx) => {
-          const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const typeface = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -156,7 +156,7 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const typeface = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -191,10 +191,10 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const roboto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
-            const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const noto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -304,7 +304,7 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const typeface = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -346,7 +346,7 @@ describe("Paragraph glyph-level APIs", () => {
       async () => {
         const result = await surface.eval(
           (Skia, ctx) => {
-            const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const typeface = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -417,7 +417,7 @@ describe("Paragraph glyph-level APIs", () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
           canvas.drawColor(Skia.Color("white"));
-          const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const typeface = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -446,7 +446,7 @@ describe("Paragraph glyph-level APIs", () => {
           width: surface.width,
         }
       );
-      checkImage(
+      await checkImage(
         img,
         `snapshots/paragraph/paragraph-path-segment-${surface.OS}.png`,
         { maxPixelDiff: 300 }
@@ -459,10 +459,10 @@ describe("Paragraph glyph-level APIs", () => {
         const img = await surface.drawOffscreen(
           (Skia, canvas, ctx) => {
             canvas.drawColor(Skia.Color("white"));
-            const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const roboto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
             )!;
-            const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            const noto = Skia.Typeface.MakeFromData(
               Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
             )!;
             const provider = Skia.TypefaceFontProvider.Make();
@@ -508,7 +508,7 @@ describe("Paragraph glyph-level APIs", () => {
             width: surface.width,
           }
         );
-        checkImage(
+        await checkImage(
           img,
           `snapshots/paragraph/paragraph-glyph-tight-bounds-${surface.OS}.png`
         );
@@ -521,7 +521,7 @@ describe("Paragraph glyph-level APIs", () => {
       const img = await surface.drawOffscreen(
         (Skia, canvas, ctx) => {
           canvas.drawColor(Skia.Color("white"));
-          const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const typeface = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
           )!;
           const provider = Skia.TypefaceFontProvider.Make();
@@ -553,7 +553,7 @@ describe("Paragraph glyph-level APIs", () => {
           width: surface.width,
         }
       );
-      checkImage(
+      await checkImage(
         img,
         `snapshots/paragraph/paragraph-metrics-bounds-${surface.OS}.png`
       );

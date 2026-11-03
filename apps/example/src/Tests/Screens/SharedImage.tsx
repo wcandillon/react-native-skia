@@ -20,7 +20,7 @@ export const SharedImage = () => {
       pixels[i + 2] = 0;
       pixels[i + 3] = 255;
     }
-    return Skia.Image.MakeRasterImage(
+    return Skia.Image.MakeRaster(
       {
         width,
         height,

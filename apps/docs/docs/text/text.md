@@ -184,7 +184,7 @@ const fontMgr = Skia.FontMgr.System();
 // The custom font manager is available via Skia.TypefaceFontProvider.Make()
 const customFontMgr = Skia.TypefaceFontProvider.Make();
 // typeface needs to be loaded via Skia.Data and instanciated via
-// Skia.Typeface.MakeFreeTypeFaceFromData()
+// Skia.Typeface.MakeFromData()
 // customFontMgr.registerTypeface(customTypeFace, "Roboto");
 
 // Matching a font
