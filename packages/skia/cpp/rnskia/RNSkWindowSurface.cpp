@@ -75,9 +75,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   _nativeHandle = nativeHandle;
   _releaser = std::move(releaser);
   // Called from the platform view (Java or Objective-C), where an exception
-  // would take the process down: without a GPU (reported when the module was
-  // installed, see DawnContext::getGpuInfo) the window is given back and the
-  // view stays blank.
+  // would take the process down: without a GPU (probed the first time the
+  // GPU is asked for, see DawnContext::getGpuInfo) the window is given back
+  // and the view stays blank.
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     detachLocked();

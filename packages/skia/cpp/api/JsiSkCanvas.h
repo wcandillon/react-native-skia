@@ -27,6 +27,7 @@
 #include "utils/RNSkTypedArray.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkAtlas.h"
 
 #include <jsi/jsi.h>
 
@@ -485,8 +486,8 @@ public:
     auto x = SkSpan(xforms.data(), xforms.size());
     auto t = SkSpan(skRects.data(), skRects.size());
     auto c = SkSpan(colors.data(), colors.size());
-    getCanvas()->drawAtlas(atlas.get(), x, t, c, blendMode, sampling, nullptr,
-                           paint.get());
+    drawAtlasAsVertices(getCanvas(), atlas.get(), x, t, c, blendMode, sampling,
+                        paint.get());
 
     return jsi::Value::undefined();
   }

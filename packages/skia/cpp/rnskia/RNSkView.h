@@ -357,6 +357,16 @@ public:
     if (recordings.empty()) {
       return kNothingPresented;
     }
+    // One frame per vsync. The producer runs a frame ahead (see
+    // RNSkGraphiteProducer::kMaxQueued), so two recordings can be waiting
+    // here; replaying both would cost the GPU two frames for one shown, which
+    // halves a GPU-bound canvas. The next one waits for the next vsync
+    // (kMoreQueued asks for it). Recordings for a size the window no longer
+    // has still go together: present() drops those for the one behind them.
+    if (recordings.size() > 1 && recordings.front()->hasSizeOf(targetInfo)) {
+      target->requeue({recordings.begin() + 1, recordings.end()});
+      recordings.resize(1);
+    }
     const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
