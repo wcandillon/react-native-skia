@@ -31,13 +31,12 @@ class Dispatcher : public std::enable_shared_from_this<Dispatcher> {
 public:
   using Operation = std::function<void()>;
   /**
-   * Posts an operation to the loop of the dispatcher's thread. Returns false
-   * when the post failed, which the next run() makes again; true hands the
-   * operation to the loop, which may still drop it, as a CallInvoker does
-   * after a reload. Called from any thread, the garbage collector's included,
-   * so it must not throw.
+   * Posts an operation to the loop of the dispatcher's thread. A loop whose
+   * thread is ending may drop it, as React Native's JS thread does on a
+   * reload: what is queued then goes with the dispatcher. Called from any
+   * thread, the garbage collector's included, so it must not throw.
    */
-  using Scheduler = std::function<bool(Operation)>;
+  using Scheduler = std::function<void(Operation)>;
 
   /** The dispatcher of the current thread, created on first use. */
   static std::shared_ptr<Dispatcher> getDispatcher() {
@@ -80,35 +79,31 @@ public:
   /**
    * Queues an operation to run on the dispatcher's thread: the next time the
    * thread calls processQueue(), which a thread bound to a loop does from a
-   * run of the queue posted there. A run is posted unless one has been since
-   * the queue was last taken, so a burst of operations posts once, and a post
-   * that failed is made again by the next call.
+   * run of the queue posted there. A run is posted when the queue was empty:
+   * the one posted before takes what is queued until it takes the queue.
    */
   void run(Operation operation) {
     Scheduler scheduler;
     {
       std::lock_guard<std::mutex> lock(_mutex);
+      if (_queue.empty()) {
+        scheduler = _scheduler;
+      }
       _queue.push(std::move(operation));
       // libc++ copies a small, nothrow-copyable std::function target on a
-      // move and leaves the source holding it: dropped here, the queue's copy
-      // is the last one.
+      // move and leaves the source holding it (__functional/function.h):
+      // dropped here, the queue's copy is the last one.
       operation = nullptr;
-      if (_runPosted || !_scheduler) {
-        return;
-      }
-      _runPosted = true;
-      scheduler = _scheduler;
+    }
+    if (!scheduler) {
+      return;
     }
     std::weak_ptr<Dispatcher> weakThis = weak_from_this();
-    bool posted = scheduler([weakThis]() {
+    scheduler([weakThis]() {
       if (auto self = weakThis.lock()) {
         self->processQueue();
       }
     });
-    if (!posted) {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _runPosted = false;
-    }
   }
 
   /**
@@ -123,7 +118,6 @@ public:
     {
       std::lock_guard<std::mutex> lock(_mutex);
       operations.swap(_queue);
-      _runPosted = false;
     }
     size_t count = operations.size();
     while (!operations.empty()) {
@@ -138,7 +132,6 @@ private:
   std::mutex _mutex;
   std::queue<Operation> _queue;
   Scheduler _scheduler;
-  bool _runPosted = false;
 };
 
 } // namespace RNSkia

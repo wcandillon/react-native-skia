@@ -64,10 +64,8 @@ public:
   }
 
   Dispatcher::Scheduler scheduler() {
-    return [this](Dispatcher::Operation operation) {
-      post(std::move(operation));
-      return true;
-    };
+    return
+        [this](Dispatcher::Operation operation) { post(std::move(operation)); };
   }
 
   std::thread::id id() const { return _thread.get_id(); }
@@ -218,7 +216,6 @@ int main() {
       Dispatcher::bindCurrentThread(
           [&waitingThread](Dispatcher::Operation operation) {
             waitingThread.runAndWait(operation);
-            return true;
           });
       waitingDispatcher = Dispatcher::getDispatcher();
     });
@@ -284,7 +281,6 @@ int main() {
       Dispatcher::bindCurrentThread([&](Dispatcher::Operation operation) {
         posts++;
         uiThread.post(std::move(operation));
-        return true;
       });
       uiDispatcher = Dispatcher::getDispatcher();
     });
@@ -349,7 +345,6 @@ int main() {
             } else {
               mainThread.post(std::move(operation));
             }
-            return true;
           });
       bool ran = false;
       Dispatcher::getDispatcher()->run([&ran]() { ran = true; });
@@ -372,7 +367,7 @@ int main() {
     Loop reboundThread;
     std::shared_ptr<Dispatcher> reboundDispatcher;
     reboundThread.runAndWait([&]() {
-      Dispatcher::bindCurrentThread([](Dispatcher::Operation) { return true; });
+      Dispatcher::bindCurrentThread([](Dispatcher::Operation) {});
       reboundDispatcher = Dispatcher::getDispatcher();
     });
     auto dropped = makeWatchedSurfaceOn(reboundThread);
@@ -393,32 +388,6 @@ int main() {
     }
   }
 
-  // A post that failed is made again by the next call: what the queue held
-  // then runs on the thread's loop.
-  {
-    Loop recoveringThread;
-    std::atomic<int> attempts{0};
-    std::shared_ptr<Dispatcher> recoveringDispatcher;
-    recoveringThread.runAndWait([&]() {
-      Dispatcher::bindCurrentThread([&](Dispatcher::Operation operation) {
-        if (attempts++ == 0) {
-          return false;
-        }
-        recoveringThread.post(std::move(operation));
-        return true;
-      });
-      recoveringDispatcher = Dispatcher::getDispatcher();
-    });
-    auto stranded = makeWatchedSurfaceOn(recoveringThread);
-    recoveringDispatcher->release(std::move(stranded.surface));
-    auto next = makeWatchedSurfaceOn(recoveringThread);
-    recoveringDispatcher->release(std::move(next.surface));
-    if (!destroyedOnWithin(stranded, recoveringThread.id(), 5s) ||
-        !destroyedOnWithin(next, recoveringThread.id(), 5s)) {
-      return fail("a post that failed leaves the queue waiting for good");
-    }
-  }
-
   // A posted run does not keep its dispatcher alive once the thread that
   // made it has ended and nothing else holds it.
   {
@@ -430,7 +399,6 @@ int main() {
       Dispatcher::bindCurrentThread([&](Dispatcher::Operation operation) {
         std::lock_guard<std::mutex> lock(postedMutex);
         posted.push_back(std::move(operation));
-        return true;
       });
       endedDispatcher = Dispatcher::getDispatcher();
       watched = makeWatchedSurface();

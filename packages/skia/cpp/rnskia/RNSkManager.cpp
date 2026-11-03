@@ -1,6 +1,5 @@
 #include "RNSkManager.h"
 
-#include <functional>
 #include <memory>
 #include <utility>
 
@@ -17,29 +16,9 @@
 #include "api/recorder/JsiRecorder.h"
 #include "jsi/BoxedNativeObject.h"
 #include "jsi/ViewProperty.h"
-#include "utils/RNSkLog.h"
 
 namespace RNSkia {
 namespace jsi = facebook::jsi;
-
-namespace {
-
-// On Android the post calls into Java, and fbjni rethrows what Java throws;
-// the main thread's scheduler must not throw (see Dispatcher::Scheduler).
-bool postToMainThread(
-    const std::shared_ptr<RNSkPlatformContext> &platformContext,
-    std::function<void()> task) {
-  try {
-    platformContext->runOnMainThread(std::move(task));
-  } catch (const std::exception &error) {
-    RNSkLogger::logToConsole("Could not post to the main thread: %s",
-                             error.what());
-    return false;
-  }
-  return true;
-}
-
-} // namespace
 
 RNSkManager::RNSkManager(
     jsi::Runtime *jsRuntime,
@@ -65,19 +44,18 @@ RNSkManager::RNSkManager(
   // on that thread (see Dispatcher): the JS thread, which installs the
   // module, and the main thread, where the UI runtime runs, destroy it when
   // their loop runs the queue. The main thread is bound by a task posted to it.
-  // A binding keeps the context it posts through: the thread outlives this
-  // manager, and another instance may still let go, from another thread, of
-  // the surfaces its UI runtime made on the main thread, until the next
-  // install binds the thread again.
+  // Each binding keeps the context it posts through, as the main thread's
+  // must: that thread outlives this manager, and another instance may still
+  // let go, from another thread, of the surfaces its UI runtime made there,
+  // until the next install binds the main thread again.
   Dispatcher::bindCurrentThread(
       [platformContext](Dispatcher::Operation operation) {
         platformContext->runOnJavascriptThread(std::move(operation));
-        return true;
       });
-  postToMainThread(platformContext, [platformContext]() {
+  platformContext->runOnMainThread([platformContext]() {
     Dispatcher::bindCurrentThread(
         [platformContext](Dispatcher::Operation operation) {
-          return postToMainThread(platformContext, std::move(operation));
+          platformContext->runOnMainThread(std::move(operation));
         });
   });
   // Install bindings
