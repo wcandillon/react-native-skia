@@ -166,8 +166,9 @@ export const Demo = () => {
 In v2, Skia drew the whole atlas as a single GPU operation: the Ganesh backend packed every sprite into one vertex buffer and submitted it as one draw (`DrawAtlasOp`).
 
 In v3, React Native Skia renders with [Graphite](/docs/getting-started/migration), and Graphite does not have a dedicated atlas renderer yet.
-Its own `drawAtlas` records one rectangle draw per sprite, which costs a draw call per sprite on Android and a per-sprite recording cost on every platform.
-React Native Skia does not use it. The `Atlas` component and `canvas.drawAtlas()` turn the sprites into a single `drawVertices` call, the way Skia itself drew atlases on Graphite before m152, so the whole atlas is one draw on every platform, as in v2.
+Its own `drawAtlas`, added in Skia m152 (before that, Graphite drew nothing for an atlas), records one rectangle draw per sprite.
+The recording cost grows with the number of sprites on every platform, and when `colors` are given, Android pays a separate draw call per distinct color on top of that.
+React Native Skia does not use it. The `Atlas` component and `canvas.drawAtlas()` turn the sprites into a single `drawVertices` call, the generic path Skia uses for devices without an atlas renderer (`SkDevice::drawAtlas`), so the whole atlas is one draw on every platform, as in v2.
 
 What this means for you:
 
