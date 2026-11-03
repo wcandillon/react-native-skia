@@ -158,6 +158,11 @@ export const HomeScreen = () => {
         description="SurfaceView vs TextureView"
         route="AndroidViews"
       />
+      <HomeScreenButton
+        title="🌙 Background GPU"
+        description="GPU work while the app is in the background (#4290)"
+        route="BackgroundGpu"
+      />
     </ScrollView>
   );
 };
