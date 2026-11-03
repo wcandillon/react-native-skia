@@ -22,15 +22,20 @@
 
 namespace RNSkia {
 
-// Skia Graphite has no batched atlas renderer. Since m152 its drawAtlas records
-// one rectangle draw per sprite: a draw call per sprite on the backends without
-// storage buffers (Dawn over Vulkan and OpenGL ES) and a per-sprite recording
-// cost everywhere. Up to m151 Graphite drew an atlas through
-// SkDevice::drawAtlas, which turns the sprites into one SkVertices and draws it
-// in a single call. These helpers keep that path: an atlas is one drawVertices
-// call, with the paint handled as SkCanvas::drawAtlas handles it. The only
-// difference with Graphite's loop is that sprite edges are not anti-aliased,
-// as in v2 (Ganesh).
+// Skia Graphite has no batched atlas renderer. Its drawAtlas, added in m152
+// (before that Graphite's override was empty and an atlas drew nothing),
+// records one rectangle draw per sprite. Graphite merges the sprites into one
+// instanced draw when they share a paint, but each sprite color is its own
+// block of paint uniforms: on the backends without storage buffers (Dawn over
+// Vulkan and OpenGL ES, so Android) that is a draw call per distinct color,
+// and the recording cost is per sprite on every platform.
+// These helpers take the path of SkDevice::drawAtlas instead, the generic
+// implementation for devices without an atlas renderer: the sprites become one
+// SkVertices, drawn in a single drawVertices call with the paint handled as
+// SkCanvas::drawAtlas handles it. This is close to what Ganesh did in v2, where
+// DrawAtlasOp packed every sprite into one vertex buffer and drew it once. The
+// only difference with Graphite's loop is that sprite edges are not
+// anti-aliased, as in v2 (Ganesh).
 
 // Each sprite is written as two triangles.
 inline constexpr size_t kAtlasVerticesPerSprite = 6;
