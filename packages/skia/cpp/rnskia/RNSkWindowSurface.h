@@ -30,12 +30,14 @@ namespace RNSkia {
  * platform view only acquires the native handle and forwards its lifecycle
  * (attach, resize, detach); everything else lives here.
  *
- * Threading: the window is attached, resized and detached on the main
- * thread, and presented on the thread the view presents on (see
- * RNSkView::setPresentThread): the main thread too, or a thread of its own.
- * A mutex keeps the two apart: the window is never reconfigured or released
- * under a present, and detaching waits for the present in flight before it
- * lets go of the window, so that the platform may destroy it right after.
+ * Threading: the window is resized on the main thread, and presented on the
+ * thread the view presents on (see RNSkView::setPresentThread): the main
+ * thread too, or a thread of its own. It is attached and detached on the
+ * main thread (Android), or on the present thread (Apple, so that the main
+ * thread never waits for a present in flight). A mutex keeps attach, detach
+ * and present apart: the window is never reconfigured or released under a
+ * present, and detaching waits for the present in flight before it lets go
+ * of the window, so that the platform may destroy it right after.
  * A resize does not wait: it notes the size, which the presenting thread
  * takes by its next present (see takePendingSizeLocked), and the swapchain
  * is configured for it there (see configureIfNeededLocked), not on the main
@@ -79,7 +81,8 @@ public:
    or 10-bit (Android) format, granted when the surface supports it;
    useP3ColorSpace renders in Display P3 rather than sRGB. The releaser, if
    any, gives the handle back when the window is detached. Requests a redraw.
-   Main thread.
+   Main thread (Android), or the present thread (Apple, see SkiaView's
+   attachSurface).
    */
   void attach(void *nativeHandle, int width, int height, bool highBitDepth,
               bool useP3ColorSpace, Releaser releaser);
@@ -104,9 +107,10 @@ public:
 
   /**
    detach(), if the window attached is still `nativeHandle`. The present
-   thread: an Apple view leaving its superview lets go of its layer there,
-   so that the main thread does not wait for the present in flight; the view
-   may be back in a superview by then, its window a new layer that stays.
+   thread (Apple): the view's layer is let go of there, as the view leaves
+   its superview or its layout collapses to zero, so that the main thread
+   does not wait for the present in flight; an attach posted after this one,
+   for another layer, stays.
    */
   void detach(void *nativeHandle);
 

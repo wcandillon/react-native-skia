@@ -65,9 +65,11 @@ usesP3ColorSpace(const std::string &colorSpace,
 // (https://github.com/wcandillon/react-native-skia/issues/4384). The thread
 // has a run loop, which the display links of the views tick on, and runs the
 // tasks posted to it in order: a view's display link is only touched here.
-// CAMetalLayer takes drawables and presents from any thread, and the window
-// surface keeps these presents apart from the main thread's attach and detach
-// (see RNSkWindowSurface).
+// CAMetalLayer takes drawables and presents from any thread. The window is
+// attached and detached here too (see attachSurface): both take the window's
+// mutex, which a present holds for as long as its pipelines take to compile,
+// so the main thread, which only resizes the window (lock-free), never waits
+// for one.
 @interface RNSkPresentThread : NSObject
 + (void)post:(dispatch_block_t)task;
 + (NSRunLoop *)runLoop;
@@ -144,9 +146,10 @@ static NSRunLoop *presentRunLoop() {
   // Whether the window can show a frame (see appIsBackgrounded). Written on
   // the main thread, read on the present thread.
   std::atomic<bool> _canPresent;
-  // Main thread: whether the window is attached, and at which size in pixels.
-  // A new size is handed over with resize(), which never waits for the
-  // present thread, rather than by attaching the window again.
+  // The main thread's record of the window: whether one is attached (the
+  // attach itself runs on the present thread, see attachSurface), and at
+  // which size in pixels. A new size is handed over with resize(), which
+  // never waits for the present thread, rather than by attaching again.
   bool _windowAttached;
   int _attachedWidth;
   int _attachedHeight;
@@ -239,8 +242,8 @@ static NSRunLoop *presentRunLoop() {
     [self setNeedsLayout];
     // A view put back gets its window onto the new layer now rather than on
     // the layout, which comes after the Core Animation commit that carries
-    // the layer: attaching asks the present thread for a redraw, which shows
-    // the last frame on it (a new layer shows none, see showsFrame).
+    // the layer: the attach, on the present thread, ends with a redraw that
+    // shows the last frame on it (a new layer shows none, see showsFrame).
     if (_view != nullptr) {
       [self enterPresentThread];
       [CATransaction begin];
@@ -531,20 +534,16 @@ static NSRunLoop *presentRunLoop() {
 
 // On every layout: the window is attached the first time it has a size, and
 // handed a new size from then on with resize(), which the present thread
-// configures the swapchain for by its next present. Attaching again would
-// wait for a present in flight, which may be waiting for its pipelines to
-// compile, on the main thread.
+// configures the swapchain for by its next present. A size of zero takes the
+// window away until the next size: Dawn refuses an empty surface, and without
+// one the frames wait.
 - (void)updateWindowSize {
   int w = 0;
   int h = 0;
   [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
   if (w == 0 || h == 0) {
-    // Dawn refuses an empty surface: without one the frames wait for a size.
-    if (_windowAttached) {
-      _surface->detach();
-      _windowAttached = false;
-    }
+    [self detachWindow];
     return;
   }
   if (!_windowAttached) {
@@ -558,26 +557,59 @@ static NSRunLoop *presentRunLoop() {
   }
 }
 
-// Configures the layer as the Dawn surface of the view at its current size:
-// as it first gets a size, and again when the bit depth or the color space
-// changes so that the layer's pixel format follows.
+// Configures the layer as the Dawn surface of the view: as it first gets a
+// size, as the view comes back into a superview with a new layer, and again
+// when the bit depth or the color space changes so that the layer's pixel
+// format follows. The attach runs on the present thread, in order with the
+// presents, detaches and redraws posted before it: it takes the window's
+// mutex, which a present in flight holds for as long as its pipelines take to
+// compile, and the main thread must not wait for that. It takes the layout
+// size as it is when it runs, so that a layout in between is not lost (a
+// resize() before the window exists is dropped), and does nothing at a size
+// of zero (that layout posted a detach after it). The main thread records the
+// window as attached right away, so that later layouts resize it.
 - (void)attachSurface {
   int w = 0;
   int h = 0;
   [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
   if (w == 0 || h == 0) {
-    _surface->detach();
-    _windowAttached = false;
+    [self detachWindow];
     return;
   }
-  // The layer is owned by the view: nothing to release with the window.
-  _surface->attach((__bridge void *)_layer, w, h, _highBitDepth,
-                   usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
-                   nullptr);
   _windowAttached = true;
   _attachedWidth = w;
   _attachedHeight = h;
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  const bool highBitDepth = _highBitDepth;
+  const bool useP3ColorSpace =
+      usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
+  [RNSkPresentThread post:^{
+    int width = 0;
+    int height = 0;
+    if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
+      return;
+    }
+    // The layer is owned by the view: nothing to release with the window.
+    surface->attach((__bridge void *)layer, width, height, highBitDepth,
+                    useP3ColorSpace, nullptr);
+  }];
+}
+
+// Takes the window away on the present thread, after the present in flight:
+// the layout collapsed to zero. Only this layer's window: an attach posted
+// after this one, for another layer, stays (see RNSkWindowSurface::detach).
+- (void)detachWindow {
+  if (!_windowAttached) {
+    return;
+  }
+  _windowAttached = false;
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  [RNSkPresentThread post:^{
+    surface->detach((__bridge void *)layer);
+  }];
 }
 
 #pragma mark - Props
