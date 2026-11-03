@@ -5,6 +5,9 @@ import type { WithDefault } from "react-native/Libraries/Types/CodegenTypes";
 // @ts-ignore - pointerEvents needs to be redeclared for codegen to generate native bindings
 export interface NativeProps extends ViewProps {
   highBitDepth?: boolean;
+  // "srgb", "display-p3", or empty for the display's color space (see
+  // views/types.ts)
+  colorSpace?: string;
   // The `android` prop, resolved (see views/android.ts)
   androidBackingView?: WithDefault<
     "TextureView" | "SurfaceView" | "HardwareBufferView",

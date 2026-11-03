@@ -208,4 +208,90 @@ describe("SkiaSGRoot", () => {
     error.mockRestore();
     await root.unmount();
   });
+  it("keeps the nodes and the scene of a re-render that changes no prop", async () => {
+    const { Skia } = importSkia();
+    let rerender: () => void = () => {};
+    const Scene = () => {
+      const [, setRenders] = React.useState(0);
+      rerender = () => setRenders((renders) => renders + 1);
+      return (
+        <skGroup>
+          <skCircle r={5} color="red" />
+        </skGroup>
+      );
+    };
+    const root = new SkiaSGRoot(Skia);
+    const { container } = root as unknown as {
+      container: { redraw: () => void };
+    };
+    const redraw = jest.spyOn(container, "redraw");
+    await root.render(<Scene />);
+    const [group] = root.sg.children;
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    await act(() => {
+      rerender();
+    });
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
+    expect(root.sg.children[0] === group).toBe(true);
+    expect(redraw).toHaveBeenCalledTimes(1);
+    await root.unmount();
+  });
+
+  it("clones the parent of a node a re-render changes, and keeps its siblings", async () => {
+    const { Skia } = importSkia();
+    let resize: (radius: number) => void = () => {};
+    const Scene = () => {
+      const [radius, setRadius] = React.useState(2);
+      resize = setRadius;
+      return (
+        <skGroup>
+          <skCircle r={1} color="red" />
+          <skCircle r={radius} color="red" />
+        </skGroup>
+      );
+    };
+    const root = new SkiaSGRoot(Skia);
+    await root.render(<Scene />);
+    const [group] = root.sg.children;
+    const [sibling] = group.children;
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    await act(() => {
+      resize(3);
+    });
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
+    const [clonedGroup] = root.sg.children;
+    expect(clonedGroup === group).toBe(false);
+    expect(clonedGroup.children[0] === sibling).toBe(true);
+    expect(clonedGroup.children.map(({ props }) => props)).toMatchObject([
+      { r: 1 },
+      { r: 3 },
+    ]);
+    await root.unmount();
+  });
+
+  it("clones the node and records a re-render that changes a prop", async () => {
+    const { Skia } = importSkia();
+    let recolor: (color: string) => void = () => {};
+    const Scene = () => {
+      const [color, setColor] = React.useState("red");
+      recolor = setColor;
+      return <skCircle r={5} color={color} />;
+    };
+    const root = new SkiaSGRoot(Skia);
+    const { container } = root as unknown as {
+      container: { redraw: () => void };
+    };
+    const redraw = jest.spyOn(container, "redraw");
+    await root.render(<Scene />);
+    const [circle] = root.sg.children;
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    await act(() => {
+      recolor("blue");
+    });
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
+    expect(root.sg.children[0] === circle).toBe(false);
+    expect(root.sg.children[0].props).toMatchObject({ color: "blue" });
+    expect(redraw).toHaveBeenCalledTimes(2);
+    await root.unmount();
+  });
 });

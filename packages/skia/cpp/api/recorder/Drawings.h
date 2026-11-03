@@ -11,6 +11,8 @@
 #include "DrawingCtx.h"
 #include "ImageFit.h"
 
+#include "rnskia/RNSkAtlas.h"
+
 #include "include/core/SkContourMeasure.h"
 #include "include/core/SkPathBuilder.h"
 #include "include/core/SkStrokeRec.h"
@@ -975,8 +977,8 @@ public:
       auto transforms =
           SkSpan(props.transforms.data(), props.transforms.size());
       auto sprites = SkSpan(props.sprites.data(), props.sprites.size());
-      ctx->canvas->drawAtlas(props.image.get(), transforms, sprites, colors,
-                             blendMode, sampling, nullptr, &(ctx->getPaint()));
+      drawAtlasAsVertices(ctx->canvas, props.image.get(), transforms, sprites,
+                          colors, blendMode, sampling, &(ctx->getPaint()));
     }
   }
 };

@@ -8,12 +8,12 @@ import {
 } from "../../../skia/types";
 import { surface, importSkia, images } from "../setup";
 
-const checkResult = (base64: string, path: string) => {
+const checkResult = async (base64: string, path: string) => {
   const { Skia } = importSkia();
   const rData = Skia.Data.fromBase64(base64);
   const image = Skia.Image.MakeFromEncoded(rData)!;
   expect(rData).toBeDefined();
-  checkImage(image, docPath(path));
+  await checkImage(image, docPath(path));
 };
 
 describe("Advanced Image Filters", () => {
@@ -49,7 +49,10 @@ describe("Advanced Image Filters", () => {
       },
       { skiaLogoPng }
     );
-    checkResult(base64, "advanced-image-filters/arithmetic-neon-glow.png");
+    await checkResult(
+      base64,
+      "advanced-image-filters/arithmetic-neon-glow.png"
+    );
   });
 
   itRunsE2eOnly("Crop - Viewport Portal", async () => {
@@ -139,7 +142,10 @@ describe("Advanced Image Filters", () => {
       },
       { skiaLogoPng, PaintStyle, TileMode }
     );
-    checkResult(base64, "advanced-image-filters/crop-viewport-portal.png");
+    await checkResult(
+      base64,
+      "advanced-image-filters/crop-viewport-portal.png"
+    );
   });
 
   itRunsE2eOnly("Empty - Silhouette Effect", async () => {
@@ -206,7 +212,7 @@ describe("Advanced Image Filters", () => {
       },
       { skiaLogoPng, BlendMode, TileMode }
     );
-    checkResult(base64, "advanced-image-filters/empty-silhouette.png");
+    await checkResult(base64, "advanced-image-filters/empty-silhouette.png");
   });
 
   itRunsE2eOnly("MakeImage - Dynamic Mosaic", async () => {
@@ -283,7 +289,7 @@ describe("Advanced Image Filters", () => {
       },
       { skiaLogoPng, FilterMode, MipmapMode, PaintStyle, TileMode, mask }
     );
-    checkResult(base64, "advanced-image-filters/makeimage-mosaic.png");
+    await checkResult(base64, "advanced-image-filters/makeimage-mosaic.png");
   });
   itRunsE2eOnly("MatrixConvolution - Embossed Metallic Effect", async () => {
     const { skiaLogoPng } = images;
@@ -484,7 +490,7 @@ describe("Advanced Image Filters", () => {
       },
       { skiaLogoPng, TileMode, PaintStyle }
     );
-    checkResult(
+    await checkResult(
       base64,
       "advanced-image-filters/matrix-convolution-embossed-metal.png"
     );

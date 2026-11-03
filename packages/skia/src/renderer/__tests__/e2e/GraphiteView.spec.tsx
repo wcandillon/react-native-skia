@@ -1,30 +1,5 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
-import { AlphaType, ColorType } from "../../../skia/types";
-import type { SkImage } from "../../../skia/types";
-import { surface } from "../setup";
-
-// A snapshot's colour pipeline can move a channel by a few units, so the
-// screen's cyan is read as a colour rather than exact bytes.
-const readScreenColor = (image: SkImage, fraction: number) => {
-  const pixel = image.readPixels(
-    Math.round(image.width() * fraction),
-    Math.round(image.height() * fraction),
-    {
-      width: 1,
-      height: 1,
-      colorType: ColorType.RGBA_8888,
-      alphaType: AlphaType.Unpremul,
-    }
-  );
-  if (pixel === null) {
-    return "unreadable";
-  }
-  const [red, green, blue] = Array.from(pixel);
-  if (red < 60 && green > 200 && blue > 200) {
-    return "cyan";
-  }
-  return `rgb(${red}, ${green}, ${blue})`;
-};
+import { readScreenColor, surface } from "../setup";
 
 describe("SkiaGraphiteView", () => {
   itRunsE2eOnly(
@@ -32,8 +7,8 @@ describe("SkiaGraphiteView", () => {
     async () => {
       const image = await surface.screen("GraphiteView");
       expect({
-        topLeft: readScreenColor(image, 1 / 4),
-        bottomRight: readScreenColor(image, 3 / 4),
+        topLeft: await readScreenColor(image, 1 / 4),
+        bottomRight: await readScreenColor(image, 3 / 4),
       }).toEqual({ topLeft: "cyan", bottomRight: "cyan" });
     }
   );
@@ -45,9 +20,39 @@ describe("SkiaGraphiteView", () => {
       // Scaled to the middle half of the screen: 3/8 is in its top-left
       // quarter and 5/8 in its bottom-right one.
       expect({
-        topLeft: readScreenColor(image, 3 / 8),
-        bottomRight: readScreenColor(image, 5 / 8),
+        topLeft: await readScreenColor(image, 3 / 8),
+        bottomRight: await readScreenColor(image, 5 / 8),
       }).toEqual({ topLeft: "cyan", bottomRight: "cyan" });
+    }
+  );
+
+  // A canvas waits for its size before it records; JS, which asks for the
+  // recording itself, is told why it cannot have one yet.
+  itRunsE2eOnly(
+    "tells JS that a view without a size cannot record",
+    async () => {
+      const outcome = await surface.eval(() => {
+        // An id no view takes: theirs count up from 1000, one per mount.
+        const nativeId = 2 ** 31;
+        const { SkiaViewApi } = globalThis;
+        const context = SkiaViewApi.makeGraphiteContext(
+          nativeId,
+          0,
+          0,
+          false,
+          false
+        );
+        try {
+          context.beginRecording();
+          context.finishRecording();
+          return "recorded";
+        } catch (e) {
+          return (e as Error).message;
+        } finally {
+          SkiaViewApi.destroyGraphiteContext(nativeId);
+        }
+      });
+      expect(outcome).toContain("SkiaGraphiteView: the view has no size yet.");
     }
   );
 

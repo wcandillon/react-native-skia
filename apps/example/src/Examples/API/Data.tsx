@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import type { SkImage } from "react-native-skia";
 import { AlphaType, Canvas, ColorType, Image, Skia } from "react-native-skia";
 import { PixelRatio } from "react-native";
 
@@ -32,13 +33,18 @@ const paint = Skia.Paint();
 paint.setColor(Skia.Color("magenta"));
 canvas.drawCircle(128, 128, 128, paint);
 canvas.restore();
-const img1 = surface.makeImageSnapshot().makeRasterImageSync();
+// A CPU copy of the snapshot, read back from the GPU asynchronously.
+const img1 = surface.makeImageSnapshot().makeRasterImage();
 
 export const Data = () => {
+  const [raster, setRaster] = useState<SkImage | null>(null);
+  useEffect(() => {
+    img1.then(setRaster);
+  }, []);
   return (
     <Canvas style={{ width: 256, height: 512 }}>
       <Image image={img} x={0} y={0} width={256} height={256} fit="cover" />
-      <Image image={img1} x={0} y={256} width={256} height={256} fit="cover" />
+      <Image image={raster} x={0} y={256} width={256} height={256} fit="cover" />
     </Canvas>
   );
 };
