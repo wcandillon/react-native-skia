@@ -43,8 +43,8 @@ namespace jsi = facebook::jsi;
  * recordings are queued on the target; the view presents them onto its window
  * surface once the platform view's surface can show a new frame (see
  * setFrameScheduler), on the thread the platform view presents on: the main
- * thread, or a thread of its own (an Android canvas presents on one shared by
- * every canvas, see setPresentThread).
+ * thread, or a thread of its own (Android and Apple canvases each present on
+ * one shared by every canvas of the platform, see setPresentThread).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
@@ -266,10 +266,12 @@ public:
    Installed by the platform view when it presents on another thread than
    the main thread: runs a task on the thread the view presents on, never on
    the spot (the window surface posts redraws with its mutex held). Any
-   thread. Without one, tasks are posted to the main thread, which the Apple
-   views present on; an Android view always installs one (its platform
-   context runs a task handed over on the main thread on the spot, see
-   JniPlatformContext). Installed once, before the view is bound to its id.
+   thread. Without one, tasks are posted to the main thread. Android and
+   Apple views always install one: a present waits for the pipelines its
+   draws use to compile, which must not hold the main thread (and an Android
+   platform context runs a task handed over on the main thread on the spot,
+   see JniPlatformContext). Installed once, before the view is bound to its
+   id.
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
@@ -363,9 +365,9 @@ public:
   }
 
   /**
-   Main thread. The window can show frames again (the app came back to the
-   foreground, see RNSkWindowSurface::setCanPresent): a redraw it could not
-   show is scheduled again, else the recordings queued meanwhile are handed
+   Main or present thread. The window can show frames again (the app came back
+   to the foreground, see RNSkWindowSurface::setCanPresent): a redraw it could
+   not show is scheduled again, else the recordings queued meanwhile are handed
    to the frame scheduler. Nothing is replayed on the spot. A GPU device
    lost in the background (where iOS refuses GPU work) is replaced now that
    the app is back, and the view is asked for a frame once it is.

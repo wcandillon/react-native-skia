@@ -14,6 +14,7 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <atomic>
 #include <cmath>
 #include <memory>
 
@@ -55,6 +56,70 @@ usesP3ColorSpace(const std::string &colorSpace,
   return context->prefersP3ColorSpace();
 }
 
+// The thread every canvas presents on, as on Android (see PresentThread.java):
+// one for the process, started on first use and never stopped. A present
+// replays the view's recordings on the GPU context, and the first replay of a
+// draw waits for the pipelines it uses to compile (hundreds of milliseconds
+// after a fresh install, when no cache has them yet): on the main thread that
+// wait froze every animation of the app
+// (https://github.com/wcandillon/react-native-skia/issues/4384). The thread
+// has a run loop, which the display links of the views tick on, and runs the
+// tasks posted to it in order: a view's display link is only touched here.
+// CAMetalLayer takes drawables and presents from any thread, and the window
+// surface keeps these presents apart from the main thread's attach and detach
+// (see RNSkWindowSurface).
+@interface RNSkPresentThread : NSObject
++ (void)post:(dispatch_block_t)task;
++ (NSRunLoop *)runLoop;
+@end
+
+@implementation RNSkPresentThread
+
+static NSRunLoop *sPresentRunLoop = nil;
+
+/** Starts the thread on first use. Any thread. */
+static NSRunLoop *presentRunLoop() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    dispatch_semaphore_t started = dispatch_semaphore_create(0);
+    NSThread *thread = [[NSThread alloc] initWithBlock:^{
+      sPresentRunLoop = [NSRunLoop currentRunLoop];
+      // A port keeps the run loop running with nothing else on it.
+      [sPresentRunLoop addPort:[NSMachPort port] forMode:NSDefaultRunLoopMode];
+      dispatch_semaphore_signal(started);
+      while (true) {
+        @autoreleasepool {
+          CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e10, true);
+        }
+      }
+    }];
+    thread.name = @"RNSkia Present";
+    // The priority of the main thread: a present is what the user waits for.
+    thread.qualityOfService = NSQualityOfServiceUserInteractive;
+    [thread start];
+    dispatch_semaphore_wait(started, DISPATCH_TIME_FOREVER);
+  });
+  return sPresentRunLoop;
+}
+
+/** Runs a task on the present thread, after those posted before it. */
++ (void)post:(dispatch_block_t)task {
+  CFRunLoopRef runLoop = [presentRunLoop() getCFRunLoop];
+  CFRunLoopPerformBlock(runLoop, kCFRunLoopCommonModes, ^{
+    @autoreleasepool {
+      task();
+    }
+  });
+  CFRunLoopWakeUp(runLoop);
+}
+
+/** The run loop of the present thread, for the views' display links. */
++ (NSRunLoop *)runLoop {
+  return presentRunLoop();
+}
+
+@end
+
 @implementation SkiaView {
   // The native view, the window surface and the layer it presents into. All
   // three exist while the view is in the hierarchy (see willMoveToSuperview:).
@@ -75,14 +140,29 @@ usesP3ColorSpace(const std::string &colorSpace,
   bool _highBitDepth;
   // The colorSpace prop, see usesP3ColorSpace.
   std::string _colorSpace;
-  // Whether the window can show a frame (see appIsBackgrounded). Main thread.
-  bool _canPresent;
+  // Whether the window can show a frame (see appIsBackgrounded). Written on
+  // the main thread, read on the present thread.
+  std::atomic<bool> _canPresent;
+  // Main thread: whether the window is attached, and at which size in pixels.
+  // A new size is handed over with resize(), which never waits for the
+  // present thread, rather than by attaching the window again.
+  bool _windowAttached;
+  int _attachedWidth;
+  int _attachedHeight;
+  // The view the present thread presents: set and cleared there, by tasks
+  // posted in order with those that present (see RNSkPresentThread).
+  std::shared_ptr<RNSkia::RNSkView> _presentView;
 #if !TARGET_OS_OSX
+  // Present thread.
   CADisplayLink *_displayLink;
   // Whether the display link asked for the display's full rate yet (see
-  // requestFullFrameRate).
+  // requestFullFrameRate). Present thread.
   bool _fullFrameRateRequested;
+  // The display's rate, read on the main thread as the view enters a window
+  // (UIKit), 0 until then.
+  std::atomic<float> _maximumFramesPerSecond;
 #else
+  // Present thread.
   bool _presentAgainScheduled;
 #endif
 }
@@ -93,10 +173,14 @@ usesP3ColorSpace(const std::string &colorSpace,
     _nativeId = 0;
     _highBitDepth = false;
     _canPresent = !appIsBackgrounded();
+    _windowAttached = false;
+    _attachedWidth = 0;
+    _attachedHeight = 0;
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
 #else
     _fullFrameRateRequested = false;
+    _maximumFramesPerSecond = 0;
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -148,24 +232,40 @@ usesP3ColorSpace(const std::string &colorSpace,
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
   _surface->setHighBitDepth(_highBitDepth);
   _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
-  // The window belongs to the main thread, and is left alone while the app
-  // is in the background: what the view holds is presented on its next frame
-  // once the app is back (see appWillEnterForeground:).
+  // The window is left alone while the app is in the background: what the
+  // view holds is presented on its next frame once the app is back (see
+  // appWillEnterForeground:). Dawn holds GPU work committed meanwhile anyway
+  // (see DawnContext), so a present racing the notification is held there.
   __weak SkiaView *weakSelf = self;
   _surface->setCanPresent([weakSelf]() {
     SkiaView *strongSelf = weakSelf;
-    return strongSelf != nil && [[NSThread currentThread] isMainThread] &&
-           strongSelf->_canPresent;
+    return strongSelf != nil && strongSelf->_canPresent.load();
   });
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+  // Presents, redraws and frame requests go to the present thread, where
+  // the view is the one the tasks posted before see.
+  _view->setPresentThread([](std::function<void()> task) {
+    auto shared = std::make_shared<std::function<void()>>(std::move(task));
+    [RNSkPresentThread post:^{
+      (*shared)();
+    }];
+  });
+  auto view = _view;
+  [RNSkPresentThread post:^{
+    SkiaView *strongSelf = weakSelf;
+    if (strongSelf != nil) {
+      strongSelf->_presentView = view;
+    }
+  }];
   [self.layer addSublayer:_layer];
+  // The display link presents whatever is waiting on its next tick, a frame
+  // for a resized window included: nothing shows before it anyway. Called on
+  // the present thread.
+  _view->setFrameScheduler(
+      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
   if (_nativeId != 0) {
     manager->setSkiaView(_nativeId, _view);
   }
-  // The display link presents whatever is waiting on its next tick, a frame
-  // for a resized window included: nothing shows before it anyway.
-  _view->setFrameScheduler(
-      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
 }
 
 - (void)removeFromSuperview {
@@ -176,16 +276,29 @@ usesP3ColorSpace(const std::string &colorSpace,
     if (_nativeId != 0 && manager != nullptr) {
       manager->setSkiaView(_nativeId, nullptr);
     }
+    // The window goes on the present thread, after the present in flight
+    // if any: the main thread does not wait for it, and the layer outlives
+    // the Dawn surface over it.
+    auto surface = _surface;
+    CALayer *layer = _layer;
+    SkiaView *strongSelf = self;
+    [RNSkPresentThread post:^{
+      strongSelf->_presentView = nullptr;
+      surface->detach();
+      (void)layer;
+    }];
     _view = nullptr;
     _surface = nullptr;
     _layer = nil;
+    _windowAttached = false;
   }
   [super removeFromSuperview];
 }
 
+// The display link holds the view: once it goes, its link was invalidated
+// (see stopDisplayLink).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-  [self stopDisplayLink];
   [self unregisterView];
 }
 
@@ -223,54 +336,74 @@ usesP3ColorSpace(const std::string &colorSpace,
 - (void)appWillEnterForeground:(NSNotification *)notification {
   _canPresent = true;
   if (_view != nullptr) {
-    _view->onCanPresent();
+    auto view = _view;
+    [RNSkPresentThread post:^{
+      view->onCanPresent();
+    }];
   }
 }
 
 #pragma mark - Frames
 
-// Presents on the display link: armed when a recording is submitted, paused
-// again once the queue is empty. macOS has no CADisplayLink on the minimum
-// deployment target, so frames are presented as soon as the main thread gets
-// to them there, and tried again a frame later while some are left (more were
-// submitted meanwhile, or the window could not take one).
+// Presents on the display link, which ticks on the present thread: armed when
+// a recording is submitted, paused again once the queue is empty. macOS has
+// no CADisplayLink on the minimum deployment target, so frames are presented
+// as soon as the present thread gets to them there, and tried again a frame
+// later while some are left (more were submitted meanwhile, or the window
+// could not take one). Present thread.
 - (void)scheduleFrame {
+  // A request that comes after the view left the hierarchy: no link for it,
+  // which would hold the view.
+  if (_presentView == nullptr) {
+    return;
+  }
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
                                                selector:@selector(onFrame:)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
+    [_displayLink addToRunLoop:[RNSkPresentThread runLoop]
                        forMode:NSRunLoopCommonModes];
   }
   [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
-  if (_view != nullptr &&
-      (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
+  if (_presentView != nullptr &&
+      (_presentView->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     [self presentAgainLater];
   }
 #endif
 }
 
 #if !TARGET_OS_OSX
+// The display's rate, for the display link (see requestFullFrameRate): UIKit
+// is only read on the main thread.
+- (void)didMoveToWindow {
+  [super didMoveToWindow];
+#if !TARGET_OS_VISION
+  UIScreen *screen = self.window.screen;
+  if (screen != nil) {
+    _maximumFramesPerSecond = (float)screen.maximumFramesPerSecond;
+  }
+#endif
+}
+
 // A display link fires at 60 Hz until it asks for more, also while the
 // display already runs at 120 Hz for another link (Reanimated asks for 120):
 // a 120 Hz producer would then be presented every other frame. Ask for the
 // display's full rate once the view knows its screen. On iPhone this needs
 // CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
 // caps every link at 60 Hz. The link is paused while nothing is queued, so an
-// idle view does not keep the display at its full rate.
+// idle view does not keep the display at its full rate. Present thread.
 - (void)requestFullFrameRate {
 #if !TARGET_OS_VISION
   if (_fullFrameRateRequested) {
     return;
   }
-  UIScreen *screen = self.window.screen;
-  if (screen == nil) {
+  const float maxFps = _maximumFramesPerSecond.load();
+  if (maxFps <= 0) {
     return;
   }
   _fullFrameRateRequested = true;
-  const float maxFps = (float)screen.maximumFramesPerSecond;
   if (maxFps > 60) {
     _displayLink.preferredFrameRateRange =
         CAFrameRateRangeMake(60, maxFps, maxFps);
@@ -279,12 +412,13 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 - (void)onFrame:(CADisplayLink *)link {
-  if (_view == nullptr ||
-      !(_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
+  if (_presentView == nullptr ||
+      !(_presentView->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
     link.paused = YES;
   }
 }
 #else
+// Present thread.
 - (void)presentAgainLater {
   if (_presentAgainScheduled) {
     return;
@@ -292,30 +426,39 @@ usesP3ColorSpace(const std::string &colorSpace,
   _presentAgainScheduled = true;
   __weak SkiaView *weakSelf = self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 60),
-                 dispatch_get_main_queue(), ^{
-                   SkiaView *strongSelf = weakSelf;
-                   if (strongSelf == nil) {
-                     return;
-                   }
-                   strongSelf->_presentAgainScheduled = false;
-                   [strongSelf scheduleFrame];
+                 dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+                   [RNSkPresentThread post:^{
+                     SkiaView *strongSelf = weakSelf;
+                     if (strongSelf == nil) {
+                       return;
+                     }
+                     strongSelf->_presentAgainScheduled = false;
+                     [strongSelf scheduleFrame];
+                   }];
                  });
 }
 #endif
 
+// Main thread. The link goes on the present thread, which owns it; a new one
+// asks for the display's rate again.
 - (void)stopDisplayLink {
 #if !TARGET_OS_OSX
-  [_displayLink invalidate];
-  _displayLink = nil;
+  SkiaView *strongSelf = self;
+  [RNSkPresentThread post:^{
+    [strongSelf->_displayLink invalidate];
+    strongSelf->_displayLink = nil;
+    strongSelf->_fullFrameRateRequested = false;
+  }];
 #endif
 }
 
 #pragma mark - Render
 
 - (void)drawRect:(CGRect)rect {
-  // The OS asked for a draw: present what the view holds right away.
+  // The OS asked for a draw: present what the view holds on the present
+  // thread's next turn.
   if (_view != nullptr) {
-    _view->redraw();
+    _view->requestRedraw();
   }
 }
 
@@ -328,30 +471,69 @@ usesP3ColorSpace(const std::string &colorSpace,
     [CATransaction setDisableActions:YES];
     _layer.frame =
         CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-    [self attachSurface];
+    [self updateWindowSize];
     [CATransaction commit];
   }
 }
 
-// Configures the layer as the Dawn surface of the view at its current size:
-// on every layout, and again when the bit depth changes so that the layer's
-// pixel format follows.
-- (void)attachSurface {
-  auto context = _view->getPlatformContext();
-  // The layout is on the pixel grid: round rather than truncate, so that a
-  // product like 1169.9999 gives the pixel size the layout means.
-  float pd = context->getPixelDensity();
-  int w = static_cast<int>(std::lround(_layer.frame.size.width * pd));
-  int h = static_cast<int>(std::lround(_layer.frame.size.height * pd));
+// The size of the layer in pixels. The layout is on the pixel grid: round
+// rather than truncate, so that a product like 1169.9999 gives the pixel size
+// the layout means.
+- (void)pixelWidth:(int *)width height:(int *)height {
+  float pd = _view->getPlatformContext()->getPixelDensity();
+  *width = static_cast<int>(std::lround(_layer.frame.size.width * pd));
+  *height = static_cast<int>(std::lround(_layer.frame.size.height * pd));
+}
+
+// On every layout: the window is attached the first time it has a size, and
+// handed a new size from then on with resize(), which the present thread
+// configures the swapchain for by its next present. Attaching again would
+// wait for a present in flight, which may be waiting for its pipelines to
+// compile, on the main thread.
+- (void)updateWindowSize {
+  int w = 0;
+  int h = 0;
+  [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
   if (w == 0 || h == 0) {
     // Dawn refuses an empty surface: without one the frames wait for a size.
+    if (_windowAttached) {
+      _surface->detach();
+      _windowAttached = false;
+    }
+    return;
+  }
+  if (!_windowAttached) {
+    [self attachSurface];
+    return;
+  }
+  if (w != _attachedWidth || h != _attachedHeight) {
+    _attachedWidth = w;
+    _attachedHeight = h;
+    _surface->resize(w, h);
+  }
+}
+
+// Configures the layer as the Dawn surface of the view at its current size:
+// as it first gets a size, and again when the bit depth or the color space
+// changes so that the layer's pixel format follows.
+- (void)attachSurface {
+  int w = 0;
+  int h = 0;
+  [self pixelWidth:&w height:&h];
+  _surface->setLayoutSize(w, h);
+  if (w == 0 || h == 0) {
     _surface->detach();
+    _windowAttached = false;
     return;
   }
   // The layer is owned by the view: nothing to release with the window.
   _surface->attach((__bridge void *)_layer, w, h, _highBitDepth,
-                   usesP3ColorSpace(_colorSpace, context), nullptr);
+                   usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
+                   nullptr);
+  _windowAttached = true;
+  _attachedWidth = w;
+  _attachedHeight = h;
 }
 
 #pragma mark - Props
@@ -394,7 +576,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   // The layer is re-attached with the new format; until then (or without a
   // size), frames are recorded for it.
   _surface->setHighBitDepth(highBitDepth);
-  if (_surface->isAttached()) {
+  if (_windowAttached) {
     [self attachSurface];
   }
 }
@@ -411,7 +593,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   // until then, frames are recorded for it.
   _surface->setUseP3ColorSpace(
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
-  if (_surface->isAttached()) {
+  if (_windowAttached) {
     [self attachSurface];
   }
 }
