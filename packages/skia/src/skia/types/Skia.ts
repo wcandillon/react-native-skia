@@ -48,8 +48,8 @@ export interface SkGpuLostInfo {
 }
 
 /**
- * The GPU Skia renders with, probed once when the module is installed (on
- * a native thread; the first read waits for the probe). On Android Skia
+ * The GPU Skia renders with, probed once, the first time something needs
+ * it (a canvas, a GPU call, or reading this property). On Android Skia
  * renders with Vulkan (1.1 or later), on iOS with Metal. When the device has
  * none, `isAvailable` is false and `error` says why: every `Canvas` stays
  * blank, CPU work (paths, decoding, encoding, raster images) still runs, and
@@ -92,6 +92,15 @@ export interface SkGpuInfo {
    * the next loss. Never resolves on the web.
    */
   readonly lost: Promise<SkGpuLostInfo>;
+  /**
+   * Whether the app is in the foreground and active, where the GPU work it
+   * submits runs: false from the moment the app starts to resign active (a
+   * lock, a swipe home, an incoming call) until it is active again. iOS
+   * refuses GPU work from an app in the background; a frame callback or a
+   * player reads this to skip its work meanwhile. On Android, whether the
+   * host activity is resumed; on the web, whether the document is visible.
+   */
+  readonly foreground: boolean;
 }
 
 /**

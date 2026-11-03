@@ -72,9 +72,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   _nativeHandle = nativeHandle;
   _releaser = std::move(releaser);
   // Called from the platform view (Java or Objective-C), where an exception
-  // would take the process down: without a GPU (reported when the module was
-  // installed, see DawnContext::getGpuInfo) the window is given back and the
-  // view stays blank.
+  // would take the process down: without a GPU (probed the first time the
+  // GPU is asked for, see DawnContext::getGpuInfo) the window is given back
+  // and the view stays blank.
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     detachLocked();
@@ -199,6 +199,21 @@ bool RNSkWindowSurface::getHighBitDepth(bool *highBitDepth) {
   return true;
 }
 
+void RNSkWindowSurface::setUseP3ColorSpace(bool useP3ColorSpace) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _knownUseP3ColorSpace = useP3ColorSpace;
+  _hasKnownUseP3ColorSpace = true;
+}
+
+bool RNSkWindowSurface::getUseP3ColorSpace(bool *useP3ColorSpace) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  if (!_hasKnownUseP3ColorSpace) {
+    return false;
+  }
+  *useP3ColorSpace = _knownUseP3ColorSpace;
+  return true;
+}
+
 bool RNSkWindowSurface::getTargetInfo(RNSkGraphiteTargetInfo *info) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   if (!_hasTargetInfo) {
@@ -228,6 +243,8 @@ void RNSkWindowSurface::updateTargetInfo() {
   // the window comes back with.
   _knownHighBitDepth = _colorType == DawnUtils::HighBitDepthColorType;
   _hasKnownHighBitDepth = true;
+  _knownUseP3ColorSpace = _useP3ColorSpace;
+  _hasKnownUseP3ColorSpace = true;
 }
 
 RNSkGraphiteTargetInfo RNSkWindowSurface::describeLocked() const {

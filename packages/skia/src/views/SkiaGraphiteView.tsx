@@ -31,6 +31,7 @@ export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
  */
 export const SkiaGraphiteView = ({
   highBitDepth = false,
+  colorSpace,
   android,
   ref,
   ...viewProps
@@ -84,6 +85,7 @@ export const SkiaGraphiteView = ({
       collapsable={false}
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
+      colorSpace={colorSpace ?? ""}
       {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />

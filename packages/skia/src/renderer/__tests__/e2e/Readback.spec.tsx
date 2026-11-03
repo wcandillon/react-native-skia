@@ -23,24 +23,23 @@ describe("Readback", () => {
         const backing = (image: unknown) =>
           (image as { isTextureBacked(): boolean }).isTextureBacked();
         // Only the requested rectangle is read back.
-        const corner = Array.from(
-          snapshot.readPixels(7, 7, { width: 1, height: 1, ...ctx })!
+        return Promise.all([
+          snapshot.readPixels(7, 7, { width: 1, height: 1, ...ctx }),
+          snapshot.makeRasterImage(),
+        ]).then(([corner, raster]) =>
+          raster
+            .readPixels(0, 0, { width: 1, height: 1, ...ctx })
+            .then((origin) => ({
+              snapshotOnGPU: backing(snapshot),
+              rasterOnGPU: backing(raster),
+              corner: Array.from(corner!),
+              origin: Array.from(origin!),
+              size: [raster.width(), raster.height()],
+            }))
         );
-        const synchronous = snapshot.makeRasterImageSync();
-        return snapshot.makeRasterImage().then((raster) => ({
-          snapshotOnGPU: backing(snapshot),
-          rasterOnGPU: backing(raster),
-          synchronousOnGPU: backing(synchronous),
-          corner,
-          origin: Array.from(
-            raster.readPixels(0, 0, { width: 1, height: 1, ...ctx })!
-          ),
-          size: [raster.width(), raster.height()],
-        }));
       }, pixelInfo);
       expect(result.snapshotOnGPU).toBe(true);
       expect(result.rasterOnGPU).toBe(false);
-      expect(result.synchronousOnGPU).toBe(false);
       expect(result.corner).toEqual([255, 0, 0, 255]);
       expect(result.origin).toEqual([0, 255, 255, 255]);
       expect(result.size).toEqual([8, 8]);
@@ -59,16 +58,23 @@ describe("Readback", () => {
         canvas.drawRect(Skia.XYWHRect(4, 4, 4, 4), paint);
         offscreen.flush();
         const snapshot = offscreen.makeImageSnapshot();
-        const raster = snapshot.makeRasterImageSync();
         const read = (image: typeof snapshot, x: number, y: number) =>
-          Array.from(
-            image.readPixels(x, y, { width: 4, height: 2, ...ctx }) ?? []
-          );
-        return {
-          gpu: [read(snapshot, -2, 6), read(snapshot, 6, 7)],
-          cpu: [read(raster, -2, 6), read(raster, 6, 7)],
-          outside: snapshot.readPixels(8, 0, { width: 1, height: 1, ...ctx }),
-        };
+          image
+            .readPixels(x, y, { width: 4, height: 2, ...ctx })
+            .then((pixels) => Array.from(pixels ?? []));
+        return snapshot.makeRasterImage().then((raster) =>
+          Promise.all([
+            read(snapshot, -2, 6),
+            read(snapshot, 6, 7),
+            read(raster, -2, 6),
+            read(raster, 6, 7),
+            snapshot.readPixels(8, 0, { width: 1, height: 1, ...ctx }),
+          ]).then(([gpuLeft, gpuRight, cpuLeft, cpuRight, outside]) => ({
+            gpu: [gpuLeft, gpuRight],
+            cpu: [cpuLeft, cpuRight],
+            outside,
+          }))
+        );
       }, pixelInfo);
       const cyan = [0, 255, 255, 255];
       const red = [255, 0, 0, 255];
@@ -118,16 +124,15 @@ describe("Readback", () => {
       const offscreen = Skia.Surface.MakeOffscreen(2, 2)!;
       offscreen.getCanvas().drawImage(texture, 0, 0);
       offscreen.flush();
-      return {
-        rasterOnGPU: backing(raster),
-        textureOnGPU: backing(texture),
-        same: again === texture,
-        pixel: Array.from(
-          offscreen
-            .makeImageSnapshot()
-            .readPixels(1, 1, { width: 1, height: 1, ...ctx })!
-        ),
-      };
+      return offscreen
+        .makeImageSnapshot()
+        .readPixels(1, 1, { width: 1, height: 1, ...ctx })
+        .then((pixel) => ({
+          rasterOnGPU: backing(raster),
+          textureOnGPU: backing(texture),
+          same: again === texture,
+          pixel: Array.from(pixel!),
+        }));
     }, pixelInfo);
     expect(result.rasterOnGPU).toBe(false);
     expect(result.textureOnGPU).toBe(true);
@@ -150,17 +155,19 @@ describe("Readback", () => {
       const read = (image: typeof live) => {
         target.getCanvas().drawImage(image, 0, 0);
         target.flush();
-        return Array.from(
-          target
-            .makeImageSnapshot()
-            .readPixels(0, 0, { width: 1, height: 1, ...ctx })!
-        );
+        return target
+          .makeImageSnapshot()
+          .readPixels(0, 0, { width: 1, height: 1, ...ctx })
+          .then((pixel) => Array.from(pixel!));
       };
-      return {
-        live: read(live),
-        snapshot: read(snapshot),
-        liveOnGPU: backing(live),
-      };
+      // One read after the other: they share the target.
+      return read(live).then((liveRead) =>
+        read(snapshot).then((snapshotRead) => ({
+          live: liveRead,
+          snapshot: snapshotRead,
+          liveOnGPU: backing(live),
+        }))
+      );
     }, pixelInfo);
     expect(result.live).toEqual([255, 0, 0, 255]);
     expect(result.snapshot).toEqual([0, 255, 255, 255]);
@@ -174,20 +181,22 @@ describe("Readback", () => {
         const encoded = Skia.Image.MakeFromEncoded(
           Skia.Data.fromBytes(new Uint8Array(ctx.data))
         )!;
-        return encoded.makeRasterImage().then((raster) => ({
-          same: raster === encoded,
-          size: [raster.width(), raster.height()],
-          pixel: Array.from(
-            raster.readPixels(0, 0, {
+        return encoded.makeRasterImage().then((raster) =>
+          raster
+            .readPixels(0, 0, {
               width: 1,
               height: 1,
               colorType: ctx.colorType,
               alphaType: ctx.alphaType,
-            })!
-          ),
-        }));
+            })
+            .then((pixel) => ({
+              same: raster === encoded,
+              size: [raster.width(), raster.height()],
+              pixel: Array.from(pixel!),
+            }))
+        );
       },
-      { ...pixelInfo, data: Array.from(oslo.encodeToBytes()) }
+      { ...pixelInfo, data: Array.from(await oslo.encodeToBytes()) }
     );
     expect(result.same).toBe(false);
     expect(result.size).toEqual([oslo.width(), oslo.height()]);

@@ -19,7 +19,7 @@ half4 main(float2 p) {
 }`;
 
 describe("RuntimeEffect", () => {
-  it("Should draw a spiral", () => {
+  it("Should draw a spiral", async () => {
     const { surface, Skia, width, height } = setupSkia();
     const spiral = Skia.RuntimeEffect.Make(spiralSkSL)!;
     expect(spiral).toBeTruthy();
@@ -61,6 +61,6 @@ describe("RuntimeEffect", () => {
     );
     paint.setShader(shader);
     canvas.drawRect(Skia.XYWHRect(0, 0, width, height), paint);
-    processResult(surface, "snapshots/runtime-effects/small-spiral.png");
+    await processResult(surface, "snapshots/runtime-effects/small-spiral.png");
   });
 });

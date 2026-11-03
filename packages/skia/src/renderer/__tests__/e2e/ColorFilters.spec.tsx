@@ -42,7 +42,7 @@ describe("Color Filters", () => {
         />
       </Image>
     );
-    checkImage(img, docPath("color-filters/color-matrix.png"));
+    await checkImage(img, docPath("color-filters/color-matrix.png"));
   });
   it("should blend a color", async () => {
     const { width } = surface;
@@ -56,7 +56,7 @@ describe("Color Filters", () => {
         </Group>
       </>
     );
-    checkImage(img, docPath("color-filters/color-blend.png"));
+    await checkImage(img, docPath("color-filters/color-blend.png"));
   });
   it("should build the reference result for should use composition", async () => {
     const { surface: ckSurface, Skia, canvas } = setupSkia(wWidth, wHeight);
@@ -70,7 +70,7 @@ describe("Color Filters", () => {
     const r = (surface.width * 3) / 2;
     canvas.drawCircle(r, r, r, paint);
     canvas.drawCircle(r * 2, r, r, paint);
-    processResult(ckSurface, docPath("color-filters/composition.png"));
+    await processResult(ckSurface, docPath("color-filters/composition.png"));
   });
   it("should use composition", async () => {
     const { width } = surface;
@@ -84,7 +84,7 @@ describe("Color Filters", () => {
         <Circle cx={2 * r} cy={r} r={r} color="red" />
       </Group>
     );
-    checkImage(img, docPath("color-filters/composition.png"));
+    await checkImage(img, docPath("color-filters/composition.png"));
   });
   it("should build the reference result for simple-lerp.png", async () => {
     const { oslo } = images;
@@ -109,7 +109,7 @@ describe("Color Filters", () => {
       rect
     );
     canvas.drawImageRect(oslo, src, dst, paint);
-    processResult(ckSurface, docPath("color-filters/simple-lerp.png"));
+    await processResult(ckSurface, docPath("color-filters/simple-lerp.png"));
   });
   it("should use basic linear interpolation", async () => {
     const { oslo } = images;
@@ -133,7 +133,7 @@ describe("Color Filters", () => {
         </Image>
       </>
     );
-    checkImage(img, docPath("color-filters/simple-lerp.png"));
+    await checkImage(img, docPath("color-filters/simple-lerp.png"));
     img = await surface.draw(
       <>
         <Image
@@ -153,7 +153,7 @@ describe("Color Filters", () => {
         </Image>
       </>
     );
-    checkImage(img, docPath("color-filters/simple-lerp.png"));
+    await checkImage(img, docPath("color-filters/simple-lerp.png"));
     img = await surface.draw(
       <>
         <Image
@@ -173,7 +173,7 @@ describe("Color Filters", () => {
         </Image>
       </>
     );
-    checkImage(img, docPath("color-filters/black-and-white.png"));
+    await checkImage(img, docPath("color-filters/black-and-white.png"));
   });
   it("should build the reference result for lerp.png", async () => {
     const { oslo } = images;
@@ -198,7 +198,7 @@ describe("Color Filters", () => {
       rect
     );
     canvas.drawImageRect(oslo, src, dst, paint);
-    processResult(ckSurface, docPath("color-filters/lerp.png"));
+    await processResult(ckSurface, docPath("color-filters/lerp.png"));
   });
   it("should use linear interpolation between two color matrices", async () => {
     const { oslo } = images;
@@ -222,6 +222,6 @@ describe("Color Filters", () => {
         </Image>
       </>
     );
-    checkImage(img, docPath("color-filters/lerp.png"));
+    await checkImage(img, docPath("color-filters/lerp.png"));
   });
 });

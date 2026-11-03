@@ -18,14 +18,14 @@ import { createDrawingContext } from "../../../sksg/Recorder/DrawingContext";
 import type { SkImage, SkPaint } from "../../../skia/types";
 import { AlphaType, ColorType } from "../../../skia/types";
 
-const readPixel = (image: SkImage, x: number, y: number) =>
+const readPixel = async (image: SkImage, x: number, y: number) =>
   Array.from(
-    image.readPixels(x, y, {
+    (await image.readPixels(x, y, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,
       alphaType: AlphaType.Unpremul,
-    })!
+    }))!
   );
 
 const blendModes = [
@@ -77,7 +77,7 @@ describe("Paint", () => {
         </Group>
       </>
     );
-    checkImage(image, "snapshots/paint/colors.png");
+    await checkImage(image, "snapshots/paint/colors.png");
   });
   it("should accept a paint object as property", async () => {
     const { width, height } = surface;
@@ -95,7 +95,7 @@ describe("Paint", () => {
         />
       </Group>
     );
-    checkImage(image, "snapshots/paint/circle.png");
+    await checkImage(image, "snapshots/paint/circle.png");
   });
   it("should not mutate a user-provided paint via child effects", async () => {
     const { Skia } = importSkia();
@@ -123,16 +123,20 @@ describe("Paint", () => {
       </Rect>
     );
     // Sanity check: the blur bleeds outside the rectangle bounds.
-    expect(readPixel(blurred, outside.x, outside.y)[3]).toBeGreaterThan(0);
+    expect((await readPixel(blurred, outside.x, outside.y))[3]).toBeGreaterThan(
+      0
+    );
     // The blur was materialized on the paint stack, not on the user's paint:
     // reusing the paint without children must render a sharp rectangle.
     const image = await surface.draw(<Rect {...rect} paint={paint} />);
-    expect(readPixel(image, outside.x, outside.y)).toEqual([0, 0, 0, 0]);
-    expect(readPixel(image, center.x, center.y)).toEqual([255, 0, 0, 255]);
+    expect(await readPixel(image, outside.x, outside.y)).toEqual([0, 0, 0, 0]);
+    expect(await readPixel(image, center.x, center.y)).toEqual([
+      255, 0, 0, 255,
+    ]);
   });
   it("should keep the base paint anti-aliased when the paint pool is reused", async () => {
     const { Skia } = importSkia();
-    const drawFrame = (paintPool: SkPaint[]) => {
+    const drawFrame = async (paintPool: SkPaint[]) => {
       const ckSurface = Skia.Surface.MakeOffscreen(64, 64)!;
       const canvas = ckSurface.getCanvas();
       const ctx = createDrawingContext(Skia, paintPool, canvas);
@@ -141,17 +145,17 @@ describe("Paint", () => {
       ctx.dispose();
       ckSurface.flush();
       return Array.from(
-        ckSurface.makeImageSnapshot().readPixels(0, 0, {
+        (await ckSurface.makeImageSnapshot().readPixels(0, 0, {
           width: 64,
           height: 64,
           colorType: ColorType.RGBA_8888,
           alphaType: AlphaType.Unpremul,
-        })!
+        }))!
       );
     };
     const paintPool: SkPaint[] = [];
-    const frame1 = drawFrame(paintPool);
-    const frame2 = drawFrame(paintPool);
+    const frame1 = await drawFrame(paintPool);
+    const frame2 = await drawFrame(paintPool);
     // The circle edge shows partial coverage: anti-aliasing survived the
     // paintPool[0].reset() performed when the pool is reused.
     const alphas = frame2.filter((_, i) => i % 4 === 3);
@@ -168,7 +172,7 @@ describe("Paint", () => {
         <Path path="M0 0h100v100H0z" paint={paint} color="red" />
       </Group>
     );
-    checkImage(image, "snapshots/paint/path-paint.png");
+    await checkImage(image, "snapshots/paint/path-paint.png");
   });
   it("should display blend modes properly", async () => {
     const { Skia, rect } = importSkia();
@@ -217,7 +221,9 @@ describe("Paint", () => {
         })}
       </>
     );
-    checkImage(img, "snapshots/paint/blend-mode.png", { maxPixelDiff: 500 });
+    await checkImage(img, "snapshots/paint/blend-mode.png", {
+      maxPixelDiff: 500,
+    });
   });
   it("Dithering", async () => {
     const { height } = surface;
@@ -237,9 +243,9 @@ describe("Paint", () => {
     }
     const withDither = await drawGradientWithDither(true);
     const withoutDither = await drawGradientWithDither(false);
-    checkImage(withDither, "snapshots/paint/dither.png");
-    checkImage(withoutDither, "snapshots/paint/without-dither.png");
-    checkImage(withoutDither, "snapshots/paint/dither.png", {
+    await checkImage(withDither, "snapshots/paint/dither.png");
+    await checkImage(withoutDither, "snapshots/paint/without-dither.png");
+    await checkImage(withoutDither, "snapshots/paint/dither.png", {
       shouldFail: true,
       threshold: 0,
     });
@@ -259,7 +265,7 @@ describe("Paint", () => {
         </Circle>
       </>
     );
-    checkImage(result, docPath("paint/stroke.png"));
+    await checkImage(result, docPath("paint/stroke.png"));
   });
   it("colors don't influence opacity (1)", async () => {
     const { vec } = importSkia();
@@ -272,7 +278,7 @@ describe("Paint", () => {
         <Circle c={c} r={r} color="lightblue" />
       </Group>
     );
-    checkImage(result, docPath("paint/opaque-circle.png"));
+    await checkImage(result, docPath("paint/opaque-circle.png"));
   });
   it("colors don't influence opacity (2)", async () => {
     const { vec } = importSkia();
@@ -285,7 +291,7 @@ describe("Paint", () => {
         <Circle c={c} r={r} color="lightblue" />
       </Group>
     );
-    checkImage(result, docPath("paint/semi-transparent-circle.png"));
+    await checkImage(result, docPath("paint/semi-transparent-circle.png"));
   });
   it("test paint", async () => {
     const { vec, Skia } = importSkia();
@@ -301,7 +307,7 @@ describe("Paint", () => {
         </Paint>
       </Path>
     );
-    checkImage(result, docPath("paint/test-paint.png"));
+    await checkImage(result, docPath("paint/test-paint.png"));
   });
   it("should apply PlusDarker blend mode", async () => {
     const { width, height } = surface;
@@ -319,7 +325,7 @@ describe("Paint", () => {
         />
       </Group>
     );
-    checkImage(result, "snapshots/paint/plus-darker.png");
+    await checkImage(result, "snapshots/paint/plus-darker.png");
   });
   it("should apply PlusLighter blend mode", async () => {
     const { width, height } = surface;
@@ -337,7 +343,7 @@ describe("Paint", () => {
         />
       </Group>
     );
-    checkImage(result, "snapshots/paint/plus-lighter.png");
+    await checkImage(result, "snapshots/paint/plus-lighter.png");
   });
   it("should apply PlusDarker blend mode with overlapping RGB circles", async () => {
     const { width, height } = surface;
@@ -365,7 +371,7 @@ describe("Paint", () => {
         />
       </Group>
     );
-    checkImage(result, "snapshots/paint/plus-darker-rgb.png");
+    await checkImage(result, "snapshots/paint/plus-darker-rgb.png");
   });
   it("should apply PlusLighter blend mode with overlapping RGB circles", async () => {
     const { width, height } = surface;
@@ -393,7 +399,7 @@ describe("Paint", () => {
         />
       </Group>
     );
-    checkImage(result, "snapshots/paint/plus-lighter-rgb.png");
+    await checkImage(result, "snapshots/paint/plus-lighter-rgb.png");
   });
   it("should honor the source alpha in plusLighter and plusDarker", async () => {
     const { width, height } = surface;
@@ -408,7 +414,7 @@ describe("Paint", () => {
           <Fill color={color} blendMode={blendMode} />
         </Group>
       );
-      return readPixel(
+      return await readPixel(
         image,
         (width / 2) * PIXEL_RATIO,
         (height / 2) * PIXEL_RATIO

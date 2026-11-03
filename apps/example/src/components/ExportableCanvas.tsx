@@ -9,14 +9,18 @@ export const ExportableCanvas = ({ children, style }: CanvasProps) => {
   const handleShare = useCallback(() => {
     const image = ref.current?.makeImageSnapshot();
     if (image) {
-      const data = image.encodeToBase64(ImageFormat.PNG, 100);
-      const url = `data:image/png;base64,${data}`;
-      Share.share({
-        url,
-        title: "Drawing",
-      }).catch(() => {
-        Alert.alert("An error occurred when sharing the image.");
-      });
+      // The snapshot is read back from the GPU and encoded off the JS thread.
+      image
+        .encodeToBase64(ImageFormat.PNG, 100)
+        .then((data) =>
+          Share.share({
+            url: `data:image/png;base64,${data}`,
+            title: "Drawing",
+          })
+        )
+        .catch(() => {
+          Alert.alert("An error occurred when sharing the image.");
+        });
     } else {
       Alert.alert(
         "An error occurred when creating a snapshot of your drawing."

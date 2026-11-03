@@ -19,7 +19,7 @@ describe("FitBox", () => {
         <Rect x={0} y={0} width={width} height={height} color="lightblue" />
       </FitBox>
     );
-    processResult(surface, "snapshots/drawings/lightblue-rect.png");
+    await processResult(surface, "snapshots/drawings/lightblue-rect.png");
   });
   it("Should take the bottom right quarter of the circle and scale to the full canvas", async () => {
     const { Skia } = importSkia();
@@ -36,7 +36,10 @@ describe("FitBox", () => {
         />
       </FitBox>
     );
-    processResult(surface, "snapshots/drawings/lightblue-quarter-circle.png");
+    await processResult(
+      surface,
+      "snapshots/drawings/lightblue-quarter-circle.png"
+    );
   });
   it("Should scale the image (1)", async () => {
     const { Skia, rect } = importSkia();
@@ -64,7 +67,7 @@ describe("FitBox", () => {
         />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/scaled-image.png");
+    await processResult(surface, "snapshots/drawings/scaled-image.png");
   });
   it("Should scale the image (2)", async () => {
     const { Skia, rect } = importSkia();
@@ -93,7 +96,7 @@ describe("FitBox", () => {
         <Rect rect={screen} color="green" opacity={0.5} />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/scaled-image2.png");
+    await processResult(surface, "snapshots/drawings/scaled-image2.png");
   });
   it("Should rotate and scale the image", async () => {
     const { Skia, rect } = importSkia();
@@ -121,7 +124,7 @@ describe("FitBox", () => {
         <Rect rect={screen} color="green" opacity={0.5} />
       </Group>
     );
-    processResult(surface, "snapshots/drawings/rotated-scaled-image.png");
+    await processResult(surface, "snapshots/drawings/rotated-scaled-image.png");
   });
 
   test("transform simple rectangle with fitbox fill", () => {

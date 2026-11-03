@@ -42,8 +42,8 @@ const sharedContext = () =>
     ? peekSharedWebGLContext(CanvasKit)
     : null;
 
-const topLeftPixel = (image: SkImage) => {
-  const pixels = image.readPixels(0, 0, {
+const topLeftPixel = async (image: SkImage) => {
+  const pixels = await image.readPixels(0, 0, {
     width: 1,
     height: 1,
     colorType: ColorType.RGBA_8888,
@@ -106,14 +106,14 @@ export const WebOffscreen = () => {
       const elapsed = performance.now() - start;
 
       // Chrome evicts on a timer once the limit is exceeded.
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
           kept.getCanvas().drawColor(Skia.Color("red"));
           kept.flush();
           const redrawn = kept.makeImageSnapshot();
-          const keptPixel = topLeftPixel(redrawn);
+          const keptPixel = await topLeftPixel(redrawn);
           redrawn.dispose();
-          const snapshotPixel = topLeftPixel(keptSnapshot);
+          const snapshotPixel = await topLeftPixel(keptSnapshot);
           setReport(
             `${ITERATIONS} surfaces in ${Math.round(elapsed)} ms` +
               ` · kept surface: ${verdict(keptPixel)}` +
