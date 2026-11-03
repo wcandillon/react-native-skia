@@ -8,6 +8,7 @@
 
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
+#include "RNSkWindowState.h"
 
 #include "webgpu/webgpu_cpp.h"
 
@@ -97,17 +98,31 @@ public:
    Destroys the Dawn surface and gives the native handle back to its
    releaser, once the present in flight, if any, is done: the platform may
    destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, the present thread (an Apple view
-   leaving the hierarchy, so that the main thread does not wait for the
-   present in flight), or the destructor.
+   it; the layout size stays. Main thread, or the destructor.
    */
   void detach();
+
+  /**
+   detach(), if the window attached is still `nativeHandle`. The present
+   thread: an Apple view leaving its superview lets go of its layer there,
+   so that the main thread does not wait for the present in flight; the view
+   may be back in a superview by then, its window a new layer that stays.
+   */
+  void detach(void *nativeHandle);
 
   /**
    Whether a window is attached. Its Dawn surface may be away for a frame
    while the GPU device is replaced (see ensureDeviceLocked). Any thread.
    */
   bool isAttached();
+
+  /**
+   Whether the window shows a frame the view presented: a window attached in
+   place of another (a new layer, on iOS) shows nothing until one is
+   presented, while the same window attached again keeps what it shows. Any
+   thread.
+   */
+  bool showsFrame();
 
   /**
    The pixel size the platform laid the view out with, which the window gets
@@ -175,11 +190,12 @@ public:
   }
 
   /**
-   Whether a window is attached and can show a frame right now: not while
-   the platform view says it cannot, nor once the GPU device is lost. Any
-   thread.
+   What a frame presented now would meet, read at once under the mutex: no
+   window, no GPU device (lost, and not replaced yet), a window that cannot
+   show a frame (the platform view says so, see setCanPresent), or one ready
+   for a frame, which `info`, when given, then describes. Any thread.
    */
-  bool canPresent();
+  RNSkWindowState readState(RNSkGraphiteTargetInfo *info);
 
   // RNSkSurface -------------------------------------------------------------
 
@@ -218,9 +234,8 @@ private:
   // Lets go of the Dawn surface and the window; see detach(). Called with
   // the mutex held.
   void detachLocked();
-  // Whether a window is attached and can show a frame (see canPresent()).
-  // Called with the mutex held.
-  bool canPresentLocked();
+  // readState(), called with the mutex held.
+  RNSkWindowState readStateLocked(RNSkGraphiteTargetInfo *info);
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
   // see takePendingSizeLocked). It is neither when the main thread resized
@@ -304,6 +319,7 @@ private:
   std::atomic<uint64_t> _generation{0};
   wgpu::Surface _surface;
   void *_nativeHandle = nullptr;
+  bool _showsFrame = false;
   Releaser _releaser;
   int _width = 0;
   int _height = 0;

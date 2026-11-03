@@ -121,8 +121,9 @@ static NSRunLoop *presentRunLoop() {
 @end
 
 @implementation SkiaView {
-  // The native view, the window surface and the layer it presents into. All
-  // three exist while the view is in the hierarchy (see willMoveToSuperview:).
+  // The native view and its window surface, from the view's first superview
+  // until it is recycled, and the layer the surface presents into, while the
+  // view is in a superview (see willMoveToSuperview:).
   std::shared_ptr<RNSkia::RNSkView> _view;
   std::shared_ptr<RNSkia::RNSkWindowSurface> _surface;
 #pragma clang diagnostic push
@@ -149,8 +150,9 @@ static NSRunLoop *presentRunLoop() {
   bool _windowAttached;
   int _attachedWidth;
   int _attachedHeight;
-  // The view the present thread presents: set and cleared there, by tasks
-  // posted in order with those that present (see RNSkPresentThread).
+  // The view the present thread presents, while the view is in a superview:
+  // set and cleared there, by tasks posted in order with those that present
+  // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
 #if !TARGET_OS_OSX
   // Present thread.
@@ -210,9 +212,11 @@ static NSRunLoop *presentRunLoop() {
 
 #pragma mark - Lifecycle
 
-// The native view lives while the view is in the hierarchy: it is created
-// when the view gets a superview and torn down when it leaves it, so that a
-// view kept around by a transition does not keep a surface.
+// The native view is created when the view first gets a superview and lives
+// until the view is recycled, as on Android: what it shows stays with it
+// while the view is out of its superview, where a scroll view that clips its
+// subviews keeps the rows scrolled away. The window goes then, the layer with
+// its drawables included, so that a view out of the hierarchy holds none.
 #if !TARGET_OS_OSX
 - (void)willMoveToSuperview:(UIView *)newSuperView {
   [super willMoveToSuperview:newSuperView];
@@ -221,14 +225,36 @@ static NSRunLoop *presentRunLoop() {
   [super viewWillMoveToSuperview:newSuperView];
 #endif // !TARGET_OS_OSX
   auto manager = _manager.lock();
-  if (newSuperView == nullptr || _view != nullptr || manager == nullptr) {
+  if (newSuperView == nullptr || manager == nullptr) {
+    return;
+  }
+  if (_layer == nil) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    _layer = [CAMetalLayer layer];
+#pragma clang diagnostic pop
+    [self.layer addSublayer:_layer];
+    // AppKit lays out a view put in a superview only when asked: the layout
+    // attaches the window's surface to the layer (see layoutSubviews).
+    [self setNeedsLayout];
+    // A view put back gets its window onto the new layer now rather than on
+    // the layout, which comes after the Core Animation commit that carries
+    // the layer: attaching asks the present thread for a redraw, which shows
+    // the last frame on it (a new layer shows none, see showsFrame).
+    if (_view != nullptr) {
+      [self enterPresentThread];
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      _layer.frame =
+          CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+      [self attachSurface];
+      [CATransaction commit];
+    }
+  }
+  if (_view != nullptr) {
     return;
   }
   auto context = manager->getPlatformContext();
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-  _layer = [CAMetalLayer layer];
-#pragma clang diagnostic pop
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
   _surface->setHighBitDepth(_highBitDepth);
   _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
@@ -250,6 +276,29 @@ static NSRunLoop *presentRunLoop() {
       (*shared)();
     }];
   });
+  [self enterPresentThread];
+  // The display link presents whatever is waiting on its next tick, a frame
+  // for a resized window included: nothing shows before it anyway. Called on
+  // the present thread.
+  _view->setFrameScheduler(
+      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
+  if (_nativeId != 0) {
+    manager->registerSkiaView(_nativeId, _view);
+  }
+}
+
+- (void)removeFromSuperview {
+  [self stopDisplayLink];
+  [self leavePresentThread];
+  [_layer removeFromSuperlayer];
+  _layer = nil;
+  [super removeFromSuperview];
+}
+
+// Main thread, as the view gets a superview: the present thread presents the
+// view from the tasks posted after this one on.
+- (void)enterPresentThread {
+  __weak SkiaView *weakSelf = self;
   auto view = _view;
   [RNSkPresentThread post:^{
     SkiaView *strongSelf = weakSelf;
@@ -257,42 +306,26 @@ static NSRunLoop *presentRunLoop() {
       strongSelf->_presentView = view;
     }
   }];
-  [self.layer addSublayer:_layer];
-  // The display link presents whatever is waiting on its next tick, a frame
-  // for a resized window included: nothing shows before it anyway. Called on
-  // the present thread.
-  _view->setFrameScheduler(
-      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
-  if (_nativeId != 0) {
-    manager->setSkiaView(_nativeId, _view);
-  }
 }
 
-- (void)removeFromSuperview {
-  [self stopDisplayLink];
-  if (_view != nullptr) {
-    [_layer removeFromSuperlayer];
-    auto manager = _manager.lock();
-    if (_nativeId != 0 && manager != nullptr) {
-      manager->setSkiaView(_nativeId, nullptr);
-    }
-    // The window goes on the present thread, after the present in flight
-    // if any: the main thread does not wait for it, and the layer outlives
-    // the Dawn surface over it.
-    auto surface = _surface;
-    CALayer *layer = _layer;
-    SkiaView *strongSelf = self;
-    [RNSkPresentThread post:^{
-      strongSelf->_presentView = nullptr;
-      surface->detach();
-      (void)layer;
-    }];
-    _view = nullptr;
-    _surface = nullptr;
-    _layer = nil;
-    _windowAttached = false;
+// Main thread, as the view leaves its superview or is recycled: the present
+// thread stops presenting the view, and lets go of the window, after the
+// present in flight if any, so that the main thread does not wait for it.
+// Only this layer's window: the view may be back with a new one by then. The
+// task holds the layer, which so outlives the Dawn surface over it, and whose
+// address cannot come back as the new layer's meanwhile.
+- (void)leavePresentThread {
+  if (_surface == nullptr) {
+    return;
   }
-  [super removeFromSuperview];
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  SkiaView *strongSelf = self;
+  [RNSkPresentThread post:^{
+    strongSelf->_presentView = nullptr;
+    surface->detach((__bridge void *)layer);
+  }];
+  _windowAttached = false;
 }
 
 // The display link holds the view: once it goes, its link was invalidated
@@ -305,7 +338,14 @@ static NSRunLoop *presentRunLoop() {
 - (void)prepareForRecycle {
   [super prepareForRecycle];
   [self stopDisplayLink];
+  // Unregistered first, so that the native view is not destroyed under the
+  // registry's lock: it goes as the present thread lets go of it.
   [self unregisterView];
+  [self leavePresentThread];
+  [_layer removeFromSuperlayer];
+  _view = nullptr;
+  _surface = nullptr;
+  _layer = nil;
 }
 
 - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
@@ -318,11 +358,14 @@ static NSRunLoop *presentRunLoop() {
   }
 }
 
+// Once: a recycled view takes its next id from its props, and a pooled one
+// must not unregister an id another view may have since.
 - (void)unregisterView {
   auto manager = _manager.lock();
   if (manager != nullptr && _nativeId != 0) {
     manager->unregisterSkiaView(_nativeId);
   }
+  _nativeId = 0;
 }
 
 #pragma mark - Application state
@@ -352,8 +395,8 @@ static NSRunLoop *presentRunLoop() {
 // later while some are left (more were submitted meanwhile, or the window
 // could not take one). Present thread.
 - (void)scheduleFrame {
-  // A request that comes after the view left the hierarchy: no link for it,
-  // which would hold the view.
+  // Out of its superview the view has no window: the frames wait, and
+  // attaching one redraws them. No link either, which would hold the view.
   if (_presentView == nullptr) {
     return;
   }
@@ -467,7 +510,7 @@ static NSRunLoop *presentRunLoop() {
 
 - (void)layoutSubviews {
   [super layoutSubviews];
-  if (_surface != nullptr) {
+  if (_surface != nullptr && _layer != nil) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _layer.frame =
