@@ -155,7 +155,8 @@ public:
 
   /**
    Schedules redraw() on the present thread, once (see RNSkRedrawRequest).
-   Any thread: the window surface asks for one from the main thread, with its
+   Any thread: the window surface asks for one as its window is attached
+   (on the main thread on Android, on the present thread on Apple), with its
    own mutex held, so nothing is presented on the spot.
    */
   void requestRedraw() {

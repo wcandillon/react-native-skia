@@ -101,7 +101,8 @@ public:
    Destroys the Dawn surface and gives the native handle back to its
    releaser, once the present in flight, if any, is done: the platform may
    destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, or the destructor.
+   it; the layout size stays. Main thread (Android), or the destructor; an
+   Apple view uses detach(nativeHandle) on the present thread.
    */
   void detach();
 
@@ -175,9 +176,11 @@ public:
 
   /**
    Installed by the view owning the surface: asks it for a frame when the
-   window appears or changes size. Called from the main thread, with the
-   window's mutex held when it appears, so it must not present on the spot:
-   the view posts the redraw to the thread it presents on.
+   window appears or changes size. Called from the thread that attaches the
+   window (the main thread on Android, the present thread on Apple), with
+   the window's mutex held when it appears, or from the main thread on a
+   resize, so it must not present on the spot: the view posts the redraw to
+   the thread it presents on.
    */
   void setRequestRedraw(std::function<void()> requestRedraw) {
     _requestRedraw = std::move(requestRedraw);
@@ -310,8 +313,9 @@ private:
     }
   }
 
-  // Keeps the main thread (attach, resize, detach) and the thread the view
-  // presents on apart; see the class comment.
+  // Keeps attach and detach (the main thread on Android, the present thread
+  // on Apple) and the presents apart; see the class comment. A resize takes
+  // _targetInfoMutex only.
   std::mutex _mutex;
   // The device the window is configured on, and its generation (see
   // DawnContext::generation()): a lost device is replaced, and the window

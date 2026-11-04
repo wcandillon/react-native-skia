@@ -157,6 +157,10 @@ static NSRunLoop *presentRunLoop() {
   // set and cleared there, by tasks posted in order with those that present
   // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
+  // Whether the window is attached, as the posted attach and detach left it
+  // (see attachWindowWithWidth:height: and detachWindow): without one the
+  // frames wait, and the display link stays paused. Present thread.
+  bool _hasWindow;
 #if !TARGET_OS_OSX
   // Present thread.
   CADisplayLink *_displayLink;
@@ -181,6 +185,7 @@ static NSRunLoop *presentRunLoop() {
     _windowAttached = false;
     _attachedWidth = 0;
     _attachedHeight = 0;
+    _hasWindow = false;
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
 #else
@@ -244,6 +249,11 @@ static NSRunLoop *presentRunLoop() {
     // the layout, which comes after the Core Animation commit that carries
     // the layer: the attach, on the present thread, ends with a redraw that
     // shows the last frame on it (a new layer shows none, see showsFrame).
+    // On an idle present thread that redraw lands within a frame of the
+    // commit (0.6 to 2.4 ms after it on an iPhone 14 Pro); behind another
+    // view's first present, which waits for its pipelines to compile, the
+    // layer shows nothing until the thread gets to it, rather than the main
+    // thread waiting for the compile.
     if (_view != nullptr) {
       [self enterPresentThread];
       [CATransaction begin];
@@ -291,7 +301,6 @@ static NSRunLoop *presentRunLoop() {
 }
 
 - (void)removeFromSuperview {
-  [self stopDisplayLink];
   [self leavePresentThread];
   [_layer removeFromSuperlayer];
   _layer = nil;
@@ -316,7 +325,9 @@ static NSRunLoop *presentRunLoop() {
 // present in flight if any, so that the main thread does not wait for it.
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
-// address cannot come back as the new layer's meanwhile.
+// address cannot come back as the new layer's meanwhile. The display link
+// goes in the same task: a frame scheduled between two would make a new one
+// that outlives the leave (see scheduleFrame).
 - (void)leavePresentThread {
   if (_surface == nullptr) {
     return;
@@ -325,14 +336,21 @@ static NSRunLoop *presentRunLoop() {
   CAMetalLayer *layer = _layer;
   SkiaView *strongSelf = self;
   [RNSkPresentThread post:^{
+#if !TARGET_OS_OSX
+    [strongSelf->_displayLink invalidate];
+    strongSelf->_displayLink = nil;
+    // The request belonged to that link: the next one must ask again.
+    strongSelf->_fullFrameRateRequested = false;
+#endif
     strongSelf->_presentView = nullptr;
     surface->detach((__bridge void *)layer);
+    strongSelf->_hasWindow = false;
   }];
   _windowAttached = false;
 }
 
 // The display link holds the view: once it goes, its link was invalidated
-// (see stopDisplayLink).
+// (see leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
@@ -340,7 +358,6 @@ static NSRunLoop *presentRunLoop() {
 
 - (void)prepareForRecycle {
   [super prepareForRecycle];
-  [self stopDisplayLink];
   // Unregistered first, so that the native view is not destroyed under the
   // registry's lock: it goes as the present thread lets go of it.
   [self unregisterView];
@@ -398,23 +415,24 @@ static NSRunLoop *presentRunLoop() {
 // later while some are left (more were submitted meanwhile, or the window
 // could not take one). Present thread.
 - (void)scheduleFrame {
-  // Out of its superview the view has no window: the frames wait, and
-  // attaching one redraws them. No link either, which would hold the view.
-  if (_presentView == nullptr) {
+  // Out of its superview, or at a size of zero, the view has no window: the
+  // frames wait, and attaching one redraws them (see
+  // RNSkWindowSurface::attach). A link would only tick for nothing, and out
+  // of the superview hold the view.
+  if (_presentView == nullptr || !_hasWindow) {
     return;
   }
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
                                                selector:@selector(onFrame:)];
-    [_displayLink addToRunLoop:[RNSkPresentThread runLoop]
+    [_displayLink addToRunLoop:[NSRunLoop currentRunLoop]
                        forMode:NSRunLoopCommonModes];
   }
   [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
-  if (_presentView != nullptr &&
-      (_presentView->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
+  if (_presentView->presentFrame() & RNSkia::RNSkView::kMoreQueued) {
     [self presentAgainLater];
   }
 #endif
@@ -457,6 +475,9 @@ static NSRunLoop *presentRunLoop() {
 #endif
 }
 
+// No autorelease pool of its own: the link is a run loop source, so the
+// thread's run loop returns after each tick and drains its pool then (see
+// presentRunLoop).
 - (void)onFrame:(CADisplayLink *)link {
   if (_presentView == nullptr ||
       !(_presentView->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
@@ -484,20 +505,6 @@ static NSRunLoop *presentRunLoop() {
                  });
 }
 #endif
-
-// Main thread. The link goes on the present thread, which owns it; a new one
-// asks for the display's rate again.
-- (void)stopDisplayLink {
-#if !TARGET_OS_OSX
-  SkiaView *strongSelf = self;
-  [RNSkPresentThread post:^{
-    [strongSelf->_displayLink invalidate];
-    strongSelf->_displayLink = nil;
-    // The request belonged to that link: the next one must ask again.
-    strongSelf->_fullFrameRateRequested = false;
-  }];
-#endif
-}
 
 #pragma mark - Render
 
@@ -542,12 +549,8 @@ static NSRunLoop *presentRunLoop() {
   int h = 0;
   [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
-  if (w == 0 || h == 0) {
-    [self detachWindow];
-    return;
-  }
-  if (!_windowAttached) {
-    [self attachSurface];
+  if (!_windowAttached || w == 0 || h == 0) {
+    [self attachWindowWithWidth:w height:h];
     return;
   }
   if (w != _attachedWidth || h != _attachedHeight) {
@@ -557,22 +560,30 @@ static NSRunLoop *presentRunLoop() {
   }
 }
 
-// Configures the layer as the Dawn surface of the view: as it first gets a
-// size, as the view comes back into a superview with a new layer, and again
-// when the bit depth or the color space changes so that the layer's pixel
-// format follows. The attach runs on the present thread, in order with the
-// presents, detaches and redraws posted before it: it takes the window's
-// mutex, which a present in flight holds for as long as its pipelines take to
-// compile, and the main thread must not wait for that. It takes the layout
-// size as it is when it runs, so that a layout in between is not lost (a
-// resize() before the window exists is dropped), and does nothing at a size
-// of zero (that layout posted a detach after it). The main thread records the
-// window as attached right away, so that later layouts resize it.
+// Configures the layer as the Dawn surface of the view, at the layer's size:
+// as the view comes back into a superview with a new layer, and again when
+// the bit depth or the color space changes so that the layer's pixel format
+// follows (see attachWindowWithWidth:height:).
 - (void)attachSurface {
   int w = 0;
   int h = 0;
   [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
+  [self attachWindowWithWidth:w height:h];
+}
+
+// Attaches the window at the layout size just set, in pixels, or takes it
+// away at a size of zero. The attach runs on the present thread, in order
+// with the presents, detaches and redraws posted before it: it takes the
+// window's mutex, which a present in flight holds for as long as its
+// pipelines take to compile, and the main thread must not wait for that. It
+// takes the layout size as it is when it runs, so that a layout in between is
+// not lost (a resize() before the window exists is dropped), and does nothing
+// at a size of zero (that layout posted a detach after it). A layout that
+// handed resize() a size while the window was being attached was dropped
+// too: the window takes the latest layout size once attached. The main thread
+// records the window as attached right away, so that later layouts resize it.
+- (void)attachWindowWithWidth:(int)w height:(int)h {
   if (w == 0 || h == 0) {
     [self detachWindow];
     return;
@@ -580,6 +591,7 @@ static NSRunLoop *presentRunLoop() {
   _windowAttached = true;
   _attachedWidth = w;
   _attachedHeight = h;
+  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   const bool highBitDepth = _highBitDepth;
@@ -594,6 +606,16 @@ static NSRunLoop *presentRunLoop() {
     // The layer is owned by the view: nothing to release with the window.
     surface->attach((__bridge void *)layer, width, height, highBitDepth,
                     useP3ColorSpace, nullptr);
+    int latestWidth = 0;
+    int latestHeight = 0;
+    if (surface->getLayoutSize(&latestWidth, &latestHeight) &&
+        (latestWidth != width || latestHeight != height)) {
+      surface->resize(latestWidth, latestHeight);
+    }
+    SkiaView *strongSelf = weakSelf;
+    if (strongSelf != nil) {
+      strongSelf->_hasWindow = surface->isAttached();
+    }
   }];
 }
 
@@ -605,10 +627,15 @@ static NSRunLoop *presentRunLoop() {
     return;
   }
   _windowAttached = false;
+  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   [RNSkPresentThread post:^{
     surface->detach((__bridge void *)layer);
+    SkiaView *strongSelf = weakSelf;
+    if (strongSelf != nil) {
+      strongSelf->_hasWindow = surface->isAttached();
+    }
   }];
 }
 
