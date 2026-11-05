@@ -327,7 +327,10 @@ static NSRunLoop *presentRunLoop() {
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
 // goes in the same task: a frame scheduled between two would make a new one
-// that outlives the leave (see scheduleFrame).
+// that outlives the leave (see scheduleFrame). The task holds the view, which
+// the link held until here, so it may hold the last reference to it once
+// Fabric let go of the view (see invalidate): the task hands the view back to
+// the main thread at its end, where UIKit expects a view to go.
 - (void)leavePresentThread {
   if (_surface == nullptr) {
     return;
@@ -345,21 +348,38 @@ static NSRunLoop *presentRunLoop() {
     strongSelf->_presentView = nullptr;
     surface->detach((__bridge void *)layer);
     strongSelf->_hasWindow = false;
+    // The main thread lets go of the view last (see above).
+    dispatch_async(dispatch_get_main_queue(), ^{
+      (void)strongSelf;
+    });
   }];
   _windowAttached = false;
 }
 
-// The display link holds the view: once it goes, its link was invalidated
-// (see leavePresentThread).
+// Main thread: the display link held the view until the leave task
+// invalidated it, and that task handed the view back here (see
+// leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
 }
 
+// Fabric either recycles an unmounted view (prepareForRecycle) or, with the
+// pool full or the view opting out, lets go of it (invalidate): the native
+// view and the window go now either way, rather than with the view.
 - (void)prepareForRecycle {
   [super prepareForRecycle];
-  // Unregistered first, so that the native view is not destroyed under the
-  // registry's lock: it goes as the present thread lets go of it.
+  [self releaseNativeView];
+}
+
+- (void)invalidate {
+  [super invalidate];
+  [self releaseNativeView];
+}
+
+// Unregistered first, so that the native view is not destroyed under the
+// registry's lock: it goes as the present thread lets go of it.
+- (void)releaseNativeView {
   [self unregisterView];
   [self leavePresentThread];
   [_layer removeFromSuperlayer];
