@@ -15,5 +15,12 @@ public interface SkiaViewAPI {
     /** The TextureView drew the frame it was given (see FrameScheduler.onFrameConsumed). */
     void onSurfaceTextureUpdated();
 
+    /**
+     * The TextureView lets go of its SurfaceTexture: whether it may release it now, else
+     * the view does (see TextureView.SurfaceTextureListener.onSurfaceTextureDestroyed).
+     */
+    boolean onSurfaceTextureDestroyed(SurfaceTexture surface);
+
+    /** The SurfaceView's surface is about to be destroyed. */
     void onSurfaceDestroyed();
 }

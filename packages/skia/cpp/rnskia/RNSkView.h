@@ -49,8 +49,8 @@ namespace jsi = facebook::jsi;
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
  * replay on the calling thread. Presenting (redraw, presentFrame) runs on the
- * present thread, and only there. The window surface keeps the present thread
- * and the platform view's own thread apart (see RNSkWindowSurface).
+ * present thread, and only there, and so does everything the platform view
+ * does to the window (see RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -155,8 +155,8 @@ public:
 
   /**
    Schedules redraw() on the present thread, once (see RNSkRedrawRequest).
-   Any thread: the window surface asks for one from the main thread, with its
-   own mutex held, so nothing is presented on the spot.
+   Any thread: the window surface asks for one as it attaches or resizes, so
+   nothing is presented on the spot.
    */
   void requestRedraw() {
     if (_redrawRequest.request()) {
@@ -610,7 +610,7 @@ private:
         // the new size follows or is on its way, as presenting it would
         // only hold that one up (a view resized on every frame has a
         // frame's worth of work in the present alone, see
-        // RNSkWindowSurface::configureIfNeededLocked), and shown through a
+        // RNSkWindowSurface::configureIfNeeded), and shown through a
         // texture, stretched, when nothing is: better than the previous
         // frame.
         if (!flush(i)) {

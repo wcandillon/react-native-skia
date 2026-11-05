@@ -21,9 +21,12 @@ namespace jni = facebook::jni;
 /**
  * The JNI side of SkiaView: owns the native view and the window surface it
  * presents into, and relays the surface callbacks of the backing SurfaceView
- * or TextureView, whose ANativeWindow it acquires for the surface. The
- * surface callbacks come on the main thread; the view presents on the present
- * thread of the Java side (see SkiaView.runOnPresentThread).
+ * or TextureView, whose ANativeWindow it acquires for the surface. The view
+ * presents on the present thread of the Java side (see
+ * SkiaView.runOnPresentThread), and the Java view posts the surface
+ * callbacks there too, as the window belongs to that thread (see
+ * RNSkWindowSurface); this object is destroyed there as well (see
+ * SkiaView.dropInstance), so no call below runs under a present.
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
 public:
@@ -40,6 +43,7 @@ public:
         {makeNativeMethod("initHybrid", JniSkiaView::initHybrid),
          makeNativeMethod("surfaceAvailable", JniSkiaView::surfaceAvailable),
          makeNativeMethod("surfaceDestroyed", JniSkiaView::surfaceDestroyed),
+         makeNativeMethod("surfaceAbandoned", JniSkiaView::surfaceAbandoned),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
@@ -58,15 +62,15 @@ public:
   std::shared_ptr<RNSkManager> getSkiaManager() { return _manager.lock(); }
 
 protected:
-  // Main thread. Attaching the window asks the view for a frame on the
-  // present thread.
+  // Present thread. Attaching the window asks the view for a frame, posted
+  // behind this call.
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
                         bool highBitDepth) {
     attachWindow(surface, width, height, isSurface, highBitDepth);
   }
 
-  // Main thread. The new size is painted on the present thread, which the
-  // surface asks for a frame once it is reconfigured.
+  // Present thread. The window follows the new size by the next present of a
+  // frame made for it, which the surface asks for.
   void surfaceSizeChanged(jobject surface, int width, int height,
                           bool isSurface, bool highBitDepth) {
     // Setting width/height to zero is nothing we need to care about when
@@ -81,10 +85,15 @@ protected:
     }
   }
 
-  // Main thread, before the platform destroys the window: waits for the
-  // present in flight, if any, then lets go of the window (see
-  // RNSkWindowSurface::detach).
+  // Present thread, before the platform destroys the window: lets go of it
+  // (see RNSkWindowSurface::detach).
   void surfaceDestroyed() { _surface->detach(); }
+
+  // Main thread: the platform destroys the window without waiting for
+  // surfaceDestroyed() to run on the present thread (see
+  // SkiaView.onSurfaceDestroyed), so nothing is presented onto it anymore
+  // (see RNSkWindowSurface::abandon).
+  void surfaceAbandoned() { _surface->abandon(); }
 
   /**
    The pixel size the backing view was laid out with. The surface it gets
@@ -112,11 +121,12 @@ protected:
     manager->registerSkiaView(nativeId, _view);
   }
 
-  // React dropped the Java view. The Java side destroys this object right
-  // after (SkiaView.dropInstance), and with it the native view and its
-  // surface: their destructors give back the GPU memory the view holds. Left
-  // to the garbage collector, that memory would wait for the Java object to
-  // be finalized, which may never happen: the collector cannot see it.
+  // Main thread: React dropped the Java view. The Java side destroys this
+  // object right after, on the present thread (SkiaView.dropInstance), and
+  // with it the native view and its surface: their destructors give back the
+  // GPU memory the view holds. Left to the garbage collector, that memory
+  // would wait for the Java object to be finalized, which may never happen:
+  // the collector cannot see it.
   void unregisterView() {
     auto manager = getSkiaManager();
     if (manager == nullptr) {
@@ -128,8 +138,9 @@ protected:
 
   // The Java view's frame scheduler, on the thread the view presents on:
   // presents the queued recordings, says whether a frame went to the window
-  // and whether more are waiting (see RNSkView::presentFrame). The Java view
-  // keeps this object alive for the call (see SkiaView.dropInstance).
+  // and whether more are waiting (see RNSkView::presentFrame). This object is
+  // destroyed on that thread too (see SkiaView.dropInstance), never under
+  // the call.
   int presentFrame() { return _view->presentFrame(); }
 
 private:
@@ -240,8 +251,8 @@ private:
 
   /**
    Gives back what attachWindow() took, once the Dawn surface drawing into the
-   window is gone. Runs from RNSkWindowSurface::detach() or its destructor, so
-   on any thread.
+   window is gone. Runs from RNSkWindowSurface::detach() on the present
+   thread, or from its destructor, so on any thread.
    */
   static void releaseWindow(ANativeWindow *window, jobject ownedSurface) {
     jni::ThreadScope threadScope;
