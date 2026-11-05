@@ -3,7 +3,11 @@ import type { SharedValue } from "react-native-reanimated";
 
 import type { SkGraphiteContext, SkImage, SkRect, SkSize } from "../skia/types";
 
-/** The Android view a canvas draws into, see {@link AndroidCanvasProps}. */
+/**
+ * The Android view a canvas draws into, see {@link AndroidCanvasProps}. Not
+ * read off the native component's spec, whose declarations a consumer's type
+ * check rejects.
+ */
 export type AndroidBackingView =
   "TextureView" | "SurfaceView" | "HardwareBufferView";
 
@@ -20,6 +24,10 @@ export interface AndroidTextureViewProps {
    * toolkit skips blending the view. Defaults to false. Applied in place.
    */
   opaque?: boolean;
+  /** `SurfaceView` only: name it with `backingView: "SurfaceView"`. */
+  zOrderOnTop?: false;
+  /** `SurfaceView` only: name it with `backingView: "SurfaceView"`. */
+  zOrderMediaOverlay?: false;
 }
 
 /** The options of a canvas backed by a `SurfaceView`. */
@@ -42,14 +50,15 @@ export interface AndroidSurfaceViewProps {
   opaque?: boolean;
   /**
    * Composite above every React Native view in the window, ignoring
-   * `zIndex`. Defaults to false. Applied in place on Android 11 and later;
-   * read once, at mount, before that.
+   * `zIndex`. Defaults to false. Applied in place on Android 11 and later,
+   * on Android 13 only without `zOrderMediaOverlay`; read once, at mount,
+   * otherwise.
    */
   zOrderOnTop?: boolean;
   /**
    * Composite above the other `SurfaceView`s below the window (video players,
    * other canvases), while staying below the window itself. Defaults to
-   * false; `zOrderOnTop` takes precedence. Applied in place on Android 11 and
+   * false; `zOrderOnTop` takes precedence. Applied in place on Android 14 and
    * later; read once, at mount, before that.
    */
   zOrderMediaOverlay?: boolean;
@@ -61,18 +70,24 @@ export interface AndroidHardwareBufferViewProps {
    * A plain view drawing each frame's `AHardwareBuffer` inline: composited
    * like a `TextureView`, without its extra copy (Android 10 and later, the
    * opt-in of React Native WebGPU). Not available in React Native Skia yet:
-   * the canvas uses a `TextureView`, with a warning in development. Always
+   * the canvas uses a `TextureView`, with a warning. Always
    * composites with alpha.
    */
   backingView: "HardwareBufferView";
+  opaque?: false;
+  zOrderOnTop?: false;
+  zOrderMediaOverlay?: false;
 }
 
 /**
  * Android-only rendering options: the native view behind the canvas and its
- * options. The view is created when the canvas mounts and kept: a change of
- * `backingView` is ignored, with a warning in development; remount the canvas
- * (with a `key`) to change it. `opaque` applies in place, and so do the
- * z-order options on Android 11 and later. Ignored on iOS and web.
+ * options. The view is created with the canvas's native view and kept for as
+ * long as that lives: a change of `backingView` is ignored, with a warning;
+ * remount the canvas (with a `key`) to change it. `opaque` applies in place,
+ * and so do
+ * `zOrderOnTop` on Android 11 and later (on Android 13 only without
+ * `zOrderMediaOverlay`) and `zOrderMediaOverlay` on Android 14 and later.
+ * Ignored on iOS and web.
  */
 export type AndroidCanvasProps =
   | AndroidTextureViewProps
@@ -111,13 +126,13 @@ export interface ISkiaViewApi {
   size: (nativeId: number) => SkSize;
   /**
    * The recording side of a view: its native id, the layout size in points,
-   * and the props its surface format follows from.
+   * and the bit depth its surface will have, resolved from the props (see
+   * `resolveHighBitDepth`).
    */
   makeGraphiteContext: (
     nativeId: number,
     width: number,
     height: number,
-    opaque: boolean,
     highBitDepth: boolean
   ) => SkGraphiteContext;
   /**

@@ -150,8 +150,8 @@ The prop is ignored on iOS and web.
 | --- | --- | --- |
 | `backingView` | `"TextureView" \| "SurfaceView" \| "HardwareBufferView"` | The native view behind the canvas. Defaults to `TextureView` |
 | `opaque` | `boolean` | Declares that the canvas covers every pixel of its bounds, so it is composited without blending. Defaults to `false` on a `TextureView` and to `true` on a `SurfaceView`. Applied in place |
-| `zOrderOnTop` | `boolean` | `SurfaceView` only: composites above every React Native view in the window. Defaults to `false` |
-| `zOrderMediaOverlay` | `boolean` | `SurfaceView` only: composites above the other `SurfaceView`s below the window (video players, other canvases). Defaults to `false`; `zOrderOnTop` takes precedence |
+| `zOrderOnTop` | `boolean` | `SurfaceView` only: composites above every React Native view in the window. Defaults to `false`. Applied in place on Android 11 and later, on Android 13 only without `zOrderMediaOverlay` |
+| `zOrderMediaOverlay` | `boolean` | `SurfaceView` only: composites above the other `SurfaceView`s below the window (video players, other canvases). Defaults to `false`; `zOrderOnTop` takes precedence. Applied in place on Android 14 and later |
 
 **`TextureView`** is the default.
 It is a regular Android view: frames go through a `SurfaceTexture` that the UI toolkit samples as a texture when it draws the view, so parent transforms, clipping, alpha, and z-order all apply, and the canvas composites over and under other React Native views.
@@ -162,9 +162,10 @@ Each frame goes straight to the system compositor as its own layer, with no extr
 The price is that it is not really view content: it punches a hole through the window, so parent transforms, clipping, rounded corners, and z-ordering with sibling views do not apply to it.
 Use it for a canvas that is a plain rectangle: a full-screen scene, a game, a video-like surface.
 On an adaptive display (Android 11 and later) the canvas asks for the display's highest refresh rate while it animates, as the window does for regular views, and lets the rate drop again once the animation stops.
+Up to Android 12 (API 31), a `SurfaceView` canvas that unmounts can leave black where it was for a frame: the `SurfaceView` removes its layer before the window frame without it lands, and nothing the canvas does can delay that. Keep the default `TextureView` for a canvas that unmounts while on screen there.
 
 **`HardwareBufferView`** is a plain view that draws each frame's `AHardwareBuffer` inline: composited like a `TextureView`, without its extra copy.
-React Native WebGPU offers it as an opt-in on Android 10 and later; React Native Skia accepts the value, so both canvases take the same options, but does not implement it yet: the canvas uses a `TextureView`, with a warning in development.
+React Native WebGPU offers it as an opt-in on Android 10 and later; React Native Skia accepts the value, so both canvases take the same options, but does not implement it yet: the canvas uses a `TextureView`, with a warning.
 
 | | `TextureView` | `SurfaceView` |
 | --- | --- | --- |
@@ -215,8 +216,8 @@ export const Switchable = ({ backingView }: { backingView: AndroidBackingView })
 
 ### Choosing the view at mount
 
-The backing view is created when the canvas mounts, from `backingView` and `highBitDepth` as they are then (and, before Android 11, the z-order options), and kept for as long as the canvas is mounted.
-`opaque` applies in place, and so do `zOrderOnTop` and `zOrderMediaOverlay` on Android 11 and later; a change of the other props is ignored, with a warning in development.
+The backing view is created with the canvas's native view, from `backingView` and `highBitDepth` as they are then (and the z-order options where Android does not move a live surface: `zOrderOnTop` before Android 11 and, with `zOrderMediaOverlay`, on Android 13; `zOrderMediaOverlay` before Android 14), and kept for as long as that view lives: until the canvas unmounts, or, with React Native's view culling, until the canvas scrolls out of view.
+`opaque` applies in place, and so do `zOrderOnTop` on Android 11 and later (on Android 13 only without `zOrderMediaOverlay`) and `zOrderMediaOverlay` on Android 14 and later; a change of the other props is ignored, with a warning.
 A canvas that needs another backing view is remounted instead: give it a `key` that changes with `backingView`.
 The remount leaves the canvas off screen for a frame or two, showing what is behind it, or black, until the new view draws its first frame: the old view leaves and the new one arrives in different window frames.
 Keeping a canvas on screen through such a swap is possible, but takes hold-and-retire logic specific to each Android release ([#4189](https://github.com/wcandillon/react-native-skia/pull/4189), [#4192](https://github.com/wcandillon/react-native-skia/pull/4192)) that the library does not carry.
@@ -259,7 +260,7 @@ const Demo = () => {
 
 :::warning
 
-On Android, `highBitDepth` needs a `SurfaceView` (`android={{ backingView: "SurfaceView" }}`): a `TextureView` composites through an 8-bit pass anyway, so on any other backing view the canvas keeps the 8-bit format, with a warning in development.
+On Android, `highBitDepth` needs a `SurfaceView` (`android={{ backingView: "SurfaceView" }}`): a `TextureView` composites through an 8-bit pass anyway, so on any other backing view the canvas keeps the 8-bit format, with a warning.
 The 10-bit format only has 2 bits of alpha, so a `highBitDepth` canvas is opaque, whatever `android.opaque` says.
 When the device does not support the 10-bit format, the canvas falls back to 8-bit.
 The format is chosen when the canvas mounts: to change it, remount the canvas with a new `key`.

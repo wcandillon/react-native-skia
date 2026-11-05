@@ -6,15 +6,21 @@ import type { Ref } from "react";
 import { createRoot } from "react-dom/client";
 
 import { SkiaGraphiteView } from "../SkiaGraphiteView";
-import type { SkiaGraphiteViewRef } from "../SkiaGraphiteView";
+import type {
+  SkiaGraphiteViewProps,
+  SkiaGraphiteViewRef,
+} from "../SkiaGraphiteView";
 
 // The host instance of the native view, which getContext() measures.
 let mockHost: object = {};
+// The props the native view was last rendered with.
+let mockNativeProps: Record<string, unknown> = {};
 
 jest.mock("../../Platform", () => ({ Platform: { OS: "android" } }));
 jest.mock("../../specs/SkiaViewNativeComponent", () => ({
   __esModule: true,
-  default: ({ ref }: { ref: Ref<object> }) => {
+  default: ({ ref, ...props }: { ref: Ref<object> }) => {
+    mockNativeProps = props;
     require("react").useImperativeHandle(ref, () => mockHost);
     return null;
   },
@@ -37,23 +43,35 @@ const { SkiaViewApi } = jest.requireMock<{
   };
 }>("../api");
 
-const mountView = ({ strict = false } = {}) => {
+const mountView = ({
+  strict = false,
+  props = {},
+}: { strict?: boolean; props?: SkiaGraphiteViewProps } = {}) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
-  const element = <SkiaGraphiteView ref={ref} />;
-  act(() => {
-    root.render(
-      strict ? <React.StrictMode>{element}</React.StrictMode> : element
-    );
-  });
-  const view = ref.current;
-  if (view === null) {
-    throw new Error("SkiaGraphiteView did not attach its ref");
-  }
+  const render = (renderedProps: SkiaGraphiteViewProps) => {
+    const element = <SkiaGraphiteView {...renderedProps} ref={ref} />;
+    act(() => {
+      root.render(
+        strict ? <React.StrictMode>{element}</React.StrictMode> : element
+      );
+    });
+  };
+  // useImperativeHandle hands the ref a new handle when its dependencies change.
+  const view = () => {
+    const handle = ref.current;
+    if (handle === null) {
+      throw new Error("SkiaGraphiteView did not attach its ref");
+    }
+    return handle;
+  };
+  render(props);
+  view();
   return {
     view,
+    rerender: render,
     unmount: async () => {
       await act(async () => root.unmount());
       container.remove();
@@ -93,14 +111,90 @@ describe("SkiaGraphiteView on native", () => {
   it("sizes the context from the view's layout, not its transformed box", async () => {
     mockHost = createScaledHost();
     const { view, unmount } = mountView();
-    view.getContext();
+    view().getContext();
     expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
-      view.getNativeId(),
+      view().getNativeId(),
       200,
       100,
-      false,
       false
     );
+    await unmount();
+  });
+
+  // Until the native view binds, the context records for the format the
+  // props call for: 10-bit on a SurfaceView only, as the view will have it.
+  it.each<[SkiaGraphiteViewProps["android"], boolean]>([
+    [{ opaque: true }, false],
+    [{ backingView: "HardwareBufferView" }, false],
+    [{ backingView: "SurfaceView" }, true],
+    [{ backingView: "SurfaceView", opaque: false }, true],
+  ])(
+    "records %j with highBitDepth for the 10-bit format: %s",
+    async (android, highBitDepth) => {
+      mockHost = createScaledHost();
+      const { view, unmount } = mountView({
+        props: { highBitDepth: true, android },
+      });
+      view().getContext();
+      expect(SkiaViewApi.makeGraphiteContext.mock.calls[0].at(-1)).toBe(
+        highBitDepth
+      );
+      await unmount();
+    }
+  );
+
+  // A view React Native creates again after culling it is made from the
+  // current props; a bound view's surface decides the format.
+  it.each([true, false])(
+    "records for the bit depth its current props call for, highBitDepth %s",
+    async (highBitDepth) => {
+      mockHost = createScaledHost();
+      const android = { backingView: "SurfaceView" } as const;
+      const { view, rerender, unmount } = mountView({
+        props: { highBitDepth, android },
+      });
+      rerender({ highBitDepth: !highBitDepth, android });
+      view().getContext();
+      expect(SkiaViewApi.makeGraphiteContext.mock.calls[0].at(-1)).toBe(
+        !highBitDepth
+      );
+      await unmount();
+    }
+  );
+
+  // The view makes a canvas with the 10-bit format opaque from the format it
+  // was created with, so a translucent SurfaceView asks for a translucent
+  // surface whatever highBitDepth says.
+  it.each([false, true])(
+    "hands a translucent SurfaceView's opacity to the view with highBitDepth %s",
+    async (highBitDepth) => {
+      mockHost = createScaledHost();
+      const { unmount } = mountView({
+        props: {
+          highBitDepth,
+          android: { backingView: "SurfaceView", opaque: false },
+        },
+      });
+      expect(mockNativeProps).toMatchObject({
+        androidBackingView: "SurfaceView",
+        androidOpacity: "Translucent",
+      });
+      await unmount();
+    }
+  );
+
+  // The native view resolves the opacity default for the view it created: a
+  // view React Native creates again, after culling it, may be another one.
+  it("hands the native view the opacity asked for after a change of backingView", async () => {
+    mockHost = createScaledHost();
+    const { rerender, unmount } = mountView({
+      props: { android: { backingView: "SurfaceView" } },
+    });
+    rerender({ android: { backingView: "TextureView" } });
+    expect(mockNativeProps).toMatchObject({
+      androidBackingView: "TextureView",
+      androidOpacity: "Default",
+    });
     await unmount();
   });
 
@@ -109,13 +203,12 @@ describe("SkiaGraphiteView on native", () => {
   it("retires its context on unmount", async () => {
     mockHost = createScaledHost();
     const { view, unmount } = mountView();
-    view.getContext();
+    const nativeId = view().getNativeId();
+    view().getContext();
     expect(SkiaViewApi.destroyGraphiteContext).not.toHaveBeenCalled();
     await unmount();
     expect(SkiaViewApi.destroyGraphiteContext).toHaveBeenCalledTimes(1);
-    expect(SkiaViewApi.destroyGraphiteContext).toHaveBeenCalledWith(
-      view.getNativeId()
-    );
+    expect(SkiaViewApi.destroyGraphiteContext).toHaveBeenCalledWith(nativeId);
   });
 
   // StrictMode runs the unmount cleanup once right after mount and re-runs
@@ -125,13 +218,12 @@ describe("SkiaGraphiteView on native", () => {
   it("retires the same id under StrictMode's simulated unmount", async () => {
     mockHost = createScaledHost();
     const { view, unmount } = mountView({ strict: true });
-    const nativeId = view.getNativeId();
-    view.getContext();
+    const nativeId = view().getNativeId();
+    view().getContext();
     expect(SkiaViewApi.makeGraphiteContext).toHaveBeenLastCalledWith(
       nativeId,
       200,
       100,
-      false,
       false
     );
     expect(SkiaViewApi.destroyGraphiteContext.mock.calls).toEqual([[nativeId]]);

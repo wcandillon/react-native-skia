@@ -173,12 +173,12 @@ describe("SkiaGraphiteView on the web", () => {
     const view = mountView();
     const id = view.ref.current!.getNativeId();
     const api = global.SkiaViewApi as ISkiaViewApiWeb;
-    const ctx = api.makeGraphiteContext(id, 0, 0, false, false);
+    const ctx = api.makeGraphiteContext(id, 0, 0, false);
     expect(ctx.width).toBe(360);
     expect(api.size(id)).toEqual({ width: 360, height: 520 });
 
     await view.unmount();
-    expect(() => api.makeGraphiteContext(id, 0, 0, false, false)).toThrow(
+    expect(() => api.makeGraphiteContext(id, 0, 0, false)).toThrow(
       "is mounted"
     );
   });

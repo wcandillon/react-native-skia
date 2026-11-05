@@ -13,7 +13,7 @@ export interface NativeProps extends ViewProps {
     "TextureView" | "SurfaceView" | "HardwareBufferView",
     "TextureView"
   >;
-  androidOpaque?: WithDefault<boolean, false>;
+  androidOpacity?: WithDefault<"Default" | "Opaque" | "Translucent", "Default">;
   androidZOrderOnTop?: WithDefault<boolean, false>;
   androidZOrderMediaOverlay?: WithDefault<boolean, false>;
   pointerEvents?: WithDefault<

@@ -182,12 +182,19 @@ export const AndroidViews = () => {
   const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), 18);
   // The backing view is created when the canvas mounts, so a change of the
   // chips remounts it. opaque applies in place on any view; the z-order
-  // switches only matter to a SurfaceView, which Android 11 and later moves
-  // in place and older releases read at mount.
+  // switches only matter to a SurfaceView, which moves in place on
+  // zOrderOnTop from Android 11 (on Android 13 only without
+  // zOrderMediaOverlay) and on zOrderMediaOverlay from Android 14, and reads
+  // them at mount elsewhere.
   const surfaceView = backingView === "SurfaceView";
-  const zOrderAtMount = surfaceView && Number(Platform.Version) < 30;
-  const backingKey = `${backingView}-${
-    zOrderAtMount ? `${zOrderOnTop}-${zOrderMediaOverlay}` : ""
+  const androidSurfaceView = Platform.OS === "android" && surfaceView;
+  const version = Number(Platform.Version);
+  const onTopAtMount =
+    androidSurfaceView &&
+    (version < 30 || (version === 33 && zOrderMediaOverlay));
+  const mediaOverlayAtMount = androidSurfaceView && version < 34;
+  const backingKey = `${backingView}-${onTopAtMount ? zOrderOnTop : ""}-${
+    mediaOverlayAtMount ? zOrderMediaOverlay : ""
   }`;
   const android = androidProps(
     backingView,
@@ -303,10 +310,11 @@ export const AndroidViews = () => {
           The backing view is created when the canvas mounts: a chip remounts
           the canvas (HardwareBufferView is not available in Skia yet and falls
           back to a TextureView, with a warning). opaque applies in place, and
-          so do the z-order switches on Android 11 and later. A SurfaceView
-          ignores the rounded clip and the overlay; with zOrderOnTop it also
-          covers the controls when they overlap, and with zOrderMediaOverlay it
-          moves above the other SurfaceView.
+          so does zOrderOnTop on Android 11 and later (on Android 13 only
+          without zOrderMediaOverlay) and zOrderMediaOverlay on Android 14 and
+          later. A SurfaceView ignores the rounded clip and the overlay; with
+          zOrderOnTop it also covers the controls when they overlap, and with
+          zOrderMediaOverlay it moves above the other SurfaceView.
         </Text>
       </ScrollView>
     </View>
