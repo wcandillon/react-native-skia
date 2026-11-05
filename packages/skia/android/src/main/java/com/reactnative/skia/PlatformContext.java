@@ -40,6 +40,9 @@ public class PlatformContext implements LifecycleEventListener {
         listenForMainThreadTasks();
         mContext = reactContext;
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
+        // Where the GPU pipelines used are recorded for the next launch, before
+        // anything probes the GPU.
+        setPipelineCacheDirectoryNative(reactContext.getCacheDir().getAbsolutePath());
         // Skia.gpu.foreground follows the host activity: resumed, or not.
         setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
         reactContext.addLifecycleEventListener(this);
@@ -161,4 +164,7 @@ public class PlatformContext implements LifecycleEventListener {
 
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
+
+    // The app's cache directory (DawnContext::setPipelineCacheDirectory).
+    private static native void setPipelineCacheDirectoryNative(String directory);
 }

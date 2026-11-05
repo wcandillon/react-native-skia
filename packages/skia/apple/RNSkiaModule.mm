@@ -45,6 +45,9 @@ RCT_EXPORT_MODULE()
     // Also where the application's state may be read: Skia.gpu.foreground
     // follows it from here on.
     RNSkia::RNSkApplePlatformContext::observeApplicationState();
+    // And before anything probes the GPU: the pipelines the last launch
+    // used are compiled as soon as it is.
+    RNSkia::RNSkApplePlatformContext::configurePipelineWarmup();
   }
   return self;
 }

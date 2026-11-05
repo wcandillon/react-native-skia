@@ -122,6 +122,17 @@ const Demo = () => {
 
 Code sharing the device with React Native WebGPU imports it again the same way, see [sharing the device](#sharing-the-device).
 
+### Pipeline compilation
+
+The GPU compiles a pipeline for each kind of drawing the first time a canvas calls for it: a solid rounded rectangle, an image, a gradient-filled path, a line of text.
+A compile takes a few milliseconds; a screen that introduces several at once can drop a frame or two the first time it appears, which the user notices as a hitch, typically while scrolling a list on a fresh install.
+React Native Skia compiles these pipelines ahead of the frames, on a thread of its own.
+On a launch without a record, it compiles a built-in set: solid colors, images and linear gradients on every shape, and glyphs.
+From then on, it records the pipelines the app actually uses in the app's cache directory (`react-native-skia-pipelines.bin`) and compiles those at the next launch, so the screens the app showed come up without a compile on the frame.
+A pipeline the record does not cover is compiled when first needed, as before, and recorded.
+The record is a cache: clearing the app's cache directory only costs the next launch a built-in set, and a React Native Skia update that changes what Graphite reads starts a new record.
+The log reports what each launch compiled ahead of time.
+
 ## Sharing the device
 
 Install React Native WebGPU next to React Native Skia, and follow its [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) for the rest of the setup:

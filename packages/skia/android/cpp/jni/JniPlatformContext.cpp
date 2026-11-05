@@ -32,12 +32,21 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::runMainThreadTasks),
       makeNativeMethod("setForegroundNative",
                        JniPlatformContext::setForegroundNative),
+      makeNativeMethod("setPipelineCacheDirectoryNative",
+                       JniPlatformContext::setPipelineCacheDirectoryNative),
   });
 }
 
 void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
                                              jboolean foreground) {
   DawnContext::setForeground(foreground == JNI_TRUE);
+}
+
+void JniPlatformContext::setPipelineCacheDirectoryNative(
+    jni::alias_ref<jclass>, jni::alias_ref<jni::JString> directory) {
+  if (directory) {
+    DawnContext::setPipelineCacheDirectory(directory->toStdString());
+  }
 }
 
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,

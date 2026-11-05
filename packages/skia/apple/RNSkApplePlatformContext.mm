@@ -187,6 +187,32 @@ void RNSkApplePlatformContext::observeApplicationState() {
 #endif // !TARGET_OS_OSX
 }
 
+void RNSkApplePlatformContext::configurePipelineWarmup() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSString *directory = NSSearchPathForDirectoriesInDomains(
+                              NSCachesDirectory, NSUserDomainMask, YES)
+                              .firstObject;
+#if TARGET_OS_OSX
+    // Shared between the apps of the user outside the sandbox: a directory
+    // of the app's own, as the sandbox would give.
+    if (directory != nil) {
+      NSString *bundle = NSBundle.mainBundle.bundleIdentifier;
+      directory = [directory
+          stringByAppendingPathComponent:bundle ?: @"react-native-skia"];
+      [NSFileManager.defaultManager createDirectoryAtPath:directory
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    }
+#endif // TARGET_OS_OSX
+    if (directory != nil) {
+      DawnContext::setPipelineCacheDirectory(directory.UTF8String);
+    }
+    DawnContext::setPrefersP3ColorSpace(mainScreenSupportsP3());
+  });
+}
+
 void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();
