@@ -75,6 +75,8 @@ useFrameCallback(() => {
 });
 ```
 
+Held work does not finish until the app comes back, so `surface.flush(true)`, which waits for the GPU, blocks its thread until then. Check `Skia.gpu.foreground` before calling it.
+
 On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.
 
 ### Device loss
@@ -160,7 +162,7 @@ Everything you create with this device (textures, buffers, pipelines) lives on t
 A few things to know about it:
 
 - The device is owned by Skia, which keeps it alive for as long as it renders with it.
-- The device can be lost: a driver reset, the GPU out of memory, GPU work refused while the app was in the background on iOS. Skia then replaces it with a new device (see [device loss](#device-loss)). The imported `GPUDevice` does not learn of the loss (its `lost` promise never settles) and everything created on it is gone: import the new device and create your resources again, with `useGpu()` in React or `Skia.gpu.lost` elsewhere.
+- The device can be lost: a driver reset, or the GPU out of memory. Skia then replaces it with a new device (see [device loss](#device-loss)). The imported `GPUDevice` does not learn of the loss (its `lost` promise never settles) and everything created on it is gone: import the new device and create your resources again, with `useGpu()` in React or `Skia.gpu.lost` elsewhere.
 - `navigator.gpu.requestAdapter()` and `requestDevice()` still work as usual. Use a device of your own when you want your GPU work isolated from Skia's command queue, but keep in mind that a texture created on another device cannot be shared with Skia.
 
 ```tsx
