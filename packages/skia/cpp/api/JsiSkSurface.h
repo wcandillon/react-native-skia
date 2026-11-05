@@ -15,6 +15,7 @@
 #include "JsiSkImage.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkThreadTrims.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -37,7 +38,8 @@ public:
                sk_sp<SkSurface> surface)
       : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
             std::move(context), std::move(surface)),
-        _dispatcher(Dispatcher::getDispatcher()) {
+        _dispatcher(Dispatcher::getDispatcher()),
+        _isGpuBacked(getObjectUnchecked()->recorder() != nullptr) {
     // The surface belongs to the recorder of this thread, which is also the
     // thread that destroys the surfaces finalized elsewhere (see
     // releaseResources).
@@ -68,7 +70,7 @@ public:
       // back through a snapshot on Graphite (which lacks synchronous canvas
       // readback), and so that it outlives a surface wrapper the GC collected
       // first.
-      _canvas->setSurface(surface, _dispatcher);
+      _canvas->setSurface(surface, _dispatcher, _isGpuBacked);
     }
     return _canvas;
   }
@@ -104,9 +106,10 @@ public:
       throw std::runtime_error(
           "asImage: the texture of the surface cannot be sampled");
     }
-    // The surface already reports the texture as its memory.
+    // The surface already reports the texture as its memory, which comes back
+    // to the recorder of the surface's thread.
     return std::make_shared<JsiSkImage>(getContext(), std::move(image),
-                                        sharesTexture);
+                                        sharesTexture, _dispatcher);
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -125,13 +128,16 @@ public:
     if (auto *recorder = surface->recorder()) {
       DawnContext::getInstance().submitRecording(recorder);
     }
+    // The snapshot's texture comes back to the recorder of the surface's
+    // thread.
     if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
-      jsiImage->setObject(image);
+      jsiImage->replaceImage(std::move(image), _dispatcher);
       return jsi::Value(runtime, arguments[1]);
     }
-    return makeJsiObject(
-        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
+    return makeJsiObject(runtime, std::make_shared<JsiSkImage>(
+                                      getContext(), std::move(image),
+                                      /* sharesTexture= */ false, _dispatcher));
   }
 
   size_t getMemoryPressure() override {
@@ -201,8 +207,10 @@ public:
 protected:
   void releaseResources() override {
     // dispose(): the canvas lets go of its reference too, so that the texture
-    // is freed now rather than once the canvas is collected (#4275). Drawing
-    // on the canvas throws from here on.
+    // goes back to its recorder once the surface's thread lets go of it (see
+    // releaseSurface) rather than once the canvas is collected (#4275), to be
+    // freed by that thread's trim the delay after (see RNSkThreadTrims).
+    // Drawing on the canvas throws from here on.
     if (_canvas) {
       _canvas->detach();
     }
@@ -217,10 +225,14 @@ private:
     // another runtime: let the thread that created the surface destroy it.
     auto surface = getObjectUnchecked();
     setObject(nullptr);
-    _dispatcher->release(std::move(surface));
+    RNSkThreadTrims::getInstance().releaseSurface(
+        _dispatcher, std::move(surface), _isGpuBacked);
   }
 
   std::shared_ptr<Dispatcher> _dispatcher;
+  // As the thread that made the surface saw it (see
+  // RNSkThreadTrims::releaseSurface).
+  const bool _isGpuBacked;
   std::shared_ptr<JsiSkCanvas> _canvas;
 };
 

@@ -4,6 +4,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 
+import com.facebook.jni.annotations.DoNotStrip;
+
 /**
  * The thread every canvas presents on: one for the process, started on first
  * use and never stopped. Presenting a frame (replaying its recordings on the
@@ -32,8 +34,16 @@ final class PresentThread {
                         Process.THREAD_PRIORITY_DISPLAY);
                 thread.start();
                 sHandler = new Handler(thread.getLooper());
+                sHandler.post(PresentThread::bindDispatcher);
             }
             return sHandler;
         }
     }
+
+    /**
+     * Has the native tasks posted to this thread run from its looper, the
+     * thread's first task (see JniPresentThread).
+     */
+    @DoNotStrip
+    private static native void bindDispatcher();
 }

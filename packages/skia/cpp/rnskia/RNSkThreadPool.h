@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -14,14 +15,7 @@
 #include <utility>
 #include <vector>
 
-#if defined(__APPLE__)
-#include <pthread.h>
-#include <pthread/qos.h>
-#elif defined(__ANDROID__)
-#include <pthread.h>
-#include <sys/resource.h>
-#include <unistd.h>
-#endif
+#include "RNSkThreadPriority.h"
 
 namespace RNSkia {
 
@@ -128,7 +122,30 @@ public:
     }
   }
 
+  /**
+   requestIdleTask() once the pool runs, and nothing before: its threads
+   cache nothing until then. Any thread.
+   */
+  static void requestIdleTaskIfStarted() {
+    if (auto *pool = started().load(std::memory_order_acquire)) {
+      pool->requestIdleTask();
+    }
+  }
+
+  /** Whether the calling thread is one of the pool's. */
+  static bool isPoolThread() { return poolThread(); }
+
 private:
+  static bool &poolThread() {
+    static thread_local bool isPool = false;
+    return isPool;
+  }
+
+  static std::atomic<RNSkThreadPool *> &started() {
+    static std::atomic<RNSkThreadPool *> pool{nullptr};
+    return pool;
+  }
+
   using Clock = std::chrono::steady_clock;
 
   /** A thread and its lane. */
@@ -150,20 +167,13 @@ private:
     for (unsigned i = 0; i < size; i++) {
       std::thread([this, i]() { run(i); }).detach();
     }
+    started().store(this, std::memory_order_release);
   }
 
   static void configureThread(unsigned index) {
-    auto name = "RNSkia Render " + std::to_string(index + 1);
-#if defined(__APPLE__)
-    pthread_setname_np(name.c_str());
-    // Frames are presented on the next vsync: the same class the UI uses.
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-#elif defined(__ANDROID__)
-    pthread_setname_np(pthread_self(), name.c_str());
-    // ANDROID_PRIORITY_DISPLAY; with PRIO_PROCESS and who = 0, Linux applies
-    // the nice value to the calling thread only.
-    setpriority(PRIO_PROCESS, 0, -4);
-#endif
+    poolThread() = true;
+    configureCurrentThread("RNSkia Render " + std::to_string(index + 1),
+                           RNSkThreadPriority::kDisplay);
   }
 
   /**
