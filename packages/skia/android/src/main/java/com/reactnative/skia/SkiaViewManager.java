@@ -40,7 +40,7 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     public void setNativeId(@NonNull ReactViewGroup view, @Nullable String nativeId) {
         super.setNativeId(view, nativeId);
         int nativeIdResolved = Integer.parseInt(nativeId);
-        ((SkiaView) view).registerView(nativeIdResolved);
+        ((SkiaView) view).bindNativeId(nativeIdResolved);
     }
 
     @ReactProp(name = "highBitDepth")

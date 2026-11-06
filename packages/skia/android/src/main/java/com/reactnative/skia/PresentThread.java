@@ -28,7 +28,9 @@ final class PresentThread {
     // compile (seconds on a slow GPU, see #4394), and no other wait for the
     // thread is worth making until it drains: each would time out in turn,
     // and the main thread would pay the timeout once per canvas. The task
-    // that timed out clears the flag when the thread gets to it.
+    // waited for clears the flag when the thread gets to it, or the wait does
+    // when the task got there first (see SkiaView.onSurfaceDestroyed): the
+    // flag never outlives the task.
     private static final AtomicBoolean sHeldUp = new AtomicBoolean(false);
 
     private PresentThread() {

@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
@@ -68,6 +69,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // the attach is posted (see onSurfaceCreated), cleared as the detach is
     // (see onSurfaceDestroyed, which the backing view calls twice per surface).
     private boolean mSurfaceAttached = false;
+
+    // The backing view's surface, by number: one more each time a surface
+    // goes (see onSurfaceDestroyed, onSurfaceTextureDestroyed). A posted
+    // attach or resize carries the number of the surface it is for and is
+    // skipped on the present thread when that surface went meanwhile (see
+    // postForSurface): an attach run after the platform destroyed the surface
+    // would take the abandon down (see RNSkWindowSurface::attach) with the
+    // window gone. Written on the main thread, read on the present thread.
+    private volatile int mSurfaceGeneration = 0;
 
     // Props. opaque is applied in place, unless the buffer format implies it
     // (see setOpaque), and so are the z-order props where Android allows it
@@ -315,6 +325,18 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         });
     }
 
+    // Runs the task on the present thread, if the native view is still there
+    // by then and the backing view's surface is still the one the task is for
+    // (see mSurfaceGeneration). Main thread; the task calls native methods.
+    private void postForSurface(Runnable task) {
+        int generation = mSurfaceGeneration;
+        postToNativeView(() -> {
+            if (generation == mSurfaceGeneration) {
+                task.run();
+            }
+        });
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -400,7 +422,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         }
         mSurfaceAttached = true;
         boolean highBitDepth = mSurfaceHighBitDepth;
-        postToNativeView(() -> surfaceAvailable(surface, width, height, true, highBitDepth));
+        postForSurface(() -> surfaceAvailable(surface, width, height, true, highBitDepth));
     }
 
     @Override
@@ -410,7 +432,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             return;
         }
         boolean highBitDepth = mSurfaceHighBitDepth;
-        postToNativeView(() -> surfaceSizeChanged(surface, width, height, true, highBitDepth));
+        postForSurface(() -> surfaceSizeChanged(surface, width, height, true, highBitDepth));
     }
 
     // Main thread, before the platform destroys a SurfaceView's surface, which
@@ -440,6 +462,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             return;
         }
         mSurfaceAttached = false;
+        // An attach or a resize still posted for this surface is stale now.
+        mSurfaceGeneration++;
         // The native view may be dropped (see dropInstance), and destroyed on
         // the present thread at any moment: resetNative is synchronized on the
         // hybrid data, so the check and the call are too, as fbjni asks.
@@ -449,9 +473,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             }
         }
         CountDownLatch detached = new CountDownLatch(1);
+        // Which came first, the task or the end of the wait below: the loser
+        // takes the held-up mark down, so that it never outlives the task.
+        AtomicBoolean settled = new AtomicBoolean(false);
         PresentThread.handler().post(() -> {
-            // The thread got here: whatever held it up is over.
-            PresentThread.setHeldUp(false);
+            // The thread got here after the wait for it timed out: whatever
+            // held it up is over.
+            if (!settled.compareAndSet(false, true)) {
+                PresentThread.setHeldUp(false);
+            }
             // Whatever the window had not drawn goes with it.
             cancelFrames();
             // A dropped native view let go of the window with itself.
@@ -466,6 +496,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         try {
             if (!detached.await(SURFACE_DETACH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                 PresentThread.setHeldUp(true);
+                // The task got there between the timeout and this: not held up.
+                if (!settled.compareAndSet(false, true)) {
+                    PresentThread.setHeldUp(false);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -480,7 +514,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (!hasNativeView()) {
             return;
         }
-        postToNativeView(() -> surfaceAvailable(surface, width, height, false, false));
+        postForSurface(() -> surfaceAvailable(surface, width, height, false, false));
     }
 
     @Override
@@ -489,7 +523,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (!hasNativeView()) {
             return;
         }
-        postToNativeView(() -> surfaceSizeChanged(surface, width, height, false, false));
+        postForSurface(() -> surfaceSizeChanged(surface, width, height, false, false));
     }
 
     // Main thread, as the TextureView lets go of its SurfaceTexture. The window
@@ -499,6 +533,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // for nothing, and the SurfaceTexture outlives the present in flight.
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+        // An attach or a resize still posted for this SurfaceTexture is stale:
+        // the window over it goes below, and the SurfaceTexture with it.
+        mSurfaceGeneration++;
         PresentThread.handler().post(() -> {
             // Whatever the window had not drawn goes with it.
             cancelFrames();
@@ -529,7 +566,17 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private native void setSurfaceHighBitDepth(boolean highBitDepth);
 
-    native void registerView(int nativeId);
+    private native void registerView(int nativeId);
+
+    // Binds the view to its id, for the view manager. Main thread; a dropped
+    // view is left alone, like every other native call made from there (see
+    // hasNativeView).
+    void bindNativeId(int nativeId) {
+        if (!hasNativeView()) {
+            return;
+        }
+        registerView(nativeId);
+    }
 
     private native void unregisterView();
 
