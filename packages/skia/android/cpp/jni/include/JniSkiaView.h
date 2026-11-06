@@ -209,8 +209,9 @@ private:
    */
   void attachWindow(jobject surface, int width, int height, bool isSurface,
                     bool highBitDepth) {
-    // Release the old surface and its window first.
-    _surface->detach();
+    // The previous window, if any, goes as the new one attaches (see
+    // RNSkWindowSurface::attach); not detach(), which would take down an
+    // abandon the main thread sets while this runs.
     // A TextureView draws the latest frame presented to it; a SurfaceView's
     // frames show in turn (see RNSkView::setWindowTakesLatestFrame).
     _view->setWindowTakesLatestFrame(!isSurface);

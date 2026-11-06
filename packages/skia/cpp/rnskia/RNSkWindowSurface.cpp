@@ -68,7 +68,10 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                Releaser releaser) {
   // A layout attaches the same window again, which keeps what it shows.
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
-  detach();
+  // Not detach(): an abandon that lands while this runs (the platform taking
+  // the window back as it attaches) must be kept for the detach posted
+  // behind, not taken down here.
+  releaseWindow();
   _showsFrame = showsFrame;
   _nativeHandle = nativeHandle;
   _releaser = std::move(releaser);
@@ -78,7 +81,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   // and the view stays blank.
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
-    detach();
+    releaseWindow();
     return;
   }
   _device = context->getWGPUDevice();
@@ -86,7 +89,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   _surface = context->MakeWGPUSurface(nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
-    detach();
+    releaseWindow();
     return;
   }
   _width = width;
@@ -132,6 +135,14 @@ void RNSkWindowSurface::resize(int width, int height) {
 }
 
 void RNSkWindowSurface::detach() {
+  releaseWindow();
+  // The window the platform took back is let go of now (see abandon). Only
+  // here, not in attach(): an abandon is always followed by this detach,
+  // and an attach for another window comes behind it.
+  _abandoned.store(false, std::memory_order_release);
+}
+
+void RNSkWindowSurface::releaseWindow() {
   // The surface goes before the window it draws into.
   _surface = nullptr;
   _needsConfigure = false;
@@ -140,8 +151,6 @@ void RNSkWindowSurface::detach() {
     _hasPendingSize = false;
   }
   _generation = 0;
-  // The window the platform took back is let go of now (see abandon).
-  _abandoned.store(false, std::memory_order_release);
   updateTargetInfo();
   if (_releaser && _nativeHandle != nullptr) {
     _releaser(_nativeHandle);
@@ -508,7 +517,9 @@ bool RNSkWindowSurface::presentTexture() {
 #endif
   // The platform is taking the window back (see abandon, set before the
   // detach that clears it is posted, so always ahead of this check): the
-  // frame is lost with it, and the device is kept.
+  // frame is lost with it, and the device is kept. The recordings were
+  // replayed all the same; the caller keeps them and replays them again onto
+  // the next window (see presentRecordings).
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }

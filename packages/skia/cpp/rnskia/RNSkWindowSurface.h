@@ -97,8 +97,9 @@ public:
   /**
    Destroys the Dawn surface and gives the native handle back to its
    releaser: the platform may destroy the window right after. The target
-   description goes away with it; the layout size stays. Presenting thread,
-   or the destructor.
+   description goes away with it; the layout size stays. Takes down the
+   abandon, if any (see abandon): this is the detach it waits for.
+   Presenting thread, or the destructor.
    */
   void detach();
 
@@ -112,7 +113,9 @@ public:
    device. Called before that detach is posted, so that it comes before the
    check the presenting thread makes between replaying a frame and presenting
    it (see presentTexture): set after the check, it would miss the present.
-   Any thread.
+   Only detach() takes it down: an attach() under way when it is set keeps
+   it, as the detach posted behind that attach is what it is for. Any
+   thread.
    */
   void abandon();
 
@@ -216,14 +219,19 @@ public:
   /**
    Replays the recordings onto the window and presents it, on the thread the
    view presents on; the swapchain texture is wrapped for the recorder of
-   that thread. Returns false, consuming nothing, when the window cannot
-   present right now: there is none, the app is in the background, the GPU
-   device is lost, the platform took the window back (see abandon), the
-   window had no drawable, or the window is no longer the target given: it
-   was resized, or configured again on a new device, since the caller read
-   it (see getTargetInfo), and the recordings chosen for that target would
-   not fit it. The redraw the change asked for presents onto the window as
-   it is now.
+   that thread. Returns false when the window cannot present right now:
+   there is none, the app is in the background, the GPU device is lost, the
+   platform took the window back (see abandon), the window had no drawable,
+   or the window is no longer the target given: it was resized, or
+   configured again on a new device, since the caller read it (see
+   getTargetInfo), and the recordings chosen for that target would not fit
+   it. The redraw the change asked for presents onto the window as it is
+   now. The recordings are then the caller's to present again, untouched in
+   every case but one: a window taken back while the frame was being
+   replayed (see presentTexture) has had the recordings replayed onto a
+   swapchain texture that is never shown, and they are replayed once more
+   onto the next window; a Graphite recording can be replayed any number of
+   times.
    */
   bool presentRecordings(
       const RNSkGraphiteTargetInfo &target,
@@ -238,6 +246,10 @@ public:
                     const sk_sp<SkImage> &image) override;
 
 private:
+  // Lets go of the Dawn surface and gives the window back to its releaser,
+  // leaving the abandon, if any, up: what detach() does before it takes the
+  // abandon down, and what attach() does to the previous window.
+  void releaseWindow();
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
   // see takePendingSize). It is neither when the window was resized again,
@@ -327,6 +339,7 @@ private:
   // configureIfNeeded).
   bool _needsConfigure = false;
   // The platform took the window back before detach() ran (see abandon).
+  // Taken down by detach() alone, never by attach() (see releaseWindow).
   std::atomic<bool> _abandoned{false};
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;

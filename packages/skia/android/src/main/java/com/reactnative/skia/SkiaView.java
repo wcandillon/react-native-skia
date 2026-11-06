@@ -75,8 +75,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // attach or resize carries the number of the surface it is for and is
     // skipped on the present thread when that surface went meanwhile (see
     // postForSurface): an attach run after the platform destroyed the surface
-    // would take the abandon down (see RNSkWindowSurface::attach) with the
-    // window gone. Written on the main thread, read on the present thread.
+    // would put a window over a surface that is gone, and ask for a frame
+    // onto it. Written on the main thread, read on the present thread.
     private volatile int mSurfaceGeneration = 0;
 
     // Props. opaque is applied in place, unless the buffer format implies it
