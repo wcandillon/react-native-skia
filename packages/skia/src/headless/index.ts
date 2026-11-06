@@ -35,7 +35,7 @@ export const drawOffscreen = async (surface: SkSurface, element: ReactNode) => {
   await root.render(element);
   const canvas = surface.getCanvas();
   root.drawOnCanvas(canvas);
-  root.unmount();
+  await root.unmount();
   surface.flush();
   return surface.makeImageSnapshot();
 };
