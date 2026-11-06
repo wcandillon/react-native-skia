@@ -140,6 +140,13 @@ void RNSkWindowSurface::detach() {
   detachNow();
 }
 
+void RNSkWindowSurface::detach(void *nativeHandle) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
+  if (nativeHandle != nullptr && nativeHandle == _nativeHandle) {
+    detachNow();
+  }
+}
+
 void RNSkWindowSurface::detachNow() {
   releaseWindow();
   // The window the platform took back is let go of now (see abandon). Only

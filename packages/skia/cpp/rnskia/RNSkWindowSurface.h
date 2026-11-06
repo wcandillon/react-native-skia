@@ -32,11 +32,12 @@ namespace RNSkia {
  * (attach, resize, detach); everything else lives here.
  *
  * Threading: the window belongs to the thread the view presents on (see
- * RNSkView::setPresentThread): the main thread on Apple platforms, the
- * present thread on Android, where the platform view posts the attach, the
- * resize and the detach from the main thread. Everything that touches the
- * Dawn surface runs there, one call after the other, and nothing waits for
- * it; the entries check it (see rnsurface::ThreadChecker: the first entry
+ * RNSkView::setPresentThread): the present thread of the platform, one for
+ * every canvas of a process (PresentThread.java, RNSkPresentThread in
+ * SkiaView.mm), where the platform view posts the attach and the detach
+ * from the main thread. Everything that touches the Dawn surface runs
+ * there, one call after the other, and nothing waits for it; the entries
+ * check it (see rnsurface::ThreadChecker: the first entry
  * binds the thread, a later entry from another thread aborts in debug
  * builds and is logged once in release builds). A resize is the exception:
  * it notes a size and posts a redraw, from any thread. Nothing waits for a
@@ -109,6 +110,15 @@ public:
    lets go of the window last (see detachNow).
    */
   void detach();
+
+  /**
+   detach(), if the window attached is still `nativeHandle`. An Apple view
+   lets go of its layer this way, as it leaves its superview or its layout
+   collapses to zero: the detach is posted behind the present in flight,
+   and an attach posted after it, for another layer, stays (see SkiaView's
+   leavePresentThread and detachWindow). Presenting thread.
+   */
+  void detach(void *nativeHandle);
 
   /**
    The platform is about to take the window back, and will not wait for
