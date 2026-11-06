@@ -31,6 +31,13 @@ public:
   // and outlives it.
   static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
 
+  // The app's cache directory, where the GPU pipelines used are recorded for
+  // the next launch (see DawnContext::setPipelineCacheDirectory). Static,
+  // like the above: set before the GPU is probed.
+  static void
+  setPipelineCacheDirectoryNative(jni::alias_ref<jclass>,
+                                  jni::alias_ref<jni::JString> directory);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);

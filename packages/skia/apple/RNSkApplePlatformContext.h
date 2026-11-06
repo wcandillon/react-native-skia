@@ -54,6 +54,14 @@ public:
    */
   static void observeApplicationState();
 
+  /**
+   Tells DawnContext where to keep its record of the GPU pipelines used (the
+   app's Caches directory, see PipelineWarmup) and whether windows render in
+   Display P3. Called once, on the main thread (RNSkiaModule's init), before
+   anything probes the GPU.
+   */
+  static void configurePipelineWarmup();
+
   bool prefersP3ColorSpace() override { return _prefersP3ColorSpace; }
 
   void runOnMainThread(std::function<void()>) override;

@@ -24,6 +24,7 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkPipelineWarmup.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -183,6 +184,26 @@ public:
   /** Sets isForeground(); the platform calls it from its main thread. */
   static void setForeground(bool foreground) noexcept {
     foregroundFlag().store(foreground, std::memory_order_release);
+  }
+
+  /**
+   The directory the pipelines used are recorded in, for the next launch
+   to compile them ahead of the frames (see PipelineWarmup): the app's cache
+   directory. The platform sets it before the GPU is probed; without it,
+   nothing is recorded.
+   */
+  static void setPipelineCacheDirectory(const std::string &directory) {
+    PipelineWarmup::shared().setCacheDirectory(directory);
+  }
+
+  /**
+   Whether windows render in Display P3 (see
+   RNSkPlatformContext::prefersP3ColorSpace), for the pipelines compiled
+   ahead of a first launch (see PipelineWarmup). The platform sets it before
+   the GPU is probed; sRGB otherwise.
+   */
+  static void setPrefersP3ColorSpace(bool prefersP3) noexcept {
+    PipelineWarmup::shared().setPrefersP3ColorSpace(prefersP3);
   }
 
   /**
@@ -959,6 +980,8 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    // Records the pipelines the frames compile, for the next launch.
+    PipelineWarmup::shared().install(ctxOptions);
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {
@@ -966,6 +989,11 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
+    // Compiles the pipelines the last launch used (or a built-in set) on a
+    // thread of its own, ahead of the frames that would otherwise wait for
+    // them. Precompiled pipelines go into the context's own cache.
+    PipelineWarmup::shared().start(generation->context->makePrecompileContext(),
+                                   generation->lost);
     return generation;
   }
 
