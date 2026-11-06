@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowState.h"
+#include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
 
@@ -35,7 +36,11 @@ namespace RNSkia {
  * present thread on Android, where the platform view posts the attach, the
  * resize and the detach from the main thread. Everything that touches the
  * Dawn surface runs there, one call after the other, and nothing waits for
- * it: a present holds the window for as long as Graphite takes to replay
+ * it; the entries check it (see rnsurface::ThreadChecker: the first entry
+ * binds the thread, a later entry from another thread aborts in debug
+ * builds and is logged once in release builds). A resize is the exception:
+ * it notes a size and posts a redraw, from any thread. Nothing waits for a
+ * present: a present holds the window for as long as Graphite takes to replay
  * the frame, which includes compiling the pipelines it needs, seconds on a
  * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
  * resize notes the size, which the present that follows takes (see
@@ -90,7 +95,8 @@ public:
    now (see getTargetInfo), and what the window is configured for by the
    first present of a frame made for it (see isTarget); until then the
    window still takes frames made for its previous size, which the platform
-   stretches to the view. Requests a redraw. Presenting thread.
+   stretches to the view. Requests a redraw. Any thread: the size is noted
+   under the target description's mutex, and the redraw is posted.
    */
   void resize(int width, int height);
 
@@ -99,7 +105,8 @@ public:
    releaser: the platform may destroy the window right after. The target
    description goes away with it; the layout size stays. Takes down the
    abandon, if any (see abandon): this is the detach it waits for.
-   Presenting thread, or the destructor.
+   Presenting thread; the destructor does the same on whichever thread
+   lets go of the window last (see detachNow).
    */
   void detach();
 
@@ -246,6 +253,9 @@ public:
                     const sk_sp<SkImage> &image) override;
 
 private:
+  // What detach() does, without the thread check: the destructor runs
+  // wherever the last owner lets go of the window.
+  void detachNow();
   // Lets go of the Dawn surface and gives the window back to its releaser,
   // leaving the abandon, if any, up: what detach() does before it takes the
   // abandon down, and what attach() does to the previous window.
@@ -364,6 +374,9 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+
+  // The thread the window belongs to (see the class comment).
+  rnsurface::ThreadChecker _presentingThread;
 };
 
 } // namespace RNSkia

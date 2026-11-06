@@ -19,6 +19,7 @@
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
+#include "rnsurface/ThreadChecker.h"
 #include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
@@ -48,9 +49,11 @@ namespace jsi = facebook::jsi;
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
- * replay on the calling thread. Presenting (redraw, presentFrame) runs on the
- * present thread, and only there, and so does everything the platform view
- * does to the window (see RNSkWindowSurface): nothing waits for a present.
+ * replay on the calling thread. Presenting (redraw, presentFrame,
+ * scheduleFrame) runs on the present thread, and only there, which the
+ * entries check (see rnsurface::ThreadChecker), and so does everything the
+ * platform view does to the window (see RNSkWindowSurface): nothing waits
+ * for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -177,6 +180,7 @@ public:
    which tries it on the view's next frame (see setFrameScheduler).
    */
   void redraw() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
     RNSkGraphiteTargetInfo targetInfo;
     switch (_redrawRequest.start(*_surface, &targetInfo)) {
     case RNSkRedrawRequest::Start::kPresent:
@@ -317,6 +321,7 @@ public:
 
   /** Present thread: a recording is waiting. */
   void scheduleFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::scheduleFrame");
     if (_frameScheduler) {
       _frameScheduler(hasFrameForResizedWindow());
     } else {
@@ -345,6 +350,7 @@ public:
    onCanPresent() each present it.
    */
   int presentFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrame");
     auto target = getTarget();
     if (target == nullptr) {
       return kNothingPresented;
@@ -707,6 +713,8 @@ private:
   bool _windowTakesLatestFrame = false;
   std::function<void(std::function<void()>)> _runOnPresentThread;
   RNSkRedrawRequest _redrawRequest;
+  // The thread the view presents on (see the class comment).
+  rnsurface::ThreadChecker _presentThread;
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread

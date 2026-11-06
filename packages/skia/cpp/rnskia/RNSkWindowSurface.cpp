@@ -60,12 +60,13 @@ RNSkWindowSurface::~RNSkWindowSurface() {
     auto &list = windows();
     list.erase(std::remove(list.begin(), list.end(), this), list.end());
   }
-  detach();
+  detachNow();
 }
 
 void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
   // A layout attaches the same window again, which keeps what it shows.
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
   // Not detach(): an abandon that lands while this runs (the platform taking
@@ -135,6 +136,11 @@ void RNSkWindowSurface::resize(int width, int height) {
 }
 
 void RNSkWindowSurface::detach() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
+  detachNow();
+}
+
+void RNSkWindowSurface::detachNow() {
   releaseWindow();
   // The window the platform took back is let go of now (see abandon). Only
   // here, not in attach(): an abandon is always followed by this detach,
@@ -164,9 +170,15 @@ void RNSkWindowSurface::abandon() {
   _abandoned.store(true, std::memory_order_release);
 }
 
-bool RNSkWindowSurface::isAttached() { return _nativeHandle != nullptr; }
+bool RNSkWindowSurface::isAttached() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::isAttached");
+  return _nativeHandle != nullptr;
+}
 
-bool RNSkWindowSurface::showsFrame() { return _showsFrame; }
+bool RNSkWindowSurface::showsFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showsFrame");
+  return _showsFrame;
+}
 
 void RNSkWindowSurface::setLayoutSize(int width, int height) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
@@ -348,6 +360,7 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 }
 
 RNSkWindowState RNSkWindowSurface::readState(RNSkGraphiteTargetInfo *info) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::readState");
   // Whether a window is attached is its handle, not its description, which
   // detach() takes once more before it lets go of the window.
   if (_nativeHandle == nullptr) {
@@ -444,6 +457,8 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
 bool RNSkWindowSurface::presentRecordings(
     const RNSkGraphiteTargetInfo &target,
     const std::vector<skgpu::graphite::Recording *> &recordings) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentRecordings");
   retireReplacedDevice();
   // The device check first: it may configure the window again.
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
@@ -478,6 +493,7 @@ bool RNSkWindowSurface::presentRecordings(
 
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
                                      const sk_sp<SkImage> &image) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
   retireReplacedDevice();
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
