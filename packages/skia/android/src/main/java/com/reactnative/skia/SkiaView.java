@@ -27,20 +27,24 @@ import com.facebook.react.views.view.ReactViewGroup;
  * androidBackingView prop and created once, from the props of the first
  * transaction, for the life of the view (see updateView()), that the native
  * side draws into with Graphite, presenting the queued recordings when the
- * backing view can show them (see FrameScheduler).
+ * backing view can show them (see rnsurface::FrameScheduler, on the native
+ * side).
  *
  * Threading: the view and its surface callbacks are on the main thread. The
  * window belongs to the present thread (see PresentThread), where the frames
- * are presented, the frame scheduler and the Choreographer callback live, and
- * the native view is destroyed (see dropInstance): the surface callbacks post
- * the attach, the resize and the detach there, so that the main thread never
- * waits for a present in flight. A present holds the window for as long as
- * Graphite takes to replay the frame, which includes compiling the pipelines
- * it needs, seconds on a slow GPU, and a main thread made to wait for that is
- * an ANR (#4394). A TextureView tells the main thread when it drew a frame
- * (onSurfaceTextureUpdated), which hands it over to the scheduler, and leaves
- * its SurfaceTexture to the present thread, which releases it once the window
- * let go of it (see onSurfaceTextureDestroyed). A SurfaceView's surface is
+ * are presented, the frame scheduler (rnsurface::FrameScheduler, on the
+ * native side) and the Choreographer callback live, and the native view is
+ * destroyed (see dropInstance): the surface callbacks post the attach, the
+ * resize and the detach there, so that the main thread never waits for a
+ * present in flight. A present holds the window for as long as Graphite
+ * takes to replay the frame, which includes compiling the pipelines it
+ * needs, seconds on a slow GPU, and a main thread made to wait for that is
+ * an ANR (#4394). The scheduler asks this view for the Choreographer's vsync
+ * (postFrameCallback) and gets it back (doFrame). A TextureView tells the
+ * main thread when it drew a frame (onSurfaceTextureUpdated), which hands it
+ * over to the scheduler, and leaves its SurfaceTexture to the present
+ * thread, which releases it once the window let go of it (see
+ * onSurfaceTextureDestroyed). A SurfaceView's surface is
  * the platform's, which destroys it as soon as surfaceDestroyed returns, so
  * there the main thread waits for the detach, for the length of a present at
  * most (see onSurfaceDestroyed).
@@ -91,11 +95,11 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     // The backing view, created by the first prop transaction and kept, with
     // the kind and the buffer format it was created with. The kind is null
-    // until then: it is what tells a mounted canvas apart. Written on the
-    // main thread, read on the present thread (see doFrame).
+    // until then: it is what tells a mounted canvas apart. Main thread; the
+    // native side learns the kind with the surface (see attachWindow).
     private View mView;
     @Nullable
-    private volatile BackingViewKind mKind = null;
+    private BackingViewKind mKind = null;
     private boolean mSurfaceHighBitDepth = false;
 
     private final SurfaceFrameRateVote mFrameRateVote = new SurfaceFrameRateVote(this);
@@ -107,29 +111,6 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private final Runnable mFrameConsumedPosted =
             () -> PresentThread.handler().post(mOnFrameConsumed);
     private final Runnable mCancelFrames = this::cancelFrames;
-    // Runs on the present thread: the Choreographer it posts to is that
-    // thread's.
-    private final FrameScheduler mFrameScheduler = new FrameScheduler(new FrameScheduler.Host() {
-        @Override
-        public void postFrameCallback() {
-            Choreographer.getInstance().postFrameCallback(SkiaView.this);
-        }
-
-        @Override
-        public int presentFrame() {
-            // The native view is destroyed on this thread (see dropInstance).
-            if (!mHybridData.isValid()) {
-                return 0;
-            }
-            int result = SkiaView.this.presentFrame();
-            // Only a SurfaceView votes (attached in onSurfaceCreated): a
-            // TextureView is composited into its window, which votes for it.
-            if ((result & FrameScheduler.PRESENTED) != 0) {
-                mFrameRateVote.onFramePresented();
-            }
-            return result;
-        }
-    });
 
     public SkiaView(Context context) {
         super(context);
@@ -363,23 +344,38 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     }
 
     /**
-     * A recording was submitted. With forResizedWindow, it is for a window
-     * resized since the frame it shows was made (see
-     * FrameScheduler.requestFrame). Present thread; called from native.
+     * The scheduler asks for the next vsync: doFrame() on this thread's
+     * Choreographer. Present thread; called from native.
      */
     @DoNotStrip
-    public void scheduleFrame(boolean forResizedWindow) {
-        mFrameScheduler.requestFrame(mKind, forResizedWindow);
+    public void postFrameCallback() {
+        Choreographer.getInstance().postFrameCallback(this);
     }
 
+    /**
+     * A frame went to the window. Only a SurfaceView votes (attached in
+     * onSurfaceCreated): a TextureView is composited into its window, which
+     * votes for it. Present thread; called from native.
+     */
+    @DoNotStrip
+    public void onFramePresented() {
+        mFrameRateVote.onFramePresented();
+    }
+
+    // The vsync asked for with postFrameCallback(). The native view is
+    // destroyed on this thread (see dropInstance), so the check and the call
+    // cannot race.
     @Override
     public void doFrame(long frameTimeNanos) {
-        mFrameScheduler.onFrame(mKind);
+        if (mHybridData.isValid()) {
+            frameCallback();
+        }
     }
 
     /**
      * The TextureView drew the frame it was given: the next one can go to it
-     * (see FrameScheduler.onFrameConsumed). Main thread, from the backing view.
+     * (see rnsurface::FrameScheduler::onFrameConsumed). Main thread, from the
+     * backing view.
      */
     @Override
     public void onSurfaceTextureUpdated() {
@@ -387,7 +383,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     }
 
     private void onFrameConsumed() {
-        mFrameScheduler.onFrameConsumed(mKind);
+        if (mHybridData.isValid()) {
+            frameConsumed();
+        }
     }
 
     // Drops the frame callback, the frame the window took and the scheduler's
@@ -395,7 +393,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private void cancelFrames() {
         Choreographer.getInstance().removeFrameCallback(this);
         PresentThread.handler().removeCallbacks(mOnFrameConsumed);
-        mFrameScheduler.cancel();
+        if (mHybridData.isValid()) {
+            cancelScheduledFrames();
+        }
     }
 
     @Override
@@ -580,10 +580,12 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     private native void unregisterView();
 
-    /**
-     * Presents the queued recordings: FrameScheduler.PRESENTED when a frame
-     * went to the window, FrameScheduler.MORE_QUEUED when recordings are left.
-     * Present thread.
-     */
-    private native int presentFrame();
+    // The scheduler's vsync (see postFrameCallback). Present thread.
+    private native void frameCallback();
+
+    // The TextureView drew the frame it was given. Present thread.
+    private native void frameConsumed();
+
+    // The scheduler forgets what it asked for (see cancelFrames). Present thread.
+    private native void cancelScheduledFrames();
 }

@@ -21,8 +21,31 @@
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
+
+@interface SkiaView ()
+// What the frame scheduler asks of the view (see SkiaViewPresentHost).
+- (void)postFrameCallback;
+- (int)presentFrame;
+@end
+
+namespace {
+
+// What the scheduler asks of the view (see rnsurface::FrameScheduler), on
+// the thread the view presents on: the display link for the vsync, the
+// native view for the present.
+class SkiaViewPresentHost : public rnsurface::FrameScheduler::Host {
+public:
+  __weak SkiaView *view = nil;
+
+  void postFrameCallback() override { [view postFrameCallback]; }
+
+  int presentFrame() override { return [view presentFrame]; }
+};
+
+} // namespace
 
 // Whether the window can show a frame: not while the app is in the background
 // (hidden on macOS), where GPU work is refused and can leave the canvas empty
@@ -78,6 +101,11 @@ usesP3ColorSpace(const std::string &colorSpace,
   std::string _colorSpace;
   // Whether the window can show a frame (see appIsBackgrounded). Main thread.
   bool _canPresent;
+  // Decides when the queued recordings are presented (see scheduleFrame:),
+  // on the thread the view presents on. The host outlives the scheduler,
+  // which refers to it (see dealloc).
+  std::unique_ptr<SkiaViewPresentHost> _presentHost;
+  std::unique_ptr<rnsurface::FrameScheduler> _scheduler;
 #if !TARGET_OS_OSX
   CADisplayLink *_displayLink;
   // Whether the display link asked for the display's full rate yet (see
@@ -94,6 +122,11 @@ usesP3ColorSpace(const std::string &colorSpace,
     _nativeId = 0;
     _highBitDepth = false;
     _canPresent = !appIsBackgrounded();
+    _presentHost = std::make_unique<SkiaViewPresentHost>();
+    _presentHost->view = self;
+    _scheduler = std::make_unique<rnsurface::FrameScheduler>(*_presentHost);
+    // A CAMetalLayer shows each frame presented in turn.
+    _scheduler->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
 #else
@@ -187,10 +220,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
-  // The display link presents whatever is waiting on its next tick, a frame
-  // for a resized window included: nothing shows before it anyway.
-  _view->setFrameScheduler(
-      [weakSelf](bool /* forResizedWindow */) { [weakSelf scheduleFrame]; });
+  // A submitted recording goes to the scheduler, which arms the display
+  // link, or presents on the spot for a window resized since the frame it
+  // shows (see rnsurface::FrameScheduler::requestFrame).
+  _view->setFrameScheduler([weakSelf](bool forResizedWindow) {
+    [weakSelf scheduleFrame:forResizedWindow];
+  });
 }
 
 - (void)removeFromSuperview {
@@ -207,6 +242,9 @@ usesP3ColorSpace(const std::string &colorSpace,
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self stopDisplayLink];
   [self unregisterView];
+  // The scheduler before the host it refers to.
+  _scheduler = nullptr;
+  _presentHost = nullptr;
 }
 
 - (void)prepareForRecycle {
@@ -258,16 +296,23 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 #pragma mark - Frames
 
-// Presents on the display link: armed when a recording is submitted, paused
-// again once the queue is empty. macOS has no CADisplayLink on the minimum
-// deployment target, so frames are presented as soon as the main thread gets
-// to them there, and tried again a frame later while some are left (more were
-// submitted meanwhile, or the window could not take one).
-- (void)scheduleFrame {
+// A recording is waiting (see RNSkView::setFrameScheduler): the scheduler
+// arms the display link for it, or presents it on the spot when it is for a
+// window resized since the frame it shows.
+- (void)scheduleFrame:(bool)forResizedWindow {
   // Without a window the frames wait: attaching one redraws them.
   if (_surface == nullptr || !_surface->isAttached()) {
     return;
   }
+  _scheduler->requestFrame(forResizedWindow);
+}
+
+// The scheduler asks for the next vsync: the display link, started and
+// unpaused here, paused again once the scheduler has nothing outstanding
+// (see onFrame:), so that an idle view does not keep the display at its full
+// rate. macOS has no CADisplayLink on the minimum deployment target, so the
+// frame is presented a frame later there (see presentAgainLater).
+- (void)postFrameCallback {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
@@ -278,11 +323,17 @@ usesP3ColorSpace(const std::string &colorSpace,
   [self requestFullFrameRate];
   _displayLink.paused = NO;
 #else
-  if (_view != nullptr &&
-      (_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
-    [self presentAgainLater];
-  }
+  [self presentAgainLater];
 #endif
+}
+
+// The scheduler presents: the queued recordings go to the window (see
+// RNSkView::presentFrame).
+- (int)presentFrame {
+  if (_view == nullptr) {
+    return rnsurface::FrameScheduler::kNothingPresented;
+  }
+  return _view->presentFrame();
 }
 
 #if !TARGET_OS_OSX
@@ -312,8 +363,10 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 - (void)onFrame:(CADisplayLink *)link {
-  if (_view == nullptr ||
-      !(_view->presentFrame() & RNSkia::RNSkView::kMoreQueued)) {
+  _scheduler->onFrame();
+  // The scheduler asked for another tick while recordings are left: more
+  // were submitted meanwhile, or the window could not take one.
+  if (!_scheduler->isFrameCallbackPosted()) {
     link.paused = YES;
   }
 }
@@ -331,12 +384,14 @@ usesP3ColorSpace(const std::string &colorSpace,
                      return;
                    }
                    strongSelf->_presentAgainScheduled = false;
-                   [strongSelf scheduleFrame];
+                   strongSelf->_scheduler->onFrame();
                  });
 }
 #endif
 
 - (void)stopDisplayLink {
+  // Whatever the scheduler asked for went with the link.
+  _scheduler->cancel();
 #if !TARGET_OS_OSX
   [_displayLink invalidate];
   _displayLink = nil;
