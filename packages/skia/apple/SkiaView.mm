@@ -446,10 +446,14 @@ static NSRunLoop *presentRunLoop() {
   [self releaseNativeView];
 }
 
+#if !TARGET_OS_OSX
+// react-native-macos (0.81) predates invalidate on RCTComponentViewProtocol
+// (React Native 0.83): drop this guard once it catches up.
 - (void)invalidate {
   [super invalidate];
   [self releaseNativeView];
 }
+#endif // !TARGET_OS_OSX
 
 // Unregistered first, so that the native view is not destroyed under the
 // registry's lock: it goes as the present thread lets go of it.
