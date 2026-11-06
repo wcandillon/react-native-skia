@@ -24,6 +24,8 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkBlobCache.h"
+#include "RNSkPipelineWarmup.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -136,6 +138,30 @@ public:
                         : " " + current->recoveryFailure;
     }
     return info;
+  }
+
+  // Startup
+  // --------------------------------------------------------------------
+
+  /**
+   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled,
+   for the next process to find (see RNSkBlobCache): the platform's cache
+   directory. Set by the platform before the GPU is first asked for (see
+   RNSkiaModule, PlatformContext); set later, it applies to the devices
+   created from then on. Any thread.
+   */
+  static void setCacheDirectory(const std::string &directory) noexcept {
+    RNSkBlobCache::getInstance().setDirectory(directory);
+  }
+
+  /**
+   Whether the pipeline warmup (see RNSkPipelineWarmup) builds the Display
+   P3 pipelines as well as the sRGB ones: on Apple platforms, when the main
+   screen has a wide gamut. Set by the platform before the GPU is first
+   asked for. Any thread.
+   */
+  static void setPrecompileDisplayP3(bool displayP3) noexcept {
+    precompileDisplayP3().store(displayP3, std::memory_order_release);
   }
 
   // Generations ---------------------------------------------------------------
@@ -786,6 +812,11 @@ private:
 
   // Whether the app is in the foreground and active (see isForeground). Not
   // tied to the context: the platform sets it before the GPU is probed.
+  static std::atomic<bool> &precompileDisplayP3() noexcept {
+    static std::atomic<bool> flag{false};
+    return flag;
+  }
+
   static std::atomic<bool> &foregroundFlag() noexcept {
     static std::atomic<bool> foreground{true};
     return foreground;
@@ -966,6 +997,13 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
+    // The common pipelines, built behind the first frame rather than inside
+    // it (see RNSkPipelineWarmup). The precompile context is a Context
+    // operation, made here under the lock, and used on the warmup thread
+    // only.
+    RNSkPipelineWarmup::start(
+        generation->context->makePrecompileContext(),
+        precompileDisplayP3().load(std::memory_order_acquire));
     return generation;
   }
 

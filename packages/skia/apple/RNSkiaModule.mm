@@ -2,6 +2,7 @@
 
 #import <ReactCommon/RCTTurboModule.h>
 
+#include "RNDawnContext.h"
 #import "RNSkApplePlatformContext.h"
 
 static __weak RNSkiaModule *sharedInstance = nil;
@@ -45,6 +46,18 @@ RCT_EXPORT_MODULE()
     // Also where the application's state may be read: Skia.gpu.foreground
     // follows it from here on.
     RNSkia::RNSkApplePlatformContext::observeApplicationState();
+    // Before the GPU is first asked for: where Dawn keeps what it compiled
+    // for the next launch, and whether the warmup builds the Display P3
+    // pipelines (see DawnContext).
+    NSString *caches = NSSearchPathForDirectoriesInDomains(
+                           NSCachesDirectory, NSUserDomainMask, YES)
+                           .firstObject;
+    if (caches != nil) {
+      RNSkia::DawnContext::setCacheDirectory(
+          [[caches stringByAppendingPathComponent:@"rnskia"] UTF8String]);
+    }
+    RNSkia::DawnContext::setPrecompileDisplayP3(
+        RNSkia::RNSkApplePlatformContext::mainScreenSupportsP3());
   }
   return self;
 }

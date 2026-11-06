@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -15,6 +16,7 @@
 
 #include "dawn/native/DawnNative.h"
 
+#include "RNSkBlobCache.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
@@ -404,6 +406,31 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   togglesDesc.disabledToggleCount = std::size(kDisabledToggles);
   togglesDesc.disabledToggles = kDisabledToggles;
 #endif
+
+  // Dawn's blob cache, on disk once the platform gave it a directory (see
+  // RNSkBlobCache): the shaders Dawn translated, and on Vulkan its pipeline
+  // caches, found again by the next process.
+  wgpu::DawnCacheDeviceDescriptor cacheDesc;
+  if (RNSkia::RNSkBlobCache::getInstance().isEnabled()) {
+    cacheDesc.isolationKey = "rnskia";
+    cacheDesc.SetDawnLoadCacheDataCallback(
+        [](std::span<const std::byte> key, std::span<std::byte> value,
+           RNSkia::RNSkBlobCache *cache) -> size_t {
+          return cache->load(
+              reinterpret_cast<const uint8_t *>(key.data()), key.size(),
+              reinterpret_cast<uint8_t *>(value.data()), value.size());
+        },
+        &RNSkia::RNSkBlobCache::getInstance());
+    cacheDesc.SetDawnStoreCacheDataCallback(
+        [](std::span<const std::byte> key, std::span<const std::byte> value,
+           RNSkia::RNSkBlobCache *cache) {
+          cache->store(
+              reinterpret_cast<const uint8_t *>(key.data()), key.size(),
+              reinterpret_cast<const uint8_t *>(value.data()), value.size());
+        },
+        &RNSkia::RNSkBlobCache::getInstance());
+    togglesDesc.nextInChain = &cacheDesc;
+  }
 
   wgpu::DeviceDescriptor desc;
   desc.requiredFeatureCount = features.size();
