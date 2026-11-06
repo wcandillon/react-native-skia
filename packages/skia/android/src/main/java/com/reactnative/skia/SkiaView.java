@@ -51,16 +51,23 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // SurfaceView's surface (see onSurfaceDestroyed): longer than a present
     // (a few milliseconds, behind the presents of the other canvases), shorter
     // than a pipeline compile on a slow GPU, well under the 5 seconds at which
-    // Android reports an ANR.
+    // Android reports an ANR, and paid once per hold-up, however many canvases
+    // go (see PresentThread.isHeldUp).
     private static final long SURFACE_DETACH_TIMEOUT_MS = 200;
 
     @DoNotStrip
     private HybridData mHybridData;
 
     // Set by dropInstance(), on the main thread: no native method is called
-    // from there after that. The native view itself goes on the present
-    // thread, where the hybrid data says whether it is still there.
+    // from there after that, but for surfaceAbandoned, under the hybrid data's
+    // lock (see onSurfaceDestroyed). The native view itself goes on the
+    // present thread, where the hybrid data says whether it is still there.
     private boolean mDropped = false;
+
+    // Whether a SurfaceView's surface is attached, for the main thread: set as
+    // the attach is posted (see onSurfaceCreated), cleared as the detach is
+    // (see onSurfaceDestroyed, which the backing view calls twice per surface).
+    private boolean mSurfaceAttached = false;
 
     // Props. opaque is applied in place, unless the buffer format implies it
     // (see setOpaque), and so are the z-order props where Android allows it
@@ -291,7 +298,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
 
     // Whether the native view still exists, for the main thread: it is dropped
     // there (see dropInstance), and no native method is called from there
-    // after that. The present thread, where it is destroyed, asks the hybrid
+    // after that, but for the one onSurfaceDestroyed makes under the hybrid
+    // data's lock. The present thread, where it is destroyed, asks the hybrid
     // data instead (see presentFrame).
     private boolean hasNativeView() {
         return !mDropped;
@@ -390,6 +398,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         if (!hasNativeView()) {
             return;
         }
+        mSurfaceAttached = true;
         boolean highBitDepth = mSurfaceHighBitDepth;
         postToNativeView(() -> surfaceAvailable(surface, width, height, true, highBitDepth));
     }
@@ -410,14 +419,39 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     // at most. Past that, the present in flight is waiting on a pipeline
     // compile (seconds on a slow GPU, see #4394): the main thread gives the
     // surface up rather than hang, and the present thread skips the present
-    // onto it when it gets there (see RNSkWindowSurface::abandon), as a
-    // frame presented onto a window that is gone loses the GPU device.
+    // onto it when it gets there, as a frame presented onto a window that is
+    // gone loses the GPU device. The surface is given up before the detach is
+    // posted, not once the wait has timed out (see RNSkWindowSurface::abandon):
+    // the present thread checks and then presents, and a flag set after its
+    // check would miss the present. A frame skipped onto a surface that is
+    // about to be destroyed is nothing lost, and the detach takes the flag
+    // down again. The wait is paid once per hold-up, not once per canvas: a
+    // wait that timed out marks the present thread held up until the detach
+    // it posted runs, and the canvases that go meanwhile give their surface
+    // up without waiting (see PresentThread.isHeldUp).
     @Override
     public void onSurfaceDestroyed() {
         // The surface is still valid here, so the vote can be taken back.
         mFrameRateVote.detach();
+        // SurfaceView reports surfaceDestroyed from its own onDetachedFromWindow,
+        // and SkiaSurfaceView calls this once more after that, a safety net for
+        // the paths where it does not: nothing is attached by then.
+        if (!mSurfaceAttached) {
+            return;
+        }
+        mSurfaceAttached = false;
+        // The native view may be dropped (see dropInstance), and destroyed on
+        // the present thread at any moment: resetNative is synchronized on the
+        // hybrid data, so the check and the call are too, as fbjni asks.
+        synchronized (mHybridData) {
+            if (mHybridData.isValid()) {
+                surfaceAbandoned();
+            }
+        }
         CountDownLatch detached = new CountDownLatch(1);
         PresentThread.handler().post(() -> {
+            // The thread got here: whatever held it up is over.
+            PresentThread.setHeldUp(false);
             // Whatever the window had not drawn goes with it.
             cancelFrames();
             // A dropped native view let go of the window with itself.
@@ -426,14 +460,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
             }
             detached.countDown();
         });
-        boolean detachedInTime = false;
+        if (PresentThread.isHeldUp()) {
+            return;
+        }
         try {
-            detachedInTime = detached.await(SURFACE_DETACH_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (!detached.await(SURFACE_DETACH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                PresentThread.setHeldUp(true);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-        if (!detachedInTime && hasNativeView()) {
-            surfaceAbandoned();
         }
     }
 

@@ -21,6 +21,9 @@ public interface SkiaViewAPI {
      */
     boolean onSurfaceTextureDestroyed(SurfaceTexture surface);
 
-    /** The SurfaceView's surface is about to be destroyed. */
+    /**
+     * The SurfaceView's surface is about to be destroyed. Called once more as
+     * the view leaves the window, after the surface went with it.
+     */
     void onSurfaceDestroyed();
 }

@@ -506,8 +506,9 @@ bool RNSkWindowSurface::presentTexture() {
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
-  // The platform took the window back while the frame was replayed (see
-  // abandon): the frame is lost with it, and the device is kept.
+  // The platform is taking the window back (see abandon, set before the
+  // detach that clears it is posted, so always ahead of this check): the
+  // frame is lost with it, and the device is kept.
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }

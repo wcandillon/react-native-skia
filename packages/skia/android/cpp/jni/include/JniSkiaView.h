@@ -89,10 +89,10 @@ protected:
   // (see RNSkWindowSurface::detach).
   void surfaceDestroyed() { _surface->detach(); }
 
-  // Main thread: the platform destroys the window without waiting for
-  // surfaceDestroyed() to run on the present thread (see
-  // SkiaView.onSurfaceDestroyed), so nothing is presented onto it anymore
-  // (see RNSkWindowSurface::abandon).
+  // Main thread, as the platform is about to destroy the window, which it
+  // does without waiting for surfaceDestroyed() to run on the present thread
+  // (see SkiaView.onSurfaceDestroyed): nothing is presented onto it from here
+  // until then (see RNSkWindowSurface::abandon).
   void surfaceAbandoned() { _surface->abandon(); }
 
   /**

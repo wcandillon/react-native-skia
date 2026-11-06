@@ -103,12 +103,15 @@ public:
   void detach();
 
   /**
-   The platform takes the window back without waiting for detach(): a
-   SurfaceView's surface is destroyed as soon as surfaceDestroyed returns,
-   and the main thread waits for the detach posted to the presenting thread
-   only so long (see SkiaView.onSurfaceDestroyed). From now until detach()
-   runs, nothing is presented onto the window: a present in flight skips its
-   present, as presenting onto a window that is gone loses the GPU device.
+   The platform is about to take the window back, and will not wait for
+   detach(): a SurfaceView's surface is destroyed as soon as surfaceDestroyed
+   returns, and the main thread waits for the detach posted to the presenting
+   thread only so long (see SkiaView.onSurfaceDestroyed). From now until
+   detach() runs, nothing is presented onto the window: a present in flight
+   skips its present, as presenting onto a window that is gone loses the GPU
+   device. Called before that detach is posted, so that it comes before the
+   check the presenting thread makes between replaying a frame and presenting
+   it (see presentTexture): set after the check, it would miss the present.
    Any thread.
    */
   void abandon();

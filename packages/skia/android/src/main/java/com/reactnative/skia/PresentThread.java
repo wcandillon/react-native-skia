@@ -4,6 +4,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * The thread every canvas presents on: one for the process, started on first
  * use and never stopped. Presenting a frame (replaying its recordings on the
@@ -20,6 +22,15 @@ final class PresentThread {
     private static final Object sLock = new Object();
     private static Handler sHandler;
 
+    // Whether the thread is known to be held up: a main-thread wait for a task
+    // posted here timed out (see SkiaView.onSurfaceDestroyed), and that task
+    // has not run since. The present in flight is then waiting on a pipeline
+    // compile (seconds on a slow GPU, see #4394), and no other wait for the
+    // thread is worth making until it drains: each would time out in turn,
+    // and the main thread would pay the timeout once per canvas. The task
+    // that timed out clears the flag when the thread gets to it.
+    private static final AtomicBoolean sHeldUp = new AtomicBoolean(false);
+
     private PresentThread() {
     }
 
@@ -35,5 +46,22 @@ final class PresentThread {
             }
             return sHandler;
         }
+    }
+
+    /**
+     * Whether a wait for this thread timed out and the thread has not run
+     * the task waited for since. Any thread.
+     */
+    static boolean isHeldUp() {
+        return sHeldUp.get();
+    }
+
+    /**
+     * Records a wait for this thread that timed out (true, from the waiting
+     * thread) or the thread getting to the task waited for (false, from this
+     * thread).
+     */
+    static void setHeldUp(boolean heldUp) {
+        sHeldUp.set(heldUp);
     }
 }
