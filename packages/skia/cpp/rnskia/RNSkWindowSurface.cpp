@@ -8,6 +8,7 @@
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
 #include "RNMetalLayerColorSpace.h"
+#include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
 
 #ifdef __APPLE__
@@ -466,6 +467,7 @@ bool RNSkWindowSurface::presentRecordings(
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::presentRecordings");
+  RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   // The device check first: it may configure the window again.
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
@@ -501,6 +503,7 @@ bool RNSkWindowSurface::presentRecordings(
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
                                      const sk_sp<SkImage> &image) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
+  RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;

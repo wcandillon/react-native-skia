@@ -25,6 +25,7 @@
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
 #include "RNSkBlobCache.h"
+#include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
 #include "utils/RNSkLog.h"
 
@@ -300,6 +301,10 @@ public:
         callback(nullptr);
         return;
       }
+      // GPU work from here until the result is delivered: the readback
+      // thread asks the device for it until then (see awaitReadbacks),
+      // which the warmup must not hold up (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
       readback.delivered = std::make_shared<std::atomic<bool>>(false);
       auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
@@ -457,6 +462,9 @@ public:
     if (recorder == nullptr) {
       return false;
     }
+    // The snap compiles the pipelines the recording needs, inline: GPU work
+    // the warmup stays behind (see RNSkGpuActivity), as is the run.
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       return false;
@@ -493,6 +501,7 @@ public:
   void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
+    RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (current->lost.load(std::memory_order_acquire)) {
@@ -997,13 +1006,14 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
-    // The common pipelines, built behind the first frame rather than inside
-    // it (see RNSkPipelineWarmup). The precompile context is a Context
-    // operation, made here under the lock, and used on the warmup thread
-    // only.
+    // The common pipelines, built while the frames leave the device alone
+    // (see RNSkPipelineWarmup), until this device is lost. The precompile
+    // context is a Context operation, made here under the lock, and used
+    // on the warmup thread only.
     RNSkPipelineWarmup::start(
         generation->context->makePrecompileContext(),
-        precompileDisplayP3().load(std::memory_order_acquire));
+        precompileDisplayP3().load(std::memory_order_acquire),
+        &generation->lost);
     return generation;
   }
 
@@ -1300,6 +1310,9 @@ private:
     wgpu::Future done;
     // Set by the readback's callback (see readPixels), once it ran.
     std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
     // The times the context was asked without the callback having run.
     int retries = 0;
   };

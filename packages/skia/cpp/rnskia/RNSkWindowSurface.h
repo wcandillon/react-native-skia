@@ -37,10 +37,11 @@ namespace RNSkia {
  * SkiaView.mm), where the platform view posts the attach and the detach
  * from the main thread. Everything that touches the Dawn surface runs
  * there, one call after the other, and nothing waits for it; the entries
- * check it (see rnsurface::ThreadChecker: the first entry
- * binds the thread, a later entry from another thread aborts in debug
- * builds and is logged once in release builds). A resize is the exception:
- * it notes a size and posts a redraw, from any thread. Nothing waits for a
+ * check it once the platform view has bound the thread (see
+ * bindPresentingThread and rnsurface::ThreadChecker: an entry from
+ * another thread aborts in debug builds and is logged once in release
+ * builds). A resize is the exception: it notes a size and posts a redraw,
+ * from any thread. Nothing waits for a
  * present: a present holds the window for as long as Graphite takes to replay
  * the frame, which includes compiling the pipelines it needs, seconds on a
  * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
@@ -119,6 +120,14 @@ public:
    leavePresentThread and detachWindow). Presenting thread.
    */
   void detach(void *nativeHandle);
+
+  /**
+   Presenting thread: binds the entries that belong to it (see the class
+   comment) to the calling thread, before the first of them; the platform
+   view posts it to the thread it presents on as it makes the surface (see
+   RNSkView::bindPresentThread).
+   */
+  void bindPresentingThread() { _presentingThread.bindToCurrentThread(); }
 
   /**
    The platform is about to take the window back, and will not wait for

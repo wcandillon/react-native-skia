@@ -171,7 +171,7 @@ private:
     // a task for a view that is gone is dropped. Called from any thread, the
     // render thread pool's included, hence the thread scope.
     auto javaView = std::make_shared<JavaView>(jThis);
-    _view->setPresentThread([javaView](std::function<void()> task) {
+    auto runOnPresentThread = [javaView](std::function<void()> task) {
       jni::ThreadScope threadScope;
       auto javaPart = javaView->weak->lockLocal();
       if (!javaPart) {
@@ -182,6 +182,15 @@ private:
               ->getMethod<void(jni::alias_ref<jni::JRunnable::javaobject>)>(
                   "runOnPresentThread");
       method(javaPart, jni::JNativeRunnable::newObjectCxxArgs(std::move(task)));
+    };
+    _view->setPresentThread(runOnPresentThread);
+    // The entries of the view and its window that belong to the present
+    // thread are bound to it there (see RNSkView::bindPresentThread), ahead
+    // of the surface callbacks the Java view posts behind this: the thread
+    // runs its tasks in order.
+    runOnPresentThread([surface = _surface, view = _view]() {
+      surface->bindPresentingThread();
+      view->bindPresentThread();
     });
     // A submitted recording goes to the scheduler, on the present thread,
     // which arms the Java view's frame callback (or presents on the spot,
@@ -245,12 +254,13 @@ private:
       if (view == nullptr) {
         return rnsurface::FrameScheduler::kNothingPresented;
       }
-      static_assert(RNSkView::kFramePresented ==
-                        rnsurface::FrameScheduler::kPresented,
+      static_assert(static_cast<int>(RNSkView::kFramePresented) ==
+                        static_cast<int>(rnsurface::FrameScheduler::kPresented),
                     "the view and the scheduler agree on the result mask");
-      static_assert(RNSkView::kMoreQueued ==
-                        rnsurface::FrameScheduler::kMoreQueued,
-                    "the view and the scheduler agree on the result mask");
+      static_assert(
+          static_cast<int>(RNSkView::kMoreQueued) ==
+              static_cast<int>(rnsurface::FrameScheduler::kMoreQueued),
+          "the view and the scheduler agree on the result mask");
       const int result = view->presentFrame();
       if ((result & RNSkView::kFramePresented) != 0) {
         if (auto javaPart = _javaView->weak->lockLocal()) {

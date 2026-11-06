@@ -27,11 +27,13 @@ namespace rnsurface {
 
 /**
  * The thread an object belongs to, checked at its entries rather than
- * described in a comment. The platform view injects the thread a view
- * presents on today (RNSkView::setPresentThread) without telling C++ which
- * thread that is, so the checker binds to the first thread that enters, and
- * every entry after that must come from the same one; a platform that knows
- * the thread binds explicitly (see bindToCurrentThread).
+ * described in a comment. The platform view knows the thread it presents
+ * on, and binds the checker from that thread (see bindToCurrentThread)
+ * before the first entry; every entry after that must come from it. Until
+ * it is bound the entries pass: there is no contract to check yet. (A
+ * checker that bound itself to whichever thread entered first would hold
+ * every later entry to that thread, the wrong one as soon as some entry is
+ * reached from elsewhere first, and report the right ones.)
  *
  * A violation aborts in debug builds (RNSURFACE_THREAD_CHECK_ABORTS); in
  * release builds it is logged once per call site (see Site) and the call
@@ -51,38 +53,23 @@ public:
   ThreadChecker(const ThreadChecker &) = delete;
   ThreadChecker &operator=(const ThreadChecker &) = delete;
 
-  /** Binds to the calling thread, from any state. */
+  /**
+   Binds to the calling thread: the one every entry from now on must come
+   from. From any state: a platform whose present thread changes binds
+   again from the new one.
+   */
   void bindToCurrentThread() {
     _thread.store(std::this_thread::get_id(), std::memory_order_release);
   }
 
-  /** Forgets the thread: the next entry binds again. */
-  void unbind() { _thread.store(std::thread::id(), std::memory_order_release); }
-
-  bool isBound() const {
-    return _thread.load(std::memory_order_acquire) != std::thread::id();
-  }
-
-  /** Whether the calling thread is the bound one; false while unbound. */
-  bool isCurrent() const {
-    return _thread.load(std::memory_order_acquire) ==
-           std::this_thread::get_id();
-  }
-
   /**
-   The entry check: binds to the calling thread when none is bound, else
-   compares. Returns whether the calling thread is the right one; a wrong
-   one aborts in debug builds, and is logged once per site in release
-   builds, with `what` naming the entry.
+   The entry check: whether the calling thread is the bound one, or none is
+   bound yet. A wrong one aborts in debug builds, and is logged once per
+   site in release builds, with `what` naming the entry.
    */
   bool assertCurrent(Site &site, const char *what) {
-    const auto current = std::this_thread::get_id();
-    auto expected = std::thread::id();
-    if (_thread.compare_exchange_strong(expected, current,
-                                        std::memory_order_acq_rel)) {
-      return true;
-    }
-    if (expected == current) {
+    const auto bound = _thread.load(std::memory_order_acquire);
+    if (bound == std::thread::id() || bound == std::this_thread::get_id()) {
       return true;
     }
     if (!site.reported.exchange(true)) {

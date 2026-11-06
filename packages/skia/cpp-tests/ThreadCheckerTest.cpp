@@ -1,7 +1,8 @@
-// Host-side check of rnsurface::ThreadChecker (see run.sh): the first entry
-// binds, the same thread passes, another thread is reported once per site.
-// Built as a release build (RNSURFACE_THREAD_CHECK_ABORTS 0), so that a
-// violation reports rather than aborts the run.
+// Host-side check of rnsurface::ThreadChecker (see run.sh): entries pass
+// until the checker is bound, the bound thread passes, another thread is
+// reported once per site, and binding again moves the contract. Built as a
+// release build (RNSURFACE_THREAD_CHECK_ABORTS 0), so that a violation
+// reports rather than aborts the run.
 
 #define RNSURFACE_THREAD_CHECK_ABORTS 0
 
@@ -32,27 +33,24 @@ template <typename F> void onAnotherThread(F f) {
 
 int main() {
   {
+    // Unbound: no contract yet, from any thread.
     ThreadChecker checker;
     ThreadChecker::Site site;
-    expect(!checker.isBound(), "unbound until the first entry");
-    expect(!checker.isCurrent(), "no thread is current while unbound");
-    expect(checker.assertCurrent(site, "first"), "the first entry binds");
-    expect(checker.isBound(), "bound after the first entry");
-    expect(checker.isCurrent(), "the binding thread is current");
-    expect(checker.assertCurrent(site, "again"), "the same thread passes");
-    expect(!site.reported, "a passing entry reports nothing");
+    expect(checker.assertCurrent(site, "unbound"), "an entry passes unbound");
+    bool passed = false;
+    onAnotherThread(
+        [&]() { passed = checker.assertCurrent(site, "unbound, other"); });
+    expect(passed, "an entry from another thread passes unbound too");
+    expect(!site.reported, "nothing is reported while unbound");
   }
   {
     ThreadChecker checker;
     ThreadChecker::Site site;
     checker.bindToCurrentThread();
+    expect(checker.assertCurrent(site, "bound"), "the bound thread passes");
+    expect(!site.reported, "a passing entry reports nothing");
     bool passed = true;
-    bool current = true;
-    onAnotherThread([&]() {
-      current = checker.isCurrent();
-      passed = checker.assertCurrent(site, "other");
-    });
-    expect(!current, "another thread is not current");
+    onAnotherThread([&]() { passed = checker.assertCurrent(site, "other"); });
     expect(!passed, "another thread fails the entry check");
     expect(site.reported, "the violation is reported");
     // The site reports once: a second violation at the same site passes the
@@ -61,25 +59,32 @@ int main() {
     onAnotherThread(
         [&]() { passedAgain = checker.assertCurrent(site, "other"); });
     expect(!passedAgain, "a second violation still fails");
-    expect(checker.isCurrent(), "the binding is kept after a violation");
+    expect(checker.assertCurrent(site, "bound again"),
+           "the binding is kept after a violation");
   }
   {
+    // Binding again moves the contract to the new thread.
     ThreadChecker checker;
     ThreadChecker::Site site;
     checker.bindToCurrentThread();
-    checker.unbind();
-    expect(!checker.isBound(), "unbind forgets the thread");
     bool passed = false;
-    onAnotherThread([&]() { passed = checker.assertCurrent(site, "rebind"); });
-    expect(passed, "the next entry after unbind binds again");
-    expect(!checker.isCurrent(), "bound to the other thread now");
-    expect(!site.reported, "a rebind reports nothing");
+    onAnotherThread([&]() {
+      checker.bindToCurrentThread();
+      passed = checker.assertCurrent(site, "rebound");
+    });
+    expect(passed, "the thread that bound again passes");
+    expect(!checker.assertCurrent(site, "previous"),
+           "the previous thread fails after the rebind");
   }
   {
-    // The macro declares a site of its own per use.
+    // The macro declares a site of its own per use, and passes on the bound
+    // thread.
     ThreadChecker checker;
+    checker.bindToCurrentThread();
     RNSURFACE_ASSERT_THREAD(checker, "macro");
-    expect(checker.isCurrent(), "the macro binds on first use");
+    ThreadChecker::Site site;
+    expect(checker.assertCurrent(site, "after the macro"),
+           "the macro leaves the binding as it is");
   }
   if (failures == 0) {
     std::printf("ThreadCheckerTest: passed\n");

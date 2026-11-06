@@ -51,9 +51,9 @@ namespace jsi = facebook::jsi;
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
  * replay on the calling thread. Presenting (redraw, presentFrame,
  * scheduleFrame) runs on the present thread, and only there, which the
- * entries check (see rnsurface::ThreadChecker), and so does everything the
- * platform view does to the window (see RNSkWindowSurface): nothing waits
- * for a present.
+ * entries check once the platform view has bound it (see
+ * bindPresentThread), and so does everything the platform view does to the
+ * window (see RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -287,6 +287,15 @@ public:
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
   }
+
+  /**
+   Present thread: binds the entries that belong to it (redraw,
+   presentFrame, scheduleFrame; see rnsurface::ThreadChecker) to the calling
+   thread, before the first of them. The platform view posts it to its
+   present thread as it installs it (see setPresentThread), ahead of
+   everything it posts there.
+   */
+  void bindPresentThread() { _presentThread.bindToCurrentThread(); }
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface

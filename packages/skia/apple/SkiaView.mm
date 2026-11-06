@@ -14,6 +14,7 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <memory>
@@ -199,9 +200,19 @@ static NSRunLoop *presentRunLoop() {
   // The display's rate, read on the main thread as the view enters a window
   // (UIKit), 0 until then.
   std::atomic<float> _maximumFramesPerSecond;
+  // Whether a frame went to the window since the display link's last tick,
+  // and when the interval of that tick ends (see scheduleFrame:). Present
+  // thread.
+  bool _presentedSinceTick;
+  CFTimeInterval _tickTarget;
 #else
-  // Present thread.
+  // Whether a tick is scheduled, when the last one ran (see
+  // presentAgainLater), and which ticks are still wanted: the leave moves
+  // the count on, and a tick scheduled before it does nothing. Present
+  // thread.
   bool _presentAgainScheduled;
+  CFTimeInterval _lastTick;
+  uint64_t _tickGeneration;
 #endif
 }
 
@@ -222,9 +233,13 @@ static NSRunLoop *presentRunLoop() {
     _scheduler->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
+    _lastTick = 0;
+    _tickGeneration = 0;
 #else
     _fullFrameRateRequested = false;
     _maximumFramesPerSecond = 0;
+    _presentedSinceTick = false;
+    _tickTarget = 0;
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -323,6 +338,17 @@ static NSRunLoop *presentRunLoop() {
       (*shared)();
     }];
   });
+  // The entries of the view and its window that belong to the present
+  // thread are bound to it there (see RNSkView::bindPresentThread), ahead
+  // of everything posted behind this.
+  {
+    auto surface = _surface;
+    auto view = _view;
+    [RNSkPresentThread post:^{
+      surface->bindPresentingThread();
+      view->bindPresentThread();
+    }];
+  }
   [self enterPresentThread];
   // A submitted recording goes to the scheduler, on the present thread,
   // which arms the display link, or presents on the spot for a window
@@ -382,6 +408,12 @@ static NSRunLoop *presentRunLoop() {
     strongSelf->_displayLink = nil;
     // The request belonged to that link: the next one must ask again.
     strongSelf->_fullFrameRateRequested = false;
+    strongSelf->_presentedSinceTick = false;
+#else
+    // A tick scheduled is let go of (see presentAgainLater): the scheduler
+    // forgot it, and the next request schedules one of its own.
+    strongSelf->_presentAgainScheduled = false;
+    strongSelf->_tickGeneration++;
 #endif
     strongSelf->_presentView = nullptr;
     surface->detach((__bridge void *)layer);
@@ -481,6 +513,19 @@ static NSRunLoop *presentRunLoop() {
   if (_presentView == nullptr || !_hasWindow) {
     return;
   }
+#if !TARGET_OS_OSX
+  // One present per vsync. A frame for a resized window goes on the spot
+  // only while nothing went to the window since the display link's last
+  // tick: a second present in the same interval shows no sooner (the
+  // display takes one frame per vsync), and takes a second of the layer's
+  // three drawables; once they are all in flight, the next present blocks
+  // this thread until one comes back. The frame waits for the next tick
+  // instead, like any other.
+  if (forResizedWindow && _presentedSinceTick &&
+      CACurrentMediaTime() < _tickTarget) {
+    forResizedWindow = false;
+  }
+#endif
   _scheduler->requestFrame(forResizedWindow);
 }
 
@@ -511,7 +556,13 @@ static NSRunLoop *presentRunLoop() {
   if (_presentView == nullptr) {
     return rnsurface::FrameScheduler::kNothingPresented;
   }
-  return _presentView->presentFrame();
+  const int result = _presentView->presentFrame();
+#if !TARGET_OS_OSX
+  if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
+    _presentedSinceTick = true;
+  }
+#endif
+  return result;
 }
 
 #if !TARGET_OS_OSX
@@ -555,6 +606,8 @@ static NSRunLoop *presentRunLoop() {
 // thread's run loop returns after each tick and drains its pool then (see
 // presentRunLoop).
 - (void)onFrame:(CADisplayLink *)link {
+  _presentedSinceTick = false;
+  _tickTarget = link.targetTimestamp;
   _scheduler->onFrame();
   // The scheduler asked for another tick while recordings are left: more
   // were submitted meanwhile, or the window could not take one.
@@ -563,21 +616,37 @@ static NSRunLoop *presentRunLoop() {
   }
 }
 #else
-// Present thread.
+// A tick stands in for the vsync macOS has no display link for on the
+// minimum deployment target. The first tick after an idle stretch runs as
+// soon as the present thread gets to it, as presenting did before the
+// scheduler: nothing waits for a cadence that has not started. The ticks
+// after it come at 60 Hz from the previous one, for the frames left over
+// (the window could not take one) and the frames that keep coming. Present
+// thread.
 - (void)presentAgainLater {
   if (_presentAgainScheduled) {
     return;
   }
   _presentAgainScheduled = true;
+  const CFTimeInterval interval = 1.0 / 60;
+  const CFTimeInterval delay =
+      std::max(0.0, _lastTick + interval - CACurrentMediaTime());
+  const uint64_t generation = _tickGeneration;
   __weak SkiaView *weakSelf = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 60),
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                               static_cast<int64_t>(delay * NSEC_PER_SEC)),
                  dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
                    [RNSkPresentThread post:^{
                      SkiaView *strongSelf = weakSelf;
-                     if (strongSelf == nil) {
+                     if (strongSelf == nil ||
+                         strongSelf->_tickGeneration != generation) {
+                       // Left meanwhile (see leavePresentThread): the scheduler
+                       // forgot what it asked for, and asks again for what
+                       // comes next.
                        return;
                      }
                      strongSelf->_presentAgainScheduled = false;
+                     strongSelf->_lastTick = CACurrentMediaTime();
                      strongSelf->_scheduler->onFrame();
                    }];
                  });
