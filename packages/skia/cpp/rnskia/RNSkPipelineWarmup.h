@@ -63,8 +63,8 @@ namespace RNSkia {
  * nothing, and the replacement device starts a warmup of its own.
  *
  * The set is the paint options <Canvas> content draws with most (a solid
- * color, an image, a linear and a radial gradient, a blur, the atlas draw,
- * text), for the render passes of a window (see DawnUtils). It is a guess
+ * color, an image, a linear and a radial gradient, the atlas draw, text),
+ * for the render passes of a window (see DawnUtils). It is a guess
  * to revise with data: ContextOptions::fPipelineCachingCallback lists what
  * Graphite compiles inline, and the cold mode of the benchmark (#4385)
  * measures the first mount.
@@ -77,21 +77,30 @@ public:
    (see DawnContext::setPrecompileDisplayP3). The context is used on the
    warmup thread only, and released there. `lost` is the device's loss flag
    (see DawnContext::Generation), which outlives the warmup: set, the warmup
-   stops at its next step. Any thread; returns at once.
+   stops at its next step. `device` is that device, whose pipeline cache the
+   thread then keeps on disk (see storePipelineCache). Any thread; returns at
+   once.
    */
   static void start(std::unique_ptr<skgpu::graphite::PrecompileContext> context,
-                    bool displayP3, const std::atomic<bool> *lost) {
+                    bool displayP3, const std::atomic<bool> *lost,
+                    wgpu::Device device) {
     if (context == nullptr || lost == nullptr) {
       return;
     }
     auto *released = context.release();
-    std::thread([released, displayP3, lost]() {
+    std::thread([released, displayP3, lost, device = std::move(device)]() {
       std::unique_ptr<skgpu::graphite::PrecompileContext> owned(released);
       lowerPriority();
       // The entries no process uses any more are let go of here, on the
       // thread that reads the cache most, before it does.
       RNSkBlobCache::getInstance().prune();
       run(owned.get(), displayP3, *lost);
+      owned = nullptr;
+#if defined(__ANDROID__)
+      storePipelineCache(device, *lost);
+#else
+      (void)device;
+#endif
     }).detach();
   }
 
@@ -100,6 +109,32 @@ private:
   // compiles: longer than the interval of a frame at any display rate, so
   // that a canvas animating at 30 Hz is not interleaved with.
   static constexpr auto kIdle = std::chrono::milliseconds(100);
+
+#if defined(__ANDROID__)
+  // How often the thread looks for pipelines to store, once the warmup is
+  // done. Rarely: the device is only asked when the frames left it alone, and
+  // a look with nothing compiled since costs next to nothing.
+  static constexpr auto kStoreInterval = std::chrono::seconds(5);
+
+  // Keeps the device's VkPipelineCache on disk for the next launch (see
+  // vulkan_monolithic_pipeline_cache in DawnUtils). Dawn only stores it from
+  // PerformIdleTasks, and only if a pipeline was compiled since the last
+  // store. The warmup's pipelines go now, those the frames compile inline
+  // once they leave the device alone, which leaving the foreground ends up
+  // doing. A process killed before that compiles them again next time, like
+  // one killed during the warmup. Until the device is lost: its pipelines are
+  // not the replacement's to keep.
+  static void storePipelineCache(const wgpu::Device &device,
+                                 const std::atomic<bool> &lost) {
+    auto &activity = RNSkGpuActivity::getInstance();
+    while (!lost.load(std::memory_order_acquire)) {
+      if (activity.isIdle(kIdle)) {
+        dawn::native::PerformIdleTasks(device);
+      }
+      std::this_thread::sleep_for(kStoreInterval);
+    }
+  }
+#endif
 
   // Behind the threads that record and present: a compile that is not
   // needed yet must not delay a frame that is.

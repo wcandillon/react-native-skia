@@ -63,6 +63,17 @@ public:
     }
   }
 
+  /**
+   Whether no work is marked and none has been for `idle`, without waiting
+   for it: for a thread that looks now and then, which waitForIdle would wake
+   on every frame. Any thread.
+   */
+  bool isIdle(std::chrono::steady_clock::duration idle) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _inFlight == 0 &&
+           std::chrono::steady_clock::now() - _lastEnd >= idle;
+  }
+
 private:
   RNSkGpuActivity() = default;
 

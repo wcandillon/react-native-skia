@@ -27,6 +27,13 @@
 
 using namespace facebook::react;
 
+// React Native 0.82 added invalidate to RCTComponentViewProtocol; before that
+// (the peer range starts at 0.79, react-native-macos is at 0.81) nothing
+// declares or implements it. See -[SkiaView invalidate].
+@interface RCTViewComponentView (SkiaInvalidate)
+- (void)invalidate;
+@end
+
 @interface SkiaView ()
 // What the frame scheduler asks of the view (see SkiaViewPresentHost).
 - (void)postFrameCallback;
@@ -97,7 +104,6 @@ usesP3ColorSpace(const std::string &colorSpace,
 // #4394: everything that touches it runs here, one task after the other.
 @interface RNSkPresentThread : NSObject
 + (void)post:(dispatch_block_t)task;
-+ (NSRunLoop *)runLoop;
 @end
 
 @implementation RNSkPresentThread
@@ -140,11 +146,6 @@ static NSRunLoop *presentRunLoop() {
   CFRunLoopWakeUp(runLoop);
 }
 
-/** The run loop of the present thread, for the views' display links. */
-+ (NSRunLoop *)runLoop {
-  return presentRunLoop();
-}
-
 @end
 
 @implementation SkiaView {
@@ -169,8 +170,13 @@ static NSRunLoop *presentRunLoop() {
   // The colorSpace prop, see usesP3ColorSpace.
   std::string _colorSpace;
   // Whether the window can show a frame (see appIsBackgrounded). Written on
-  // the main thread, read on the present thread.
-  std::atomic<bool> _canPresent;
+  // the main thread, read on the present thread, by the surface, which holds
+  // this rather than the view (see leavePresentThread).
+  std::shared_ptr<std::atomic<bool>> _canPresent;
+  // Whether the present thread presents the view: from the enter task to the
+  // leave task. What a recording that reaches the present thread looks at
+  // before it touches the view (see leavePresentThread). Present thread.
+  std::shared_ptr<bool> _presenting;
   // The main thread's record of the window: whether one is attached (the
   // attach itself runs on the present thread, see attachSurface), and at
   // which size in pixels. A new size is handed over with resize(), which
@@ -221,7 +227,8 @@ static NSRunLoop *presentRunLoop() {
     _manager = [RNSkiaModule latestActiveSkManager];
     _nativeId = 0;
     _highBitDepth = false;
-    _canPresent = !appIsBackgrounded();
+    _canPresent = std::make_shared<std::atomic<bool>>(!appIsBackgrounded());
+    _presenting = std::make_shared<bool>(false);
     _windowAttached = false;
     _attachedWidth = 0;
     _attachedHeight = 0;
@@ -324,11 +331,8 @@ static NSRunLoop *presentRunLoop() {
   // view holds is presented on its next frame once the app is back (see
   // appWillEnterForeground:). Dawn holds GPU work committed meanwhile anyway
   // (see DawnContext), so a present racing the notification is held there.
-  __weak SkiaView *weakSelf = self;
-  _surface->setCanPresent([weakSelf]() {
-    SkiaView *strongSelf = weakSelf;
-    return strongSelf != nil && strongSelf->_canPresent.load();
-  });
+  _surface->setCanPresent(
+      [canPresent = _canPresent]() { return canPresent->load(); });
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
   // Presents, redraws and frame requests go to the present thread, where
   // the view is the one the tasks posted before see.
@@ -354,9 +358,13 @@ static NSRunLoop *presentRunLoop() {
   // which arms the display link, or presents on the spot for a window
   // resized since the frame it shows (see
   // rnsurface::FrameScheduler::requestFrame).
-  _view->setFrameScheduler([weakSelf](bool forResizedWindow) {
-    [weakSelf scheduleFrame:forResizedWindow];
-  });
+  __weak SkiaView *weakSelf = self;
+  _view->setFrameScheduler(
+      [weakSelf, presenting = _presenting](bool forResizedWindow) {
+        if (*presenting) {
+          [weakSelf scheduleFrame:forResizedWindow];
+        }
+      });
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
@@ -374,7 +382,9 @@ static NSRunLoop *presentRunLoop() {
 - (void)enterPresentThread {
   __weak SkiaView *weakSelf = self;
   auto view = _view;
+  auto presenting = _presenting;
   [RNSkPresentThread post:^{
+    *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
@@ -389,39 +399,47 @@ static NSRunLoop *presentRunLoop() {
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
 // goes in the same task: a frame scheduled between two would make a new one
-// that outlives the leave (see scheduleFrame). The task holds the view, which
-// the link held until here, so it may hold the last reference to it once
-// Fabric let go of the view (see invalidate): the task hands the view back to
-// the main thread at its end, where UIKit expects a view to go.
+// that outlives the leave (see scheduleFrame). The view goes on the main
+// thread, where UIKit expects it to, as this task owns the last reference to
+// it once Fabric let go of it (see invalidate). A strong capture cannot
+// promise that: the block would let go on the present thread, racing the main
+// thread for the last release. So the reference is taken here, by hand, and
+// let go of only on the main thread, once the autorelease pool of the work is
+// drained. Every task posted before this one runs under that reference, also
+// where it loads a weak one. Nothing of the present thread loads one after
+// this task (a recording from a stale RNSkView stops at _presenting), and the
+// surface asks _canPresent rather than the view.
 - (void)leavePresentThread {
   if (_surface == nullptr) {
     return;
   }
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
-  SkiaView *strongSelf = self;
+  void *retainedSelf = (__bridge_retained void *)self;
   [RNSkPresentThread post:^{
-    // Whatever the scheduler asked for goes with the link.
-    strongSelf->_scheduler->cancel();
+    @autoreleasepool {
+      __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
+      *view->_presenting = false;
+      // Whatever the scheduler asked for goes with the link.
+      view->_scheduler->cancel();
 #if !TARGET_OS_OSX
-    [strongSelf->_displayLink invalidate];
-    strongSelf->_displayLink = nil;
-    // The request belonged to that link: the next one must ask again.
-    strongSelf->_fullFrameRateRequested = false;
-    strongSelf->_presentedSinceTick = false;
+      [view->_displayLink invalidate];
+      view->_displayLink = nil;
+      // The request belonged to that link: the next one must ask again.
+      view->_fullFrameRateRequested = false;
+      view->_presentedSinceTick = false;
 #else
-    // A tick scheduled is let go of (see presentAgainLater): the scheduler
-    // forgot it, and the next request schedules one of its own.
-    strongSelf->_presentAgainScheduled = false;
-    strongSelf->_tickGeneration++;
+      // A tick scheduled is let go of (see presentAgainLater): the scheduler
+      // forgot it, and the next request schedules one of its own.
+      view->_presentAgainScheduled = false;
+      view->_tickGeneration++;
 #endif
-    strongSelf->_presentView = nullptr;
-    surface->detach((__bridge void *)layer);
-    strongSelf->_hasWindow = false;
-    // The main thread lets go of the view last (see above).
-    dispatch_async(dispatch_get_main_queue(), ^{
-      (void)strongSelf;
-    });
+      view->_presentView = nullptr;
+      surface->detach((__bridge void *)layer);
+      view->_hasWindow = false;
+    }
+    dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
+                     [](void *retained) { CFRelease(retained); });
   }];
   _windowAttached = false;
 }
@@ -446,14 +464,13 @@ static NSRunLoop *presentRunLoop() {
   [self releaseNativeView];
 }
 
-#if !TARGET_OS_OSX
-// react-native-macos (0.81) predates invalidate on RCTComponentViewProtocol
-// (React Native 0.83): drop this guard once it catches up.
+// Only called from React Native 0.82 on, which implements it on every view:
+// on an earlier version nothing gets here. Drop the category above once the
+// peer range starts at 0.82 and react-native-macos has caught up.
 - (void)invalidate {
   [super invalidate];
   [self releaseNativeView];
 }
-#endif // !TARGET_OS_OSX
 
 // Unregistered first, so that the native view is not destroyed under the
 // registry's lock: it goes as the present thread lets go of it.
@@ -490,12 +507,12 @@ static NSRunLoop *presentRunLoop() {
 
 // The app went to the background (was hidden on macOS): frames wait there.
 - (void)appDidEnterBackground:(NSNotification *)notification {
-  _canPresent = false;
+  _canPresent->store(false);
 }
 
 // The app is coming back: what waited is presented on the view's next frame.
 - (void)appWillEnterForeground:(NSNotification *)notification {
-  _canPresent = true;
+  _canPresent->store(true);
   if (_view != nullptr) {
     auto view = _view;
     [RNSkPresentThread post:^{
@@ -637,10 +654,14 @@ static NSRunLoop *presentRunLoop() {
       std::max(0.0, _lastTick + interval - CACurrentMediaTime());
   const uint64_t generation = _tickGeneration;
   __weak SkiaView *weakSelf = self;
+  auto presenting = _presenting;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                static_cast<int64_t>(delay * NSEC_PER_SEC)),
                  dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
                    [RNSkPresentThread post:^{
+                     if (!*presenting) {
+                       return;
+                     }
                      SkiaView *strongSelf = weakSelf;
                      if (strongSelf == nil ||
                          strongSelf->_tickGeneration != generation) {
@@ -725,15 +746,15 @@ static NSRunLoop *presentRunLoop() {
 
 // Attaches the window at the layout size just set, in pixels, or takes it
 // away at a size of zero. The attach runs on the present thread, in order
-// with the presents, detaches and redraws posted before it: it takes the
-// window's mutex, which a present in flight holds for as long as its
-// pipelines take to compile, and the main thread must not wait for that. It
-// takes the layout size as it is when it runs, so that a layout in between is
-// not lost (a resize() before the window exists is dropped), and does nothing
-// at a size of zero (that layout posted a detach after it). A layout that
-// handed resize() a size while the window was being attached was dropped
-// too: the window takes the latest layout size once attached. The main thread
-// records the window as attached right away, so that later layouts resize it.
+// with the presents, detaches and redraws posted before it: a present in
+// flight holds the thread for as long as its pipelines take to compile, and
+// the main thread must not wait for that. It takes the layout size as it is
+// when it runs, so that a layout in between is not lost (a resize() before the
+// window exists is dropped), and does nothing at a size of zero (that layout
+// posted a detach after it). A layout that handed resize() a size while the
+// window was being attached was dropped too: the window takes the latest layout
+// size once attached. The main thread records the window as attached right
+// away, so that later layouts resize it.
 - (void)attachWindowWithWidth:(int)w height:(int)h {
   if (w == 0 || h == 0) {
     [self detachWindow];

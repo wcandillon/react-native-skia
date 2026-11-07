@@ -1,7 +1,7 @@
 // Host-side check of RNSkia::RNSkBlobCache (see run.sh): Dawn's two-call
-// load, a miss, an entry too large to keep or to read, the cache before a
-// directory is set, and the prune: by age, with a load as a touch, by
-// budget, and of the temporary files a dead writer left.
+// load, a miss, an entry too large to keep or to read, a damaged entry, the
+// cache before a directory is set, and the prune: by age, with a load as a
+// touch, by budget, and of the temporary files a dead writer left.
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -135,6 +135,61 @@ int main() {
   const auto hugeKey = bytes("huge");
   cache.store(hugeKey.data(), hugeKey.size(), huge.data(), huge.size());
   expect(sizeOf(cache, hugeKey) == 0, "an entry too large is dropped");
+
+  // A damaged entry reads as a miss, as a power loss can leave one (the rename
+  // on disk, the data not), and a store replaces it.
+  {
+    const auto damagedKey = bytes("damaged");
+    const std::vector<uint8_t> whole(4096, 42);
+    const auto files = entryFiles(directory);
+    cache.store(damagedKey.data(), damagedKey.size(), whole.data(),
+                whole.size());
+    const auto path = newFile(files, directory);
+    expect(!path.empty(), "the damaged entry got a file");
+    const auto size = std::filesystem::file_size(path);
+    const auto isMiss = [&](const char *what) {
+      cache.setDirectory(directory.string());
+      expect(sizeOf(cache, damagedKey) == 0, what);
+      cache.store(damagedKey.data(), damagedKey.size(), whole.data(),
+                  whole.size());
+      cache.setDirectory(directory.string());
+      expect(sizeOf(cache, damagedKey) == whole.size(),
+             "a store replaces a damaged entry");
+    };
+    const auto overwrite = [&](long offset, const char *data, size_t length) {
+      std::FILE *file = std::fopen(path.c_str(), "r+b");
+      std::fseek(file, offset, SEEK_SET);
+      std::fwrite(data, 1, length, file);
+      std::fclose(file);
+    };
+
+    cache.setDirectory(directory.string());
+    expect(sizeOf(cache, damagedKey) == whole.size(), "a whole entry loads");
+
+    std::filesystem::resize_file(path, size - 1);
+    isMiss("a truncated value misses");
+
+    std::filesystem::resize_file(path, 4);
+    isMiss("a truncated header misses");
+
+    // The size is right, the data never reached the disk.
+    const std::vector<char> zeros(512, 0);
+    overwrite(static_cast<long>(size - zeros.size()), zeros.data(),
+              zeros.size());
+    isMiss("a value zeroed at the end misses");
+
+    const char flipped = 1;
+    overwrite(static_cast<long>(size - 1), &flipped, 1);
+    isMiss("a value with a wrong byte misses");
+
+    std::filesystem::resize_file(path, size + 1);
+    isMiss("bytes after the value miss");
+
+    overwrite(0, "RNSKBLOB", 8);
+    isMiss("an entry in the previous format misses");
+
+    std::filesystem::remove(path);
+  }
 
   // The prune by age: an entry nothing asked for in a long time goes, one
   // asked for stays, as the load touched it.

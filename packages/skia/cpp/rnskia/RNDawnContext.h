@@ -819,13 +819,15 @@ private:
     return *registry;
   }
 
-  // Whether the app is in the foreground and active (see isForeground). Not
-  // tied to the context: the platform sets it before the GPU is probed.
+  // See setPrecompileDisplayP3. Not tied to the context: the platform sets it
+  // before the GPU is probed.
   static std::atomic<bool> &precompileDisplayP3() noexcept {
     static std::atomic<bool> flag{false};
     return flag;
   }
 
+  // Whether the app is in the foreground and active (see isForeground). Not
+  // tied to the context: the platform sets it before the GPU is probed.
   static std::atomic<bool> &foregroundFlag() noexcept {
     static std::atomic<bool> foreground{true};
     return foreground;
@@ -1013,7 +1015,7 @@ private:
     RNSkPipelineWarmup::start(
         generation->context->makePrecompileContext(),
         precompileDisplayP3().load(std::memory_order_acquire),
-        &generation->lost);
+        &generation->lost, generation->backendContext.fDevice);
     return generation;
   }
 

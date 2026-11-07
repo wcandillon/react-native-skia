@@ -28,7 +28,12 @@ namespace RNSkia {
  *
  * One file per entry, named after a hash of Dawn's key, which the file
  * carries so that a hash collision reads as a miss: the magic, the key's
- * size, the key, the value. Dawn's keys carry its own version and the
+ * size, the value's size and hash, the key, the value. A file that does not
+ * add up reads as a miss too, and Dawn's store then replaces it: a rename can
+ * reach the disk ahead of the data (a power loss), and what a driver makes of
+ * a damaged pipeline cache is not to be found out. Nothing is synced to disk
+ * for that reason: a store runs on the thread that compiles, and an entry lost
+ * only costs a compile. Dawn's keys carry its own version and the
  * adapter's identity, so a stale entry is never asked for; it is let go of
  * once nothing has asked for it in a while (see prune). Any thread: Dawn
  * loads and stores from whichever thread creates a pipeline, the warmup
@@ -187,7 +192,7 @@ private:
   RNSkBlobCache() = default;
 
   static constexpr auto kTemporaryMaxAge = std::chrono::hours(1);
-  static constexpr char kMagic[8] = {'R', 'N', 'S', 'K', 'B', 'L', 'O', 'B'};
+  static constexpr char kMagic[8] = {'R', 'N', 'S', 'K', 'B', 'L', 'B', '2'};
 
   // The entry read last: Dawn loads each entry twice (the size, then the
   // bytes), and the second call must not read the file again. Let go of
@@ -219,69 +224,80 @@ private:
     return ::stat(directory.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
   }
 
-  std::string pathFor(const uint8_t *key, size_t keySize) const {
-    // FNV-1a over the key: the file carries the key itself, so the hash
-    // only has to spread the names.
-    uint64_t hash = 14695981039346656037ull;
-    for (size_t i = 0; i < keySize; i++) {
-      hash ^= key[i];
-      hash *= 1099511628211ull;
+  // FNV-1a: a file name that only has to spread, and a check against damage
+  // rather than an attacker (the directory is the app's own).
+  static uint64_t hash(const uint8_t *data, size_t size) {
+    uint64_t result = 14695981039346656037ull;
+    for (size_t i = 0; i < size; i++) {
+      result ^= data[i];
+      result *= 1099511628211ull;
     }
+    return result;
+  }
+
+  std::string pathFor(const uint8_t *key, size_t keySize) const {
     char name[32];
     std::snprintf(name, sizeof(name), "%016llx.blob",
-                  static_cast<unsigned long long>(hash));
+                  static_cast<unsigned long long>(hash(key, keySize)));
     return _directory + "/" + name;
   }
 
-  // Reads the entry for the key into _last; false when there is none, the
-  // file is not an entry for this key, or it is too large to be one.
+  // Whether the file is a whole entry for the key, whose value it leaves in
+  // `value`.
+  static bool readEntry(std::FILE *file, const uint8_t *key, size_t keySize,
+                        std::vector<uint8_t> *value) {
+    char magic[sizeof(kMagic)];
+    uint32_t storedKeySize = 0;
+    uint64_t valueSize = 0;
+    uint64_t valueHash = 0;
+    if (std::fread(magic, 1, sizeof(magic), file) != sizeof(magic) ||
+        std::memcmp(magic, kMagic, sizeof(magic)) != 0 ||
+        std::fread(&storedKeySize, 1, sizeof(storedKeySize), file) !=
+            sizeof(storedKeySize) ||
+        storedKeySize != keySize ||
+        std::fread(&valueSize, 1, sizeof(valueSize), file) !=
+            sizeof(valueSize) ||
+        std::fread(&valueHash, 1, sizeof(valueHash), file) !=
+            sizeof(valueHash) ||
+        valueSize > kMaxValueSize) {
+      return false;
+    }
+    std::vector<uint8_t> storedKey(keySize);
+    if (std::fread(storedKey.data(), 1, keySize, file) != keySize ||
+        std::memcmp(storedKey.data(), key, keySize) != 0) {
+      return false;
+    }
+    value->resize(static_cast<size_t>(valueSize));
+    return std::fread(value->data(), 1, value->size(), file) == value->size() &&
+           std::fgetc(file) == EOF &&
+           hash(value->data(), value->size()) == valueHash;
+  }
+
+  // Reads the entry for the key into _last; false when there is none, or the
+  // file is not a whole entry for this key.
   bool read(const uint8_t *key, size_t keySize) {
     const auto path = pathFor(key, keySize);
     std::FILE *file = std::fopen(path.c_str(), "rb");
     if (file == nullptr) {
       return false;
     }
-    bool ok = false;
-    char magic[sizeof(kMagic)];
-    uint32_t storedKeySize = 0;
-    std::vector<uint8_t> storedKey;
     std::vector<uint8_t> value;
-    if (std::fread(magic, 1, sizeof(magic), file) == sizeof(magic) &&
-        std::memcmp(magic, kMagic, sizeof(magic)) == 0 &&
-        std::fread(&storedKeySize, 1, sizeof(storedKeySize), file) ==
-            sizeof(storedKeySize) &&
-        storedKeySize == keySize) {
-      storedKey.resize(keySize);
-      if (std::fread(storedKey.data(), 1, keySize, file) == keySize &&
-          std::memcmp(storedKey.data(), key, keySize) == 0) {
-        const long start = std::ftell(file);
-        if (start >= 0 && std::fseek(file, 0, SEEK_END) == 0) {
-          const long end = std::ftell(file);
-          if (end >= start &&
-              static_cast<uint64_t>(end - start) <= kMaxValueSize &&
-              std::fseek(file, start, SEEK_SET) == 0) {
-            value.resize(static_cast<size_t>(end - start));
-            ok = value.empty() || std::fread(value.data(), 1, value.size(),
-                                             file) == value.size();
-          }
-        }
-      }
-    }
+    const bool ok = readEntry(file, key, keySize, &value);
     std::fclose(file);
     if (!ok) {
       return false;
     }
     // In use: the entry stays (see prune).
     ::utimensat(AT_FDCWD, path.c_str(), nullptr, 0);
-    _last.key = std::move(storedKey);
+    _last.key.assign(key, key + keySize);
     _last.value = std::move(value);
     return true;
   }
 
-  // Writes the entry to a file of its own, whole: a file is only ever seen
-  // complete, by this process or the next. The temporary file is this
-  // process's and this write's, so another process of the app writing the
-  // same entry never publishes a partial one.
+  // Writes the entry to a file of its own, whole: a running process only ever
+  // sees it complete (after a power loss, see readEntry). The temporary file
+  // is this process's and this write's, so another process of the app writing
+  // the same entry never publishes a partial one.
   void write(const uint8_t *key, size_t keySize, const uint8_t *value,
              size_t valueSize) {
     const auto path = pathFor(key, keySize);
@@ -292,10 +308,16 @@ private:
       return;
     }
     const uint32_t storedKeySize = static_cast<uint32_t>(keySize);
+    const uint64_t storedValueSize = valueSize;
+    const uint64_t valueHash = hash(value, valueSize);
     const bool ok =
         std::fwrite(kMagic, 1, sizeof(kMagic), file) == sizeof(kMagic) &&
         std::fwrite(&storedKeySize, 1, sizeof(storedKeySize), file) ==
             sizeof(storedKeySize) &&
+        std::fwrite(&storedValueSize, 1, sizeof(storedValueSize), file) ==
+            sizeof(storedValueSize) &&
+        std::fwrite(&valueHash, 1, sizeof(valueHash), file) ==
+            sizeof(valueHash) &&
         std::fwrite(key, 1, keySize, file) == keySize &&
         std::fwrite(value, 1, valueSize, file) == valueSize;
     const bool closed = std::fclose(file) == 0;

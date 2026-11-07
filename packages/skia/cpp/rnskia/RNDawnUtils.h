@@ -355,7 +355,8 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // (MediaTek mt6855) segfaults while Graphite compiles its pipelines
       // (#4340). With one cache the only vkDestroyPipelineCache runs at
       // device teardown, and pipelines that share binaries compile faster.
-      // PerformIdleTasks is not needed: nothing persists the cache.
+      // The blob cache keeps it across launches, from PerformIdleTasks (see
+      // RNSkPipelineWarmup::storePipelineCache).
       "vulkan_monolithic_pipeline_cache",
 #endif
 #ifdef __APPLE__
