@@ -52,6 +52,16 @@ RCT_EXPORT_MODULE()
     NSString *caches = NSSearchPathForDirectoriesInDomains(
                            NSCachesDirectory, NSUserDomainMask, YES)
                            .firstObject;
+#if TARGET_OS_OSX
+    // Shared between the apps of the user outside the sandbox: a directory
+    // of the app's own, as the sandbox would give, so that the record of
+    // the pipelines used is this app's.
+    if (caches != nil) {
+      NSString *bundle = NSBundle.mainBundle.bundleIdentifier;
+      caches = [caches
+          stringByAppendingPathComponent:bundle ?: @"react-native-skia"];
+    }
+#endif // TARGET_OS_OSX
     if (caches != nil) {
       RNSkia::DawnContext::setCacheDirectory(
           [[caches stringByAppendingPathComponent:@"rnskia"] UTF8String]);

@@ -146,13 +146,15 @@ public:
 
   /**
    Where Dawn's blob cache keeps the shaders and pipeline caches it compiled,
-   for the next process to find (see RNSkBlobCache): the platform's cache
+   and where the pipelines the app used are recorded, for the next process
+   to find (see RNSkBlobCache, RNSkPipelineWarmup): the platform's cache
    directory. Set by the platform before the GPU is first asked for (see
    RNSkiaModule, PlatformContext); set later, it applies to the devices
    created from then on. Any thread.
    */
   static void setCacheDirectory(const std::string &directory) noexcept {
     RNSkBlobCache::getInstance().setDirectory(directory);
+    RNSkPipelineWarmup::getInstance().setDirectory(directory);
   }
 
   /**
@@ -1001,6 +1003,9 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    // Records the pipelines the frames compile, for the next launch (see
+    // RNSkPipelineWarmup).
+    RNSkPipelineWarmup::getInstance().install(ctxOptions);
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {
@@ -1012,7 +1017,7 @@ private:
     // (see RNSkPipelineWarmup), until this device is lost. The precompile
     // context is a Context operation, made here under the lock, and used
     // on the warmup thread only.
-    RNSkPipelineWarmup::start(
+    RNSkPipelineWarmup::getInstance().start(
         generation->context->makePrecompileContext(),
         precompileDisplayP3().load(std::memory_order_acquire),
         &generation->lost, generation->backendContext.fDevice);
