@@ -19,6 +19,9 @@ namespace jsi = facebook::jsi;
  * The recording side of a SkiaGraphiteView, handed to JS by
  * SkiaViewApi.makeGraphiteContext. It can be captured into any runtime:
  * recording happens on the calling thread, presenting on the main thread.
+ * Every context made for a view shares the view's target, which keeps its
+ * one open recording and the canvas JS draws it on (see
+ * RNSkGraphiteTarget::beginRecording).
  */
 class JsiSkGraphiteContext
     : public JsiSkWrappingSharedPtrNativeObject<JsiSkGraphiteContext,
@@ -37,24 +40,16 @@ public:
   double getHeight() { return getObject()->getHeight(); }
 
   std::shared_ptr<JsiSkCanvas> beginRecording() {
-    auto *canvas = getObject()->beginRecording();
+    auto canvas = getObject()->beginRecording();
     if (canvas == nullptr) {
       throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
     }
-    auto jsiCanvas = std::make_shared<JsiSkCanvas>(getContext(), canvas);
-    _canvas = jsiCanvas;
-    return jsiCanvas;
+    return canvas;
   }
 
   std::shared_ptr<JsiSkGraphiteRecording> finishRecording() {
-    auto recording = getObject()->finishRecording();
-    // The deferred canvas is deleted by the snap.
-    if (auto canvas = _canvas.lock()) {
-      canvas->detach();
-    }
-    _canvas.reset();
-    return std::make_shared<JsiSkGraphiteRecording>(getContext(),
-                                                    std::move(recording));
+    return std::make_shared<JsiSkGraphiteRecording>(
+        getContext(), getObject()->finishRecording());
   }
 
   void submit(std::shared_ptr<JsiSkGraphiteRecording> recording) {
@@ -74,9 +69,6 @@ public:
   }
 
   size_t getMemoryPressure() override { return 1024; }
-
-private:
-  std::weak_ptr<JsiSkCanvas> _canvas;
 };
 
 } // namespace RNSkia
