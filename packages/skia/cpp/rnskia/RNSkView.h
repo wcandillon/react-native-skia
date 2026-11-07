@@ -19,6 +19,7 @@
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
+#include "rnsurface/ThreadChecker.h"
 #include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
@@ -43,14 +44,16 @@ namespace jsi = facebook::jsi;
  * recordings are queued on the target; the view presents them onto its window
  * surface once the platform view's surface can show a new frame (see
  * setFrameScheduler), on the thread the platform view presents on: the main
- * thread, or a thread of its own (an Android canvas presents on one shared by
- * every canvas, see setPresentThread).
+ * thread, or a thread of its own (Android and Apple canvases each present on
+ * one shared by every canvas of the platform, see setPresentThread).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
- * replay on the calling thread. Presenting (redraw, presentFrame) runs on the
- * present thread, and only there, and so does everything the platform view
- * does to the window (see RNSkWindowSurface): nothing waits for a present.
+ * replay on the calling thread. Presenting (redraw, presentFrame,
+ * scheduleFrame) runs on the present thread, and only there, which the
+ * entries check once the platform view has bound it (see
+ * bindPresentThread), and so does everything the platform view does to the
+ * window (see RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -177,6 +180,7 @@ public:
    which tries it on the view's next frame (see setFrameScheduler).
    */
   void redraw() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
     RNSkGraphiteTargetInfo targetInfo;
     switch (_redrawRequest.start(*_surface, &targetInfo)) {
     case RNSkRedrawRequest::Start::kPresent:
@@ -271,15 +275,27 @@ public:
   /**
    Installed by the platform view when it presents on another thread than
    the main thread: runs a task on the thread the view presents on, never on
-   the spot (the window surface posts redraws with its mutex held). Any
-   thread. Without one, tasks are posted to the main thread, which the Apple
-   views present on; an Android view always installs one (its platform
-   context runs a task handed over on the main thread on the spot, see
-   JniPlatformContext). Installed once, before the view is bound to its id.
+   the spot (the window surface asks for a redraw from inside attach() and
+   resize(), and a redraw on the spot would present mid-attach). Any
+   thread. Without one, tasks are posted to the main thread. Android and
+   Apple views always install one: a present waits for the pipelines its
+   draws use to compile, which must not hold the main thread (and an Android
+   platform context runs a task handed over on the main thread on the spot,
+   see JniPlatformContext). Installed once, before the view is bound to its
+   id.
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
   }
+
+  /**
+   Present thread: binds the entries that belong to it (redraw,
+   presentFrame, scheduleFrame; see rnsurface::ThreadChecker) to the calling
+   thread, before the first of them. The platform view posts it to its
+   present thread as it installs it (see setPresentThread), ahead of
+   everything it posts there.
+   */
+  void bindPresentThread() { _presentThread.bindToCurrentThread(); }
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface
@@ -317,6 +333,7 @@ public:
 
   /** Present thread: a recording is waiting. */
   void scheduleFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::scheduleFrame");
     if (_frameScheduler) {
       _frameScheduler(hasFrameForResizedWindow());
     } else {
@@ -345,6 +362,7 @@ public:
    onCanPresent() each present it.
    */
   int presentFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrame");
     auto target = getTarget();
     if (target == nullptr) {
       return kNothingPresented;
@@ -379,13 +397,13 @@ public:
   }
 
   /**
-   Main thread. The window can show frames again (the app came back to the
-   foreground, see RNSkWindowSurface::setCanPresent): the redraw owed since
-   one found it could not present is posted (see RNSkRedrawRequest), else
-   the recordings queued meanwhile are handed to the frame scheduler. Nothing
-   is replayed on the spot. A GPU device lost in the background (where iOS
-   refuses GPU work) is replaced now that the app is back, and the view is
-   asked for a frame once it is.
+   Main or present thread. The window can show frames again (the app came
+   back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
+   owed since one found it could not present is posted (see
+   RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
+   frame scheduler. Nothing is replayed on the spot. A GPU device lost in the
+   background (where iOS refuses GPU work) is replaced now that the app is
+   back, and the view is asked for a frame once it is.
    */
   void onCanPresent() {
     DawnContext::requestRecovery();
@@ -707,6 +725,8 @@ private:
   bool _windowTakesLatestFrame = false;
   std::function<void(std::function<void()>)> _runOnPresentThread;
   RNSkRedrawRequest _redrawRequest;
+  // The thread the view presents on (see the class comment).
+  rnsurface::ThreadChecker _presentThread;
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread
