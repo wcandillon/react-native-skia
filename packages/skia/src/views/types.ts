@@ -17,7 +17,9 @@ export interface AndroidTextureViewProps {
   backingView?: "TextureView";
   /**
    * Declares that the canvas covers every pixel of its bounds, so the UI
-   * toolkit skips blending the view. Defaults to false. Applied in place.
+   * toolkit skips blending the view. Defaults to false. Applied in place;
+   * on Android 10 the view blends anyway, since that release's UI toolkit can
+   * leave an opaque `TextureView` blank.
    */
   opaque?: boolean;
 }
