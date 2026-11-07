@@ -675,8 +675,11 @@ public:
     SkCanvas *canvas = surface->getCanvas();
     canvas->drawImage(image, 0, 0);
 
-    // Flush the surface to ensure the image is rendered
-    submitRecording(recorder, skgpu::graphite::SyncToCpu::kYes);
+    // Submit without waiting on the CPU. A Dawn texture belongs to the device
+    // that made it, so whoever reads this one (adoptTexture() on the imported
+    // device) submits to the same queue, which runs this draw first. Waiting
+    // here blocked the JS thread until the GPU had drained every queued frame.
+    submitRecording(recorder);
 
     return texture;
   }
