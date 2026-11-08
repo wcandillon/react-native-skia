@@ -72,7 +72,6 @@ const mountView = (nativeID: string, options: MountOptions = {}) => {
       <SkiaPictureView
         nativeID={nativeID}
         onLayout={onLayout}
-        // eslint-disable-next-line @typescript-eslint/no-deprecated
         __destroyWebGLContextAfterRender={destroyContextAfterRender}
         style={{ width: 360, height: 520 }}
       />

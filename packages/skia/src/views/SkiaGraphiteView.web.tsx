@@ -345,7 +345,6 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     onLayout: _onLayout,
     nativeID: _nativeID,
     // Deprecated, kept out of the DOM.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;

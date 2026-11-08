@@ -23,7 +23,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import type { CanvasKit as CanvasKitType } from "canvaskit-wasm";
-import { peekSharedWebGLContext } from "react-native-skia/src/skia/web/SharedWebGLContext";
+import { peekSharedWebGLContext } from "@shopify/react-native-skia/src/skia/web/SharedWebGLContext";
 
 // Exercises the lifetime of the WebGL context behind the canvases on web.
 // Every canvas on the page draws through one shared WebGL context; a

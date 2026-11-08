@@ -16,7 +16,7 @@ const SIZE = 32;
 // number of paints the frame took from the pool.
 const draw = async (element: ReactNode) => {
   const { Skia } = importSkia();
-  const surface = Skia.Surface.MakeRaster(SIZE, SIZE)!;
+  const surface = Skia.Surface.Make(SIZE, SIZE)!;
   const root = new SkiaSGRoot(Skia);
   await root.render(
     <>

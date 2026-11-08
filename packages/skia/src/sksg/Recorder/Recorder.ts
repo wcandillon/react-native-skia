@@ -117,14 +117,21 @@ export class Recorder implements BaseRecorder {
         command.animatedProps = animatedProps;
       }
       // Static props are converted here, once; the player converts the
-      // animated ones on every frame.
-      command.props = convertProps(
-        this.Skia,
-        command.type,
-        props,
-        animatedProps,
-        this.disposables
-      );
+      // animated ones on every frame. A prop that cannot be converted (a
+      // path that does not parse) is left as is: the player reports it when
+      // the frame is drawn, where a recording error has always surfaced on
+      // this branch, rather than inside React's commit.
+      try {
+        command.props = convertProps(
+          this.Skia,
+          command.type,
+          props,
+          animatedProps,
+          this.disposables
+        );
+      } catch {
+        command.props = props;
+      }
     }
     this.cursors[this.cursors.length - 1].push(command);
   }

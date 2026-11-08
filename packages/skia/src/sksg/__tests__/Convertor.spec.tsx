@@ -32,7 +32,7 @@ const SIZE = 64;
 // Draws the element on a fresh surface and returns its pixels.
 const draw = async (element: ReactNode) => {
   const { Skia } = importSkia();
-  const surface = Skia.Surface.MakeRaster(SIZE, SIZE)!;
+  const surface = Skia.Surface.Make(SIZE, SIZE)!;
   const root = new SkiaSGRoot(Skia);
   await root.render(element);
   root.drawOnCanvas(surface.getCanvas());
@@ -196,7 +196,7 @@ describe("Record-time conversion", () => {
 
   it("reports a path that does not parse like any recording error", async () => {
     const { Skia } = importSkia();
-    const surface = Skia.Surface.MakeRaster(4, 4)!;
+    const surface = Skia.Surface.Make(4, 4)!;
     const root = new SkiaSGRoot(Skia);
     await root.render(<skPath path="not a path" start={0} end={1} />);
     expect(() => root.drawOnCanvas(surface.getCanvas())).toThrow(

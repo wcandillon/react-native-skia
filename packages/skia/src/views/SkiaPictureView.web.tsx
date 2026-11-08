@@ -204,7 +204,6 @@ export const SkiaPictureView = (props: SkiaPictureViewProps) => {
     onLayout: _onLayout,
     picture: _picture,
     // Deprecated, kept out of the DOM.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;

@@ -14,10 +14,10 @@ import {
   Fill,
   Image,
   Skia,
-} from "react-native-skia";
-import type { SkImage } from "react-native-skia";
+} from "@shopify/react-native-skia";
+import type { SkImage } from "@shopify/react-native-skia";
 import type { CanvasKit as CanvasKitType } from "canvaskit-wasm";
-import { peekSharedWebGLContext } from "react-native-skia/src/skia/web/SharedWebGLContext";
+import { peekSharedWebGLContext } from "@shopify/react-native-skia/src/skia/web/SharedWebGLContext";
 
 // Skia.Surface.MakeOffscreen() on web is a render target on the WebGL
 // context the page shares with its canvases: no context of its own (a
