@@ -14,7 +14,7 @@ const config = {
     "<rootDir>/../../node_modules/react-native-gesture-handler/jestSetup.js",
     "<rootDir>/jestSetup.js",
   ],
-  preset: "react-native",
+  preset: "@react-native/jest-preset",
   resolver: "react-native-reanimated/jest/resolver",
   transformIgnorePatterns: [
     "node_modules/(?!(@react-native|react-native|react-native.*|@?react-navigation.*|three)/)",
