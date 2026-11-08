@@ -18,6 +18,7 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 namespace DawnUtils {
@@ -353,7 +354,8 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // (MediaTek mt6855) segfaults while Graphite compiles its pipelines
       // (#4340). With one cache the only vkDestroyPipelineCache runs at
       // device teardown, and pipelines that share binaries compile faster.
-      // PerformIdleTasks is not needed: nothing persists the cache.
+      // The blob cache keeps it across launches, from PerformIdleTasks (see
+      // RNSkPipelineWarmup::storePipelineCache).
       "vulkan_monolithic_pipeline_cache",
 #endif
 #ifdef __APPLE__
@@ -409,6 +411,14 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   desc.requiredFeatureCount = features.size();
   desc.requiredFeatures = features.data();
   desc.nextInChain = &togglesDesc;
+  // Dawn's blob cache, on disk once the platform gave it a directory (see
+  // DawnContext::setCacheDirectory): the shaders Dawn translated, and on
+  // Vulkan its pipeline cache, found again by the next process. The same
+  // cache as React Native WebGPU's, chained in front of the toggles and
+  // alive for the RequestDevice call below, like them.
+  WGPUDawnCacheDeviceDescriptor blobCache =
+      WGPU_DAWN_CACHE_DEVICE_DESCRIPTOR_INIT;
+  rnwgpu::DawnBlobCache::chain(desc, blobCache);
 
   // Destroyed is the context tearing the device down on purpose, and
   // CallbackCancelled the instance going away: neither is a loss.

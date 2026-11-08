@@ -13,6 +13,7 @@ import com.facebook.react.common.LifecycleState;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -39,6 +40,9 @@ public class PlatformContext implements LifecycleEventListener {
     public PlatformContext(ReactContext reactContext) {
         listenForMainThreadTasks();
         mContext = reactContext;
+        // Before the GPU is first asked for: where Dawn keeps what it
+        // compiled, for the next launch to find (see DawnContext).
+        setCacheDirectoryNative(new File(reactContext.getCacheDir(), "rnskia").getAbsolutePath());
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
         // Skia.gpu.foreground follows the host activity: resumed, or not.
         setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
@@ -161,4 +165,7 @@ public class PlatformContext implements LifecycleEventListener {
 
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
+
+    // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
+    private static native void setCacheDirectoryNative(String directory);
 }

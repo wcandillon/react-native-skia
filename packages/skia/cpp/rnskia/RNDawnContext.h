@@ -24,6 +24,9 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkGpuActivity.h"
+#include "RNSkPipelineWarmup.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -136,6 +139,33 @@ public:
                         : " " + current->recoveryFailure;
     }
     return info;
+  }
+
+  // Startup
+  // --------------------------------------------------------------------
+
+  /**
+   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled
+   (see rnwgpu::DawnBlobCache, the cache React Native WebGPU keeps for the
+   devices it creates, here for Skia's), and where the pipelines the app used
+   are recorded, for the next process to find (see RNSkPipelineWarmup): the
+   platform's cache directory. Set by the platform before the GPU is first
+   asked for (see RNSkiaModule, PlatformContext); set later, it applies to
+   the devices created from then on. Any thread.
+   */
+  static void setCacheDirectory(const std::string &directory) noexcept {
+    rnwgpu::DawnBlobCache::setDirectory(directory);
+    RNSkPipelineWarmup::getInstance().setDirectory(directory);
+  }
+
+  /**
+   Whether the pipeline warmup (see RNSkPipelineWarmup) builds the Display
+   P3 pipelines as well as the sRGB ones: on Apple platforms, when the main
+   screen has a wide gamut. Set by the platform before the GPU is first
+   asked for. Any thread.
+   */
+  static void setPrecompileDisplayP3(bool displayP3) noexcept {
+    precompileDisplayP3().store(displayP3, std::memory_order_release);
   }
 
   // Generations ---------------------------------------------------------------
@@ -274,6 +304,10 @@ public:
         callback(nullptr);
         return;
       }
+      // GPU work from here until the result is delivered: the readback
+      // thread asks the device for it until then (see awaitReadbacks),
+      // which the warmup must not hold up (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
       readback.delivered = std::make_shared<std::atomic<bool>>(false);
       auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
@@ -431,6 +465,9 @@ public:
     if (recorder == nullptr) {
       return false;
     }
+    // The snap compiles the pipelines the recording needs, inline: GPU work
+    // the warmup stays behind (see RNSkGpuActivity), as is the run.
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       return false;
@@ -467,6 +504,7 @@ public:
   void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
+    RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (current->lost.load(std::memory_order_acquire)) {
@@ -787,6 +825,13 @@ private:
     return *registry;
   }
 
+  // See setPrecompileDisplayP3. Not tied to the context: the platform sets it
+  // before the GPU is probed.
+  static std::atomic<bool> &precompileDisplayP3() noexcept {
+    static std::atomic<bool> flag{false};
+    return flag;
+  }
+
   // Whether the app is in the foreground and active (see isForeground). Not
   // tied to the context: the platform sets it before the GPU is probed.
   static std::atomic<bool> &foregroundFlag() noexcept {
@@ -962,6 +1007,9 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    // Records the pipelines the frames compile, for the next launch (see
+    // RNSkPipelineWarmup).
+    RNSkPipelineWarmup::getInstance().install(ctxOptions);
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {
@@ -969,6 +1017,14 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
+    // The common pipelines, built while the frames leave the device alone
+    // (see RNSkPipelineWarmup), until this device is lost. The precompile
+    // context is a Context operation, made here under the lock, and used
+    // on the warmup thread only.
+    RNSkPipelineWarmup::getInstance().start(
+        generation->context->makePrecompileContext(),
+        precompileDisplayP3().load(std::memory_order_acquire),
+        &generation->lost, generation->backendContext.fDevice);
     return generation;
   }
 
@@ -1265,6 +1321,9 @@ private:
     wgpu::Future done;
     // Set by the readback's callback (see readPixels), once it ran.
     std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
     // The times the context was asked without the callback having run.
     int retries = 0;
   };

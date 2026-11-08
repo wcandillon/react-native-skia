@@ -12,6 +12,7 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
+#include "RNSkGpuActivity.h"
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkWindowSurface.h"
@@ -229,6 +230,9 @@ public:
     _recording = false;
     auto *recorder = std::exchange(_openRecorder, nullptr);
     auto owner = std::move(_openOwner);
+    // The snap compiles the pipelines the frame needs, inline: GPU work the
+    // warmup stays behind (see RNSkGpuActivity).
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       throw std::runtime_error(

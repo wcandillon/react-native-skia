@@ -124,6 +124,19 @@ const Demo = () => {
 
 Code sharing the device with React Native WebGPU imports it again the same way, see [sharing the device](#sharing-the-device).
 
+### Pipeline compilation
+
+The GPU compiles a pipeline for each kind of drawing the first time a canvas calls for it: a solid rounded rectangle, an image, a gradient-filled path, a line of text.
+A compile takes from a few milliseconds to a few hundred on a fresh install, and the frame that needs the pipeline waits for it, so a screen that introduces several at once comes up late the first time it appears.
+React Native Skia compiles these pipelines ahead of the frames, on a thread of its own, while the frames leave the GPU alone.
+On a launch without a record, it compiles a built-in set: solid colors, images and gradients on every shape, text, and drop shadows.
+From then on, it records the pipelines the app actually uses in its cache directory (`rnskia/pipelines.bin`) and compiles those at the next launch, so the screens the app showed come up without a compile on the frame.
+A pipeline the record does not cover is compiled when first needed, as before, and recorded.
+A pipeline whose paint uses a runtime effect, one of Skia's own (a blur, a morphology, the luma color filter) or one of yours, is compiled when first needed too, but not recorded: Graphite can only compile it on the context that drew it.
+The compiled shaders themselves, and on Android the driver's pipeline cache, are kept in the same directory by Dawn's blob cache: the one React Native WebGPU keeps for the devices it creates (see its [pipeline cache](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-api#pipeline-cache)), here for Skia's device, so a later launch mostly reads them back.
+Both are caches: clearing the app's cache directory costs the next launch a built-in set and the compiles, and a React Native Skia update that changes what Graphite or Dawn read starts them over.
+The log reports what each launch compiled ahead of the frames.
+
 ## Sharing the device
 
 Install React Native WebGPU next to React Native Skia, and follow its [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) for the rest of the setup:
