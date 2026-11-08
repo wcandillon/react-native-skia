@@ -34,6 +34,18 @@ public:
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,
                                       jni::alias_ref<jni::JString> directory);
 
+  // PresentThread.post: runs the Java task on the present thread, under a
+  // thread scope, as the thread is the native side's and not attached to
+  // the JVM on its own.
+  static void postNative(jni::alias_ref<jclass>,
+                         jni::alias_ref<jni::JRunnable::javaobject> task);
+
+  // PresentThread.postAndWait (see rnsurface::RenderThread::postAndWait).
+  static jboolean
+  postAndWaitNative(jni::alias_ref<jclass>,
+                    jni::alias_ref<jni::JRunnable::javaobject> task,
+                    jlong timeoutMs);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);

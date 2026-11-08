@@ -3,6 +3,7 @@
 #include <fcntl.h>
 
 #include <cerrno>
+#include <chrono>
 #include <exception>
 #include <system_error>
 #include <thread>
@@ -16,6 +17,7 @@
 #include "include/core/SkTypes.h"
 
 #include "RNDawnContext.h"
+#include "RNSkPresentThread.h"
 
 namespace RNSkia {
 
@@ -34,7 +36,41 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::setForegroundNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
+      makeNativeMethod("postNative", JniPlatformContext::postNative),
+      makeNativeMethod("postAndWaitNative",
+                       JniPlatformContext::postAndWaitNative),
   });
+}
+
+namespace {
+
+// A Java task as a present-thread task: the global reference is made here,
+// on a Java thread, and let go of on the present thread under its scope.
+std::function<void()>
+javaTask(jni::alias_ref<jni::JRunnable::javaobject> task) {
+  auto global = std::make_shared<jni::global_ref<jni::JRunnable::javaobject>>(
+      jni::make_global(task));
+  return [global]() {
+    jni::ThreadScope threadScope;
+    (*global)->run();
+    global->reset();
+  };
+}
+
+} // namespace
+
+void JniPlatformContext::postNative(
+    jni::alias_ref<jclass>, jni::alias_ref<jni::JRunnable::javaobject> task) {
+  presentThread().post(javaTask(task));
+}
+
+jboolean JniPlatformContext::postAndWaitNative(
+    jni::alias_ref<jclass>, jni::alias_ref<jni::JRunnable::javaobject> task,
+    jlong timeoutMs) {
+  return presentThread().postAndWait(javaTask(task),
+                                     std::chrono::milliseconds(timeoutMs))
+             ? JNI_TRUE
+             : JNI_FALSE;
 }
 
 void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
