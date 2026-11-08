@@ -20,6 +20,7 @@
 #include <memory>
 
 #import "RNSkManager.h"
+#import "RNSkPresentThread.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
@@ -86,67 +87,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
   return context->prefersP3ColorSpace();
 }
-
-// The thread every canvas presents on, as on Android (see PresentThread.java):
-// one for the process, started on first use and never stopped. A present
-// replays the view's recordings on the GPU context, and the first replay of a
-// draw waits for the pipelines it uses to compile (hundreds of milliseconds
-// after a fresh install, when no cache has them yet): on the main thread that
-// wait froze every animation of the app
-// (https://github.com/wcandillon/react-native-skia/issues/4384). The thread
-// has a run loop, which the display links of the views tick on, and runs the
-// tasks posted to it in order: a view's display link is only touched here.
-// CAMetalLayer takes drawables and presents from any thread. The window is
-// attached and detached here too (see attachSurface), in order with the
-// presents: a present holds the thread for as long as its pipelines take to
-// compile, and the main thread, which only resizes the window (which never
-// waits), never waits for one. The window has no mutex of its own since
-// #4394: everything that touches it runs here, one task after the other.
-@interface RNSkPresentThread : NSObject
-+ (void)post:(dispatch_block_t)task;
-@end
-
-@implementation RNSkPresentThread
-
-static NSRunLoop *sPresentRunLoop = nil;
-
-/** Starts the thread on first use. Any thread. */
-static NSRunLoop *presentRunLoop() {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    dispatch_semaphore_t started = dispatch_semaphore_create(0);
-    NSThread *thread = [[NSThread alloc] initWithBlock:^{
-      sPresentRunLoop = [NSRunLoop currentRunLoop];
-      // A port keeps the run loop running with nothing else on it.
-      [sPresentRunLoop addPort:[NSMachPort port] forMode:NSDefaultRunLoopMode];
-      dispatch_semaphore_signal(started);
-      while (true) {
-        @autoreleasepool {
-          CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e10, true);
-        }
-      }
-    }];
-    thread.name = @"RNSkia Present";
-    // The priority of the main thread: a present is what the user waits for.
-    thread.qualityOfService = NSQualityOfServiceUserInteractive;
-    [thread start];
-    dispatch_semaphore_wait(started, DISPATCH_TIME_FOREVER);
-  });
-  return sPresentRunLoop;
-}
-
-/** Runs a task on the present thread, after those posted before it. */
-+ (void)post:(dispatch_block_t)task {
-  CFRunLoopRef runLoop = [presentRunLoop() getCFRunLoop];
-  CFRunLoopPerformBlock(runLoop, kCFRunLoopCommonModes, ^{
-    @autoreleasepool {
-      task();
-    }
-  });
-  CFRunLoopWakeUp(runLoop);
-}
-
-@end
 
 @implementation SkiaView {
   // The native view and its window surface, from the view's first superview

@@ -19,6 +19,7 @@
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
+#include "rnsurface/FrameScheduler.h"
 #include "rnsurface/ThreadChecker.h"
 #include "utils/RNSkLog.h"
 
@@ -341,15 +342,9 @@ public:
     }
   }
 
-  /** What presentFrame() did, as a mask. */
-  enum PresentFrameResult : int {
-    kNothingPresented = 0,
-    // A frame went to the window.
-    kFramePresented = 1,
-    // Recordings are left for a later frame: more were queued, or the
-    // window could not take them (no drawable).
-    kMoreQueued = 2,
-  };
+  // What presentFrame() reports, as a mask: the scheduler's own, which the
+  // platform view hands it straight.
+  using PresentResult = rnsurface::FrameScheduler::PresentResult;
 
   /**
    Present thread. Presents the queued recordings (see setFrameScheduler for
@@ -365,15 +360,15 @@ public:
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrame");
     auto target = getTarget();
     if (target == nullptr) {
-      return kNothingPresented;
+      return PresentResult::kNothingPresented;
     }
     RNSkGraphiteTargetInfo targetInfo;
     if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
-      return kNothingPresented;
+      return PresentResult::kNothingPresented;
     }
     auto recordings = target->takeQueued();
     if (recordings.empty()) {
-      return kNothingPresented;
+      return PresentResult::kNothingPresented;
     }
     // One frame per vsync. The producer runs a frame ahead (see
     // RNSkGraphiteProducer::kMaxQueued), so two recordings can be waiting
@@ -388,12 +383,13 @@ public:
     const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
-    const int result = presented.shown ? kFramePresented : kNothingPresented;
+    const int result = presented.shown ? PresentResult::kPresented
+                                       : PresentResult::kNothingPresented;
     if (!presented.allDone) {
-      return result | kMoreQueued;
+      return result | PresentResult::kMoreQueued;
     }
     _producer->onFramePresented(taken);
-    return target->hasQueued() ? result | kMoreQueued : result;
+    return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
   }
 
   /**

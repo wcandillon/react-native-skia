@@ -254,15 +254,9 @@ private:
       if (view == nullptr) {
         return rnsurface::FrameScheduler::kNothingPresented;
       }
-      static_assert(static_cast<int>(RNSkView::kFramePresented) ==
-                        static_cast<int>(rnsurface::FrameScheduler::kPresented),
-                    "the view and the scheduler agree on the result mask");
-      static_assert(
-          static_cast<int>(RNSkView::kMoreQueued) ==
-              static_cast<int>(rnsurface::FrameScheduler::kMoreQueued),
-          "the view and the scheduler agree on the result mask");
+      // The view reports in the scheduler's mask.
       const int result = view->presentFrame();
-      if ((result & RNSkView::kFramePresented) != 0) {
+      if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
         if (auto javaPart = _javaView->weak->lockLocal()) {
           static const auto method =
               javaPart->getClass()->getMethod<void()>("onFramePresented");
