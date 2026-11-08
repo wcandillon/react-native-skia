@@ -91,7 +91,7 @@ const parseProp = (value: any, assets: Assets): any => {
       const assets: any = {};
       if (value.assets) {
         Object.keys(value.assets).forEach((key) => {
-          assets[key] = Skia.Data.fromBytes(new Uint8Array(value.assets[key]));
+          assets[key] = Skia.Data.fromBase64(value.assets[key]);
         });
       }
       return Skia.Skottie.Make(value.source, assets);

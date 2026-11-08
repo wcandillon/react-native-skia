@@ -29,11 +29,10 @@ RNSkManager::RNSkManager(
       _idFloor(ViewRegistry::getInstance().beginBundle()) {
   // A lost GPU device is replaced by a new one (see DawnContext), on which
   // the windows hold nothing yet: every view records its content again for
-  // it. The redraw waits for the view's present thread (the main thread on
-  // Apple platforms), and for the window to be able to show a frame (the app
-  // may be in the background, where the device was lost); it then configures
-  // the window on the new device. The listener only reaches the registry,
-  // which outlives this manager.
+  // it. The redraw waits for the view's present thread, and for the window
+  // to be able to show a frame (the app may be in the background, where the
+  // device was lost); it then configures the window on the new device. The
+  // listener only reaches the registry, which outlives this manager.
   _lossListener =
       DawnContext::addLossListener([](const DawnContext::LossInfo &) {
         for (const auto &view : ViewRegistry::getInstance().getViews()) {
