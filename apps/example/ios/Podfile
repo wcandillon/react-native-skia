@@ -46,9 +46,14 @@ end
 # and takes no extra keys from app.json. Without this one iOS caps every
 # display link at 60 Hz on iPhone, so a ProMotion iPhone would never show the
 # canvases above 60 fps (see the docs, "High refresh rate displays").
+# react-native-test-app generates it next to app.json (apps/example), not at
+# the root of the workspace where the package itself is hoisted: looked for
+# in both places, the app's first.
 opt_in_promotion = ->(_installer) do
-  plist_path = "#{ws_dir}/node_modules/.generated/ios/Info.plist"
-  return unless File.exist?(plist_path)
+  app_dir = File.expand_path('..', __dir__)
+  plist_path = ["#{app_dir}/node_modules/.generated/ios/Info.plist",
+                "#{ws_dir}/node_modules/.generated/ios/Info.plist"].find { |path| File.exist?(path) }
+  return if plist_path.nil?
 
   info = Xcodeproj::Plist.read_from_path(plist_path)
   info['CADisableMinimumFrameDurationOnPhone'] = true
