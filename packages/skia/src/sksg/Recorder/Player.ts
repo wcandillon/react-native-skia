@@ -127,11 +127,7 @@ const play = (ctx: DrawingContext, _command: Command) => {
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { standalone } = command as any;
-      ctx.savePaint();
-      if (standalone) {
-        const freshPaint = ctx.Skia.Paint();
-        ctx.paint.assign(freshPaint);
-      }
+      ctx.savePaint(standalone);
       setPaintProperties(ctx.Skia, ctx, command.props, standalone);
     }
   } else if (isCommand(command, CommandType.RestorePaint)) {
@@ -166,30 +162,21 @@ const play = (ctx: DrawingContext, _command: Command) => {
   } else if (isCommand(command, CommandType.RestoreCTM)) {
     ctx.canvas.restore();
   } else {
-    // Draw with the current paint, carrying the group opacity. The alpha is
-    // set on the paint for the draw and restored after it (the same paint
-    // draws the node's siblings) rather than set on a copy: no command writes
-    // to the paint it draws with, and a copy is a native allocation per
-    // command.
-    const opacity = ctx.getOpacity();
-    const { paint } = ctx;
-    const alpha = opacity === 1 ? 1 : paint.getAlphaf();
-    if (opacity !== 1) {
-      paint.setAlphaf(alpha * opacity);
+    // Draws with the current paint, which carries the group opacity (see
+    // DrawingContext.applyOpacity), then once more with each paint declared
+    // on the node (its <Paint> children), in order.
+    if (ctx.paintDeclarations.length === 0) {
+      draw(ctx, command);
+      return;
     }
-    const paints = [paint, ...ctx.paintDeclarations];
+    const declarations = ctx.paintDeclarations;
     ctx.paintDeclarations = [];
-    try {
-      paints.forEach((p) => {
-        ctx.paints.push(p);
-        draw(ctx, command);
-        ctx.paints.pop();
-      });
-    } finally {
-      if (opacity !== 1) {
-        paint.setAlphaf(alpha);
-      }
-    }
+    draw(ctx, command);
+    declarations.forEach((p) => {
+      ctx.paints.push(p);
+      draw(ctx, command);
+      ctx.paints.pop();
+    });
   }
 };
 
