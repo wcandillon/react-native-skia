@@ -54,6 +54,60 @@ public:
 
   bool empty() const { return _keys.empty(); }
 
+  /**
+   Whether Graphite can compile `key` on a context that has not drawn with
+   it, as the warmup asks it to (see RNSkPipelineWarmup). Graphite reads a
+   key against the shader code dictionary of the context, which knows the
+   paint's code snippets by ID: the built-in snippets from the start, a
+   runtime effect only once a draw registered it. On any other context, a
+   key naming one of Skia's own effects (the blurs, the morphologies, the
+   luma color filter, ...) finds its snippet uninitialized (Skia's
+   TODO(b/238759147) in ShaderCodeDictionary::getEntry): an effect with
+   children fails to read, one without reads and then crashes the compile
+   on its null name. Such a key is left out of the record, as is a key in a
+   layout this does not know (another version of Graphite's format), whose
+   snippets cannot be told.
+
+   The layout (see src/gpu/graphite/SerializationUtils.cpp): "skiapipe",
+   the format version, the render step, the count of the paint key's 32-bit
+   words and the words, then the render pass. The words are snippet IDs
+   and, after some snippets, embedded sampler data. The IDs below 500 are
+   the built-in snippets, from 500 on the runtime effects (see
+   src/core/SkKnownRuntimeEffects.h). The data words are read as IDs too:
+   a key with one at 500 or above is left out for nothing, which is rare
+   and costs a precompile.
+   */
+  static bool isPortable(const Key &key) {
+    static constexpr char kGraphiteMagic[8] = {'s', 'k', 'i', 'a',
+                                               'p', 'i', 'p', 'e'};
+    static constexpr uint32_t kGraphiteVersion = 3;
+    static constexpr int32_t kFirstRuntimeEffectId = 500;
+    static constexpr size_t kHeaderSize =
+        sizeof(kGraphiteMagic) + 3 * sizeof(uint32_t);
+    if (key.size() < kHeaderSize ||
+        std::memcmp(key.data(), kGraphiteMagic, sizeof(kGraphiteMagic)) != 0) {
+      return false;
+    }
+    uint32_t version = 0;
+    uint32_t wordCount = 0;
+    std::memcpy(&version, key.data() + sizeof(kGraphiteMagic), sizeof(version));
+    std::memcpy(&wordCount, key.data() + kHeaderSize - sizeof(wordCount),
+                sizeof(wordCount));
+    if (version != kGraphiteVersion ||
+        wordCount > (key.size() - kHeaderSize) / sizeof(int32_t)) {
+      return false;
+    }
+    for (uint32_t i = 0; i < wordCount; i++) {
+      int32_t word = 0;
+      std::memcpy(&word, key.data() + kHeaderSize + i * sizeof(int32_t),
+                  sizeof(word));
+      if (word >= kFirstRuntimeEffectId) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /** The path of the record in `directory`. */
   static std::string pathIn(const std::string &directory) {
     return directory + "/" + kFileName;

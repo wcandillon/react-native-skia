@@ -1,11 +1,14 @@
 // Host-side check of RNSkia::RNSkPipelineRecord (see run.sh): a key is
-// kept once, the oldest goes past the bound, and the file comes back as
-// written, or empty when it is not a record.
+// kept once, the oldest goes past the bound, the file comes back as
+// written, or empty when it is not a record, and a key is portable unless
+// its paint uses a runtime effect.
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 #include "rnskia/RNSkPipelineRecord.h"
 
@@ -26,6 +29,29 @@ void expect(bool condition, const char *what) {
 Key key(const std::string &text) { return {text.begin(), text.end()}; }
 
 Key numbered(size_t i) { return key("key-" + std::to_string(i)); }
+
+// A key as Graphite serializes it (see RNSkPipelineRecord::isPortable):
+// the paint key's words between the render step and a render pass.
+Key graphiteKey(const std::vector<int32_t> &words, uint32_t version = 3) {
+  Key key = {'s', 'k', 'i', 'a', 'p', 'i', 'p', 'e'};
+  const auto append = [&key](uint32_t value) {
+    const auto *bytes = reinterpret_cast<const uint8_t *>(&value);
+    key.insert(key.end(), bytes, bytes + sizeof(value));
+  };
+  append(version);
+  append(/* renderStepID= */ 6);
+  append(static_cast<uint32_t>(words.size()));
+  for (const int32_t word : words) {
+    append(static_cast<uint32_t>(word));
+  }
+  // The render pass: three attachment tags, the swizzle, the sample count,
+  // the end tag, as a Pixel 8 wrote them.
+  const uint8_t renderPass[] = {0x01, 0x00, 0x01, 0x13, 0x01, 0x00, 0x00,
+                                0x00, 0x01, 0x01, 0x01, 0x30, 0x10, 0x32,
+                                0x01, 0x20, 0x64, 0x6e, 0x65};
+  key.insert(key.end(), renderPass, renderPass + sizeof(renderPass));
+  return key;
+}
 
 } // namespace
 
@@ -82,6 +108,45 @@ int main() {
            "a truncated record keeps the keys before the cut");
 
     std::remove(path.c_str());
+  }
+  {
+    // A solid color, then an image through a local matrix: built-in
+    // snippets only.
+    expect(RNSkPipelineRecord::isPortable(graphiteKey({-1, 2, -2, 59})),
+           "a solid color is portable");
+    expect(RNSkPipelineRecord::isPortable(
+               graphiteKey({-1, 21, 54, 32, 26, -1, 41, -2, 61})),
+           "an image is portable");
+    expect(RNSkPipelineRecord::isPortable(graphiteKey({})),
+           "a paint without a key is portable");
+    // The key a Pixel 8 recorded for an image composed with the luma color
+    // filter (Skia's known runtime effect 527), which crashed the warmup of
+    // the next context (#4398), and a blur (504).
+    const Key luma = {
+        0x73, 0x6b, 0x69, 0x61, 0x70, 0x69, 0x70, 0x65, 0x03, 0x00, 0x00, 0x00,
+        0x06, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+        0x36, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
+        0x20, 0x00, 0x00, 0x00, 0x1a, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+        0x29, 0x00, 0x00, 0x00, 0x0f, 0x02, 0x00, 0x00, 0xfe, 0xff, 0xff, 0xff,
+        0x40, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x13, 0x01, 0x00, 0x00, 0x00,
+        0x01, 0x01, 0x01, 0x30, 0x10, 0x32, 0x01, 0x20, 0x64, 0x6e, 0x65};
+    expect(!RNSkPipelineRecord::isPortable(luma),
+           "the luma color filter is not portable");
+    expect(!RNSkPipelineRecord::isPortable(
+               graphiteKey({-1, 504, 21, 54, 24, -1, 1, -2, 59})),
+           "a blur is not portable");
+    expect(!RNSkPipelineRecord::isPortable(graphiteKey({-1, 1100, -2, 59})),
+           "a user runtime effect is not portable");
+    // Another layout: another version of the format, another magic, a key
+    // cut short of its words.
+    expect(!RNSkPipelineRecord::isPortable(graphiteKey({-1, 2, -2, 59}, 4)),
+           "another version is not portable");
+    expect(!RNSkPipelineRecord::isPortable(key("RNSKPIPE and more bytes")),
+           "another format is not portable");
+    Key cut = graphiteKey({-1, 2, -2, 59});
+    cut.resize(24);
+    expect(!RNSkPipelineRecord::isPortable(cut), "a cut key is not portable");
+    expect(!RNSkPipelineRecord::isPortable(Key()), "an empty key is not");
   }
   if (failures == 0) {
     std::printf("PipelineRecordTest: passed\n");

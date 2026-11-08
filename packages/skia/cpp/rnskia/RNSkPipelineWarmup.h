@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -81,7 +82,10 @@ namespace RNSkia {
  *   RNSkPipelineRecord), written a moment after they last changed, and the
  *   next launch compiles them first thing, so the screens the app showed
  *   come up without a compile on the frame. A key Graphite no longer reads
- *   (after a Skia update) is dropped from the record.
+ *   (after a Skia update) is dropped from the record. So is one Graphite
+ *   can only compile on the context that recorded it: a paint with a
+ *   runtime effect, Skia's own included (see
+ *   RNSkPipelineRecord::isPortable).
  * - On a launch without a record (the first one, or after the cache was
  *   cleared), a built-in set: the paint options <Canvas> content draws
  *   with most (a solid color, an image, a linear and a radial gradient,
@@ -221,6 +225,9 @@ private:
 
   // Adds a key to the record, once, and has it written. Any thread.
   void record(Key key) {
+    if (!RNSkPipelineRecord::isPortable(key)) {
+      return;
+    }
     std::lock_guard<std::mutex> lock(_mutex);
     if (_directory.empty() || !_record.add(std::move(key))) {
       return;
@@ -323,6 +330,7 @@ private:
     // device.
     std::vector<Key> keys;
     bool fromFile = false;
+    bool dropped = false;
     {
       std::lock_guard<std::mutex> lock(_mutex);
       if (_loaded) {
@@ -333,6 +341,14 @@ private:
         if (!_directory.empty()) {
           keys =
               RNSkPipelineRecord::load(RNSkPipelineRecord::pathIn(_directory));
+          // A file written before such keys were left out of the record
+          // (see isPortable): the next file is without them.
+          const auto end =
+              std::remove_if(keys.begin(), keys.end(), [](const Key &key) {
+                return !RNSkPipelineRecord::isPortable(key);
+              });
+          dropped = end != keys.end();
+          keys.erase(end, keys.end());
         }
       }
     }
@@ -357,7 +373,7 @@ private:
       for (auto &key : kept) {
         _record.add(std::move(key));
       }
-      if (kept.size() != keys.size() && !_directory.empty()) {
+      if ((dropped || kept.size() != keys.size()) && !_directory.empty()) {
         // Keys Graphite could not read any more: the next file is without
         // them.
         markChangedLocked();
