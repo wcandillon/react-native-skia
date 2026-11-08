@@ -13,10 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * TextureView) costs a few milliseconds of CPU on a Vulkan window, which this
  * thread takes off the main thread; one thread serves every canvas, as
  * presents serialize on the GPU context anyway. It is a looper thread, so
- * that each canvas's FrameScheduler runs on it as it would on the main
- * thread, with the Choreographer of this thread for its vsync (see
- * SkiaView for how a TextureView's present still waits for its window's
- * pending draw).
+ * that each canvas's frame scheduler (rnsurface::FrameScheduler, on the
+ * native side) runs on it as it would on the main thread, with the
+ * Choreographer of this thread for its vsync (see SkiaView for how a
+ * TextureView's present still waits for its window's pending draw).
  */
 final class PresentThread {
     private static final Object sLock = new Object();

@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowState.h"
+#include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
 
@@ -31,11 +32,17 @@ namespace RNSkia {
  * (attach, resize, detach); everything else lives here.
  *
  * Threading: the window belongs to the thread the view presents on (see
- * RNSkView::setPresentThread): the main thread on Apple platforms, the
- * present thread on Android, where the platform view posts the attach, the
- * resize and the detach from the main thread. Everything that touches the
- * Dawn surface runs there, one call after the other, and nothing waits for
- * it: a present holds the window for as long as Graphite takes to replay
+ * RNSkView::setPresentThread): the present thread of the platform, one for
+ * every canvas of a process (PresentThread.java, RNSkPresentThread in
+ * SkiaView.mm), where the platform view posts the attach and the detach
+ * from the main thread. Everything that touches the Dawn surface runs
+ * there, one call after the other, and nothing waits for it; the entries
+ * check it once the platform view has bound the thread (see
+ * bindPresentingThread and rnsurface::ThreadChecker: an entry from
+ * another thread aborts in debug builds and is logged once in release
+ * builds). A resize is the exception: it notes a size and posts a redraw,
+ * from any thread. Nothing waits for a
+ * present: a present holds the window for as long as Graphite takes to replay
  * the frame, which includes compiling the pipelines it needs, seconds on a
  * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
  * resize notes the size, which the present that follows takes (see
@@ -90,7 +97,8 @@ public:
    now (see getTargetInfo), and what the window is configured for by the
    first present of a frame made for it (see isTarget); until then the
    window still takes frames made for its previous size, which the platform
-   stretches to the view. Requests a redraw. Presenting thread.
+   stretches to the view. Requests a redraw. Any thread: the size is noted
+   under the target description's mutex, and the redraw is posted.
    */
   void resize(int width, int height);
 
@@ -99,9 +107,27 @@ public:
    releaser: the platform may destroy the window right after. The target
    description goes away with it; the layout size stays. Takes down the
    abandon, if any (see abandon): this is the detach it waits for.
-   Presenting thread, or the destructor.
+   Presenting thread; the destructor does the same on whichever thread
+   lets go of the window last (see detachNow).
    */
   void detach();
+
+  /**
+   detach(), if the window attached is still `nativeHandle`. An Apple view
+   lets go of its layer this way, as it leaves its superview or its layout
+   collapses to zero: the detach is posted behind the present in flight,
+   and an attach posted after it, for another layer, stays (see SkiaView's
+   leavePresentThread and detachWindow). Presenting thread.
+   */
+  void detach(void *nativeHandle);
+
+  /**
+   Presenting thread: binds the entries that belong to it (see the class
+   comment) to the calling thread, before the first of them; the platform
+   view posts it to the thread it presents on as it makes the surface (see
+   RNSkView::bindPresentThread).
+   */
+  void bindPresentingThread() { _presentingThread.bindToCurrentThread(); }
 
   /**
    The platform is about to take the window back, and will not wait for
@@ -246,6 +272,9 @@ public:
                     const sk_sp<SkImage> &image) override;
 
 private:
+  // What detach() does, without the thread check: the destructor runs
+  // wherever the last owner lets go of the window.
+  void detachNow();
   // Lets go of the Dawn surface and gives the window back to its releaser,
   // leaving the abandon, if any, up: what detach() does before it takes the
   // abandon down, and what attach() does to the previous window.
@@ -364,6 +393,9 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+
+  // The thread the window belongs to (see the class comment).
+  rnsurface::ThreadChecker _presentingThread;
 };
 
 } // namespace RNSkia
