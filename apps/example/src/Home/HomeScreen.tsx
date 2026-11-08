@@ -163,6 +163,11 @@ export const HomeScreen = () => {
         description="GPU work while the app is in the background (#4290)"
         route="BackgroundGpu"
       />
+      <HomeScreenButton
+        title="⏱ Recorder Benchmark"
+        description="Recorder, immediate mode and command buffer timings"
+        route="RecorderBenchmark"
+      />
     </ScrollView>
   );
 };

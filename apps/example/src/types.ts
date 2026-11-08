@@ -39,4 +39,5 @@ export type StackParamList = {
   GraphiteCanvas: undefined;
   AndroidViews: undefined;
   BackgroundGpu: undefined;
+  RecorderBenchmark: undefined;
 };

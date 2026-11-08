@@ -32,3 +32,4 @@ export * from "./HighBitDepth";
 export * from "./Graphite";
 export * from "./AndroidViews";
 export * from "./BackgroundGpu";
+export * from "./RecorderBenchmark";

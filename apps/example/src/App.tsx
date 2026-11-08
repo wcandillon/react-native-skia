@@ -38,6 +38,7 @@ import {
   GraphiteCanvasExample,
   BackgroundGpu,
   AndroidViews,
+  RecorderBenchmark,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
 import { HomeScreen } from "./Home";
@@ -88,6 +89,7 @@ const linking: LinkingOptions<StackParamList> = {
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
       BackgroundGpu: "background-gpu",
+      RecorderBenchmark: "recorder-benchmark",
     },
   },
   // react-native-test-app registers its bundle id as the iOS URL scheme, and
@@ -122,6 +124,18 @@ const HeaderLeft = (props: HeaderBackButtonProps) => {
 
 enableScreens(true);
 
+// The recorder benchmark drives itself from a bundle time environment
+// variable (inlined by babel-plugin-transform-inline-environment-variables)
+// so that a release build on a device runs it without a tap, see
+// Examples/RecorderBenchmark.
+const benchmarkAutorun = process.env.RNSKIA_BENCHMARK_AUTORUN;
+const initialRouteName = (() => {
+  if (CI) {
+    return "Tests";
+  }
+  return benchmarkAutorun ? "RecorderBenchmark" : "Home";
+})();
+
 const App = () => {
   const Stack = createNativeStackNavigator<StackParamList>();
   const assets = useAssets();
@@ -137,7 +151,7 @@ const App = () => {
             screenOptions={{
               headerLeft: HeaderLeft,
             }}
-            initialRouteName={CI ? "Tests" : "Home"}
+            initialRouteName={initialRouteName}
           >
             <Stack.Screen
               name="Home"
@@ -266,6 +280,11 @@ const App = () => {
               name="BackgroundGpu"
               component={BackgroundGpu}
               options={{ title: "🌙 Background GPU" }}
+            />
+            <Stack.Screen
+              name="RecorderBenchmark"
+              component={RecorderBenchmark}
+              options={{ title: "⏱ Recorder Benchmark" }}
             />
           </Stack.Navigator>
         </NavigationContainer>
