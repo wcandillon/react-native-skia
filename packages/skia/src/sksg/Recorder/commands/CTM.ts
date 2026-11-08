@@ -5,7 +5,7 @@ import {
 } from "../../../dom/nodes";
 import type { ClipDef, CTMProps } from "../../../dom/types";
 import type { Skia, SkPath, SkRect, SkRRect } from "../../../skia/types";
-import { ClipOp, isRRect } from "../../../skia/types";
+import { ClipOp, isMatrix, isRRect } from "../../../skia/types";
 import type { DrawingContext } from "../DrawingContext";
 
 const computeClip = (
@@ -44,7 +44,16 @@ export const saveCTM = (ctx: DrawingContext, props: CTMProps) => {
   const clip = computeClip(Skia, rawClip);
   const hasClip = clip !== undefined;
   const op = invertClip ? ClipOp.Difference : ClipOp.Intersect;
-  const m3 = processTransformProps2(Skia, { matrix, transform, origin });
+  // A matrix alone is concatenated as is: the recorder bakes static
+  // transform props into one (Convertor.ts), and a matrix prop with no origin
+  // concatenates the same way.
+  const m3 =
+    transform === undefined &&
+    origin === undefined &&
+    matrix !== undefined &&
+    isMatrix(matrix)
+      ? matrix
+      : processTransformProps2(Skia, { matrix, transform, origin });
   const shouldSave = hasTransform || hasClip || !!layer;
   if (shouldSave) {
     if (layer) {

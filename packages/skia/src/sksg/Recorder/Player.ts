@@ -166,64 +166,84 @@ const play = (ctx: DrawingContext, _command: Command) => {
   } else if (isCommand(command, CommandType.RestoreCTM)) {
     ctx.canvas.restore();
   } else {
-    // apply opacity to the current paint.
-    const paint = ctx.track(ctx.paint.copy());
-    paint.setAlphaf(paint.getAlphaf() * ctx.getOpacity());
+    // Draw with the current paint, carrying the group opacity. The alpha is
+    // set on the paint for the draw and restored after it (the same paint
+    // draws the node's siblings) rather than set on a copy: no command writes
+    // to the paint it draws with, and a copy is a native allocation per
+    // command.
+    const opacity = ctx.getOpacity();
+    const { paint } = ctx;
+    const alpha = opacity === 1 ? 1 : paint.getAlphaf();
+    if (opacity !== 1) {
+      paint.setAlphaf(alpha * opacity);
+    }
     const paints = [paint, ...ctx.paintDeclarations];
     ctx.paintDeclarations = [];
-    paints.forEach((p) => {
-      ctx.paints.push(p);
-      if (isBoxCommand(command)) {
-        drawBox(ctx, command);
-      } else if (isCommand(command, CommandType.DrawPaint)) {
-        ctx.canvas.drawPaint(ctx.paint);
-      } else if (isDrawCommand(command, CommandType.DrawImage)) {
-        drawImage(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawCircle)) {
-        drawCircle(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPoints)) {
-        drawPoints(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPath)) {
-        drawPath(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawRect)) {
-        drawRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawRRect)) {
-        drawRRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawOval)) {
-        drawOval(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawLine)) {
-        drawLine(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPatch)) {
-        drawPatch(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawVertices)) {
-        drawVertices(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawDiffRect)) {
-        drawDiffRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawText)) {
-        drawText(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawTextPath)) {
-        drawTextPath(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawTextBlob)) {
-        drawTextBlob(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawGlyphs)) {
-        drawGlyphs(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPicture)) {
-        drawPicture(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawImageSVG)) {
-        drawImageSVG(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawParagraph)) {
-        drawParagraph(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawAtlas)) {
-        drawAtlas(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawSkottie)) {
-        drawSkottie(ctx, command.props);
-      } else {
-        console.warn(`Unknown command: ${command.type}`);
+    try {
+      paints.forEach((p) => {
+        ctx.paints.push(p);
+        draw(ctx, command);
+        ctx.paints.pop();
+      });
+    } finally {
+      if (opacity !== 1) {
+        paint.setAlphaf(alpha);
       }
-      ctx.paints.pop();
-    });
+    }
   }
 };
+
+/** Draws the command with the paint on top of the stack. */
+const draw = (ctx: DrawingContext, command: Command) => {
+  if (isBoxCommand(command)) {
+    drawBox(ctx, command);
+  } else if (isCommand(command, CommandType.DrawPaint)) {
+    ctx.canvas.drawPaint(ctx.paint);
+  } else if (isDrawCommand(command, CommandType.DrawImage)) {
+    drawImage(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawCircle)) {
+    drawCircle(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPoints)) {
+    drawPoints(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPath)) {
+    drawPath(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawRect)) {
+    drawRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawRRect)) {
+    drawRRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawOval)) {
+    drawOval(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawLine)) {
+    drawLine(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPatch)) {
+    drawPatch(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawVertices)) {
+    drawVertices(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawDiffRect)) {
+    drawDiffRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawText)) {
+    drawText(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawTextPath)) {
+    drawTextPath(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawTextBlob)) {
+    drawTextBlob(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawGlyphs)) {
+    drawGlyphs(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPicture)) {
+    drawPicture(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawImageSVG)) {
+    drawImageSVG(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawParagraph)) {
+    drawParagraph(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawAtlas)) {
+    drawAtlas(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawSkottie)) {
+    drawSkottie(ctx, command.props);
+  } else {
+    console.warn(`Unknown command: ${command.type}`);
+  }
+};
+
 export function replay(ctx: DrawingContext, commands: Command[]) {
   "worklet";
   //console.log(debugTree(commands));
