@@ -14,6 +14,7 @@ namespace RNSkia {
 
 namespace jsi = facebook::jsi;
 
+class CommandBuffer;
 class Recorder;
 class RNSkGraphiteTarget;
 
@@ -76,6 +77,14 @@ public:
   /** Content from the static container: a picture to replay. */
   void setPicture(sk_sp<SkPicture> picture);
 
+  /**
+   Experimental (see api/experimental/CommandBuffer.h): a command buffer to
+   replay, interpreted on the canvas or through a picture made again when
+   the buffer is committed. Replaces the recorder or picture; nullptr
+   releases it.
+   */
+  void setCommandBuffer(std::shared_ptr<CommandBuffer> buffer, bool asPicture);
+
   bool hasContent();
 
   /**
@@ -126,7 +135,9 @@ private:
    into a canvas: clears it and applies the density.
    */
   static void drawContent(SkCanvas *canvas, Recorder *recorder,
-                          const sk_sp<SkPicture> &picture, float pixelDensity);
+                          const sk_sp<SkPicture> &picture,
+                          CommandBuffer *commandBuffer,
+                          bool commandBufferAsPicture, float pixelDensity);
 
   /**
    Swaps the content under the lock and releases the previous one outside of
@@ -149,6 +160,8 @@ private:
   std::shared_ptr<RNSkGraphiteTarget> _target;
   std::shared_ptr<Recorder> _recorder;
   sk_sp<SkPicture> _picture;
+  std::shared_ptr<CommandBuffer> _commandBuffer;
+  bool _commandBufferAsPicture = false;
   // Recordings submitted to the current target and not presented yet. A job
   // starts while there is room for its recording in the queue.
   static constexpr size_t kMaxQueued = 2;

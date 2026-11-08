@@ -14,3 +14,4 @@ export type {
   RecorderStatsApi,
   RecorderStatsSnapshot,
 } from "./sksg/RecorderStats";
+export * from "./sksg/CommandBuffer";

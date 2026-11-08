@@ -8,6 +8,7 @@
 #include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkThreadPool.h"
+#include "api/experimental/CommandBuffer.h"
 #include "api/recorder/DrawingCtx.h"
 #include "api/recorder/RNRecorder.h"
 #include "utils/RNSkLog.h"
@@ -56,11 +57,15 @@ RNSkGraphiteProducer::~RNSkGraphiteProducer() {
 
 void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
                                        const sk_sp<SkPicture> &picture,
+                                       CommandBuffer *commandBuffer,
+                                       bool commandBufferAsPicture,
                                        float pixelDensity) {
   canvas->clear(SK_ColorTRANSPARENT);
   canvas->save();
   canvas->scale(pixelDensity, pixelDensity);
-  if (recorder != nullptr) {
+  if (commandBuffer != nullptr) {
+    commandBuffer->draw(canvas, commandBufferAsPicture);
+  } else if (recorder != nullptr) {
     DrawingCtx ctx(canvas);
     recorder->play(&ctx);
   } else if (picture != nullptr) {
@@ -96,6 +101,22 @@ void RNSkGraphiteProducer::setPicture(sk_sp<SkPicture> picture) {
   replaceContent(nullptr, std::move(picture), /* dirty= */ true);
 }
 
+void RNSkGraphiteProducer::setCommandBuffer(
+    std::shared_ptr<CommandBuffer> buffer, bool asPicture) {
+  std::shared_ptr<Recorder> retiredRecorder;
+  sk_sp<SkPicture> retiredPicture;
+  std::shared_ptr<CommandBuffer> retiredBuffer;
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    retiredRecorder = std::exchange(_recorder, nullptr);
+    retiredPicture = std::exchange(_picture, nullptr);
+    retiredBuffer = std::exchange(_commandBuffer, std::move(buffer));
+    _commandBufferAsPicture = asPicture;
+    _dirty = true;
+    kickLocked();
+  }
+}
+
 void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
                                           sk_sp<SkPicture> picture,
                                           bool dirty) {
@@ -105,6 +126,7 @@ void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
     std::lock_guard<std::mutex> lock(_mutex);
     retiredRecorder = std::exchange(_recorder, std::move(recorder));
     retiredPicture = std::exchange(_picture, std::move(picture));
+    _commandBuffer = nullptr;
     _dirty = dirty;
     if (dirty) {
       kickLocked();
@@ -128,7 +150,8 @@ bool RNSkGraphiteProducer::hasContentLocked() const {
   // its animated properties are unset, and replaying it would draw them wrong.
   // The view keeps showing the previous frame until the mapper has read them,
   // which schedules the frame that draws it (applyUpdates).
-  return (_recorder != nullptr && _recorder->isReady()) || _picture != nullptr;
+  return (_recorder != nullptr && _recorder->isReady()) ||
+         _picture != nullptr || _commandBuffer != nullptr;
 }
 
 bool RNSkGraphiteProducer::applyUpdatesTo(
@@ -212,6 +235,8 @@ void RNSkGraphiteProducer::produce() {
   std::shared_ptr<RNSkGraphiteTarget> target;
   std::shared_ptr<Recorder> recorder;
   sk_sp<SkPicture> picture;
+  std::shared_ptr<CommandBuffer> commandBuffer;
+  bool commandBufferAsPicture = false;
   {
     std::lock_guard<std::mutex> lock(_mutex);
     target = _target;
@@ -221,11 +246,13 @@ void RNSkGraphiteProducer::produce() {
     if (hasContentLocked()) {
       recorder = _recorder;
       picture = _picture;
+      commandBuffer = _commandBuffer;
+      commandBufferAsPicture = _commandBufferAsPicture;
     }
     _dirty = false;
   }
   std::shared_ptr<RNSkGraphiteRecording> recording;
-  if (target && (recorder || picture)) {
+  if (target && (recorder || picture || commandBuffer)) {
     SkCanvas *canvas = nullptr;
     // Without a GPU nothing records, and Skia.gpu says why.
     if (auto *context = DawnContext::tryGetInstance()) {
@@ -242,7 +269,8 @@ void RNSkGraphiteProducer::produce() {
     if (canvas != nullptr) {
       try {
         // The deferred canvas already draws in points.
-        drawContent(canvas, recorder.get(), picture, /* pixelDensity= */ 1.0f);
+        drawContent(canvas, recorder.get(), picture, commandBuffer.get(),
+                    commandBufferAsPicture, /* pixelDensity= */ 1.0f);
       } catch (const std::exception &e) {
         RNSkLogger::logToConsole("Canvas: replaying the scene failed: %s",
                                  e.what());
@@ -289,14 +317,19 @@ void RNSkGraphiteProducer::produce() {
 void RNSkGraphiteProducer::renderInto(SkCanvas *canvas, float pixelDensity) {
   std::shared_ptr<Recorder> recorder;
   sk_sp<SkPicture> picture;
+  std::shared_ptr<CommandBuffer> commandBuffer;
+  bool commandBufferAsPicture = false;
   {
     std::lock_guard<std::mutex> lock(_mutex);
     if (hasContentLocked()) {
       recorder = _recorder;
       picture = _picture;
+      commandBuffer = _commandBuffer;
+      commandBufferAsPicture = _commandBufferAsPicture;
     }
   }
-  drawContent(canvas, recorder.get(), picture, pixelDensity);
+  drawContent(canvas, recorder.get(), picture, commandBuffer.get(),
+              commandBufferAsPicture, pixelDensity);
 }
 
 } // namespace RNSkia

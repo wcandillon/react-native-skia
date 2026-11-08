@@ -21,10 +21,13 @@ export class SkiaSGRoot {
 
   constructor(
     public Skia: Skia,
-    nativeId = -1
+    nativeId = -1,
+    // The container the scene graph is committed to; the platform's by
+    // default (Container.ts, Container.native.ts).
+    containerFactory: (skia: Skia, id: number) => Container = createContainer
   ) {
     const strictMode = false;
-    this.container = createContainer(Skia, nativeId);
+    this.container = containerFactory(Skia, nativeId);
     this.root = skiaReconciler.createContainer(
       this.container,
       0,

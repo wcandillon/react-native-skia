@@ -155,6 +155,21 @@ public:
   }
 
   /**
+   Experimental (see api/experimental/CommandBuffer.h): a command buffer as
+   the content of the view, in place of a recorder or a picture.
+   */
+  void setCommandBuffer(std::shared_ptr<CommandBuffer> buffer, bool asPicture) {
+    _producer->setCommandBuffer(std::move(buffer), asPicture);
+  }
+
+  /**
+   Schedules a frame of the declarative content on the render thread pool,
+   from any thread, the way applyUpdates() does once it has read the values:
+   for content updated in place (a command buffer).
+   */
+  void requestFrame() { _producer->requestFrame(); }
+
+  /**
    Schedules redraw() on the present thread, once (see RNSkRedrawRequest).
    Any thread: the window surface asks for one as it attaches or resizes, so
    nothing is presented on the spot.

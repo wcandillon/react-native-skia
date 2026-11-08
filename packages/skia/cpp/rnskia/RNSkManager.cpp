@@ -12,6 +12,7 @@
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
 #include "api/JsiSkPicture.h"
+#include "api/experimental/JsiSkExperimental.h"
 #include "api/recorder/JsiRecorder.h"
 #include "api/recorder/RecorderStats.h"
 #include "jsi/BoxedNativeObject.h"
@@ -99,6 +100,13 @@ void RNSkManager::installBindings() {
       *_jsRuntime, "__skiaWorkletHelpers",
       jsi::Object::createFromHostObject(
           *_jsRuntime, std::make_shared<RNJsi::NativeObjectWorkletHelpers>()));
+
+  // The experimental allocation free drawing path of the recorder benchmark
+  // (see api/experimental). Not part of the public API.
+  _jsRuntime->global().setProperty(
+      *_jsRuntime, "__RNSkiaExperimental",
+      makeJsiObject(*_jsRuntime,
+                    std::make_shared<JsiSkExperimental>(_platformContext)));
 
 #ifdef RNSKIA_RECORDER_STATS
   // The benchmark counters of the recorder (see RecorderStats.h), for the
