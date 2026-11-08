@@ -226,6 +226,7 @@ public:
       // the frame on its way may hold.
       if (!showsLastFrameAgain) {
         _producer->onFramePresented(taken);
+        target->onRecordingsDone(taken);
       }
       return;
     }
@@ -389,6 +390,7 @@ public:
       return result | PresentResult::kMoreQueued;
     }
     _producer->onFramePresented(taken);
+    target->onRecordingsDone(taken);
     return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
   }
 

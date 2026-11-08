@@ -83,6 +83,8 @@ class WebGraphiteRecording implements SkGraphiteRecording {
 interface RecordingTarget {
   getSize(): { width: number; height: number };
   submit(recording: WebGraphiteRecording): void;
+  /** Recordings submitted and not yet drawn. */
+  pendingFrames(): number;
 }
 
 class WebGraphiteContext implements SkGraphiteContext {
@@ -97,6 +99,10 @@ class WebGraphiteContext implements SkGraphiteContext {
 
   get height() {
     return this.target.getSize().height;
+  }
+
+  get pendingFrames() {
+    return this.target.pendingFrames();
   }
 
   beginRecording(): SkCanvas {
@@ -237,6 +243,8 @@ export const SkiaView = (props: SkiaViewProps) => {
     [redraw]
   );
 
+  const pendingFrames = useCallback(() => queueRef.current.length, []);
+
   const getSize = useCallback(
     () => ({
       width: canvasRef.current?.clientWidth || 0,
@@ -246,8 +254,9 @@ export const SkiaView = (props: SkiaViewProps) => {
   );
 
   const getContext = useCallback(
-    (): SkGraphiteContext => new WebGraphiteContext({ getSize, submit }),
-    [getSize, submit]
+    (): SkGraphiteContext =>
+      new WebGraphiteContext({ getSize, submit, pendingFrames }),
+    [getSize, submit, pendingFrames]
   );
 
   const makeImageSnapshot = useCallback(
