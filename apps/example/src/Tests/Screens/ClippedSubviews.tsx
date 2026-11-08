@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { RefObject, ComponentRef } from "react";
 import React, { memo, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, View } from "react-native";
@@ -54,7 +54,7 @@ interface ClippedSubviewsProps {
 // GPU device lost and replaced. React Native flattens the row, so the views
 // themselves leave their superview while away.
 const ClippedSubviews = ({ change, roundTrips }: ClippedSubviewsProps) => {
-  const scrollView = useRef<ScrollView>(null);
+  const scrollView = useRef<ComponentRef<typeof ScrollView>>(null);
   const tripsLeft = useRef(roundTrips);
   const [clipped, setClipped] = useState(false);
   const [color, setColor] = useState("red");

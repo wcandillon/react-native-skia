@@ -159,12 +159,9 @@ export const makeLayoutEvent = (
 ): LayoutChangeEvent => ({
   timeStamp: Date.now(),
   nativeEvent: { layout: { x, y, width, height } },
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error
   currentTarget: 0,
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error
   target: 0,
+  dispatchConfig: { registrationName: "onLayout" },
   bubbles: false,
   cancelable: false,
   defaultPrevented: false,
