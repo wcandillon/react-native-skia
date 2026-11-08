@@ -19,6 +19,12 @@ Atlas transforms can be animated with near-zero cost using worklets. This makes 
 | blendMode? | `BlendMode` | Optional. Blend mode used for layer compositing (how the Atlas is drawn onto the canvas). |
 | sampling? | `Sampling` | The method used to sample the image. see ([sampling options](/docs/images#sampling-options)). |
 
+:::tip
+
+To draw many filled rectangles, rounded rectangles or circles in one draw call, see [Shape Blob](/docs/shapes/shape-blob).
+
+:::
+
 ## RSXform
 
 The RSXform object used by the altas API is the compression of the following matrix: `[fSCos -fSSin fTx, fSSin fSCos fTy, 0, 0, 1]`. Below are few transformations that you will find useful:
