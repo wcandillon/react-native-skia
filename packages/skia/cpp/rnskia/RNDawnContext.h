@@ -24,9 +24,9 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
-#include "RNSkBlobCache.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -145,15 +145,16 @@ public:
   // --------------------------------------------------------------------
 
   /**
-   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled,
-   and where the pipelines the app used are recorded, for the next process
-   to find (see RNSkBlobCache, RNSkPipelineWarmup): the platform's cache
-   directory. Set by the platform before the GPU is first asked for (see
-   RNSkiaModule, PlatformContext); set later, it applies to the devices
-   created from then on. Any thread.
+   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled
+   (see rnwgpu::DawnBlobCache, the cache React Native WebGPU keeps for the
+   devices it creates, here for Skia's), and where the pipelines the app used
+   are recorded, for the next process to find (see RNSkPipelineWarmup): the
+   platform's cache directory. Set by the platform before the GPU is first
+   asked for (see RNSkiaModule, PlatformContext); set later, it applies to
+   the devices created from then on. Any thread.
    */
   static void setCacheDirectory(const std::string &directory) noexcept {
-    RNSkBlobCache::getInstance().setDirectory(directory);
+    rnwgpu::DawnBlobCache::setDirectory(directory);
     RNSkPipelineWarmup::getInstance().setDirectory(directory);
   }
 

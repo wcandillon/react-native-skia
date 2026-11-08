@@ -21,9 +21,9 @@
 #endif
 
 #include "RNDawnUtils.h"
-#include "RNSkBlobCache.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineRecord.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
@@ -58,8 +58,8 @@ namespace RNSkia {
  * a window's frames until a SurfaceView's first buffer arrives, the whole
  * screen freezes. A pipeline built here is found in Graphite's cache
  * instead; one that is not is still compiled inline, as before. Dawn's blob
- * cache on disk (see RNSkBlobCache) keeps the compiled shaders across
- * processes, so the warmup of a second launch is mostly reads.
+ * cache on disk (see rnwgpu::DawnBlobCache) keeps the compiled shaders
+ * across processes, so the warmup of a second launch is mostly reads.
  *
  * The warmup runs while the frames leave the device alone: from the moment
  * the device exists (on the first launch, while the bundle still loads)
@@ -146,9 +146,6 @@ public:
                  device = std::move(device)]() {
       std::unique_ptr<skgpu::graphite::PrecompileContext> owned(released);
       lowerPriority();
-      // The entries no process uses any more are let go of here, on the
-      // thread that reads the cache most, before it does.
-      RNSkBlobCache::getInstance().prune();
       run(owned.get(), displayP3, *lost);
       owned = nullptr;
 #if defined(__ANDROID__)
@@ -267,9 +264,10 @@ private:
 
 #if defined(__ANDROID__)
   // How often the thread looks for pipelines to store, once the warmup is
-  // done. Rarely: the device is only asked when the frames left it alone, and
-  // a look with nothing compiled since costs next to nothing.
-  static constexpr auto kStoreInterval = std::chrono::seconds(5);
+  // done: the cadence React Native WebGPU flushes the devices it creates at.
+  // Rarely: the device is only asked when the frames left it alone, and a
+  // look with nothing compiled since costs next to nothing.
+  static constexpr auto kStoreInterval = std::chrono::seconds(10);
 
   // Keeps the device's VkPipelineCache on disk for the next launch (see
   // vulkan_monolithic_pipeline_cache in DawnUtils). Dawn only stores it from
@@ -278,13 +276,24 @@ private:
   // once they leave the device alone, which leaving the foreground ends up
   // doing. A process killed before that compiles them again next time, like
   // one killed during the warmup. Until the device is lost: its pipelines are
-  // not the replacement's to keep.
+  // not the replacement's to keep. Or until the blob cache refuses the
+  // pipeline cache as too large (see DawnBlobCache::setDirectory): Dawn
+  // stores on this thread, before PerformIdleTasks returns, and stores
+  // nothing but the pipeline cache on idle, so a store refused on the way is
+  // the pipeline cache's, and serializing it again (Dawn copies the whole of
+  // it out of the driver, hashes it and copies it again) would be for
+  // nothing.
   static void storePipelineCache(const wgpu::Device &device,
                                  const std::atomic<bool> &lost) {
     auto &activity = RNSkGpuActivity::getInstance();
     while (!lost.load(std::memory_order_acquire)) {
       if (activity.isIdle(kIdle)) {
+        const uint64_t refused =
+            rnwgpu::DawnBlobCache::refusedStoresOnThisThread();
         dawn::native::PerformIdleTasks(device);
+        if (rnwgpu::DawnBlobCache::refusedStoresOnThisThread() != refused) {
+          return;
+        }
       }
       std::this_thread::sleep_for(kStoreInterval);
     }

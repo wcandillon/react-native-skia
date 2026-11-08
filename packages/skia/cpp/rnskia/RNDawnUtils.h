@@ -6,7 +6,6 @@
 
 #include <functional>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -16,10 +15,10 @@
 
 #include "dawn/native/DawnNative.h"
 
-#include "RNSkBlobCache.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 namespace DawnUtils {
@@ -408,35 +407,18 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   togglesDesc.disabledToggles = kDisabledToggles;
 #endif
 
-  // Dawn's blob cache, on disk once the platform gave it a directory (see
-  // RNSkBlobCache): the shaders Dawn translated, and on Vulkan its pipeline
-  // caches, found again by the next process.
-  wgpu::DawnCacheDeviceDescriptor cacheDesc;
-  if (RNSkia::RNSkBlobCache::getInstance().isEnabled()) {
-    cacheDesc.isolationKey = "rnskia";
-    cacheDesc.SetDawnLoadCacheDataCallback(
-        [](std::span<const std::byte> key, std::span<std::byte> value,
-           RNSkia::RNSkBlobCache *cache) -> size_t {
-          return cache->load(
-              reinterpret_cast<const uint8_t *>(key.data()), key.size(),
-              reinterpret_cast<uint8_t *>(value.data()), value.size());
-        },
-        &RNSkia::RNSkBlobCache::getInstance());
-    cacheDesc.SetDawnStoreCacheDataCallback(
-        [](std::span<const std::byte> key, std::span<const std::byte> value,
-           RNSkia::RNSkBlobCache *cache) {
-          cache->store(
-              reinterpret_cast<const uint8_t *>(key.data()), key.size(),
-              reinterpret_cast<const uint8_t *>(value.data()), value.size());
-        },
-        &RNSkia::RNSkBlobCache::getInstance());
-    togglesDesc.nextInChain = &cacheDesc;
-  }
-
   wgpu::DeviceDescriptor desc;
   desc.requiredFeatureCount = features.size();
   desc.requiredFeatures = features.data();
   desc.nextInChain = &togglesDesc;
+  // Dawn's blob cache, on disk once the platform gave it a directory (see
+  // DawnContext::setCacheDirectory): the shaders Dawn translated, and on
+  // Vulkan its pipeline cache, found again by the next process. The same
+  // cache as React Native WebGPU's, chained in front of the toggles and
+  // alive for the RequestDevice call below, like them.
+  WGPUDawnCacheDeviceDescriptor blobCache =
+      WGPU_DAWN_CACHE_DEVICE_DESCRIPTOR_INIT;
+  rnwgpu::DawnBlobCache::chain(desc, blobCache);
 
   // Destroyed is the context tearing the device down on purpose, and
   // CallbackCancelled the instance going away: neither is a loss.

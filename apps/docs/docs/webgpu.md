@@ -132,7 +132,7 @@ React Native Skia compiles these pipelines ahead of the frames, on a thread of i
 On a launch without a record, it compiles a built-in set: solid colors, images and gradients on every shape, text, and drop shadows.
 From then on, it records the pipelines the app actually uses in its cache directory (`rnskia/pipelines.bin`) and compiles those at the next launch, so the screens the app showed come up without a compile on the frame.
 A pipeline the record does not cover is compiled when first needed, as before, and recorded.
-The compiled shaders themselves are kept in the same directory by Dawn's cache, so a later launch mostly reads them back.
+The compiled shaders themselves, and on Android the driver's pipeline cache, are kept in the same directory by Dawn's blob cache: the one React Native WebGPU keeps for the devices it creates (see its [pipeline cache](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-api#pipeline-cache)), here for Skia's device, so a later launch mostly reads them back.
 Both are caches: clearing the app's cache directory costs the next launch a built-in set and the compiles, and a React Native Skia update that changes what Graphite or Dawn read starts them over.
 The log reports what each launch compiled ahead of the frames.
 
