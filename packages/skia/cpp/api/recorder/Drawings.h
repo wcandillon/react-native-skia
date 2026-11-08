@@ -10,6 +10,7 @@
 #include "Convertor.h"
 #include "DrawingCtx.h"
 #include "ImageFit.h"
+#include "RecorderStats.h"
 
 #include "rnskia/RNSkAtlas.h"
 
@@ -108,6 +109,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Paths);
     // Saturate start and end values (clamp between 0 and 1)
     float start = std::clamp(props.start, 0.0f, 1.0f);
     float end = std::clamp(props.end, 0.0f, 1.0f);
@@ -812,12 +814,14 @@ public:
   PictureCmdProps props;
 
   PictureCmd(jsi::Runtime &runtime, const jsi::Object &object,
-           Variables &variables)
+             Variables &variables)
       : Command(CommandType::DrawPicture) {
     convertProperty(runtime, object, "picture", props.picture, variables);
   }
 
-  void play(DrawingCtx *ctx) override { ctx->canvas->drawPicture(props.picture); }
+  void play(DrawingCtx *ctx) override {
+    ctx->canvas->drawPicture(props.picture);
+  }
 };
 
 struct ImageSVGCmdProps {

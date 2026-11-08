@@ -60,10 +60,29 @@ opt_in_promotion = ->(_installer) do
   Xcodeproj::Plist.write_to_path(info, plist_path)
 end
 
+# Compiles the recorder with its benchmark counters and timers (see
+# cpp/api/recorder/RecorderStats.h) when RNSKIA_RECORDER_STATS=1 is set in the
+# environment of `pod install`. Off by default: the counters sit on the hot
+# path of every commit and every frame.
+recorder_stats = ->(installer) do
+  return unless ENV['RNSKIA_RECORDER_STATS'] == '1'
+
+  Pod::UI.puts 'react-native-skia: building with RNSKIA_RECORDER_STATS'
+  installer.pods_project.targets.each do |target|
+    next unless target.name == 'react-native-skia'
+
+    target.build_configurations.each do |config|
+      defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || '$(inherited)'
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = "#{defs} RNSKIA_RECORDER_STATS=1"
+    end
+  end
+end
+
 example_post_install = ->(installer) do
   fix_fmt_consteval.call(installer)
   raise_pod_deployment_targets.call(installer)
   opt_in_promotion.call(installer)
+  recorder_stats.call(installer)
   installer.pods_project.targets.each do |target|
     next unless ['react-native-skia', 'react-native-webgpu'].include?(target.name)
 

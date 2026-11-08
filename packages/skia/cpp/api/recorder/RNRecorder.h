@@ -24,6 +24,7 @@
 #include "ImageFilters.h"
 #include "Paint.h"
 #include "PathEffects.h"
+#include "RecorderStats.h"
 #include "Shaders.h"
 #include "rnskia/RNSkPlatformContext.h"
 
@@ -101,6 +102,7 @@ private:
   CommandList &currentCommands() { return *commandStack.back(); }
 
   void pushCommand(std::unique_ptr<Command> command) {
+    RNSKIA_STAT_COUNT(CommandAllocs);
     currentCommands().push_back(std::move(command));
   }
 
@@ -162,13 +164,23 @@ private:
     }
     // A drawing is played once per paint declared on the node (its <Paint>
     // children), then with the node's own paint.
+#ifdef RNSKIA_RECORDER_STATS
+    auto paintCopies = RecorderStats::Clock::now();
+#endif
     auto paints = ctx->paintDeclarations;
     SkPaint paint(ctx->getPaint());
     paint.setAlphaf(paint.getAlphaf() * ctx->getOpacity());
     paints.push_back(paint);
     ctx->paintDeclarations.clear();
+#ifdef RNSKIA_RECORDER_STATS
+    RecorderStats::accumulate(RecorderStats::PaintCopies,
+                              RecorderStats::micros(paintCopies));
+#endif
     for (auto &layerPaint : paints) {
-      ctx->pushPaint(layerPaint);
+      {
+        RNSKIA_STAT_SCOPE(PaintCopies);
+        ctx->pushPaint(layerPaint);
+      }
       cmd->play(ctx);
       ctx->restorePaint();
     }
@@ -479,10 +491,18 @@ public:
   /** Replays the commands, with the pending values written in first. */
   void play(DrawingCtx *ctx) {
     std::lock_guard<std::mutex> lock(_commandsMutex);
+#ifdef RNSKIA_RECORDER_STATS
+    RecorderStats::beginFrame();
+    auto start = RecorderStats::Clock::now();
+#endif
     flushPendingWritesLocked();
     for (const auto &cmd : commands) {
       playCommand(ctx, cmd.get());
     }
+#ifdef RNSKIA_RECORDER_STATS
+    RecorderStats::get().endFrame(RecorderStats::Play,
+                                  RecorderStats::micros(start));
+#endif
   }
 
   /**
@@ -525,6 +545,10 @@ public:
    */
   std::optional<std::string> readUpdates(jsi::Runtime &runtime,
                                          const jsi::Array &values) {
+#ifdef RNSKIA_RECORDER_STATS
+    auto start = RecorderStats::Clock::now();
+#endif
+    RNSKIA_STAT_READING_SCOPE();
     Read read;
     const auto count = std::min(values.size(runtime), variables.size());
     for (size_t slot = 0; slot < count; slot++) {
@@ -532,7 +556,12 @@ public:
           values.getValueAtIndex(runtime, slot).asObject(runtime);
       readSlot(runtime, slot, sharedValue, read);
     }
-    return filePendingWrites(std::move(read), count == variables.size());
+    auto error = filePendingWrites(std::move(read), count == variables.size());
+#ifdef RNSKIA_RECORDER_STATS
+    RecorderStats::get().sample(RecorderStats::ReadUpdates,
+                                RecorderStats::micros(start));
+#endif
+    return error;
   }
 
   /**
@@ -543,6 +572,7 @@ public:
    * values from the mapper instead. Errors as readUpdates().
    */
   std::optional<std::string> readSharedValues(jsi::Runtime &runtime) {
+    RNSKIA_STAT_READING_SCOPE();
     Read read;
     size_t count = 0;
     for (size_t slot = 0; slot < variables.size(); slot++) {

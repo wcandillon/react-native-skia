@@ -33,6 +33,7 @@
 #include "api/third_party/CSSColorParser.h"
 
 #include "DataTypes.h"
+#include "RecorderStats.h"
 
 #include <jsi/jsi.h>
 
@@ -77,6 +78,7 @@ public:
     _conversions[slotFor(runtime, sharedValue)].push_back(
         std::move(conversion));
     _conversionCount++;
+    RNSKIA_STAT_COUNT(Conversions);
   }
 
   bool empty() const { return _conversions.empty(); }
@@ -169,10 +171,16 @@ struct GlyphData {
 };
 
 inline bool isSharedValue(jsi::Runtime &runtime, const jsi::Value &value) {
-  return value.isObject() &&
-         value.asObject(runtime).hasProperty(runtime,
-                                             "_isReanimatedSharedValue") &&
-         value.asObject(runtime)
+  if (!value.isObject()) {
+    return false;
+  }
+  RNSKIA_STAT_COUNT(HasProperty);
+  if (!value.asObject(runtime).hasProperty(runtime,
+                                           "_isReanimatedSharedValue")) {
+    return false;
+  }
+  RNSKIA_STAT_COUNT_N(GetProperty, 2);
+  return value.asObject(runtime)
              .getProperty(runtime, "_isReanimatedSharedValue")
              .isBool() &&
          value.asObject(runtime)
@@ -204,10 +212,15 @@ bool convertSelectorProperty(jsi::Runtime &runtime, const jsi::Value &prop,
     return false;
   }
   auto wrapper = prop.asObject(runtime);
-  if (!wrapper.hasProperty(runtime, "__sv") ||
-      !wrapper.hasProperty(runtime, "__key")) {
+  RNSKIA_STAT_COUNT(HasProperty);
+  if (!wrapper.hasProperty(runtime, "__sv")) {
     return false;
   }
+  RNSKIA_STAT_COUNT(HasProperty);
+  if (!wrapper.hasProperty(runtime, "__key")) {
+    return false;
+  }
+  RNSKIA_STAT_COUNT_N(GetProperty, 2);
   auto svVal = wrapper.getProperty(runtime, "__sv");
   auto keyVal = wrapper.getProperty(runtime, "__key");
   if (!isSharedValue(runtime, svVal) || !keyVal.isString()) {
@@ -247,10 +260,12 @@ template <typename T, typename Target>
 void convertPropertyImpl(jsi::Runtime &runtime, const jsi::Object &object,
                          const std::string &propertyName, Target &target,
                          Variables &variables) {
+  RNSKIA_STAT_COUNT(HasProperty);
   if (!object.hasProperty(runtime, propertyName.c_str())) {
     return;
   }
 
+  RNSKIA_STAT_COUNT(GetProperty);
   auto prop = object.getProperty(runtime, propertyName.c_str());
 
   if (convertSelectorProperty<T>(runtime, prop, target, variables)) {
@@ -312,6 +327,7 @@ template <>
 inline SkPoint getPropertyValue(jsi::Runtime &runtime,
                                 const jsi::Value &value) {
   if (value.isObject()) {
+    RNSKIA_STAT_COUNT_N(GetProperty, 2);
     auto x = value.asObject(runtime).getProperty(runtime, "x").asNumber();
     auto y = value.asObject(runtime).getProperty(runtime, "y").asNumber();
     return SkPoint::Make(x, y);
@@ -451,6 +467,8 @@ inline SkM44 getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
     SkM44 m4;
     for (int i = 0; i < size; i++) {
       auto value = array.getValueAtIndex(runtime, i).asObject(runtime);
+      // One getPropertyNames and one getProperty per transform entry.
+      RNSKIA_STAT_COUNT_N(GetProperty, 2);
       auto propNames = value.getPropertyNames(runtime);
       if (propNames.size(runtime) == 0) {
         throw std::runtime_error(
@@ -740,6 +758,7 @@ template <>
 inline Radius getPropertyValue(jsi::Runtime &runtime, const jsi::Value &value) {
   if (value.isObject()) {
     auto object = value.asObject(runtime);
+    RNSKIA_STAT_COUNT_N(GetProperty, 2);
     auto rX = static_cast<float>(object.getProperty(runtime, "x").asNumber());
     auto rY = static_cast<float>(object.getProperty(runtime, "y").asNumber());
     return {rX, rY};

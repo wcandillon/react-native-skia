@@ -18,6 +18,7 @@
 #include "RNSkRedrawRequest.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
+#include "api/recorder/RecorderStats.h"
 #include "jsi/ViewProperty.h"
 #include "utils/RNSkLog.h"
 
@@ -371,6 +372,11 @@ public:
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
     const int result = presented.shown ? kFramePresented : kNothingPresented;
+#ifdef RNSKIA_RECORDER_STATS
+    if (presented.shown) {
+      RecorderStats::get().framePresented(_nativeId);
+    }
+#endif
     if (!presented.allDone) {
       return result | kMoreQueued;
     }

@@ -10,3 +10,7 @@ export * from "./external";
 export * from "./animation";
 export * from "./dom/types";
 export * from "./dom/nodes";
+export type {
+  RecorderStatsApi,
+  RecorderStatsSnapshot,
+} from "./sksg/RecorderStats";

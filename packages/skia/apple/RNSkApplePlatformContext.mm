@@ -194,3 +194,23 @@ void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
 }
 
 } // namespace RNSkia
+
+#ifdef RNSKIA_RECORDER_STATS
+#include "api/recorder/RecorderStats.h"
+
+namespace RNSkia {
+
+// See RecorderStats.h: for the recorder benchmark, which runs for minutes
+// without a touch.
+void recorderStatsKeepAwake(bool on) {
+#if !TARGET_OS_OSX
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [UIApplication sharedApplication].idleTimerDisabled = on;
+  });
+#else
+  (void)on;
+#endif
+}
+
+} // namespace RNSkia
+#endif

@@ -8,6 +8,8 @@ import {
 
 import { Container } from "./StaticContainer";
 import { visit } from "./Recorder/Visitor";
+// Declares the benchmark hook globalThis.__RNSkiaCommitTimings read below.
+import "./RecorderStats";
 
 import "../skia/NativeSetup";
 import "../views/api";
@@ -119,8 +121,11 @@ class NativeContainer extends Container {
       return;
     }
     const recorder = this.Skia.Recorder();
+    const timings = globalThis.__RNSkiaCommitTimings;
     try {
+      const start = timings ? performance.now() : 0;
       visit(recorder, this.root);
+      const visited = timings ? performance.now() : 0;
       if (this.nativeId === -1) {
         // No mapper will update the picture: it is played with the current
         // values of the shared values, which makePicture() reads on this
@@ -131,6 +136,9 @@ class NativeContainer extends Container {
         this.picture = picture;
       } else {
         this.installRecording(recorder);
+      }
+      if (timings) {
+        timings(visited - start, performance.now() - visited);
       }
     } finally {
       // The wrapper is disposed right away: it would otherwise co-own the

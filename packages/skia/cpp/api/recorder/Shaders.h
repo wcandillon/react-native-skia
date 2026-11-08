@@ -14,6 +14,7 @@
 #include "Convertor.h"
 #include "DrawingCtx.h"
 #include "ImageFit.h"
+#include "RecorderStats.h"
 
 namespace RNSkia {
 
@@ -39,6 +40,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     auto source = props.source;
     auto uniforms = props.uniforms;
     auto m3 = processTransform(props.matrix, props.transform, props.origin);
@@ -93,6 +95,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     auto x = props.x;
     auto y = props.y;
     auto width = props.width;
@@ -148,6 +151,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     auto shader = SkShaders::Color(props.color);
     ctx->shaders.push_back(shader);
   }
@@ -245,6 +249,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -302,6 +307,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -361,6 +367,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
+    RNSKIA_STAT_SCOPE(Shaders);
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -423,7 +430,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-
+    RNSKIA_STAT_SCOPE(Shaders);
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {

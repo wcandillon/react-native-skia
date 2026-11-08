@@ -13,6 +13,7 @@
 #include "api/JsiSkApi.h"
 #include "api/JsiSkPicture.h"
 #include "api/recorder/JsiRecorder.h"
+#include "api/recorder/RecorderStats.h"
 #include "jsi/BoxedNativeObject.h"
 #include "jsi/ViewProperty.h"
 
@@ -98,6 +99,16 @@ void RNSkManager::installBindings() {
       *_jsRuntime, "__skiaWorkletHelpers",
       jsi::Object::createFromHostObject(
           *_jsRuntime, std::make_shared<RNJsi::NativeObjectWorkletHelpers>()));
+
+#ifdef RNSKIA_RECORDER_STATS
+  // The benchmark counters of the recorder (see RecorderStats.h), for the
+  // benchmark screens of the example app. A HostObject: worklets pass it to
+  // other runtimes by reference.
+  _jsRuntime->global().setProperty(
+      *_jsRuntime, "__RNSkiaRecorderStats",
+      jsi::Object::createFromHostObject(*_jsRuntime,
+                                        std::make_shared<JsiRecorderStats>()));
+#endif
 
   // The WebGPU JS API (RNWebGPU, navigator.gpu, constants, createImageBitmap)
   // is no longer installed here: react-native-webgpu is the single WebGPU API

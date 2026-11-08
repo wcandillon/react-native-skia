@@ -8,6 +8,7 @@
 #include "api/JsiSkPicture.h"
 
 #include "RNRecorder.h"
+#include "RecorderStats.h"
 
 #include <jsi/jsi.h>
 
@@ -286,78 +287,115 @@ public:
     return jsi::Value::undefined();
   }
 
+  /**
+   * Installs a recorder method like installHostMethod does. With
+   * RNSKIA_RECORDER_STATS, the installed function counts its calls first
+   * (RecorderStats::HostCalls), so that a benchmark can count the JSI calls
+   * a commit makes.
+   */
+  static void installRecorderMethod(jsi::Runtime &runtime,
+                                    jsi::Object &prototype, const char *name,
+                                    HostMethod method) {
+#ifdef RNSKIA_RECORDER_STATS
+    auto func = jsi::Function::createFromHostFunction(
+        runtime, jsi::PropNameID::forUtf8(runtime, name), 0,
+        [method](jsi::Runtime &rt, const jsi::Value &thisValue,
+                 const jsi::Value *arguments, size_t count) -> jsi::Value {
+          RNSKIA_STAT_COUNT(HostCalls);
+          auto native = fromThis(rt, thisValue);
+          return ((*native).*method)(rt, thisValue, arguments, count);
+        });
+    prototype.setProperty(runtime, name, func);
+#else
+    installHostMethod(runtime, prototype, name, method);
+#endif
+  }
+
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installCommon(runtime, prototype);
-    installHostMethod(runtime, prototype, "saveGroup", &JsiRecorder::saveGroup);
-    installHostMethod(runtime, prototype, "restoreGroup",
-                      &JsiRecorder::restoreGroup);
-    installHostMethod(runtime, prototype, "savePaint", &JsiRecorder::savePaint);
-    installHostMethod(runtime, prototype, "restorePaint",
-                      &JsiRecorder::restorePaint);
-    installHostMethod(runtime, prototype, "restorePaintDeclaration",
-                      &JsiRecorder::restorePaintDeclaration);
-    installHostMethod(runtime, prototype, "materializePaint",
-                      &JsiRecorder::materializePaint);
-    installHostMethod(runtime, prototype, "pushPathEffect",
-                      &JsiRecorder::pushPathEffect);
-    installHostMethod(runtime, prototype, "pushImageFilter",
-                      &JsiRecorder::pushImageFilter);
-    installHostMethod(runtime, prototype, "pushColorFilter",
-                      &JsiRecorder::pushColorFilter);
-    installHostMethod(runtime, prototype, "pushShader",
-                      &JsiRecorder::pushShader);
-    installHostMethod(runtime, prototype, "pushBlurMaskFilter",
-                      &JsiRecorder::pushBlurMaskFilter);
-    installHostMethod(runtime, prototype, "composePathEffect",
-                      &JsiRecorder::composePathEffect);
-    installHostMethod(runtime, prototype, "composeColorFilter",
-                      &JsiRecorder::composeColorFilter);
-    installHostMethod(runtime, prototype, "composeImageFilter",
-                      &JsiRecorder::composeImageFilter);
-    installHostMethod(runtime, prototype, "saveCTM", &JsiRecorder::saveCTM);
-    installHostMethod(runtime, prototype, "restoreCTM",
-                      &JsiRecorder::restoreCTM);
-    installHostMethod(runtime, prototype, "drawPaint", &JsiRecorder::drawPaint);
-    installHostMethod(runtime, prototype, "saveLayer", &JsiRecorder::saveLayer);
-    installHostMethod(runtime, prototype, "saveBackdropFilter",
-                      &JsiRecorder::saveBackdropFilter);
-    installHostMethod(runtime, prototype, "drawBox", &JsiRecorder::drawBox);
-    installHostMethod(runtime, prototype, "drawImage", &JsiRecorder::drawImage);
-    installHostMethod(runtime, prototype, "drawCircle",
-                      &JsiRecorder::drawCircle);
-    installHostMethod(runtime, prototype, "drawPoints",
-                      &JsiRecorder::drawPoints);
-    installHostMethod(runtime, prototype, "drawPath", &JsiRecorder::drawPath);
-    installHostMethod(runtime, prototype, "drawRect", &JsiRecorder::drawRect);
-    installHostMethod(runtime, prototype, "drawRRect", &JsiRecorder::drawRRect);
-    installHostMethod(runtime, prototype, "drawOval", &JsiRecorder::drawOval);
-    installHostMethod(runtime, prototype, "drawLine", &JsiRecorder::drawLine);
-    installHostMethod(runtime, prototype, "drawPatch", &JsiRecorder::drawPatch);
-    installHostMethod(runtime, prototype, "drawVertices",
-                      &JsiRecorder::drawVertices);
-    installHostMethod(runtime, prototype, "drawDiffRect",
-                      &JsiRecorder::drawDiffRect);
-    installHostMethod(runtime, prototype, "drawText", &JsiRecorder::drawText);
-    installHostMethod(runtime, prototype, "drawTextPath",
-                      &JsiRecorder::drawTextPath);
-    installHostMethod(runtime, prototype, "drawTextBlob",
-                      &JsiRecorder::drawTextBlob);
-    installHostMethod(runtime, prototype, "drawGlyphs",
-                      &JsiRecorder::drawGlyphs);
-    installHostMethod(runtime, prototype, "drawPicture",
-                      &JsiRecorder::drawPicture);
-    installHostMethod(runtime, prototype, "drawImageSVG",
-                      &JsiRecorder::drawImageSVG);
-    installHostMethod(runtime, prototype, "drawParagraph",
-                      &JsiRecorder::drawParagraph);
-    installHostMethod(runtime, prototype, "drawAtlas", &JsiRecorder::drawAtlas);
-    installHostMethod(runtime, prototype, "drawSkottie",
-                      &JsiRecorder::drawSkottie);
-    installHostMethod(runtime, prototype, "makePicture",
-                      &JsiRecorder::makePicture);
-    installHostMethod(runtime, prototype, "getSharedValues",
-                      &JsiRecorder::getSharedValues);
-    installHostMethod(runtime, prototype, "getId", &JsiRecorder::getId);
+    installRecorderMethod(runtime, prototype, "saveGroup",
+                          &JsiRecorder::saveGroup);
+    installRecorderMethod(runtime, prototype, "restoreGroup",
+                          &JsiRecorder::restoreGroup);
+    installRecorderMethod(runtime, prototype, "savePaint",
+                          &JsiRecorder::savePaint);
+    installRecorderMethod(runtime, prototype, "restorePaint",
+                          &JsiRecorder::restorePaint);
+    installRecorderMethod(runtime, prototype, "restorePaintDeclaration",
+                          &JsiRecorder::restorePaintDeclaration);
+    installRecorderMethod(runtime, prototype, "materializePaint",
+                          &JsiRecorder::materializePaint);
+    installRecorderMethod(runtime, prototype, "pushPathEffect",
+                          &JsiRecorder::pushPathEffect);
+    installRecorderMethod(runtime, prototype, "pushImageFilter",
+                          &JsiRecorder::pushImageFilter);
+    installRecorderMethod(runtime, prototype, "pushColorFilter",
+                          &JsiRecorder::pushColorFilter);
+    installRecorderMethod(runtime, prototype, "pushShader",
+                          &JsiRecorder::pushShader);
+    installRecorderMethod(runtime, prototype, "pushBlurMaskFilter",
+                          &JsiRecorder::pushBlurMaskFilter);
+    installRecorderMethod(runtime, prototype, "composePathEffect",
+                          &JsiRecorder::composePathEffect);
+    installRecorderMethod(runtime, prototype, "composeColorFilter",
+                          &JsiRecorder::composeColorFilter);
+    installRecorderMethod(runtime, prototype, "composeImageFilter",
+                          &JsiRecorder::composeImageFilter);
+    installRecorderMethod(runtime, prototype, "saveCTM", &JsiRecorder::saveCTM);
+    installRecorderMethod(runtime, prototype, "restoreCTM",
+                          &JsiRecorder::restoreCTM);
+    installRecorderMethod(runtime, prototype, "drawPaint",
+                          &JsiRecorder::drawPaint);
+    installRecorderMethod(runtime, prototype, "saveLayer",
+                          &JsiRecorder::saveLayer);
+    installRecorderMethod(runtime, prototype, "saveBackdropFilter",
+                          &JsiRecorder::saveBackdropFilter);
+    installRecorderMethod(runtime, prototype, "drawBox", &JsiRecorder::drawBox);
+    installRecorderMethod(runtime, prototype, "drawImage",
+                          &JsiRecorder::drawImage);
+    installRecorderMethod(runtime, prototype, "drawCircle",
+                          &JsiRecorder::drawCircle);
+    installRecorderMethod(runtime, prototype, "drawPoints",
+                          &JsiRecorder::drawPoints);
+    installRecorderMethod(runtime, prototype, "drawPath",
+                          &JsiRecorder::drawPath);
+    installRecorderMethod(runtime, prototype, "drawRect",
+                          &JsiRecorder::drawRect);
+    installRecorderMethod(runtime, prototype, "drawRRect",
+                          &JsiRecorder::drawRRect);
+    installRecorderMethod(runtime, prototype, "drawOval",
+                          &JsiRecorder::drawOval);
+    installRecorderMethod(runtime, prototype, "drawLine",
+                          &JsiRecorder::drawLine);
+    installRecorderMethod(runtime, prototype, "drawPatch",
+                          &JsiRecorder::drawPatch);
+    installRecorderMethod(runtime, prototype, "drawVertices",
+                          &JsiRecorder::drawVertices);
+    installRecorderMethod(runtime, prototype, "drawDiffRect",
+                          &JsiRecorder::drawDiffRect);
+    installRecorderMethod(runtime, prototype, "drawText",
+                          &JsiRecorder::drawText);
+    installRecorderMethod(runtime, prototype, "drawTextPath",
+                          &JsiRecorder::drawTextPath);
+    installRecorderMethod(runtime, prototype, "drawTextBlob",
+                          &JsiRecorder::drawTextBlob);
+    installRecorderMethod(runtime, prototype, "drawGlyphs",
+                          &JsiRecorder::drawGlyphs);
+    installRecorderMethod(runtime, prototype, "drawPicture",
+                          &JsiRecorder::drawPicture);
+    installRecorderMethod(runtime, prototype, "drawImageSVG",
+                          &JsiRecorder::drawImageSVG);
+    installRecorderMethod(runtime, prototype, "drawParagraph",
+                          &JsiRecorder::drawParagraph);
+    installRecorderMethod(runtime, prototype, "drawAtlas",
+                          &JsiRecorder::drawAtlas);
+    installRecorderMethod(runtime, prototype, "drawSkottie",
+                          &JsiRecorder::drawSkottie);
+    installRecorderMethod(runtime, prototype, "makePicture",
+                          &JsiRecorder::makePicture);
+    installRecorderMethod(runtime, prototype, "getSharedValues",
+                          &JsiRecorder::getSharedValues);
+    installRecorderMethod(runtime, prototype, "getId", &JsiRecorder::getId);
   }
 
   // The recorder itself is a small command list. The resources it references
