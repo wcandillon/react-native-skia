@@ -132,6 +132,11 @@ export const HomeScreen = () => {
         route="TextBlobs"
       />
       <HomeScreenButton
+        title="⏱ Benchmark"
+        description="Scenes for performance regression runs"
+        route="Benchmark"
+      />
+      <HomeScreenButton
         title="🖼 Pictures"
         description="Animated circle trail using Pictures"
         route="Pictures"
