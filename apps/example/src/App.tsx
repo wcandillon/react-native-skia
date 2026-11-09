@@ -22,6 +22,7 @@ import {
   Glassmorphism,
   Neumorphism,
   PerformanceDrawingTest,
+  TextBlobsBenchmark,
   Wallpaper,
   Vertices,
   Wallet,
@@ -76,6 +77,7 @@ const linking: LinkingOptions<StackParamList> = {
       Animation: "animation",
       Reanimated: "reanimated",
       Performance: "performance",
+      TextBlobs: "text-blobs",
       Tests: "test",
       Transitions: "transitions",
       Stickers: "stickers",
@@ -246,6 +248,11 @@ const App = () => {
             <Stack.Screen
               name="Performance"
               component={PerformanceDrawingTest}
+            />
+            <Stack.Screen
+              name="TextBlobs"
+              component={TextBlobsBenchmark}
+              options={{ title: "🔤 Text Blobs" }}
             />
             <Stack.Screen name="Pictures" component={Pictures} />
             <Stack.Screen
