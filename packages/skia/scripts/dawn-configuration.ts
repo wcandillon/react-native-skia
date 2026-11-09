@@ -404,57 +404,77 @@ export const collectDawnHeaders = (buildDir: string) => {
 /**
  * Assembles libs/dawn/apple/libwebgpu_dawn.xcframework from the Apple slices
  * in libs/dawn/apple and the headers in libs/dawn/include, which every slice
- * embeds so SwiftPM consumers see them without any search path.
+ * embeds so SwiftPM consumers see them without any search path. A slice whose
+ * targets were not built (e.g. `yarn build-dawn ios-simulator-arm64
+ * xcframework` to test on a simulator) is left out, with a warning, and a
+ * lipo'd simulator slice keeps the architectures that were built.
  */
 export const createDawnXcframework = () => {
   const appleDir = path.join(DawnLibs, "apple");
   const include = path.join(DawnLibs, "include");
-  const slice = (name: string) => {
-    const lib = path.join(appleDir, name, dawnLibraryName("apple"));
-    if (!fs.existsSync(lib)) {
-      throw new Error(
-        `Missing Dawn slice ${lib}: build the ${name} target first`
-      );
-    }
-    return lib;
-  };
   if (!fs.existsSync(path.join(include, "webgpu", "webgpu.h"))) {
     throw new Error(`Missing Dawn headers in ${include}`);
   }
+  const built = (name: string) =>
+    fs.existsSync(path.join(appleDir, name, dawnLibraryName("apple")));
+  const lib = (name: string) =>
+    path.join(appleDir, name, dawnLibraryName("apple"));
+  const slices: { name: string; targets: string[] }[] = [
+    { name: "ios-arm64", targets: ["ios-arm64"] },
+    {
+      name: "ios-simulator",
+      targets: ["ios-simulator-arm64", "ios-simulator-x86_64"],
+    },
+    { name: "tvos-arm64", targets: ["tvos-arm64"] },
+    {
+      name: "tvos-simulator",
+      targets: ["tvos-simulator-arm64", "tvos-simulator-x86_64"],
+    },
+    { name: "maccatalyst-universal", targets: ["maccatalyst-universal"] },
+    { name: "macos-universal", targets: ["macos-universal"] },
+  ];
 
-  const simulator = path.join(appleDir, "ios-simulator");
-  fs.mkdirSync(simulator, { recursive: true });
-  const simulatorLib = path.join(simulator, dawnLibraryName("apple"));
-  console.log("📱 Creating the fat iOS simulator library");
-  execSync(
-    `lipo -create ${slice("ios-simulator-arm64")} ${slice("ios-simulator-x86_64")} -output ${simulatorLib}`
-  );
-
-  const tvSimulator = path.join(appleDir, "tvos-simulator");
-  fs.mkdirSync(tvSimulator, { recursive: true });
-  const tvSimulatorLib = path.join(tvSimulator, dawnLibraryName("apple"));
-  console.log("📺 Creating the fat tvOS simulator library");
-  execSync(
-    `lipo -create ${slice("tvos-simulator-arm64")} ${slice(
-      "tvos-simulator-x86_64"
-    )} -output ${tvSimulatorLib}`
-  );
+  const libraries: string[] = [];
+  const lipoDirs: string[] = [];
+  const missing: string[] = [];
+  for (const { name, targets } of slices) {
+    const present = targets.filter(built);
+    missing.push(...targets.filter((target) => !built(target)));
+    if (present.length === 0) {
+      continue;
+    }
+    if (targets.length === 1) {
+      libraries.push(lib(name));
+      continue;
+    }
+    const dir = path.join(appleDir, name);
+    fs.mkdirSync(dir, { recursive: true });
+    const fat = path.join(dir, dawnLibraryName("apple"));
+    console.log(`📱 Creating the ${name} library (${present.join(", ")})`);
+    execSync(`lipo -create ${present.map(lib).join(" ")} -output ${fat}`);
+    libraries.push(fat);
+    lipoDirs.push(dir);
+  }
+  if (libraries.length === 0) {
+    throw new Error(
+      `No Dawn slice in ${appleDir}: build an Apple target first`
+    );
+  }
+  if (missing.length > 0) {
+    console.warn(
+      `⚠️ Leaving out the Dawn slices that were not built: ${missing.join(", ")}`
+    );
+  }
 
   fileOps.rm(DawnAppleXcframework);
   console.log(`🍏 Creating ${DawnAppleXcframework}`);
   execSync(
     [
       "xcodebuild -create-xcframework",
-      `-library ${slice("ios-arm64")} -headers ${include}`,
-      `-library ${simulatorLib} -headers ${include}`,
-      `-library ${slice("tvos-arm64")} -headers ${include}`,
-      `-library ${tvSimulatorLib} -headers ${include}`,
-      `-library ${slice("maccatalyst-universal")} -headers ${include}`,
-      `-library ${slice("macos-universal")} -headers ${include}`,
+      ...libraries.map((library) => `-library ${library} -headers ${include}`),
       `-output ${DawnAppleXcframework}`,
     ].join(" ")
   );
-  fileOps.rm(simulator);
-  fileOps.rm(tvSimulator);
+  lipoDirs.forEach((dir) => fileOps.rm(dir));
   console.log(`✅ ${DawnAppleXcframework}`);
 };

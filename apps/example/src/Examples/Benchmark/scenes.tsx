@@ -1,18 +1,20 @@
 // The benchmark scenes. Layouts match apps/benchmark in react-native-tgfx
 // (same counts, grids and SkSL), so numbers can be compared across the two.
 import React from "react";
-import { Dimensions, Platform } from "react-native";
+import { Dimensions, PixelRatio, Platform } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
-import type { SkFont, SkImage } from "react-native-skia";
+import type { SkFont, SkImage, SkPicture } from "react-native-skia";
 import {
   Circle,
+  createPicture,
   Fill,
   Group,
   Image,
   ImageShader,
   matchFont,
   Path,
+  Picture,
   Rect,
   Shader,
   Skia,
@@ -48,6 +50,28 @@ const SHAPES = Array.from({ length: 20000 }, (_, i) => ({
   color: PALETTE[i % PALETTE.length],
   circle: i % 3 === 0,
 }));
+
+// The same 20,000 shapes in one SkShapeBlob, drawn with a single
+// canvas.drawShapes (one drawVertices): the `shapes` scene without the
+// per-draw cost. The picture is recorded once; it pins the sprites at the
+// pixel density, since a recording canvas has no device scale.
+let shapeBlob: SkPicture | null = null;
+const getShapeBlob = () => {
+  if (shapeBlob === null) {
+    const blob = Skia.ShapeBlob({ rasterScale: PixelRatio.get() });
+    const colors = PALETTE.map((c) => Skia.Color(c));
+    SHAPES.forEach((s, i) => {
+      const color = colors[i % colors.length];
+      if (s.circle) {
+        blob.addCircle(s.x + s.size / 2, s.y + s.size / 2, s.size / 2, color);
+      } else {
+        blob.addRect(Skia.XYWHRect(s.x, s.y, s.size, s.size), color);
+      }
+    });
+    shapeBlob = createPicture((canvas) => canvas.drawShapes(blob));
+  }
+  return shapeBlob;
+};
 
 // 3,600 image draws over 8 textures.
 const IMAGE_CELLS = Array.from({ length: 3600 }, (_, i) => ({
@@ -181,6 +205,12 @@ export const BenchScene = ({
               />
             )
           )}
+        </Group>
+      );
+    case "shapeBlob":
+      return (
+        <Group transform={transform} origin={origin}>
+          <Picture picture={getShapeBlob()} />
         </Group>
       );
     case "images": {

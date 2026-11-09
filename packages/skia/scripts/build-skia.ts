@@ -511,17 +511,16 @@ const buildXCFramework = (
     // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
     const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
     $(`git apply ${catalystPatch}`);
-    // A runtime effect local named like main's parameters ("pos") broke
-    // Graphite's SkSL, and the failed pipeline then crashed insertRecording.
-    const runtimeEffectPatch = path.join(
+    // A pipeline that failed to build crashed insertRecording instead of
+    // failing it (https://skia-review.googlesource.com/c/skia/+/1421717).
+    const nullPipelinePatch = path.join(
       __dirname,
-      "skia-graphite-runtime-effect-names.patch"
+      "skia-graphite-null-pipeline.patch"
     );
-    $(`git apply ${runtimeEffectPatch}`);
-    // Recorder::makeDeferredCanvas hard-codes default surface props, which
-    // rules out device independent (SDF) fonts for the canvas a view records
-    // into: a glyph is then rasterized again whenever its transform changes
-    // (see RNSkGraphiteTarget::recordingSurfaceProps).
+    $(`git apply ${nullPipelinePatch}`);
+    // Recorder::makeDeferredCanvas takes the surface props the canvas a view
+    // records into draws with, e.g. device independent fonts
+    // (https://skia-review.googlesource.com/c/skia/+/1421716).
     const deferredCanvasPropsPatch = path.join(
       __dirname,
       "skia-graphite-deferred-canvas-props.patch"

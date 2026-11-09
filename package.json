@@ -34,7 +34,8 @@
   "packageManager": "yarn@3.6.4",
   "resolutions": {
     "@webgpu/types": "^0.1.69",
-    "react-native-macos@^0.81.8": "patch:react-native-macos@npm%3A0.81.9#./.yarn/patches/react-native-macos-npm-0.81.9-macos-codegen.patch"
+    "react-native-macos@^0.81.8": "patch:react-native-macos@npm%3A0.81.9#./.yarn/patches/react-native-macos-npm-0.81.9-macos-codegen.patch",
+    "react-native-webgpu-dawn": "158.0.0"
   },
   "devDependencies": {
     "eas-cli": "18.4.0",
