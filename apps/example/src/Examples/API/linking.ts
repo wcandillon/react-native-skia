@@ -49,4 +49,5 @@ export const apiScreenPaths: Record<keyof Routes, string> = {
   WebGLContexts: "webgl-contexts",
   WebGLLifecycle: "webgl-lifecycle",
   WebMemory: "web-memory",
+  WebOffscreen: "web-offscreen",
 };

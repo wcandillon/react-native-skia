@@ -47,6 +47,7 @@ import { WebLayout } from "./WebLayout";
 import { WebGLContexts } from "./WebGLContexts";
 import { WebGLLifecycle } from "./WebGLLifecycle";
 import { WebMemory } from "./WebMemory";
+import { WebOffscreen } from "./WebOffscreen";
 
 const Stack = createNativeStackNavigator<Routes>();
 
@@ -367,6 +368,13 @@ export const API = () => {
         component={WebMemory}
         options={{
           title: "💧 WASM Memory",
+        }}
+      />
+      <Stack.Screen
+        name="WebOffscreen"
+        component={WebOffscreen}
+        options={{
+          title: "🧱 Offscreen Surfaces",
         }}
       />
     </Stack.Navigator>

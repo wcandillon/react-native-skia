@@ -85,6 +85,7 @@ export interface CanvasProps extends Omit<ViewProps, "onLayout"> {
   android?: AndroidCanvasProps;
   ref?: React.Ref<CanvasRef>;
   androidWarmup?: boolean;
+  /** @deprecated Does nothing: on web, every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
 }
 

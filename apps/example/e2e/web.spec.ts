@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { test, expect } from "playwright/test";
+import type { Page } from "playwright/test";
 
 import { apiScreenPaths } from "../src/Examples/API/linking";
 
@@ -79,13 +80,24 @@ for (const name of screens) {
   });
 }
 
-// The WebGL context behind a <Canvas> belongs to the <canvas> element, the
-// renderer to a layout effect, and the two lifetimes don't line up (#3976,
-// #3349). The WebGLLifecycle screen exercises every way they can diverge;
-// the reference canvas on it must keep a healthy context throughout.
-test("WebGLLifecycle: context lifetime", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+// Every canvas on the page draws through one shared WebGL context and
+// presents its frame through a 2D context of its own, so a canvas element
+// never owns a WebGL context the browser could evict.
+const sampleCanvas = (canvas: HTMLCanvasElement) => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  const { data } = ctx.getImageData(
+    Math.floor(canvas.width / 2),
+    Math.floor(canvas.height / 2),
+    1,
+    1
+  );
+  return Array.from(data);
+};
+
+const collectEvictions = (page: Page) => {
   // Chrome reports evictions as a browser-generated console warning:
   // "WARNING: Too many active WebGL contexts. Oldest context will be lost."
   const evictions: string[] = [];
@@ -94,53 +106,148 @@ test("WebGLLifecycle: context lifetime", async ({ page }) => {
       evictions.push(message.text());
     }
   });
+  return evictions;
+};
+
+// More canvases than the browser allows live WebGL contexts, each painted
+// through the shared context and showing its color.
+test("WebGLContexts: more canvases than the context limit", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  const evictions = collectEvictions(page);
+  await page.goto("/api/webgl-contexts");
+  const canvases = page.getByTestId("grid").locator("canvas");
+  await expect(canvases).toHaveCount(40, { timeout: 60_000 });
+  // Chrome's eviction runs on a timer after the context count is exceeded.
+  await page.waitForTimeout(1_000);
+  // Runs in the page: the sampling is spelled out again as a closure over
+  // sampleCanvas would not be serialized.
+  const pixels = await canvases.evaluateAll((elements) =>
+    elements.map((element) => {
+      const canvas = element as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return null;
+      }
+      const { data } = ctx.getImageData(
+        Math.floor(canvas.width / 2),
+        Math.floor(canvas.height / 2),
+        1,
+        1
+      );
+      return Array.from(data);
+    })
+  );
+  // Each canvas has its own hue, so no two neighbours look alike, and none
+  // of them is blank.
+  pixels.forEach((pixel, i) => {
+    expect(pixel, `canvas ${i + 1}`).not.toBeNull();
+    expect(pixel![3], `canvas ${i + 1} alpha`).toBe(255);
+  });
+  expect(new Set(pixels.map((pixel) => pixel!.join(","))).size).toBeGreaterThan(
+    10
+  );
+  expect(evictions).toEqual([]);
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
+// The WebGL context behind the canvases is shared by the page, a <canvas>
+// element owns none, and the renderer belongs to a layout effect (#3976,
+// #3349). The WebGLLifecycle screen exercises every way those lifetimes can
+// diverge; the shared context must stay healthy throughout and the
+// reference canvas must keep painting.
+test("WebGLLifecycle: context lifetime", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  const evictions = collectEvictions(page);
   await page.goto("/api/webgl-lifecycle");
   const status = page.getByTestId("status");
   const reference = page.getByTestId("reference").locator("canvas");
   await expect(reference).toBeVisible({ timeout: 60_000 });
-  await expect(status).toContainText("reference: ok");
+  await expect(status).toContainText("context: ok");
+  // The element presents through a 2D context: it owns no WebGL context.
+  expect(
+    await reference.evaluate(
+      (canvas: HTMLCanvasElement) => canvas.getContext("webgl2") === null
+    )
+  ).toBe(true);
 
   // Mounting and unmounting a canvas more times than the browser's context
-  // limit: each unmounted canvas must release its context right away, or the
-  // browser evicts the oldest live one, which is the reference canvas.
+  // limit must not cost a single context.
   await page.getByTestId("remount").click();
   await expect(status).toContainText("cycles 20/20", { timeout: 30_000 });
   // Chrome's eviction runs on a timer after the context count is exceeded.
   await page.waitForTimeout(500);
-  await expect(status).toContainText("reference: ok");
+  await expect(status).toContainText("context: ok");
   expect(evictions).toEqual([]);
 
   // StrictMode re-runs the renderer's layout effect on the same element.
   await page.getByTestId("strict").click();
   await expect(status).toContainText("strict: on");
   await expect(reference).toBeVisible();
-  await expect(status).toContainText("reference: ok");
+  await expect(status).toContainText("context: ok");
 
-  // The browser can take the context away and hand it back; the renderer
-  // must pick it up again.
+  // The browser can take the shared context away and hand it back; every
+  // canvas must pick it up again.
   await page.getByTestId("lose").click();
-  await expect(status).toContainText("reference: LOST");
+  await expect(status).toContainText("context: LOST");
   await page.getByTestId("restore").click();
-  await expect(status).toContainText("reference: ok");
-  expect(
-    await reference.evaluate((canvas: HTMLCanvasElement) => {
-      // A restored context has a fresh drawing buffer: the renderer must have
-      // resized it (and hence rebuilt its surface) rather than left it empty.
-      return canvas.width > 0 && canvas.height > 0;
-    })
-  ).toBe(true);
-
-  // Live -> static -> live: each renderer kind needs its own element.
-  await page.getByTestId("renderer").click();
-  await expect(status).toContainText("renderer: static");
-  await expect(reference).toBeVisible();
-  await page.getByTestId("renderer").click();
-  await expect(status).toContainText("renderer: live");
-  await expect(status).toContainText("reference: ok");
+  await expect(status).toContainText("context: ok");
+  // Give the spinner a frame to paint on the restored context.
+  await page.waitForTimeout(100);
+  const pixel = await reference.evaluate(sampleCanvas);
+  // The spinner's background, #1c2541, not a blank canvas.
+  expect(pixel).not.toBeNull();
+  expect(pixel![3]).toBe(255);
 
   await page.screenshot({
     path: path.join(screenshotsDir, "WebGLLifecycle-actions.png"),
   });
+  await expect(status).not.toContainText("error:");
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
+// Skia.Surface.MakeOffscreen() is a render target on the shared WebGL
+// context: making and disposing surfaces past the browser's context limit
+// must not cost a context, a surface the app kept survives, and a canvas can
+// draw the snapshot of an offscreen surface.
+test("WebOffscreen: offscreen surfaces share the page's context", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  const evictions = collectEvictions(page);
+  await page.goto("/api/web-offscreen");
+  const status = page.getByTestId("status");
+  const reference = page.getByTestId("reference").locator("canvas");
+  await expect(reference).toBeVisible({ timeout: 60_000 });
+  await expect(status).toContainText("context: ok");
+
+  await page.getByTestId("run").click();
+  await expect(status).toContainText("kept surface:", { timeout: 30_000 });
+  // Chrome's eviction runs on a timer after the context count is exceeded.
+  await page.waitForTimeout(500);
+  await page.screenshot({
+    path: path.join(screenshotsDir, "WebOffscreen.png"),
+  });
+
+  expect(evictions).toEqual([]);
+  await expect(status).toContainText("context: ok");
+  await expect(status).toContainText("kept surface: ok");
+  await expect(status).toContainText("snapshot: ok");
+  // The snapshot of the kept surface, red, drawn by a canvas.
+  const pixel = await page
+    .getByTestId("snapshot")
+    .locator("canvas")
+    .evaluate(sampleCanvas);
+  expect(pixel).not.toBeNull();
+  const [r, g, b, a] = pixel!;
+  expect(a).toBe(255);
+  expect(r).toBeGreaterThan(200);
+  expect(g).toBeLessThan(80);
+  expect(b).toBeLessThan(80);
   await expect(status).not.toContainText("error:");
   expect(errors, errors.join("\n")).toEqual([]);
 });

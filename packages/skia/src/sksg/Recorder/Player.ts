@@ -127,11 +127,7 @@ const play = (ctx: DrawingContext, _command: Command) => {
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { standalone } = command as any;
-      ctx.savePaint();
-      if (standalone) {
-        const freshPaint = ctx.Skia.Paint();
-        ctx.paint.assign(freshPaint);
-      }
+      ctx.savePaint(standalone);
       setPaintProperties(ctx.Skia, ctx, command.props, standalone);
     }
   } else if (isCommand(command, CommandType.RestorePaint)) {
@@ -166,64 +162,75 @@ const play = (ctx: DrawingContext, _command: Command) => {
   } else if (isCommand(command, CommandType.RestoreCTM)) {
     ctx.canvas.restore();
   } else {
-    // apply opacity to the current paint.
-    const paint = ctx.track(ctx.paint.copy());
-    paint.setAlphaf(paint.getAlphaf() * ctx.getOpacity());
-    const paints = [paint, ...ctx.paintDeclarations];
+    // Draws with the current paint, which carries the group opacity (see
+    // DrawingContext.applyOpacity), then once more with each paint declared
+    // on the node (its <Paint> children), in order.
+    if (ctx.paintDeclarations.length === 0) {
+      draw(ctx, command);
+      return;
+    }
+    const declarations = ctx.paintDeclarations;
     ctx.paintDeclarations = [];
-    paints.forEach((p) => {
+    draw(ctx, command);
+    declarations.forEach((p) => {
       ctx.paints.push(p);
-      if (isBoxCommand(command)) {
-        drawBox(ctx, command);
-      } else if (isCommand(command, CommandType.DrawPaint)) {
-        ctx.canvas.drawPaint(ctx.paint);
-      } else if (isDrawCommand(command, CommandType.DrawImage)) {
-        drawImage(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawCircle)) {
-        drawCircle(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPoints)) {
-        drawPoints(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPath)) {
-        drawPath(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawRect)) {
-        drawRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawRRect)) {
-        drawRRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawOval)) {
-        drawOval(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawLine)) {
-        drawLine(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPatch)) {
-        drawPatch(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawVertices)) {
-        drawVertices(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawDiffRect)) {
-        drawDiffRect(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawText)) {
-        drawText(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawTextPath)) {
-        drawTextPath(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawTextBlob)) {
-        drawTextBlob(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawGlyphs)) {
-        drawGlyphs(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawPicture)) {
-        drawPicture(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawImageSVG)) {
-        drawImageSVG(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawParagraph)) {
-        drawParagraph(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawAtlas)) {
-        drawAtlas(ctx, command.props);
-      } else if (isDrawCommand(command, CommandType.DrawSkottie)) {
-        drawSkottie(ctx, command.props);
-      } else {
-        console.warn(`Unknown command: ${command.type}`);
-      }
+      draw(ctx, command);
       ctx.paints.pop();
     });
   }
 };
+
+/** Draws the command with the paint on top of the stack. */
+const draw = (ctx: DrawingContext, command: Command) => {
+  if (isBoxCommand(command)) {
+    drawBox(ctx, command);
+  } else if (isCommand(command, CommandType.DrawPaint)) {
+    ctx.canvas.drawPaint(ctx.paint);
+  } else if (isDrawCommand(command, CommandType.DrawImage)) {
+    drawImage(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawCircle)) {
+    drawCircle(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPoints)) {
+    drawPoints(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPath)) {
+    drawPath(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawRect)) {
+    drawRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawRRect)) {
+    drawRRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawOval)) {
+    drawOval(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawLine)) {
+    drawLine(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPatch)) {
+    drawPatch(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawVertices)) {
+    drawVertices(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawDiffRect)) {
+    drawDiffRect(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawText)) {
+    drawText(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawTextPath)) {
+    drawTextPath(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawTextBlob)) {
+    drawTextBlob(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawGlyphs)) {
+    drawGlyphs(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawPicture)) {
+    drawPicture(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawImageSVG)) {
+    drawImageSVG(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawParagraph)) {
+    drawParagraph(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawAtlas)) {
+    drawAtlas(ctx, command.props);
+  } else if (isDrawCommand(command, CommandType.DrawSkottie)) {
+    drawSkottie(ctx, command.props);
+  } else {
+    console.warn(`Unknown command: ${command.type}`);
+  }
+};
+
 export function replay(ctx: DrawingContext, commands: Command[]) {
   "worklet";
   //console.log(debugTree(commands));

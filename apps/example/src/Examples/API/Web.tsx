@@ -22,6 +22,10 @@ const examples = [
     screen: "WebMemory",
     title: "💧 WASM Memory",
   },
+  {
+    screen: "WebOffscreen",
+    title: "🧱 Offscreen Surfaces",
+  },
 ] as const;
 
 const styles = StyleSheet.create({

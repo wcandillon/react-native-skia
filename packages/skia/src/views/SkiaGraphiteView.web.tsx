@@ -26,12 +26,12 @@ import type { SkiaGraphiteViewNativeProps } from "./types";
 import { useSkiaWebRenderer } from "./SkiaWebRenderer";
 import type { Renderer } from "./SkiaWebRenderer";
 
-// The web has no Graphite: a recording is an SkPicture, replayed onto the
-// view's WebGL surface by the same renderer as SkiaPictureView (with its
-// context-loss handling and the destroy-context-after-render mode). Frames
-// keep their native semantics, presented in submission order and never
-// dropped, with one difference: the surface starts cleared on every frame,
-// so a recording draws the whole frame rather than a delta.
+// The web has no Graphite: a recording is an SkPicture, painted through the
+// WebGL context the page shares (see SkiaWebRenderer) by the same renderer
+// as SkiaPictureView. Frames keep their native semantics, presented in
+// submission order and never dropped, with one difference: the surface
+// starts cleared on every frame, so a recording draws the whole frame rather
+// than a delta.
 
 export interface SkiaGraphiteViewRef {
   /**
@@ -161,8 +161,6 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     [props.nativeID]
   );
 
-  const isStatic = props.__destroyWebGLContextAfterRender === true;
-
   // Presents what was submitted since the last frame. A frame that cannot be
   // painted yet (unmeasured canvas, lost context) stays queued for the next
   // opportunity.
@@ -191,7 +189,7 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     },
     [present]
   );
-  const rendererRef = useSkiaWebRenderer(canvasRef, isStatic, {
+  const rendererRef = useSkiaWebRenderer(canvasRef, {
     paint,
     onLayout,
   });
@@ -346,16 +344,13 @@ export const SkiaGraphiteView = (props: SkiaGraphiteViewProps) => {
     ref: _ref,
     onLayout: _onLayout,
     nativeID: _nativeID,
-    __destroyWebGLContextAfterRender: _isStatic,
+    // Deprecated, kept out of the DOM.
+    __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;
   return (
     <Platform.View nativeID={`${nativeId}`} {...viewProps}>
       <canvas
-        // A canvas element is bound to one context kind for life (WebGL for
-        // the live renderer, 2D for the static one), so switching renderers
-        // needs a fresh element.
-        key={isStatic ? "static" : "webgl"}
         ref={canvasRef}
         style={{ display: "block", width: "100%", height: "100%" }}
       />
