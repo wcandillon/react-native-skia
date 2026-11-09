@@ -625,21 +625,24 @@ private:
         batchLast = recording;
         continue;
       }
-      if (!recording->hasSizeOf(targetInfo) && _producer->hasContent()) {
-        // Declarative content recorded for a size the window had. It is
-        // recorded again for the window as it is now (see redraw), so this
-        // frame is stale, but it carries the latest content: it goes onto
-        // the window while the window still has that size (the platform
-        // stretches it to the view until the frame for the new size lands)
-        // when the window shows the latest frame presented rather than each
-        // in turn (see setWindowTakesLatestFrame): it costs a present and
-        // nothing else there. Otherwise it is dropped when the frame for
-        // the new size follows or is on its way, as presenting it would
+      if (!recording->hasSizeOf(targetInfo)) {
+        // A recording made for a size the window had: declarative content,
+        // which is recorded again for the window as it is now (see redraw),
+        // or an imperative frame submitted before the resize. The frame is
+        // stale, but it carries the latest content: it goes onto the window
+        // while the window still has that size (the platform stretches it
+        // to the view until the frame for the new size lands) when the
+        // window shows the latest frame presented rather than each in turn
+        // (see setWindowTakesLatestFrame): it costs a present and nothing
+        // else there. Otherwise it is dropped when another recording follows
+        // it or a declarative frame is on its way, as presenting it would
         // only hold that one up (a view resized on every frame has a
         // frame's worth of work in the present alone, see
-        // RNSkWindowSurface::configureIfNeeded), and shown through a
-        // texture, stretched, when nothing is: better than the previous
-        // frame.
+        // RNSkWindowSurface::configureIfNeeded, and one presented through a
+        // texture costs a texture pass each: imperative frames queued faster
+        // than a slow GPU presents them would pile up for good, as they did
+        // on the CI emulator), and shown through a texture, stretched, when
+        // nothing is: better than the previous frame.
         if (!flush(i)) {
           taken = false;
           break;
