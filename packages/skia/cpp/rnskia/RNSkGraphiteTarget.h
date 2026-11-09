@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <deque>
 #include <functional>
@@ -257,7 +258,12 @@ public:
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
+      // Counted before anything can be done with it, so pendingFrames()
+      // never reads below zero.
+      _submitted.fetch_add(1, std::memory_order_relaxed);
       if (!recording->isCurrent()) {
+        // Dropped, with whatever waited: done, as far as pacing goes.
+        _done.fetch_add(_queue.size() + 1, std::memory_order_release);
         _queue.clear();
         return;
       }
@@ -331,6 +337,28 @@ public:
   bool hasQueued() {
     std::lock_guard<std::mutex> lock(_queueMutex);
     return !_queue.empty();
+  }
+
+  /**
+   Main thread. `count` recordings taken from the queue are done: presented,
+   or dropped by the present for a size the window no longer has. The same
+   signal the declarative producer paces on (RNSkGraphiteProducer::
+   onFramePresented).
+   */
+  void onRecordingsDone(size_t count) {
+    _done.fetch_add(count, std::memory_order_release);
+  }
+
+  /**
+   Any thread. Recordings submitted and not yet presented (or dropped). A
+   client recording on every vsync keeps this at or below a budget, as the
+   declarative producer does with kMaxQueued, so that a GPU-bound view does
+   not build a queue that is never dropped.
+   */
+  uint64_t pendingFrames() const {
+    const auto done = _done.load(std::memory_order_acquire);
+    const auto submitted = _submitted.load(std::memory_order_relaxed);
+    return submitted > done ? submitted - done : 0;
   }
 
 private:
@@ -461,6 +489,10 @@ private:
   std::mutex _queueMutex;
   std::deque<std::shared_ptr<RNSkGraphiteRecording>> _queue;
   std::function<void()> _requestFrame;
+
+  // Pacing counters, see pendingFrames().
+  std::atomic<uint64_t> _submitted{0};
+  std::atomic<uint64_t> _done{0};
 };
 
 /**

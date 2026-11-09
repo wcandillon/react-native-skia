@@ -12,6 +12,7 @@ import {
 } from "./ClippedSubviews";
 import { Empty } from "./Empty";
 import { GpuReplacement } from "./GpuReplacement";
+import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { CanvasAboveImageView, ImageView, ImageViewRounded } from "./ImageView";
 import { ImageViewMinified, ImageViewMinifiedOdd } from "./ImageViewMinified";
@@ -57,6 +58,7 @@ export const Screens: Readonly<Record<string, Screen>> = {
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
   Empty: shown(Empty),
   GpuReplacement: shown(GpuReplacement),
+  GraphitePendingFrames: settling(GraphitePendingFrames),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
   ImageView: shown(ImageView),
