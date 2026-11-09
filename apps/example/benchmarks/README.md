@@ -54,6 +54,21 @@ Results land in `benchmarks/results/` (git-ignored) as JSON and Markdown.
 The screen is also on the Home screen ("Benchmark"); opened from there it runs
 the default plan, without measurements.
 
+## On the self-hosted Mac
+
+The `Benchmark` workflow (`.github/workflows/benchmark.yml`, Actions tab, "Run
+workflow") runs the FPS benchmark on the Android phone plugged into the
+self-hosted Mac. There is no iPhone on that machine, so it is Android only.
+It measures the `baseline` ref (default `main`) and then the candidate (`ref`,
+default the dispatched branch, `refs/pull/<n>/head` for a pull request) on the
+same phone, compares the two with `--compare` and fails on a regression. The
+reports go to the job summary and the JSON to the `benchmark-android`
+artifact. A baseline without this benchmark is skipped.
+
+The phone has to be authorized for adb on the Mac, plugged in, and have no
+secure lock screen. The job locks the panel at `refresh_rate` (120), keeps
+the screen on, and puts both back at the end.
+
 ## Cold first draw
 
 `--cold` measures something else: what the first draw of a canvas costs the
