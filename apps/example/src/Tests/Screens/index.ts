@@ -6,6 +6,7 @@ import {
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
 } from "./ClippedSubviews";
+import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { IsOnMainThread } from "./IsOnMainThread";
 import { OnLayout } from "./OnLayout";
@@ -33,6 +34,7 @@ export const Screens: Readonly<Record<string, Screen>> = {
   ),
   ClippedSubviewsStateChanged: settling(ClippedSubviewsStateChanged),
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
+  GraphitePendingFrames: settling(GraphitePendingFrames),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
   IsOnMainThread: shown(IsOnMainThread),
