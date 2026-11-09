@@ -315,7 +315,7 @@ jobs:
           # globalSetup, the same as for a phone.
           script: |
             adb reverse tcp:8081 tcp:8081
-            nohup adb logcat > logcat.txt 2>&1 &
+            nohup sh -c 'while true; do adb logcat -T 1 -v time GPFDBG:I ReactNativeJS:I SkiaView:I *:S >> logcat.txt 2>&1; sleep 1; done' > /dev/null 2>&1 &
             # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
             ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
             adb wait-for-device shell monkey -p com.reactnativeskia.example 1
