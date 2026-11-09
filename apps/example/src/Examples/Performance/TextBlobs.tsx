@@ -18,13 +18,12 @@ import { scheduleOnRN } from "react-native-worklets";
 // Text pacing benchmark: thousands of text blobs, each rotating on every
 // frame, recorded on the Reanimated UI runtime into a SkiaGraphiteView.
 //
-// With default surface props Graphite rasterizes a glyph for the exact
-// transform it is drawn with, so a rotating blob is masked again, and rebuilt
-// (findOrCreateBlob), on every frame. With device independent fonts (see
-// RNSkGraphiteTarget::recordingSurfaceProps) a glyph is rasterized once as a
-// distance field and reused under any rotation. SDF text only applies to
-// glyphs between 18 and 324 device pixels: at a pixel density of 3 the font
-// size below (16 pt = 48 px) is within the range.
+// By default Graphite rasterizes a glyph for the exact transform it is drawn
+// with, so a rotating blob is masked again, and rebuilt (findOrCreateBlob),
+// on every frame. With the deviceIndependentFonts prop a glyph is rasterized
+// once as a distance field and reused under any rotation. SDF text only
+// applies to glyphs between 18 and 324 device pixels: at a pixel density of
+// 3 the font size below (16 pt = 48 px) is within the range.
 //
 // "rotate" is the scene the problem was reported against; "translate" moves
 // the blobs by whole pixels instead, which keeps the glyph masks reusable
@@ -136,10 +135,16 @@ const drawFrame = (
 interface BenchmarkViewProps {
   count: number;
   mode: Mode;
+  deviceIndependentFonts: boolean;
   onStats: (fps: number, recordingMs: number) => void;
 }
 
-const BenchmarkView = ({ count, mode, onStats }: BenchmarkViewProps) => {
+const BenchmarkView = ({
+  count,
+  mode,
+  deviceIndependentFonts,
+  onStats,
+}: BenchmarkViewProps) => {
   const ref = useRef<SkiaGraphiteViewRef>(null);
   const ctx = useSharedValue<SkGraphiteContext | null>(null);
   // The scene is built on the JS thread; Skia objects are shared with the
@@ -195,6 +200,7 @@ const BenchmarkView = ({ count, mode, onStats }: BenchmarkViewProps) => {
     <SkiaGraphiteView
       ref={ref}
       style={styles.view}
+      deviceIndependentFonts={deviceIndependentFonts}
       android={{ backingView: "SurfaceView" }}
     />
   );
@@ -203,16 +209,18 @@ const BenchmarkView = ({ count, mode, onStats }: BenchmarkViewProps) => {
 export const TextBlobsBenchmark = () => {
   const [count, setCount] = useState(6000);
   const [mode, setMode] = useState<Mode>("rotate");
+  const [fonts, setFonts] = useState(true);
   const [stats, setStats] = useState({ fps: 0, recordingMs: 0 });
   // Logged too, so that a run can be read off adb logcat or the Xcode console.
   useEffect(() => {
     if (stats.fps > 0) {
       console.log(
-        `TextBlobs ${count} ${mode}: ${stats.fps.toFixed(1)} fps, ` +
+        `TextBlobs ${count} ${mode} ${fonts ? "sdf" : "default"}: ` +
+          `${stats.fps.toFixed(1)} fps, ` +
           `${stats.recordingMs.toFixed(2)} ms recording`
       );
     }
-  }, [count, mode, stats]);
+  }, [count, mode, fonts, stats]);
   return (
     <View style={styles.container}>
       <View style={styles.panel}>
@@ -228,6 +236,10 @@ export const TextBlobsBenchmark = () => {
             setMode((m) => (m === "rotate" ? "translate" : "rotate"))
           }
         />
+        <Button
+          title={fonts ? "sdf" : "masks"}
+          onPress={() => setFonts((f) => !f)}
+        />
       </View>
       <Text style={styles.label}>
         {stats.fps.toFixed(0)} fps, {stats.recordingMs.toFixed(1)} ms recording
@@ -236,6 +248,7 @@ export const TextBlobsBenchmark = () => {
       <BenchmarkView
         count={count}
         mode={mode}
+        deviceIndependentFonts={fonts}
         onStats={(fps, recordingMs) => setStats({ fps, recordingMs })}
       />
     </View>
