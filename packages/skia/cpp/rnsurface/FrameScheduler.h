@@ -103,6 +103,20 @@ public:
     }
   }
 
+  /**
+   A recording reached a vsync-driven window after its callback, while the
+   host still has an unused, unexpired interval. The host checks that before
+   calling. Keep any posted callback: leftovers or a failed present still
+   need the next vsync. Latest-frame windows retain consumption backpressure.
+   */
+  void requestFrameInCurrentInterval() {
+    if (_window != Window::kShowsEachFrame) {
+      requestFrame();
+      return;
+    }
+    present();
+  }
+
   /** The vsync asked for with Host::postFrameCallback(). */
   void onFrame() {
     _frameCallbackPosted = false;
@@ -135,8 +149,8 @@ public:
   }
 
   /**
-   Whether a frame callback is outstanding: a host that ticks on its own (a
-   display link) pauses when none is.
+   Whether the scheduler still requests a frame callback. A host ticking on
+   its own may also keep ticks while replay is in flight or to confirm idle.
    */
   bool isFrameCallbackPosted() const { return _frameCallbackPosted; }
 

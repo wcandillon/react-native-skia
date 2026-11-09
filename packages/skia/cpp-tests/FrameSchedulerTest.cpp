@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rnsurface/FrameScheduler.h"
+#include "rnsurface/DisplayLinkPacing.h"
 
 namespace {
 
@@ -218,9 +219,9 @@ void cancelDropsOutstandingRequestsAndTheFrameInTheWindow() {
   }
 }
 
-void aDisplayLinkPausesWhenNoCallbackIsOutstanding() {
-  // What SkiaView.mm asks after each tick: the link stays on while a
-  // callback is outstanding (more queued), and pauses otherwise.
+void schedulerStopsRequestingCallbacksOnceTheQueueIsEmpty() {
+  // The scheduler's demand only: the Apple host may retain a following
+  // callback to cover replay or confirm idle even after this demand ends.
   Case c(Window::kShowsEachFrame);
   c.host.results.push_back(kPresented | kMoreQueued);
   c.scheduler.requestFrame();
@@ -236,14 +237,77 @@ void aDisplayLinkPausesWhenNoCallbackIsOutstanding() {
   c.scheduler.onFrame();
   if (c.scheduler.isFrameCallbackPosted()) {
     std::fprintf(stderr,
-                 "FAIL: display link: paused once the queue is empty\n");
+                 "FAIL: scheduler: no callback requested once the queue is empty\n");
     failures++;
   }
+}
+
+void lateFrameUsesTheCurrentIntervalAndKeepsItsRetry() {
+  Case c(Window::kShowsEachFrame);
+  c.host.results.push_back(kMoreQueued);
+  c.scheduler.requestFrameInCurrentInterval();
+  expectCalls(c.host, {Call::kPresent, Call::kPostFrameCallback},
+              "late frame: try now, retry on next vsync if declined");
+  c.scheduler.onFrame();
+  expectCalls(c.host, {Call::kPresent}, "late frame: retry presents");
+}
+
+void lateFrameDoesNotChangeLatestFrameBackpressure() {
+  Case c(Window::kShowsLatestFrame);
+  c.scheduler.requestFrame();
+  c.scheduler.requestFrameInCurrentInterval();
+  expectCalls(c.host, {Call::kPresent}, "late latest-frame: still one at a time");
+  c.scheduler.onFrameConsumed();
+  expectCalls(c.host, {Call::kPresent}, "late latest-frame: waits for consumption");
+}
+
+void lateFrameDoesNotCancelAPostedCallbackOrPresentWithoutAWindow() {
+  Case c(Window::kShowsEachFrame);
+  c.scheduler.requestFrame();
+  c.scheduler.requestFrameInCurrentInterval();
+  expectCalls(c.host, {Call::kPostFrameCallback, Call::kPresent},
+              "late frame: existing callback is retained");
+  if (!c.scheduler.isFrameCallbackPosted()) failures++;
+  c.scheduler.setWindow(Window::kNone);
+  c.scheduler.requestFrameInCurrentInterval();
+  expectCalls(c.host, {}, "late frame: no window, no present");
+}
+
+void displayLinkKeepsTheGapBeforeTheNextReplayAndAdmitsItLate() {
+  rnsurface::DisplayLinkPacing pacing;
+  const auto expect = [](bool value, const char *what) {
+    if (!value) { std::fprintf(stderr, "FAIL: %s\n", what); failures++; }
+  };
+  expect(!pacing.canPresentLate(10), "no tick: cannot present late");
+  pacing.onTick(10.016);
+  pacing.onPresented();
+  // No replay exists yet. Keeping this demand, not only in-flight work,
+  // is what bridges the gap until the next UI update starts its replay.
+  expect(pacing.hasPresented(), "present: keep the following callback");
+  expect(!pacing.canPresentLate(10.008), "one present per interval");
+  pacing.onTick(10.032);
+  expect(!pacing.hasPresented(), "empty callback: no continuing idle demand");
+  expect(pacing.canPresentLate(10.0164), "replay ready after empty callback");
+  pacing.onPresented();
+  expect(!pacing.canPresentLate(10.017), "late frame uses the interval once");
+  pacing.onTick(10.048);
+  expect(!pacing.canPresentLate(10.048), "deadline itself is not open");
+  expect(!pacing.canPresentLate(10.049), "expired deadline is not open");
+  pacing.onPresented();
+  expect(pacing.hasPresentedInInterval(10.040), "resize cannot double-present");
+  expect(!pacing.hasPresentedInInterval(10.049), "expired interval allows resize");
+  pacing.reset();
+  expect(!pacing.hasPresented() && !pacing.canPresentLate(0),
+         "detach resets presentation and deadline");
 }
 
 } // namespace
 
 int main() {
+  lateFrameUsesTheCurrentIntervalAndKeepsItsRetry();
+  lateFrameDoesNotChangeLatestFrameBackpressure();
+  lateFrameDoesNotCancelAPostedCallbackOrPresentWithoutAWindow();
+  displayLinkKeepsTheGapBeforeTheNextReplayAndAdmitsItLate();
   surfaceViewFrameIsPresentedOnTheNextVsync();
   textureViewFrameIsPresentedOnTheSpotWhileTheWindowHasNone();
   textureViewNextFrameWaitsForTheWindowToDrawThePrevious();
@@ -256,7 +320,7 @@ int main() {
   requestAfterTheFrameRanIsPostedAgain();
   withoutABackingViewNothingIsPostedOrPresented();
   cancelDropsOutstandingRequestsAndTheFrameInTheWindow();
-  aDisplayLinkPausesWhenNoCallbackIsOutstanding();
+  schedulerStopsRequestingCallbacksOnceTheQueueIsEmpty();
   if (failures == 0) {
     std::printf("FrameSchedulerTest: passed\n");
     return 0;
