@@ -1,5 +1,5 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
-import { readScreenColor, surface } from "../setup";
+import { countColors, readScreenColor, surface } from "../setup";
 
 describe("SkiaGraphiteView", () => {
   itRunsE2eOnly(
@@ -102,6 +102,23 @@ describe("SkiaGraphiteView", () => {
         return outcome;
       });
       expect(shared).toBe("shares the open recording");
+    }
+  );
+
+  // The view resizes every frame while two recordings per frame are queued,
+  // so presents of mixed sizes race the resizes and some end partway (see
+  // RNSkView::presentOrKeep). Every recording taken must still be counted
+  // once presented, or pendingFrames stays above 0 for good and a loop that
+  // paces on it stops. The screen shows lime once pendingFrames is back at
+  // 0, blue when it never gets there.
+  itRunsE2eOnly(
+    "counts every presented recording while it resizes",
+    async () => {
+      const counts = await countColors(
+        await surface.screen("GraphitePendingFrames")
+      );
+      expect(counts.green).toBeGreaterThan(0);
+      expect(counts.blue).toBe(0);
     }
   );
 });

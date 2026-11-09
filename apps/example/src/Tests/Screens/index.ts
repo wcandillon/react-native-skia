@@ -8,6 +8,7 @@ import {
 } from "./ClippedSubviews";
 import { Empty } from "./Empty";
 import { GpuReplacement } from "./GpuReplacement";
+import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { IsOnMainThread } from "./IsOnMainThread";
 import { OnLayout } from "./OnLayout";
@@ -37,6 +38,7 @@ export const Screens: Readonly<Record<string, Screen>> = {
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
   Empty: shown(Empty),
   GpuReplacement: shown(GpuReplacement),
+  GraphitePendingFrames: settling(GraphitePendingFrames),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
   IsOnMainThread: shown(IsOnMainThread),

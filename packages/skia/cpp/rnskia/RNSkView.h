@@ -220,13 +220,17 @@ public:
       }
       recordings.push_back(std::move(lastPresented));
     }
-    const size_t taken = recordings.size();
-    if (presentOrKeep(*target, targetInfo, std::move(recordings)).allDone) {
-      // The last frame shown again holds none of the producer's slots, which
-      // the frame on its way may hold.
-      if (!showsLastFrameAgain) {
-        _producer->onFramePresented(taken);
-      }
+    const auto presented =
+        presentOrKeep(*target, targetInfo, std::move(recordings));
+    // The recordings done so far are counted, also when the window could not
+    // take the ones behind them: those go back to the queue and count once
+    // presented. The last frame shown again holds none of the producer's
+    // slots, which the frame on its way may hold.
+    if (!showsLastFrameAgain && presented.done > 0) {
+      _producer->onFramePresented(presented.done);
+      target->onRecordingsDone(presented.done);
+    }
+    if (presented.allDone) {
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
@@ -384,15 +388,19 @@ public:
       target->requeue({recordings.begin() + 1, recordings.end()});
       recordings.resize(1);
     }
-    const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
     const int result = presented.shown ? PresentResult::kPresented
                                        : PresentResult::kNothingPresented;
+    // Counted also when the window could not take every recording (see
+    // redraw): the ones it kept are presented, and counted, next time.
+    if (presented.done > 0) {
+      _producer->onFramePresented(presented.done);
+      target->onRecordingsDone(presented.done);
+    }
     if (!presented.allDone) {
       return result | PresentResult::kMoreQueued;
     }
-    _producer->onFramePresented(taken);
     return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
   }
 
@@ -510,6 +518,9 @@ private:
     bool allDone;
     // A frame went to the window.
     bool shown;
+    // How many of the recordings are done, from the front; the rest went
+    // back to the queue.
+    size_t done;
   };
 
   /**
@@ -527,12 +538,14 @@ private:
       RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
       std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings) {
     bool shown = false;
+    size_t done = 0;
     for (int attempt = 0;; attempt++) {
       const auto replayed =
           present(*_surface, targetInfo, recordings, /* remember= */ true);
       shown = shown || replayed.shown;
+      done += replayed.done;
       if (replayed.done == recordings.size()) {
-        return {true, shown};
+        return {true, shown, done};
       }
       recordings.erase(recordings.begin(),
                        recordings.begin() + static_cast<long>(replayed.done));
@@ -542,7 +555,7 @@ private:
         continue;
       }
       target.requeue(std::move(recordings));
-      return {false, shown};
+      return {false, shown, done};
     }
   }
 
@@ -616,26 +629,31 @@ private:
         batchLast = recording;
         continue;
       }
-      if (!recording->hasSizeOf(targetInfo) && _producer->hasContent()) {
-        // Declarative content recorded for a size the window had. It is
-        // recorded again for the window as it is now (see redraw), so this
-        // frame is stale, but it carries the latest content: it goes onto
-        // the window while the window still has that size (the platform
-        // stretches it to the view until the frame for the new size lands)
-        // when the window shows the latest frame presented rather than each
-        // in turn (see setWindowTakesLatestFrame): it costs a present and
-        // nothing else there. Otherwise it is dropped when the frame for
-        // the new size follows or is on its way, as presenting it would
-        // only hold that one up (a view resized on every frame has a
-        // frame's worth of work in the present alone, see
-        // RNSkWindowSurface::configureIfNeeded), and shown through a
-        // texture, stretched, when nothing is: better than the previous
-        // frame.
+      if (!recording->hasSizeOf(targetInfo)) {
+        // A recording made for a size the window had: declarative content,
+        // which is recorded again for the window as it is now (see redraw),
+        // or an imperative frame submitted before the resize. The frame is
+        // stale, but it carries the latest content: a declarative one goes
+        // onto the window while the window still has that size (the
+        // platform stretches it to the view until the frame for the new
+        // size lands) when the window shows the latest frame presented
+        // rather than each in turn (see setWindowTakesLatestFrame): it costs
+        // a present and nothing else there. An imperative one does not, as
+        // no frame for the new size need follow it. Otherwise it is dropped
+        // when another recording follows it or a declarative frame is on its
+        // way, as presenting it would only hold that one up (a view resized on
+        // every frame has a frame's worth of work in the present alone, see
+        // RNSkWindowSurface::configureIfNeeded, and one presented through a
+        // texture costs a texture pass each: imperative frames queued faster
+        // than a slow GPU presents them would pile up for good, as they did
+        // on the CI emulator), and shown through a texture, stretched, when
+        // nothing is: better than the previous frame.
         if (!flush(i)) {
           taken = false;
           break;
         }
-        if (_windowTakesLatestFrame && &surface == _surface.get() &&
+        if (_producer->hasContent() && _windowTakesLatestFrame &&
+            &surface == _surface.get() &&
             surface.presentRecordings(recording->getTarget(),
                                       {recording->get()})) {
           last = recording;
