@@ -166,6 +166,11 @@ LoadSkiaWeb({
 });
 ```
 
+### Verifying the CanvasKit binary
+
+In development, React Native Skia checks that the `canvaskit.wasm` file it downloads matches the CanvasKit version it bundles, and fails with a descriptive error if it doesn't.
+Pass `verifyWasm: false` to `LoadSkiaWeb` or `WithSkiaWeb` to disable the check, or `verifyWasm: true` to also run it in production.
+
 ## WebGL Contexts
 
 Browsers limit the number of live WebGL contexts per page (16 in Chrome, which then evicts the oldest one with the warning `Too many active WebGL contexts. Oldest context will be lost.`).
