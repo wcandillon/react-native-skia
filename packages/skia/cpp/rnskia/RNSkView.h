@@ -220,14 +220,17 @@ public:
       }
       recordings.push_back(std::move(lastPresented));
     }
-    const size_t taken = recordings.size();
-    if (presentOrKeep(*target, targetInfo, std::move(recordings)).allDone) {
-      // The last frame shown again holds none of the producer's slots, which
-      // the frame on its way may hold.
-      if (!showsLastFrameAgain) {
-        _producer->onFramePresented(taken);
-        target->onRecordingsDone(taken);
-      }
+    const auto presented =
+        presentOrKeep(*target, targetInfo, std::move(recordings));
+    // The recordings done so far are counted, also when the window could not
+    // take the ones behind them: those go back to the queue and count once
+    // presented. The last frame shown again holds none of the producer's
+    // slots, which the frame on its way may hold.
+    if (!showsLastFrameAgain && presented.done > 0) {
+      _producer->onFramePresented(presented.done);
+      target->onRecordingsDone(presented.done);
+    }
+    if (presented.allDone) {
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
@@ -381,16 +384,19 @@ public:
       target->requeue({recordings.begin() + 1, recordings.end()});
       recordings.resize(1);
     }
-    const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
     const int result = presented.shown ? PresentResult::kPresented
                                        : PresentResult::kNothingPresented;
+    // Counted also when the window could not take every recording (see
+    // redraw): the ones it kept are presented, and counted, next time.
+    if (presented.done > 0) {
+      _producer->onFramePresented(presented.done);
+      target->onRecordingsDone(presented.done);
+    }
     if (!presented.allDone) {
       return result | PresentResult::kMoreQueued;
     }
-    _producer->onFramePresented(taken);
-    target->onRecordingsDone(taken);
     return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
   }
 
@@ -508,6 +514,9 @@ private:
     bool allDone;
     // A frame went to the window.
     bool shown;
+    // How many of the recordings are done, from the front; the rest went
+    // back to the queue.
+    size_t done;
   };
 
   /**
@@ -525,12 +534,14 @@ private:
       RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
       std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings) {
     bool shown = false;
+    size_t done = 0;
     for (int attempt = 0;; attempt++) {
       const auto replayed =
           present(*_surface, targetInfo, recordings, /* remember= */ true);
       shown = shown || replayed.shown;
+      done += replayed.done;
       if (replayed.done == recordings.size()) {
-        return {true, shown};
+        return {true, shown, done};
       }
       recordings.erase(recordings.begin(),
                        recordings.begin() + static_cast<long>(replayed.done));
@@ -540,7 +551,7 @@ private:
         continue;
       }
       target.requeue(std::move(recordings));
-      return {false, shown};
+      return {false, shown, done};
     }
   }
 
