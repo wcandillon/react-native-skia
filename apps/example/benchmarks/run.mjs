@@ -27,7 +27,8 @@
 //
 // Results go to benchmarks/results/ (git-ignored) as JSON plus a Markdown
 // table; --compare prints the change against an earlier result and flags
-// scenes that lost more than 10% of their present FPS. See README.md for
+// scenes that lost more than 10% of their present FPS or, on Android, whose
+// render CPU per presented frame grew by more than 10%. See README.md for
 // device preparation: a run on an emulator or a simulator measures their
 // software renderers, not React Native Skia.
 import { execFile, spawn } from "node:child_process";
@@ -248,6 +249,20 @@ async function threadSnapshot() {
   return { at, ticks };
 }
 
+// The threads whose CPU time is charged to each presented frame: the render
+// pool records and submits, the present thread hands frames to the window.
+const RENDER_THREAD = "RNSkia Render";
+const PRESENT_THREAD = "RNSkia Present";
+// A CPU-per-frame change below this many milliseconds is noise: /proc counts
+// in 10 ms ticks per thread.
+const CPU_FLOOR_MS = 0.25;
+
+// CPU milliseconds a thread group spent per presented frame: its share of a
+// core over the window, divided by the frames shown in that window. Unlike
+// present FPS it does not stop at the panel rate, so a scene that runs at
+// 120 FPS still shows a regression in its CPU cost.
+const msPerFrame = (percent, fps) => (percent == null || !(fps > 0) ? null : (percent * 10) / fps);
+
 // Per-thread CPU over 8 s, pool threads grouped by name (index dropped).
 async function threadsAndroid() {
   const a = await threadSnapshot();
@@ -323,7 +338,14 @@ async function measureAndroid() {
               run.present = present?.fps ?? null;
               run.presentSource = present?.source ?? null;
               run.threads = threads;
-              console.log(`[bench]    ${run.scene} present=${run.present?.toFixed(1)}fps (${run.presentSource})`);
+              run.cpu = {
+                render: msPerFrame(threads[RENDER_THREAD], run.present),
+                present: msPerFrame(threads[PRESENT_THREAD], run.present),
+              };
+              console.log(
+                `[bench]    ${run.scene} present=${run.present?.toFixed(1)}fps (${run.presentSource})` +
+                  ` render=${run.cpu.render?.toFixed(2) ?? "?"}ms/frame present=${run.cpu.present?.toFixed(2) ?? "?"}ms/frame`
+              );
             })()
           );
           continue;
@@ -355,6 +377,7 @@ async function measureAndroid() {
         ui: median(measured.map((t) => t.ui)),
         js: median(measured.map((t) => t.js)),
         threads: r.threads,
+        cpu: r.cpu ?? null,
         thermal: r.thermal,
       };
     }),
@@ -666,6 +689,8 @@ function summarize(result) {
     reps: runs.map((r) => (r.present == null ? "?" : r.present.toFixed(1))).join(" / "),
     ui: median(runs.map((r) => r.ui).filter((v) => v != null)),
     js: median(runs.map((r) => r.js).filter((v) => v != null)),
+    render: median(runs.map((r) => r.cpu?.render).filter((v) => v != null)),
+    presentCpu: median(runs.map((r) => r.cpu?.present).filter((v) => v != null)),
     threads: Object.entries(runs.at(-1).threads ?? {})
       .filter(([name, p]) => name !== "UI" && name !== "JS" && p >= 5)
       .sort((a, b) => b[1] - a[1])
@@ -745,31 +770,54 @@ function report(result, previous) {
     "",
     `${result.device}, react-native-skia ${result.skia}, ${result.date}. Plan: \`${result.plan}\`.`,
     `Present FPS is the median over reps of frames the compositor showed (${TRACE_SECONDS} s per scene).`,
+    ...(result.platform === "android"
+      ? ["Render and present ms/frame: CPU time of the `RNSkia Render` pool and the `RNSkia Present` thread over the same window, divided by the frames presented (median over reps). They keep measuring when present FPS sits at the panel rate."]
+      : []),
     "",
   ];
+  const pct = (v) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`);
   if (before) {
+    const withCpu = result.platform === "android";
     lines.push(
-      `Compared with ${previous.label} (${previous.skia}, ${previous.date}); a drop of more than 10% is flagged.`,
+      withCpu
+        ? `Compared with ${previous.label} (${previous.skia}, ${previous.date}); a present FPS drop of more than 10%, or render CPU per frame growing by more than 10% and ${CPU_FLOOR_MS} ms, is flagged.`
+        : `Compared with ${previous.label} (${previous.skia}, ${previous.date}); a drop of more than 10% is flagged.`,
       "",
-      "| scene | before | after | change | |",
-      "|---|---|---|---|---|",
+      withCpu
+        ? "| scene | FPS before | FPS after | change | render ms/frame before | after | change | |"
+        : "| scene | before | after | change | |",
+      withCpu ? "|---|---|---|---|---|---|---|---|" : "|---|---|---|---|---|",
       ...rows.map((r) => {
-        const b = before.get(r.scene)?.present;
+        const prev = before.get(r.scene);
+        const b = prev?.present;
         const change = b && r.present != null ? (r.present / b - 1) * 100 : null;
-        const verdict = change == null ? "" : change < -10 ? "regression" : change > 10 ? "improvement" : "";
-        return `| ${r.scene} | ${fmt(b)} | ${fmt(r.present)} | ${change == null ? "?" : `${change >= 0 ? "+" : ""}${change.toFixed(0)}%`} | ${verdict} |`;
+        let verdict = change == null ? "" : change < -10 ? "regression" : change > 10 ? "improvement" : "";
+        if (!withCpu) {
+          return `| ${r.scene} | ${fmt(b)} | ${fmt(r.present)} | ${pct(change)} | ${verdict} |`;
+        }
+        const cb = prev?.render ?? null;
+        const ca = r.render;
+        const cpuChange = cb && ca != null ? (ca / cb - 1) * 100 : null;
+        if (cpuChange != null && verdict !== "regression") {
+          if (cpuChange > 10 && ca - cb > CPU_FLOOR_MS) {
+            verdict = "regression";
+          } else if (verdict === "" && cpuChange < -10 && cb - ca > CPU_FLOOR_MS) {
+            verdict = "improvement";
+          }
+        }
+        return `| ${r.scene} | ${fmt(b)} | ${fmt(r.present)} | ${pct(change)} | ${fmt(cb, 2)} | ${fmt(ca, 2)} | ${pct(cpuChange)} | ${verdict} |`;
       }),
       ""
     );
   }
   lines.push(
     result.platform === "android"
-      ? "| scene | Present FPS | per rep | UI FPS | JS FPS | busiest threads (% of a core) | thermal |"
+      ? "| scene | Present FPS | per rep | render ms/frame | present ms/frame | UI FPS | JS FPS | busiest threads (% of a core) | thermal |"
       : "| scene | Present FPS | per rep | thermal |",
-    result.platform === "android" ? "|---|---|---|---|---|---|---|" : "|---|---|---|---|",
+    result.platform === "android" ? "|---|---|---|---|---|---|---|---|---|" : "|---|---|---|---|",
     ...rows.map((r) =>
       result.platform === "android"
-        ? `| ${r.scene} | ${fmt(r.present)} | ${r.reps} | ${fmt(r.ui, 0)} | ${fmt(r.js, 0)} | ${r.threads} | ${r.thermal} |`
+        ? `| ${r.scene} | ${fmt(r.present)} | ${r.reps} | ${fmt(r.render, 2)} | ${fmt(r.presentCpu, 2)} | ${fmt(r.ui, 0)} | ${fmt(r.js, 0)} | ${r.threads} | ${r.thermal} |`
         : `| ${r.scene} | ${fmt(r.present)} | ${r.reps} | ${r.thermal} |`
     )
   );

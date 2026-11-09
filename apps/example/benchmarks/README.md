@@ -32,8 +32,10 @@ node benchmarks/run.mjs --platform android --reps 2 --gap 20 --label candidate \
 
 Each run builds a Release example app whose bundle carries the plan, installs
 it, and lets it run the scenes on its own (28 s each, the rotation starting at
-3.5 s), measuring 8 s of each. `--compare` prints the change per scene, flags a
-drop of more than 10% as a regression and then exits with status 1.
+3.5 s), measuring 8 s of each. `--compare` prints the change per scene and
+flags a regression when present FPS drops by more than 10% or, on Android,
+when render CPU per frame grows by more than 10% (and more than 0.25 ms); it
+then exits with status 1.
 
 | flag | default | |
 |---|---|---|
@@ -90,14 +92,22 @@ Logging trace.
 
 ## What is measured
 
-- **Present FPS** is the only throughput number. Skia records and presents on
+- **Present FPS** is the throughput number. Skia records and presents on
   its own threads, so the JS and UI threads stay at the panel rate whatever
   the canvas does. Android counts the present fences SurfaceFlinger signalled
   for the canvas, from a perfetto trace of `android.surfaceflinger.frame`
   (atrace carries no SurfaceFlinger events on Android 17). iOS counts the
   surfaces the display swapped in for the app, from a Metal System Trace.
-- Android also reports JS/UI thread FPS, per-thread CPU (`RNSkia Render`,
-  `RNSkia Present`) and the thermal status at the start of each scene.
+- **CPU per frame** (Android): the CPU time of the `RNSkia Render` pool and
+  of the `RNSkia Present` thread over the measured window, from
+  `/proc/<pid>/task/*/stat`, divided by the frames presented in it. Present
+  FPS stops at the panel rate, so a scene that already runs at 120 FPS hides
+  any regression in its cost; render ms/frame does not. It is the number to
+  watch for CPU-bound scenes (`shapes`, `images`, `paths`, `text`). It counts
+  time on a core only, not time blocked on the GPU, so a GPU-bound scene
+  (`shader`, `pattern`) shows its regressions in present FPS instead.
+- Android also reports JS/UI thread FPS, the busiest threads (% of a core)
+  and the thermal status at the start of each scene.
 - On iOS, React Native's `console.log` does not reach the host in a Release
   build, so the runner follows the plan's fixed schedule instead of the app's
   log lines, and reports present FPS only.
