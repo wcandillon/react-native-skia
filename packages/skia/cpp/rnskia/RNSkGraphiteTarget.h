@@ -341,9 +341,9 @@ public:
 
   /**
    Main thread. `count` recordings taken from the queue are done: presented,
-   or dropped by the present for a size the window no longer has. The same
-   signal the declarative producer paces on (RNSkGraphiteProducer::
-   onFramePresented).
+   or dropped by the present for a size the window no longer has. The signal
+   the declarative producer paces on (RNSkGraphiteProducer::kMaxQueued) is
+   its own, freed per recording (see RNSkRecordingSlots).
    */
   void onRecordingsDone(size_t count) {
     _done.fetch_add(count, std::memory_order_release);
