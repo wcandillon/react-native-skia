@@ -160,16 +160,8 @@ LoadSkiaWeb({
 
 ### Verifying the CanvasKit binary
 
-In development (`__DEV__`), `LoadSkiaWeb` and `WithSkiaWeb` download `canvaskit.wasm` first and check its size and SHA-256 hash against the canvaskit-wasm version bundled with React Native Skia.
-A file from another version, or a server answering with an HTML page instead of the binary, fails immediately with an error naming the URL and the expected version, instead of crashing later in a CanvasKit call.
-The check adds a little startup time, so it is off in production. Pass `verifyWasm: false` to disable it, or `verifyWasm: true` to run it everywhere.
-
-```tsx
-LoadSkiaWeb({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@${version}/bin/full/${file}`,
-  verifyWasm: true,
-});
-```
+In development, React Native Skia checks that the `canvaskit.wasm` file it downloads matches the CanvasKit version it bundles, and fails with a descriptive error if it doesn't.
+Pass `verifyWasm: false` to `LoadSkiaWeb` or `WithSkiaWeb` to disable the check, or `verifyWasm: true` to also run it in production.
 
 ## WebGL Contexts
 
