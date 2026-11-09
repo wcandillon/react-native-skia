@@ -26055,14 +26055,14 @@ __metadata:
 
 "react-native-svg@patch:react-native-svg@npm%3A15.16.1#../../.yarn/patches/react-native-svg-npm-15.16.1-position-props.patch::locator=example%40workspace%3Aapps%2Fexample":
   version: 15.16.1
-  resolution: "react-native-svg@patch:react-native-svg@npm%3A15.16.1#../../.yarn/patches/react-native-svg-npm-15.16.1-position-props.patch::version=15.16.1&hash=84651d&locator=example%40workspace%3Aapps%2Fexample"
+  resolution: "react-native-svg@patch:react-native-svg@npm%3A15.16.1#../../.yarn/patches/react-native-svg-npm-15.16.1-position-props.patch::version=15.16.1&hash=cd4200&locator=example%40workspace%3Aapps%2Fexample"
   dependencies:
     css-select: ^5.1.0
     css-tree: ^1.1.3
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: aa4c73c94b9e1a4bd2e4a54d534e4bc65289de305720368241ef46af0fd65ea3e88f8266375b0fd24342959a460cdc400953c8f2f474274ff4ffd5c1c2cf837a
+  checksum: 1acdd42ee8e7f31df3a57df59aa13bc9a09c62b8f2c5d88538e22fc84f7b676b0f6dfcda014421df5807697b5394a7d4f05b9597cc3d3012c781891607a4e28e
   languageName: node
   linkType: hard
 
