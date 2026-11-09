@@ -62,7 +62,8 @@ namespace RNSkia {
  * them (see releaseSurfacesOn) runs with no window in use; the list itself
  * is guarded, as windows are made and destroyed on other threads too. Locks,
  * innermost last: the list of windows, the GPU context's (DawnContext); the
- * target description's mutex is leaf and never held across either.
+ * target description's mutex is leaf and never held across either, nor is
+ * the memory release's (see DawnContext::requestMemoryRelease).
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
@@ -105,10 +106,11 @@ public:
   /**
    Destroys the Dawn surface and gives the native handle back to its
    releaser: the platform may destroy the window right after. The target
-   description goes away with it; the layout size stays. Takes down the
-   abandon, if any (see abandon): this is the detach it waits for.
-   Presenting thread; the destructor does the same on whichever thread
-   lets go of the window last (see detachNow).
+   description goes away with it; the layout size stays. Dawn is then asked
+   for the swapchain's memory back (see DawnContext::requestMemoryRelease).
+   Takes down the abandon, if any (see abandon): this is the detach it
+   waits for. Presenting thread; the destructor does the same on whichever
+   thread lets go of the window last (see detachNow).
    */
   void detach();
 
@@ -277,7 +279,9 @@ private:
   void detachNow();
   // Lets go of the Dawn surface and gives the window back to its releaser,
   // leaving the abandon, if any, up: what detach() does before it takes the
-  // abandon down, and what attach() does to the previous window.
+  // abandon down, and what attach() does to the previous window. A surface
+  // let go of has Dawn asked for its swapchain's memory back (see
+  // DawnContext::requestMemoryRelease).
   void releaseWindow();
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,

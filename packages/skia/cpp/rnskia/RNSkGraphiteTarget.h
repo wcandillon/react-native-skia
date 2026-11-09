@@ -38,7 +38,8 @@ namespace RNSkia {
  * The Graphite recorder of a target JS records into (see
  * RNSkGraphiteTarget::beginRecording()). Shared by the target and by every
  * recording snapped from it, so that the recorder outlives its recordings
- * whichever of them is released last. Made for one GPU device (see
+ * whichever of them is released last; Dawn is then asked for what it held
+ * (see DawnContext::requestMemoryRelease). Made for one GPU device (see
  * DawnContext::generation()): once that device is lost the target makes a
  * new one, and the recordings of this one are dropped. Declarative content
  * is recorded on the recorders of the render thread pool instead, which
@@ -47,6 +48,10 @@ namespace RNSkia {
 struct RNSkGraphiteRecorder {
   std::unique_ptr<skgpu::graphite::Recorder> recorder;
   uint64_t generation = 0;
+  ~RNSkGraphiteRecorder() {
+    recorder = nullptr;
+    DawnContext::requestMemoryRelease();
+  }
 };
 
 /**
