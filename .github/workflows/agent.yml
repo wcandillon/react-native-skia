@@ -156,7 +156,6 @@ jobs:
             -destination "id=$IOS_SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            RCT_METRO_PORT=$METRO_PORT \
             build | tee xcodebuild.log | xcpretty || {
               grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
               exit 1
@@ -171,7 +170,10 @@ jobs:
           xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
           curl -sf --max-time 900 -o /dev/null \
             "http://localhost:$METRO_PORT/index.bundle?platform=ios&dev=true&lazy=true&minify=false"
-          xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID"
+          # The prebuilt React Native core ignores RCT_METRO_PORT: point the
+          # app at Metro through the RCT_jsLocation user default instead.
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID" \
+            -RCT_jsLocation "localhost:$METRO_PORT"
           sleep 20
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
 

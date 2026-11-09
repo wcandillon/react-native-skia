@@ -25,11 +25,12 @@ class RNSkGraphiteTarget;
  * Three threads meet here. The JS thread hands over the content. A Reanimated
  * mapper, on the UI runtime, reads the shared values into the recorder's
  * pending writes: that is the only step that needs a JS runtime, and it never
- * waits for a replay. A pool thread replays the commands (the recorder writes
- * the pending values into them first) into a deferred canvas of the view's
- * target, on the Graphite recorder of that thread (a view holds none of its
- * own, see RNSkGraphiteTarget::beginRecording), and submits the recording;
- * the main thread presents it on the next vsync.
+ * waits for a replay. A pool thread, the same one for every frame of the view
+ * (see RNSkThreadPool::acquireLane), replays the commands (the recorder
+ * writes the pending values into them first) into a deferred canvas of the
+ * view's target, on the Graphite recorder of that thread (a view holds none
+ * of its own, see RNSkGraphiteTarget::beginRecording), and submits the
+ * recording; the main thread presents it on the next vsync.
  *
  * A recording with shared values arrives without their values (recording
  * reads none, see Variables) and is not replayed before the mapper has read
@@ -51,7 +52,8 @@ class RNSkGraphiteTarget;
 class RNSkGraphiteProducer
     : public std::enable_shared_from_this<RNSkGraphiteProducer> {
 public:
-  RNSkGraphiteProducer() = default;
+  /** Takes a thread of the render pool for the life of the producer. */
+  RNSkGraphiteProducer();
   ~RNSkGraphiteProducer();
 
   /**
@@ -153,6 +155,10 @@ private:
   bool _dirty = false;
   bool _inFlight = false;
   size_t _queued = 0;
+  // The render thread every job of this producer runs on, so that its
+  // frames are always recorded on the same Graphite recorder (see
+  // RNSkThreadPool::acquireLane). Set once, read without the lock.
+  const size_t _lane;
 };
 
 } // namespace RNSkia

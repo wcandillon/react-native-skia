@@ -285,20 +285,14 @@ public:
     // Store creation runtime for logging etc.
     instance->setCreationRuntime(&runtime);
 
-    // Create a new object
-    jsi::Object obj(runtime);
+    // Create the object with its prototype (installed on first use) in one
+    // step. Hermes builds it natively; setting the prototype afterwards cost a
+    // lookup of Object.setPrototypeOf and a call into JS for every wrapper.
+    auto &prototype = ensurePrototype(runtime);
+    auto obj = jsi::Object::create(runtime, jsi::Value(runtime, prototype));
 
     // Attach native state
     obj.setNativeState(runtime, instance);
-
-    // Install (on first use) and apply the prototype
-    {
-      auto &prototype = ensurePrototype(runtime);
-      auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
-      auto setPrototypeOf =
-          objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
-      setPrototypeOf.call(runtime, obj, prototype);
-    }
 
     // Set memory pressure hint for GC
     auto pressure = instance->getMemoryPressure();

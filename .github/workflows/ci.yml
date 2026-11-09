@@ -1,12 +1,13 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library), the Android build (with its emulator run on main only), and
-# the SwiftPM build. The native builds and the emulator/simulator runs happen on pull
-# requests and in the merge queue, so a merge does not pay for the full suite
-# twice. The Android build runs on push because a pull request can only
-# restore caches saved by its own earlier runs or by its base branch (see
-# build-test-android). The SwiftPM build runs on push, and on the pull
-# requests whose diff can affect it (see spm-changes).
+# build-library), the Android build (with its emulator run on main only), the
+# SwiftPM build, and (on main only) the macOS build. The native builds and
+# the emulator/simulator runs happen on pull requests and in the merge queue,
+# so a merge does not pay for the full suite twice. The Android build runs on
+# push because a pull request can only restore caches saved by its own
+# earlier runs or by its base branch (see build-test-android). The SwiftPM
+# build runs on push, and on the pull requests whose diff can affect it (see
+# spm-changes).
 on:
   push:
     branches:
@@ -354,8 +355,8 @@ jobs:
       #   8082   4243         skia-ci     (this job)
       #   8083   4244         webgpu-ci   (react-native-webgpu)
       #   8084   4245         skia-agent  (agent.yml)
-      # RCT_METRO_PORT is compiled into the app by xcodebuild; E2E_PORT is
-      # inlined into the JS bundle (useClient) and read by the jest
+      # The app finds Metro through the RCT_jsLocation launch argument; E2E_PORT
+      # is inlined into the JS bundle (useClient) and read by the jest
       # globalSetup, so the app and the test server agree on the port.
       METRO_PORT: 8082
       E2E_PORT: 4243
@@ -420,7 +421,6 @@ jobs:
       # Plain xcodebuild rather than `yarn ios`: the CLI insists on opening
       # Simulator.app from the Xcode bundle, which Xcode 27 no longer ships
       # there, and a headless booted simulator is all the tests need.
-      # RCT_METRO_PORT feeds React-Core's GCC_PREPROCESSOR_DEFINITIONS.
       # The derived data lives outside the workspace, which the checkout
       # cleans on every run: kept there, the build is incremental and only
       # the sources that changed since the previous run are compiled.
@@ -435,7 +435,6 @@ jobs:
             -destination "id=$IOS_SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            RCT_METRO_PORT=$METRO_PORT \
             build | tee xcodebuild.log | xcpretty || {
               # xcpretty drops some errors (e.g. project-level ones), so show
               # them from the raw log.
@@ -443,10 +442,16 @@ jobs:
               exit 1
             }
 
+      # React Native's prebuilt core, which the example installs since 0.88, is
+      # compiled with Metro on 8081: an RCT_METRO_PORT build setting no longer
+      # reaches it.
+      # RCTBundleURLProvider reads the RCT_jsLocation user default first, and
+      # `-key value` launch arguments land in the user defaults.
       - name: Install and launch app on simulator
         run: |
           xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
-          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp \
+            -RCT_jsLocation "localhost:$METRO_PORT"
 
       - name: Run e2e tests
         working-directory: packages/skia
@@ -471,59 +476,17 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
 
-  # Decides whether build-test-macos runs. That job only compiles the example
-  # for macOS, and build-test-ios already compiles the same Apple and C++
-  # sources, yet both share the one self-hosted Mac, so on every pull request
-  # the macOS build queued behind the iOS run and added its own minutes to
-  # the wall clock. A pull request now pays for it only when its diff touches
-  # what can change the outcome: the podspec and the autolinking config, the
-  # Apple and C++ sources, the scripts that copy the headers from the Skia
-  # submodule and the submodule itself, the dependencies that pin the
-  # prebuilt binaries, the example's macOS project, or CI itself. Other
-  # events build unconditionally, so a change this list misses still shows
-  # up in the merge queue.
-  macos-changes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run: ${{ steps.diff.outputs.run }}
-    steps:
-      - name: Checkout
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
-
-      # Same shallow diff as spm-changes.
-      - name: Compare the pull request to its base
-        id: diff
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if [ "$EVENT" != "pull_request" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git fetch --depth=1 origin "$BASE"
-          changed=$(git diff --name-only "$BASE" HEAD)
-          run=false
-          while IFS= read -r file; do
-            case "$file" in
-              packages/skia/react-native-skia.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
-              packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
-              apps/example/macos/*|apps/example/package.json|apps/example/react-native.config.js|\
-              package.json|yarn.lock|turbo.json|.gitmodules|externals/*|\
-              .github/workflows/ci.yml|.github/actions/setup/*)
-                echo "$file"
-                run=true
-                ;;
-            esac
-          done <<< "$changed"
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-
+  # Builds the example for macOS on pushes to main (and manual runs) only, on
+  # a hosted Mac so it never holds the self-hosted one. Pull requests and the
+  # merge queue skip it, which still satisfies the required check:
+  # build-test-ios already compiles the same Apple and C++ sources, and the
+  # apple-sdks workflow checks the platform-specific Apple code against the
+  # iOS, macOS and tvOS SDKs on every pull request that touches it. What only
+  # this job catches (a macOS link error, react-native-macos drift) shows up
+  # on main instead.
   build-test-macos:
-    needs: macos-changes
-    if: needs.macos-changes.outputs.run == 'true'
-    runs-on: [self-hosted, macOS]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: macos-latest
     timeout-minutes: 60
     steps:
       - name: Checkout

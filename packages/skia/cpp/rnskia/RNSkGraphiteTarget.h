@@ -12,6 +12,7 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
+#include "RNSkGpuActivity.h"
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkWindowSurface.h"
@@ -172,14 +173,15 @@ public:
   /**
    Returns a canvas that records the next frame, in points, on the recorder
    of the calling thread (see DawnContext::getThreadRecorder): the render
-   thread pool records the declarative content of every view this way, each
-   job on whichever thread is free, so a view holds no recorder of its own
-   and the recorders of a few threads serve every view, with their caches
-   and atlases. finishRecording() snaps it, on the same thread, before the
-   thread records anything else (a recorder takes one deferred canvas at a
-   time). The canvas is deleted by finishRecording(). Returns nullptr while
-   the view has no size. Throws while a recording is already open, or when
-   no deferred canvas can be made.
+   thread pool records the declarative content of every view this way, a
+   view always on the same thread (see RNSkThreadPool::acquireLane), so a
+   view holds no recorder of its own and the recorders of a few threads
+   serve every view, each with a warm cache and atlases for its views.
+   finishRecording() snaps it, on the same thread, before the thread records
+   anything else (a recorder takes one deferred canvas at a time). The canvas
+   is deleted by finishRecording(). Returns nullptr while the view has no
+   size. Throws while a recording is already open, or when no deferred canvas
+   can be made.
    */
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
@@ -228,6 +230,9 @@ public:
     _recording = false;
     auto *recorder = std::exchange(_openRecorder, nullptr);
     auto owner = std::move(_openOwner);
+    // The snap compiles the pipelines the frame needs, inline: GPU work the
+    // warmup stays behind (see RNSkGpuActivity).
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       throw std::runtime_error(

@@ -1,5 +1,6 @@
 import type { SharedValue } from "react-native-reanimated";
 
+import { importSkia } from "../../renderer/__tests__/setup";
 import { select } from "../../renderer/processors/Animations/Animations";
 import { isSharedValueSelector } from "../utils";
 import { materializeCommand, CommandType } from "../Recorder/Core";
@@ -85,7 +86,8 @@ describe("materializeCommand", () => {
 describe("Recorder selector collection (web path)", () => {
   it("registers one shared value for many selectors of the same value", () => {
     const sv = makeSharedValue({ x: 1, y: 2 });
-    const recorder = new Recorder();
+    const { Skia } = importSkia();
+    const recorder = new Recorder(Skia);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const props: any = { cx: select(sv, "x"), cy: select(sv, "y"), r: 3 };
     recorder.drawCircle(props);
@@ -97,7 +99,8 @@ describe("Recorder selector collection (web path)", () => {
   it("registers a plain shared value and a selector's underlying value", () => {
     const grouped = makeSharedValue({ x: 1 });
     const plain = makeSharedValue(5);
-    const recorder = new Recorder();
+    const { Skia } = importSkia();
+    const recorder = new Recorder(Skia);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const props: any = { cx: select(grouped, "x"), r: plain };
     recorder.drawCircle(props);
