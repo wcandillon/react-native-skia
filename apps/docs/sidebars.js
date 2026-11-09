@@ -68,6 +68,7 @@ const sidebars = {
         "shapes/polygons",
         "shapes/ellipses",
         "shapes/atlas",
+        "shapes/shape-blob",
         "shapes/vertices",
         "shapes/patch",
       ],
