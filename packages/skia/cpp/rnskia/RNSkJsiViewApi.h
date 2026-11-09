@@ -246,9 +246,9 @@ public:
           if (view != nullptr) {
             return;
           }
-          // The view has not registered yet (or is detached, which on iOS
-          // destroys it): the recording waits in the registry and is drawn,
-          // with whatever values it holds by then, once a view registers.
+          // The view has not registered yet: the recording waits in the
+          // registry and is drawn, with whatever values it holds by then,
+          // once the view registers.
           // Keep it current, under the registry lock so that a registration
           // cannot slip in between; the recording would otherwise wait,
           // unready (it reads no value while recording), until the next

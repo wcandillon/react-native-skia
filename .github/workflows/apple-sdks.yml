@@ -1,0 +1,29 @@
+name: apple-sdks
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "packages/skia/apple/**"
+      - "packages/skia/cpp/rnskia/**"
+      - "packages/skia/package.json"
+      - "packages/skia/scripts/check-apple-sdks.sh"
+      - ".github/workflows/apple-sdks.yml"
+jobs:
+  apple-sdks:
+    # Syntax-check only: no yarn install, no pods, no submodule, no simulator.
+    # Only the Dawn headers are downloaded (about 1 MB out of the package's
+    # tarball).
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - name: Download Dawn headers
+        run: |
+          VERSION=$(node -p 'require("./packages/skia/package.json").dependencies["react-native-webgpu-dawn"]')
+          mkdir -p "$RUNNER_TEMP/dawn"
+          curl -sfL "https://registry.npmjs.org/react-native-webgpu-dawn/-/react-native-webgpu-dawn-$VERSION.tgz" \
+            | tar xz -C "$RUNNER_TEMP/dawn" package/include
+      - name: Compile Apple sources for iOS, macOS and tvOS
+        run: packages/skia/scripts/check-apple-sdks.sh "$RUNNER_TEMP/dawn/package/include"

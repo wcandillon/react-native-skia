@@ -14,6 +14,11 @@ const fingerprintJSON = require("./setup/skottie/fingerprint.json");
 const textLayerJSON = require("./setup/skottie/text-layer.json");
 const unnamedLayersJSON = require("./setup/skottie/unnamed-layers.json");
 
+// A font as a JSON array of its bytes is a 30 MB string for the device to
+// receive and an 8.5 M element array for it to parse, in which the iPhone runs
+// out of memory after a few evals. Base64 is a third of that and no array.
+const toBase64 = (data: Uint8Array) => Buffer.from(data).toString("base64");
+
 describe("Skottie", () => {
   it("Should render Skottie component with lego animation", async () => {
     const { Skia } = importSkia();
@@ -103,8 +108,8 @@ describe("Skottie", () => {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     animation.assets = {
-      "NotoSerif": Array.from(dataAssets.NotoSansSCRegular),
-      "img_0.png": Array.from(dataAssets.img_0),
+      "NotoSerif": toBase64(dataAssets.NotoSansSCRegular),
+      "img_0.png": toBase64(dataAssets.img_0),
     };
     // END OF INTERNAL TESTING ONLY
     const img = await surface.draw(
@@ -200,16 +205,16 @@ describe("Skottie", () => {
     const slots = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "NotoSerif": Skia.Data.fromBytes(new Uint8Array(ctx.NotoSerif)),
-          "img_0.png": Skia.Data.fromBytes(new Uint8Array(ctx.img_0)),
+          "NotoSerif": Skia.Data.fromBase64(ctx.NotoSerif),
+          "img_0.png": Skia.Data.fromBase64(ctx.img_0),
         };
         const animation = Skia.Skottie.Make(ctx.basicSlotsJSON, assets);
         return animation.getSlotInfo();
       },
       {
         basicSlotsJSON: JSON.stringify(basicSlotsJSON),
-        NotoSerif: Array.from(dataAssets.NotoSansSCRegular),
-        img_0: Array.from(dataAssets.img_0),
+        NotoSerif: toBase64(dataAssets.NotoSansSCRegular),
+        img_0: toBase64(dataAssets.img_0),
       }
     );
     expect(slots).toEqual({
@@ -224,8 +229,8 @@ describe("Skottie", () => {
     const props = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "NotoSerif": Skia.Data.fromBytes(new Uint8Array(ctx.NotoSerif)),
-          "img_0.png": Skia.Data.fromBytes(new Uint8Array(ctx.img_0)),
+          "NotoSerif": Skia.Data.fromBase64(ctx.NotoSerif),
+          "img_0.png": Skia.Data.fromBase64(ctx.img_0),
         };
         const animation = Skia.Skottie.Make(ctx.basicSlotsJSON, assets);
         return {
@@ -248,8 +253,8 @@ describe("Skottie", () => {
       },
       {
         basicSlotsJSON: JSON.stringify(basicSlotsJSON),
-        NotoSerif: Array.from(dataAssets.NotoSansSCRegular),
-        img_0: Array.from(dataAssets.img_0),
+        NotoSerif: toBase64(dataAssets.NotoSansSCRegular),
+        img_0: toBase64(dataAssets.img_0),
       }
     );
     expect(props).toEqual({
@@ -300,8 +305,8 @@ describe("Skottie", () => {
     const raw = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "NotoSerif": Skia.Data.fromBytes(new Uint8Array(ctx.NotoSerif)),
-          "img_0.png": Skia.Data.fromBytes(new Uint8Array(ctx.img_0)),
+          "NotoSerif": Skia.Data.fromBase64(ctx.NotoSerif),
+          "img_0.png": Skia.Data.fromBase64(ctx.img_0),
         };
         const animation = Skia.Skottie.Make(ctx.basicSlotsJSON, assets);
         const size = animation.size();
@@ -317,8 +322,8 @@ describe("Skottie", () => {
       },
       {
         basicSlotsJSON: JSON.stringify(basicSlotsJSON),
-        NotoSerif: Array.from(dataAssets.NotoSansSCRegular),
-        img_0: Array.from(dataAssets.img_0),
+        NotoSerif: toBase64(dataAssets.NotoSansSCRegular),
+        img_0: toBase64(dataAssets.img_0),
       }
     );
     const { Skia } = importSkia();
@@ -331,8 +336,8 @@ describe("Skottie", () => {
     const raw = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "NotoSerif": Skia.Data.fromBytes(new Uint8Array(ctx.NotoSerif)),
-          "img_0.png": Skia.Data.fromBytes(new Uint8Array(ctx.img_0)),
+          "NotoSerif": Skia.Data.fromBase64(ctx.NotoSerif),
+          "img_0.png": Skia.Data.fromBase64(ctx.img_0),
         };
         const animation = Skia.Skottie.Make(ctx.basicSlotsJSON, assets);
         const size = animation.size();
@@ -350,8 +355,8 @@ describe("Skottie", () => {
       },
       {
         basicSlotsJSON: JSON.stringify(basicSlotsJSON),
-        NotoSerif: Array.from(dataAssets.NotoSansSCRegular),
-        img_0: Array.from(dataAssets.img_0),
+        NotoSerif: toBase64(dataAssets.NotoSansSCRegular),
+        img_0: toBase64(dataAssets.img_0),
       }
     );
     const { Skia } = importSkia();
@@ -407,7 +412,7 @@ describe("Skottie", () => {
     const colorProps = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "Avenir-Heavy": Skia.Data.fromBytes(new Uint8Array(ctx.AvenirHeavy)),
+          "Avenir-Heavy": Skia.Data.fromBase64(ctx.AvenirHeavy),
         };
         const animation = Skia.Skottie.Make(ctx.textLayerJSON, assets);
         const props = animation.getTextProps();
@@ -418,7 +423,7 @@ describe("Skottie", () => {
       },
       {
         textLayerJSON: JSON.stringify(textLayerJSON),
-        AvenirHeavy: Array.from(dataAssets.AvenirHeavy),
+        AvenirHeavy: toBase64(dataAssets.AvenirHeavy),
       }
     );
     expect(colorProps[0]).toEqual({
@@ -434,7 +439,7 @@ describe("Skottie", () => {
     const raw = await surface.eval(
       (Skia, ctx) => {
         const assets = {
-          "Avenir-Heavy": Skia.Data.fromBytes(new Uint8Array(ctx.AvenirHeavy)),
+          "Avenir-Heavy": Skia.Data.fromBase64(ctx.AvenirHeavy),
         };
         const animation = Skia.Skottie.Make(ctx.textLayer, assets);
         const size = animation.size();
@@ -452,7 +457,7 @@ describe("Skottie", () => {
       },
       {
         textLayer: JSON.stringify(textLayerJSON),
-        AvenirHeavy: Array.from(dataAssets.AvenirHeavy),
+        AvenirHeavy: toBase64(dataAssets.AvenirHeavy),
       }
     );
     const { Skia } = importSkia();

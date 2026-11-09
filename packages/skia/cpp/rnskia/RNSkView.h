@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -16,9 +15,12 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkRedrawRequest.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
 #include "jsi/ViewProperty.h"
+#include "rnsurface/FrameScheduler.h"
+#include "rnsurface/ThreadChecker.h"
 #include "utils/RNSkLog.h"
 
 #pragma clang diagnostic push
@@ -43,14 +45,16 @@ namespace jsi = facebook::jsi;
  * recordings are queued on the target; the view presents them onto its window
  * surface once the platform view's surface can show a new frame (see
  * setFrameScheduler), on the thread the platform view presents on: the main
- * thread, or a thread of its own (an Android canvas presents on one shared by
- * every canvas, see setPresentThread).
+ * thread, or a thread of its own (Android and Apple canvases each present on
+ * one shared by every canvas of the platform, see setPresentThread).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
- * replay on the calling thread. Presenting (redraw, presentFrame) runs on the
- * present thread, and only there. The window surface keeps the present thread
- * and the platform view's own thread apart (see RNSkWindowSurface).
+ * replay on the calling thread. Presenting (redraw, presentFrame,
+ * scheduleFrame) runs on the present thread, and only there, which the
+ * entries check once the platform view has bound it (see
+ * bindPresentThread), and so does everything the platform view does to the
+ * window (see RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -154,39 +158,40 @@ public:
   }
 
   /**
-   Schedules redraw() on the present thread, once. A redraw the window could
-   not show (the app in the background) stays requested until onCanPresent()
-   schedules it again. Any thread: the window surface asks for one from the
-   main thread, with its own mutex held, so nothing is presented on the spot.
+   Schedules redraw() on the present thread, once (see RNSkRedrawRequest).
+   Any thread: the window surface asks for one as it attaches or resizes, so
+   nothing is presented on the spot.
    */
   void requestRedraw() {
-    if (_redrawRequested.exchange(true)) {
-      return;
+    if (_redrawRequest.request()) {
+      postRedraw();
     }
-    postRedraw();
   }
 
   /**
    Present thread. Presents everything submitted since the last frame; with
    nothing queued, presents the last frame again (a redraw after a resize or
-   on a new surface). Without a surface the queue is left alone: the surface
-   presents it when it appears. While the window cannot show a frame (the
-   app in the background, see RNSkWindowSurface::setCanPresent) nothing is
-   replayed either: the redraw stays requested, and onCanPresent() schedules
-   it again. A frame the window could not take (no drawable) is queued again
-   and handed to the frame scheduler, which tries it on the view's next frame
-   (see setFrameScheduler).
+   on a new surface). It takes the request and decides on one read of the
+   window (see RNSkRedrawRequest): without a window or a GPU device the
+   request is dropped and the queue left alone, attaching a window and
+   replacing the device each asking again; a window that cannot show a
+   frame (the app in the background, see RNSkWindowSurface::setCanPresent)
+   is owed the redraw until onCanPresent(). A frame the window could not
+   take (no drawable) is queued again and handed to the frame scheduler,
+   which tries it on the view's next frame (see setFrameScheduler).
    */
   void redraw() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
     RNSkGraphiteTargetInfo targetInfo;
-    if (!_surface->getTargetInfo(&targetInfo)) {
-      _redrawRequested = false;
+    switch (_redrawRequest.start(*_surface, &targetInfo)) {
+    case RNSkRedrawRequest::Start::kPresent:
+      break;
+    case RNSkRedrawRequest::Start::kPostAgain:
+      postRedraw();
+      return;
+    case RNSkRedrawRequest::Start::kSkip:
       return;
     }
-    if (!_surface->canPresent()) {
-      return;
-    }
-    _redrawRequested = false;
     // Declarative content is recorded again for the surface as it is now.
     const bool frameComing = _producer->requestFrame();
     auto target = getTarget();
@@ -194,20 +199,22 @@ public:
       return;
     }
     auto recordings = target->takeQueued();
-    if (recordings.empty()) {
-      // With a frame on its way, the layer keeps showing the last one until
-      // it lands: presenting it again would only cost a second present.
-      // Otherwise the last frame is presented again, also onto a surface of
-      // another size (the view was resized and nothing records for it): the
-      // frame then shows stretched to it rather than nothing at all. A last
-      // frame made for a GPU device lost since cannot be shown again: the
-      // view stays as it is until something records for it.
+    const bool showsLastFrameAgain = recordings.empty();
+    if (showsLastFrameAgain) {
+      // The last frame is presented again, also onto a surface of another
+      // size (the view was resized and nothing records for it), where it
+      // shows stretched to it rather than nothing at all. With a frame on its
+      // way, a window that shows the last frame keeps it until the new one
+      // lands: presenting it again would only cost a second present; a window
+      // attached in place of another shows nothing, so it gets the last frame
+      // meanwhile. A last frame made for a GPU device lost since cannot be
+      // shown again: the view stays as it is until something records for it.
       std::shared_ptr<RNSkGraphiteRecording> lastPresented;
       {
         std::lock_guard<std::mutex> lock(_mutex);
         lastPresented = _lastPresented;
       }
-      if (frameComing || lastPresented == nullptr ||
+      if ((frameComing && _surface->showsFrame()) || lastPresented == nullptr ||
           !lastPresented->isCurrent()) {
         return;
       }
@@ -215,7 +222,11 @@ public:
     }
     const size_t taken = recordings.size();
     if (presentOrKeep(*target, targetInfo, std::move(recordings)).allDone) {
-      _producer->onFramePresented(taken);
+      // The last frame shown again holds none of the producer's slots, which
+      // the frame on its way may hold.
+      if (!showsLastFrameAgain) {
+        _producer->onFramePresented(taken);
+      }
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
@@ -265,15 +276,27 @@ public:
   /**
    Installed by the platform view when it presents on another thread than
    the main thread: runs a task on the thread the view presents on, never on
-   the spot (the window surface posts redraws with its mutex held). Any
-   thread. Without one, tasks are posted to the main thread, which the Apple
-   views present on; an Android view always installs one (its platform
-   context runs a task handed over on the main thread on the spot, see
-   JniPlatformContext). Installed once, before the view is bound to its id.
+   the spot (the window surface asks for a redraw from inside attach() and
+   resize(), and a redraw on the spot would present mid-attach). Any
+   thread. Without one, tasks are posted to the main thread. Android and
+   Apple views always install one: a present waits for the pipelines its
+   draws use to compile, which must not hold the main thread (and an Android
+   platform context runs a task handed over on the main thread on the spot,
+   see JniPlatformContext). Installed once, before the view is bound to its
+   id.
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
   }
+
+  /**
+   Present thread: binds the entries that belong to it (redraw,
+   presentFrame, scheduleFrame; see rnsurface::ThreadChecker) to the calling
+   thread, before the first of them. The platform view posts it to its
+   present thread as it installs it (see setPresentThread), ahead of
+   everything it posts there.
+   */
+  void bindPresentThread() { _presentThread.bindToCurrentThread(); }
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface
@@ -311,6 +334,7 @@ public:
 
   /** Present thread: a recording is waiting. */
   void scheduleFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::scheduleFrame");
     if (_frameScheduler) {
       _frameScheduler(hasFrameForResizedWindow());
     } else {
@@ -318,61 +342,68 @@ public:
     }
   }
 
-  /** What presentFrame() did, as a mask. */
-  enum PresentFrameResult : int {
-    kNothingPresented = 0,
-    // A frame went to the window.
-    kFramePresented = 1,
-    // Recordings are left for a later frame: more were queued, or the
-    // window could not take them (no drawable).
-    kMoreQueued = 2,
-  };
+  // What presentFrame() reports, as a mask: the scheduler's own, which the
+  // platform view hands it straight.
+  using PresentResult = rnsurface::FrameScheduler::PresentResult;
 
   /**
    Present thread. Presents the queued recordings (see setFrameScheduler for
    when). Says whether a frame went to the window, and whether more are
    waiting, so that the platform view asks again: also when the window could
    not take one (no drawable), so that it is tried again on the next frame
-   rather than left waiting for a redraw. Without a surface the queue is
-   left alone: the surface presents it when it appears. While the window
-   cannot show a frame (the app in the background) the queue is left alone
-   too, and nobody asks again before onCanPresent().
+   rather than left waiting for a redraw. Without a window or a GPU device,
+   or while the window cannot show a frame (the app in the background), the
+   queue is left alone: attaching a window, replacing the device and
+   onCanPresent() each present it.
    */
   int presentFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrame");
     auto target = getTarget();
     if (target == nullptr) {
-      return kNothingPresented;
+      return PresentResult::kNothingPresented;
     }
     RNSkGraphiteTargetInfo targetInfo;
-    if (!_surface->getTargetInfo(&targetInfo) || !_surface->canPresent()) {
-      return kNothingPresented;
+    if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
+      return PresentResult::kNothingPresented;
     }
     auto recordings = target->takeQueued();
     if (recordings.empty()) {
-      return kNothingPresented;
+      return PresentResult::kNothingPresented;
+    }
+    // One frame per vsync. The producer runs a frame ahead (see
+    // RNSkGraphiteProducer::kMaxQueued), so two recordings can be waiting
+    // here; replaying both would cost the GPU two frames for one shown, which
+    // halves a GPU-bound canvas. The next one waits for the next vsync
+    // (kMoreQueued asks for it). Recordings for a size the window no longer
+    // has still go together: present() drops those for the one behind them.
+    if (recordings.size() > 1 && recordings.front()->hasSizeOf(targetInfo)) {
+      target->requeue({recordings.begin() + 1, recordings.end()});
+      recordings.resize(1);
     }
     const size_t taken = recordings.size();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
-    const int result = presented.shown ? kFramePresented : kNothingPresented;
+    const int result = presented.shown ? PresentResult::kPresented
+                                       : PresentResult::kNothingPresented;
     if (!presented.allDone) {
-      return result | kMoreQueued;
+      return result | PresentResult::kMoreQueued;
     }
     _producer->onFramePresented(taken);
-    return target->hasQueued() ? result | kMoreQueued : result;
+    return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
   }
 
   /**
-   Main thread. The window can show frames again (the app came back to the
-   foreground, see RNSkWindowSurface::setCanPresent): a redraw it could not
-   show is scheduled again, else the recordings queued meanwhile are handed
-   to the frame scheduler. Nothing is replayed on the spot. A GPU device
-   lost in the background (where iOS refuses GPU work) is replaced now that
-   the app is back, and the view is asked for a frame once it is.
+   Main or present thread. The window can show frames again (the app came
+   back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
+   owed since one found it could not present is posted (see
+   RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
+   frame scheduler. Nothing is replayed on the spot. A GPU device lost in the
+   background (where iOS refuses GPU work) is replaced now that the app is
+   back, and the view is asked for a frame once it is.
    */
   void onCanPresent() {
     DawnContext::requestRecovery();
-    if (_redrawRequested) {
+    if (_redrawRequest.onCanPresent()) {
       postRedraw();
     } else if (hasQueuedRecordings()) {
       scheduleFrame();
@@ -454,12 +485,15 @@ private:
                .done == 1;
   }
 
-  /** Runs redraw() on the present thread, when it gets to it. */
+  /**
+   Runs redraw() on the present thread, when it gets to it, unless a redraw
+   took the request meanwhile.
+   */
   void postRedraw() {
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
     _runOnPresentThread([weakThis]() {
       if (auto view = weakThis.lock()) {
-        if (view->_redrawRequested) {
+        if (view->_redrawRequest.isWaiting()) {
           view->redraw();
         }
       }
@@ -590,7 +624,7 @@ private:
         // the new size follows or is on its way, as presenting it would
         // only hold that one up (a view resized on every frame has a
         // frame's worth of work in the present alone, see
-        // RNSkWindowSurface::configureIfNeededLocked), and shown through a
+        // RNSkWindowSurface::configureIfNeeded), and shown through a
         // texture, stretched, when nothing is: better than the previous
         // frame.
         if (!flush(i)) {
@@ -686,7 +720,9 @@ private:
   std::function<void(bool forResizedWindow)> _frameScheduler;
   bool _windowTakesLatestFrame = false;
   std::function<void(std::function<void()>)> _runOnPresentThread;
-  std::atomic<bool> _redrawRequested = {false};
+  RNSkRedrawRequest _redrawRequest;
+  // The thread the view presents on (see the class comment).
+  rnsurface::ThreadChecker _presentThread;
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread
