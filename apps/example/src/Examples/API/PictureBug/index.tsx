@@ -52,7 +52,7 @@ class SkiaImageCache {
     const uri =
       typeof source === "string"
         ? source
-        : Image.resolveAssetSource(source).uri;
+        : Image.resolveAssetSource(source)!.uri;
     const data = await Skia.Data.fromURI(uri);
     const image = imgFactory(data);
 

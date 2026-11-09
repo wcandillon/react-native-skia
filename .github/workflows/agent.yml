@@ -156,7 +156,6 @@ jobs:
             -destination "id=$IOS_SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            RCT_METRO_PORT=$METRO_PORT \
             build | tee xcodebuild.log | xcpretty || {
               grep -E "error:|fatal error" xcodebuild.log | sort -u | head -50
               exit 1
@@ -171,12 +170,15 @@ jobs:
           xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
           curl -sf --max-time 900 -o /dev/null \
             "http://localhost:$METRO_PORT/index.bundle?platform=ios&dev=true&lazy=true&minify=false"
-          xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID"
+          # The prebuilt React Native core ignores RCT_METRO_PORT: point the
+          # app at Metro through the RCT_jsLocation user default instead.
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID" \
+            -RCT_jsLocation "localhost:$METRO_PORT"
           sleep 20
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The workflow's own token instead of the Claude GitHub App, which is
@@ -278,7 +280,7 @@ jobs:
           swap-storage: false
 
       - name: Install JDK
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -436,7 +438,7 @@ jobs:
           adb exec-out screencap -p > "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

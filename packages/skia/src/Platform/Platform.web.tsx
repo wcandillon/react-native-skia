@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import React, { useMemo } from "react";
-import type { ViewComponent, ViewProps } from "react-native";
+import type { View as RNView, ViewProps } from "react-native";
 
 import type { DataModule } from "../skia/types";
 import { isRNModule, unwrapModule } from "../skia/types";
@@ -34,7 +34,7 @@ const View = (({ children, style: rawStyle }: ViewProps) => {
   }, [style]);
 
   return <div style={cssStyles}>{children}</div>;
-}) as unknown as typeof ViewComponent;
+}) as unknown as typeof RNView;
 
 interface AssetRegistry {
   getAssetByID(id: number): {

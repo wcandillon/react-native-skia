@@ -138,7 +138,7 @@ export class StaticContainer extends JsContainer {
       disposeRecording(this.recording);
       this.recording = null;
     }
-    const recorder = new Recorder();
+    const recorder = new Recorder(this.Skia);
     visit(recorder, this.root);
     this.recording = recorder.getRecording();
     const isOnScreen = this.nativeId !== -1;

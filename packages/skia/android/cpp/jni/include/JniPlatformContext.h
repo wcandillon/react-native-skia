@@ -31,6 +31,9 @@ public:
   // and outlives it.
   static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
 
+  static void setCacheDirectoryNative(jni::alias_ref<jclass>,
+                                      jni::alias_ref<jni::JString> directory);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);
