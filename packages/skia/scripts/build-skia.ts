@@ -511,13 +511,21 @@ const buildXCFramework = (
     // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
     const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
     $(`git apply ${catalystPatch}`);
-    // A runtime effect local named like main's parameters ("pos") broke
-    // Graphite's SkSL, and the failed pipeline then crashed insertRecording.
-    const runtimeEffectPatch = path.join(
+    // A pipeline that failed to build crashed insertRecording instead of
+    // failing it (https://skia-review.googlesource.com/c/skia/+/1421717).
+    const nullPipelinePatch = path.join(
       __dirname,
-      "skia-graphite-runtime-effect-names.patch"
+      "skia-graphite-null-pipeline.patch"
     );
-    $(`git apply ${runtimeEffectPatch}`);
+    $(`git apply ${nullPipelinePatch}`);
+    // Recorder::makeDeferredCanvas takes the surface props the canvas a view
+    // records into draws with, e.g. device independent fonts
+    // (https://skia-review.googlesource.com/c/skia/+/1421716).
+    const deferredCanvasPropsPatch = path.join(
+      __dirname,
+      "skia-graphite-deferred-canvas-props.patch"
+    );
+    $(`git apply ${deferredCanvasPropsPatch}`);
     // The GN build compiles the same Dawn checkout as build-dawn.ts.
     // Without this, Mac Catalyst compilation will be failed.
     applyDawnPatches();

@@ -1,0 +1,57 @@
+diff --git a/include/gpu/graphite/Recorder.h b/include/gpu/graphite/Recorder.h
+index 95219fa8b7..023ddc619c 100644
+--- a/include/gpu/graphite/Recorder.h
++++ b/include/gpu/graphite/Recorder.h
+@@ -27,6 +27,7 @@
+ 
+ class SkCanvas;
+ class SkPixmap;
++class SkSurfaceProps;
+ class SkTraceMemoryDump;
+ struct SkISize;
+ struct SkImageInfo;
+@@ -195,8 +196,11 @@ public:
+     // Returns a canvas that will record to a proxy surface, which must be instantiated on replay.
+     // This can only be called once per Recording; subsequent calls will return null until a
+     // Recording is snapped. Additionally, the returned SkCanvas is only valid until the next
+-    // Recording snap, at which point it is deleted.
+-    SkCanvas* makeDeferredCanvas(const SkImageInfo&, const TextureInfo&);
++    // Recording snap, at which point it is deleted. The canvas draws with the given surface props
++    // (e.g. SkSurfaceProps::kUseDeviceIndependentFonts_Flag), or the default ones if null.
++    SkCanvas* makeDeferredCanvas(const SkImageInfo&,
++                                 const TextureInfo&,
++                                 const SkSurfaceProps* props = nullptr);
+ 
+     /**
+      * Frees GPU resources created and held by the Recorder. Can be called to reduce GPU memory
+diff --git a/src/gpu/graphite/Recorder.cpp b/src/gpu/graphite/Recorder.cpp
+index 47437a3874..939c4501d4 100644
+--- a/src/gpu/graphite/Recorder.cpp
++++ b/src/gpu/graphite/Recorder.cpp
+@@ -26,6 +26,7 @@
+ #include "include/private/SkLog.h"
+ #include "src/capture/SkCaptureManager.h"
+ #include "src/core/SkMipmap.h"
++#include "src/core/SkSurfacePriv.h"
+ #include "src/core/SkTraceEvent.h"
+ #include "src/gpu/GpuTypesPriv.h"
+ #include "src/gpu/RefCntedCallback.h"
+@@ -294,7 +295,8 @@ std::unique_ptr<Recording> Recorder::snap() {
+ }
+ 
+ SkCanvas* Recorder::makeDeferredCanvas(const SkImageInfo& imageInfo,
+-                                       const TextureInfo& textureInfo) {
++                                       const TextureInfo& textureInfo,
++                                       const SkSurfaceProps* props) {
+     if (fTargetProxyCanvas) {
+         // Require snapping before requesting another canvas.
+         SKIA_LOG_W("Requested a new deferred canvas before snapping the previous one");
+@@ -309,7 +311,7 @@ SkCanvas* Recorder::makeDeferredCanvas(const SkImageInfo& imageInfo,
+                                       fTargetProxyData->refLazyProxy(),
+                                       imageInfo.dimensions(),
+                                       imageInfo.colorInfo(),
+-                                      {},
++                                      SkSurfacePropsCopyOrDefault(props),
+                                       LoadOp::kLoad);
+     fTargetProxyCanvas = std::make_unique<SkCanvas>(fTargetProxyDevice);
+     return fTargetProxyCanvas.get();
