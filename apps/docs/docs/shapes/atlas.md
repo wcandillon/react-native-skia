@@ -21,7 +21,7 @@ Atlas transforms can be animated with near-zero cost using worklets. This makes 
 
 :::tip
 
-To draw many filled rectangles, rounded rectangles or circles in one draw call, see [Shape Blob](/docs/shapes/shape-blob).
+If your sprites are filled rectangles, rounded rectangles or circles, [Shape Blob](/docs/shapes/shape-blob) builds the atlas for you: it rasterizes each distinct shape at the device's pixel density and keeps its vertices between frames.
 
 :::
 
@@ -180,6 +180,7 @@ What this means for you:
 
 - Animating the transforms with [`useRSXformBuffer`](/docs/animations/hooks#usersxformbuffer) remains cheap on the JS and UI threads: the buffers are updated in place and nothing is re-recorded there.
 - Each frame, the render thread writes six vertices per sprite (position, texture coordinates and, when `colors` are given, the sprite's color) before the single draw.
+- For filled rectangles, rounded rectangles and circles, a [Shape Blob](/docs/shapes/shape-blob) skips that per-frame step: it keeps its vertices and only updates the shapes you change.
 
 ### Drawing sprites with WebGPU
 

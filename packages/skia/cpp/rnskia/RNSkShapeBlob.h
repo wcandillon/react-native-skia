@@ -37,9 +37,11 @@ namespace RNSkia {
 
 // A shape blob draws many filled rectangles, rounded rectangles and circles
 // in one drawVertices call. Graphite records each drawRect, drawRRect or
-// drawCircle as its own draw (clip, paint key, sort key, per-frame sort), and
-// its drawAtlas is a loop of one draw per sprite, so a scene of thousands of
-// small static shapes is bound by the CPU cost per draw.
+// drawCircle as its own draw (clip, paint key, sort key, per-frame sort), so a
+// scene of thousands of small static shapes is bound by the CPU cost per draw.
+// A shape blob is an atlas built for the caller: unlike drawAtlasAsVertices
+// (RNSkAtlas.h), which writes six vertices per sprite on every draw, it keeps
+// its SkVertices between frames and patches only the instances that change.
 //
 // Every distinct shape (kind, size, radii) is rasterized once, white, into an
 // atlas image: analytic coverage, a transparent margin of at least one pixel,

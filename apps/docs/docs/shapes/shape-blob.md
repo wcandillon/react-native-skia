@@ -7,7 +7,7 @@ slug: /shapes/shape-blob
 
 A shape blob draws thousands of filled rectangles, rounded rectangles and circles in a single draw call.
 
-Every `drawRect`, `drawRRect` or `drawCircle` is a draw of its own, and each draw has a CPU cost on the GPU backend (clip, paint key, sort key, ordering): a scene of 20,000 small shapes is bound by that cost long before the GPU is busy. `canvas.drawAtlas` does not help on Graphite, where it records one draw per sprite. A shape blob rasterizes each distinct shape once into an atlas image and draws every shape as a textured quad tinted by its color, all in one `drawVertices` call.
+Every `drawRect`, `drawRRect` or `drawCircle` is a draw of its own, and each draw has a CPU cost on the GPU backend (clip, paint key, sort key, ordering): a scene of 20,000 small shapes is bound by that cost long before the GPU is busy. A shape blob is an [atlas](/docs/shapes/atlas) built for you: it rasterizes each distinct shape once into an atlas image, at the device's pixel density, and draws every shape as a textured quad tinted by its color, all in one `drawVertices` call. Unlike `drawAtlas`, it keeps its vertices between frames: a static scene costs nothing to rebuild, and `setPosition` or `setColor` updates a single shape.
 
 Use it for many small shapes of a few distinct sizes: particles, dots of a chart, cells of a grid, confetti. It is fill only: no strokes, shaders, gradients or per-shape transforms.
 
