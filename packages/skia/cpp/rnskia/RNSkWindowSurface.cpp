@@ -157,7 +157,10 @@ void RNSkWindowSurface::detachNow() {
 }
 
 void RNSkWindowSurface::releaseWindow() {
-  // The surface goes before the window it draws into.
+  // The surface goes before the window it draws into, and the frame held
+  // for the window, if any, with it: it is not presented onto a window the
+  // platform may be taking back (see abandon).
+  _hasHeldFrame = false;
   _surface = nullptr;
   _needsConfigure = false;
   {
@@ -185,7 +188,37 @@ bool RNSkWindowSurface::isAttached() {
 
 bool RNSkWindowSurface::showsFrame() {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showsFrame");
-  return _showsFrame;
+  // A frame held is the window's by its next draw: nothing to present
+  // again meanwhile.
+  return _showsFrame || _hasHeldFrame;
+}
+
+void RNSkWindowSurface::setHoldsFrames(bool holdsFrames) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::setHoldsFrames");
+  _holdsFrames = holdsFrames;
+}
+
+bool RNSkWindowSurface::presentHeldFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentHeldFrame");
+  if (!_hasHeldFrame) {
+    return false;
+  }
+  _hasHeldFrame = false;
+  // The frame is lost with a window the platform is taking back (see
+  // presentTexture), and with a GPU device lost since it was replayed (the
+  // next present sweeps its surface away, see retireReplacedDevice); its
+  // surface going (see releaseWindow) took the flag down already.
+  if (_abandoned.load(std::memory_order_acquire) ||
+      DawnContext::isDeviceLost()) {
+    return false;
+  }
+  // The present takes the device, briefly: marked, so that no pipeline
+  // warmup starts under it (see RNSkGpuActivity).
+  RNSkGpuActivity::Scope activity;
+  presentCurrentTexture();
+  return true;
 }
 
 void RNSkWindowSurface::setLayoutSize(int width, int height) {
@@ -420,6 +453,8 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
     if (window->_generation == generation) {
+      // A frame held on that surface goes with it (see setHoldsFrames).
+      window->_hasHeldFrame = false;
       window->_surface = nullptr;
       window->_generation = 0;
     }
@@ -470,7 +505,15 @@ bool RNSkWindowSurface::presentRecordings(
   RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   // The device check first: it may configure the window again.
-  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
+  if (!canPresent() || !ensureDevice()) {
+    return false;
+  }
+  // A frame held for the window goes to it ahead of this one (see
+  // setHoldsFrames): the window takes the latest frame presented, and the
+  // swapchain is to be configured again for a resize, below, and asked for
+  // its next texture, with no frame in flight on it.
+  presentHeldFrame();
+  if (!isTarget(target)) {
     return false;
   }
   configureIfNeeded();
@@ -505,7 +548,12 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
   RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
-  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
+  if (!canPresent() || !ensureDevice()) {
+    return false;
+  }
+  // As in presentRecordings: the frame held goes first.
+  presentHeldFrame();
+  if (!isTarget(target)) {
     return false;
   }
   configureIfNeeded();
@@ -538,9 +586,6 @@ bool RNSkWindowSurface::canPresent() {
 }
 
 bool RNSkWindowSurface::presentTexture() {
-#ifdef __APPLE__
-  dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
-#endif
   // The platform is taking the window back (see abandon, set before the
   // detach that clears it is posted, so always ahead of this check): the
   // frame is lost with it, and the device is kept. The recordings were
@@ -549,9 +594,22 @@ bool RNSkWindowSurface::presentTexture() {
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }
+  // The GPU work is submitted; the texture stays acquired, for
+  // presentHeldFrame() to hand over (see setHoldsFrames).
+  if (_holdsFrames) {
+    _hasHeldFrame = true;
+    return true;
+  }
+  presentCurrentTexture();
+  return true;
+}
+
+void RNSkWindowSurface::presentCurrentTexture() {
+#ifdef __APPLE__
+  dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
+#endif
   _surface.Present();
   _showsFrame = true;
-  return true;
 }
 
 } // namespace RNSkia

@@ -42,7 +42,10 @@ import com.facebook.react.views.view.ReactViewGroup;
  * an ANR (#4394). The scheduler asks this view for the Choreographer's vsync
  * (postFrameCallback) and gets it back (doFrame). A TextureView tells the
  * main thread when it drew a frame (onSurfaceTextureUpdated), which hands it
- * over to the scheduler, and leaves its SurfaceTexture to the present
+ * over to the scheduler: the next frame, replayed on the present thread as
+ * soon as it was queued and held back since, goes to the window then (see
+ * RNSkWindowSurface::setHoldsFrames, on the native side). A TextureView
+ * leaves its SurfaceTexture to the present
  * thread, which releases it once the window let go of it (see
  * onSurfaceTextureDestroyed). A SurfaceView's surface is
  * the platform's, which destroys it as soon as surfaceDestroyed returns, so
@@ -373,8 +376,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     }
 
     /**
-     * The TextureView drew the frame it was given: the next one can go to it
-     * (see rnsurface::FrameScheduler::onFrameConsumed). Main thread, from the
+     * The TextureView drew the frame it was given: the next one, replayed
+     * and held back meanwhile, goes to it (see
+     * rnsurface::FrameScheduler::onFrameConsumed). Main thread, from the
      * backing view.
      */
     @Override

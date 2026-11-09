@@ -266,6 +266,11 @@ private:
       return result;
     }
 
+    bool presentHeldFrame() override {
+      auto view = _view.lock();
+      return view != nullptr && view->presentHeldFrame();
+    }
+
   private:
     std::shared_ptr<JavaView> _javaView;
     std::weak_ptr<RNSkView> _view;
@@ -283,8 +288,11 @@ private:
     // abandon the main thread sets while this runs.
     // A TextureView draws the latest frame presented to it; a SurfaceView's
     // frames show in turn (see RNSkView::setWindowTakesLatestFrame), and the
-    // scheduler paces each its own way.
+    // scheduler paces each its own way: a TextureView's frames are replayed
+    // as they are queued and held back for the window until it drew (see
+    // RNSkWindowSurface::setHoldsFrames).
     _view->setWindowTakesLatestFrame(!isSurface);
+    _surface->setHoldsFrames(!isSurface);
     _scheduler->setWindow(
         isSurface ? rnsurface::FrameScheduler::Window::kShowsEachFrame
                   : rnsurface::FrameScheduler::Window::kShowsLatestFrame);

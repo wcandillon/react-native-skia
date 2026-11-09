@@ -303,7 +303,9 @@ public:
    can show a new frame, and again while it says more are waiting: on the
    display link on iOS, straight away and then a frame apart on macOS, and on
    Android as its FrameScheduler decides (a SurfaceView on the vsync, a
-   TextureView once its window took the previous frame). Its argument says that
+   TextureView as soon as a recording is queued, with the frame held back
+   for the window until it drew the previous one: see presentHeldFrame and
+   RNSkWindowSurface::setHoldsFrames). Its argument says that
    the window was resized since the frame it shows was made, so it shows that
    frame stretched to its size (see presentThroughTexture), and that the
    recording waiting is for its size: a platform view that would wait for its
@@ -390,6 +392,19 @@ public:
     }
     _producer->onFramePresented(taken);
     return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
+  }
+
+  /**
+   Present thread. Hands the window the frame the last presentFrame()
+   replayed and the window held back for its next draw, on a window that
+   shows the latest frame presented (a TextureView, see
+   RNSkWindowSurface::setHoldsFrames): whether one went to the window. The
+   platform view calls it once the window drew the frame it has (see
+   rnsurface::FrameScheduler::onFrameConsumed).
+   */
+  bool presentHeldFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentHeldFrame");
+    return _surface->presentHeldFrame();
   }
 
   /**

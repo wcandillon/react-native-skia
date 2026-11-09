@@ -152,10 +152,10 @@ public:
   bool isAttached();
 
   /**
-   Whether the window shows a frame the view presented: a window attached in
-   place of another (a new layer, on iOS) shows nothing until one is
-   presented, while the same window attached again keeps what it shows.
-   Presenting thread.
+   Whether the window shows a frame the view presented, or holds one for
+   its next draw (see setHoldsFrames): a window attached in place of
+   another (a new layer, on iOS) shows nothing until one is presented, while
+   the same window attached again keeps what it shows. Presenting thread.
    */
   bool showsFrame();
 
@@ -243,9 +243,34 @@ public:
   bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
   /**
-   Replays the recordings onto the window and presents it, on the thread the
-   view presents on; the swapchain texture is wrapped for the recorder of
-   that thread. Returns false when the window cannot present right now:
+   Installed by the platform view for a window that shows the latest frame
+   presented at each of its draws (a TextureView, see
+   rnsurface::FrameScheduler): presentRecordings() and presentImage() replay
+   the frame onto the window's next texture and submit the GPU work as they
+   do on any window, but hold the texture back from the window until
+   presentHeldFrame(), which the view calls once the window drew the frame
+   it has. The replay, milliseconds of CPU, is done by then, and the frame
+   is on the window's next draw rather than the one after. One frame is
+   held at a time: a present while one is held hands it to the window
+   first (the window takes the latest). Presenting thread; set before the
+   window attaches. Off, a present hands the window its frame on the spot.
+   */
+  void setHoldsFrames(bool holdsFrames);
+
+  /**
+   Hands the window the frame the last present held back for it, if any
+   (see setHoldsFrames): whether one went to the window. A frame whose
+   surface went meanwhile (the window detached, the GPU device replaced)
+   went with it, and the platform taking the window back declines it (see
+   abandon). Presenting thread.
+   */
+  bool presentHeldFrame();
+
+  /**
+   Replays the recordings onto the window and presents it (or holds it for
+   presentHeldFrame(), see setHoldsFrames), on the thread the view presents
+   on; the swapchain texture is wrapped for the recorder of that thread.
+   Returns false when the window cannot present right now:
    there is none, the app is in the background, the GPU device is lost, the
    platform took the window back (see abandon), the window had no drawable,
    or the window is no longer the target given: it was resized, or
@@ -325,10 +350,12 @@ private:
   // Whether a frame can go onto the window now: it is ready (see readState)
   // and the platform has not taken it back (see abandon).
   bool canPresent();
-  // Presents the swapchain texture the frame was replayed onto, unless the
-  // platform took the window back meanwhile (see abandon). Returns whether
-  // it did.
+  // Presents the swapchain texture the frame was replayed onto, or holds it
+  // for presentHeldFrame() (see setHoldsFrames), unless the platform took
+  // the window back meanwhile (see abandon). Returns whether it did either.
   bool presentTexture();
+  // Hands the window the swapchain texture acquired for the frame.
+  void presentCurrentTexture();
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
@@ -367,6 +394,12 @@ private:
   // The window attached or resized since the swapchain was configured (see
   // configureIfNeeded).
   bool _needsConfigure = false;
+  // Whether presents hold their frame for presentHeldFrame() (see
+  // setHoldsFrames), and whether one is held now: a swapchain texture
+  // acquired and replayed onto, not presented. The surface going (see
+  // releaseWindow, releaseSurfacesOn) takes the frame with it.
+  bool _holdsFrames = false;
+  bool _hasHeldFrame = false;
   // The platform took the window back before detach() ran (see abandon).
   // Taken down by detach() alone, never by attach() (see releaseWindow).
   std::atomic<bool> _abandoned{false};

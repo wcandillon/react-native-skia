@@ -41,7 +41,7 @@ A recording is immutable: you can submit the same one again later without record
 
 ## Threading model
 
-Recording happens on the thread that calls `beginRecording()`. Presenting happens on the display link on iOS (`CADisplayLink`, on the main thread), and on a present thread of its own on Android, so that the main thread pays nothing for a frame: on the vsync of that thread's `Choreographer` for a `SurfaceView`, once its window has drawn the previous frame for a `TextureView`.
+Recording happens on the thread that calls `beginRecording()`. Presenting happens on the display link on iOS (`CADisplayLink`, on the main thread), and on a present thread of its own on Android, so that the main thread pays nothing for a frame: on the vsync of that thread's `Choreographer` for a `SurfaceView`; for a `TextureView`, the frame is replayed as soon as it is queued and handed to the window once it has drawn the previous one, so that the window's next draw finds it ready.
 The context can be captured into a worklet, so a frame loop can run on the Reanimated UI runtime, at the display's rate, without touching the JS thread:
 
 ```tsx

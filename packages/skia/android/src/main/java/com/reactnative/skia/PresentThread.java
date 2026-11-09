@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * that each canvas's frame scheduler (rnsurface::FrameScheduler, on the
  * native side) runs on it as it would on the main thread, with the
  * Choreographer of this thread for its vsync (see SkiaView for how a
- * TextureView's present still waits for its window's pending draw).
+ * TextureView's frame, replayed here as soon as it is queued, still waits
+ * for its window's pending draw before it is handed over).
  */
 final class PresentThread {
     private static final Object sLock = new Object();

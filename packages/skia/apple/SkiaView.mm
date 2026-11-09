@@ -53,6 +53,10 @@ public:
   void postFrameCallback() override { [view postFrameCallback]; }
 
   int presentFrame() override { return [view presentFrame]; }
+
+  // A CAMetalLayer shows each frame in turn: the scheduler never holds one
+  // back for it (see RNSkWindowSurface::setHoldsFrames), so nothing is asked.
+  bool presentHeldFrame() override { return false; }
 };
 
 } // namespace
