@@ -276,12 +276,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
   // Presents, redraws and frame requests go to the present thread, where
   // the view is the one the tasks posted before see.
-  _view->setPresentThread([](std::function<void()> task) {
-    auto shared = std::make_shared<std::function<void()>>(std::move(task));
-    [RNSkPresentThread post:^{
-      (*shared)();
-    }];
-  });
+  _view->setPresentThread(RNSkia::runOnPresentThread);
   // The entries of the view and its window that belong to the present
   // thread are bound to it there (see RNSkView::bindPresentThread), ahead
   // of everything posted behind this.

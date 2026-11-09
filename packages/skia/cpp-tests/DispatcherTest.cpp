@@ -5,19 +5,20 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include "api/JsiSkDispatcher.h"
+
+#include "Loop.h"
+#include "WatchedSurface.h"
 
 using RNSkia::Dispatcher;
 using namespace std::chrono_literals;
@@ -36,98 +37,6 @@ static bool movedFromFunctionKeepsItsTarget() {
 }
 
 namespace {
-
-// A thread that runs what is posted to it, in order, as the JS thread and the
-// main thread run their loops.
-class Loop {
-public:
-  Loop() : _thread([this]() { work(); }) {}
-
-  ~Loop() {
-    {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _stopping = true;
-    }
-    _condition.notify_all();
-    _thread.join();
-  }
-
-  void post(std::function<void()> operation) {
-    {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _operations.push(std::move(operation));
-    }
-    _condition.notify_all();
-  }
-
-  // Runs `operation` on the loop's thread and waits for it.
-  void runAndWait(const std::function<void()> &operation) {
-    std::promise<void> done;
-    auto finished = done.get_future();
-    post([&]() {
-      operation();
-      done.set_value();
-    });
-    finished.wait();
-  }
-
-  Dispatcher::Scheduler scheduler() {
-    return
-        [this](Dispatcher::Operation operation) { post(std::move(operation)); };
-  }
-
-  std::thread::id id() const { return _thread.get_id(); }
-
-private:
-  void work() {
-    while (true) {
-      std::function<void()> operation;
-      {
-        std::unique_lock<std::mutex> lock(_mutex);
-        _condition.wait(lock,
-                        [this]() { return _stopping || !_operations.empty(); });
-        if (_operations.empty()) {
-          return;
-        }
-        operation = std::move(_operations.front());
-        _operations.pop();
-      }
-      operation();
-    }
-  }
-
-  std::mutex _mutex;
-  std::condition_variable _condition;
-  std::queue<std::function<void()>> _operations;
-  bool _stopping = false;
-  std::thread _thread;
-};
-
-// Stands in for a Graphite surface: runs `onDestroy` on the thread that
-// destroys it.
-class Surface {
-public:
-  explicit Surface(std::function<void()> onDestroy)
-      : _onDestroy(std::move(onDestroy)) {}
-  ~Surface() { _onDestroy(); }
-
-private:
-  std::function<void()> _onDestroy;
-};
-
-// A surface that tells which thread destroyed it.
-struct WatchedSurface {
-  std::shared_ptr<Surface> surface;
-  std::shared_future<std::thread::id> destroyedOn;
-};
-
-WatchedSurface makeWatchedSurface() {
-  auto promise = std::make_shared<std::promise<std::thread::id>>();
-  auto destroyedOn = promise->get_future().share();
-  auto surface = std::make_shared<Surface>(
-      [promise]() { promise->set_value(std::this_thread::get_id()); });
-  return {std::move(surface), std::move(destroyedOn)};
-}
 
 WatchedSurface makeWatchedSurfaceOn(Loop &loop) {
   WatchedSurface watched;

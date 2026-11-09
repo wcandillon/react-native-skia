@@ -4,6 +4,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 
+import com.facebook.jni.annotations.DoNotStrip;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -45,6 +47,7 @@ final class PresentThread {
                         Process.THREAD_PRIORITY_DISPLAY);
                 thread.start();
                 sHandler = new Handler(thread.getLooper());
+                sHandler.post(PresentThread::bindDispatcher);
             }
             return sHandler;
         }
@@ -66,4 +69,11 @@ final class PresentThread {
     static void setHeldUp(boolean heldUp) {
         sHeldUp.set(heldUp);
     }
+
+    /**
+     * Has the native tasks posted to this thread run from its looper, the
+     * thread's first task (see JniPresentThread).
+     */
+    @DoNotStrip
+    private static native void bindDispatcher();
 }

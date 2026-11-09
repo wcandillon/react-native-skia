@@ -29,6 +29,7 @@
 
 #include "rnskia/RNDawnContext.h"
 #include "rnskia/RNSkAtlas.h"
+#include "rnskia/RNSkThreadTrims.h"
 
 #include <jsi/jsi.h>
 
@@ -618,11 +619,13 @@ public:
   // Associates the canvas with its owning surface, keeping it alive as long
   // as the canvas. This lets readPixels fall back to a surface snapshot on
   // Graphite, which has no synchronous canvas readback. The dispatcher is the
-  // one of the thread the surface was created on.
+  // one of the thread the surface was created on, and `isGpuBacked` what that
+  // thread saw of it (see RNSkThreadTrims::releaseSurface).
   void setSurface(sk_sp<SkSurface> surface,
-                  std::shared_ptr<Dispatcher> dispatcher) {
+                  std::shared_ptr<Dispatcher> dispatcher, bool isGpuBacked) {
     _surface = std::move(surface);
     _dispatcher = std::move(dispatcher);
+    _isGpuBacked = isGpuBacked;
   }
 
   // Called by the owner of the SkCanvas (JsiSkSurface, JsiSkPictureRecorder,
@@ -634,7 +637,8 @@ public:
   void detach() {
     _canvas = nullptr;
     if (_dispatcher) {
-      _dispatcher->release(std::move(_surface));
+      RNSkThreadTrims::getInstance().releaseSurface(
+          _dispatcher, std::move(_surface), _isGpuBacked);
     }
   }
 
@@ -642,5 +646,6 @@ private:
   SkCanvas *_canvas = nullptr;
   sk_sp<SkSurface> _surface;
   std::shared_ptr<Dispatcher> _dispatcher;
+  bool _isGpuBacked = false;
 };
 } // namespace RNSkia

@@ -1,5 +1,10 @@
 #import "RNSkPresentThread.h"
 
+#include <memory>
+#include <utility>
+
+#include "api/JsiSkDispatcher.h"
+
 @implementation RNSkPresentThread
 
 static NSRunLoop *sPresentRunLoop = nil;
@@ -13,6 +18,7 @@ static NSRunLoop *presentRunLoop() {
       sPresentRunLoop = [NSRunLoop currentRunLoop];
       // A port keeps the run loop running with nothing else on it.
       [sPresentRunLoop addPort:[NSMachPort port] forMode:NSDefaultRunLoopMode];
+      RNSkia::Dispatcher::bindCurrentThread(RNSkia::runOnPresentThread);
       dispatch_semaphore_signal(started);
       while (true) {
         @autoreleasepool {
@@ -40,3 +46,14 @@ static NSRunLoop *presentRunLoop() {
 }
 
 @end
+
+namespace RNSkia {
+
+void runOnPresentThread(std::function<void()> task) {
+  auto shared = std::make_shared<std::function<void()>>(std::move(task));
+  [RNSkPresentThread post:^{
+    (*shared)();
+  }];
+}
+
+} // namespace RNSkia

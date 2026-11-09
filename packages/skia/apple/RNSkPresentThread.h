@@ -2,6 +2,8 @@
 
 #import <Foundation/Foundation.h>
 
+#include <functional>
+
 /**
  * The thread every canvas presents on, as on Android (see PresentThread.java):
  * one for the process, started on first use and never stopped. A present
@@ -17,7 +19,9 @@
  * holds the thread for as long as its pipelines take to compile, and the main
  * thread, which only resizes the window (which never waits), never waits for
  * one. The window needs no mutex of its own: everything that touches it runs
- * here, one task after the other.
+ * here, one task after the other. The thread's dispatcher runs its queue
+ * from the run loop too (see Dispatcher::bindCurrentThread), so that the
+ * thread trims what it records once idle (see RNSkThreadTrims).
  */
 @interface RNSkPresentThread : NSObject
 
@@ -26,3 +30,14 @@
 + (void)post:(dispatch_block_t)task;
 
 @end
+
+namespace RNSkia {
+
+/**
+ * Runs a C++ task on the present thread, after those posted before it: the
+ * thread of every view's presents (see RNSkView::setPresentThread) and of its
+ * own dispatcher's queue. Any thread.
+ */
+void runOnPresentThread(std::function<void()> task);
+
+} // namespace RNSkia
