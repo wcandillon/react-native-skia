@@ -27,15 +27,16 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
     protected void onWindowVisibilityChanged(int visibility) {
         super.onWindowVisibilityChanged(visibility);
         // When the activity stops, Android drops the texture layer of every window
-        // sharing its token but keeps the SurfaceTexture, so no destroyed/available
-        // callback reaches us. On restart the new layer only latches a frame once one
-        // is queued or the view gets onVisibilityChanged(VISIBLE); activity views get
-        // the latter from the decor view, a Dialog's (RN Modal) never does, and a
-        // static canvas never queues a frame on its own: it stays blank (#2135).
-        // Redraw through the size-changed path to queue one.
-        SurfaceTexture surfaceTexture = getSurfaceTexture();
-        if (visibility == VISIBLE && surfaceTexture != null && getWidth() > 0 && getHeight() > 0) {
-            mApi.onSurfaceTextureChanged(surfaceTexture, getWidth(), getHeight());
+        // sharing its token but keeps the SurfaceTexture (and the buffer it holds),
+        // so no destroyed/available callback reaches us. On restart the new layer
+        // only latches that buffer once a frame is queued or the view gets
+        // onVisibilityChanged(VISIBLE); activity views get the latter from the decor
+        // view, a Dialog's (RN Modal) never does, and a static canvas never queues a
+        // frame on its own: it stays blank (#2135). Run the same latch ourselves: it
+        // marks the layer for update and invalidates, so the next draw rebinds the
+        // retained buffer without any GPU or JS work.
+        if (visibility == VISIBLE) {
+            onVisibilityChanged(this, VISIBLE);
         }
     }
 
