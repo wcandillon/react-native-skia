@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "counts": [128, 1024, 2048, 4096, 8192, 16384],
+  "burstMs": 400,
+  "idleMs": 200,
+  "warmups": 2,
+  "bursts": 12,
+  "continuousMs": 5000,
+  "loadSettleMs": 600
+}

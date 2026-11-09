@@ -43,6 +43,9 @@ then exits with status 1.
 |---|---|---|
 | `--platform` | `android` | `ios` needs a paired iPhone; `ios-simulator` with `--cold` only |
 | `--cold` | | measure the first draw after a fresh install instead of FPS (see below) |
+| `--pacing` | | iOS burst/continuous displayed-frame intervals (see below) |
+| `--refresh-rate` | | pacing: required actual display cadence in Hz |
+| `--keep-trace` | | pacing: retain a successful raw recording for inspection |
 | `--scenes` | all seven | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
@@ -70,6 +73,79 @@ artifact. A baseline without this benchmark is skipped.
 The phone has to be authorized for adb on the Mac, plugged in, and have no
 secure lock screen. The job locks the panel at `refresh_rate` (120), keeps
 the screen on, and puts both back at the end.
+
+## Short-animation frame pacing (iOS)
+
+`--pacing` measures uneven displayed-frame intervals rather than average FPS.
+Use the example's normal iOS setup first (`pod install` from `ios/`); the runner
+builds and installs the app but does not synchronize pods.
+It runs a memoized Canvas with 128, 1024, 2048, 4096, 8192 and 16384 deterministic circles under
+pan/zoom: two warmups and twelve measured 400ms bursts per load, separated by
+200ms idle periods. Each repetition also includes a five-second continuous
+control at 1024 circles. The Canvas stays mounted during idle; only a load
+change rebuilds its scene. There is no changing status overlay during a run.
+
+```sh
+node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
+  --reps 3 --label baseline --team <TEAM> --bundle-id <APP_ID>
+
+# Switch to the candidate checkout, with the same benchmark implementation.
+node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
+  --reps 3 --label candidate --team <TEAM> --bundle-id <APP_ID> \
+  --compare benchmarks/results/<baseline>.json
+
+# Synthetic parser/report checks; these do not build or measure a phone.
+python3 -m unittest discover -s benchmarks -p '*_test.py'
+node --test benchmarks/pacing.test.mjs
+```
+
+- Both passes build separate Release binaries. Keep the device, plan, power
+  mode and display rate the same. `--refresh-rate` must be the actual active
+  display cadence, not merely the panel's maximum. Physical 120Hz validation
+  is separate; a 60Hz measurement does not establish 120Hz behavior.
+- Set Auto-Lock to Never and leave the app foreground without touching it.
+  `--settle` is at least 10 seconds so recording can attach before animation.
+- The `Display` instrument records compositor-displayed app surfaces, alongside
+  the `Logging` template. This avoids full Metal API tracing, which can perturb
+  timing-sensitive scheduling. `os_log` captures RN's native logging host function, transferred
+  to and called synchronously on UI, at animation boundaries on the same device
+  clock. No production Skia hooks are added. Missing native logger support
+  fails measurement rather than falling back to
+  asynchronously timestamped RN console messages.
+  `Thermal State` records the device's thermal-state metadata.
+- UI completion is not display completion. Each window includes its 200ms
+  idle-drain period so queued final frames are measured. Only successive
+  displayed surfaces **inside that window** contribute intervals: no gap is
+  synthesized after its last surface, or across to the next animation. Warmups
+  are excluded. Overlapping windows fail. First-surface time and remaining
+  idle after the last surface are retained separately in JSON.
+  These are displayed app-surface intervals, not input latency or proof that
+  each surface contains the intended animation value.
+- Reports show p99 (median of per-repetition p99s), worst observed interval,
+  and animation windows with at least one gap longer than 1.5 display periods.
+  UI maximum gap is a control metric, not a substitute for displayed frames.
+  First-surface time is reported separately (median of per-repetition medians)
+  to expose animation-onset delay; it is not input latency or proof that the
+  first surface already contains the intended animation value.
+  A p99 increase over 25% **and** a quarter display period flags a regression;
+  smaller or rarer changes remain visible in maximum/gap counts.
+- Incomplete/cancelled windows, missing completion, stale workloads and
+  insufficient displayed frames fail explicitly. Comparisons reject different
+  devices, display rates, workload/measurement fingerprints or plans. The
+  device identifier is hashed; raw UDIDs are not written to results.
+- `--keep-trace` retains the raw Instruments recording for inspection. Failed
+  measurements always retain it. Without that flag, successful traces are
+  removed after their per-window measurements are saved in result JSON.
+- As with FPS mode, `--no-build` reuses an installed binary. Rebuild for a
+  revision comparison: the installed workload fingerprint is checked, but
+  `--no-build` cannot prove which native revision was previously installed.
+
+This mode is iOS-only. Existing FPS/cold modes and the Android-only hosted
+workflow keep their current behavior. To measure a fix, first merge this
+benchmark independently; baseline and candidate must both contain it.
+`--scenes`, `--gap` and `--backing` are not accepted by this fixed-workload mode.
+Keep the load sweep: scheduling races can appear at an intermediate count and
+disappear at a larger one. This is not simply a GPU-saturation test.
 
 ## Cold first draw
 
