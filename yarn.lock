@@ -25790,7 +25790,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-macos@npm:^0.81.8":
+"react-native-macos@npm:0.81.9":
   version: 0.81.9
   resolution: "react-native-macos@npm:0.81.9"
   dependencies:
@@ -25839,6 +25839,58 @@ __metadata:
     react-native: cli.js
     react-native-macos: cli.js
   checksum: 3fa842489a2aa186683a11d4637dae36f8fe8ec32abdd5813ef40e6ca2c96af9f7e73a7f488b7e4580f678d9de2b47873347fad3fc23b583d1749288178b3310
+  languageName: node
+  linkType: hard
+
+"react-native-macos@patch:react-native-macos@npm%3A0.81.9#./.yarn/patches/react-native-macos-npm-0.81.9-macos-codegen.patch::locator=react-native-skia-monorepo%40workspace%3A.":
+  version: 0.81.9
+  resolution: "react-native-macos@patch:react-native-macos@npm%3A0.81.9#./.yarn/patches/react-native-macos-npm-0.81.9-macos-codegen.patch::version=0.81.9&hash=84d55a&locator=react-native-skia-monorepo%40workspace%3A."
+  dependencies:
+    "@jest/create-cache-key-function": ^29.7.0
+    "@react-native-macos/virtualized-lists": 0.81.9
+    "@react-native/assets-registry": 0.81.6
+    "@react-native/codegen": 0.81.6
+    "@react-native/community-cli-plugin": 0.81.6
+    "@react-native/gradle-plugin": 0.81.6
+    "@react-native/js-polyfills": 0.81.6
+    "@react-native/normalize-colors": 0.81.6
+    abort-controller: ^3.0.0
+    anser: ^1.4.9
+    ansi-regex: ^5.0.0
+    babel-jest: ^29.7.0
+    babel-plugin-syntax-hermes-parser: 0.29.1
+    base64-js: ^1.5.1
+    commander: ^12.0.0
+    flow-enums-runtime: ^0.0.6
+    glob: ^7.1.1
+    invariant: ^2.2.4
+    jest-environment-node: ^29.7.0
+    memoize-one: ^5.0.0
+    metro-runtime: ^0.83.1
+    metro-source-map: ^0.83.1
+    nullthrows: ^1.1.1
+    pretty-format: ^29.7.0
+    promise: ^8.3.0
+    react-devtools-core: ^6.1.5
+    react-refresh: ^0.14.0
+    regenerator-runtime: ^0.13.2
+    scheduler: 0.26.0
+    semver: ^7.1.3
+    stacktrace-parser: ^0.1.10
+    whatwg-fetch: ^3.0.0
+    ws: ^6.2.3
+    yargs: ^17.6.2
+  peerDependencies:
+    "@types/react": ^19.1.4
+    react: ^19.1.4
+    react-native: 0.81.6
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+  bin:
+    react-native: cli.js
+    react-native-macos: cli.js
+  checksum: a39a996d2280d11343fc2dc42c38354a8eb24c6fc9428b00e04cbb49b56bae06c6c0f20bbfe4221c2f15cf7f0efe2bf015f0a897739243f71289c3b1cf5a4cf5
   languageName: node
   linkType: hard
 

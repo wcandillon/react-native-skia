@@ -2,7 +2,6 @@ import type { FC } from "react";
 
 import {
   ClippedSubviewsBack,
-  ClippedSubviewsDeviceLost,
   ClippedSubviewsSharedValueChanged,
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
@@ -29,7 +28,6 @@ const settling = (component: FC): Screen => ({
 
 export const Screens: Readonly<Record<string, Screen>> = {
   ClippedSubviewsBack: settling(ClippedSubviewsBack),
-  ClippedSubviewsDeviceLost: settling(ClippedSubviewsDeviceLost),
   ClippedSubviewsSharedValueChanged: settling(
     ClippedSubviewsSharedValueChanged
   ),
