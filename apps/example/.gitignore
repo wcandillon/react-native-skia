@@ -20,3 +20,4 @@ test-results/
 playwright-report/
 xcodebuild-*.log
 benchmarks/results/
+benchmarks/.venv/

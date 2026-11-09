@@ -19,6 +19,12 @@ Atlas transforms can be animated with near-zero cost using worklets. This makes 
 | blendMode? | `BlendMode` | Optional. Blend mode used for layer compositing (how the Atlas is drawn onto the canvas). |
 | sampling? | `Sampling` | The method used to sample the image. see ([sampling options](/docs/images#sampling-options)). |
 
+:::tip
+
+If your sprites are filled rectangles, rounded rectangles or circles, [Shape Blob](/docs/shapes/shape-blob) builds the atlas for you: it rasterizes each distinct shape at the device's pixel density and keeps its vertices between frames.
+
+:::
+
 ## RSXform
 
 The RSXform object used by the altas API is the compression of the following matrix: `[fSCos -fSSin fTx, fSSin fSCos fTy, 0, 0, 1]`. Below are few transformations that you will find useful:
@@ -166,13 +172,15 @@ export const Demo = () => {
 In v2, Skia drew the whole atlas as a single GPU operation: the Ganesh backend packed every sprite into one vertex buffer and submitted it as one draw (`DrawAtlasOp`).
 
 In v3, React Native Skia renders with [Graphite](/docs/getting-started/migration), and Graphite does not have a dedicated atlas renderer yet.
-Its own `drawAtlas` records one rectangle draw per sprite, which costs a draw call per sprite on Android and a per-sprite recording cost on every platform.
-React Native Skia does not use it. The `Atlas` component and `canvas.drawAtlas()` turn the sprites into a single `drawVertices` call, the way Skia itself drew atlases on Graphite before m152, so the whole atlas is one draw on every platform, as in v2.
+Its own `drawAtlas`, added in Skia m152 (before that, Graphite drew nothing for an atlas), records one rectangle draw per sprite.
+The recording cost grows with the number of sprites on every platform, and when `colors` are given, Android pays a separate draw call per distinct color on backends without storage buffers.
+React Native Skia does not use it. The `Atlas` component and `canvas.drawAtlas()` turn the sprites into a single `drawVertices` call, the generic path Skia uses for devices without an atlas renderer (`SkDevice::drawAtlas`), so the whole atlas is one draw on every platform, as in v2.
 
 What this means for you:
 
 - Animating the transforms with [`useRSXformBuffer`](/docs/animations/hooks#usersxformbuffer) remains cheap on the JS and UI threads: the buffers are updated in place and nothing is re-recorded there.
 - Each frame, the render thread writes six vertices per sprite (position, texture coordinates and, when `colors` are given, the sprite's color) before the single draw.
+- For filled rectangles, rounded rectangles and circles, a [Shape Blob](/docs/shapes/shape-blob) skips that per-frame step: it keeps its vertices and only updates the shapes you change.
 
 ### Drawing sprites with WebGPU
 

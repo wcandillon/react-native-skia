@@ -26,6 +26,7 @@ export * from "./RSXform";
 export * from "./JsiInstance";
 export * from "./Skia";
 export * from "./TextBlob";
+export * from "./ShapeBlob";
 export * from "./Size";
 export * from "./Paragraph";
 export * from "./Matrix4";

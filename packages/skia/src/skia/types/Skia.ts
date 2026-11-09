@@ -21,6 +21,7 @@ import type { SkVertices, VertexMode } from "./Vertices/Vertices";
 import type { DataFactory } from "./Data";
 import type { SVGFactory } from "./SVG";
 import type { TextBlobFactory } from "./TextBlob";
+import type { ShapeBlobOptions, SkShapeBlob } from "./ShapeBlob";
 import type { SurfaceFactory } from "./Surface";
 import type { SkRSXform } from "./RSXform";
 import type { SkPath } from "./Path/Path";
@@ -92,6 +93,15 @@ export interface SkGpuInfo {
    * the next loss. Never resolves on the web.
    */
   readonly lost: Promise<SkGpuLostInfo>;
+  /**
+   * Whether the app is in the foreground and active, where the GPU work it
+   * submits runs: false from the moment the app starts to resign active (a
+   * lock, a swipe home, an incoming call) until it is active again. iOS
+   * refuses GPU work from an app in the background; a frame callback or a
+   * player reads this to skip its work meanwhile. On Android, whether the
+   * host activity is resumed; on the web, whether the document is visible.
+   */
+  readonly foreground: boolean;
 }
 
 /**
@@ -158,6 +168,12 @@ export interface Skia {
   AnimatedImage: AnimatedImageFactory;
   SVG: SVGFactory;
   TextBlob: TextBlobFactory;
+  /**
+   * Creates an empty shape blob: a mutable batch of filled rectangles, rounded
+   * rectangles and circles drawn with `canvas.drawShapes(blob)` in one draw
+   * call. See {@link SkShapeBlob}.
+   */
+  ShapeBlob(options?: ShapeBlobOptions): SkShapeBlob;
   Surface: SurfaceFactory;
   ParagraphBuilder: ParagraphBuilderFactory;
   Skottie: SkottieFactory;

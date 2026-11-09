@@ -37,8 +37,7 @@ public class SkiaTextureView extends TextureView implements TextureView.SurfaceT
 
     @Override
     public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surfaceTexture) {
-        mApi.onSurfaceDestroyed();
-        return true;
+        return mApi.onSurfaceTextureDestroyed(surfaceTexture);
     }
 
     @Override

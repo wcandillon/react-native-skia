@@ -40,7 +40,6 @@ public:
 
   void play(DrawingCtx *ctx) override {
     auto source = props.source;
-    auto uniforms = props.uniforms;
     auto m3 = processTransform(props.matrix, props.transform, props.origin);
     auto uniformsData = processUniforms(source, props.uniforms);
 

@@ -24,7 +24,10 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkGpuActivity.h"
+#include "RNSkPipelineWarmup.h"
 #include "RNSkWindowSurface.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -139,6 +142,33 @@ public:
     return info;
   }
 
+  // Startup
+  // --------------------------------------------------------------------
+
+  /**
+   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled
+   (see rnwgpu::DawnBlobCache, the cache React Native WebGPU keeps for the
+   devices it creates, here for Skia's), and where the pipelines the app used
+   are recorded, for the next process to find (see RNSkPipelineWarmup): the
+   platform's cache directory. Set by the platform before the GPU is first
+   asked for (see RNSkiaModule, PlatformContext); set later, it applies to
+   the devices created from then on. Any thread.
+   */
+  static void setCacheDirectory(const std::string &directory) noexcept {
+    rnwgpu::DawnBlobCache::setDirectory(directory);
+    RNSkPipelineWarmup::getInstance().setDirectory(directory);
+  }
+
+  /**
+   Whether the pipeline warmup (see RNSkPipelineWarmup) builds the Display
+   P3 pipelines as well as the sRGB ones: on Apple platforms, when the main
+   screen has a wide gamut. Set by the platform before the GPU is first
+   asked for. Any thread.
+   */
+  static void setPrecompileDisplayP3(bool displayP3) noexcept {
+    precompileDisplayP3().store(displayP3, std::memory_order_release);
+  }
+
   // Generations ---------------------------------------------------------------
 
   /**
@@ -166,6 +196,24 @@ public:
     return instance != nullptr &&
            instance->_current.load(std::memory_order_acquire)
                ->lost.load(std::memory_order_acquire);
+  }
+
+  /**
+   Whether the app is in the foreground and active, where the GPU work it
+   submits runs (Skia.gpu.foreground): false from the moment it starts to
+   resign active (a lock, a swipe home, an incoming call; the inactive and
+   background states of iOS) until it is active again. A frame callback or a
+   player reads it to skip its work meanwhile. Set by the platform on its main
+   thread (see setForeground), read from any thread; true where the platform
+   says nothing.
+   */
+  static bool isForeground() noexcept {
+    return foregroundFlag().load(std::memory_order_acquire);
+  }
+
+  /** Sets isForeground(); the platform calls it from its main thread. */
+  static void setForeground(bool foreground) noexcept {
+    foregroundFlag().store(foreground, std::memory_order_release);
   }
 
   /**
@@ -257,6 +305,10 @@ public:
         callback(nullptr);
         return;
       }
+      // GPU work from here until the result is delivered: the readback
+      // thread asks the device for it until then (see awaitReadbacks),
+      // which the warmup must not hold up (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
       readback.delivered = std::make_shared<std::atomic<bool>>(false);
       auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
@@ -414,6 +466,9 @@ public:
     if (recorder == nullptr) {
       return false;
     }
+    // The snap compiles the pipelines the recording needs, inline: GPU work
+    // the warmup stays behind (see RNSkGpuActivity), as is the run.
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       return false;
@@ -450,6 +505,7 @@ public:
   void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
+    RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (current->lost.load(std::memory_order_acquire)) {
@@ -519,15 +575,19 @@ public:
     return _current.load(std::memory_order_acquire)->backendContext.fDevice;
   }
 
-  // Create a secondary Dawn device from the same adapter.
-  // Has its own command queue and does NOT enable
-  // ImplicitDeviceSynchronization, so it won't contend with the primary
-  // rendering device's mutex. Safe for concurrent GPU work (e.g. ML inference)
-  // alongside Skia rendering.
+  // Create a secondary Dawn device from the same adapter, with its own command
+  // queue: GPU work of the app's own (ML inference, the camera) runs alongside
+  // Skia rendering without waiting for it. It has a device lock of its own
+  // (ImplicitDeviceSynchronization), which never contends with the primary
+  // device's: Dawn relies on it to use a device from several threads, and the
+  // hold of its submissions while the app is in the background (see
+  // DawnUtils::requestDevice) is only atomic against an in-flight submit
+  // through it.
   wgpu::Device createSecondaryDevice() {
     auto adapter = DawnUtils::getMatchedAdapter(instance.get());
 
     std::vector<wgpu::FeatureName> features = {
+        wgpu::FeatureName::ImplicitDeviceSynchronization,
         wgpu::FeatureName::BufferMapExtendedUsages,
 #ifdef __APPLE__
         wgpu::FeatureName::SharedTextureMemoryIOSurface,
@@ -654,8 +714,11 @@ public:
     SkCanvas *canvas = surface->getCanvas();
     canvas->drawImage(image, 0, 0);
 
-    // Flush the surface to ensure the image is rendered
-    submitRecording(recorder, skgpu::graphite::SyncToCpu::kYes);
+    // Submit without waiting on the CPU. A Dawn texture belongs to the device
+    // that made it, so whoever reads this one (adoptTexture() on the imported
+    // device) submits to the same queue, which runs this draw first. Waiting
+    // here blocked the JS thread until the GPU had drained every queued frame.
+    submitRecording(recorder);
 
     return texture;
   }
@@ -696,6 +759,9 @@ private:
     DawnUtils::DeviceLostListener listener;
     skgpu::graphite::DawnBackendContext backendContext;
     std::unique_ptr<skgpu::graphite::Context> context;
+    // Whether the Dawn device was destroyed (see destroyReplacedDevice).
+    // Guarded by _mutex.
+    bool deviceDestroyed = false;
     // Set once, by the loss callback (any thread, see onDeviceLost); the
     // strings are guarded by _lostMutex.
     std::atomic<bool> lost{false};
@@ -733,6 +799,20 @@ private:
   static LossListeners &lossListeners() noexcept {
     static auto *registry = new LossListeners();
     return *registry;
+  }
+
+  // See setPrecompileDisplayP3. Not tied to the context: the platform sets it
+  // before the GPU is probed.
+  static std::atomic<bool> &precompileDisplayP3() noexcept {
+    static std::atomic<bool> flag{false};
+    return flag;
+  }
+
+  // Whether the app is in the foreground and active (see isForeground). Not
+  // tied to the context: the platform sets it before the GPU is probed.
+  static std::atomic<bool> &foregroundFlag() noexcept {
+    static std::atomic<bool> foreground{true};
+    return foreground;
   }
 
   static const Probe &probe() noexcept {
@@ -829,23 +909,57 @@ private:
   }
 
   /**
-   Destroys `lost` once every window has let go of its surface on it (see
-   RNSkWindowSurface::releaseSurfacesOn), then replaces it with a new device
-   and Graphite context, unless it was replaced meanwhile, and tells the
-   loss listeners. The new device is validated (see
-   DawnUtils::requestDevice): a resource of the lost device that reaches it
-   is refused with an error rather than handed to the driver. A replacement
-   that could not be made, or that was lost before it was in place, is
-   tried again (see scheduleRecovery).
+   Destroys `lost` once every window has let go of its surface on it, then
+   replaces it with a new device and Graphite context, unless it was
+   replaced meanwhile, and tells the loss listeners. The release and the
+   destroy run on the platform's presenting thread (see
+   RNSkWindowSurface::presentThreadRunner), which is where every window
+   operation runs, and this thread waits for them:
+   RNSkWindowSurface::releaseSurfacesOn takes no window's lock, since
+   windows have none any more, so the sweep must not race a present or an
+   attach there. The lost device is destroyed before the new one is made,
+   so that its memory is free for it (a loss can be the GPU running out of
+   memory), and before it is published, so that no window makes a swapchain
+   over its native window on the new device meanwhile
+   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR); and before the loss listeners run,
+   so that what it held reads as destroyed once Skia.gpu.lost resolves. The
+   new device is validated (see DawnUtils::requestDevice): a resource of
+   the lost device that reaches it is refused with an error rather than
+   handed to the driver. A replacement that could not be made, that was
+   lost before it was in place, or whose release could not be handed to the
+   presenting thread, is tried again (see scheduleRecovery).
    */
   void recover(Generation *lost) noexcept {
-    // Replaced meanwhile by another recovery (see requestRecovery): no sweep.
+    // Replaced meanwhile by another recovery (see requestRecovery).
     if (_current.load(std::memory_order_acquire) != lost) {
       return;
     }
-    // Outside the context lock, which comes after a window's mutex (see
-    // RNSkWindowSurface).
-    RNSkWindowSurface::releaseSurfacesOn(lost->id);
+    // The windows let go of their surface on the lost device, and the device
+    // is destroyed, on the presenting thread: nothing there presents or
+    // attaches meanwhile. This thread holds no lock while it waits for the
+    // thread (the context lock is not taken until below).
+    switch (releaseAndDestroyOnPresentThread(lost)) {
+    case Handoff::kDone:
+      break;
+    case Handoff::kNoRunner:
+      // No window has a runner: no canvas presents on a thread of its own,
+      // so no window can be in use. The sweep finds none, and the destroy
+      // runs here.
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      destroyReplacedDevice(lost);
+      break;
+    case Handoff::kDropped:
+      // The presenting thread did not run the task: the view its runner
+      // belongs to is gone, or a present is held up past the wait. The
+      // device stays lost as it is, and this attempt makes no replacement;
+      // the next one asks again, and a task that runs later finds the device
+      // destroyed already.
+      RNSkLogger::logToConsole(
+          "React Native Skia could not hand the release of its lost GPU "
+          "device to the presenting thread; it tries again.");
+      scheduleRecovery(lost, /* failedAttempt= */ true);
+      return;
+    }
     LossInfo info;
     Generation *next = nullptr;
     {
@@ -859,16 +973,6 @@ private:
         info.reason = lost->lostReason;
         info.message = lost->lostMessage;
       }
-      // Dawn runs the deletions it deferred on a lost device, which never
-      // ticks again, once it is destroyed: those of the swapchains the
-      // windows let go of included, whose VkSurfaceKHRs keep their windows
-      // connected until then. Destroyed before the new device is made, its
-      // memory is free for it (a loss can be the GPU running out of memory),
-      // and before it is published, it holds no window by the time one makes
-      // a swapchain on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR
-      // otherwise). Destroying it again, after a failed replacement, does
-      // nothing.
-      lost->backendContext.fDevice.Destroy();
       try {
         next = createGeneration(/* validate= */ true);
         _retired.push_back(lost);
@@ -899,6 +1003,84 @@ private:
     notifyLossListeners(info);
   }
 
+  /** What releaseAndDestroyOnPresentThread() did. */
+  enum class Handoff {
+    // The presenting thread released the windows' surfaces and destroyed the
+    // device.
+    kDone,
+    // No window has a runner: no canvas presents on a thread of its own, so
+    // no window can be in use.
+    kNoRunner,
+    // The presenting thread did not run the task within the wait: the view
+    // its runner belongs to is gone, or a present is held up.
+    kDropped,
+  };
+
+  /**
+   Hands the release of every window's surface on `lost` and the destroy of
+   its device to the platform's presenting thread, through the runner a
+   window's view installed (see RNSkWindowSurface::presentThreadRunner), and
+   waits for both: every task on that thread runs in order, so nothing
+   presents or attaches while they run, and nothing that follows them runs
+   before they are done. The wait is bounded: a runner drops the task when
+   the view it belongs to is gone (see JniSkiaView), and a present may be
+   held up compiling pipelines for seconds, so a task not run within the
+   wait is left to run later (it finds the device destroyed already) and
+   the attempt is retried (see recover). Called without a lock; the task
+   takes the windows' list and, for the destroy, the context lock, in that
+   order (see the class comment on locks in RNSkWindowSurface).
+   */
+  Handoff releaseAndDestroyOnPresentThread(Generation *lost) {
+    auto run = RNSkWindowSurface::presentThreadRunner();
+    if (!run) {
+      return Handoff::kNoRunner;
+    }
+    struct Task {
+      std::mutex mutex;
+      std::condition_variable done;
+      bool ran = false;
+    };
+    auto task = std::make_shared<Task>();
+    run([this, lost, task]() {
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      destroyReplacedDevice(lost);
+      {
+        std::lock_guard<std::mutex> lock(task->mutex);
+        task->ran = true;
+      }
+      task->done.notify_all();
+    });
+    std::unique_lock<std::mutex> lock(task->mutex);
+    if (!task->done.wait_for(lock, std::chrono::seconds(10),
+                             [&task]() { return task->ran; })) {
+      return Handoff::kDropped;
+    }
+    return Handoff::kDone;
+  }
+
+  /**
+   Destroys the Dawn device of a generation that was replaced (see
+   generation()), so that Dawn runs the deletions it deferred on it: a lost
+   device never ticks again, and on Android the VkSurfaceKHR of a window's
+   old swapchain keeps the window connected until then, so that no swapchain
+   can be made over it on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR).
+   The Generation, its device handle and its Graphite context stay: what
+   still points at them keeps failing validation, as destroyed rather than
+   lost. Called once the windows on that device have let go of their
+   surfaces (see RNSkWindowSurface::releaseSurfacesOn), on the presenting
+   thread or, when no window has a runner, on the thread replacing the
+   device (see recover). Nothing happens for a device destroyed already.
+   Takes the context lock.
+   */
+  void destroyReplacedDevice(Generation *lost) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (lost->deviceDestroyed) {
+      return;
+    }
+    lost->deviceDestroyed = true;
+    lost->backendContext.fDevice.Destroy();
+  }
+
   /**
    A new device on the adapter, with a Graphite context on it, numbered
    after the last one. Throws, with the reason, when either cannot be made.
@@ -922,6 +1104,9 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    // Records the pipelines the frames compile, for the next launch (see
+    // RNSkPipelineWarmup).
+    RNSkPipelineWarmup::getInstance().install(ctxOptions);
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {
@@ -929,6 +1114,14 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
+    // The common pipelines, built while the frames leave the device alone
+    // (see RNSkPipelineWarmup), until this device is lost. The precompile
+    // context is a Context operation, made here under the lock, and used
+    // on the warmup thread only.
+    RNSkPipelineWarmup::getInstance().start(
+        generation->context->makePrecompileContext(),
+        precompileDisplayP3().load(std::memory_order_acquire),
+        &generation->lost, generation->backendContext.fDevice);
     return generation;
   }
 
@@ -1225,6 +1418,9 @@ private:
     wgpu::Future done;
     // Set by the readback's callback (see readPixels), once it ran.
     std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
     // The times the context was asked without the callback having run.
     int retries = 0;
   };

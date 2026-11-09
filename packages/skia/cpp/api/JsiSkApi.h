@@ -54,6 +54,7 @@
 #include "JsiSkSVGFactory.h"
 #include "JsiSkShader.h"
 #include "JsiSkShaderFactory.h"
+#include "JsiSkShapeBlob.h"
 #include "JsiSkSurfaceFactory.h"
 #include "JsiSkTextBlobFactory.h"
 #include "JsiSkTypeface.h"
@@ -156,6 +157,10 @@ public:
     return JsiSkVertices::createCtor(getContext())(runtime, thisValue,
                                                    arguments, count);
   }
+  JSI_HOST_FUNCTION(ShapeBlob) {
+    return JsiSkShapeBlob::createCtor(getContext())(runtime, thisValue,
+                                                    arguments, count);
+  }
   JSI_HOST_FUNCTION(PictureRecorder) {
     return JsiSkPictureRecorder::createCtor(getContext())(runtime, thisValue,
                                                           arguments, count);
@@ -200,6 +205,7 @@ public:
                                      : jsi::Value(runtime, string(gpu.error)));
     result.setProperty(runtime, "lost",
                        getLostPromise(runtime, gpu.generation));
+    result.setProperty(runtime, "foreground", DawnContext::isForeground());
     return result;
   }
 
@@ -279,6 +285,7 @@ public:
                       &JsiSkApi::ContourMeasureIter);
     installHostMethod(runtime, prototype, "MakeVertices",
                       &JsiSkApi::MakeVertices);
+    installHostMethod(runtime, prototype, "ShapeBlob", &JsiSkApi::ShapeBlob);
     installHostMethod(runtime, prototype, "PictureRecorder",
                       &JsiSkApi::PictureRecorder);
     installHostMethod(runtime, prototype, "Color", &JsiSkApi::Color);
