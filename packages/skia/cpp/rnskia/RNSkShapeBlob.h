@@ -111,10 +111,10 @@ inline float shapeBlobCoverage(ShapeBlobKind kind, float w, float h, float rx,
   }
   if (kind == ShapeBlobKind::kRect ||
       (kind == ShapeBlobKind::kRRect && (rx <= 0 || ry <= 0))) {
-    const float ox =
-        std::max(0.0f, std::min(px + 1.0f, mx + w) - std::max(float(px), mx));
-    const float oy =
-        std::max(0.0f, std::min(py + 1.0f, my + h) - std::max(float(py), my));
+    const float ox = std::max(0.0f, std::min(px + 1.0f, mx + w) -
+                                        std::max(static_cast<float>(px), mx));
+    const float oy = std::max(0.0f, std::min(py + 1.0f, my + h) -
+                                        std::max(static_cast<float>(py), my));
     return std::min(1.0f, ox * oy);
   }
   const float cx = mx + w / 2;
