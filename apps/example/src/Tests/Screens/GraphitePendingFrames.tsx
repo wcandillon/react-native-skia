@@ -8,7 +8,9 @@ import { useScreenDone } from "../ScreenDone";
 const SMALL = 60;
 const LARGE = 120;
 const STEP = 6;
-const FRAMES = 240;
+// How long the loop runs: 240 frames at 60 fps, a few dozen on a slow
+// emulator, where 240 of them would outlast the test's timeout.
+const LOOP_MS = 4000;
 const WAIT_MS = 8000;
 
 // A Graphite view that resizes a few points per frame while JS submits two
@@ -34,13 +36,12 @@ export const GraphitePendingFrames = () => {
       context.submit(recording);
       recording.dispose();
     };
-    let frames = 0;
+    const started = Date.now();
     let current = SMALL;
     let direction = 1;
     let frame = 0;
     let settle: ReturnType<typeof setTimeout> | undefined;
     const step = () => {
-      frames += 1;
       record("red");
       record("red");
       current += direction * STEP;
@@ -48,7 +49,7 @@ export const GraphitePendingFrames = () => {
         direction = -direction;
       }
       setSize(current);
-      if (frames < FRAMES) {
+      if (Date.now() - started < LOOP_MS) {
         frame = requestAnimationFrame(step);
         return;
       }
