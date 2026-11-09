@@ -5,7 +5,9 @@ describe("Shared value reads on a device", () => {
   itRunsE2eOnly(
     "draws the current values in a snapshot and survives an invalid value",
     async () => {
-      const counts = countColors(await surface.screen("SharedValueReads"));
+      const counts = await countColors(
+        await surface.screen("SharedValueReads")
+      );
       // The blue rect is drawn once its shared value is valid: the invalid
       // value it held at mount was reported, not fatal, and did not stop
       // the mapper from reading the valid one.

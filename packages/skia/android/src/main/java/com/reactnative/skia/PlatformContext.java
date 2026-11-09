@@ -2,13 +2,18 @@ package com.reactnative.skia;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.MessageQueue;
+import android.os.ParcelFileDescriptor;
 
 import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
+import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.common.LifecycleState;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -17,7 +22,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 
-public class PlatformContext {
+public class PlatformContext implements LifecycleEventListener {
     @DoNotStrip
     private final HybridData mHybridData;
 
@@ -27,9 +32,55 @@ public class PlatformContext {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    // The native side's main-thread queue signals its tasks on this
+    // descriptor, one for the process, so queuing one from another thread
+    // calls no Java there.
+    private static ParcelFileDescriptor sMainThreadWakeup;
+
     public PlatformContext(ReactContext reactContext) {
+        listenForMainThreadTasks();
         mContext = reactContext;
+        // Before the GPU is first asked for: where Dawn keeps what it
+        // compiled, for the next launch to find (see DawnContext).
+        setCacheDirectoryNative(new File(reactContext.getCacheDir(), "rnskia").getAbsolutePath());
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
+        // Skia.gpu.foreground follows the host activity: resumed, or not.
+        setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
+        reactContext.addLifecycleEventListener(this);
+    }
+
+    /** Stops following the host activity; the manager is going away. */
+    public void destroy() {
+        mContext.removeLifecycleEventListener(this);
+    }
+
+    @Override
+    public void onHostResume() {
+        setForegroundNative(true);
+    }
+
+    @Override
+    public void onHostPause() {
+        setForegroundNative(false);
+    }
+
+    @Override
+    public void onHostDestroy() {
+    }
+
+    private static synchronized void listenForMainThreadTasks() {
+        if (sMainThreadWakeup != null) {
+            return;
+        }
+        ParcelFileDescriptor wakeup = ParcelFileDescriptor.adoptFd(duplicateMainThreadWakeup());
+        Looper.getMainLooper().getQueue().addOnFileDescriptorEventListener(
+                wakeup.getFileDescriptor(),
+                MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT,
+                (descriptor, events) -> {
+                    runMainThreadTasks();
+                    return MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT;
+                });
+        sMainThreadWakeup = wakeup;
     }
 
     private byte[] getStreamAsBytes(InputStream is) throws IOException {
@@ -105,17 +156,16 @@ public class PlatformContext {
         });
     }
 
-    @DoNotStrip
-    public void notifyTaskReady() {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            notifyTaskReadyNative();
-        } else {
-            mainHandler.post(this::notifyTaskReadyNative);
-        }
-    }
-
     // Private c++ native methods
     private native HybridData initHybrid(float pixelDensity);
 
-    private native void notifyTaskReadyNative();
+    private static native int duplicateMainThreadWakeup();
+
+    private static native void runMainThreadTasks();
+
+    // Whether the app is in the foreground (DawnContext::setForeground).
+    private static native void setForegroundNative(boolean foreground);
+
+    // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
+    private static native void setCacheDirectoryNative(String directory);
 }

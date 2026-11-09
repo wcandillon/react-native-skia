@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -23,6 +24,9 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkGpuActivity.h"
+#include "RNSkPipelineWarmup.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkColorSpace.h"
@@ -69,9 +73,9 @@ public:
   /**
    The GPU Skia renders with, or why there is none: a device without a
    Vulkan 1.1 driver on Android, a driver short of the WebGPU core
-   requirements, a device creation failure. Probed once per process, the
-   first time the context is asked for (RNSkManager does so when the module
-   is installed), and reported to JS as Skia.gpu.
+   requirements, a device creation failure. Probed once per process, on
+   whichever thread asks for the context first (a view's window, a GPU call,
+   Skia.gpu), and reported to JS as Skia.gpu.
    */
   struct GpuInfo {
     bool available = false;
@@ -137,21 +141,31 @@ public:
     return info;
   }
 
+  // Startup
+  // --------------------------------------------------------------------
+
   /**
-   Starts the probe on a thread of its own, so that installing the module
-   does not wait for the GPU (drivers load, a device and a Graphite context
-   are created). Whoever needs the context first (a view's window, a GPU
-   call, Skia.gpu) waits for the probe to finish instead.
+   Where Dawn's blob cache keeps the shaders and pipeline caches it compiled
+   (see rnwgpu::DawnBlobCache, the cache React Native WebGPU keeps for the
+   devices it creates, here for Skia's), and where the pipelines the app used
+   are recorded, for the next process to find (see RNSkPipelineWarmup): the
+   platform's cache directory. Set by the platform before the GPU is first
+   asked for (see RNSkiaModule, PlatformContext); set later, it applies to
+   the devices created from then on. Any thread.
    */
-  static void probeInBackground() {
-    std::thread([]() {
-#if defined(__APPLE__)
-      pthread_setname_np("RNSkia GPU Probe");
-#elif defined(__ANDROID__)
-      pthread_setname_np(pthread_self(), "RNSkia GPU Probe");
-#endif
-      probe();
-    }).detach();
+  static void setCacheDirectory(const std::string &directory) noexcept {
+    rnwgpu::DawnBlobCache::setDirectory(directory);
+    RNSkPipelineWarmup::getInstance().setDirectory(directory);
+  }
+
+  /**
+   Whether the pipeline warmup (see RNSkPipelineWarmup) builds the Display
+   P3 pipelines as well as the sRGB ones: on Apple platforms, when the main
+   screen has a wide gamut. Set by the platform before the GPU is first
+   asked for. Any thread.
+   */
+  static void setPrecompileDisplayP3(bool displayP3) noexcept {
+    precompileDisplayP3().store(displayP3, std::memory_order_release);
   }
 
   // Generations ---------------------------------------------------------------
@@ -181,6 +195,24 @@ public:
     return instance != nullptr &&
            instance->_current.load(std::memory_order_acquire)
                ->lost.load(std::memory_order_acquire);
+  }
+
+  /**
+   Whether the app is in the foreground and active, where the GPU work it
+   submits runs (Skia.gpu.foreground): false from the moment it starts to
+   resign active (a lock, a swipe home, an incoming call; the inactive and
+   background states of iOS) until it is active again. A frame callback or a
+   player reads it to skip its work meanwhile. Set by the platform on its main
+   thread (see setForeground), read from any thread; true where the platform
+   says nothing.
+   */
+  static bool isForeground() noexcept {
+    return foregroundFlag().load(std::memory_order_acquire);
+  }
+
+  /** Sets isForeground(); the platform calls it from its main thread. */
+  static void setForeground(bool foreground) noexcept {
+    foregroundFlag().store(foreground, std::memory_order_release);
   }
 
   /**
@@ -239,11 +271,13 @@ public:
   // Readbacks ----------------------------------------------------------------
   //
   // Graphite reads pixels back asynchronously: the request goes to the GPU
-  // with the next submit and the result is delivered by the context once the
-  // GPU is done, from checkAsyncWorkCompletion() or from any later submit. A
-  // thread of its own polls the context while readbacks are pending, so a
-  // caller never has to wait inside the context lock (which would hold up
-  // the frames of every view meanwhile).
+  // with the next submit and the result is delivered by the context once it
+  // sees the GPU done with it, from checkAsyncWorkCompletion() or from any
+  // later submit. A thread of its own waits for the GPU through Dawn and
+  // then has the context deliver (see awaitReadbacks), so that no caller
+  // waits inside the context lock (which would hold up the frames of every
+  // view meanwhile). There is no synchronous readback: JS awaits a Promise
+  // (see RNSkAsync), which is what the GPU offers.
 
   /**
    Reads `srcRect` of a Graphite image back into CPU memory, in the color
@@ -257,8 +291,10 @@ public:
                   std::function<void(ReadResult)> callback) {
     struct Request {
       std::function<void(ReadResult)> callback;
+      std::shared_ptr<std::atomic<bool>> delivered;
     };
     auto info = image->imageInfo().makeDimensions(srcRect.size());
+    Readback readback;
     {
       std::unique_lock<std::mutex> lock(_mutex);
       auto *current = _current.load(std::memory_order_acquire);
@@ -268,48 +304,34 @@ public:
         callback(nullptr);
         return;
       }
-      auto *request = new Request{std::move(callback)};
-      _pendingReadbacks.fetch_add(1, std::memory_order_acq_rel);
+      // GPU work from here until the result is delivered: the readback
+      // thread asks the device for it until then (see awaitReadbacks),
+      // which the warmup must not hold up (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
+      readback.delivered = std::make_shared<std::atomic<bool>>(false);
+      auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
           SkImage::RescaleMode::kNearest,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
-            getInstance()._pendingReadbacks.fetch_sub(
-                1, std::memory_order_acq_rel);
             request->callback(std::move(result));
+            request->delivered->store(true, std::memory_order_release);
             delete request;
           },
           request);
       current->context->submit();
+      readback.generation = current;
+      readback.done = workDone(current);
     }
-    wakeReadbackPoller();
-  }
-
-  /**
-   Same as readPixels(), waiting for the result. The wait happens outside the
-   context lock; the calling thread blocks for a GPU round trip.
-   */
-  ReadResult readPixelsSync(const sk_sp<SkImage> &image,
-                            const SkIRect &srcRect) {
-    struct Wait {
-      std::mutex mutex;
-      std::condition_variable condition;
-      bool done = false;
-      ReadResult result;
-    };
-    auto wait = std::make_shared<Wait>();
-    readPixels(image, srcRect, [wait](ReadResult result) {
-      {
-        std::lock_guard<std::mutex> lock(wait->mutex);
-        wait->result = std::move(result);
-        wait->done = true;
-      }
-      wait->condition.notify_one();
+    {
+      std::lock_guard<std::mutex> lock(_readbacksMutex);
+      _readbacks.push_back(readback);
+    }
+    std::call_once(_readbackThreadOnce, [this]() {
+      std::thread([this]() { awaitReadbacks(); }).detach();
     });
-    std::unique_lock<std::mutex> lock(wait->mutex);
-    wait->condition.wait(lock, [&wait]() { return wait->done; });
-    return std::move(wait->result);
+    _readbacksCondition.notify_one();
   }
 
   /**
@@ -332,20 +354,6 @@ public:
         },
         const_cast<SkImage::AsyncReadResult *>(raw));
     return SkImages::RasterFromData(info, std::move(data), rowBytes);
-  }
-
-  /**
-   A CPU copy of a Graphite image, read back synchronously; the image itself
-   when it is not texture-backed, which needs no GPU (nor the context: it
-   works on a device without one). Throws without a GPU for a Graphite
-   image, like getInstance().
-   */
-  static sk_sp<SkImage> MakeRasterImage(const sk_sp<SkImage> &image) {
-    if (!image->isTextureBacked()) {
-      return image;
-    }
-    return MakeRasterImage(image->imageInfo(), getInstance().readPixelsSync(
-                                                   image, image->bounds()));
   }
 
   // Recorders ----------------------------------------------------------------
@@ -457,6 +465,9 @@ public:
     if (recorder == nullptr) {
       return false;
     }
+    // The snap compiles the pipelines the recording needs, inline: GPU work
+    // the warmup stays behind (see RNSkGpuActivity), as is the run.
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       return false;
@@ -493,6 +504,7 @@ public:
   void
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
                    SkSurface *targetSurface) {
+    RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (current->lost.load(std::memory_order_acquire)) {
@@ -562,15 +574,19 @@ public:
     return _current.load(std::memory_order_acquire)->backendContext.fDevice;
   }
 
-  // Create a secondary Dawn device from the same adapter.
-  // Has its own command queue and does NOT enable
-  // ImplicitDeviceSynchronization, so it won't contend with the primary
-  // rendering device's mutex. Safe for concurrent GPU work (e.g. ML inference)
-  // alongside Skia rendering.
+  // Create a secondary Dawn device from the same adapter, with its own command
+  // queue: GPU work of the app's own (ML inference, the camera) runs alongside
+  // Skia rendering without waiting for it. It has a device lock of its own
+  // (ImplicitDeviceSynchronization), which never contends with the primary
+  // device's: Dawn relies on it to use a device from several threads, and the
+  // hold of its submissions while the app is in the background (see
+  // DawnUtils::requestDevice) is only atomic against an in-flight submit
+  // through it.
   wgpu::Device createSecondaryDevice() {
     auto adapter = DawnUtils::getMatchedAdapter(instance.get());
 
     std::vector<wgpu::FeatureName> features = {
+        wgpu::FeatureName::ImplicitDeviceSynchronization,
         wgpu::FeatureName::BufferMapExtendedUsages,
 #ifdef __APPLE__
         wgpu::FeatureName::SharedTextureMemoryIOSurface,
@@ -697,8 +713,11 @@ public:
     SkCanvas *canvas = surface->getCanvas();
     canvas->drawImage(image, 0, 0);
 
-    // Flush the surface to ensure the image is rendered
-    submitRecording(recorder, skgpu::graphite::SyncToCpu::kYes);
+    // Submit without waiting on the CPU. A Dawn texture belongs to the device
+    // that made it, so whoever reads this one (adoptTexture() on the imported
+    // device) submits to the same queue, which runs this draw first. Waiting
+    // here blocked the JS thread until the GPU had drained every queued frame.
+    submitRecording(recorder);
 
     return texture;
   }
@@ -804,6 +823,20 @@ private:
   static LossListeners &lossListeners() noexcept {
     static auto *registry = new LossListeners();
     return *registry;
+  }
+
+  // See setPrecompileDisplayP3. Not tied to the context: the platform sets it
+  // before the GPU is probed.
+  static std::atomic<bool> &precompileDisplayP3() noexcept {
+    static std::atomic<bool> flag{false};
+    return flag;
+  }
+
+  // Whether the app is in the foreground and active (see isForeground). Not
+  // tied to the context: the platform sets it before the GPU is probed.
+  static std::atomic<bool> &foregroundFlag() noexcept {
+    static std::atomic<bool> foreground{true};
+    return foreground;
   }
 
   static const Probe &probe() noexcept {
@@ -974,6 +1007,9 @@ private:
     skgpu::graphite::ContextOptionsPriv contextOptionsPriv;
     ctxOptions.fOptionsPriv = &contextOptionsPriv;
     ctxOptions.fOptionsPriv->fStoreContextRefInRecorder = true;
+    // Records the pipelines the frames compile, for the next launch (see
+    // RNSkPipelineWarmup).
+    RNSkPipelineWarmup::getInstance().install(ctxOptions);
     generation->context = skgpu::graphite::ContextFactory::MakeDawn(
         generation->backendContext, ctxOptions);
     if (!generation->context) {
@@ -981,6 +1017,14 @@ private:
           "React Native Skia could not create its Graphite context on the "
           "GPU device.");
     }
+    // The common pipelines, built while the frames leave the device alone
+    // (see RNSkPipelineWarmup), until this device is lost. The precompile
+    // context is a Context operation, made here under the lock, and used
+    // on the warmup thread only.
+    RNSkPipelineWarmup::getInstance().start(
+        generation->context->makePrecompileContext(),
+        precompileDisplayP3().load(std::memory_order_acquire),
+        &generation->lost, generation->backendContext.fDevice);
     return generation;
   }
 
@@ -1119,51 +1163,68 @@ private:
 
   // Readbacks ----------------------------------------------------------------
 
-  void wakeReadbackPoller() {
-    std::call_once(_pollerOnce, [this]() {
-      std::thread([this]() { pollReadbacks(); }).detach();
-    });
-    // Taken so that a poller between its predicate check and its wait cannot
-    // miss the notification.
-    { std::lock_guard<std::mutex> lock(_pollerMutex); }
-    _pollerCondition.notify_one();
+  // A future that completes once the GPU is done with everything submitted
+  // on the generation's queue so far, waited for with WaitAny (see
+  // awaitReadbacks); right away once the device is lost. Called with the
+  // context lock held.
+  static wgpu::Future workDone(Generation *generation) {
+    return generation->backendContext.fQueue.OnSubmittedWorkDone(
+        wgpu::CallbackMode::WaitAnyOnly,
+        [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
   }
 
-  void pollReadbacks() {
+  // The readback thread: for each readback, in order, waits for the GPU to
+  // be done with it, then has its context (the one it was asked of: a
+  // generation since lost delivers its own) deliver the result. The wait is
+  // Dawn's own (Instance::WaitAny, on the queue's completion), so the thread
+  // sleeps until the GPU is done rather than polling the context.
+  void awaitReadbacks() {
 #if defined(__APPLE__)
     pthread_setname_np("RNSkia Readback");
 #elif defined(__ANDROID__)
     pthread_setname_np(pthread_self(), "RNSkia Readback");
 #endif
+    wgpu::Instance waiter(instance->Get());
     for (;;) {
+      Readback readback;
       {
-        std::unique_lock<std::mutex> lock(_pollerMutex);
-        _pollerCondition.wait(lock, [this]() {
-          return _pendingReadbacks.load(std::memory_order_acquire) > 0;
-        });
+        std::unique_lock<std::mutex> lock(_readbacksMutex);
+        _readbacksCondition.wait(lock,
+                                 [this]() { return !_readbacks.empty(); });
+        readback = _readbacks.front();
+        _readbacks.pop_front();
       }
-      // Polls every millisecond at first, then backs off: a short readback
-      // is delivered quickly, a long one does not take the context lock a
-      // thousand times a second.
-      auto interval = std::chrono::milliseconds(1);
-      while (_pendingReadbacks.load(std::memory_order_acquire) > 0) {
-        // A busy context is a view rendering: skip this round rather than
-        // hold up its frame.
-        std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-        if (lock.owns_lock()) {
-          tick();
-          _current.load(std::memory_order_acquire)
-              ->context->checkAsyncWorkCompletion();
-          // A readback requested on a device lost since is failed by Dawn;
-          // its context delivers that like any other result.
-          for (auto *retired : _retired) {
-            retired->context->checkAsyncWorkCompletion();
-          }
-          lock.unlock();
-          interval = std::min(interval * 2, std::chrono::milliseconds(4));
+      auto status = waiter.WaitAny(readback.done, UINT64_MAX);
+      if (status != wgpu::WaitStatus::Success) {
+        // Not waited for (an error, or a timed wait Dawn turned down): the
+        // context is asked all the same, and again shortly if need be.
+        RNSkLogger::logToConsole(
+            "React Native Skia: waiting for a readback failed (%d).",
+            static_cast<int>(status));
+      }
+      {
+        std::lock_guard<std::mutex> lock(_mutex);
+        tick();
+        readback.generation->context->checkAsyncWorkCompletion();
+        if (readback.delivered->load(std::memory_order_acquire)) {
+          continue;
         }
-        std::this_thread::sleep_for(interval);
+        // Dawn may complete the mapping of the read buffer a tick after the
+        // queue's work: the context is asked again after the queue's next
+        // completion (which is immediate when it is idle).
+        readback.done = workDone(readback.generation);
       }
+      std::unique_lock<std::mutex> lock(_readbacksMutex);
+      if (_readbacks.empty()) {
+        // Nothing else to wait for in between: ask again shortly, less
+        // often the longer it takes.
+        lock.unlock();
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(readback.retries < 2 ? 1 : 4));
+        lock.lock();
+      }
+      readback.retries++;
+      _readbacks.push_back(readback);
     }
   }
 
@@ -1253,13 +1314,23 @@ private:
   std::unordered_map<const skgpu::graphite::Recorder *, uint64_t> _recorders;
   std::vector<std::unique_ptr<skgpu::graphite::Recorder>> _retiredRecorders;
 
-  // The readback poller: started on the first readback, it checks the
-  // context for finished GPU work while readbacks are pending and sleeps
-  // otherwise (see readPixels).
-  std::atomic<int> _pendingReadbacks{0};
-  std::once_flag _pollerOnce;
-  std::mutex _pollerMutex;
-  std::condition_variable _pollerCondition;
+  // The readbacks waiting for the GPU, for the readback thread (see
+  // readPixels and awaitReadbacks); the thread is started by the first one.
+  struct Readback {
+    Generation *generation = nullptr;
+    wgpu::Future done;
+    // Set by the readback's callback (see readPixels), once it ran.
+    std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
+    // The times the context was asked without the callback having run.
+    int retries = 0;
+  };
+  std::once_flag _readbackThreadOnce;
+  std::mutex _readbacksMutex;
+  std::condition_variable _readbacksCondition;
+  std::deque<Readback> _readbacks;
 };
 
 } // namespace RNSkia

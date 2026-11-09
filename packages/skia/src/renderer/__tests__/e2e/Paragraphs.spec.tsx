@@ -83,7 +83,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(img, docPath(`paragraph/hello-world-${surface.OS}.png`), {
+    await checkImage(img, docPath(`paragraph/hello-world-${surface.OS}.png`), {
       // In CI, the emoji font is different
       maxPixelDiff: 15000,
     });
@@ -133,7 +133,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(img, docPath(`paragraph/font-style-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/font-style-${surface.OS}.png`));
   });
   itRunsE2eOnly("should render simple paragraph", async () => {
     const img = await surface.drawOffscreen(
@@ -147,7 +147,10 @@ describe("Paragraphs", () => {
       },
       { width: surface.width }
     );
-    checkImage(img, `snapshots/paragraph/simple-paragraph-${surface.OS}.png`);
+    await checkImage(
+      img,
+      `snapshots/paragraph/simple-paragraph-${surface.OS}.png`
+    );
   });
   it("should render simple paragraph with custom font", async () => {
     const img = await surface.drawOffscreen(
@@ -170,7 +173,7 @@ describe("Paragraphs", () => {
       },
       { Pacifico, width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/simple-paragraph-with-provider-${surface.OS}.png`
     );
@@ -188,7 +191,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-linebreaks-${surface.OS}.png`
     );
@@ -203,7 +206,7 @@ describe("Paragraphs", () => {
       para.layout(50); // Layout width set to 50 as in the original test
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-auto-linebreaks-${surface.OS}.png`
     );
@@ -223,7 +226,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Right }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-right-${surface.OS}.png`
     );
@@ -243,7 +246,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Center }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-center-${surface.OS}.png`
     );
@@ -267,7 +270,7 @@ describe("Paragraphs", () => {
       },
       { textAlign: TextAlign.Justify, width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-justify-${surface.OS}.png`
     );
@@ -291,7 +294,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Justify }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-justify-${surface.OS}.png`
     );
@@ -313,7 +316,7 @@ describe("Paragraphs", () => {
       },
       { textDirection: TextDirection.RTL }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-rtl-${surface.OS}.png`
     );
@@ -394,7 +397,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-rtl-arabic-spacing-bug-${surface.OS}.png`
     );
@@ -463,7 +466,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-word-spacing-ltr-rtl-${surface.OS}.png`
     );
@@ -488,7 +491,7 @@ describe("Paragraphs", () => {
         },
         { width: 50 }
       );
-      checkImage(
+      await checkImage(
         img,
         `snapshots/paragraph/paragraph-ellipse-${surface.OS}.png`
       );
@@ -504,7 +507,7 @@ describe("Paragraphs", () => {
       para.layout(50);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-in-paragraph-style-${surface.OS}.png`
     );
@@ -526,7 +529,7 @@ describe("Paragraphs", () => {
       para.layout(150);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-colors-${surface.OS}.png`
     );
@@ -567,7 +570,7 @@ describe("Paragraphs", () => {
         overline: TextDecoration.Overline,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-decoration-${surface.OS}.png`
     );
@@ -602,7 +605,7 @@ describe("Paragraphs", () => {
         boldItalic: FontStyle.BoldItalic,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-style-${surface.OS}.png`
     );
@@ -643,7 +646,7 @@ describe("Paragraphs", () => {
         boldItalic: FontStyle.BoldItalic,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-style-${surface.OS}-box.png`
     );
@@ -678,7 +681,7 @@ describe("Paragraphs", () => {
         RobotoRegular,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-bounding-box-${surface.OS}.png`
     );
@@ -717,7 +720,7 @@ describe("Paragraphs", () => {
         canvasHeight: surface.height,
       }
     );
-    checkImage(img, docPath(`paragraph/boundingbox-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/boundingbox-${surface.OS}.png`));
   });
 
   itRunsE2eOnly("should return the paragraph height", async () => {
@@ -761,7 +764,7 @@ describe("Paragraphs", () => {
       para.layout(150);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-shadow-${surface.OS}.png`
     );

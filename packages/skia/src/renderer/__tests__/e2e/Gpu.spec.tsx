@@ -41,8 +41,8 @@ const differingShare = (
   return differing / (a.length / 4);
 };
 
-// Skia.gpu describes the GPU probed when the module was installed. The test
-// devices have one; a device without one keeps the app running with blank
+// Skia.gpu describes the GPU probed the first time the GPU is asked for. The
+// test devices have one; a device without one keeps the app running with blank
 // canvases, which this suite cannot exercise.
 describe("GPU info", () => {
   itRunsE2eOnly("reports the GPU Skia renders with", async () => {
@@ -56,6 +56,8 @@ describe("GPU info", () => {
     expect(typeof gpu.device).toBe("string");
     expect(typeof gpu.description).toBe("string");
     expect(gpu.lostIsPromise).toBe(true);
+    // The test app is in front while the suite runs.
+    expect(gpu.foreground).toBe(true);
   });
 
   // The device harness forces the loss through react-native-webgpu's
@@ -81,18 +83,19 @@ describe("GPU info", () => {
           stale.getCanvas().drawColor(Skia.Color("cyan"));
           stale.flush();
           const staleSnapshot = stale.makeImageSnapshot();
-          const stalePixels = staleSnapshot ? staleSnapshot.readPixels() : null;
           // The new device renders.
           const fresh = Skia.Surface.MakeOffscreen(16, 16)!;
           fresh.getCanvas().drawColor(Skia.Color("cyan"));
           fresh.flush();
-          const pixel = fresh.makeImageSnapshot().readPixels(8, 8, {
-            width: 1,
-            height: 1,
-            colorType: ctx.colorType,
-            alphaType: ctx.alphaType,
-          });
-          return {
+          return Promise.all([
+            staleSnapshot ? staleSnapshot.readPixels() : null,
+            fresh.makeImageSnapshot().readPixels(8, 8, {
+              width: 1,
+              height: 1,
+              colorType: ctx.colorType,
+              alphaType: ctx.alphaType,
+            }),
+          ]).then(([stalePixels, pixel]) => ({
             sameLostPromise,
             reason: info.reason,
             message: info.message,
@@ -102,7 +105,7 @@ describe("GPU info", () => {
             newLostPromise: after.lost !== lost,
             stalePixels: stalePixels === null ? null : Array.from(stalePixels),
             pixel: pixel === null ? null : Array.from(pixel),
-          };
+          }));
         });
       },
       {
@@ -131,7 +134,7 @@ describe("GPU info", () => {
     // Views render on the new device too: the canvas records its content
     // again, and its window is configured on the device.
     const image = await surface.draw(<Fill color="cyan" />);
-    expect(readScreenColor(image, 1 / 2)).toBe("cyan");
+    expect(await readScreenColor(image, 1 / 2)).toBe("cyan");
   });
 
   // The texture of a CPU image drawn before the loss was uploaded on the lost
@@ -153,7 +156,7 @@ describe("GPU info", () => {
           />
         </>
       );
-    const before = readAllPixels(await drawLogo());
+    const before = await readAllPixels(await drawLogo());
     expect(paintedShare(before)).toBeGreaterThan(0.1);
     const replaced = await surface.eval(
       (Skia, ctx) => {
@@ -165,7 +168,7 @@ describe("GPU info", () => {
       {} as { forceGpuDeviceLoss: () => void }
     );
     expect(replaced).toBe(true);
-    const after = readAllPixels(await drawLogo());
+    const after = await readAllPixels(await drawLogo());
     expect(paintedShare(after)).toBeGreaterThan(0.1);
     expect(after.length).toBe(before.length);
     expect(differingShare(before, after)).toBeLessThan(0.001);

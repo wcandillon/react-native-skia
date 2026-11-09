@@ -27,8 +27,8 @@ const Scene = ({ respectCTM }: { respectCTM?: boolean }) => {
 
 // Number of pixels the shape and its blur cover: a blur whose sigma follows the
 // CTM reaches considerably further than one that ignores it.
-const coveredArea = (image: SkImage) => {
-  const pixels = readAllPixels(image);
+const coveredArea = async (image: SkImage) => {
+  const pixels = await readAllPixels(image);
   let count = 0;
   for (let i = 0; i < pixels.length; i += 4) {
     if (pixels[i] < 250) {
@@ -40,9 +40,11 @@ const coveredArea = (image: SkImage) => {
 
 describe("Mask filters", () => {
   it("BlurMask defaults respectCTM to true", async () => {
-    const withDefault = coveredArea(await surface.draw(<Scene />));
-    const respectingCTM = coveredArea(await surface.draw(<Scene respectCTM />));
-    const ignoringCTM = coveredArea(
+    const withDefault = await coveredArea(await surface.draw(<Scene />));
+    const respectingCTM = await coveredArea(
+      await surface.draw(<Scene respectCTM />)
+    );
+    const ignoringCTM = await coveredArea(
       await surface.draw(<Scene respectCTM={false} />)
     );
     // Sanity check: the two explicit values must actually differ, otherwise the

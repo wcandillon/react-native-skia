@@ -8,6 +8,8 @@
 
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
+#include "RNSkWindowState.h"
+#include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
 
@@ -29,38 +31,45 @@ namespace RNSkia {
  * platform view only acquires the native handle and forwards its lifecycle
  * (attach, resize, detach); everything else lives here.
  *
- * Threading: the window is attached, resized and detached on the main
- * thread, and presented on the thread the view presents on (see
- * RNSkView::setPresentThread): the main thread too, or a thread of its own.
- * A mutex keeps the two apart: the window is never reconfigured or released
- * under a present, and detaching waits for the present in flight before it
- * lets go of the window, so that the platform may destroy it right after.
- * A resize does not wait: it notes the size, which the presenting thread
- * takes by its next present (see takePendingSizeLocked), and the swapchain
- * is configured for it there (see configureIfNeededLocked), not on the main
- * thread as the window attaches or resizes: a Vulkan swapchain is made again
- * for every size (about 5 ms on a Pixel 8), which inside the layout would
- * hold up the traversal, and the presenting thread with it, by that much on
- * every frame of a view animated in size.
- * A present is made for the target the presenting thread read before it took
- * the mutex; under it, the window checks that it still is that target, and
- * declines a present made for a window resized since (see
- * presentRecordings). The description of the target texture is kept in a
- * copy of its own, so
- * that whoever records for the view (the JS thread, a worklet runtime, the
- * render thread pool) can read it from any thread, also before the window
- * exists (see getLayoutSize).
+ * Threading: the window belongs to the thread the view presents on (see
+ * RNSkView::setPresentThread): the present thread of the platform, one for
+ * every canvas of a process (PresentThread.java, RNSkPresentThread in
+ * SkiaView.mm), where the platform view posts the attach and the detach
+ * from the main thread. Everything that touches the Dawn surface runs
+ * there, one call after the other, and nothing waits for it; the entries
+ * check it once the platform view has bound the thread (see
+ * bindPresentingThread and rnsurface::ThreadChecker: an entry from
+ * another thread aborts in debug builds and is logged once in release
+ * builds). A resize is the exception: it notes a size and posts a redraw,
+ * from any thread. Nothing waits for a
+ * present: a present holds the window for as long as Graphite takes to replay
+ * the frame, which includes compiling the pipelines it needs, seconds on a
+ * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
+ * resize notes the size, which the present that follows takes (see
+ * takePendingSize) and configures the swapchain for (see configureIfNeeded):
+ * a Vulkan swapchain is made again for every size (about 5 ms on a Pixel 8),
+ * and until a frame for the new size arrives the window still takes frames
+ * made for its previous one, which the platform stretches to the view.
+ * A present is made for the target the view read before (see getTargetInfo);
+ * the window checks that it still is that target, and declines a present
+ * made for a window resized since (see presentRecordings). The description
+ * of the target texture is kept in a copy of its own, under a mutex, so that
+ * whoever records for the view (the JS thread, a worklet runtime, the render
+ * thread pool) can read it from any thread, also before the window exists
+ * (see getLayoutSize).
  *
- * Locks, innermost last: the list of windows (see releaseSurfacesOn), a
- * window's own mutex, the GPU context's (DawnContext). A thread never holds
- * two windows' mutexes at once: windows may present on different threads
- * (every Android canvas shares one, Apple views present on the main thread).
+ * The windows of a process all present on the same thread, so the sweep over
+ * them (see releaseSurfacesOn) runs with no window in use; the list itself
+ * is guarded, as windows are made and destroyed on other threads too. Locks,
+ * innermost last: the list of windows, the GPU context's (DawnContext); the
+ * target description's mutex is leaf and never held across either.
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
   /**
    Gives back the native handle attach() was given, once the Dawn surface
-   over it is gone. Called from detach() or the destructor, so on any thread.
+   over it is gone. Called from detach(), on the presenting thread, or from
+   the destructor, wherever the last owner lets go of the window.
    */
   using Releaser = std::function<void(void *nativeHandle)>;
 
@@ -78,7 +87,7 @@ public:
    or 10-bit (Android) format, granted when the surface supports it;
    useP3ColorSpace renders in Display P3 rather than sRGB. The releaser, if
    any, gives the handle back when the window is detached. Requests a redraw.
-   Main thread.
+   Presenting thread.
    */
   void attach(void *nativeHandle, int width, int height, bool highBitDepth,
               bool useP3ColorSpace, Releaser releaser);
@@ -86,26 +95,69 @@ public:
   /**
    Takes note of a new size, in pixels: what frames are recorded for from
    now (see getTargetInfo), and what the window is configured for by the
-   first present of a frame made for it, on the presenting thread (see
-   isTargetLocked); until then the window still takes frames made for its
-   previous size, which the platform stretches to the view. Requests a
-   redraw. Main thread; never waits for the presenting thread.
+   first present of a frame made for it (see isTarget); until then the
+   window still takes frames made for its previous size, which the platform
+   stretches to the view. Requests a redraw. Any thread: the size is noted
+   under the target description's mutex, and the redraw is posted.
    */
   void resize(int width, int height);
 
   /**
    Destroys the Dawn surface and gives the native handle back to its
-   releaser, once the present in flight, if any, is done: the platform may
-   destroy the window right after. The target description goes away with
-   it; the layout size stays. Main thread, or the destructor.
+   releaser: the platform may destroy the window right after. The target
+   description goes away with it; the layout size stays. Takes down the
+   abandon, if any (see abandon): this is the detach it waits for.
+   Presenting thread; the destructor does the same on whichever thread
+   lets go of the window last (see detachNow).
    */
   void detach();
 
   /**
+   detach(), if the window attached is still `nativeHandle`. An Apple view
+   lets go of its layer this way, as it leaves its superview or its layout
+   collapses to zero: the detach is posted behind the present in flight,
+   and an attach posted after it, for another layer, stays (see SkiaView's
+   leavePresentThread and detachWindow). Presenting thread.
+   */
+  void detach(void *nativeHandle);
+
+  /**
+   Presenting thread: binds the entries that belong to it (see the class
+   comment) to the calling thread, before the first of them; the platform
+   view posts it to the thread it presents on as it makes the surface (see
+   RNSkView::bindPresentThread).
+   */
+  void bindPresentingThread() { _presentingThread.bindToCurrentThread(); }
+
+  /**
+   The platform is about to take the window back, and will not wait for
+   detach(): a SurfaceView's surface is destroyed as soon as surfaceDestroyed
+   returns, and the main thread waits for the detach posted to the presenting
+   thread only so long (see SkiaView.onSurfaceDestroyed). From now until
+   detach() runs, nothing is presented onto the window: a present in flight
+   skips its present, as presenting onto a window that is gone loses the GPU
+   device. Called before that detach is posted, so that it comes before the
+   check the presenting thread makes between replaying a frame and presenting
+   it (see presentTexture): set after the check, it would miss the present.
+   Only detach() takes it down: an attach() under way when it is set keeps
+   it, as the detach posted behind that attach is what it is for. Any
+   thread.
+   */
+  void abandon();
+
+  /**
    Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDeviceLocked). Any thread.
+   while the GPU device is replaced (see ensureDevice). Presenting thread.
    */
   bool isAttached();
+
+  /**
+   Whether the window shows a frame the view presented: a window attached in
+   place of another (a new layer, on iOS) shows nothing until one is
+   presented, while the same window attached again keeps what it shows.
+   Presenting thread.
+   */
+  bool showsFrame();
 
   /**
    The pixel size the platform laid the view out with, which the window gets
@@ -140,10 +192,23 @@ public:
   bool getHighBitDepth(bool *highBitDepth);
 
   /**
+   The color space the platform view will attach the window with (Display P3
+   or sRGB, see attach()), known before it does. Any thread.
+   */
+  void setUseP3ColorSpace(bool useP3ColorSpace);
+
+  /**
+   Whether the window renders in Display P3 rather than sRGB: as it was last
+   attached, else as the platform view said it would be (see
+   setUseP3ColorSpace). Returns false until either is known. Any thread.
+   */
+  bool getUseP3ColorSpace(bool *useP3ColorSpace);
+
+  /**
    Installed by the view owning the surface: asks it for a frame when the
-   window appears or changes size. Called from the main thread, with the
-   window's mutex held when it appears, so it must not present on the spot:
-   the view posts the redraw to the thread it presents on.
+   window appears or changes size. Called from inside attach() and resize(),
+   so it must not present on the spot: the view posts the redraw to the
+   thread it presents on.
    */
   void setRequestRedraw(std::function<void()> requestRedraw) {
     _requestRedraw = std::move(requestRedraw);
@@ -155,20 +220,21 @@ public:
    that shows before its window frame waits for that frame to commit). The
    view presents nothing while it returns false, and asks again once told
    that it can (see RNSkView::askForDeclinedFrame). Without one, an attached
-   window always can. Installed before the window attaches, and called with
-   the window's mutex held on the thread that asks, so it must not call back
-   into this surface.
+   window always can. Installed before the window attaches, and called on
+   the thread that presents, which reads the window (see readState), so it
+   must not call back into this surface.
    */
   void setCanPresent(std::function<bool()> canPresent) {
     _canPresent = std::move(canPresent);
   }
 
   /**
-   Whether a window is attached and can show a frame right now: not while
-   the platform view says it cannot, nor once the GPU device is lost. Any
-   thread.
+   What a frame presented now would meet: no window, no GPU device (lost,
+   and not replaced yet), a window that cannot show a frame (the platform
+   view says so, see setCanPresent), or one ready for a frame, which `info`,
+   when given, then describes. Presenting thread.
    */
-  bool canPresent();
+  RNSkWindowState readState(RNSkGraphiteTargetInfo *info);
 
   // RNSkSurface -------------------------------------------------------------
 
@@ -183,13 +249,19 @@ public:
   /**
    Replays the recordings onto the window and presents it, on the thread the
    view presents on; the swapchain texture is wrapped for the recorder of
-   that thread. Returns false, consuming nothing, when the window cannot
-   present right now: there is none, the platform view says it cannot (see
-   setCanPresent), the GPU device is lost, the window had no drawable, or the
-   window is no longer the target given: it was resized, or configured again
-   on a new device, since the caller read it (see getTargetInfo), and the
-   recordings chosen for that target would not fit it. The redraw the change
-   asked for presents onto the window as it is now.
+   that thread. Returns false when the window cannot present right now:
+   there is none, the platform view says it cannot (see setCanPresent), the
+   GPU device is lost, the platform took the window back (see abandon), the
+   window had no drawable, or the window is no longer the target given: it
+   was resized, or configured again on a new device, since the caller read
+   it (see getTargetInfo), and the recordings chosen for that target would
+   not fit it. The redraw the change asked for presents onto the window as
+   it is now. The recordings are then the caller's to present again,
+   untouched in every case but one: a window taken back while the frame was
+   being replayed (see presentTexture) has had the recordings replayed onto
+   a swapchain texture that is never shown, and they are replayed once more
+   onto the next window; a Graphite recording can be replayed any number of
+   times.
    */
   bool presentRecordings(
       const RNSkGraphiteTargetInfo &target,
@@ -204,19 +276,19 @@ public:
                     const sk_sp<SkImage> &image) override;
 
 private:
-  // Lets go of the Dawn surface and the window; see detach(). Called with
-  // the mutex held.
-  void detachLocked();
-  // Whether a window is attached and can show a frame (see canPresent()).
-  // Called with the mutex held.
-  bool canPresentLocked();
+  // What detach() does, without the thread check: the destructor runs
+  // wherever the last owner lets go of the window.
+  void detachNow();
+  // Lets go of the Dawn surface and gives the window back to its releaser,
+  // leaving the abandon, if any, up: what detach() does before it takes the
+  // abandon down, and what attach() does to the previous window.
+  void releaseWindow();
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
-  // see takePendingSizeLocked). It is neither when the main thread resized
-  // it again, or a device replacement configured it again (see
-  // ensureDeviceLocked), between the read and the present. Called with the
-  // mutex held.
-  bool isTargetLocked(const RNSkGraphiteTargetInfo &target);
+  // see takePendingSize). It is neither when the window was resized again,
+  // or a device replacement configured it again (see ensureDevice), between
+  // the read and the present.
+  bool isTarget(const RNSkGraphiteTargetInfo &target);
   // Lets go of the surfaces made on the GPU device this window was
   // configured on when that device was lost and replaced since (see
   // DawnContext), the window's own included, and destroys the device: the
@@ -227,39 +299,40 @@ private:
   // destroy swapchains with their device, and detaching one afterwards
   // crashes, so every window on that device lets go of its surface first
   // (see releaseSurfacesOn), then the device is destroyed, and the windows
-  // get a surface on the new device on their next frame (see
-  // ensureDeviceLocked). Called before taking the mutex: the sweep locks
-  // each window in turn, this one included.
+  // get a surface on the new device on their next frame (see ensureDevice).
   void retireReplacedDevice();
   // Lets go of the Dawn surface of every window configured on the given
-  // generation (see retireReplacedDevice), one window at a time under its
-  // own mutex. Called with no window's mutex held.
+  // generation (see retireReplacedDevice). Presenting thread, the one every
+  // window presents on.
   static void releaseSurfacesOn(uint64_t generation);
   // Configures the window on the GPU device in use when it has no surface:
   // when the device it was configured on was lost and replaced since (see
   // retireReplacedDevice), the surface is made again on the new device, the
   // window itself stays. Returns false without a context, without a
   // surface, or with one made for a device replaced since the sweep (the
-  // next frame sweeps again). Called with the mutex held.
-  bool ensureDeviceLocked();
-  // Configures the swapchain for the current size, format and usage. Called
-  // with the mutex held.
+  // next frame sweeps again).
+  bool ensureDevice();
+  // Configures the swapchain for the current size, format and usage.
   void configureSurface();
   // Configures the swapchain when the window attached or resized since it
-  // was last configured (see attach, takePendingSizeLocked), on the
-  // presenting thread, by the present that follows. Called with the mutex
-  // held.
-  void configureIfNeededLocked();
+  // was last configured (see attach, takePendingSize), by the present that
+  // follows.
+  void configureIfNeeded();
   // Takes the size resize() noted, if any: the window's size from now, and
-  // the swapchain's by the next present (see configureIfNeededLocked).
-  // Called with the mutex held, on the presenting thread.
-  void takePendingSizeLocked();
+  // the swapchain's by the next present (see configureIfNeeded).
+  void takePendingSize();
   // Copies the window's target description where any thread can read it.
-  // Called with the mutex held.
   void updateTargetInfo();
   // The description of the window's texture as it is now: what getTargetInfo
-  // hands out once copied. Called with the mutex held.
-  RNSkGraphiteTargetInfo describeLocked() const;
+  // hands out once copied.
+  RNSkGraphiteTargetInfo describe() const;
+  // Whether a frame can go onto the window now: it is ready (see readState)
+  // and the platform has not taken it back (see abandon).
+  bool canPresent();
+  // Presents the swapchain texture the frame was replayed onto, unless the
+  // platform took the window back meanwhile (see abandon). Returns whether
+  // it did.
+  bool presentTexture();
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
@@ -280,48 +353,53 @@ private:
     }
   }
 
-  // Keeps the main thread (attach, resize, detach) and the thread the view
-  // presents on apart; see the class comment.
-  std::mutex _mutex;
   // The device the window is configured on, and its generation (see
   // DawnContext::generation()): a lost device is replaced, and the window
   // configured again on the new one (see retireReplacedDevice). The surface
   // is null between the two, and while the window is detached; the
-  // generation is 0 then, and readable without the mutex, as a hint that a
-  // sweep is due.
+  // generation is 0 then.
   wgpu::Device _device;
-  std::atomic<uint64_t> _generation{0};
+  uint64_t _generation = 0;
   wgpu::Surface _surface;
   void *_nativeHandle = nullptr;
+  bool _showsFrame = false;
   Releaser _releaser;
   int _width = 0;
   int _height = 0;
   wgpu::TextureFormat _format = wgpu::TextureFormat::Undefined;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
   // The window attached or resized since the swapchain was configured (see
-  // configureIfNeededLocked).
+  // configureIfNeeded).
   bool _needsConfigure = false;
+  // The platform took the window back before detach() ran (see abandon).
+  // Taken down by detach() alone, never by attach() (see releaseWindow).
+  std::atomic<bool> _abandoned{false};
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;
 
   // A copy of the window's target description, readable from any thread
-  // while the window itself is under the mutex.
+  // while the window itself belongs to the presenting thread.
   std::mutex _targetInfoMutex;
   RNSkGraphiteTargetInfo _targetInfo;
   bool _hasTargetInfo = false;
   int _layoutWidth = 0;
   int _layoutHeight = 0;
-  // The size resize() noted, for the presenting thread to take (see
-  // takePendingSizeLocked).
+  // The size resize() noted, for the next present to take (see
+  // takePendingSize).
   int _pendingWidth = 0;
   int _pendingHeight = 0;
   bool _hasPendingSize = false;
   // The bit depth the window has, or will have (see getHighBitDepth).
   bool _knownHighBitDepth = false;
   bool _hasKnownHighBitDepth = false;
+  bool _knownUseP3ColorSpace = false;
+  bool _hasKnownUseP3ColorSpace = false;
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+
+  // The thread the window belongs to (see the class comment).
+  rnsurface::ThreadChecker _presentingThread;
 };
 
 } // namespace RNSkia

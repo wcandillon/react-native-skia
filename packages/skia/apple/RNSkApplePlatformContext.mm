@@ -50,11 +50,13 @@ void RNSkApplePlatformContext::performStreamOperation(
       data = [NSData dataWithContentsOfURL:url];
     }
 
-    auto bytes = [data bytes];
-    auto skData = SkData::MakeWithCopy(bytes, [data length]);
-    auto stream = SkMemoryStream::Make(skData);
-
-    op(std::move(stream));
+    if (data == nil) {
+      // Nothing at the uri: the caller is told rather than handed no bytes.
+      op(nullptr);
+      return;
+    }
+    auto skData = SkData::MakeWithCopy([data bytes], [data length]);
+    op(SkMemoryStream::Make(skData));
   };
 
   // Fire and forget the thread - will be resolved on completion
@@ -159,6 +161,30 @@ RNSkApplePlatformContext::resolveFontFamily(const std::string &familyName) {
   }
   // Return as-is if no mapping exists
   return familyName;
+}
+
+void RNSkApplePlatformContext::observeApplicationState() {
+#if !TARGET_OS_OSX
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    DawnContext::setForeground(
+        UIApplication.sharedApplication.applicationState ==
+        UIApplicationStateActive);
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    [center addObserverForName:UIApplicationWillResignActiveNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      DawnContext::setForeground(false);
+                    }];
+    [center addObserverForName:UIApplicationDidBecomeActiveNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      DawnContext::setForeground(true);
+                    }];
+  });
+#endif // !TARGET_OS_OSX
 }
 
 void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {

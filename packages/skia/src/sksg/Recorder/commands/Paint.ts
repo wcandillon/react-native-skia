@@ -27,19 +27,25 @@ export const setPaintProperties = (
   standalone: boolean
 ) => {
   "worklet";
-  const { paint } = ctx;
-
   if (opacity !== undefined) {
-    if (standalone) {
-      paint.setAlphaf(paint.getAlphaf() * opacity);
-    } else {
-      ctx.setOpacity(ctx.getOpacity() * opacity);
-    }
+    ctx.applyOpacity(opacity, standalone);
   }
   if (color !== undefined) {
-    paint.setShader(null);
-    paint.setColor(processColor(Skia, color));
+    ctx.setColor(processColor(Skia, color), standalone);
   }
+  if (
+    blendMode === undefined &&
+    strokeWidth === undefined &&
+    style === undefined &&
+    strokeJoin === undefined &&
+    strokeCap === undefined &&
+    strokeMiter === undefined &&
+    antiAlias === undefined &&
+    dither === undefined
+  ) {
+    return;
+  }
+  const paint = ctx.writablePaint();
   if (blendMode !== undefined) {
     paint.setBlendMode(BlendMode[enumKey(blendMode)]);
   }

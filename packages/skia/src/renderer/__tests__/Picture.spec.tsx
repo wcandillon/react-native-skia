@@ -66,18 +66,18 @@ describe("Picture", () => {
   it("should respect dependency array", async () => {
     const { surface, draw } = await mountCanvas(<CheckPicture />);
     await draw();
-    processResult(surface, "snapshots/pictures/green.png");
+    await processResult(surface, "snapshots/pictures/green.png");
     await wait(1000);
     await draw();
-    processResult(surface, "snapshots/pictures/red.png");
+    await processResult(surface, "snapshots/pictures/red.png");
   });
 
   it("should not redraw if there are no dependency", async () => {
     const { surface, draw } = await mountCanvas(<CheckPicture2 />);
     await draw();
-    processResult(surface, "snapshots/pictures/green.png");
+    await processResult(surface, "snapshots/pictures/green.png");
     await wait(1000);
     await draw();
-    processResult(surface, "snapshots/pictures/green.png");
+    await processResult(surface, "snapshots/pictures/green.png");
   });
 });

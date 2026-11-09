@@ -28,6 +28,7 @@ export type StackParamList = {
   Animation: undefined;
   Reanimated: undefined;
   Performance: undefined;
+  Benchmark: undefined;
   Transitions: undefined;
   Stickers: undefined;
   FrostedCard: undefined;
@@ -38,4 +39,5 @@ export type StackParamList = {
   Graphite: undefined;
   GraphiteCanvas: undefined;
   AndroidViews: undefined;
+  BackgroundGpu: undefined;
 };

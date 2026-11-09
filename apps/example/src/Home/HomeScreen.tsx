@@ -127,6 +127,11 @@ export const HomeScreen = () => {
         route="Performance"
       />
       <HomeScreenButton
+        title="⏱ Benchmark"
+        description="Scenes for performance regression runs"
+        route="Benchmark"
+      />
+      <HomeScreenButton
         title="🖼 Pictures"
         description="Animated circle trail using Pictures"
         route="Pictures"
@@ -157,6 +162,11 @@ export const HomeScreen = () => {
         title="🤖 Android Views"
         description="SurfaceView vs TextureView"
         route="AndroidViews"
+      />
+      <HomeScreenButton
+        title="🌙 Background GPU"
+        description="GPU work while the app is in the background (#4290)"
+        route="BackgroundGpu"
       />
     </ScrollView>
   );

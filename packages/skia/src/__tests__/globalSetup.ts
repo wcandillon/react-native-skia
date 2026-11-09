@@ -1,10 +1,10 @@
 import { execFileSync } from "child_process";
 
-import type { Server, WebSocket } from "ws";
+import type { WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 
 declare global {
-  var testServer: Server;
+  var testServer: WebSocketServer;
   // Each test file keeps a global's first value, so the client is a property.
   var testConnection: { client: WebSocket | null };
   var testOS: "ios" | "android" | "web" | "node" | "macos";
