@@ -4,7 +4,7 @@ import React from "react";
 import { Dimensions, PixelRatio, Platform } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
-import type { SkImage, SkPicture } from "react-native-skia";
+import type { SkFont, SkImage, SkPicture } from "react-native-skia";
 import {
   Circle,
   createPicture,
@@ -126,10 +126,18 @@ half4 main(float2 pos) {
 }`;
 
 const effect = Skia.RuntimeEffect.Make(SKSL)!;
-const font = matchFont({
-  fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }),
-  fontSize: 14,
-});
+// Matched on first use: module-level matching throws when the font manager
+// has no such family (the jest environment has no Helvetica).
+let font: SkFont | null = null;
+const getFont = () => {
+  if (font === null) {
+    font = matchFont({
+      fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }),
+      fontSize: 14,
+    });
+  }
+  return font;
+};
 
 // A CPU surface: its snapshot is a raster image any canvas can draw.
 const makeTexture = (i: number, size: number): SkImage => {
@@ -256,7 +264,8 @@ export const BenchScene = ({
           )}
         </Group>
       );
-    case "text":
+    case "text": {
+      const textFont = getFont();
       return (
         <Group transform={transform} origin={origin}>
           {TEXTS.map((item, i) => (
@@ -265,11 +274,12 @@ export const BenchScene = ({
               x={item.x}
               y={item.y}
               text={item.label}
-              font={font}
+              font={textFont}
               color={item.color}
             />
           ))}
         </Group>
       );
+    }
   }
 };
