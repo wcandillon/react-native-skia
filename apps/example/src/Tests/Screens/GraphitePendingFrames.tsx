@@ -35,6 +35,8 @@ export const GraphitePendingFrames = () => {
       recording.dispose();
     };
     let frames = 0;
+    const t0 = Date.now();
+    console.log(`[GPF] start`);
     let current = SMALL;
     let direction = 1;
     let frame = 0;
@@ -55,12 +57,15 @@ export const GraphitePendingFrames = () => {
       // The queue drains at the display's rate: wait for pendingFrames to
       // come back to 0, which it never does when the view lost count.
       const startedWaiting = Date.now();
+      console.log(`[GPF] loop done in ${startedWaiting - t0}ms pending=${context.pendingFrames}`);
       const settleStep = () => {
         const pending = context.pendingFrames;
+        console.log(`[GPF] settle t=${Date.now() - startedWaiting}ms pending=${pending}`);
         if (pending > 0 && Date.now() - startedWaiting < WAIT_MS) {
           settle = setTimeout(settleStep, 100);
           return;
         }
+        console.log(`[GPF] final ${pending === 0 ? "lime" : "blue"} total=${Date.now() - t0}ms`);
         record(pending === 0 ? "lime" : "blue");
         done();
       };

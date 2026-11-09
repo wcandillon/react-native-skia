@@ -1,5 +1,15 @@
 #pragma once
 
+// DEBUG (debug-gpf-scheduler): temporary scheduler tracing, not for merge.
+#ifndef GPF_LOG
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define GPF_LOG(...) __android_log_print(ANDROID_LOG_INFO, "GPFDBG", __VA_ARGS__)
+#else
+#define GPF_LOG(...)
+#endif
+#endif
+
 namespace rnsurface {
 
 /**
@@ -75,6 +85,9 @@ public:
    on every frame.
    */
   void requestFrame(bool forResizedWindow) {
+    GPF_LOG("%p requestFrame resized=%d window=%d posted=%d inWindow=%d requested=%d",
+            this, forResizedWindow, static_cast<int>(_window),
+            _frameCallbackPosted, _frameInWindow, _requested);
     if (_window == Window::kNone) {
       return;
     }
@@ -105,6 +118,8 @@ public:
 
   /** The vsync asked for with Host::postFrameCallback(). */
   void onFrame() {
+    GPF_LOG("%p onFrame inWindow=%d requested=%d", this, _frameInWindow,
+            _requested);
     _frameCallbackPosted = false;
     if (_window == Window::kNone) {
       return;
@@ -117,6 +132,8 @@ public:
    resized window): the recording waiting for that, if any, goes to it now.
    */
   void onFrameConsumed() {
+    GPF_LOG("%p onFrameConsumed requested=%d posted=%d", this, _requested,
+            _frameCallbackPosted);
     _frameInWindow = false;
     if (_window == Window::kNone || !_requested) {
       return;
@@ -129,6 +146,7 @@ public:
    removed its callbacks, and the scheduler forgets what it asked for.
    */
   void cancel() {
+    GPF_LOG("%p cancel", this);
     _frameCallbackPosted = false;
     _frameInWindow = false;
     _requested = false;
@@ -153,6 +171,10 @@ private:
     if (inWindow) {
       _frameInWindow = true;
     }
+    GPF_LOG("%p present result=%d inWindow=%d -> %s", this, result, inWindow,
+            (result & kMoreQueued) == 0
+                ? "idle"
+                : (inWindow ? "wait-consumed" : "post-vsync"));
     if ((result & kMoreQueued) == 0) {
       return;
     }

@@ -1,5 +1,15 @@
 #pragma once
 
+// DEBUG (debug-gpf-scheduler): temporary scheduler tracing, not for merge.
+#ifndef GPF_LOG
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define GPF_LOG(...) __android_log_print(ANDROID_LOG_INFO, "GPFDBG", __VA_ARGS__)
+#else
+#define GPF_LOG(...)
+#endif
+#endif
+
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -230,6 +240,8 @@ public:
       _producer->onFramePresented(presented.done);
       target->onRecordingsDone(presented.done);
     }
+    GPF_LOG("%p redraw done=%zu allDone=%d lastAgain=%d", this, presented.done,
+            presented.allDone, showsLastFrameAgain);
     if (presented.allDone) {
       return;
     }
@@ -367,10 +379,16 @@ public:
       return PresentResult::kNothingPresented;
     }
     RNSkGraphiteTargetInfo targetInfo;
-    if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
+    if (const auto state = _surface->readState(&targetInfo);
+        state != RNSkWindowState::kReady) {
+      GPF_LOG("%p presentFrame window not ready state=%d queued=%d", this,
+              static_cast<int>(state), target->hasQueued());
       return PresentResult::kNothingPresented;
     }
     auto recordings = target->takeQueued();
+    GPF_LOG("%p presentFrame took=%zu size=%dx%d", this, recordings.size(),
+            static_cast<int>(targetInfo.width),
+            static_cast<int>(targetInfo.height));
     if (recordings.empty()) {
       return PresentResult::kNothingPresented;
     }
@@ -394,6 +412,9 @@ public:
       _producer->onFramePresented(presented.done);
       target->onRecordingsDone(presented.done);
     }
+    GPF_LOG("%p presentFrame done=%zu allDone=%d shown=%d queuedAfter=%d",
+            this, presented.done, presented.allDone, presented.shown,
+            target->hasQueued());
     if (!presented.allDone) {
       return result | PresentResult::kMoreQueued;
     }
