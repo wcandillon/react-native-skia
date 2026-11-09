@@ -6,12 +6,7 @@ import { PixelRatio, Text, View } from "react-native";
 
 import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
-import {
-  forceGpuDeviceLoss,
-  getSharedDevice,
-  mapGpuBuffer,
-  mappedGpuBufferState,
-} from "./GpuDevice";
+import { forceGpuDeviceLoss, getSharedDevice } from "./GpuDevice";
 import { ScreenDoneContext } from "./ScreenDone";
 import type { Screen } from "./Screens";
 import { Screens } from "./Screens";
@@ -40,6 +35,19 @@ const resultMessage = (result: unknown) => {
     ? errorEnvelope(`The snippet's result has no JSON form: ${typeof result}`)
     : json;
 };
+
+// A buffer of the device Skia renders with, mapped as it is made, which tells
+// a destroyed device from a lost one (the Gpu spec): Dawn unmaps the buffers
+// of a destroyed device, and a loss alone leaves them mapped.
+let mappedBuffer: GPUBuffer | null = null;
+const mapGpuBuffer = () => {
+  mappedBuffer = getSharedDevice().createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+    mappedAtCreation: true,
+  });
+};
+const mappedGpuBufferState = () => mappedBuffer?.mapState ?? null;
 
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
 // into a texture of the shared device, and Skia wraps that texture. This is

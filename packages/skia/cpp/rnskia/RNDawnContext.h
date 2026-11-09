@@ -778,6 +778,9 @@ private:
     DawnUtils::DeviceLostListener listener;
     skgpu::graphite::DawnBackendContext backendContext;
     std::unique_ptr<skgpu::graphite::Context> context;
+    // Whether the Dawn device was destroyed (see destroyReplacedDevice).
+    // Guarded by _mutex.
+    bool deviceDestroyed = false;
     // Set once, by the loss callback (any thread, see onDeviceLost); the
     // strings are guarded by _lostMutex.
     std::atomic<bool> lost{false};
@@ -925,23 +928,57 @@ private:
   }
 
   /**
-   Destroys `lost` once every window has let go of its surface on it (see
-   RNSkWindowSurface::releaseSurfacesOn), then replaces it with a new device
-   and Graphite context, unless it was replaced meanwhile, and tells the
-   loss listeners. The new device is validated (see
-   DawnUtils::requestDevice): a resource of the lost device that reaches it
-   is refused with an error rather than handed to the driver. A replacement
-   that could not be made, or that was lost before it was in place, is
-   tried again (see scheduleRecovery).
+   Destroys `lost` once every window has let go of its surface on it, then
+   replaces it with a new device and Graphite context, unless it was
+   replaced meanwhile, and tells the loss listeners. The release and the
+   destroy run on the platform's presenting thread (see
+   RNSkWindowSurface::presentThreadRunner), which is where every window
+   operation runs, and this thread waits for them:
+   RNSkWindowSurface::releaseSurfacesOn takes no window's lock, since
+   windows have none any more, so the sweep must not race a present or an
+   attach there. The lost device is destroyed before the new one is made,
+   so that its memory is free for it (a loss can be the GPU running out of
+   memory), and before it is published, so that no window makes a swapchain
+   over its native window on the new device meanwhile
+   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR); and before the loss listeners run,
+   so that what it held reads as destroyed once Skia.gpu.lost resolves. The
+   new device is validated (see DawnUtils::requestDevice): a resource of
+   the lost device that reaches it is refused with an error rather than
+   handed to the driver. A replacement that could not be made, that was
+   lost before it was in place, or whose release could not be handed to the
+   presenting thread, is tried again (see scheduleRecovery).
    */
   void recover(Generation *lost) noexcept {
-    // Replaced meanwhile by another recovery (see requestRecovery): no sweep.
+    // Replaced meanwhile by another recovery (see requestRecovery).
     if (_current.load(std::memory_order_acquire) != lost) {
       return;
     }
-    // Outside the context lock, which comes after a window's mutex (see
-    // RNSkWindowSurface).
-    RNSkWindowSurface::releaseSurfacesOn(lost->id);
+    // The windows let go of their surface on the lost device, and the device
+    // is destroyed, on the presenting thread: nothing there presents or
+    // attaches meanwhile. This thread holds no lock while it waits for the
+    // thread (the context lock is not taken until below).
+    switch (releaseAndDestroyOnPresentThread(lost)) {
+    case Handoff::kDone:
+      break;
+    case Handoff::kNoRunner:
+      // No window has a runner: no window presents on a thread of its own,
+      // so none can be in use. The sweep finds none, and the destroy runs
+      // here.
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      destroyReplacedDevice(lost);
+      break;
+    case Handoff::kDropped:
+      // The presenting thread did not run the task: the view its runner
+      // belongs to is gone, or a present is held up past the wait. The
+      // device stays lost as it is, and this attempt makes no replacement;
+      // the next one asks again, and a task that runs later finds the device
+      // destroyed already.
+      RNSkLogger::logToConsole(
+          "React Native Skia could not hand the release of its lost GPU "
+          "device to the presenting thread; it tries again.");
+      scheduleRecovery(lost, /* failedAttempt= */ true);
+      return;
+    }
     LossInfo info;
     Generation *next = nullptr;
     {
@@ -955,16 +992,6 @@ private:
         info.reason = lost->lostReason;
         info.message = lost->lostMessage;
       }
-      // Dawn runs the deletions it deferred on a lost device, which never
-      // ticks again, once it is destroyed: those of the swapchains the
-      // windows let go of included, whose VkSurfaceKHRs keep their windows
-      // connected until then. Destroyed before the new device is made, its
-      // memory is free for it (a loss can be the GPU running out of memory),
-      // and before it is published, it holds no window by the time one makes
-      // a swapchain on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR
-      // otherwise). Destroying it again, after a failed replacement, does
-      // nothing.
-      lost->backendContext.fDevice.Destroy();
       try {
         next = createGeneration(/* validate= */ true);
         _retired.push_back(lost);
@@ -993,6 +1020,84 @@ private:
       scheduleRecovery(next, /* failedAttempt= */ true);
     }
     notifyLossListeners(info);
+  }
+
+  /** What releaseAndDestroyOnPresentThread() did. */
+  enum class Handoff {
+    // The presenting thread released the windows' surfaces and destroyed the
+    // device.
+    kDone,
+    // No window has a runner: no window presents on a thread of its own, so
+    // none can be in use.
+    kNoRunner,
+    // The presenting thread did not run the task within the wait: the view
+    // its runner belongs to is gone, or a present is held up.
+    kDropped,
+  };
+
+  /**
+   Hands the release of every window's surface on `lost` and the destroy of
+   its device to the platform's presenting thread, through the runner a
+   window's view installed (see RNSkWindowSurface::presentThreadRunner), and
+   waits for both: every task on that thread runs in order, so nothing
+   presents or attaches while they run, and nothing that follows them runs
+   before they are done. The wait is bounded: a runner drops the task when
+   the view it belongs to is gone (see JniSkiaView), and a present may be
+   held up compiling pipelines for seconds, so a task not run within the
+   wait is left to run later (it finds the device destroyed already) and
+   the attempt is retried (see recover). Called without a lock; the task
+   takes the windows' list and, for the destroy, the context lock, in that
+   order (see the class comment on locks in RNSkWindowSurface).
+   */
+  Handoff releaseAndDestroyOnPresentThread(Generation *lost) {
+    auto run = RNSkWindowSurface::presentThreadRunner();
+    if (!run) {
+      return Handoff::kNoRunner;
+    }
+    struct Task {
+      std::mutex mutex;
+      std::condition_variable done;
+      bool ran = false;
+    };
+    auto task = std::make_shared<Task>();
+    run([this, lost, task]() {
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      destroyReplacedDevice(lost);
+      {
+        std::lock_guard<std::mutex> lock(task->mutex);
+        task->ran = true;
+      }
+      task->done.notify_all();
+    });
+    std::unique_lock<std::mutex> lock(task->mutex);
+    if (!task->done.wait_for(lock, std::chrono::seconds(10),
+                             [&task]() { return task->ran; })) {
+      return Handoff::kDropped;
+    }
+    return Handoff::kDone;
+  }
+
+  /**
+   Destroys the Dawn device of a generation that was replaced (see
+   generation()), so that Dawn runs the deletions it deferred on it: a lost
+   device never ticks again, and on Android the VkSurfaceKHR of a window's
+   old swapchain keeps the window connected until then, so that no swapchain
+   can be made over it on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR).
+   The Generation, its device handle and its Graphite context stay: what
+   still points at them keeps failing validation, as destroyed rather than
+   lost. Called once the windows on that device have let go of their
+   surfaces (see RNSkWindowSurface::releaseSurfacesOn), on the presenting
+   thread or, when no window has a runner, on the thread replacing the
+   device (see recover). Nothing happens for a device destroyed already.
+   Takes the context lock.
+   */
+  void destroyReplacedDevice(Generation *lost) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (lost->deviceDestroyed) {
+      return;
+    }
+    lost->deviceDestroyed = true;
+    lost->backendContext.fDevice.Destroy();
   }
 
   /**

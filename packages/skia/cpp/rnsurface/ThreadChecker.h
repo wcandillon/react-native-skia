@@ -63,15 +63,6 @@ public:
   }
 
   /**
-   Whether the calling thread is the one this belongs to, or none is bound:
-   a caller that would post a task to its own thread runs it on the spot.
-   */
-  bool isCurrentThread() const {
-    const auto bound = _thread.load(std::memory_order_acquire);
-    return bound == std::thread::id() || bound == std::this_thread::get_id();
-  }
-
-  /**
    The entry check: whether the calling thread is the bound one, or none is
    bound yet. A wrong one aborts in debug builds, and is logged once per
    site in release builds, with `what` naming the entry.

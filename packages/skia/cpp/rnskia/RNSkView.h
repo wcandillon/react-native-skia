@@ -295,27 +295,11 @@ public:
    frame requests the view hands out then keep the runner they were given.
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
-    _runOnPresentThread = std::move(run);
-    // The sweep before a lost device is destroyed releases a window's
-    // surface on the thread it presents on (see
-    // RNSkWindowSurface::releaseSurfacesOn).
+    installPresentThread(std::move(run));
+    // The window hands the release of the windows' surfaces on a lost device,
+    // and its destroy, to this thread (see
+    // RNSkWindowSurface::setRunOnPresentThread and DawnContext::recover).
     _surface->setRunOnPresentThread(_runOnPresentThread);
-    // The thread installed is bound there, ahead of everything the platform
-    // view posts to it (see bindPresentThread); a runner installed later, as
-    // a static canvas's worker is, binds again from its own thread, and a
-    // bind still waiting on the runner it replaced does nothing.
-    const uint64_t generation = ++_presentThreadGeneration;
-    std::weak_ptr<RNSkView> weakThis = weak_from_this();
-    auto surface = _surface;
-    _runOnPresentThread([weakThis, surface, generation]() {
-      auto view = weakThis.lock();
-      if (view == nullptr || view->_presentThreadGeneration.load(
-                                 std::memory_order_acquire) != generation) {
-        return;
-      }
-      surface->bindPresentingThread();
-      view->bindPresentThread();
-    });
   }
 
   /**
@@ -376,12 +360,16 @@ public:
    No window takes them, so they need neither the main thread nor the present
    thread every window shares, which a screen of static canvases mounting at
    once would hold up. Installed in place of the platform view's present
-   thread and frame scheduler, before the view is bound to its id.
+   thread and frame scheduler, before the view is bound to its id. The worker
+   is no window's thread: the surface leaves the windows whose surfaces a lost
+   device's replacement releases on theirs (see
+   RNSkWindowSurface::presentAsImages).
    */
   void presentAsImages() {
-    setPresentThread([](std::function<void()> task) {
+    installPresentThread([](std::function<void()> task) {
       RNSkWorker::getInstance().post(std::move(task));
     });
+    _surface->presentAsImages();
     _frameScheduler = nullptr;
   }
 
@@ -455,9 +443,8 @@ public:
    owed since one found it could not present is posted (see
    RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
    frame scheduler, on the present thread. Nothing is replayed on the spot. A
-   GPU device lost in the
-   background (where iOS refuses GPU work) is replaced now that the app is
-   back, and the view is asked for a frame once it is.
+   GPU device lost in the background (where iOS refuses GPU work) is replaced
+   now that the app is back, and the view is asked for a frame once it is.
    */
   void onCanPresent() {
     DawnContext::requestRecovery();
@@ -541,6 +528,30 @@ private:
     }
     return present(surface, targetInfo, {recording}, /* remember= */ false)
                .done == 1;
+  }
+
+  /**
+   Installs the runner of the thread the view presents on (see
+   setPresentThread), and binds the view's entries and its window's to that
+   thread there, ahead of everything the platform view posts to it (see
+   bindPresentThread): a runner installed later, as a static canvas's worker
+   is (see presentAsImages), binds again from its own thread, and a bind
+   still waiting on the runner it replaced does nothing.
+   */
+  void installPresentThread(std::function<void(std::function<void()>)> run) {
+    _runOnPresentThread = std::move(run);
+    const uint64_t generation = ++_presentThreadGeneration;
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    auto surface = _surface;
+    _runOnPresentThread([weakThis, surface, generation]() {
+      auto view = weakThis.lock();
+      if (view == nullptr || view->_presentThreadGeneration.load(
+                                 std::memory_order_acquire) != generation) {
+        return;
+      }
+      surface->bindPresentingThread();
+      view->bindPresentThread();
+    });
   }
 
   /** Runs scheduleFrame() on the present thread, when it gets to it. */
@@ -811,7 +822,7 @@ private:
   RNSkRedrawRequest _redrawRequest;
   // The thread the view presents on (see the class comment).
   rnsurface::ThreadChecker _presentThread;
-  // Which setPresentThread installed the runner in use (see there).
+  // Which installPresentThread installed the runner in use (see there).
   std::atomic<uint64_t> _presentThreadGeneration{0};
 
   // The target is bound on the JS thread and read on the present thread and
