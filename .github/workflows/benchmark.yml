@@ -30,7 +30,7 @@ on:
         type: string
         default: main
       scenes:
-        description: Scenes, comma-separated (shapes,images,shader,pattern,paths,text), empty for all
+        description: Scenes, comma-separated (shapes,shapeBlob,images,shader,pattern,paths,text), empty for all
         type: string
         default: ""
       reps:
