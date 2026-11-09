@@ -629,15 +629,16 @@ private:
         // A recording made for a size the window had: declarative content,
         // which is recorded again for the window as it is now (see redraw),
         // or an imperative frame submitted before the resize. The frame is
-        // stale, but it carries the latest content: it goes onto the window
-        // while the window still has that size (the platform stretches it
-        // to the view until the frame for the new size lands) when the
-        // window shows the latest frame presented rather than each in turn
-        // (see setWindowTakesLatestFrame): it costs a present and nothing
-        // else there. Otherwise it is dropped when another recording follows
-        // it or a declarative frame is on its way, as presenting it would
-        // only hold that one up (a view resized on every frame has a
-        // frame's worth of work in the present alone, see
+        // stale, but it carries the latest content: a declarative one goes
+        // onto the window while the window still has that size (the
+        // platform stretches it to the view until the frame for the new
+        // size lands) when the window shows the latest frame presented
+        // rather than each in turn (see setWindowTakesLatestFrame): it costs
+        // a present and nothing else there. An imperative one does not, as
+        // no frame for the new size need follow it. Otherwise it is dropped
+        // when another recording follows it or a declarative frame is on its
+        // way, as presenting it would only hold that one up (a view resized on
+        // every frame has a frame's worth of work in the present alone, see
         // RNSkWindowSurface::configureIfNeeded, and one presented through a
         // texture costs a texture pass each: imperative frames queued faster
         // than a slow GPU presents them would pile up for good, as they did
@@ -647,7 +648,8 @@ private:
           taken = false;
           break;
         }
-        if (_windowTakesLatestFrame && &surface == _surface.get() &&
+        if (_producer->hasContent() && _windowTakesLatestFrame &&
+            &surface == _surface.get() &&
             surface.presentRecordings(recording->getTarget(),
                                       {recording->get()})) {
           last = recording;
