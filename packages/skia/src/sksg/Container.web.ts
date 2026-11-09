@@ -76,13 +76,14 @@ class ReanimatedContainer extends JsContainer {
       return;
     }
     const previousRecording = this.recording;
-    const recorder = new Recorder();
+    const recorder = new Recorder(this.Skia);
     visit(recorder, this.root);
     const record = recorder.getRecording();
     const { animationValues } = record;
     this.recording = {
       commands: record.commands,
       paintPool: record.paintPool,
+      disposables: record.disposables,
     };
     const { nativeId, Skia, recording } = this;
     if (animationValues.size > 0) {

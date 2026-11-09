@@ -1,4 +1,4 @@
-import type { ViewComponent } from "react-native";
+import type { View } from "react-native";
 
 import type { DataModule } from "../skia/types";
 
@@ -8,5 +8,5 @@ export interface IPlatform {
   Version?: number | string;
   PixelRatio: number;
   resolveAsset: (source: DataModule) => string;
-  View: typeof ViewComponent;
+  View: typeof View;
 }

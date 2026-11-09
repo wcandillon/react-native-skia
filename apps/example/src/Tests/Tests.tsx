@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Canvas, Group, Skia, useCanvasRef } from "react-native-skia";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -38,7 +39,9 @@ const resultMessage = (result: unknown) => {
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
 // into a texture of the shared device, and Skia wraps that texture. This is
 // the one way to snapshot a view with Skia v3 (see docs/webgpu#view-snapshots).
-const encodeView = async (view: React.RefObject<View | null>) => {
+const encodeView = async (
+  view: React.RefObject<ComponentRef<typeof View> | null>
+) => {
   const device = getSharedDevice();
   const pixels = Math.round(size * PixelRatio.get());
   const texture = device.createTexture({
@@ -71,7 +74,7 @@ interface TestsProps {
 }
 
 export const Tests = ({ assets }: TestsProps) => {
-  const viewRef = useRef<View>(null);
+  const viewRef = useRef<ComponentRef<typeof View>>(null);
   const ref = useCanvasRef();
   const [client, hostname] = useClient();
   const [drawing, setDrawing] = useState<any>(null);
