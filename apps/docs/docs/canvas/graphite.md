@@ -83,7 +83,7 @@ A few rules follow from this model:
 
 ## Animated text
 
-Text that rotates or scales on every frame is rasterized again on every frame by default. Pass `deviceIndependentFonts` to draw it as distance fields instead, rasterized once and reused under any transform (see [animated text](/docs/canvas/overview#animated-text) for the tradeoff). It applies from the next recording on and can be changed at any time.
+Text that rotates or scales on every frame is rasterized again on every frame by default. Pass `deviceIndependentFonts` to draw it as distance fields instead, rasterized once and reused under any transform (see [animated text](/docs/text/text#animated-text) for the tradeoff). It applies from the next recording on and can be changed at any time.
 
 ## Snapshots
 
