@@ -1,5 +1,7 @@
 package com.reactnative.skia;
 
+import android.content.ComponentCallbacks;
+import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -27,9 +29,28 @@ public class PlatformContext {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    // The display density can change while the app runs (display size
+    // setting, foldables): the native side follows it.
+    private final ComponentCallbacks mComponentCallbacks = new ComponentCallbacks() {
+        @Override
+        public void onConfigurationChanged(Configuration newConfig) {
+            setPixelDensityNative(mContext.getResources().getDisplayMetrics().density);
+        }
+
+        @Override
+        public void onLowMemory() {
+        }
+    };
+
     public PlatformContext(ReactContext reactContext) {
         mContext = reactContext;
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
+        reactContext.getApplicationContext().registerComponentCallbacks(mComponentCallbacks);
+    }
+
+    /** Stops following the display density; the manager is going away. */
+    public void destroy() {
+        mContext.getApplicationContext().unregisterComponentCallbacks(mComponentCallbacks);
     }
 
     @DoNotStrip
@@ -126,6 +147,9 @@ public class PlatformContext {
 
     // Private c++ native methods
     private native HybridData initHybrid(float pixelDensity);
+
+    // The display density changed (JniPlatformContext::setPixelDensity).
+    private native void setPixelDensityNative(float pixelDensity);
 
     private native void notifyTaskReadyNative();
 }

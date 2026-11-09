@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -195,10 +196,18 @@ public:
   /**
    * @return Current scale factor for pixels
    */
-  float getPixelDensity() { return _pixelDensity; }
+  float getPixelDensity() { return _pixelDensity.load(); }
+
+  /**
+   * Updates the scale factor for pixels, for example after the display
+   * density changed. Any thread: views read it on their next frame.
+   */
+  void setPixelDensity(float pixelDensity) {
+    _pixelDensity.store(pixelDensity);
+  }
 
 private:
-  float _pixelDensity;
+  std::atomic<float> _pixelDensity;
   std::shared_ptr<react::CallInvoker> _callInvoker;
 };
 } // namespace RNSkia

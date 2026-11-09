@@ -3,6 +3,7 @@
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -40,7 +41,15 @@ public:
 
   void notifyTaskReadyNative();
 
-  float getPixelDensity() { return _pixelDensity; }
+  float getPixelDensity() { return _pixelDensity.load(); }
+
+  // The display density changed (a configuration change, see
+  // PlatformContext.java): the platform context follows it.
+  void setPixelDensity(float pixelDensity);
+
+  // The platform context made from this one, kept up to date with the
+  // display density.
+  void setPlatformContext(const std::shared_ptr<RNSkPlatformContext> &context);
 
   sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag);
 
@@ -50,7 +59,9 @@ private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
-  float _pixelDensity;
+  std::atomic<float> _pixelDensity;
+  std::mutex _platformContextMutex;
+  std::weak_ptr<RNSkPlatformContext> _platformContext;
   std::mutex _mainThreadTasksMutex;
   std::queue<std::function<void()>> _mainThreadTasks;
   bool _mainThreadDispatchScheduled = false;

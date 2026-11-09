@@ -65,12 +65,30 @@ void JniPlatformContext::registerNatives() {
       makeNativeMethod("initHybrid", JniPlatformContext::initHybrid),
       makeNativeMethod("notifyTaskReadyNative",
                        JniPlatformContext::notifyTaskReadyNative),
+      makeNativeMethod("setPixelDensityNative",
+                       JniPlatformContext::setPixelDensity),
   });
 }
 
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
                                      float pixelDensity) {
   return makeCxxInstance(jThis, pixelDensity);
+}
+
+void JniPlatformContext::setPixelDensity(float pixelDensity) {
+  std::lock_guard<std::mutex> lock(_platformContextMutex);
+  _pixelDensity.store(pixelDensity);
+  if (auto context = _platformContext.lock()) {
+    context->setPixelDensity(pixelDensity);
+  }
+}
+
+void JniPlatformContext::setPlatformContext(
+    const std::shared_ptr<RNSkPlatformContext> &context) {
+  std::lock_guard<std::mutex> lock(_platformContextMutex);
+  _platformContext = context;
+  // The density may have changed since the context was made.
+  context->setPixelDensity(_pixelDensity.load());
 }
 
 jni::global_ref<jobject>
