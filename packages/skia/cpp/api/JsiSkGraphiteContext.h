@@ -36,6 +36,10 @@ public:
 
   double getHeight() { return getObject()->getHeight(); }
 
+  double getPendingFrames() {
+    return static_cast<double>(getObject()->pendingFrames());
+  }
+
   std::shared_ptr<JsiSkCanvas> beginRecording() {
     auto *canvas = getObject()->beginRecording();
     if (canvas == nullptr) {
@@ -66,6 +70,8 @@ public:
     installGetter(runtime, prototype, "width", &JsiSkGraphiteContext::getWidth);
     installGetter(runtime, prototype, "height",
                   &JsiSkGraphiteContext::getHeight);
+    installGetter(runtime, prototype, "pendingFrames",
+                  &JsiSkGraphiteContext::getPendingFrames);
     installMethod(runtime, prototype, "beginRecording",
                   &JsiSkGraphiteContext::beginRecording);
     installMethod(runtime, prototype, "finishRecording",
