@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -24,6 +25,58 @@
 #endif
 
 namespace RNSkia {
+
+/**
+ * When one thread of RNSkThreadPool runs the pool's idle task, and whether it
+ * runs it idle (see RNSkThreadPool::setIdleTask). The task is due the delay
+ * after the latest request the thread has not served. A thread that runs it
+ * busy owes it a run once it ran no job for the delay, and each job puts that
+ * run off: the jobs of the views a request comes from can still be running
+ * when it is made. The caller passes the times; it reads no clock.
+ */
+class RNSkIdleTaskSchedule {
+public:
+  using Clock = std::chrono::steady_clock;
+
+  /** For a thread that starts at `start`, with no job run yet. */
+  RNSkIdleTaskSchedule(Clock::duration delay, Clock::time_point start)
+      : _delay(delay), _lastJobEnd(start) {}
+
+  /**
+   When the thread runs the idle task next, or nothing while it owes no run:
+   `requests` counts the requests made so far, the latest at `requestTime`.
+   */
+  std::optional<Clock::time_point> due(uint64_t requests,
+                                       Clock::time_point requestTime) const {
+    if (requests != _servedRequests) {
+      return requestTime + _delay;
+    }
+    if (_idleRunOwed) {
+      return _lastJobEnd + _delay;
+    }
+    return std::nullopt;
+  }
+
+  /**
+   The thread runs the idle task at `now`, which serves `requests`. Returns
+   whether it runs it idle; run busy, it owes the task an idle run.
+   */
+  bool run(uint64_t requests, Clock::time_point now) {
+    _servedRequests = requests;
+    const bool idle = now - _lastJobEnd >= _delay;
+    _idleRunOwed = !idle;
+    return idle;
+  }
+
+  /** The thread finished a job at `now`. */
+  void ranJob(Clock::time_point now) { _lastJobEnd = now; }
+
+private:
+  const Clock::duration _delay;
+  uint64_t _servedRequests = 0;
+  bool _idleRunOwed = false;
+  Clock::time_point _lastJobEnd;
+};
 
 /**
  * The threads that replay recordings for SkiaGraphiteViews, so that neither
@@ -43,7 +96,10 @@ namespace RNSkia {
  */
 class RNSkThreadPool {
 public:
-  /** How long after requestIdleTask() the threads run the idle task. */
+  /**
+   How long after requestIdleTask() the threads run the idle task, and how
+   long a thread runs no job before it counts as idle.
+   */
   static constexpr std::chrono::seconds kIdleDelay{2};
 
   /** A thread of the pool (see acquireLane). */
@@ -100,7 +156,8 @@ public:
   /**
    The task every thread runs, on itself, after requestIdleTask(). `idle`
    says whether the thread ran no job for kIdleDelay: it records nothing for
-   now, and whatever it caches can go.
+   now, and whatever it caches can go. A thread that runs it busy runs it
+   again, idle, once it ran no job for kIdleDelay (see RNSkIdleTaskSchedule).
    */
   void setIdleTask(std::function<void(bool idle)> task) {
     std::lock_guard<std::mutex> lock(_idleMutex);
@@ -110,8 +167,8 @@ public:
   /**
    Asks every thread to run the idle task kIdleDelay from now, as soon as no
    job is waiting on it: a thread busy with jobs runs it between two of
-   them, once its queue is empty. Requests add up: a thread runs the task
-   once for all those it has not served, kIdleDelay after the latest. Any
+   them, once its queue is empty. Requests add up: one run serves every
+   request a thread has not served, kIdleDelay after the latest. Any
    thread.
    */
   void requestIdleTask() {
@@ -184,9 +241,7 @@ private:
   void run(unsigned index) {
     configureThread(index);
     auto &worker = *_workers[index];
-    // The last idle request this thread served, and when it ran a job last.
-    uint64_t served = 0;
-    auto lastJob = Clock::now();
+    RNSkIdleTaskSchedule schedule(kIdleDelay, Clock::now());
     for (;;) {
       std::function<void()> job;
       std::function<void(bool)> idleTask;
@@ -203,25 +258,24 @@ private:
           // to notify, so a request cannot land between this read and the
           // wait below unnoticed.
           const auto request = idleRequest();
-          if (request.id == served) {
+          const auto due = schedule.due(request.id, request.time);
+          if (!due) {
             worker.condition.wait(lock);
             continue;
           }
-          const auto due = request.time + kIdleDelay;
           const auto now = Clock::now();
-          if (now < due) {
-            worker.condition.wait_until(lock, due);
+          if (now < *due) {
+            worker.condition.wait_until(lock, *due);
             continue;
           }
-          served = request.id;
           idleTask = request.task;
-          idle = now - lastJob >= kIdleDelay;
+          idle = schedule.run(request.id, now);
           break;
         }
       }
       if (job) {
         job();
-        lastJob = Clock::now();
+        schedule.ranJob(Clock::now());
       } else if (idleTask) {
         idleTask(idle);
       }
