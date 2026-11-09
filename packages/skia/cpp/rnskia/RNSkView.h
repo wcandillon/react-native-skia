@@ -646,7 +646,7 @@ private:
         batchLast = recording;
         continue;
       }
-      if (!recording->hasSizeOf(targetInfo) && _producer->hasContent()) {
+      if (!recording->hasSizeOf(targetInfo)) {
         // Declarative content recorded for a size the window had. It is
         // recorded again for the window as it is now (see redraw), so this
         // frame is stale, but it carries the latest content: it goes onto
