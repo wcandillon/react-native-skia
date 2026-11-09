@@ -7,7 +7,7 @@ slug: /canvas/graphite
 
 `SkiaGraphiteView` is a canvas that you drive frame by frame from any JavaScript runtime.
 A frame is a Graphite recording: you record it on the thread you are on (the JS thread, the Reanimated UI runtime or a dedicated worklet runtime), and the view presents it on the next display frame.
-On the web, where Skia runs on WebGL, the same API is emulated: see [Web](#web) below.
+On the web, Skia still runs on WebGL at the moment: see [Web](#web).
 
 ## Recording a frame
 
@@ -35,7 +35,8 @@ export const Demo = () => {
 };
 ```
 
-`beginRecording()` returns a canvas in points that is valid until `finishRecording()`.
+`beginRecording()` returns a canvas that is valid until `finishRecording()`.
+
 `finishRecording()` returns the recording, and `submit()` queues it for the next frame.
 A recording is immutable: you can submit the same one again later without recording it again, which is convenient for static content.
 
@@ -93,5 +94,5 @@ A few rules follow from this model:
 
 ## Web
 
-The web has no Graphite. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings through the WebGL context the page shares, using the same renderer as `Canvas`.
-Frames are presented in submission order and never dropped, right before the browser paints. One difference to keep in mind: the surface starts cleared on every frame, so a recording should draw the whole frame rather than a delta on top of the previous one.
+The web has no Graphite yet. `SkiaGraphiteView` keeps the same API there: a recording is an `SkPicture`, and the view replays the queued recordings through the WebGL context the page shares, using the same renderer as `Canvas`.
+Frames are presented in submission order and never dropped, right before the browser paints.
