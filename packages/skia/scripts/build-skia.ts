@@ -503,6 +503,15 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       "skia-graphite-runtime-effect-names.patch"
     );
     $(`git apply ${runtimeEffectPatch}`);
+    // Recorder::makeDeferredCanvas hard-codes default surface props, which
+    // rules out device independent (SDF) fonts for the canvas a view records
+    // into: a glyph is then rasterized again whenever its transform changes
+    // (see RNSkGraphiteTarget::recordingSurfaceProps).
+    const deferredCanvasPropsPatch = path.join(
+      __dirname,
+      "skia-graphite-deferred-canvas-props.patch"
+    );
+    $(`git apply ${deferredCanvasPropsPatch}`);
     // The GN build compiles the same Dawn checkout as build-dawn.ts.
     // Without this, Mac Catalyst compilation will be failed.
     applyDawnPatches();

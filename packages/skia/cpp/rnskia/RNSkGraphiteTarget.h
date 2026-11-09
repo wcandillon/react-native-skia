@@ -23,6 +23,7 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImageInfo.h"
+#include "include/core/SkSurfaceProps.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/TextureInfo.h"
@@ -335,6 +336,23 @@ public:
 
 private:
   /**
+   The surface props every recording is made with. Device independent fonts:
+   with the defaults Graphite rasterizes a glyph for the exact transform it
+   is drawn with, so text that rotates or scales every frame is masked
+   again, and its blobs rebuilt (findOrCreateBlob), on every frame. With the
+   flag, glyphs in the SDF size range are rasterized once as distance fields
+   and reused under any rotation or scale; the smallest sizes keep using
+   masks, and the largest paths, as with the defaults. The pixel geometry
+   stays unknown, as with the defaults: the target may be translucent or
+   composited, and the recording is replayed onto whatever texture the view
+   has at that point, so LCD text is never an option here.
+   */
+  static SkSurfaceProps recordingSurfaceProps() {
+    return SkSurfaceProps(SkSurfaceProps::kUseDeviceIndependentFonts_Flag,
+                          kUnknown_SkPixelGeometry);
+  }
+
+  /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
    recorder alive when it is the target's own. Returns nullptr while the view
    has no size. Called with the state lock held.
@@ -353,7 +371,8 @@ private:
     auto imageInfo = SkImageInfo::Make(
         target.width, target.height, target.colorType, kPremul_SkAlphaType,
         DawnUtils::viewColorSpace(target.useP3ColorSpace));
-    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo);
+    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo,
+                                                recordingSurfaceProps());
     if (canvas == nullptr) {
       throw std::runtime_error(
           "SkiaGraphiteView: could not create a deferred canvas.");
