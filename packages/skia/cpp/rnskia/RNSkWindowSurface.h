@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <utility>
@@ -226,35 +227,13 @@ public:
   }
 
   /**
-   Installed by the view with the runner of the thread it presents on (see
-   RNSkView::setPresentThread): how DawnContext::recover hands the release of
-   the windows' surfaces and the destroy of a replaced device to that thread,
-   which is where every window operation runs (see presentThreadRunner). Any
-   thread; guarded by the list's mutex, which presentThreadRunner() reads it
-   under.
-   */
-  void setRunOnPresentThread(std::function<void(std::function<void()>)> run);
-
-  /**
-   The runner of the present thread (see setRunOnPresentThread), for
-   DawnContext::recover to post the release of the windows' surfaces on a
-   lost device and its destroy there: every window of a process presents on
-   one thread (see the class comment), so any window's runner posts to it.
-   Empty when no window has one, in which case no canvas presents on a thread
-   of its own and no window can be in use. Any thread.
-   */
-  static std::function<void(std::function<void()>)> presentThreadRunner();
-
-  /**
    Lets go of the Dawn surface of every window configured on the given
-   generation (see DawnContext::generation()), and so it is run on the
-   present thread, by the task DawnContext::recover posts through
-   presentThreadRunner, before that thread can present or attach anything
-   else: it races neither a present in flight nor an attach, which no
-   window's own lock keeps apart any more (see the class comment). The
-   windows make their surface again by their next frame (see ensureDevice).
-   Presenting thread; called by DawnContext::recover itself only when no
-   window has a runner, and then no window can be in use.
+   generation (see DawnContext::generation()): the replacement of a lost
+   device does so before it destroys the device (see DawnContext::recover).
+   The windows make their surface again by their next frame (see
+   ensureDevice). Presenting thread, where no present or attach overlaps
+   the release, as the windows have no lock of their own (see the class
+   comment).
    */
   static void releaseSurfacesOn(uint64_t generation);
 
@@ -323,7 +302,8 @@ private:
   // on it: when the device it was configured on was lost and replaced since
   // (see releaseSurfacesOn), the surface is made again on the new device
   // (a Vulkan swapchain cannot move to another device, Dawn refuses it), the
-  // window itself stays.
+  // window itself stays. Returns false without a context, or when no
+  // surface can be made over the window.
   bool ensureDevice();
   // Configures the swapchain for the current size, format and usage.
   void configureSurface();
@@ -411,9 +391,6 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
-  // Posts a task to the thread the view presents on (see
-  // setRunOnPresentThread).
-  std::function<void(std::function<void()>)> _runOnPresentThread;
 
   // The thread the window belongs to (see the class comment).
   rnsurface::ThreadChecker _presentingThread;

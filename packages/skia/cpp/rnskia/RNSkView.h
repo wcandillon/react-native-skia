@@ -291,10 +291,6 @@ public:
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
-    // The window hands the release of the windows' surfaces on a lost device,
-    // and its destroy, to this thread (see
-    // RNSkWindowSurface::setRunOnPresentThread and DawnContext::recover).
-    _surface->setRunOnPresentThread(_runOnPresentThread);
   }
 
   /**

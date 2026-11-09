@@ -4,6 +4,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 
+import com.facebook.proguard.annotations.DoNotStrip;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -48,6 +50,16 @@ final class PresentThread {
             }
             return sHandler;
         }
+    }
+
+    /**
+     * Runs a task on the thread, after those posted before it: how native
+     * code posts here with no view at hand (DawnContext::setPresentThread).
+     * Any thread; called from native.
+     */
+    @DoNotStrip
+    static void post(Runnable task) {
+        handler().post(task);
     }
 
     /**

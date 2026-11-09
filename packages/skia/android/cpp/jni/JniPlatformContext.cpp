@@ -4,9 +4,12 @@
 
 #include <cerrno>
 #include <exception>
+#include <functional>
 #include <system_error>
 #include <thread>
 #include <utility>
+
+#include <fbjni/NativeRunnable.h>
 
 #include "RNSkMainThreadTasks.h"
 
@@ -34,6 +37,8 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::setForegroundNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
+      makeNativeMethod("setPresentThreadNative",
+                       JniPlatformContext::setPresentThreadNative),
   });
 }
 
@@ -47,6 +52,31 @@ void JniPlatformContext::setCacheDirectoryNative(
   if (directory) {
     DawnContext::setCacheDirectory(directory->toStdString());
   }
+}
+
+namespace {
+
+// PresentThread.java: the thread every canvas presents on.
+struct JPresentThread : jni::JavaClass<JPresentThread> {
+  static auto constexpr kJavaDescriptor =
+      "Lcom/reactnative/skia/PresentThread;";
+};
+
+} // namespace
+
+void JniPlatformContext::setPresentThreadNative(jni::alias_ref<jclass>) {
+  // Looked up here, on a thread Java started: on a thread native code
+  // attached, FindClass searches the system class loader, which has none of
+  // the app's classes.
+  static const auto post =
+      JPresentThread::javaClassStatic()
+          ->getStaticMethod<void(jni::alias_ref<jni::JRunnable::javaobject>)>(
+              "post");
+  DawnContext::setPresentThread([](std::function<void()> task) {
+    jni::ThreadScope threadScope;
+    post(JPresentThread::javaClassStatic(),
+         jni::JNativeRunnable::newObjectCxxArgs(std::move(task)));
+  });
 }
 
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,

@@ -403,12 +403,6 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
   return describe() == target;
 }
 
-void RNSkWindowSurface::setRunOnPresentThread(
-    std::function<void(std::function<void()>)> run) {
-  std::lock_guard<std::mutex> listLock(windowsMutex());
-  _runOnPresentThread = std::move(run);
-}
-
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
@@ -417,17 +411,6 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
       window->_generation = 0;
     }
   }
-}
-
-std::function<void(std::function<void()>)>
-RNSkWindowSurface::presentThreadRunner() {
-  std::lock_guard<std::mutex> listLock(windowsMutex());
-  for (auto *window : windows()) {
-    if (window->_runOnPresentThread) {
-      return window->_runOnPresentThread;
-    }
-  }
-  return nullptr;
 }
 
 bool RNSkWindowSurface::ensureDevice() {
@@ -439,10 +422,10 @@ bool RNSkWindowSurface::ensureDevice() {
   if (context == nullptr) {
     return false;
   }
-  // A surface on a device that is not the one in use — attach() made one
-  // while the device was being replaced, before the sweep (see
-  // releaseSurfacesOn) — is made again: it was never configured, since
-  // nothing presents on a lost device.
+  // A surface on a device that is not the one in use, which attach() made
+  // after the sweep (see releaseSurfacesOn) and before the new device was in
+  // place, is made again: it was never configured, as nothing presents on a
+  // lost device.
   _surface = nullptr;
   _device = context->getWGPUDevice();
   _generation = generation;

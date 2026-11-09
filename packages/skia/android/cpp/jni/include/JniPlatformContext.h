@@ -34,6 +34,11 @@ public:
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,
                                       jni::alias_ref<jni::JString> directory);
 
+  // The thread every canvas presents on (PresentThread.java), for
+  // DawnContext::setPresentThread. Static: it is the process's, not the
+  // context's.
+  static void setPresentThreadNative(jni::alias_ref<jclass>);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);

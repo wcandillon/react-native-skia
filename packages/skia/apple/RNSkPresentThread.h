@@ -2,6 +2,10 @@
 
 #import <Foundation/Foundation.h>
 
+#ifdef __cplusplus
+#include <functional>
+#endif
+
 /**
  * The thread every canvas presents on, as on Android (see PresentThread.java):
  * one for the process, started on first use and never stopped. A present
@@ -24,5 +28,12 @@
 /** Runs a task on the present thread, after those posted before it. Any
  * thread. */
 + (void)post:(dispatch_block_t)task;
+
+#ifdef __cplusplus
+/** post: with a C++ task: how a view and the GPU context post here (see
+ * RNSkView::setPresentThread and DawnContext::setPresentThread). Any
+ * thread. */
++ (void)postTask:(std::function<void()>)task;
+#endif
 
 @end

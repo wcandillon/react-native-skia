@@ -1,5 +1,8 @@
 #import "RNSkPresentThread.h"
 
+#include <memory>
+#include <utility>
+
 @implementation RNSkPresentThread
 
 static NSRunLoop *sPresentRunLoop = nil;
@@ -37,6 +40,13 @@ static NSRunLoop *presentRunLoop() {
     }
   });
   CFRunLoopWakeUp(runLoop);
+}
+
++ (void)postTask:(std::function<void()>)task {
+  auto shared = std::make_shared<std::function<void()>>(std::move(task));
+  [self post:^{
+    (*shared)();
+  }];
 }
 
 @end
