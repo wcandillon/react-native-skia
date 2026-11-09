@@ -44,7 +44,9 @@ public:
       : _javaPart(jni::make_global(jThis)), _jsRuntime(runtime),
         _jsCallInvoker(jsCallInvoker),
         _context(std::make_shared<RNSkAndroidPlatformContext>(platformContext,
-                                                              jsCallInvoker)) {}
+                                                              jsCallInvoker)) {
+    platformContext->setPlatformContext(_context);
+  }
 
   std::shared_ptr<RNSkAndroidPlatformContext> getPlatformContext() {
     return _context;

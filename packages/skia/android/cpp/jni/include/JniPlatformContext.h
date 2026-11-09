@@ -3,9 +3,11 @@
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "RNSkPlatformContext.h"
@@ -46,13 +48,23 @@ public:
 
   static void runMainThreadTasks(jni::alias_ref<jclass>);
 
-  float getPixelDensity() { return _pixelDensity; }
+  float getPixelDensity() { return _pixelDensity.load(); }
+
+  // The display density changed (a configuration change, see
+  // PlatformContext.java): the platform context and its views follow it.
+  void setPixelDensity(float pixelDensity);
+
+  // The platform context made from this one, kept up to date with the
+  // display density.
+  void setPlatformContext(const std::shared_ptr<RNSkPlatformContext> &context);
 
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
-  float _pixelDensity;
+  std::atomic<float> _pixelDensity;
+  std::mutex _platformContextMutex;
+  std::weak_ptr<RNSkPlatformContext> _platformContext;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,
