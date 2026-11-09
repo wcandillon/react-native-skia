@@ -14,7 +14,14 @@ export const Platform: IPlatform = {
     if (typeof asset === "string") {
       return asset;
     }
-    return isRNModule(asset) ? Image.resolveAssetSource(asset).uri : asset.uri;
+    if (!isRNModule(asset)) {
+      return asset.uri;
+    }
+    const resolved = Image.resolveAssetSource(asset);
+    if (!resolved) {
+      throw new Error(`Couldn't resolve the asset ${asset}`);
+    }
+    return resolved.uri;
   },
   View,
 };

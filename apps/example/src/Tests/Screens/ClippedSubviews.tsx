@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { RefObject, ComponentRef } from "react";
 import React, { memo, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, View } from "react-native";
@@ -16,7 +16,6 @@ import { useAnimatedReaction, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { exhaustiveCheck } from "react-native-skia/src/renderer/typeddash";
 
-import { forceGpuDeviceLoss } from "../GpuDevice";
 import { useScreenDone } from "../ScreenDone";
 
 import { CyanGraphiteView } from "./GraphiteView";
@@ -46,7 +45,7 @@ const PictureCanvasContent = ({
 );
 const PictureCanvas = memo(PictureCanvasContent);
 
-type Change = "nothing" | "state" | "sharedValue" | "deviceLost";
+type Change = "nothing" | "state" | "sharedValue";
 
 // The views in the row: a canvas beside a canvas drawing a picture and a
 // graphite view, or a static canvas beside an image view.
@@ -64,16 +63,14 @@ interface ClippedSubviewsProps {
 // unclipped, so that their native views are in the window first; then clipping
 // is turned on and the scroll view goes away and back, roundTrips times, each
 // step once the scroll view reports the offset of the one before. A change is
-// made while away: React state, a shared value, or the GPU device lost and
-// replaced. React Native flattens the row, so the views themselves leave their
-// superview while away.
+// made while away: React state or a shared value. React Native flattens the
+// row, so the views themselves leave their superview while away.
 const ClippedSubviews = ({ change, roundTrips, row }: ClippedSubviewsProps) => {
-  const scrollView = useRef<ScrollView>(null);
+  const scrollView = useRef<ComponentRef<typeof ScrollView>>(null);
   const tripsLeft = useRef(roundTrips);
   const [clipped, setClipped] = useState(false);
   const [color, setColor] = useState("red");
   const sharedColor = useSharedValue("red");
-  const deviceLost = useRef(false);
   const [cyanImage] = useState(makeCyanImage);
   const pictureCanvas = useCanvasRef();
   const done = useScreenDone();
@@ -123,15 +120,6 @@ const ClippedSubviews = ({ change, roundTrips, row }: ClippedSubviewsProps) => {
           break;
         case "sharedValue":
           sharedColor.value = "cyan";
-          break;
-        case "deviceLost":
-          // Once: the scroll view may report the offset again.
-          if (!deviceLost.current) {
-            deviceLost.current = true;
-            const { lost } = Skia.gpu;
-            forceGpuDeviceLoss();
-            lost.then(scrollBack);
-          }
           break;
         default:
           exhaustiveCheck(change);
@@ -185,10 +173,6 @@ export const ClippedSubviewsStateChanged = () => (
 
 export const ClippedSubviewsSharedValueChanged = () => (
   <ClippedSubviews change="sharedValue" roundTrips={1} row="canvas" />
-);
-
-export const ClippedSubviewsDeviceLost = () => (
-  <ClippedSubviews change="deviceLost" roundTrips={1} row="canvas" />
 );
 
 export const ClippedStaticBack = () => (

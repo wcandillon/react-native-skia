@@ -85,6 +85,7 @@ let package = Package(
         "cpp/api",
         "cpp/jsi",
         "cpp/rnskia",
+        "cpp/rnwgpu",
         "cpp/utils",
         // libskottie.a needs skjson and Apple builds no libskjson archive.
         // CocoaPods compiles this via its cpp/**/*.cpp glob.

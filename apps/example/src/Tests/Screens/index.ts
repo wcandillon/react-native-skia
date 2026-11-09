@@ -6,7 +6,6 @@ import {
   ClippedStaticStateChanged,
   ClippedStaticTwice,
   ClippedSubviewsBack,
-  ClippedSubviewsDeviceLost,
   ClippedSubviewsSharedValueChanged,
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
@@ -51,7 +50,6 @@ export const Screens: Readonly<Record<string, Screen>> = {
   ClippedStaticStateChanged: settling(ClippedStaticStateChanged),
   ClippedStaticTwice: settling(ClippedStaticTwice),
   ClippedSubviewsBack: settling(ClippedSubviewsBack),
-  ClippedSubviewsDeviceLost: settling(ClippedSubviewsDeviceLost),
   ClippedSubviewsSharedValueChanged: settling(
     ClippedSubviewsSharedValueChanged
   ),

@@ -28,6 +28,7 @@ import {
   type InputRRect,
   type SkSVG,
   type SkTextBlob,
+  type SkShapeBlob,
   type SkVertices,
   type SkRSXform,
   type CubicResampler,
@@ -44,6 +45,7 @@ import { JsiSkVertices } from "./JsiSkVertices";
 import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkFont } from "./JsiSkFont";
 import { JsiSkTextBlob } from "./JsiSkTextBlob";
+import { JsiSkShapeBlob } from "./JsiSkShapeBlob";
 import { JsiSkPicture } from "./JsiSkPicture";
 import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkImageFilter } from "./JsiSkImageFilter";
@@ -322,6 +324,13 @@ export class JsiSkCanvas
       x,
       y,
       JsiSkPaint.fromValue(paint)
+    );
+  }
+
+  drawShapes(blob: SkShapeBlob, paint?: SkPaint | null) {
+    JsiSkShapeBlob.fromValue(blob).draw(
+      this.ref,
+      paint ? JsiSkPaint.fromValue<Paint>(paint) : null
     );
   }
 

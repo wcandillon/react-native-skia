@@ -127,6 +127,11 @@ export const HomeScreen = () => {
         route="Performance"
       />
       <HomeScreenButton
+        title="⏱ Benchmark"
+        description="Scenes for performance regression runs"
+        route="Benchmark"
+      />
+      <HomeScreenButton
         title="🖼 Pictures"
         description="Animated circle trail using Pictures"
         route="Pictures"

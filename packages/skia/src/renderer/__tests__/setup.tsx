@@ -5,7 +5,7 @@ import path from "path";
 
 import React from "react";
 import type { ReactNode } from "react";
-import type { Server, WebSocket } from "ws";
+import type { WebSocket, WebSocketServer } from "ws";
 
 import type * as SkiaExports from "../../index";
 import { JsiSkApi } from "../../skia/web/JsiSkia";
@@ -24,7 +24,7 @@ jest.setTimeout(180 * 1000);
 type TestOS = "ios" | "android" | "web" | "node" | "macos";
 
 declare global {
-  var testServer: Server;
+  var testServer: WebSocketServer;
   var testConnection: { client: WebSocket | null };
   var testOS: TestOS;
 }

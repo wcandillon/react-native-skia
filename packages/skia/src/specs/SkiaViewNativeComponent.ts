@@ -1,3 +1,4 @@
+/// <reference path="./CodegenTypes.d.ts" />
 import { codegenNativeComponent, type ViewProps } from "react-native";
 import type { WithDefault } from "react-native/Libraries/Types/CodegenTypes";
 
