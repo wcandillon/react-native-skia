@@ -381,6 +381,40 @@ describe("SkiaPictureView.web", () => {
     expect(canvas.height).toBe(0);
   });
 
+  // The first draw of a view runs from a microtask and the following ones
+  // from a ResizeObserver callback: an error thrown there reaches neither the
+  // app nor an error boundary.
+  it("keeps its frame instead of throwing when the context can't make a surface", async () => {
+    const { CanvasKitMock, rawCanvas } = installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const makeSurface =
+      CanvasKitMock.MakeOnScreenGLSurface.getMockImplementation()!;
+    CanvasKitMock.MakeOnScreenGLSurface.mockImplementation(() => null);
+
+    const view = mountView("17");
+    await setPicture(17);
+    expect(rawCanvas.drawPicture).not.toHaveBeenCalled();
+    expect(contextOf(view.canvas()).drawImage).not.toHaveBeenCalled();
+
+    // It fails on every draw, and says so once.
+    canvasSize.width = 400;
+    deliverResize();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("Could not create a 360x520");
+
+    // The frame was kept: it is painted as soon as a surface can be made.
+    CanvasKitMock.MakeOnScreenGLSurface.mockImplementation(makeSurface);
+    canvasSize.width = 360;
+    deliverResize();
+    expect(rawCanvas.drawPicture).toHaveBeenCalledWith(fakePicture.ref);
+    expect(contextOf(view.canvas()).drawImage).toHaveBeenCalledTimes(1);
+
+    warn.mockRestore();
+    await view.unmount();
+  });
+
   it("recovers from the browser losing and restoring the shared context", async () => {
     const { CanvasKitMock, rawCanvas, grContext, registry } =
       installCanvasKit();
