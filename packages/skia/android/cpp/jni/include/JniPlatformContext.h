@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fbjni/NativeRunnable.h>
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
@@ -34,9 +35,10 @@ public:
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,
                                       jni::alias_ref<jni::JString> directory);
 
-  // PresentThread.post: runs the Java task on the present thread, under a
-  // thread scope, as the thread is the native side's and not attached to
-  // the JVM on its own.
+  // PresentThread.post: runs the Java task on the present thread, which is
+  // the native side's and attached to the JVM for good by its first task
+  // (see attachPresentThread). Registered on PresentThread, not on the
+  // context's class.
   static void postNative(jni::alias_ref<jclass>,
                          jni::alias_ref<jni::JRunnable::javaobject> task);
 

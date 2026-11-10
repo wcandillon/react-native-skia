@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -8,6 +9,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 
@@ -179,12 +181,24 @@ private:
     _started.notify_all();
   }
 
+#if defined(__ANDROID__) || defined(__linux__)
+  static int makeWakeup() {
+    const int wakeup = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (wakeup == -1) {
+      throw std::system_error(errno, std::generic_category(), "eventfd");
+    }
+    return wakeup;
+  }
+#endif
+
 #if defined(__APPLE__)
   // A run loop, which a CADisplayLink made on this thread ticks on ([NSRunLoop
   // currentRunLoop] wraps it). The queue is a source of the loop: a post
   // signals it and wakes the loop, which drains the queue under an
-  // autorelease pool of its own (CFRunLoopRunInMode drains the thread's pool
-  // after each source).
+  // autorelease pool of its own. The loop returns after each source it
+  // handled, a tick of the display link among them, and each turn has a pool
+  // too: a thread made here has none, and CoreFoundation is not documented
+  // to drain one per callout.
   void loop() {
     pthread_setname_np(_name.c_str());
     // The priority of the main thread: a present is what the user waits for.
@@ -203,7 +217,9 @@ private:
     CFRunLoopAddSource(_runLoop, _source, kCFRunLoopCommonModes);
     markStarted();
     while (!_stopping.load(std::memory_order_acquire)) {
+      void *pool = objc_autoreleasePoolPush();
       CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e10, true);
+      objc_autoreleasePoolPop(pool);
     }
     drain();
     CFRunLoopRemoveSource(_runLoop, _source, kCFRunLoopCommonModes);
@@ -230,7 +246,6 @@ private:
     // The priority of the UI toolkit's own render thread
     // (Process.THREAD_PRIORITY_DISPLAY).
     setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), -4);
-    _wakeup = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     _looper = ALooper_prepare(ALOOPER_PREPARE_ALLOW_NON_CALLBACKS);
     ALooper_acquire(_looper);
     ALooper_addFd(
@@ -252,20 +267,18 @@ private:
     close(_wakeup);
   }
 
-  void wake() {
-    if (_wakeup != -1) {
-      eventfd_write(_wakeup, 1);
-    }
-  }
+  void wake() { eventfd_write(_wakeup, 1); }
 
   ALooper *_looper = nullptr;
-  int _wakeup = -1;
+  // Made with the object, ahead of the thread (declared above it): without
+  // it no post would ever wake the loop, so its failure is thrown, not
+  // carried.
+  int _wakeup = makeWakeup();
 #elif defined(__linux__)
   // The host: a poll on the eventfd, what the Android loop does without the
   // ALooper around it.
   void loop() {
     pthread_setname_np(pthread_self(), _name.substr(0, 15).c_str());
-    _wakeup = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     markStarted();
     while (!_stopping.load(std::memory_order_acquire)) {
       pollfd watched{_wakeup, POLLIN, 0};
@@ -279,13 +292,12 @@ private:
     close(_wakeup);
   }
 
-  void wake() {
-    if (_wakeup != -1) {
-      eventfd_write(_wakeup, 1);
-    }
-  }
+  void wake() { eventfd_write(_wakeup, 1); }
 
-  int _wakeup = -1;
+  // Made with the object, ahead of the thread (declared above it): without
+  // it no post would ever wake the loop, so its failure is thrown, not
+  // carried.
+  int _wakeup = makeWakeup();
 #else
 #error "rnsurface::RenderThread has no loop for this platform"
 #endif

@@ -356,9 +356,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     }
 
     // Drops the frame the window took and the scheduler's requests, on the
-    // present thread, where they live. A vsync or a frame-consumed signal
-    // still on its way finds a scheduler that asked for nothing, and does
-    // nothing.
+    // present thread, where they live. A frame-consumed signal still on its
+    // way finds a scheduler that asked for nothing, and does nothing; a
+    // vsync still on its way (AChoreographer has no cancel) is dropped by
+    // the native host, or serves a request made since.
     private void cancelFrames() {
         if (mHybridData.isValid()) {
             cancelScheduledFrames();

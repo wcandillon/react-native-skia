@@ -7,11 +7,10 @@
 #include <android/choreographer.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
-#include <dlfcn.h>
-#include <fbjni/NativeRunnable.h>
 #include <fbjni/fbjni.h>
 #include <jni.h>
 
+#include "JniPresentThread.h"
 #include "JniSkiaManager.h"
 #include "RNSkLog.h"
 #include "RNSkPresentThread.h"
@@ -150,8 +149,9 @@ protected:
   void frameConsumed() { _scheduler->onFrameConsumed(); }
 
   // Present thread: the view left its window, or the window lost its
-  // surface, and the Java view removed its callbacks (see
-  // SkiaView.cancelFrames).
+  // surface (see SkiaView.cancelFrames). A vsync already asked for still
+  // fires, as AChoreographer has no cancel: the host drops it, or hands it
+  // to a request made since (see PresentHost::onVsync).
   void cancelScheduledFrames() { _scheduler->cancel(); }
 
 private:
@@ -221,39 +221,44 @@ private:
    the Java view told of a frame that went to the window, for its frame rate
    vote (see SkiaView.onFramePresented).
    */
-  class PresentHost : public rnsurface::FrameScheduler::Host {
+  class PresentHost : public rnsurface::FrameScheduler::Host,
+                      public std::enable_shared_from_this<PresentHost> {
   public:
     PresentHost(std::shared_ptr<JavaView> javaView,
                 std::weak_ptr<RNSkView> view)
         : _javaView(std::move(javaView)), _view(std::move(view)) {}
 
-    // The scheduler the vsync goes to; weak, as the callback may fire after
-    // this object went (AChoreographer has no cancel).
+    // The scheduler the vsync goes to; weak, as it goes before this object.
     void setScheduler(std::weak_ptr<rnsurface::FrameScheduler> scheduler) {
       _scheduler = std::move(scheduler);
     }
 
     // The next vsync, from the AChoreographer of the present thread (its
-    // looper is the thread's, see rnsurface::RenderThread). The entry point
-    // with a 64-bit frame time is API 29; before it the one of API 24, whose
-    // frame time is not used, serves. The token outlives this object, so a
-    // vsync that fires after it finds nothing to tick.
+    // looper is the thread's, see rnsurface::RenderThread). A vsync has no
+    // cancel, so one is outstanding at most: a request made while the vsync
+    // of a cancelled one is still to fire takes that vsync rather than a
+    // second, which would present twice per vsync from then on. The token
+    // outlives this object, so a vsync that fires after it finds nothing.
     void postFrameCallback() override {
+      if (_vsyncPending) {
+        return;
+      }
+      _vsyncPending = true;
+      auto *token = new std::weak_ptr<PresentHost>(weak_from_this());
       auto *choreographer = AChoreographer_getInstance();
       if (choreographer == nullptr) {
+        // No connection to the display's events. The frame goes without a
+        // vsync, as a task behind those queued, rather than never: the
+        // scheduler holds its requests until the callback it asked for.
+        if (!_loggedNoChoreographer) {
+          _loggedNoChoreographer = true;
+          RNSkLogger::logToConsole(
+              "No AChoreographer on the present thread: presenting unpaced");
+        }
+        presentThread().post([token]() { onVsync(token); });
         return;
       }
-      auto *token = new std::weak_ptr<rnsurface::FrameScheduler>(_scheduler);
-      using PostFrameCallback64 =
-          void (*)(AChoreographer *, void (*)(int64_t, void *), void *);
-      static const auto postFrameCallback64 =
-          reinterpret_cast<PostFrameCallback64>(
-              dlsym(RTLD_DEFAULT, "AChoreographer_postFrameCallback64"));
-      if (postFrameCallback64 != nullptr) {
-        postFrameCallback64(
-            choreographer, [](int64_t, void *data) { onVsync(data); }, token);
-        return;
-      }
+      // The entry point of API 24: its frame time, a long, is not used.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
       AChoreographer_postFrameCallback(
@@ -262,10 +267,15 @@ private:
     }
 
     static void onVsync(void *data) {
-      auto *token =
-          static_cast<std::weak_ptr<rnsurface::FrameScheduler> *>(data);
-      if (auto scheduler = token->lock()) {
-        scheduler->onFrame();
+      auto *token = static_cast<std::weak_ptr<PresentHost> *>(data);
+      if (auto host = token->lock()) {
+        host->_vsyncPending = false;
+        auto scheduler = host->_scheduler.lock();
+        // Not asked for any more after a cancel: the scheduler presents on
+        // the vsyncs it asked for only.
+        if (scheduler != nullptr && scheduler->isFrameCallbackPosted()) {
+          scheduler->onFrame();
+        }
       }
       delete token;
     }
@@ -278,13 +288,17 @@ private:
       // The view reports in the scheduler's mask.
       const int result = view->presentFrame();
       if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
-        // A Java call from the native thread: attached for its duration.
-        jni::ThreadScope threadScope;
-        if (auto javaPart = _javaView->weak->lockLocal()) {
-          static const auto method =
-              javaPart->getClass()->getMethod<void()>("onFramePresented");
-          method(javaPart);
-        }
+        // A Java call from the native thread, which is attached (see
+        // attachPresentThread). The local reference goes with the scope:
+        // no Java frame is below to let go of it.
+        callJavaFromPresentThread([&]() {
+          jni::JniLocalScope localScope(jni::Environment::current(), 4);
+          if (auto javaPart = _javaView->weak->lockLocal()) {
+            static const auto method =
+                javaPart->getClass()->getMethod<void()>("onFramePresented");
+            method(javaPart);
+          }
+        });
       }
       return result;
     }
@@ -293,6 +307,10 @@ private:
     std::shared_ptr<JavaView> _javaView;
     std::weak_ptr<RNSkView> _view;
     std::weak_ptr<rnsurface::FrameScheduler> _scheduler;
+    // A vsync was asked of the choreographer and has not fired. Present
+    // thread, as the rest.
+    bool _vsyncPending = false;
+    bool _loggedNoChoreographer = false;
   };
 
   /**

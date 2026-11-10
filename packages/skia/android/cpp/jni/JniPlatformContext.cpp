@@ -5,6 +5,8 @@
 #include <cerrno>
 #include <chrono>
 #include <exception>
+#include <memory>
+#include <string>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -16,6 +18,7 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkTypes.h"
 
+#include "JniPresentThread.h"
 #include "RNDawnContext.h"
 #include "RNSkPresentThread.h"
 
@@ -36,23 +39,37 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::setForegroundNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
-      makeNativeMethod("postNative", JniPlatformContext::postNative),
-      makeNativeMethod("postAndWaitNative",
-                       JniPlatformContext::postAndWaitNative),
   });
+  // The statics of PresentThread.java, which has no native peer of its own.
+  jni::registerNatives(
+      "com/reactnative/skia/PresentThread",
+      {
+          makeNativeMethod("postNative", JniPlatformContext::postNative),
+          makeNativeMethod("postAndWaitNative",
+                           JniPlatformContext::postAndWaitNative),
+      });
+}
+
+void attachPresentThread() {
+  // For the life of the thread: fbjni detaches it when it exits, which it
+  // never does. A thread scope made on it from here on finds it attached.
+  jni::Environment::ensureCurrentThreadIsAttached();
 }
 
 namespace {
 
 // A Java task as a present-thread task: the global reference is made here,
-// on a Java thread, and let go of on the present thread under its scope.
+// on a Java thread, and let go of on the present thread, which is attached
+// (see attachPresentThread). fbjni's JRunnable declares no method, so run()
+// is looked up, once and on a Java thread.
 std::function<void()>
 javaTask(jni::alias_ref<jni::JRunnable::javaobject> task) {
+  static const auto run =
+      jni::JRunnable::javaClassStatic()->getMethod<void()>("run");
   auto global = std::make_shared<jni::global_ref<jni::JRunnable::javaobject>>(
       jni::make_global(task));
   return [global]() {
-    jni::ThreadScope threadScope;
-    (*global)->run();
+    callJavaFromPresentThread([&]() { run(*global); });
     global->reset();
   };
 }

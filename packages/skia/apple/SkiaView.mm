@@ -559,8 +559,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 // No autorelease pool of its own: the link is a run loop source, so the
-// thread's run loop returns after each tick and drains its pool then (see
-// presentRunLoop).
+// present thread's loop returns after each tick and drains its pool then
+// (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
   _presentedSinceTick = false;
   _tickTarget = link.targetTimestamp;
