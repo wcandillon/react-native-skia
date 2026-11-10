@@ -27,6 +27,7 @@
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkPresentThread.h"
 #include "RNSkWindowSurface.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
@@ -168,24 +169,6 @@ public:
    */
   static void setPrecompileDisplayP3(bool displayP3) noexcept {
     precompileDisplayP3().store(displayP3, std::memory_order_release);
-  }
-
-  /**
-   The thread every window presents on (see RNSkWindowSurface), one for the
-   process: PresentThread on Android, RNSkPresentThread on Apple platforms.
-   The replacement of a lost device runs there: the windows let go of their
-   surfaces on it, the new device is put in place and the lost one
-   destroyed, with no present or attach in between (see
-   replaceOnPresentThread). `run` posts a task there, behind those
-   posted before, and the thread runs every one. Set by the platform before
-   it makes its first window; until then a task runs on the thread replacing
-   the device, as no window exists. Any thread.
-   */
-  static void
-  setPresentThread(std::function<void(std::function<void()>)> run) noexcept {
-    auto &thread = presentThread();
-    std::lock_guard<std::mutex> lock(thread.mutex);
-    thread.run = std::move(run);
   }
 
   // Generations ---------------------------------------------------------------
@@ -834,18 +817,6 @@ private:
     return foreground;
   }
 
-  // The thread every window presents on (see setPresentThread). Not tied to
-  // the context: the platform sets it before the GPU is probed. Never
-  // destroyed: a loss can be reported during process teardown.
-  struct PresentThread {
-    std::mutex mutex;
-    std::function<void(std::function<void()>)> run;
-  };
-  static PresentThread &presentThread() noexcept {
-    static auto *thread = new PresentThread();
-    return *thread;
-  }
-
   static const Probe &probe() noexcept {
     // Attempted once: a device without a usable GPU does not get one by
     // asking again, and the attempt enumerates drivers. The context is never
@@ -1002,7 +973,7 @@ private:
   }
 
   /**
-   Has the thread every window presents on (see setPresentThread) let go of
+   Has the thread every window presents on (see RNSkPresentThread.h) let go of
    every window's surface on `lost`, put `next` in its place and destroy
    the lost device, and waits for it. The tasks there run one after the
    other, so no present or attach overlaps the task: a window has no lock
@@ -1019,28 +990,16 @@ private:
    context lock (see the class comment on locks in RNSkWindowSurface).
    */
   void replaceOnPresentThread(Generation *lost, Generation *next) {
-    auto replace = [this, lost, next]() {
-      RNSkWindowSurface::releaseSurfacesOn(lost->id);
-      std::lock_guard<std::mutex> lock(_mutex);
-      _retired.push_back(lost);
-      _current.store(next, std::memory_order_release);
-      lost->backendContext.fDevice.Destroy();
-    };
-    std::function<void(std::function<void()>)> run;
-    {
-      auto &thread = presentThread();
-      std::lock_guard<std::mutex> lock(thread.mutex);
-      run = thread.run;
-    }
-    if (!run) {
-      // No window was made yet (see setPresentThread).
-      replace();
-      return;
-    }
     auto done = std::make_shared<std::promise<void>>();
     auto replaced = done->get_future();
-    run([replace, done]() {
-      replace();
+    presentThread().post([this, lost, next, done]() {
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _retired.push_back(lost);
+        _current.store(next, std::memory_order_release);
+        lost->backendContext.fDevice.Destroy();
+      }
       done->set_value();
     });
     replaced.wait();
