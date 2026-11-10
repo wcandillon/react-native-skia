@@ -79,6 +79,18 @@ export interface CanvasProps extends ViewProps {
    */
   colorSpace?: CanvasColorSpace;
   /**
+   * Draws text with device independent (distance field) fonts: a glyph is
+   * rasterized once and reused under any rotation or scale, instead of
+   * being rasterized again for every new transform. Turn it on for text that
+   * rotates or scales on every frame, where it is many times faster (6,000
+   * rotating text blobs: 4 to 30 fps on an iPhone 14 Pro). It costs more
+   * GPU time per glyph and draws slightly softer glyphs, which text that only
+   * moves pays for nothing, so it is off by default. Glyphs smaller than
+   * about 18 pixels are drawn as usual. Can be changed at any time. Native
+   * only, ignored on web.
+   */
+  deviceIndependentFonts?: boolean;
+  /**
    * Android-only rendering options: the native view behind the canvas and its
    * options, see {@link AndroidCanvasProps}. The view is created when the
    * canvas mounts and kept: a change of `backingView` is ignored, with a
@@ -95,14 +107,24 @@ export interface CanvasProps extends ViewProps {
  */
 const useCanvasRoot = ({
   children,
+  deviceIndependentFonts,
   ref,
-}: Pick<CanvasProps, "children" | "ref">) => {
+}: Pick<CanvasProps, "children" | "deviceIndependentFonts" | "ref">) => {
   const viewRef = useRef<NativeView>(null);
   // Native ID
   const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
+
+  // Before the content, so that the first frame is recorded with it.
+  useLayoutEffect(() => {
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "deviceIndependentFonts",
+      deviceIndependentFonts
+    );
+  }, [nativeId, deviceIndependentFonts]);
 
   // Render effects
   useLayoutEffect(() => {
@@ -171,12 +193,17 @@ const useCanvasRoot = ({
 export const Canvas = ({
   children,
   highBitDepth = false,
+  deviceIndependentFonts = false,
   colorSpace,
   android,
   ref,
   ...viewProps
 }: CanvasProps) => {
-  const { nativeId, viewRef } = useCanvasRoot({ children, ref });
+  const { nativeId, viewRef } = useCanvasRoot({
+    children,
+    deviceIndependentFonts,
+    ref,
+  });
   useBackingViewWarning({ highBitDepth, android });
   return (
     <SkiaViewNativeComponent

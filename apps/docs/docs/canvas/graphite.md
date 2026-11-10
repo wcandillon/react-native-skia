@@ -88,6 +88,10 @@ A few rules follow from this model:
 - GPU-backed images (offscreen surface snapshots, native buffers, video frames, [WebGPU textures](/docs/webgpu)) can be drawn from any runtime. Their content is uploaded when they are created, so create them before the frame that uses them.
 - A loop on the Reanimated UI runtime or on a worklet runtime runs at the display's rate. On iOS, React Native's `requestAnimationFrame` on the JS thread runs at 60 Hz, so a view fed from it presents at that rate (see [High refresh rate displays](/docs/canvas/overview#high-refresh-rate-displays)).
 
+## Animated text
+
+Text that rotates or scales on every frame is rasterized again on every frame by default. Pass `deviceIndependentFonts` to draw it as distance fields instead, rasterized once and reused under any transform (see [animated text](/docs/text/text#animated-text) for the tradeoff). It applies from the next recording on and can be changed at any time.
+
 ## Snapshots
 
 `makeImageSnapshot()` from `SkiaViewApi` replays the current frame into an offscreen surface and returns a GPU image of it, like it does for a `Canvas`.
