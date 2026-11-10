@@ -10,6 +10,7 @@ import type { ISkiaViewApiWeb } from "../../specs/NativeSkiaModule.web";
 // Installs global.SkiaViewApi
 import "../../specs/NativeSkiaModule.web";
 import { SkiaPictureView } from "../SkiaPictureView.web";
+import { WebGLRenderer } from "../SkiaWebRenderer";
 
 import {
   installWebEnvironment,
@@ -379,6 +380,91 @@ describe("SkiaPictureView.web", () => {
     await view.unmount();
     expect(canvas.width).toBe(0);
     expect(canvas.height).toBe(0);
+  });
+
+  // React runs the layout effect cleanup of a view when the Activity it is in
+  // gets hidden, then sets display: none on the subtree. An app can keep that
+  // subtree displayed, as a backdrop under the screen covering it. Activity
+  // isn't stable in the React version these tests run with, so the renderer
+  // is disposed directly, the way the cleanup does.
+  const mountRenderer = () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const makeRenderer = () => new WebGLRenderer(canvas, () => {});
+    return { canvas, makeRenderer, renderer: makeRenderer() };
+  };
+
+  it("frees the bitmap of a disposed canvas once it is hidden", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const { canvas, renderer } = mountRenderer();
+    expect(canvas.width).toBe(360);
+
+    // The cleanup runs first, the element is hidden right after.
+    renderer.dispose();
+    canvas.style.display = "none";
+    expect(canvas.width).toBe(360);
+    await flushMicrotasks();
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+
+    canvas.remove();
+  });
+
+  it("keeps the frame of a disposed canvas that is still displayed", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const { canvas, renderer } = mountRenderer();
+    const reset = jest.spyOn(contextOf(canvas), "reset");
+
+    // The canvas is still on screen: sizing it would clear what it shows.
+    renderer.dispose();
+    await flushMicrotasks();
+    expect(canvas.width).toBe(360);
+    expect(canvas.height).toBe(520);
+    expect(reset).not.toHaveBeenCalled();
+
+    canvas.remove();
+  });
+
+  it("leaves a disposed canvas to the renderer that took it over", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const { canvas, renderer, makeRenderer } = mountRenderer();
+    renderer.dispose();
+    const next = makeRenderer();
+    canvas.style.display = "none";
+    await flushMicrotasks();
+    // Hidden, but no longer the first renderer's to clear.
+    expect(canvas.width).toBe(360);
+
+    next.dispose();
+    await flushMicrotasks();
+    expect(canvas.width).toBe(0);
+
+    canvas.remove();
+  });
+
+  it("keeps the frame when StrictMode re-runs the layout effect", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountView("16", { strict: true });
+    const canvas = view.canvas();
+    await setPicture(16);
+    // The first renderer's deferred cleanup found the second one in charge.
+    expect(canvas.width).toBe(360);
+    expect(contextOf(canvas).drawImage).toHaveBeenCalled();
+
+    await view.unmount();
+    expect(canvas.width).toBe(0);
   });
 
   // The first draw of a view runs from a microtask and the following ones

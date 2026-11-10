@@ -308,6 +308,23 @@ export const installWebEnvironment = () => {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   HTMLCanvasElement.prototype.getContext = getContextMock as any;
+  // jsdom has no layout, so every element reports no box. Report one unless
+  // the element is out of the document or under display: none, which is what
+  // tells a rendered element from a hidden one in a browser.
+  HTMLCanvasElement.prototype.getClientRects = function (
+    this: HTMLCanvasElement
+  ) {
+    let rendered = this.isConnected;
+    for (
+      let element: HTMLElement | null = this;
+      rendered && element;
+      element = element.parentElement
+    ) {
+      rendered = element.style.display !== "none";
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (rendered ? [{}] : []) as any;
+  };
   // Setting a canvas's size (even to the same value) clears its bitmap and
   // resets its 2D context's state.
   for (const dimension of ["width", "height"] as const) {
