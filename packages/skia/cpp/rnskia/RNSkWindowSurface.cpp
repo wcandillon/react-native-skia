@@ -406,6 +406,8 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
+    RNSURFACE_ASSERT_THREAD(window->_presentingThread,
+                            "RNSkWindowSurface::releaseSurfacesOn");
     if (window->_generation == generation) {
       window->_surface = nullptr;
       window->_generation = 0;
@@ -414,21 +416,15 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
 }
 
 bool RNSkWindowSurface::ensureDevice() {
-  const auto generation = DawnContext::generation();
-  if (_surface && _generation == generation) {
+  if (_surface) {
     return true;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
-  // A surface on a device that is not the one in use, which attach() made
-  // after the sweep (see releaseSurfacesOn) and before the new device was in
-  // place, is made again: it was never configured, as nothing presents on a
-  // lost device.
-  _surface = nullptr;
   _device = context->getWGPUDevice();
-  _generation = generation;
+  _generation = DawnContext::generation();
   _surface = context->MakeWGPUSurface(_nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");

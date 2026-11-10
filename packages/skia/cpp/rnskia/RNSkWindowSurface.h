@@ -148,8 +148,9 @@ public:
   void abandon();
 
   /**
-   Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDevice). Presenting thread.
+   Whether a window is attached. Its Dawn surface is away from the
+   replacement of a lost GPU device until the window's next frame (see
+   ensureDevice). Presenting thread.
    */
   bool isAttached();
 
@@ -229,7 +230,8 @@ public:
   /**
    Lets go of the Dawn surface of every window configured on the given
    generation (see DawnContext::generation()): the replacement of a lost
-   device does so before it destroys the device (see DawnContext::recover).
+   device does so before it puts the new device in place and destroys the
+   lost one (see DawnContext::recover).
    The windows make their surface again by their next frame (see
    ensureDevice). Presenting thread, where no present or attach overlaps
    the release, as the windows have no lock of their own (see the class
@@ -298,12 +300,12 @@ private:
   // or a device replacement configured it again (see ensureDevice), between
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
-  // Configures the window on the GPU device in use when its surface is not
-  // on it: when the device it was configured on was lost and replaced since
-  // (see releaseSurfacesOn), the surface is made again on the new device
-  // (a Vulkan swapchain cannot move to another device, Dawn refuses it), the
-  // window itself stays. Returns false without a context, or when no
-  // surface can be made over the window.
+  // Configures the window on the GPU device in use when it has no surface:
+  // the replacement of a lost device let go of it (see releaseSurfacesOn),
+  // and it is made again on the new device (a Vulkan swapchain cannot move
+  // to another device, Dawn refuses it); the window itself stays. Returns
+  // false without a context, or when no surface can be made over the
+  // window.
   bool ensureDevice();
   // Configures the swapchain for the current size, format and usage.
   void configureSurface();
@@ -347,11 +349,10 @@ private:
   }
 
   // The device the window's surface was made on, and its generation (see
-  // DawnContext::generation()): a surface made on a device replaced since is
-  // made again on the device in use by the window's next frame (see
-  // ensureDevice). The generation is 0 while the window is detached, and
-  // once the replacement of a lost device let go of the surface (see
-  // releaseSurfacesOn).
+  // DawnContext::generation()), by which the replacement of a lost device
+  // lets go of the surface (see releaseSurfacesOn); the window's next frame
+  // makes it again on the new device (see ensureDevice). The generation is 0
+  // while the window is detached, and once the surface was let go of.
   wgpu::Device _device;
   uint64_t _generation = 0;
   wgpu::Surface _surface;
