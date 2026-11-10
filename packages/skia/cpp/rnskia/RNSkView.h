@@ -136,9 +136,23 @@ public:
   /** Keep the Apple display link current while a queued replay finishes. */
   bool hasFrameInFlight() { return _producer->hasFrameInFlight(); }
 
-  /** Declarative content: the recorder of <Canvas>, or a picture. */
+  /**
+   Declarative content: the recorder of <Canvas>, or a picture; and the
+   deviceIndependentFonts option, set on the target (the view's recordings
+   and those JS makes for it) before its content, so that a canvas mounting
+   with it records its first frame with it. Called after setNativeId.
+   */
   void setJsiProperties(
       std::unordered_map<std::string, RNJsi::ViewProperty> &props) {
+    auto option = props.find("deviceIndependentFonts");
+    if (option != props.end() && option->second.isBool()) {
+      auto target = getTarget();
+      // Static content is not recorded again by itself.
+      if (target &&
+          target->setDeviceIndependentFonts(option->second.getBool())) {
+        _producer->requestFrame();
+      }
+    }
     for (auto &prop : props) {
       if (prop.first == "recorder") {
         _producer->setRecorder(
