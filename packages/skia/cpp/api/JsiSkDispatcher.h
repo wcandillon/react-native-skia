@@ -1,11 +1,16 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "include/core/SkRefCnt.h"
 
 namespace RNSkia {
 
@@ -21,6 +26,10 @@ private:
   struct DispatcherData {
     std::queue<Operation> operationQueue;
     std::mutex queueMutex;
+    // Objects whose last reference must be dropped on this thread, kept
+    // until nothing else holds them (see releaseWhenUnreferenced). Only
+    // touched on this thread.
+    std::vector<sk_sp<SkRefCnt>> heldUntilUnreferenced;
   };
 
   // Thread-local storage for dispatcher data
@@ -88,6 +97,32 @@ public:
   }
 
   /**
+   * Hand `object` to the dispatcher's thread and keep it there until no one
+   * else references it, then drop it on that thread (in processQueue()).
+   *
+   * For objects whose destruction must happen on this thread while other
+   * threads may still hold references to them. A texture-backed SkImage made
+   * with a Ganesh context is one: an SkPicture recorded on another thread,
+   * a shader or a paint can keep the image alive after its wrapper is gone,
+   * and whichever of them lets go last would otherwise return the texture to
+   * this thread's GrResourceCache from its own thread.
+   *
+   * May be called from any thread.
+   */
+  void releaseWhenUnreferenced(sk_sp<SkRefCnt> object) {
+    if (!object) {
+      return;
+    }
+    // A raw pointer: the operation only runs in processQueue() on this
+    // data, so it cannot outlive it, and a shared_ptr stored in the data's
+    // own queue would keep the data alive.
+    auto *data = _data.get();
+    run([data, object = std::move(object)]() mutable {
+      data->heldUntilUnreferenced.push_back(std::move(object));
+    });
+  }
+
+  /**
    * Process all pending operations for the current thread.
    * Must be called from the thread that owns this dispatcher.
    * Returns the number of operations processed.
@@ -113,6 +148,17 @@ public:
       op();
       operations.pop();
     }
+
+    // Drop the held objects that nothing else references any more. unique()
+    // is only true once every other holder has let go, and no other thread
+    // can take a new reference from this list, so the last reference goes
+    // here, on this thread.
+    auto &held = _data->heldUntilUnreferenced;
+    held.erase(std::remove_if(held.begin(), held.end(),
+                              [](const sk_sp<SkRefCnt> &object) {
+                                return object->unique();
+                              }),
+               held.end());
 
     return count;
   }
