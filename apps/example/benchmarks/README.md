@@ -45,7 +45,8 @@ then exits with status 1.
 | `--cold` | | measure the first draw after a fresh install instead of FPS (see below) |
 | `--pacing` | | iOS burst/continuous displayed-frame intervals (see below) |
 | `--refresh-rate` | | pacing: required actual display cadence in Hz |
-| `--keep-trace` | | pacing: retain a successful raw recording for inspection |
+| `--trace` | | pacing: collect optional Instruments diagnostics |
+| `--keep-trace` | | pacing: collect and retain optional Instruments diagnostics |
 | `--scenes` | all seven | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
@@ -76,9 +77,12 @@ the screen on, and puts both back at the end.
 
 ## Short-animation frame pacing (iOS)
 
-`--pacing` measures uneven displayed-frame intervals rather than average FPS.
-Use the example's normal iOS setup first (`pod install` from `ios/`); the runner
-builds and installs the app but does not synchronize pods.
+`--pacing` measures uneven drawable presentation intervals rather than average
+FPS. Its primary clock is Metal's `MTLDrawable.presentedTime`, not Instruments
+display-swap counts or callback arrival times.
+Run `pod install` from `ios/` first to include the example-only `BenchPacing`
+observer. Repeat that step when its native source changes: a compiled observer
+hash rejects stale builds. The runner builds/installs the app, not its pods.
 It runs a memoized Canvas with 128, 1024, 2048, 4096, 8192 and 16384 deterministic circles under
 pan/zoom: two warmups and twelve measured 400ms bursts per load, separated by
 200ms idle periods. Each repetition also includes a five-second continuous
@@ -86,6 +90,9 @@ control at 1024 circles. The Canvas stays mounted during idle; only a load
 change rebuilds its scene. There is no changing status overlay during a run.
 
 ```sh
+# From apps/example; required once and after observer-native-source changes.
+(cd ios && pod install)
+
 node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
   --reps 3 --label baseline --team <TEAM> --bundle-id <APP_ID>
 
@@ -103,39 +110,62 @@ node --test benchmarks/pacing.test.mjs
   mode and display rate the same. `--refresh-rate` must be the actual active
   display cadence, not merely the panel's maximum. Physical 120Hz validation
   is separate; a 60Hz measurement does not establish 120Hz behavior.
-- Set Auto-Lock to Never and leave the app foreground without touching it.
+- Leave the phone unlocked, app foreground, without touching it. The observer
+  temporarily prevents auto-lock and restores the previous setting on cleanup.
   `--settle` is at least 10 seconds so recording can attach before animation.
-- The `Display` instrument records compositor-displayed app surfaces, alongside
-  the `Logging` template. This avoids full Metal API tracing, which can perturb
-  timing-sensitive scheduling. `os_log` captures RN's native logging host function, transferred
-  to and called synchronously on UI, at animation boundaries on the same device
-  clock. No production Skia hooks are added. Missing native logger support
-  fails measurement rather than falling back to
-  asynchronously timestamped RN console messages.
-  `Thermal State` records the device's thermal-state metadata.
+- The native helper finds the tagged benchmark Canvas and observes only its
+  Metal layer's drawables. It registers `addPresentedHandler` callbacks and
+  buffers their `presentedTime` feedback in preallocated memory. No per-frame
+  bridge calls, logging, JSON or disk writes. The observer is installed only
+  for a pacing capture, restored on finish/abort, and never changes production
+  Skia's scheduling, queue limits or GPU synchronization.
+- UI-boundary markers use RN's native logging host function, transferred to and
+  called synchronously on UI. The helper temporarily wraps RN's public native
+  log function, preserves normal logging, and timestamps only this capture's
+  markers with `CACurrentMediaTime`. Markers and drawable feedback share the
+  same clock: no Instruments discovery, JS/RN bridge hop, host-sleep estimate,
+  callback-arrival time, or cross-clock alignment determines the windows.
+  The prior logger is restored on finish/abort. Missing markers fail explicitly.
+  Native Low Power Mode and thermal snapshots are saved at capture endpoints;
+  endpoints alone do not establish temperature stability throughout a run.
 - UI completion is not display completion. Each window includes its 200ms
   idle-drain period so queued final frames are measured. Only successive
-  displayed surfaces **inside that window** contribute intervals: no gap is
+  drawable presentations **inside that window** contribute intervals: no gap is
   synthesized after its last surface, or across to the next animation. Warmups
-  are excluded. Overlapping windows fail. First-surface time and remaining
-  idle after the last surface are retained separately in JSON.
-  These are displayed app-surface intervals, not input latency or proof that
-  each surface contains the intended animation value.
+  are excluded. Overlapping windows and presentations beyond the configured
+  drain fail. First-presentation time and remaining idle are retained separately.
+  Drawable feedback measures presentation cadence, not input latency or proof
+  that each frame contains the intended animation value.
+- Optional `--trace`/`--keep-trace` uses `Logging`, `Display` and `Thermal State`
+  for secondary `traceDiagnostics`, never pacing verdicts. Normal runs do not
+  require Instruments to attach. Diagnostic attachment failure is recorded and
+  warned about, not converted into a pacing failure or substituted frame data.
+  Instruments can omit swaps: a matched check found apparent ~50ms trace gaps
+  containing two regular intermediate drawable presentations. Both streams
+  stay available for inspection; missing trace events neither invent stalls
+  nor cause native timestamps to be filled, filtered or replaced.
 - Reports show p99 (median of per-repetition p99s), worst observed interval,
   and animation windows with at least one gap longer than 1.5 display periods.
   UI maximum gap is a control metric, not a substitute for displayed frames.
-  First-surface time is reported separately (median of per-repetition medians)
+  First-presentation time is reported separately (median of per-repetition medians)
   to expose animation-onset delay; it is not input latency or proof that the
-  first surface already contains the intended animation value.
+  first drawable already contains the intended animation value.
   A p99 increase over 25% **and** a quarter display period flags a regression;
   smaller or rarer changes remain visible in maximum/gap counts.
-- Incomplete/cancelled windows, missing completion, stale workloads and
-  insufficient displayed frames fail explicitly. Comparisons reject different
-  devices, display rates, workload/measurement fingerprints or plans. The
-  device identifier is hashed; raw UDIDs are not written to results.
-- `--keep-trace` retains the raw Instruments recording for inspection. Failed
-  measurements always retain it. Without that flag, successful traces are
-  removed after their per-window measurements are saved in result JSON.
+- The native helper drains all attached callbacks before saving. Zero
+  `presentedTime` means dropped/unshown, counted separately; a missing callback
+  is incomplete evidence and fails. Cancellation, foreground interruption,
+  ambiguous/lost layers, overflow (60,000-frame buffer), insufficient feedback,
+  invalid clocks and stale PID/session/native hashes fail explicitly.
+  Comparisons reject different devices, display rates, measurement sources,
+  power modes, diagnostic settings, workload/native implementations or plans.
+  Changed Low Power Mode endpoints invalidate a capture. Old trace-only JSON is not
+  comparable: rebuild and rerun both baseline and candidate with this observer.
+  Device identifiers are hashed; raw UDIDs are not written to results.
+- `--keep-trace` requests and retains the raw Instruments recording for
+  inspection. Failed measurements/diagnostic recordings retain their capture
+  directory. Otherwise, temporary files are removed after intervals and full native
+  feedback buffer are saved in result JSON (`nativeCapture`).
 - As with FPS mode, `--no-build` reuses an installed binary. Rebuild for a
   revision comparison: the installed workload fingerprint is checked, but
   `--no-build` cannot prove which native revision was previously installed.

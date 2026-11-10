@@ -9,16 +9,21 @@ const here = dirname(fileURLToPath(import.meta.url));
 const source = join(here, "../src/Examples/Benchmark");
 export const configPath = join(source, "pacing-config.json");
 export const config = JSON.parse(readFileSync(configPath, "utf8"));
+const nativeDir = join(here, "native");
+export const nativeHash = createHash("sha256").update(readFileSync(join(nativeDir, "BenchPacing.mm"))).digest("hex");
 // Baked into markers too: --no-build must not silently measure another plan.
 const fingerprint = createHash("sha256");
 for (const file of [configPath, join(source, "pacing.tsx"), fileURLToPath(import.meta.url),
-  join(here, "pacing-ios.py"), join(here, "trace_ios.py")]) fingerprint.update(readFileSync(file));
+  join(here, "pacing-ios.py"), join(here, "trace_ios.py"),
+  join(nativeDir, "BenchPacing.mm"), join(nativeDir, "BenchPacing.podspec"),
+  join(here, "../ios/Podfile")]) fingerprint.update(readFileSync(file));
 export const fixture = fingerprint.digest("hex");
 const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
-export async function measurePacing({ device, app, sh, reps, settle, refreshRate, keepTrace }) {
+export async function measurePacing({ device, app, sh, reps, settle, refreshRate, keepTrace, collectTrace = keepTrace }) {
   const dir = mkdtempSync(join(tmpdir(), "skia-pacing-"));
   let complete = false;
+  let traceError;
   try {
     const plist = join(app, "Info.plist");
     const get = async (key) => (await sh("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, plist])).trim();
@@ -36,29 +41,44 @@ export async function measurePacing({ device, app, sh, reps, settle, refreshRate
     await launch();
     await sleep(12);
     const pid = await launch();
-    // CoreDevice can return a PID before Instruments discovers the process.
-    // This is before the >=10s device settle, never inside measured windows.
-    await sleep(2);
-    await sh("xcrun", ["devicectl", "device", "info", "lockState", "--device", device.id]);
+    const launchedAt = Date.now();
     const perRepMs = config.counts.length * (config.loadSettleMs +
       (config.warmups + config.bursts) * (config.burstMs + config.idleMs)) +
       config.loadSettleMs + config.continuousMs + config.idleMs;
     const seconds = Math.ceil(settle + reps * perRepMs / 1000 + 15);
+    console.log(`[bench] observing drawable pacing (${seconds}s); leave app foreground`);
     const trace = join(dir, "pacing.trace");
-    console.log(`[bench] recording pacing (${seconds}s); leave app foreground`);
-    // Both streams share Instruments' device clock. UI markers distinguish
-    // actual animation windows from idle; host timers only bound the recording.
-    // Display has the same compositor table without full Metal API tracing,
-    // whose overhead can change the scheduling race this workload exercises.
-    await sh("xcrun", ["xctrace", "record", "--template", "Logging", "--instrument", "Display", "--instrument", "Thermal State",
-      "--device", device.udid, "--attach", String(pid), "--time-limit", `${seconds}s`, "--output", trace]);
-    const data = JSON.parse(await sh("python3", [join(here, "pacing-ios.py"), trace, `${label} (${pid})`,
-      fixture, configPath, String(reps), String(refreshRate)]));
+    let recorded = false;
+    if (collectTrace) {
+      await sleep(2);
+      await sh("xcrun", ["devicectl", "device", "info", "lockState", "--device", device.id]);
+      try {
+        await sh("xcrun", ["xctrace", "record", "--template", "Logging", "--instrument", "Display", "--instrument", "Thermal State",
+          "--device", device.udid, "--attach", String(pid), "--time-limit", `${seconds}s`, "--output", trace]);
+        recorded = true;
+      } catch (error) {
+        traceError = error.message;
+        console.warn(`[bench] optional Instruments recording failed: ${traceError}`);
+      }
+    }
+    // Host timing only bounds collection. Actual UI windows and frame times
+    // come from the native buffer; a missing/incomplete file never passes.
+    await sleep(Math.max(0, seconds - (Date.now() - launchedAt) / 1000));
+    const feedback = join(dir, "drawables.json");
+    await sh("xcrun", ["devicectl", "device", "copy", "from", "--device", device.id,
+      "--domain-type", "appDataContainer", "--domain-identifier", bundleId,
+      "--source", "Documents/skia-benchmark-pacing.json", "--destination", feedback]);
+    const data = JSON.parse(await sh("python3", [join(here, "pacing-ios.py"), feedback,
+      fixture, configPath, String(reps), String(refreshRate), String(pid), nativeHash,
+      ...(recorded ? ["--trace", trace, "--process", `${label} (${pid})`] : [])]));
+    data.traceRequested = !!collectTrace;
+    data.traceRecorded = recorded;
+    if (traceError) data.traceDiagnostics = { available: false, error: traceError };
     complete = true;
     return { device: device.label, deviceId: createHash("sha256").update(device.udid).digest("hex"), ...data };
   } finally {
-    if (complete && !keepTrace) rmSync(dir, { recursive: true, force: true });
-    else console.log(`[bench] pacing trace retained: ${dir}`);
+    if (complete && !keepTrace && !traceError) rmSync(dir, { recursive: true, force: true });
+    else console.log(`[bench] pacing capture retained: ${dir}`);
   }
 }
 
@@ -78,11 +98,12 @@ export function pacingSummary(result) {
   for (const run of result.runs.filter((r) => !r.warmup)) {
     if (run.intervalsMs.some((v) => !Number.isFinite(v) || v <= 0)) throw new Error("Invalid pacing interval");
     const key = `${run.kind}/${run.count}/${run.rep}`;
-    const trial = trials.get(key) ?? { kind: run.kind, count: run.count, intervals: [], first: [], windows: 0, longWindows: 0, uiMax: 0 };
+    const trial = trials.get(key) ?? { kind: run.kind, count: run.count, intervals: [], first: [], windows: 0, longWindows: 0, dropped: 0, uiMax: 0 };
     trial.intervals.push(...run.intervalsMs);
-    trial.first.push(run.firstSurfaceMs);
+    trial.first.push(run.firstPresentationMs);
     trial.windows++;
     trial.longWindows += run.longGaps > 0 ? 1 : 0;
+    trial.dropped += run.droppedDrawables ?? 0;
     trial.uiMax = Math.max(trial.uiMax, run.uiMaxGapMs);
     trials.set(key, trial);
   }
@@ -97,16 +118,20 @@ export function pacingSummary(result) {
     kind: trials[0].kind, count: trials[0].count, trials: trials.length,
     windows: trials.reduce((sum, t) => sum + t.windows, 0),
     longWindows: trials.reduce((sum, t) => sum + t.longWindows, 0),
+    droppedDrawables: trials.reduce((sum, t) => sum + t.dropped, 0),
     p99Ms: median(trials.map((t) => percentile(t.intervals, 0.99))),
-    firstSurfaceMs: median(trials.map((t) => median(t.first))),
+    firstPresentationMs: median(trials.map((t) => median(t.first))),
     maxMs: Math.max(...trials.map((t) => Math.max(...t.intervals))),
     uiMaxMs: median(trials.map((t) => t.uiMax)),
   }));
 }
 
 export function reportPacing(result, previous) {
-  if (previous && ["mode", "platform", "device", "deviceId", "fixture", "refreshRate", "plan"].some((key) => previous[key] !== result[key])) {
-    throw new Error("Pacing comparison requires the same mode, device, display rate, fixture and plan");
+  if (result.measurement !== "metal-drawable-presentedTime-v2") {
+    throw new Error("Pacing verdicts require native drawable feedback v2; rerun legacy results");
+  }
+  if (previous && ["mode", "platform", "device", "deviceId", "fixture", "refreshRate", "plan", "measurement", "nativeHash", "traceRequested", "traceRecorded", "lowPowerMode"].some((key) => previous[key] !== result[key])) {
+    throw new Error("Pacing comparison requires the same mode, device, display rate, fixture, native implementation, power mode, trace setting and plan");
   }
   const rows = pacingSummary(result);
   const before = previous ? new Map(pacingSummary(previous).map((r) => [`${r.kind}/${r.count}`, r])) : null;
@@ -115,13 +140,16 @@ export function reportPacing(result, previous) {
   const lines = [
     `# React Native Skia displayed-frame pacing: ${result.label}`,
     "", `${result.device}; ${result.refreshRate}Hz; ${result.skia}; ${result.date}.`,
-    "Intervals are between compositor-displayed app surfaces for UI-marked animations plus their bounded display-drain tail, not native handoffs or JS/UI FPS. Warmups and gaps between windows are excluded. No interval is added for idle after the last surface.",
+    `Thermal: ${(result.thermal ?? []).join(", ") || "unavailable"} (${result.thermalCoverage ?? "unspecified"}); Low Power Mode: ${result.lowPowerMode ? "on" : "off"}; Instruments requested/recorded: ${result.traceRequested ? "yes" : "no"}/${result.traceRecorded ? "yes" : "no"}.`, "",
+    "Intervals use MTLDrawable.presentedTime feedback for the tagged benchmark Canvas and UI-marked animations plus their bounded display-drain tail, not CPU handoffs, callback arrival or Instruments swap counts. Warmups and gaps between windows are excluded. No interval is added for idle after the last presentation.",
     "Long gap: >1.5 display periods. Windows = bursts or continuous controls with at least one long gap / measured windows. p99 = median of per-trial p99s; max = worst observed interval. Lower is better.", "",
-    "First surface = median of per-trial median times from UI animation start to the first displayed app surface; not input latency or proof of the surface's animation value. Reported separately from inter-frame jitter.", "",
+    "Instruments may omit swap events: its intervals are saved separately as traceDiagnostics, never used for pacing verdicts. Missing native callbacks, overflow and stale capture identities fail measurement.", "",
+    `Measured dropped/unshown drawables (zero presentedTime): ${rows.reduce((sum, r) => sum + r.droppedDrawables, 0)}. Counted separately; presentation intervals use successful feedback only.`, "",
+    "First presentation = median of per-trial median times from UI animation start to the first drawable presentation; not input latency or proof of its animation value. Reported separately from inter-frame jitter.", "",
   ];
   if (previous) {
     lines.push(`Compared with ${previous.label} (${previous.skia}). A p99 increase >25% and >a quarter display period is flagged; max/gap counts remain visible for rarer outliers.`, "",
-      "| Kind | Circles | Long-gap windows before | after | p99 before, ms | after | First surface before, ms | after | Max before, ms | after | |",
+      "| Kind | Circles | Long-gap windows before | after | p99 before, ms | after | First presentation before, ms | after | Max before, ms | after | |",
       "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
     for (const row of rows) {
       const old = before.get(`${row.kind}/${row.count}`);
@@ -129,12 +157,12 @@ export function reportPacing(result, previous) {
       const significant = Math.abs(row.p99Ms - old.p99Ms) > 1000 / result.refreshRate / 4;
       const verdict = significant && row.p99Ms > old.p99Ms * 1.25 ? "regression" :
         significant && row.p99Ms < old.p99Ms * 0.75 ? "improvement" : "";
-      lines.push(`| ${row.kind} | ${row.count} | ${windows(old)} | ${windows(row)} | ${ms(old.p99Ms)} | ${ms(row.p99Ms)} | ${ms(old.firstSurfaceMs)} | ${ms(row.firstSurfaceMs)} | ${ms(old.maxMs)} | ${ms(row.maxMs)} | ${verdict} |`);
+      lines.push(`| ${row.kind} | ${row.count} | ${windows(old)} | ${windows(row)} | ${ms(old.p99Ms)} | ${ms(row.p99Ms)} | ${ms(old.firstPresentationMs)} | ${ms(row.firstPresentationMs)} | ${ms(old.maxMs)} | ${ms(row.maxMs)} | ${verdict} |`);
     }
   } else {
-    lines.push("| Kind | Circles | Trials | Long-gap windows | p99, ms | First surface, ms | Max, ms | UI max, ms |",
+    lines.push("| Kind | Circles | Trials | Long-gap windows | p99, ms | First presentation, ms | Max, ms | UI max, ms |",
       "|---|---:|---:|---:|---:|---:|---:|---:|",
-      ...rows.map((r) => `| ${r.kind} | ${r.count} | ${r.trials} | ${windows(r)} | ${ms(r.p99Ms)} | ${ms(r.firstSurfaceMs)} | ${ms(r.maxMs)} | ${ms(r.uiMaxMs)} |`));
+      ...rows.map((r) => `| ${r.kind} | ${r.count} | ${r.trials} | ${windows(r)} | ${ms(r.p99Ms)} | ${ms(r.firstPresentationMs)} | ${ms(r.maxMs)} | ${ms(r.uiMaxMs)} |`));
   }
   return lines.join("\n");
 }

@@ -1,7 +1,8 @@
 // Short animations separated by real idle periods: an empty presentation
-// queue must not be confused with the end of an animation. No native probe.
+// queue must not be confused with the end of an animation. The example-only
+// observer records drawable presentation feedback, not CPU handoff timestamps.
 import React, { memo, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { NativeModules, StyleSheet, Text, View } from "react-native";
 import {
   Easing,
   cancelAnimation,
@@ -16,6 +17,13 @@ import { Canvas, Circle, Fill, Group } from "react-native-skia";
 
 import type { Plan } from "./plan";
 import config from "./pacing-config.json";
+
+const CANVAS_TEST_ID = "skia-benchmark-pacing";
+type PresentationObserver = {
+  start: (fixture: string, testId: string, session: string) => Promise<boolean>;
+  finish: (session: string) => Promise<string>;
+  abort: (session: string) => void;
+};
 
 const Scene = memo(
   ({ count, t }: { count: number; t: SharedValue<number> }) => {
@@ -35,7 +43,7 @@ const Scene = memo(
       { scale: 1 + 2 * t.value },
     ]);
     return (
-      <Canvas style={StyleSheet.absoluteFill}>
+      <Canvas testID={CANVAS_TEST_ID} style={StyleSheet.absoluteFill}>
         <Fill color="#20242c" />
         <Group transform={transform}>
           {circles.map((circle, i) => (
@@ -92,6 +100,9 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
     ).nativeLoggingHook;
     if (typeof logger !== "function")
       throw new Error("Pacing benchmark requires RN's native logging hook");
+    const observer: PresentationObserver | undefined =
+      NativeModules.BenchPacing;
+    const session = `pacing-${Date.now()}-${Math.random()}`;
     let alive = true;
     let id = 0;
     const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -121,6 +132,7 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
           kind,
           warmup,
           fixture: plan.pacingFixture,
+          session,
         };
         scheduleOnUI(() => {
           "worklet";
@@ -151,6 +163,10 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
       });
 
     const run = async () => {
+      if (!observer)
+        throw new Error("BenchPacing is missing; run pod install and rebuild");
+      await observer.start(plan.pacingFixture, CANVAS_TEST_ID, session);
+      if (!alive) return;
       // The runner attaches before the first marker. All later attribution
       // uses device timestamps in the trace, never host-side sleep estimates.
       await wait(plan.settleMs);
@@ -171,21 +187,31 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
         await wait(config.idleMs);
       }
       if (!alive) return;
-      scheduleOnUI(() => {
-        "worklet";
-        emit(logger, {
-          event: "done",
-          samples: id,
-          fixture: plan.pacingFixture,
+      await new Promise<void>((resolve) => {
+        scheduleOnUI(() => {
+          "worklet";
+          emit(logger, {
+            event: "done",
+            samples: id,
+            fixture: plan.pacingFixture,
+            session,
+          });
+          scheduleOnRN(resolve);
         });
       });
+      // Cross the bridge only after measurement; native waits for every
+      // attached drawable callback before atomically saving its result.
+      await observer.finish(session);
+      if (!alive) return;
       setDone(true);
     };
     void run().catch((error: Error) => {
-      if (alive) console.error(`[bench-pacing] failed: ${error.message}`);
+      observer?.abort(session);
+      if (alive) logger(`[bench-pacing] failed: ${error.message}`, 3);
     });
     return () => {
       alive = false;
+      observer?.abort(session);
       timers.forEach(clearTimeout);
       scheduleOnUI(() => {
         "worklet";

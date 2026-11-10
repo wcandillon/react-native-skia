@@ -70,4 +70,7 @@ end
 
 use_test_app! :hermes_enabled => true,
               :new_arch_enabled => true,
-              :post_install => example_post_install
+              :post_install => example_post_install do
+  # Opt-in example benchmark observer; production Skia has no measurement hooks.
+  pod 'BenchPacing', :path => '../benchmarks/native'
+end

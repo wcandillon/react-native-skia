@@ -1,4 +1,6 @@
 PODS:
+  - BenchPacing (1.0.0):
+    - React-Core
   - boost (1.84.0):
     - ReactNativeDependencies
   - DoubleConversion (1.1.6):
@@ -2192,6 +2194,7 @@ PODS:
     - React-Core-prebuilt
 
 DEPENDENCIES:
+  - BenchPacing (from `../benchmarks/native`)
   - boost (from `build/rndeps-facades/boost`)
   - DoubleConversion (from `build/rndeps-facades/DoubleConversion`)
   - fast_float (from `build/rndeps-facades/fast_float`)
@@ -2292,6 +2295,8 @@ DEPENDENCIES:
   - Yoga (from `build/rncore-facades/Yoga`)
 
 EXTERNAL SOURCES:
+  BenchPacing:
+    :path: "../benchmarks/native"
   boost:
     :path: build/rndeps-facades/boost
   DoubleConversion:
@@ -2489,6 +2494,7 @@ EXTERNAL SOURCES:
     :path: build/rncore-facades/Yoga
 
 SPEC CHECKSUMS:
+  BenchPacing: 8418ddb0263f041654adc4c2550e41aae7dac287
   boost: 8502bfdc46e2804408af2e163049ece181009af4
   DoubleConversion: 501a575c40c0b50c89685762dd3e415e6bb26fb0
   fast_float: 7c925d1cebf8328d4018d061f49377e9f887e3b4
@@ -2587,6 +2593,6 @@ SPEC CHECKSUMS:
   SocketRocket: 37aec555668fb852ec12e3c0de59a86ca58f0871
   Yoga: d1c536142c5ff8ec8cd856ab2a7c227a1d875c8e
 
-PODFILE CHECKSUM: e08296f4a213e67a2925ec40737845822ce5603d
+PODFILE CHECKSUM: 57ef19a6e9fefa196a80fa7e9702ddb5e3e44b8d
 
 COCOAPODS: 1.16.2

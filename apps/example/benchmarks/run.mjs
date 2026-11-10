@@ -7,7 +7,7 @@
 //   node benchmarks/run.mjs --cold --platform android|ios|ios-simulator
 //        [--scenes ...] [--reps 3] [--settle 10] [--label main] [--compare ...]
 //   node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60
-//        [--reps 3] [--settle 10] [--keep-trace] [--compare ...]
+//        [--reps 3] [--settle 10] [--trace] [--keep-trace] [--compare ...]
 //
 // --cold measures the first draw of each scene after a fresh install instead
 // of present FPS: the longest UI thread gap while it mounts, then again for a
@@ -866,7 +866,7 @@ if (COLD) {
     await installIos(device);
   }
   measured = PACING
-    ? await measurePacing({ device, app: IOS_APP, sh, reps: REPS, settle: SETTLE, refreshRate: REFRESH_RATE, keepTrace: flag("keep-trace") })
+    ? await measurePacing({ device, app: IOS_APP, sh, reps: REPS, settle: SETTLE, refreshRate: REFRESH_RATE, keepTrace: flag("keep-trace"), collectTrace: flag("trace") || flag("keep-trace") })
     : await measureIos(device);
 }
 
