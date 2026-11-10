@@ -43,9 +43,6 @@ public class PlatformContext implements LifecycleEventListener {
         // Before the GPU is first asked for: where Dawn keeps what it
         // compiled, for the next launch to find (see DawnContext).
         setCacheDirectoryNative(new File(reactContext.getCacheDir(), "rnskia").getAbsolutePath());
-        // Before the first canvas: where the windows let go of a lost GPU
-        // device's surfaces before it is destroyed (see DawnContext).
-        setPresentThreadNative();
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
         // Skia.gpu.foreground follows the host activity: resumed, or not.
         setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
@@ -171,8 +168,4 @@ public class PlatformContext implements LifecycleEventListener {
 
     // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
     private static native void setCacheDirectoryNative(String directory);
-
-    // The thread every canvas presents on, PresentThread
-    // (DawnContext::setPresentThread).
-    private static native void setPresentThreadNative();
 }

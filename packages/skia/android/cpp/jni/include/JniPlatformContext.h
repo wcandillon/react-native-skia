@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fbjni/NativeRunnable.h>
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
@@ -34,10 +35,18 @@ public:
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,
                                       jni::alias_ref<jni::JString> directory);
 
-  // The thread every canvas presents on (PresentThread.java), for
-  // DawnContext::setPresentThread. Static: it is the process's, not the
-  // context's.
-  static void setPresentThreadNative(jni::alias_ref<jclass>);
+  // PresentThread.post: runs the Java task on the present thread, which is
+  // the native side's and attached to the JVM for good by its first task
+  // (see attachPresentThread). Registered on PresentThread, not on the
+  // context's class.
+  static void postNative(jni::alias_ref<jclass>,
+                         jni::alias_ref<jni::JRunnable::javaobject> task);
+
+  // PresentThread.postAndWait (see rnsurface::RenderThread::postAndWait).
+  static jboolean
+  postAndWaitNative(jni::alias_ref<jclass>,
+                    jni::alias_ref<jni::JRunnable::javaobject> task,
+                    jlong timeoutMs);
 
   void performStreamOperation(
       const std::string &sourceUri,

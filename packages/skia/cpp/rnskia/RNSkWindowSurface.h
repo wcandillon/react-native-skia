@@ -32,31 +32,29 @@ namespace RNSkia {
  * (attach, resize, detach); everything else lives here.
  *
  * Threading: the window belongs to the thread the view presents on (see
- * RNSkView::setPresentThread): the present thread of the platform, one for
- * every canvas of a process (PresentThread.java, RNSkPresentThread in
- * SkiaView.mm), where the platform view posts the attach and the detach
- * from the main thread. Everything that touches the Dawn surface runs
- * there, one call after the other, and nothing waits for it; the entries
- * check it once the platform view has bound the thread (see
- * bindPresentingThread and rnsurface::ThreadChecker: an entry from
- * another thread aborts in debug builds and is logged once in release
- * builds). A resize is the exception: it notes a size and posts a redraw,
- * from any thread. Nothing waits for a
- * present: a present holds the window for as long as Graphite takes to replay
- * the frame, which includes compiling the pipelines it needs, seconds on a
- * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
- * resize notes the size, which the present that follows takes (see
- * takePendingSize) and configures the swapchain for (see configureIfNeeded):
- * a Vulkan swapchain is made again for every size (about 5 ms on a Pixel 8),
- * and until a frame for the new size arrives the window still takes frames
- * made for its previous one, which the platform stretches to the view.
- * A present is made for the target the view read before (see getTargetInfo);
- * the window checks that it still is that target, and declines a present
- * made for a window resized since (see presentRecordings). The description
- * of the target texture is kept in a copy of its own, under a mutex, so that
- * whoever records for the view (the JS thread, a worklet runtime, the render
- * thread pool) can read it from any thread, also before the window exists
- * (see getLayoutSize).
+ * RNSkView::setPresentThread): the present thread of the process, one for
+ * every canvas (see RNSkPresentThread.h, a rnsurface::RenderThread), where
+ * the platform view posts the attach and the detach from the main thread.
+ * Everything that touches the Dawn surface runs there, one call after the
+ * other, and nothing waits for it; the entries check it once the platform view
+ * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
+ * an entry from another thread aborts in debug builds and is logged once in
+ * release builds). A resize is the exception: it notes a size and posts a
+ * redraw, from any thread. Nothing waits for a present: a present holds the
+ * window for as long as Graphite takes to replay the frame, which includes
+ * compiling the pipelines it needs, seconds on a slow GPU, and a main thread
+ * made to wait for that is an ANR (#4394). A resize notes the size, which the
+ * present that follows takes (see takePendingSize) and configures the swapchain
+ * for (see configureIfNeeded): a Vulkan swapchain is made again for every size
+ * (about 5 ms on a Pixel 8), and until a frame for the new size arrives the
+ * window still takes frames made for its previous one, which the platform
+ * stretches to the view. A present is made for the target the view read before
+ * (see getTargetInfo); the window checks that it still is that target, and
+ * declines a present made for a window resized since (see presentRecordings).
+ * The description of the target texture is kept in a copy of its own, under a
+ * mutex, so that whoever records for the view (the JS thread, a worklet
+ * runtime, the render thread pool) can read it from any thread, also before the
+ * window exists (see getLayoutSize).
  *
  * The windows of a process all present on the same thread, so the sweep over
  * them (see releaseSurfacesOn), which the replacement of a lost device has

@@ -4,7 +4,6 @@
 
 #include "RNDawnContext.h"
 #import "RNSkApplePlatformContext.h"
-#import "RNSkPresentThread.h"
 
 static __weak RNSkiaModule *sharedInstance = nil;
 
@@ -69,11 +68,6 @@ RCT_EXPORT_MODULE()
     }
     RNSkia::DawnContext::setPrecompileDisplayP3(
         RNSkia::RNSkApplePlatformContext::mainScreenSupportsP3());
-    // Before the first canvas: where the windows let go of a lost GPU
-    // device's surfaces before it is destroyed (see DawnContext).
-    RNSkia::DawnContext::setPresentThread([](std::function<void()> task) {
-      [RNSkPresentThread postTask:std::move(task)];
-    });
   }
   return self;
 }
