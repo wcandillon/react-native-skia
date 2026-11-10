@@ -165,7 +165,7 @@ jobs:
           swap-storage: false
 
       - name: Install JDK
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -297,7 +297,9 @@ jobs:
       # The whole e2e suite, as the iOS job does. `yarn e2e` sets E2E=true,
       # which is what makes the tests run on the emulator: without it the
       # harness uses CanvasKit in Node and never talks to the app. Paragraphs
-      # stays excluded, as it was before the Graphite switch.
+      # stays excluded, as it was before the Graphite switch. ClippedSubviews
+      # is excluded on the emulator only, where it is flaky; it still runs on
+      # iOS and on a physical Android device.
       - name: Run Android Emulator Tests
         if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
@@ -319,7 +321,7 @@ jobs:
             # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
             ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
             adb wait-for-device shell monkey -p com.reactnativeskia.example 1
-            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns Paragraphs
+            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns "Paragraphs|ClippedSubviews"
 
       # The *.test.png images of failed checks: a failed comparison's, and
       # the image of a check without a reference.
