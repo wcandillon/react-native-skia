@@ -246,7 +246,7 @@ public:
     // The snap compiles the pipelines the frame needs, inline: GPU work the
     // warmup stays behind (see RNSkGpuActivity).
     RNSkGpuActivity::Scope activity;
-    auto recording = recorder->snap();
+    auto recording = DawnContext::getInstance().snap(recorder);
     if (recording == nullptr) {
       throw std::runtime_error(
           "SkiaGraphiteView: snapping the recording failed.");
