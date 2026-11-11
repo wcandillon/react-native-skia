@@ -340,11 +340,12 @@ private:
   // or a device replacement configured it again (see ensureDevice), between
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
-  // A Dawn surface and the generation of the device it was made on (see
-  // DawnContext::generation()), by which the replacement of a lost device
-  // lets go of it (see releaseSurfacesOn).
+  // A Dawn surface, the device it was made on and that device's generation
+  // (see DawnContext::generation()), by which the replacement of a lost
+  // device lets go of it (see releaseSurfacesOn).
   struct DawnSurface {
     wgpu::Surface handle;
+    wgpu::Device device;
     uint64_t generation = 0;
   };
   // A window: the native handle, the releaser that gives it back, and the
@@ -362,9 +363,10 @@ private:
   };
   // A static canvas's image frames, presented in place of a window (see
   // attachImagePresenter): each frame is made in a texture of its own, on
-  // the device of the generation given (see ensureDevice).
+  // the device given, of the generation given (see ensureDevice).
   struct ImageFrames {
     ImagePresenter presenter;
+    wgpu::Device device;
     uint64_t generation = 0;
   };
   // Brings what is attached onto the GPU device in use; false when it cannot
@@ -417,8 +419,8 @@ private:
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
   // splits the pass), and CopySrc for copy tasks. Only request what the
   // surface reports as supported.
-  wgpu::TextureUsage supportedSurfaceUsage(const wgpu::Surface &surface);
-  bool surfaceSupportsFormat(const wgpu::Surface &surface,
+  wgpu::TextureUsage supportedSurfaceUsage(const DawnSurface &surface);
+  bool surfaceSupportsFormat(const DawnSurface &surface,
                              wgpu::TextureFormat format);
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
@@ -444,8 +446,6 @@ private:
   // What the surface presents into: nothing, a window or a static canvas's
   // image frames.
   std::variant<std::monostate, Window, ImageFrames> _attachment;
-  // The device the window's surface or the frames' textures are made on.
-  wgpu::Device _device;
   bool _showsFrame = false;
   int _width = 0;
   int _height = 0;
