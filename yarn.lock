@@ -25908,6 +25908,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-reanimated@patch:react-native-reanimated@npm%3A4.7.1#./.yarn/patches/react-native-reanimated-npm-4.7.1-dbfb143762.patch::locator=react-native-skia-monorepo%40workspace%3A.":
+  version: 4.7.1
+  resolution: "react-native-reanimated@patch:react-native-reanimated@npm%3A4.7.1#./.yarn/patches/react-native-reanimated-npm-4.7.1-dbfb143762.patch::version=4.7.1&hash=dd19ed&locator=react-native-skia-monorepo%40workspace%3A."
+  dependencies:
+    react-native-is-edge-to-edge: ^1.3.1
+    semver: ^7.7.3
+  peerDependencies:
+    react: "*"
+    react-native: 0.86 - 0.88
+    react-native-worklets: 0.13.x
+  checksum: e3f40529e6058afe26c9e0c28f9902d0aa954acc2c977b31baac3f7b94d06020a3643d713757841d7722991739cefb23a066ae268b059b62a1b65a792c8633db
+  languageName: node
+  linkType: hard
+
 "react-native-safe-area-context@npm:^5.2.0":
   version: 5.10.1
   resolution: "react-native-safe-area-context@npm:5.10.1"
