@@ -189,41 +189,30 @@ export const countColors = async (image: SkImage) => {
   return counts;
 };
 
+// The one-pixel region at fractions of a snapshot's width and of its height.
+const pixelAt = (image: SkImage, x: number, y: number) =>
+  [
+    Math.round(image.width() * x),
+    Math.round(image.height() * y),
+    1,
+    1,
+  ] as const;
+
 // The colour of the screen at fractions of its width and of its height.
 const readScreenColorAt = async (image: SkImage, x: number, y: number) =>
-  nameColor(
-    await readRegionOrNull(
-      image,
-      Math.round(image.width() * x),
-      Math.round(image.height() * y),
-      1,
-      1
-    )
-  );
+  nameColor(await readRegionOrNull(image, ...pixelAt(image, x, y)));
 
-// Whether the screen shows nothing at a fraction of its width and of its
+// Whether the screen shows nothing at fractions of its width and of its
 // height: a view that has drawn nothing there yet leaves it transparent.
-export const isTransparentAt = async (image: SkImage, fraction: number) => {
-  const pixel = await readRegionOrNull(
-    image,
-    Math.round(image.width() * fraction),
-    Math.round(image.height() * fraction),
-    1,
-    1
-  );
+export const isTransparentAt = async (image: SkImage, x: number, y: number) => {
+  const pixel = await readRegionOrNull(image, ...pixelAt(image, x, y));
   return pixel !== null && pixel[3] === 0;
 };
 
 // The red, green and blue bytes of the screen at fractions of its width and
 // of its height.
 const readScreenPixelAt = async (image: SkImage, x: number, y: number) => {
-  const [red, green, blue] = await readRegion(
-    image,
-    Math.round(image.width() * x),
-    Math.round(image.height() * y),
-    1,
-    1
-  );
+  const [red, green, blue] = await readRegion(image, ...pixelAt(image, x, y));
   return [red, green, blue] as const;
 };
 

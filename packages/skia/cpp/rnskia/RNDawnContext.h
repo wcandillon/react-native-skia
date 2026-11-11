@@ -531,8 +531,9 @@ public:
    `generation` (see generation()), which the recordings and the surface were
    made for: for a caller that presents off the windows' thread, which the
    replacement of a lost device is not kept apart from (see recover), so the
-   check and the replay hold the context lock together. Returns whether the
-   recordings ran.
+   check and the replay hold the context lock together. Returns false, with
+   nothing run, when the device in use is another or is lost; a recording
+   Graphite rejects is logged and dropped, as by insertRecordings().
    */
   bool
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,

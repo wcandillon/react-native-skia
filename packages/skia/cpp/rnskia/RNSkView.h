@@ -14,6 +14,7 @@
 #include "RNSkGraphiteProducer.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkGraphiteTargetInfo.h"
+#include "RNSkImagePresenterLayout.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkPresentedImages.h"
@@ -366,42 +367,55 @@ public:
    releases on theirs (see RNSkWindowSurface::presentAsImages).
    */
   void presentAsImages() {
+    _surface->presentAsImages();
     installPresentThread([](std::function<void()> task) {
       RNSkPresentedImages::worker().post(std::move(task));
     });
-    _surface->presentAsImages();
   }
 
   /**
-   A static canvas was laid out at this size in pixels, which its images take
-   (see presentAsImages): on its worker, when it gets to it, the first layout
-   attaches the image presenter, a new size resizes it, and `attachAgain`
-   attaches it anew (a new color space); a size the images already have
-   changes nothing. The task holds the view while it runs, so the surface
-   never calls back into a view the platform let go of meanwhile (see
-   RNSkWindowSurface::setRequestRedraw). Any thread.
+   A static canvas was laid out at this size in pixels, in this color space,
+   which its images take (see presentAsImages). Main thread: a layout is
+   handed on to the images' worker only when it changes (see
+   RNSkImagePresenterLayout). There, when it gets to it, the first layout and
+   a new color space attach the image presenter, and a new size resizes it.
+   The task holds the view while it runs, so the surface never calls back
+   into a view the platform let go of meanwhile (see
+   RNSkWindowSurface::setRequestRedraw).
    */
   void layOutImagePresenter(int width, int height, bool useP3ColorSpace,
-                            bool attachAgain,
                             RNSkWindowSurface::ImagePresenter presenter) {
-    if (!attachAgain && _surface->getWidth() == width &&
-        _surface->getHeight() == height) {
+    const RNSkImagePresenterLayout::Layout layout{width, height,
+                                                  useP3ColorSpace};
+    const auto change = _imagePresenterLayout.layOut(layout);
+    if (change == RNSkImagePresenterLayout::Change::kNone) {
       return;
     }
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
-    _runOnPresentThread([weakThis, width, height, useP3ColorSpace, attachAgain,
-                         presenter = std::move(presenter)]() {
-      auto view = weakThis.lock();
-      if (view == nullptr) {
-        return;
-      }
-      auto &surface = *view->_surface;
-      if (attachAgain || !surface.isAttached()) {
-        surface.attachImagePresenter(width, height, useP3ColorSpace, presenter);
-      } else if (surface.getWidth() != width || surface.getHeight() != height) {
-        surface.resize(width, height);
-      }
-    });
+    _runOnPresentThread(
+        [weakThis, change, layout, presenter = std::move(presenter)]() {
+          auto view = weakThis.lock();
+          if (view == nullptr) {
+            return;
+          }
+          auto &surface = *view->_surface;
+          switch (change) {
+          case RNSkImagePresenterLayout::Change::kNone:
+            return;
+          case RNSkImagePresenterLayout::Change::kAttach:
+            surface.attachImagePresenter(layout.width, layout.height,
+                                         layout.useP3ColorSpace, presenter);
+            return;
+          case RNSkImagePresenterLayout::Change::kResize:
+            if (surface.isAttached()) {
+              surface.resize(layout.width, layout.height);
+            } else {
+              surface.attachImagePresenter(layout.width, layout.height,
+                                           layout.useP3ColorSpace, presenter);
+            }
+            return;
+          }
+        });
   }
 
   /** Present thread: a recording is waiting. */
@@ -850,6 +864,9 @@ private:
   RNSkRedrawRequest _redrawRequest;
   // The thread the view presents on (see the class comment).
   rnsurface::ThreadChecker _presentThread;
+  // A static canvas's layout, as handed on to the images' worker (see
+  // layOutImagePresenter). Main thread.
+  RNSkImagePresenterLayout _imagePresenterLayout;
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread

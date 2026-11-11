@@ -12,6 +12,8 @@
 
 #if defined(__APPLE__)
 #include <pthread.h>
+extern "C" void *objc_autoreleasePoolPush(void);
+extern "C" void objc_autoreleasePoolPop(void *pool);
 #elif defined(__ANDROID__)
 #include <pthread.h>
 #endif
@@ -88,8 +90,21 @@ private:
         job = std::move(_jobs.front());
         _jobs.pop_front();
       }
-      runLoggingFailure(job);
+      runInAutoreleasePool(job);
     }
+  }
+
+  // A thread made here has no autorelease pool, and a job calls into
+  // Objective-C on Apple platforms (Dawn's Metal backend, a presented
+  // image's CGImage): what it autoreleases is drained as it ends.
+  void runInAutoreleasePool(const std::function<void()> &job) const {
+#if defined(__APPLE__)
+    void *pool = objc_autoreleasePoolPush();
+    runLoggingFailure(job);
+    objc_autoreleasePoolPop(pool);
+#else
+    runLoggingFailure(job);
+#endif
   }
 
   template <typename Work> void runLoggingFailure(const Work &work) const {

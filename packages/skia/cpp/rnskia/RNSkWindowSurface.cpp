@@ -658,9 +658,12 @@ bool RNSkWindowSurface::presentImage(ImageFrames &frames,
   }
   drawOnto(imageTarget->getCanvas(), image, imageTarget->width(),
            imageTarget->height());
-  // The recorder is the frames' device's (see makeImageTarget): the submit
-  // refuses it once that device is lost or replaced.
-  if (!DawnContext::getInstance().submitRecording(imageTarget->recorder())) {
+  // The recorder is the frames' device's (see makeImageTarget): a submit
+  // refused because that device was lost or replaced since leaves the image
+  // for the device in use, while one Graphite rejects is shown as a window
+  // shows it, rather than refused again on every frame.
+  if (!DawnContext::getInstance().submitRecording(imageTarget->recorder()) &&
+      !DawnContext::isCurrent(frames.generation)) {
     return false;
   }
   showFrame(frames, frame);

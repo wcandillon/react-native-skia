@@ -264,7 +264,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     [CATransaction setDisableActions:YES];
     _imageLayer.frame =
         CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-    [self updateImagePresenter:false];
+    [self updateImagePresenter];
     [CATransaction commit];
     return;
   }
@@ -699,7 +699,7 @@ usesP3ColorSpace(const std::string &colorSpace,
       [CATransaction setDisableActions:YES];
       _imageLayer.frame =
           CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-      [self updateImagePresenter:false];
+      [self updateImagePresenter];
       [CATransaction commit];
     }
     return;
@@ -714,21 +714,17 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
 }
 
-// A static canvas presents into images of the view's size (see
-// RNSkView::layOutImagePresenter); a color space change attaches its
-// presenter again. Main thread.
-- (void)updateImagePresenter:(bool)attachAgain {
+// A static canvas presents into images of the view's size, in its color
+// space (see RNSkView::layOutImagePresenter). Main thread.
+- (void)updateImagePresenter {
   const float pd = _view->getPlatformContext()->getPixelDensity();
   const int w = static_cast<int>(std::lround(self.bounds.size.width * pd));
   const int h = static_cast<int>(std::lround(self.bounds.size.height * pd));
   _surface->setLayoutSize(w, h);
-  if (w == 0 || h == 0) {
-    return;
-  }
   auto presentedFrame = [self presentedFrame];
   _view->layOutImagePresenter(
       w, h, usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
-      attachAgain, [presentedFrame](const sk_sp<SkImage> &frame) {
+      [presentedFrame](const sk_sp<SkImage> &frame) {
         presentedFrame->present(frame);
       });
 }
@@ -941,7 +937,7 @@ usesP3ColorSpace(const std::string &colorSpace,
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
   if (_staticPresentation) {
     if (_imageLayer != nil) {
-      [self updateImagePresenter:true];
+      [self updateImagePresenter];
     }
     return;
   }

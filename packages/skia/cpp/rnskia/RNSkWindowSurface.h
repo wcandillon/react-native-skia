@@ -40,8 +40,8 @@ namespace RNSkia {
  * every window (see RNSkPresentThread.h, a rnsurface::RenderThread), where
  * the platform view posts the attach and the detach from the main thread.
  * Everything that touches the Dawn surface runs there, one call after the
- * other, and nothing waits for it; the entries check it once the platform view
- * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
+ * other, and nothing waits for it; the entries check it once the view has bound
+ * the thread (see RNSkView::installPresentThread and rnsurface::ThreadChecker:
  * an entry from another thread aborts in debug builds and is logged once in
  * release builds). A resize is the exception: it notes a size and posts a
  * redraw, from any thread. Nothing waits for a present: a present holds the
@@ -62,9 +62,10 @@ namespace RNSkia {
  *
  * An image presenter holds no Dawn surface: each frame is replayed into a
  * texture of its own at the window's size and handed to the presenter, so the
- * view needs no surface or swapchain. It presents on the images' worker
- * rather than on the present thread, and is not one of the windows below
- * (see presentAsImages).
+ * view needs no surface or swapchain. It is attached, resized and presented
+ * on the images' worker rather than on the present thread, where the view
+ * posts its layouts (see RNSkView::layOutImagePresenter), and is not one of
+ * the windows below (see presentAsImages).
  *
  * The windows of a process all present on the same thread, so the sweep over
  * them (see releaseSurfacesOn), which the replacement of a lost device has

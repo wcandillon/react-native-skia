@@ -61,9 +61,10 @@ public:
   RNSkPresentedImages &operator=(const RNSkPresentedImages &) = delete;
 
   /**
-   The thread the bitmaps are made on, and static canvases present on (see
-   RNSkView::presentAsImages): one of their own, so that a long job on the
-   shared worker, an encode or a decode, holds up none of them.
+   The thread the bitmaps are made on, an encoded image decoded first, and
+   static canvases present on (see RNSkView::presentAsImages): one of their
+   own, so that the shared worker's jobs, the encodes and decodes JS asks
+   for, hold up none of them.
    */
   static RNSkWorker &worker() {
     static auto &instance = RNSkWorker::makeDedicated("RNSkia Images");

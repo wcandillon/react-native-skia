@@ -20,10 +20,14 @@ for test in cpp-tests/*.cpp; do
   case "$name" in
     DawnBlobCacheTest) sources="cpp/rnwgpu/DawnBlobCache.cpp" ;;
   esac
-  # On a Mac the render thread is a CFRunLoop with autorelease pools.
+  # On a Mac the render thread is a CFRunLoop with autorelease pools, and
+  # the worker drains one around each job.
   libs=""
-  if [ "$name" = RenderThreadTest ] && [ "$(uname)" = Darwin ]; then
-    libs="-framework CoreFoundation -lobjc"
+  if [ "$(uname)" = Darwin ]; then
+    libs="-lobjc"
+    if [ "$name" = RenderThreadTest ]; then
+      libs="-framework CoreFoundation -lobjc"
+    fi
   fi
   # shellcheck disable=SC2086
   "$CXX" -std=c++20 -I "$SKIA_INCLUDE" -I "$DAWN_INCLUDE" -I cpp -I android/cpp -I "$JSI_INCLUDE" "$test" $sources $libs -o "$OUT/$name"

@@ -24,7 +24,9 @@ const expectEvenGreyMiddle = async (image: SkImage) => {
 const hasUndrawnHalf = async (image: SkImage) =>
   (
     await Promise.all(
-      [1 / 4, 3 / 4].map((fraction) => isTransparentAt(image, fraction))
+      [1 / 4, 3 / 4].map((fraction) =>
+        isTransparentAt(image, fraction, fraction)
+      )
     )
   ).some((transparent) => transparent);
 

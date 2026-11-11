@@ -30,9 +30,9 @@ import com.facebook.react.views.view.ReactViewGroup;
  * window belongs to the present thread (see PresentThread, owned by the
  * native side), where the frames are presented, the frame scheduler
  * (rnsurface::FrameScheduler) and its vsync (AChoreographer) live, and the
- * native view is destroyed (see dropInstance): the surface callbacks post
- * the attach, the resize and the detach there, so that the main thread
- * never waits for a present in flight. A present holds the window for as
+ * native view of a window canvas is destroyed (see dropInstance): the surface
+ * callbacks post the attach, the resize and the detach there, so that the main
+ * thread never waits for a present in flight. A present holds the window for as
  * long as Graphite takes to replay the frame, which includes compiling the
  * pipelines it needs, seconds on a slow GPU, and a main thread made to wait
  * for that is an ANR (#4394). A TextureView tells the main thread when it
@@ -64,8 +64,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
 
     // Set by dropInstance(), on the main thread: no native method is called
     // from there after that, but for surfaceAbandoned, under the hybrid data's
-    // lock (see onSurfaceDestroyed). The native view itself goes on the
-    // present thread, where the hybrid data says whether it is still there.
+    // lock (see onSurfaceDestroyed). A window canvas's native view itself goes
+    // on the present thread, where the hybrid data says whether it is still
+    // there; a static canvas's goes here.
     private boolean mDropped = false;
 
     // Whether a SurfaceView's surface is attached, for the main thread: set as
@@ -354,7 +355,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
 
     // Whether the native view presents through the backing view's window, and
     // so has a frame scheduler (see updateView). Main thread.
-    private boolean presentsThroughWindow() {
+    private boolean hasFrameScheduler() {
         if (mKind == null) {
             return false;
         }
@@ -368,7 +369,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     // there (see dropInstance), and no native method is called from there
     // after that, but for the one onSurfaceDestroyed makes under the hybrid
     // data's lock. The present thread, where a window canvas's is destroyed,
-    // asks the hybrid data instead (see presentFrame).
+    // asks the hybrid data instead (see postToNativeView).
     private boolean hasNativeView() {
         return !mDropped;
     }
@@ -458,7 +459,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         // Only a window's frames are scheduled: a static canvas asks for none,
         // and its native view is dropped on the main thread, not behind this
         // task (see dropInstance).
-        if (presentsThroughWindow()) {
+        if (hasFrameScheduler()) {
             PresentThread.post(mCancelFrames);
         }
     }
