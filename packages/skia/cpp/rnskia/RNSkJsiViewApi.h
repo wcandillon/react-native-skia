@@ -343,16 +343,19 @@ public:
 
   /**
    Returns the recording side of a view: (nativeId, width, height, opaque,
-   highBitDepth), the size in points as laid out and the props the surface
-   format follows from. The view may not exist yet; the context binds to it
-   by id when it does, and the registry owns the target in between, so a
-   frame submitted before then is kept whether or not JS keeps the context.
+   highBitDepth, deviceIndependentFonts), the size in points as laid out, the
+   props the surface format follows from and the font option of the
+   recordings (set again through setJsiProperty when it changes). The view may
+   not exist yet; the context binds to it by id when it does, and the registry
+   owns the target in between, so a frame submitted before then is kept whether
+   or not JS keeps the context.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
         !arguments[2].isNumber()) {
       throw jsi::JSError(runtime, "makeGraphiteContext: expected (nativeId, "
-                                  "width, height, opaque, highBitDepth)");
+                                  "width, height, opaque, highBitDepth, "
+                                  "deviceIndependentFonts)");
     }
     auto nativeId = static_cast<size_t>(arguments[0].asNumber());
     auto width = static_cast<float>(arguments[1].asNumber());
@@ -363,6 +366,8 @@ public:
     auto target = RNSkGraphiteTargetRegistry::getInstance().getOrCreate(
         nativeId, _platformContext);
     target->setLayout(width, height, opaque, highBitDepth);
+    target->setDeviceIndependentFonts(count > 5 && arguments[5].isBool() &&
+                                      arguments[5].getBool());
     return makeJsiObject(runtime, std::make_shared<JsiSkGraphiteContext>(
                                       _platformContext, std::move(target)));
   }

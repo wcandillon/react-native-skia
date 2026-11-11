@@ -18,6 +18,7 @@ Behind the scenes, it is using its own React renderer.
 | highBitDepth? | `boolean` | Render into a surface with more than 8 bits per channel (see [high bit depth](#high-bit-depth)) |
 | colorSpace? | `"srgb" \| "display-p3"` | The color space the canvas renders in, by default the one of the display (see [color space](#color-space)) |
 | static? | `boolean` | Show each frame as an image, with no surface of its own (see [static canvases](#static-canvases)) |
+| deviceIndependentFonts? | `boolean` | Draw text as distance fields, for text that rotates or scales on every frame (see [animated text](/docs/text/text#animated-text)) |
 
 ## Canvas size
 

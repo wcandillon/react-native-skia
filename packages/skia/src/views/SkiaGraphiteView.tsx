@@ -31,6 +31,7 @@ export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
  */
 export const SkiaGraphiteView = ({
   highBitDepth = false,
+  deviceIndependentFonts = false,
   colorSpace,
   static: staticPresentation = false,
   android,
@@ -59,6 +60,14 @@ export const SkiaGraphiteView = ({
     },
     [nativeId]
   );
+  // A context made already keeps the target: the option is set on it.
+  useEffect(() => {
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "deviceIndependentFonts",
+      deviceIndependentFonts
+    );
+  }, [nativeId, deviceIndependentFonts]);
   useImperativeHandle(
     ref,
     () => ({
@@ -77,11 +86,12 @@ export const SkiaGraphiteView = ({
           size.width,
           size.height,
           opaque,
-          rendersHighBitDepth
+          rendersHighBitDepth,
+          deviceIndependentFonts
         );
       },
     }),
-    [nativeId, opaque, rendersHighBitDepth]
+    [nativeId, opaque, rendersHighBitDepth, deviceIndependentFonts]
   );
   return (
     <SkiaViewNativeComponent

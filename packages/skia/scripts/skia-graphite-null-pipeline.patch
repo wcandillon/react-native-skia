@@ -1,0 +1,17 @@
+diff --git a/src/gpu/graphite/QueueManager.cpp b/src/gpu/graphite/QueueManager.cpp
+index 63d47a5a34..0708722656 100644
+--- a/src/gpu/graphite/QueueManager.cpp
++++ b/src/gpu/graphite/QueueManager.cpp
+@@ -218,6 +218,12 @@ InsertStatus QueueManager::addRecording(const InsertRecordingInfo& info, Context
+         std::string failureMsg;
+         const bool validPipelines = info.fRecording->priv().taskList()->visitPipelines(
+                 [&failureMsg](const GraphicsPipeline* pipeline) {
++                    // A handle has no pipeline when its creation failed outright (reported when
++                    // the handle was resolved) or when the commands failed before the handle was
++                    // resolved. Neither is an async compilation failure.
++                    if (!pipeline) {
++                        return true;
++                    }
+                     if (auto failure = pipeline->didAsyncCompilationFail()) {
+                         failureMsg = *failure;
+                         return false;
