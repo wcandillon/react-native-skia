@@ -20,7 +20,7 @@
 #include <memory>
 
 #import "RNSkManager.h"
-#import "RNSkPresentThread.h"
+#include "RNSkPresentThread.h"
 #import "RNSkPresentedFrame.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
@@ -338,10 +338,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     // Presents, redraws and frame requests go to the present thread, where
     // the view is the one the tasks posted before see.
     _view->setPresentThread([](std::function<void()> task) {
-      auto shared = std::make_shared<std::function<void()>>(std::move(task));
-      [RNSkPresentThread post:^{
-        (*shared)();
-      }];
+      RNSkia::presentThread().post(std::move(task));
     });
     [self enterPresentThread];
     // A submitted recording goes to the scheduler, on the present thread,
@@ -376,13 +373,13 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto view = _view;
   auto presenting = _presenting;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
     }
-  }];
+  });
 }
 
 // Main thread, as the view leaves its superview or is recycled: the present
@@ -409,7 +406,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   void *retainedSelf = (__bridge_retained void *)self;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     @autoreleasepool {
       __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
       *view->_presenting = false;
@@ -433,7 +430,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     }
     dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
                      [](void *retained) { CFRelease(retained); });
-  }];
+  });
   _windowAttached = false;
 }
 
@@ -624,8 +621,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 // No autorelease pool of its own: the link is a run loop source, so the
-// thread's run loop returns after each tick and drains its pool then (see
-// presentRunLoop).
+// present thread's loop returns after each tick and drains its pool then
+// (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
   _presentedSinceTick = false;
   _tickTarget = link.targetTimestamp;
@@ -658,7 +655,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                static_cast<int64_t>(delay * NSEC_PER_SEC)),
                  dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-                   [RNSkPresentThread post:^{
+                   RNSkia::presentThread().post([=]() {
                      if (!*presenting) {
                        return;
                      }
@@ -673,7 +670,7 @@ usesP3ColorSpace(const std::string &colorSpace,
                      strongSelf->_presentAgainScheduled = false;
                      strongSelf->_lastTick = CACurrentMediaTime();
                      strongSelf->_scheduler->onFrame();
-                   }];
+                   });
                  });
 }
 #endif
@@ -838,7 +835,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   const bool highBitDepth = _highBitDepth;
   const bool useP3ColorSpace =
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     int width = 0;
     int height = 0;
     if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
@@ -857,7 +854,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     if (strongSelf != nil) {
       strongSelf->_hasWindow = surface->isAttached();
     }
-  }];
+  });
 }
 
 // Takes the window away on the present thread, after the present in flight:
@@ -871,13 +868,13 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     surface->detach((__bridge void *)layer);
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_hasWindow = surface->isAttached();
     }
-  }];
+  });
 }
 
 #pragma mark - Props

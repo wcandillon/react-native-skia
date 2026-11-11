@@ -56,9 +56,9 @@ namespace jsi = facebook::jsi;
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
  * replay on the calling thread. Presenting (redraw, presentFrame,
  * scheduleFrame) runs on the present thread, and only there, which the
- * entries check once the platform view has bound it (see
- * bindPresentThread), and so does everything the platform view does to the
- * window (see RNSkWindowSurface): nothing waits for a present.
+ * entries check once the view has bound it (see installPresentThread), and
+ * so does everything the platform view does to the window (see
+ * RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -309,20 +309,7 @@ public:
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
     installPresentThread(std::move(run));
-    // The window hands the release of the windows' surfaces on a lost device,
-    // and its destroy, to this thread (see
-    // RNSkWindowSurface::setRunOnPresentThread and DawnContext::recover).
-    _surface->setRunOnPresentThread(_runOnPresentThread);
   }
-
-  /**
-   Present thread: binds the entries that belong to it (redraw,
-   presentFrame, scheduleFrame; see rnsurface::ThreadChecker) to the calling
-   thread, before the first of them. The view posts it to its present thread
-   as it installs it (see installPresentThread), ahead of everything posted
-   there after.
-   */
-  void bindPresentThread() { _presentThread.bindToCurrentThread(); }
 
   /**
    Runs a task on the thread the view presents on (see setPresentThread),
@@ -579,9 +566,10 @@ private:
 
   /**
    Installs the runner of the thread the view presents on (see
-   setPresentThread and presentAsImages), and binds the view's entries and
-   its window's to that thread there, ahead of everything the platform view
-   posts to it (see bindPresentThread).
+   setPresentThread and presentAsImages), and binds the entries of the view
+   and of its window that belong to that thread (redraw, presentFrame,
+   scheduleFrame; see rnsurface::ThreadChecker) to it there, ahead of
+   everything posted to it after.
    */
   void installPresentThread(std::function<void(std::function<void()>)> run) {
     _runOnPresentThread = std::move(run);
@@ -589,7 +577,7 @@ private:
     _runOnPresentThread([weakThis]() {
       if (auto view = weakThis.lock()) {
         view->_surface->bindPresentingThread();
-        view->bindPresentThread();
+        view->_presentThread.bindToCurrentThread();
       }
     });
   }

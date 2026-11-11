@@ -452,39 +452,23 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
   return describe() == target;
 }
 
-void RNSkWindowSurface::setRunOnPresentThread(
-    std::function<void(std::function<void()>)> run) {
-  std::lock_guard<std::mutex> listLock(windowsMutex());
-  _runOnPresentThread = std::move(run);
-}
-
 void RNSkWindowSurface::presentAsImages() {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   auto &list = windows();
   list.erase(std::remove(list.begin(), list.end(), this), list.end());
-  _runOnPresentThread = nullptr;
 }
 
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
+    RNSURFACE_ASSERT_THREAD(window->_presentingThread,
+                            "RNSkWindowSurface::releaseSurfacesOn");
     auto *attached = std::get_if<Window>(&window->_attachment);
     if (attached != nullptr && attached->surface &&
         attached->surface->generation == generation) {
       attached->surface.reset();
     }
   }
-}
-
-std::function<void(std::function<void()>)>
-RNSkWindowSurface::presentThreadRunner() {
-  std::lock_guard<std::mutex> listLock(windowsMutex());
-  for (auto *window : windows()) {
-    if (window->_runOnPresentThread) {
-      return window->_runOnPresentThread;
-    }
-  }
-  return nullptr;
 }
 
 bool RNSkWindowSurface::ensureDevice() {
@@ -502,18 +486,13 @@ bool RNSkWindowSurface::ensureDevice() {
 }
 
 bool RNSkWindowSurface::ensureDevice(Window &window, uint64_t generation) {
-  if (window.surface && window.surface->generation == generation) {
+  if (window.surface) {
     return true;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
-  // A surface on a device that is not the one in use — attach() made one
-  // while the device was being replaced, before the sweep (see
-  // releaseSurfacesOn) — is made again: it was never configured, since
-  // nothing presents on a lost device.
-  window.surface.reset();
   _device = context->getWGPUDevice();
   auto surface = context->MakeWGPUSurface(window.nativeHandle);
   if (!surface) {

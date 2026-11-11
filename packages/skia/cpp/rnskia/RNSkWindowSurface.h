@@ -36,37 +36,35 @@ namespace RNSkia {
  * here.
  *
  * Threading: the window belongs to the thread the view presents on (see
- * RNSkView::setPresentThread): the present thread of the platform, one for
- * every window of a process (PresentThread.java, RNSkPresentThread in
- * SkiaView.mm), where the platform view posts the attach and the detach
- * from the main thread. Everything that touches the Dawn surface runs
- * there, one call after the other, and nothing waits for it; the entries
- * check it once the platform view has bound the thread (see
- * bindPresentingThread and rnsurface::ThreadChecker: an entry from
- * another thread aborts in debug builds and is logged once in release
- * builds). A resize is the exception: it notes a size and posts a redraw,
- * from any thread. Nothing waits for a
- * present: a present holds the window for as long as Graphite takes to replay
- * the frame, which includes compiling the pipelines it needs, seconds on a
- * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
- * resize notes the size, which the present that follows takes (see
- * takePendingSize) and configures the swapchain for (see configureIfNeeded):
- * a Vulkan swapchain is made again for every size (about 5 ms on a Pixel 8),
- * and until a frame for the new size arrives the window still takes frames
- * made for its previous one, which the platform stretches to the view.
- * A present is made for the target the view read before (see getTargetInfo);
- * the window checks that it still is that target, and declines a present
- * made for a window resized since (see presentRecordings). The description
- * of the target texture is kept in a copy of its own, under a mutex, so that
- * whoever records for the view (the JS thread, a worklet runtime, the render
- * thread pool) can read it from any thread, also before the window exists
- * (see getLayoutSize).
+ * RNSkView::setPresentThread): the present thread of the process, one for
+ * every window (see RNSkPresentThread.h, a rnsurface::RenderThread), where
+ * the platform view posts the attach and the detach from the main thread.
+ * Everything that touches the Dawn surface runs there, one call after the
+ * other, and nothing waits for it; the entries check it once the platform view
+ * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
+ * an entry from another thread aborts in debug builds and is logged once in
+ * release builds). A resize is the exception: it notes a size and posts a
+ * redraw, from any thread. Nothing waits for a present: a present holds the
+ * window for as long as Graphite takes to replay the frame, which includes
+ * compiling the pipelines it needs, seconds on a slow GPU, and a main thread
+ * made to wait for that is an ANR (#4394). A resize notes the size, which the
+ * present that follows takes (see takePendingSize) and configures the swapchain
+ * for (see configureIfNeeded): a Vulkan swapchain is made again for every size
+ * (about 5 ms on a Pixel 8), and until a frame for the new size arrives the
+ * window still takes frames made for its previous one, which the platform
+ * stretches to the view. A present is made for the target the view read before
+ * (see getTargetInfo); the window checks that it still is that target, and
+ * declines a present made for a window resized since (see presentRecordings).
+ * The description of the target texture is kept in a copy of its own, under a
+ * mutex, so that whoever records for the view (the JS thread, a worklet
+ * runtime, the render thread pool) can read it from any thread, also before the
+ * window exists (see getLayoutSize).
  *
  * An image presenter holds no Dawn surface: each frame is replayed into a
  * texture of its own at the window's size and handed to the presenter, so the
- * view needs no surface or swapchain. It presents on the worker rather than
- * on the windows' thread, and is not one of the windows below (see
- * presentAsImages).
+ * view needs no surface or swapchain. It presents on the images' worker
+ * rather than on the present thread, and is not one of the windows below
+ * (see presentAsImages).
  *
  * The windows of a process all present on the same thread, so the sweep over
  * them (see releaseSurfacesOn), which the replacement of a lost device has
@@ -177,8 +175,8 @@ public:
 
   /**
    Whether a window or an image presenter is attached. A window's Dawn
-   surface may be away for a frame while the GPU device is replaced (see
-   ensureDevice). Presenting thread.
+   surface is away from the replacement of a lost GPU device until the
+   window's next frame (see ensureDevice). Presenting thread.
    */
   bool isAttached();
 
@@ -256,46 +254,25 @@ public:
   }
 
   /**
-   Installed by the view with the runner of the thread it presents on (see
-   RNSkView::setPresentThread): how DawnContext::recover hands the release of
-   the windows' surfaces and the destroy of a replaced device to that thread,
-   which is where every window operation runs (see presentThreadRunner). Any
-   thread; guarded by the list's mutex, which presentThreadRunner() reads it
-   under.
-   */
-  void setRunOnPresentThread(std::function<void(std::function<void()>)> run);
-
-  /**
    For a static canvas, before anything is attached: the surface presents
-   images and never a window (see attachImagePresenter), on the worker rather
-   than on the windows' thread (see RNSkView::presentAsImages). It leaves the
-   windows, and the runner it had with them: the release of their surfaces on
-   a lost device runs on their thread (see releaseSurfacesOn), where this
-   surface's state, which the worker writes, is out of reach, and an image
-   presenter holds no Dawn surface to let go of. Any thread.
+   images and never a window (see attachImagePresenter), on the images'
+   worker rather than on the present thread (see RNSkView::presentAsImages).
+   It leaves the windows: the release of their surfaces on a lost device
+   runs on the present thread (see releaseSurfacesOn), where this surface's
+   state, which the worker writes, is out of reach, and an image presenter
+   holds no Dawn surface to let go of. Any thread.
    */
   void presentAsImages();
 
   /**
-   The runner of the present thread (see setRunOnPresentThread), for
-   DawnContext::recover to post the release of the windows' surfaces on a
-   lost device and its destroy there: every window of a process presents on
-   one thread (see the class comment), so any window's runner posts to it.
-   Empty when no window has one, in which case no window presents on a thread
-   of its own and none can be in use. Any thread.
-   */
-  static std::function<void(std::function<void()>)> presentThreadRunner();
-
-  /**
    Lets go of the Dawn surface of every window configured on the given
-   generation (see DawnContext::generation()), and so it is run on the
-   present thread, by the task DawnContext::recover posts through
-   presentThreadRunner, before that thread can present or attach anything
-   else: it races neither a present in flight nor an attach, which no
-   window's own lock keeps apart any more (see the class comment). The
-   windows make their surface again by their next frame (see ensureDevice).
-   Presenting thread; called by DawnContext::recover itself only when no
-   window has a runner, and then no window can be in use.
+   generation (see DawnContext::generation()): the replacement of a lost
+   device does so before it puts the new device in place and destroys the
+   lost one (see DawnContext::recover).
+   The windows make their surface again by their next frame (see
+   ensureDevice). Presenting thread, where no present or attach overlaps
+   the release, as the windows have no lock of their own (see the class
+   comment).
    */
   static void releaseSurfacesOn(uint64_t generation);
 
@@ -363,7 +340,8 @@ private:
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
   // A Dawn surface and the generation of the device it was made on (see
-  // DawnContext::generation()).
+  // DawnContext::generation()), by which the replacement of a lost device
+  // lets go of it (see releaseSurfacesOn).
   struct DawnSurface {
     wgpu::Surface handle;
     uint64_t generation = 0;
@@ -391,12 +369,12 @@ private:
   // Brings what is attached onto the GPU device in use; false when it cannot
   // present on it (see the overloads).
   bool ensureDevice();
-  // Configures the window on the GPU device in use when its surface is not
-  // on it: when the device it was configured on was lost and replaced since
-  // (see releaseSurfacesOn), the surface is made again on the new device
-  // (a Vulkan swapchain cannot move to another device, Dawn refuses it), the
-  // window itself stays. Returns false without a context, or when no surface
-  // can be made over the window.
+  // Configures the window on the GPU device in use when it has no surface:
+  // the replacement of a lost device let go of it (see releaseSurfacesOn),
+  // and it is made again on the new device (a Vulkan swapchain cannot move
+  // to another device, Dawn refuses it); the window itself stays. Returns
+  // false without a context, or when no surface can be made over the
+  // window.
   bool ensureDevice(Window &window, uint64_t generation);
   // Takes the device in use for the frames' textures when it was replaced
   // since the last frame; false without a context.
@@ -498,9 +476,6 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
-  // Posts a task to the thread the view presents on (see
-  // setRunOnPresentThread).
-  std::function<void(std::function<void()>)> _runOnPresentThread;
 
   // The thread the window belongs to (see the class comment).
   rnsurface::ThreadChecker _presentingThread;
