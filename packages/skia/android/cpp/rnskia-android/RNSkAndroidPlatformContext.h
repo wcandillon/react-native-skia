@@ -10,7 +10,7 @@
 #include "JniPlatformContext.h"
 #include "JniSkiaPresentedImages.h"
 #include "RNSkPlatformContext.h"
-#include "RNSkWorker.h"
+#include "RNSkPresentedImages.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -81,10 +81,10 @@ public:
       : RNSkPlatformContext(std::move(jsCallInvoker),
                             jniPlatformContext->getPixelDensity()),
         _jniPlatformContext(jniPlatformContext) {
-    // The worker calls into Java for every presented image and lets go of
-    // Java references: attached once, for the thread's life, rather than
-    // around every call.
-    RNSkWorker::getInstance().post(
+    // The images' worker calls into Java for every presented image and lets
+    // go of Java references: attached once, for the thread's life, rather
+    // than around every call.
+    RNSkPresentedImages::worker().post(
         []() { static thread_local jni::ThreadScope attached; });
   }
 

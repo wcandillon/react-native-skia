@@ -178,6 +178,35 @@ describe("SkiaImageView on the web", () => {
     await view.unmount();
   });
 
+  it("keeps a large image's scaled copy until its pixels are read", async () => {
+    let finishRead: (pixels: Uint8Array<ArrayBuffer>) => void = () => {};
+    const scaledDispose = jest.fn();
+    const surfaceDispose = jest.fn();
+    mockMakeOffscreen.mockImplementationOnce(() => ({
+      getCanvas: () => ({ drawImageRectOptions: mockDrawImageRectOptions }),
+      flush: () => {},
+      makeImageSnapshot: () => ({
+        readPixels: () =>
+          new Promise<Uint8Array<ArrayBuffer>>((resolve) => {
+            finishRead = resolve;
+          }),
+        dispose: scaledDispose,
+      }),
+      dispose: surfaceDispose,
+    }));
+    const { image } = makeImage(8192, 4096);
+    const view = mount(<SkiaImageView image={image} />);
+    await startEncodes();
+    expect(scaledDispose).not.toHaveBeenCalled();
+    expect(surfaceDispose).not.toHaveBeenCalled();
+    finishRead(new Uint8Array(4));
+    await startEncodes();
+    expect(scaledDispose).toHaveBeenCalledTimes(1);
+    expect(surfaceDispose).toHaveBeenCalledTimes(1);
+    await view.unmount();
+    await finishEncodes();
+  });
+
   it("encodes a strip wider than any canvas at the widest one", async () => {
     const { image } = makeImage(30000000, 1);
     const view = mount(<SkiaImageView image={image} />);

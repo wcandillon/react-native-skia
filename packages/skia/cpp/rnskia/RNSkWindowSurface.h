@@ -3,7 +3,9 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
@@ -35,7 +37,7 @@ namespace RNSkia {
  *
  * Threading: the window belongs to the thread the view presents on (see
  * RNSkView::setPresentThread): the present thread of the platform, one for
- * every canvas of a process (PresentThread.java, RNSkPresentThread in
+ * every window of a process (PresentThread.java, RNSkPresentThread in
  * SkiaView.mm), where the platform view posts the attach and the detach
  * from the main thread. Everything that touches the Dawn surface runs
  * there, one call after the other, and nothing waits for it; the entries
@@ -151,9 +153,9 @@ public:
 
   /**
    Presenting thread: binds the entries that belong to it (see the class
-   comment) to the calling thread, before the first of them; the platform
-   view posts it to the thread it presents on as it makes the surface (see
-   RNSkView::bindPresentThread).
+   comment) to the calling thread, before the first of them; the view posts
+   it to the thread it presents on as it installs that thread (see
+   RNSkView::installPresentThread).
    */
   void bindPresentingThread() { _presentingThread.bindToCurrentThread(); }
 
@@ -360,19 +362,52 @@ private:
   // or a device replacement configured it again (see ensureDevice), between
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
+  // A Dawn surface and the generation of the device it was made on (see
+  // DawnContext::generation()).
+  struct DawnSurface {
+    wgpu::Surface handle;
+    uint64_t generation = 0;
+  };
+  // A window: the native handle, the releaser that gives it back, and the
+  // Dawn surface over it (see attach).
+  struct Window {
+    void *nativeHandle = nullptr;
+    Releaser releaser;
+    // None from the release of the surfaces on a lost device (see
+    // releaseSurfacesOn), or a make that failed, until the next frame makes
+    // it on the device in use (see ensureDevice).
+    std::optional<DawnSurface> surface;
+    // Attached or resized since the swapchain was configured (see
+    // configureIfNeeded).
+    bool needsConfigure = false;
+  };
+  // A static canvas's image frames, presented in place of a window (see
+  // attachImagePresenter): each frame is made in a texture of its own, on
+  // the device of the generation given (see ensureDevice).
+  struct ImageFrames {
+    ImagePresenter presenter;
+    uint64_t generation = 0;
+  };
+  // Brings what is attached onto the GPU device in use; false when it cannot
+  // present on it (see the overloads).
+  bool ensureDevice();
   // Configures the window on the GPU device in use when its surface is not
   // on it: when the device it was configured on was lost and replaced since
   // (see releaseSurfacesOn), the surface is made again on the new device
   // (a Vulkan swapchain cannot move to another device, Dawn refuses it), the
-  // window itself stays. An image presenter takes the device in use for its
-  // next frame.
-  bool ensureDevice();
-  // Configures the swapchain for the current size, format and usage.
-  void configureSurface();
+  // window itself stays. Returns false without a context, or when no surface
+  // can be made over the window.
+  bool ensureDevice(Window &window, uint64_t generation);
+  // Takes the device in use for the frames' textures when it was replaced
+  // since the last frame; false without a context.
+  bool ensureDevice(ImageFrames &frames, uint64_t generation);
+  // Configures the window's swapchain for the current size, format and
+  // usage.
+  void configureSurface(const Window &window);
   // Configures the swapchain when the window attached or resized since it
   // was last configured (see attach, takePendingSize), by the present that
   // follows.
-  void configureIfNeeded();
+  void configureIfNeeded(Window &window);
   // Takes the size resize() noted, if any: the window's size from now, and
   // the swapchain's by the next present (see configureIfNeeded).
   void takePendingSize();
@@ -384,17 +419,28 @@ private:
   // Whether a frame can go onto the window now: it is ready (see readState)
   // and the platform has not taken it back (see abandon).
   bool canPresent();
+  // presentRecordings() and presentImage() onto what is attached, once the
+  // target checks passed.
+  bool presentRecordings(
+      Window &window,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentRecordings(
+      ImageFrames &frames,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentImage(Window &window, const sk_sp<SkImage> &image);
+  bool presentImage(ImageFrames &frames, const sk_sp<SkImage> &image);
   // Presents the swapchain texture the frame was replayed onto, unless the
   // platform took the window back meanwhile (see abandon). Returns whether
   // it did.
-  bool presentTexture();
+  bool presentTexture(const Window &window);
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
   // splits the pass), and CopySrc for copy tasks. Only request what the
   // surface reports as supported.
-  wgpu::TextureUsage supportedSurfaceUsage();
-  bool surfaceSupportsFormat(wgpu::TextureFormat format);
+  wgpu::TextureUsage supportedSurfaceUsage(const wgpu::Surface &surface);
+  bool surfaceSupportsFormat(const wgpu::Surface &surface,
+                             wgpu::TextureFormat format);
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
   skgpu::graphite::TextureInfo getTextureInfo() const;
@@ -402,48 +448,30 @@ private:
   // wraps the swapchain texture for and presentImage() draws on; nullptr
   // when none can be made.
   static skgpu::graphite::Recorder *presentRecorder();
-  // A texture of the window's size, format and usage for the image
-  // presenter's next frame, wrapped for the recorder given; nullptr when it
-  // cannot be made.
-  sk_sp<SkSurface> makeImageTarget(skgpu::graphite::Recorder *recorder);
+  // A texture of the window's size, format and usage for the next of the
+  // frames, on their device, wrapped for the calling thread's recorder when
+  // it was made for that device too; nullptr when it was not (the device was
+  // replaced since ensureDevice()), or the texture cannot be made.
+  sk_sp<SkSurface> makeImageTarget(const ImageFrames &frames);
   // Hands the image of an image target, drawn into before the GPU reads it,
-  // to the image presenter. Presenting thread.
-  void showFrame(const sk_sp<SkImage> &frame);
-  // presentRecordings() and presentImage() onto the image presenter, once
-  // the target checks passed. Presenting thread.
-  bool presentRecordingsAsImage(
-      const std::vector<skgpu::graphite::Recording *> &recordings);
-  bool presentImageAsImage(const sk_sp<SkImage> &image);
+  // to the image presenter.
+  void showFrame(const ImageFrames &frames, const sk_sp<SkImage> &frame);
   void requestRedraw() {
     if (_requestRedraw) {
       _requestRedraw();
     }
   }
 
-  // The device the window's surface was made on, and its generation (see
-  // DawnContext::generation()): a surface made on a device replaced since is
-  // made again on the device in use by the window's next frame (see
-  // ensureDevice). The generation is 0 while the window is detached, and
-  // once the replacement of a lost device let go of the surface (see
-  // releaseSurfacesOn).
+  // What the surface presents into: nothing, a window or a static canvas's
+  // image frames.
+  std::variant<std::monostate, Window, ImageFrames> _attachment;
+  // The device the window's surface or the frames' textures are made on.
   wgpu::Device _device;
-  uint64_t _generation = 0;
-  wgpu::Surface _surface;
-  void *_nativeHandle = nullptr;
-  // The image presenter of a static canvas, attached in place of a window
-  // (see attachImagePresenter); _device and _generation are then the device
-  // its frames are made on, taken again when it was replaced (see
-  // ensureDevice).
-  ImagePresenter _presenter;
   bool _showsFrame = false;
-  Releaser _releaser;
   int _width = 0;
   int _height = 0;
   wgpu::TextureFormat _format = wgpu::TextureFormat::Undefined;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
-  // The window attached or resized since the swapchain was configured (see
-  // configureIfNeeded).
-  bool _needsConfigure = false;
   // The platform took the window back before detach() ran (see abandon).
   // Taken down by detach() alone, never by attach() (see releaseAttachment).
   std::atomic<bool> _abandoned{false};

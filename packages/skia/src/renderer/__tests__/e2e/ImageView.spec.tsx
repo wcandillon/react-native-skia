@@ -1,10 +1,10 @@
 import type { SkImage } from "../../../skia/types";
-import { AlphaType, ColorType } from "../../../skia/types";
 import {
   itRunsE2eOnly,
   itRunsUnderForceDarkOnly,
 } from "../../../__tests__/setup";
 import {
+  isTransparentAt,
   loseGpuDevice,
   readMiddleLuminance,
   readScreenColor,
@@ -20,25 +20,13 @@ const expectEvenGreyMiddle = async (image: SkImage) => {
   expect(mean).toBeLessThan(200);
 };
 
-// Where readScreenHalves reads: a view that has drawn nothing there yet
-// leaves the snapshot transparent.
-const hasUndrawnHalf = async (image: SkImage) => {
-  const pixels = await Promise.all(
-    [1 / 4, 3 / 4].map((fraction) =>
-      image.readPixels(
-        Math.round(image.width() * fraction),
-        Math.round(image.height() * fraction),
-        {
-          width: 1,
-          height: 1,
-          colorType: ColorType.RGBA_8888,
-          alphaType: AlphaType.Unpremul,
-        }
-      )
+// Where readScreenHalves reads.
+const hasUndrawnHalf = async (image: SkImage) =>
+  (
+    await Promise.all(
+      [1 / 4, 3 / 4].map((fraction) => isTransparentAt(image, fraction))
     )
-  );
-  return pixels.some((pixel) => pixel !== null && pixel[3] === 0);
-};
+  ).some((transparent) => transparent);
 
 // A screen whose images are read back and scaled down natively, which can
 // outlast one capture's wait on a slow phone: captured again, the same views,

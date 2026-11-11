@@ -325,6 +325,14 @@ usesP3ColorSpace(const std::string &colorSpace,
     [self.layer addSublayer:_imageLayer];
     [self setNeedsLayout];
   } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    _layer = [CAMetalLayer layer];
+#pragma clang diagnostic pop
+    [self.layer addSublayer:_layer];
+    // AppKit lays out a view put in a superview only when asked: the layout
+    // attaches the window's surface to the layer (see layoutSubviews).
+    [self setNeedsLayout];
     _surface->setHighBitDepth(_highBitDepth);
     _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
     // Presents, redraws and frame requests go to the present thread, where
@@ -509,9 +517,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   _canPresent->store(true);
   if (_view != nullptr) {
     auto view = _view;
-    [RNSkPresentThread post:^{
-      view->onCanPresent();
-    }];
+    view->postToPresentThread([view]() { view->onCanPresent(); });
   }
 }
 
@@ -711,11 +717,10 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
 }
 
-// A static canvas presents into images of the view's size, on the worker
-// that presents its frames: the first layout attaches the presenter, and a
-// size the images already have changes nothing; a color space change attaches
-// it again. Main thread.
-- (void)updateImagePresenter:(bool)forceAttach {
+// A static canvas presents into images of the view's size (see
+// RNSkView::layOutImagePresenter); a color space change attaches its
+// presenter again. Main thread.
+- (void)updateImagePresenter:(bool)attachAgain {
   const float pd = _view->getPlatformContext()->getPixelDensity();
   const int w = static_cast<int>(std::lround(self.bounds.size.width * pd));
   const int h = static_cast<int>(std::lround(self.bounds.size.height * pd));
@@ -723,24 +728,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   if (w == 0 || h == 0) {
     return;
   }
-  auto surface = _surface;
-  const bool useP3ColorSpace =
-      usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
   auto presentedFrame = [self presentedFrame];
-  _view->postToPresentThread([surface, w, h, useP3ColorSpace, presentedFrame,
-                              forceAttach]() {
-    if (!surface->isAttached() || forceAttach) {
-      if (surface->isAttached()) {
-        surface->detach();
-      }
-      surface->attachImagePresenter(
-          w, h, useP3ColorSpace, [presentedFrame](const sk_sp<SkImage> &frame) {
-            presentedFrame->present(frame);
-          });
-    } else if (surface->getWidth() != w || surface->getHeight() != h) {
-      surface->resize(w, h);
-    }
-  });
+  _view->layOutImagePresenter(
+      w, h, usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
+      attachAgain, [presentedFrame](const sk_sp<SkImage> &frame) {
+        presentedFrame->present(frame);
+      });
 }
 
 // The frames a static canvas presents on the worker, which the layer shows on

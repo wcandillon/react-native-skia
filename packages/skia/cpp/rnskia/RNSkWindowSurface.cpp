@@ -10,6 +10,7 @@
 #include "RNMetalLayerColorSpace.h"
 #include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
+#include "utils/RNSkOverloaded.h"
 
 #ifdef __APPLE__
 #include "dawn/native/MetalBackend.h"
@@ -71,14 +72,16 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                Releaser releaser) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
   // A layout attaches the same window again, which keeps what it shows.
-  const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
+  const auto *previous = std::get_if<Window>(&_attachment);
+  const bool showsFrame = _showsFrame && previous != nullptr &&
+                          previous->nativeHandle == nativeHandle;
   // Not detach(): an abandon that lands while this runs (the platform taking
   // the window back as it attaches) must be kept for the detach posted
   // behind, not taken down here.
   releaseAttachment();
   _showsFrame = showsFrame;
-  _nativeHandle = nativeHandle;
-  _releaser = std::move(releaser);
+  auto &window =
+      _attachment.emplace<Window>(Window{nativeHandle, std::move(releaser)});
   // Called from the platform view (Java or Objective-C), where an exception
   // would take the process down: without a GPU (probed the first time the
   // GPU is asked for, see DawnContext::getGpuInfo) the window is given back
@@ -89,20 +92,22 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     return;
   }
   _device = context->getWGPUDevice();
-  _generation = DawnContext::generation();
-  _surface = context->MakeWGPUSurface(nativeHandle);
-  if (!_surface) {
+  const auto generation = DawnContext::generation();
+  auto surface = context->MakeWGPUSurface(nativeHandle);
+  if (!surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     releaseAttachment();
     return;
   }
+  window.surface = DawnSurface{std::move(surface), generation};
   _width = width;
   _height = height;
   _useP3ColorSpace = useP3ColorSpace;
   _format = DawnUtils::PreferredTextureFormat;
   _colorType = DawnUtils::PreferedColorType;
   if (highBitDepth) {
-    if (surfaceSupportsFormat(DawnUtils::HighBitDepthTextureFormat)) {
+    if (surfaceSupportsFormat(window.surface->handle,
+                              DawnUtils::HighBitDepthTextureFormat)) {
       _format = DawnUtils::HighBitDepthTextureFormat;
       _colorType = DawnUtils::HighBitDepthColorType;
     } else {
@@ -111,8 +116,8 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
           "it, falling back to the 8-bit format");
     }
   }
-  _usage = supportedSurfaceUsage();
-  _needsConfigure = true;
+  _usage = supportedSurfaceUsage(window.surface->handle);
+  window.needsConfigure = true;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
@@ -133,12 +138,12 @@ void RNSkWindowSurface::attachImagePresenter(int width, int height,
   if (context == nullptr) {
     return;
   }
-  _presenter = std::move(presenter);
   // The generation first: a device replaced between the two reads leaves an
   // older generation beside the new device, which the next frame refreshes
   // (see ensureDevice); the other way round, the presenter would keep the
   // replaced device for good.
-  _generation = DawnContext::generation();
+  _attachment.emplace<ImageFrames>(
+      ImageFrames{std::move(presenter), DawnContext::generation()});
   _device = context->getWGPUDevice();
   _width = width;
   _height = height;
@@ -178,7 +183,9 @@ void RNSkWindowSurface::detach() {
 
 void RNSkWindowSurface::detach(void *nativeHandle) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
-  if (nativeHandle != nullptr && nativeHandle == _nativeHandle) {
+  const auto *window = std::get_if<Window>(&_attachment);
+  if (nativeHandle != nullptr && window != nullptr &&
+      window->nativeHandle == nativeHandle) {
     detachNow();
   }
 }
@@ -192,21 +199,24 @@ void RNSkWindowSurface::detachNow() {
 }
 
 void RNSkWindowSurface::releaseAttachment() {
-  // The surface goes before the window it draws into.
-  _surface = nullptr;
-  _presenter = nullptr;
-  _needsConfigure = false;
+  auto released = std::exchange(_attachment, std::monostate{});
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
   }
-  _generation = 0;
   updateTargetInfo();
-  if (_releaser && _nativeHandle != nullptr) {
-    _releaser(_nativeHandle);
-  }
-  _releaser = nullptr;
-  _nativeHandle = nullptr;
+  std::visit(Overloaded{
+                 [](std::monostate &) {},
+                 [](Window &window) {
+                   // The surface goes before the window it draws into.
+                   window.surface.reset();
+                   if (window.releaser) {
+                     window.releaser(window.nativeHandle);
+                   }
+                 },
+                 [](ImageFrames &) {},
+             },
+             released);
   _showsFrame = false;
 }
 
@@ -216,7 +226,7 @@ void RNSkWindowSurface::abandon() {
 
 bool RNSkWindowSurface::isAttached() {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::isAttached");
-  return _nativeHandle != nullptr || _presenter != nullptr;
+  return !std::holds_alternative<std::monostate>(_attachment);
 }
 
 bool RNSkWindowSurface::showsFrame() {
@@ -293,7 +303,7 @@ void RNSkWindowSurface::updateTargetInfo() {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   // Kept while the surface is away for a device replacement (see
   // ensureDevice): the frames recorded meanwhile are for this window.
-  if (_nativeHandle == nullptr && _presenter == nullptr) {
+  if (std::holds_alternative<std::monostate>(_attachment)) {
     _hasTargetInfo = false;
     return;
   }
@@ -341,18 +351,20 @@ void RNSkWindowSurface::takePendingSize() {
   }
   _width = _pendingWidth;
   _height = _pendingHeight;
-  _needsConfigure = true;
+  if (auto *window = std::get_if<Window>(&_attachment)) {
+    window->needsConfigure = true;
+  }
 }
 
-void RNSkWindowSurface::configureIfNeeded() {
-  if (!_needsConfigure) {
+void RNSkWindowSurface::configureIfNeeded(Window &window) {
+  if (!window.needsConfigure) {
     return;
   }
-  _needsConfigure = false;
-  configureSurface();
+  window.needsConfigure = false;
+  configureSurface(window);
 }
 
-void RNSkWindowSurface::configureSurface() {
+void RNSkWindowSurface::configureSurface(const Window &window) {
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -363,19 +375,20 @@ void RNSkWindowSurface::configureSurface() {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
-  _surface.Configure(&config);
+  window.surface->handle.Configure(&config);
 #ifdef __APPLE__
   // The layer is tagged with the gamut the window renders in; float formats
   // need the (gamma-encoded) extended variant so the values display
   // identically to the 8-bit path.
-  applyCAMetalLayerColorSpace(_nativeHandle, _format, _useP3ColorSpace);
+  applyCAMetalLayerColorSpace(window.nativeHandle, _format, _useP3ColorSpace);
 #endif
 }
 
-wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {
+wgpu::TextureUsage
+RNSkWindowSurface::supportedSurfaceUsage(const wgpu::Surface &surface) {
   wgpu::TextureUsage usage = wgpu::TextureUsage::RenderAttachment;
   wgpu::SurfaceCapabilities capabilities;
-  if (_surface.GetCapabilities(_device.GetAdapter(), &capabilities) !=
+  if (surface.GetCapabilities(_device.GetAdapter(), &capabilities) !=
       wgpu::Status::Success) {
     return usage;
   }
@@ -389,9 +402,10 @@ wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {
   return usage;
 }
 
-bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
+bool RNSkWindowSurface::surfaceSupportsFormat(const wgpu::Surface &surface,
+                                              wgpu::TextureFormat format) {
   wgpu::SurfaceCapabilities capabilities;
-  if (_surface.GetCapabilities(_device.GetAdapter(), &capabilities) !=
+  if (surface.GetCapabilities(_device.GetAdapter(), &capabilities) !=
       wgpu::Status::Success) {
     return false;
   }
@@ -405,10 +419,10 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 
 RNSkWindowState RNSkWindowSurface::readState(RNSkGraphiteTargetInfo *info) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::readState");
-  // Whether a window or an image presenter is attached is its handle or its
-  // presenter, not its description, which detach() takes once more before it
-  // lets go of it.
-  if (_nativeHandle == nullptr && _presenter == nullptr) {
+  // Whether a window or an image presenter is attached is the attachment,
+  // not its description, which detach() takes once more before it lets go of
+  // it.
+  if (std::holds_alternative<std::monostate>(_attachment)) {
     return RNSkWindowState::kNone;
   }
   // A lost device (see DawnContext::isDeviceLost) takes no frame until it
@@ -454,9 +468,10 @@ void RNSkWindowSurface::presentAsImages() {
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
-    if (window->_generation == generation) {
-      window->_surface = nullptr;
-      window->_generation = 0;
+    auto *attached = std::get_if<Window>(&window->_attachment);
+    if (attached != nullptr && attached->surface &&
+        attached->surface->generation == generation) {
+      attached->surface.reset();
     }
   }
 }
@@ -474,21 +489,20 @@ RNSkWindowSurface::presentThreadRunner() {
 
 bool RNSkWindowSurface::ensureDevice() {
   const auto generation = DawnContext::generation();
-  if (_presenter) {
-    // The presenter's frames are made in a texture of its own: the device is
-    // the one in use, taken again when it was replaced.
-    if (_generation == generation) {
-      return true;
-    }
-    auto *context = DawnContext::tryGetInstance();
-    if (context == nullptr) {
-      return false;
-    }
-    _device = context->getWGPUDevice();
-    _generation = generation;
-    return true;
-  }
-  if (_surface && _generation == generation) {
+  return std::visit(Overloaded{
+                        [](std::monostate &) { return false; },
+                        [this, generation](Window &window) {
+                          return ensureDevice(window, generation);
+                        },
+                        [this, generation](ImageFrames &frames) {
+                          return ensureDevice(frames, generation);
+                        },
+                    },
+                    _attachment);
+}
+
+bool RNSkWindowSurface::ensureDevice(Window &window, uint64_t generation) {
+  if (window.surface && window.surface->generation == generation) {
     return true;
   }
   auto *context = DawnContext::tryGetInstance();
@@ -499,18 +513,33 @@ bool RNSkWindowSurface::ensureDevice() {
   // while the device was being replaced, before the sweep (see
   // releaseSurfacesOn) — is made again: it was never configured, since
   // nothing presents on a lost device.
-  _surface = nullptr;
+  window.surface.reset();
   _device = context->getWGPUDevice();
-  _generation = generation;
-  _surface = context->MakeWGPUSurface(_nativeHandle);
-  if (!_surface) {
+  auto surface = context->MakeWGPUSurface(window.nativeHandle);
+  if (!surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     return false;
   }
-  _usage = supportedSurfaceUsage();
-  configureSurface();
-  _needsConfigure = false;
+  window.surface = DawnSurface{std::move(surface), generation};
+  _usage = supportedSurfaceUsage(window.surface->handle);
+  configureSurface(window);
+  window.needsConfigure = false;
   updateTargetInfo();
+  return true;
+}
+
+bool RNSkWindowSurface::ensureDevice(ImageFrames &frames, uint64_t generation) {
+  // The frames are made in textures of their own: the device is the one in
+  // use, taken again when it was replaced.
+  if (frames.generation == generation) {
+    return true;
+  }
+  auto *context = DawnContext::tryGetInstance();
+  if (context == nullptr) {
+    return false;
+  }
+  _device = context->getWGPUDevice();
+  frames.generation = generation;
   return true;
 }
 
@@ -534,12 +563,24 @@ bool RNSkWindowSurface::presentRecordings(
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  if (_presenter) {
-    return presentRecordingsAsImage(recordings);
-  }
-  configureIfNeeded();
+  return std::visit(Overloaded{
+                        [](std::monostate &) { return false; },
+                        [this, &recordings](Window &window) {
+                          return presentRecordings(window, recordings);
+                        },
+                        [this, &recordings](ImageFrames &frames) {
+                          return presentRecordings(frames, recordings);
+                        },
+                    },
+                    _attachment);
+}
+
+bool RNSkWindowSurface::presentRecordings(
+    Window &window,
+    const std::vector<skgpu::graphite::Recording *> &recordings) {
+  configureIfNeeded(window);
   wgpu::SurfaceTexture surfaceTexture;
-  _surface.GetCurrentTexture(&surfaceTexture);
+  window.surface->handle.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
     return false;
@@ -561,7 +602,24 @@ bool RNSkWindowSurface::presentRecordings(
   // A recording Graphite rejects is logged there and dropped: it would be
   // rejected again on every frame, and the frames behind it would never come.
   DawnContext::getInstance().insertRecordings(recordings, surface.get());
-  return presentTexture();
+  return presentTexture(window);
+}
+
+bool RNSkWindowSurface::presentRecordings(
+    ImageFrames &frames,
+    const std::vector<skgpu::graphite::Recording *> &recordings) {
+  auto imageTarget = makeImageTarget(frames);
+  if (imageTarget == nullptr) {
+    return false;
+  }
+  auto frame = SkSurfaces::AsImage(imageTarget);
+  if (frame == nullptr ||
+      !DawnContext::getInstance().insertRecordings(
+          recordings, imageTarget.get(), frames.generation)) {
+    return false;
+  }
+  showFrame(frames, frame);
+  return true;
 }
 
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
@@ -571,12 +629,23 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  if (_presenter) {
-    return presentImageAsImage(image);
-  }
-  configureIfNeeded();
+  return std::visit(Overloaded{
+                        [](std::monostate &) { return false; },
+                        [this, &image](Window &window) {
+                          return presentImage(window, image);
+                        },
+                        [this, &image](ImageFrames &frames) {
+                          return presentImage(frames, image);
+                        },
+                    },
+                    _attachment);
+}
+
+bool RNSkWindowSurface::presentImage(Window &window,
+                                     const sk_sp<SkImage> &image) {
+  configureIfNeeded(window);
   wgpu::SurfaceTexture surfaceTexture;
-  _surface.GetCurrentTexture(&surfaceTexture);
+  window.surface->handle.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
     return false;
@@ -595,7 +664,28 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   }
   drawOnto(surface->getCanvas(), image, surface->width(), surface->height());
   DawnContext::getInstance().submitRecording(recorder);
-  return presentTexture();
+  return presentTexture(window);
+}
+
+bool RNSkWindowSurface::presentImage(ImageFrames &frames,
+                                     const sk_sp<SkImage> &image) {
+  auto imageTarget = makeImageTarget(frames);
+  if (imageTarget == nullptr) {
+    return false;
+  }
+  auto frame = SkSurfaces::AsImage(imageTarget);
+  if (frame == nullptr) {
+    return false;
+  }
+  drawOnto(imageTarget->getCanvas(), image, imageTarget->width(),
+           imageTarget->height());
+  // The recorder is the frames' device's (see makeImageTarget): the submit
+  // refuses it once that device is lost or replaced.
+  if (!DawnContext::getInstance().submitRecording(imageTarget->recorder())) {
+    return false;
+  }
+  showFrame(frames, frame);
+  return true;
 }
 
 bool RNSkWindowSurface::canPresent() {
@@ -603,7 +693,7 @@ bool RNSkWindowSurface::canPresent() {
          !_abandoned.load(std::memory_order_acquire);
 }
 
-bool RNSkWindowSurface::presentTexture() {
+bool RNSkWindowSurface::presentTexture(const Window &window) {
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
@@ -615,14 +705,23 @@ bool RNSkWindowSurface::presentTexture() {
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }
-  _surface.Present();
+  window.surface->handle.Present();
   _showsFrame = true;
   return true;
 }
 
-sk_sp<SkSurface>
-RNSkWindowSurface::makeImageTarget(skgpu::graphite::Recorder *recorder) {
-  if (recorder == nullptr) {
+sk_sp<SkSurface> RNSkWindowSurface::makeImageTarget(const ImageFrames &frames) {
+  DawnContext::RecorderRef recorder;
+  try {
+    recorder = DawnContext::getInstance().getThreadRecorder();
+  } catch (const std::exception &e) {
+    RNSkLogger::logToConsole("Could not get a recorder to present with: %s",
+                             e.what());
+    return nullptr;
+  }
+  // A device replaced since ensureDevice(): the next frame is made on the
+  // new one.
+  if (recorder.generation != frames.generation) {
     return nullptr;
   }
   wgpu::TextureDescriptor descriptor;
@@ -632,7 +731,7 @@ RNSkWindowSurface::makeImageTarget(skgpu::graphite::Recorder *recorder) {
   descriptor.format = _format;
   descriptor.usage = _usage;
   auto imageTarget = DawnContext::getInstance().MakeSurfaceFromTexture(
-      _device.CreateTexture(&descriptor), recorder,
+      _device.CreateTexture(&descriptor), recorder.recorder,
       DawnUtils::viewColorSpace(_useP3ColorSpace));
   // The frame stays queued: the view's next redraw presents it, or its next
   // recording once the producer has room to make one.
@@ -644,41 +743,10 @@ RNSkWindowSurface::makeImageTarget(skgpu::graphite::Recorder *recorder) {
   return imageTarget;
 }
 
-void RNSkWindowSurface::showFrame(const sk_sp<SkImage> &frame) {
-  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showFrame");
-  _presenter(frame);
+void RNSkWindowSurface::showFrame(const ImageFrames &frames,
+                                  const sk_sp<SkImage> &frame) {
+  frames.presenter(frame);
   _showsFrame = true;
-}
-
-bool RNSkWindowSurface::presentRecordingsAsImage(
-    const std::vector<skgpu::graphite::Recording *> &recordings) {
-  RNSURFACE_ASSERT_THREAD(_presentingThread,
-                          "RNSkWindowSurface::presentRecordingsAsImage");
-  auto *recorder = presentRecorder();
-  auto imageTarget = makeImageTarget(recorder);
-  auto frame = SkSurfaces::AsImage(imageTarget);
-  if (frame == nullptr) {
-    return false;
-  }
-  DawnContext::getInstance().insertRecordings(recordings, imageTarget.get());
-  showFrame(frame);
-  return true;
-}
-
-bool RNSkWindowSurface::presentImageAsImage(const sk_sp<SkImage> &image) {
-  RNSURFACE_ASSERT_THREAD(_presentingThread,
-                          "RNSkWindowSurface::presentImageAsImage");
-  auto *recorder = presentRecorder();
-  auto imageTarget = makeImageTarget(recorder);
-  auto frame = SkSurfaces::AsImage(imageTarget);
-  if (frame == nullptr) {
-    return false;
-  }
-  drawOnto(imageTarget->getCanvas(), image, imageTarget->width(),
-           imageTarget->height());
-  DawnContext::getInstance().submitRecording(recorder);
-  showFrame(frame);
-  return true;
 }
 
 } // namespace RNSkia

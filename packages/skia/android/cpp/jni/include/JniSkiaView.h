@@ -27,13 +27,16 @@ namespace jni = facebook::jni;
  * presents on the present thread of the Java side (see
  * SkiaView.runOnPresentThread), and the Java view posts the surface
  * callbacks there too, as the window belongs to that thread (see
- * RNSkWindowSurface); this object is destroyed there as well (see
+ * RNSkWindowSurface); a window canvas's object is destroyed there as well (see
  * SkiaView.dropInstance), so no call below runs under a present. The frame
  * scheduler lives here too (see rnsurface::FrameScheduler): the Java view
  * hands it the vsync of its Choreographer and the TextureView's draws, and
  * arms the Choreographer when the scheduler asks (see PresentHost). A static
  * canvas has no backing view: it presents its frames as images, on the
- * worker, which the Java view's image child shows (see presentAsImages).
+ * images' worker, which the Java view's image child shows (see
+ * presentAsImages); its object is destroyed on the main thread, as each task
+ * of that worker holds the native view while it runs (see
+ * RNSkView::layOutImagePresenter).
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
 public:
@@ -54,6 +57,8 @@ public:
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
+         makeNativeMethod("presentThroughWindow",
+                          JniSkiaView::presentThroughWindow),
          makeNativeMethod("presentAsImages", JniSkiaView::presentAsImages),
          makeNativeMethod("imagePresenterLaidOut",
                           JniSkiaView::imagePresenterLaidOut),
@@ -124,34 +129,61 @@ protected:
   }
 
   /**
-   The canvas is static: its frames are presented as images, on the worker
-   (see RNSkView::presentAsImages). Main thread, before the view is
-   registered (see SkiaView.updateView).
+   The canvas presents through its backing view's window, on the present
+   thread of the Java side, its frames paced by the frame scheduler. Main
+   thread, before the view is registered (see SkiaView.updateView), in place
+   of presentAsImages().
+   */
+  void presentThroughWindow() {
+    // Tasks for the present thread go through the Java view, which owns the
+    // thread. Weak: the Java view owns this object through its hybrid data;
+    // a task for a view that is gone is dropped. Called from any thread, the
+    // render thread pool's included, hence the thread scope.
+    auto javaView = _javaView;
+    _view->setPresentThread([javaView](std::function<void()> task) {
+      jni::ThreadScope threadScope;
+      auto javaPart = javaView->weak->lockLocal();
+      if (!javaPart) {
+        return;
+      }
+      static const auto method =
+          javaPart->getClass()
+              ->getMethod<void(jni::alias_ref<jni::JRunnable::javaobject>)>(
+                  "runOnPresentThread");
+      method(javaPart, jni::JNativeRunnable::newObjectCxxArgs(std::move(task)));
+    });
+    // A submitted recording goes to the scheduler, on the present thread,
+    // which arms the Java view's frame callback (or presents on the spot,
+    // for a window resized since the frame it shows: see
+    // rnsurface::FrameScheduler::requestFrame). Weak: the view may outlive
+    // this object in the registry for a moment, with the scheduler gone.
+    _presentHost = std::make_shared<PresentHost>(javaView, _view);
+    _scheduler = std::make_shared<rnsurface::FrameScheduler>(*_presentHost);
+    std::weak_ptr<rnsurface::FrameScheduler> weakScheduler = _scheduler;
+    _view->setFrameScheduler([weakScheduler](bool forResizedWindow) {
+      if (auto scheduler = weakScheduler.lock()) {
+        scheduler->requestFrame(forResizedWindow);
+      }
+    });
+  }
+
+  /**
+   The canvas is static: its frames are presented as images, on the images'
+   worker (see RNSkView::presentAsImages). Main thread, before the view is
+   registered (see SkiaView.updateView), in place of presentThroughWindow().
    */
   void presentAsImages() { _view->presentAsImages(); }
 
   /**
-   A static canvas was laid out at this pixel size, which its images take:
-   the first layout attaches the presenter, and a size the images already
-   have changes nothing. Main thread; the surface belongs to the worker that
-   presents the images, which attaches or resizes it there.
+   A static canvas was laid out at this pixel size, which its images take
+   (see RNSkView::layOutImagePresenter). Main thread.
    */
   void imagePresenterLaidOut(int width, int height) {
     if (width <= 0 || height <= 0) {
       return;
     }
-    auto surface = _surface;
-    auto presenter = makeImagePresenter();
-    _view->postToPresentThread([surface, width, height,
-                                presenter = std::move(presenter)]() {
-      if (!surface->isAttached()) {
-        surface->attachImagePresenter(width, height,
-                                      /* useP3ColorSpace= */ false, presenter);
-      } else if (surface->getWidth() != width ||
-                 surface->getHeight() != height) {
-        surface->resize(width, height);
-      }
-    });
+    _view->layOutImagePresenter(width, height, /* useP3ColorSpace= */ false,
+                                /* attachAgain= */ false, makeImagePresenter());
   }
 
   /**
@@ -210,40 +242,6 @@ private:
     _surface = std::make_shared<RNSkWindowSurface>();
     _view = std::make_shared<RNSkView>(context, _surface);
     _javaView = std::make_shared<JavaView>(jThis);
-    // Tasks for the present thread go through the Java view, which owns the
-    // thread. Weak: the Java view owns this object through its hybrid data;
-    // a task for a view that is gone is dropped. Called from any thread, the
-    // render thread pool's included, hence the thread scope.
-    auto javaView = _javaView;
-    auto runOnPresentThread = [javaView](std::function<void()> task) {
-      jni::ThreadScope threadScope;
-      auto javaPart = javaView->weak->lockLocal();
-      if (!javaPart) {
-        return;
-      }
-      static const auto method =
-          javaPart->getClass()
-              ->getMethod<void(jni::alias_ref<jni::JRunnable::javaobject>)>(
-                  "runOnPresentThread");
-      method(javaPart, jni::JNativeRunnable::newObjectCxxArgs(std::move(task)));
-    };
-    // The thread and the window are bound to it there, ahead of the surface
-    // callbacks the Java view posts behind this (see
-    // RNSkView::setPresentThread).
-    _view->setPresentThread(runOnPresentThread);
-    // A submitted recording goes to the scheduler, on the present thread,
-    // which arms the Java view's frame callback (or presents on the spot,
-    // for a window resized since the frame it shows: see
-    // rnsurface::FrameScheduler::requestFrame). Weak: the view may outlive
-    // this object in the registry for a moment, with the scheduler gone.
-    _presentHost = std::make_shared<PresentHost>(javaView, _view);
-    _scheduler = std::make_shared<rnsurface::FrameScheduler>(*_presentHost);
-    std::weak_ptr<rnsurface::FrameScheduler> weakScheduler = _scheduler;
-    _view->setFrameScheduler([weakScheduler](bool forResizedWindow) {
-      if (auto scheduler = weakScheduler.lock()) {
-        scheduler->requestFrame(forResizedWindow);
-      }
-    });
   }
 
   /**
@@ -267,31 +265,26 @@ private:
 
   /**
    Shows each frame of a static canvas through the Java view's image child,
-   by the id of its image (see SkiaView.showPresentedImage), from the worker
-   that presents it.
+   by the id of its image (see SkiaView.showPresentedImage), from the images'
+   worker that presents it.
    */
   RNSkWindowSurface::ImagePresenter makeImagePresenter() {
-    if (_presentedFrame != nullptr) {
-      auto presentedFrame = _presentedFrame;
-      return [presentedFrame](const sk_sp<SkImage> &frame) {
-        presentedFrame->present(frame);
-      };
+    if (_presentedFrame == nullptr) {
+      auto javaView = _javaView;
+      _presentedFrame = std::make_shared<RNSkPresentedFrame>(
+          _view->getPlatformContext(), [javaView](uint32_t imageId) {
+            jni::ThreadScope threadScope;
+            auto javaPart = javaView->weak->lockLocal();
+            if (!javaPart) {
+              return;
+            }
+            static const auto method =
+                javaPart->getClass()->getMethod<void(jlong)>(
+                    "showPresentedImage");
+            method(javaPart, static_cast<jlong>(imageId));
+          });
     }
-    auto javaView = _javaView;
-    _presentedFrame = std::make_shared<RNSkPresentedFrame>(
-        _view->getPlatformContext(), [javaView](uint32_t imageId) {
-          jni::ThreadScope threadScope;
-          auto javaPart = javaView->weak->lockLocal();
-          if (!javaPart) {
-            return;
-          }
-          static const auto method =
-              javaPart->getClass()->getMethod<void(jlong)>(
-                  "showPresentedImage");
-          method(javaPart, static_cast<jlong>(imageId));
-        });
-    auto presentedFrame = _presentedFrame;
-    return [presentedFrame](const sk_sp<SkImage> &frame) {
+    return [presentedFrame = _presentedFrame](const sk_sp<SkImage> &frame) {
       presentedFrame->present(frame);
     };
   }

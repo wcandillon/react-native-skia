@@ -520,25 +520,26 @@ public:
                    SkSurface *targetSurface) {
     RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
-    auto *current = _current.load(std::memory_order_acquire);
-    if (current->lost.load(std::memory_order_acquire)) {
-      return;
-    }
-    for (auto *recording : recordings) {
-      skgpu::graphite::InsertRecordingInfo info;
-      info.fRecording = recording;
-      info.fTargetSurface = targetSurface;
-      auto status = current->context->insertRecording(info);
-      // InsertStatus converts to true on success.
-      if (!static_cast<bool>(status)) {
-        RNSkLogger::logToConsole(
-            "Graphite rejected a recording (InsertStatus %d): %s",
-            static_cast<int>(
-                static_cast<skgpu::graphite::InsertStatus::V>(status)),
-            status.message().c_str());
-      }
-    }
-    current->context->submit();
+    insertRecordingsLocked(*_current.load(std::memory_order_acquire),
+                           recordings, targetSurface);
+  }
+
+  /**
+   insertRecordings(), when the device in use is still the one of
+   `generation` (see generation()), which the recordings and the surface were
+   made for: for a caller that presents off the windows' thread, which the
+   replacement of a lost device is not kept apart from (see recover), so the
+   check and the replay hold the context lock together. Returns whether the
+   recordings ran.
+   */
+  bool
+  insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
+                   SkSurface *targetSurface, uint64_t generation) {
+    RNSkGpuActivity::Scope activity;
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto &current = *_current.load(std::memory_order_acquire);
+    return current.id == generation &&
+           insertRecordingsLocked(current, recordings, targetSurface);
   }
 
   // GPU objects --------------------------------------------------------------
@@ -789,6 +790,33 @@ private:
     // Why the last attempt to replace the device failed, if it did.
     std::string recoveryFailure;
   };
+
+  // insertRecordings(), on `current`: false, with nothing run, while it is
+  // lost. Called with the context lock held.
+  static bool insertRecordingsLocked(
+      Generation &current,
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      SkSurface *targetSurface) {
+    if (current.lost.load(std::memory_order_acquire)) {
+      return false;
+    }
+    for (auto *recording : recordings) {
+      skgpu::graphite::InsertRecordingInfo info;
+      info.fRecording = recording;
+      info.fTargetSurface = targetSurface;
+      auto status = current.context->insertRecording(info);
+      // InsertStatus converts to true on success.
+      if (!static_cast<bool>(status)) {
+        RNSkLogger::logToConsole(
+            "Graphite rejected a recording (InsertStatus %d): %s",
+            static_cast<int>(
+                static_cast<skgpu::graphite::InsertStatus::V>(status)),
+            status.message().c_str());
+      }
+    }
+    current.context->submit();
+    return true;
+  }
 
   /**
    The recorder of one thread, with the generation it was made for (see

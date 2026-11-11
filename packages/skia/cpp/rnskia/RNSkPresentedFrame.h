@@ -23,12 +23,13 @@ namespace RNSkia {
  presentable in RNSkPresentedImages while the view shows it, and given back
  once the next frame replaces it, so the view keeps the previous frame until
  the next one's pixels arrive. The platform view is told which image to show,
- by its id, from the worker that presents the frames; it closes this when it
- goes away, and a frame presented after that is given back unseen.
+ by its id, from the images' worker that presents the frames (see
+ RNSkPresentedImages::worker); it closes this when it goes away, and a frame
+ presented after that is given back unseen.
  */
 class RNSkPresentedFrame {
 public:
-  /** Tells the platform view the image to show. Called on the worker. */
+  /** Tells the platform view the image to show. The images' worker. */
   using Show = std::function<void(uint32_t imageId)>;
 
   RNSkPresentedFrame(std::shared_ptr<RNSkPlatformContext> context, Show show)
@@ -39,7 +40,7 @@ public:
   RNSkPresentedFrame(const RNSkPresentedFrame &) = delete;
   RNSkPresentedFrame &operator=(const RNSkPresentedFrame &) = delete;
 
-  /** A new frame to show. Worker. */
+  /** A new frame to show. The images' worker. */
   void present(const sk_sp<SkImage> &frame) {
     std::lock_guard<std::mutex> lock(_mutex);
     if (_closed) {

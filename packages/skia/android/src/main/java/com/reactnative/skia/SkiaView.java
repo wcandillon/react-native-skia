@@ -261,9 +261,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         }
         kind = mStaticPresentation ? BackingViewKind.IMAGE : mBackingView;
         mKind = kind;
-        // Before the view registers its id (see registerPendingView).
-        if (kind == BackingViewKind.IMAGE && hasNativeView()) {
-            presentAsImages();
+        // How the native view presents is decided once, before the view
+        // registers its id (see registerPendingView).
+        if (hasNativeView()) {
+            switch (kind) {
+                case SURFACE_VIEW, TEXTURE_VIEW -> presentThroughWindow();
+                case IMAGE -> presentAsImages();
+            }
         }
         mSurfaceHighBitDepth = BackingViewKind.resolveHighBitDepth(kind, mHighBitDepth);
         if (mHighBitDepth && !mSurfaceHighBitDepth) {
@@ -339,9 +343,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         // on this thread, before the present thread gets to the drop.
         unregisterView();
         if (mKind == BackingViewKind.IMAGE) {
-            // A static canvas's frames are presented on the worker, which
-            // holds what it presents of this view: nothing of the native
-            // view is reached from the present thread, so it goes now.
+            // A static canvas's native view is reached from the worker alone,
+            // whose tasks hold it while they run (see
+            // RNSkView::layOutImagePresenter), so it goes now.
             if (mView instanceof SkiaImageView imageView) {
                 imageView.setPresentedImageId(0);
             }
@@ -353,11 +357,23 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         PresentThread.handler().post(mHybridData::resetNative);
     }
 
+    // Whether the native view presents through the backing view's window, and
+    // so has a frame scheduler (see updateView). Main thread.
+    private boolean presentsThroughWindow() {
+        if (mKind == null) {
+            return false;
+        }
+        return switch (mKind) {
+            case SURFACE_VIEW, TEXTURE_VIEW -> true;
+            case IMAGE -> false;
+        };
+    }
+
     // Whether the native view still exists, for the main thread: it is dropped
     // there (see dropInstance), and no native method is called from there
     // after that, but for the one onSurfaceDestroyed makes under the hybrid
-    // data's lock. The present thread, where it is destroyed, asks the hybrid
-    // data instead (see presentFrame).
+    // data's lock. The present thread, where a window canvas's is destroyed,
+    // asks the hybrid data instead (see presentFrame).
     private boolean hasNativeView() {
         return !mDropped;
     }
@@ -431,9 +447,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
         mFrameRateVote.onFramePresented();
     }
 
-    // The vsync asked for with postFrameCallback(). The native view is
-    // destroyed on this thread (see dropInstance), so the check and the call
-    // cannot race.
+    // The vsync a window canvas's scheduler asked for with postFrameCallback().
+    // Its native view is destroyed on this thread (see dropInstance), so the
+    // check and the call cannot race.
     @Override
     public void doFrame(long frameTimeNanos) {
         if (mHybridData.isValid()) {
@@ -471,7 +487,12 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         removeCallbacks(mFrameConsumedPosted);
-        PresentThread.handler().post(mCancelFrames);
+        // Only a window's frames are scheduled: a static canvas asks for none,
+        // and its native view is dropped on the main thread, not behind this
+        // task (see dropInstance).
+        if (presentsThroughWindow()) {
+            PresentThread.handler().post(mCancelFrames);
+        }
     }
 
     // Surfaces ------------------------------------------------------------
@@ -632,6 +653,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI, Choreograph
     private native void surfaceAbandoned();
 
     private native void setLayoutSize(int width, int height);
+
+    private native void presentThroughWindow();
 
     private native void presentAsImages();
 

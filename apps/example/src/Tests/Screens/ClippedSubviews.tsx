@@ -2,7 +2,7 @@ import type { RefObject, ComponentRef } from "react";
 import React, { memo, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, View } from "react-native";
-import type { CanvasRef } from "react-native-skia";
+import type { CanvasRef, SkImage } from "react-native-skia";
 import {
   Canvas,
   createPicture,
@@ -50,6 +50,38 @@ type Change = "nothing" | "state" | "sharedValue";
 // The views in the row: a canvas beside a canvas drawing a picture and a
 // graphite view, or a static canvas beside an image view.
 type Row = "canvas" | "static";
+
+const isStaticRow: Readonly<Record<Row, boolean>> = {
+  canvas: false,
+  static: true,
+};
+
+interface RowNeighboursProps {
+  row: Row;
+  cyanImage: SkImage;
+  pictureCanvas: RefObject<CanvasRef | null>;
+}
+
+// The views beside the row's first canvas.
+const RowNeighbours = ({
+  row,
+  cyanImage,
+  pictureCanvas,
+}: RowNeighboursProps) => {
+  switch (row) {
+    case "canvas":
+      return (
+        <>
+          <PictureCanvas canvasRef={pictureCanvas} />
+          <CyanGraphiteView style={{ flex: 1 }} />
+        </>
+      );
+    case "static":
+      return <SkiaImageView style={{ flex: 1 }} image={cyanImage} />;
+    default:
+      return exhaustiveCheck(row);
+  }
+};
 
 interface ClippedSubviewsProps {
   change: Change;
@@ -142,17 +174,14 @@ const ClippedSubviews = ({ change, roundTrips, row }: ClippedSubviewsProps) => {
       style={{ flex: 1 }}
     >
       <View style={{ flexDirection: "row", height: ROW_HEIGHT }}>
-        <Canvas style={{ flex: 1 }} static={row === "static"}>
+        <Canvas style={{ flex: 1 }} static={isStaticRow[row]}>
           <Fill color={change === "sharedValue" ? sharedColor : color} />
         </Canvas>
-        {row === "static" ? (
-          <SkiaImageView style={{ flex: 1 }} image={cyanImage} />
-        ) : (
-          <>
-            <PictureCanvas canvasRef={pictureCanvas} />
-            <CyanGraphiteView style={{ flex: 1 }} />
-          </>
-        )}
+        <RowNeighbours
+          row={row}
+          cyanImage={cyanImage}
+          pictureCanvas={pictureCanvas}
+        />
       </View>
       <View style={{ height: 2 * AWAY }} />
     </ScrollView>

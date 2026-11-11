@@ -201,6 +201,19 @@ const readScreenColorAt = async (image: SkImage, x: number, y: number) =>
     )
   );
 
+// Whether the screen shows nothing at a fraction of its width and of its
+// height: a view that has drawn nothing there yet leaves it transparent.
+export const isTransparentAt = async (image: SkImage, fraction: number) => {
+  const pixel = await readRegionOrNull(
+    image,
+    Math.round(image.width() * fraction),
+    Math.round(image.height() * fraction),
+    1,
+    1
+  );
+  return pixel !== null && pixel[3] === 0;
+};
+
 // The red, green and blue bytes of the screen at fractions of its width and
 // of its height.
 const readScreenPixelAt = async (image: SkImage, x: number, y: number) => {

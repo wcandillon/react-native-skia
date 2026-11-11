@@ -41,8 +41,9 @@ namespace RNSkia {
  started (a reload) gives back its own retains and no others.
 
  Threading: retain and release run on the caller's thread: the JS runtime of
- a <SkiaImageView>, or the worker and the main thread for a static canvas; a
- readback completes on whichever thread finishes the GPU work. The registry
+ a <SkiaImageView>, or the images' worker (see worker()) and the main thread
+ for a static canvas; a readback completes on whichever thread finishes the
+ GPU work. The registry
  hands the platform its present and discard requests under its own lock, so
  they reach the main thread in the order the retains and releases happened: a
  release always overtakes a readback still in flight for the same retain.
@@ -50,14 +51,24 @@ namespace RNSkia {
 class RNSkPresentedImages {
 public:
   static RNSkPresentedImages &getInstance() {
-    // Never destroyed, like RNSkWorker: the worker and the poller may
-    // still use it while the process exits.
+    // Never destroyed, like RNSkWorker: the images' worker and the poller
+    // may still use it while the process exits.
     static auto *instance = new RNSkPresentedImages();
     return *instance;
   }
 
   RNSkPresentedImages(const RNSkPresentedImages &) = delete;
   RNSkPresentedImages &operator=(const RNSkPresentedImages &) = delete;
+
+  /**
+   The thread the bitmaps are made on, and static canvases present on (see
+   RNSkView::presentAsImages): one of their own, so that a long job on the
+   shared worker, an encode or a decode, holds up none of them.
+   */
+  static RNSkWorker &worker() {
+    static auto &instance = RNSkWorker::makeDedicated("RNSkia Images");
+    return instance;
+  }
 
   /** The id a view shows `image` by. */
   static uint32_t idOf(const sk_sp<SkImage> &image) {
@@ -80,13 +91,12 @@ public:
       return;
     }
     const uint64_t generation = *readback;
-    // The readback is requested from the worker, so that the caller only
-    // counts.
+    // The readback is requested from the images' worker, so that the caller
+    // only counts.
     std::weak_ptr<RNSkPlatformContext> weakContext = context;
-    RNSkWorker::getInstance().post(
-        [this, id, generation, image, weakContext]() {
-          produce(id, generation, image, weakContext);
-        });
+    worker().post([this, id, generation, image, weakContext]() {
+      produce(id, generation, image, weakContext);
+    });
   }
 
   /** Gives back a retain. The last one discards the image's bitmap. */
@@ -135,11 +145,11 @@ private:
         kRGBA_8888_SkColorType, kPremul_SkAlphaType, std::move(colorSpace));
   }
 
-  // Runs on the worker, where the platform's bitmap is made and finished: a
-  // readback completes inside the GPU context's lock, where that work would
-  // hold up every view's frame. A CPU image is scaled into the bitmap. A
-  // readback's mapped memory goes with the GPU device that made it, which a
-  // loss may destroy as soon as the readback's callback returns (see
+  // Runs on the images' worker, where the platform's bitmap is made and
+  // finished: a readback completes inside the GPU context's lock, where that
+  // work would hold up every view's frame. A CPU image is scaled into the
+  // bitmap. A readback's mapped memory goes with the GPU device that made it,
+  // which a loss may destroy as soon as the readback's callback returns (see
   // DawnContext::recover), so its rows are copied into the bitmap in the
   // callback, the one thing done there.
   void produce(uint32_t id, uint64_t generation, const sk_sp<SkImage> &image,
@@ -194,8 +204,8 @@ private:
                 writer->getPixels().width(), writer->getPixels().height());
           }
           // The platform's calls that finish the bitmap, or free it, run on
-          // the worker, outside the GPU context's lock.
-          RNSkWorker::getInstance().post(
+          // the images' worker, outside the GPU context's lock.
+          worker().post(
               [this, id, generation, written, writer = std::move(writer)]() {
                 if (written) {
                   finishAndPresent(id, generation, *writer);
