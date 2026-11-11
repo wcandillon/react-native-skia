@@ -25,6 +25,7 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkDeviceUses.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
 #include "RNSkPresentThread.h"
@@ -484,7 +485,7 @@ public:
     // The snap compiles the pipelines the recording needs, inline: GPU work
     // the warmup stays behind (see RNSkGpuActivity), as is the run.
     RNSkGpuActivity::Scope activity;
-    auto recording = recorder->snap();
+    auto recording = snap(recorder);
     if (recording == nullptr) {
       return false;
     }
@@ -508,6 +509,19 @@ public:
     }
     current->context->submit(syncToCpu);
     return inserted;
+  }
+
+  /**
+   Snaps what the recorder recorded, compiling the pipelines the recording
+   needs on the recorder's device: the device in use, whose destruction
+   waits for the snap (see Generation::uses), or one replaced since, which
+   was lost first, and Dawn makes nothing on a lost device. Called on the
+   recorder's thread, without the context lock.
+   */
+  std::unique_ptr<skgpu::graphite::Recording>
+  snap(skgpu::graphite::Recorder *recorder) {
+    RNSkDeviceUses::Use use(_current.load(std::memory_order_acquire)->uses);
+    return recorder->snap();
   }
 
   /**
@@ -772,8 +786,8 @@ private:
    A device and the Graphite context on it (see generation()). Never
    destroyed: Dawn reports its loss from any of its threads, at any time,
    and the recorders, surfaces and images made on it keep pointing at it.
-   The Dawn device itself is destroyed when it is replaced (see recover);
-   the handle stays valid.
+   The Dawn device itself is destroyed when it is replaced (see recover),
+   once no call into it is in flight (see uses); the handle stays valid.
    */
   struct Generation {
     uint64_t id = 0;
@@ -792,6 +806,9 @@ private:
     std::string lostMessage;
     // Why the last attempt to replace the device failed, if it did.
     std::string recoveryFailure;
+    // The snaps and warmup calls into the device, which its destruction
+    // waits out.
+    RNSkDeviceUses uses;
   };
 
   // insertRecordings(), on `current`: false, with nothing run, while it is
@@ -1022,20 +1039,24 @@ private:
 
   /**
    Has the thread every window presents on (see RNSkPresentThread.h) let go of
-   every window's surface on `lost`, put `next` in its place and destroy
-   the lost device, and waits for it. The tasks there run one after the
-   other, so no present or attach overlaps the task: a window has no lock
-   of its own, and none configures a swapchain on the new device before
-   the lost one is destroyed, which runs the deletions Dawn deferred on it
-   (a lost device never ticks again), the VkSurfaceKHR of each window's
-   old swapchain among them, which keeps the window connected until then
-   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). The Generation, its
-   device handle and its Graphite context stay: what still points at them
-   keeps failing validation, as destroyed rather than lost. A present in
-   flight holds the thread for as long as Graphite takes to replay its
-   frame, the pipelines it compiles included, and this thread waits as
-   long. Called without a lock; the task takes the windows' list, then the
-   context lock (see the class comment on locks in RNSkWindowSurface).
+   every window's surface on `lost`, put `next` in its place and destroy the
+   lost device, and waits for it. The tasks there run one after the other, so
+   no present or attach overlaps the task: a window has no lock of its own,
+   and none configures a swapchain on the new device before the lost one is
+   destroyed, which runs the deletions Dawn deferred on it (a lost device
+   never ticks again), the VkSurfaceKHR of each window's old swapchain among
+   them, which keeps the window connected until then
+   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). The destroy waits for the
+   snaps and warmup calls in flight on the lost device (see
+   Generation::uses), each past the pipeline it was compiling as the device
+   was lost, after which Dawn makes nothing on it. The Generation, its device
+   handle and its Graphite context stay: what still points at them keeps
+   failing validation, as destroyed rather than lost. A present in flight
+   holds the thread for as long as Graphite takes to replay its frame, the
+   pipelines it compiles included, and this thread waits as long. Called
+   without a lock; the task takes the windows' list, then the context lock,
+   then the lost device's uses and the context lock again (see the class
+   comment on locks in RNSkWindowSurface).
    */
   void replaceOnPresentThread(Generation *lost, Generation *next) {
     auto done = std::make_shared<std::promise<void>>();
@@ -1046,8 +1067,11 @@ private:
         std::lock_guard<std::mutex> lock(_mutex);
         _retired.push_back(lost);
         _current.store(next, std::memory_order_release);
-        lost->backendContext.fDevice.Destroy();
       }
+      lost->uses.destroyAfterUses([this, lost]() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        lost->backendContext.fDevice.Destroy();
+      });
       done->set_value();
     });
     replaced.wait();
@@ -1092,8 +1116,8 @@ private:
     // on the warmup thread only.
     RNSkPipelineWarmup::getInstance().start(
         generation->context->makePrecompileContext(),
-        precompileDisplayP3().load(std::memory_order_acquire),
-        &generation->lost, generation->backendContext.fDevice);
+        precompileDisplayP3().load(std::memory_order_acquire), generation->lost,
+        generation->uses, generation->backendContext.fDevice);
     return generation;
   }
 

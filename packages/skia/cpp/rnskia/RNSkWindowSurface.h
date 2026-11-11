@@ -72,8 +72,9 @@ namespace RNSkia {
  * that thread run before the device is destroyed (see DawnContext::recover),
  * runs with no window in use; the list itself is guarded, as windows are
  * made and destroyed on other threads too. Locks, innermost last: the list
- * of windows, the GPU context's (DawnContext); the target description's
- * mutex is leaf and never held across either.
+ * of windows, a lost device's uses (see DawnContext::Generation::uses), the
+ * GPU context's (DawnContext); the target description's mutex is leaf and
+ * never held across any of them.
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
