@@ -1,4 +1,4 @@
-// Opt-in iOS pacing mode. Existing throughput/cold plans stay unchanged.
+// Opt-in pacing modes. Existing throughput/cold plans stay unchanged.
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +15,7 @@ export const nativeHash = createHash("sha256").update(readFileSync(join(nativeDi
 const fingerprint = createHash("sha256");
 for (const file of [configPath, join(source, "pacing.tsx"), fileURLToPath(import.meta.url),
   join(here, "pacing-ios.py"), join(here, "trace_ios.py"),
+  join(here, "pacing-android.py"), join(here, "pacing-android.mjs"), join(here, "pacing_common.py"),
   join(nativeDir, "BenchPacing.mm"), join(nativeDir, "BenchPacing.podspec"),
   join(here, "../ios/Podfile")]) fingerprint.update(readFileSync(file));
 export const fixture = fingerprint.digest("hex");
@@ -127,8 +128,9 @@ export function pacingSummary(result) {
 }
 
 export function reportPacing(result, previous) {
-  if (result.measurement !== "metal-drawable-presentedTime-v2") {
-    throw new Error("Pacing verdicts require native drawable feedback v2; rerun legacy results");
+  const android = result.platform === "android";
+  if (result.measurement !== (android ? "android-surfaceflinger-present-fence-v1" : "metal-drawable-presentedTime-v2")) {
+    throw new Error("Pacing verdicts require platform presentation feedback; rerun legacy results");
   }
   if (previous && ["mode", "platform", "device", "deviceId", "fixture", "refreshRate", "plan", "measurement", "nativeHash", "traceRequested", "traceRecorded", "lowPowerMode"].some((key) => previous[key] !== result[key])) {
     throw new Error("Pacing comparison requires the same mode, device, display rate, fixture, native implementation, power mode, trace setting and plan");
@@ -140,11 +142,15 @@ export function reportPacing(result, previous) {
   const lines = [
     `# React Native Skia displayed-frame pacing: ${result.label}`,
     "", `${result.device}; ${result.refreshRate}Hz; ${result.skia}; ${result.date}.`,
-    `Thermal: ${(result.thermal ?? []).join(", ") || "unavailable"} (${result.thermalCoverage ?? "unspecified"}); Low Power Mode: ${result.lowPowerMode ? "on" : "off"}; Instruments requested/recorded: ${result.traceRequested ? "yes" : "no"}/${result.traceRecorded ? "yes" : "no"}.`, "",
-    "Intervals use MTLDrawable.presentedTime feedback for the tagged benchmark Canvas and UI-marked animations plus their bounded display-drain tail, not CPU handoffs, callback arrival or Instruments swap counts. Warmups and gaps between windows are excluded. No interval is added for idle after the last presentation.",
+    `Thermal: ${(result.thermal ?? []).join(", ") || "unavailable"} (${result.thermalCoverage ?? "unspecified"}); Low Power Mode: ${result.lowPowerMode ? "on" : "off"}; Trace requested/recorded: ${result.traceRequested ? "yes" : "no"}/${result.traceRecorded ? "yes" : "no"}.`, "",
+    android
+      ? "Intervals use SurfaceFlinger PresentFenceSignaled events for exactly one app SurfaceView layer and synchronous UI markers in Perfetto's clock. No app-window fallback, CPU handoffs, host/logcat arrival timestamps or average FPS. Warmups/idle excluded; bounded display-drain tail included, without a synthetic gap after the last presentation."
+      : "Intervals use MTLDrawable.presentedTime feedback for the tagged benchmark Canvas and UI-marked animations plus their bounded display-drain tail, not CPU handoffs, callback arrival or Instruments swap counts. Warmups and gaps between windows are excluded. No interval is added for idle after the last presentation.",
     "Long gap: >1.5 display periods. Windows = bursts or continuous controls with at least one long gap / measured windows. p99 = median of per-trial p99s; max = worst observed interval. Lower is better.", "",
-    "Instruments may omit swap events: its intervals are saved separately as traceDiagnostics, never used for pacing verdicts. Missing native callbacks, overflow and stale capture identities fail measurement.", "",
-    `Measured dropped/unshown drawables (zero presentedTime): ${rows.reduce((sum, r) => sum + r.droppedDrawables, 0)}. Counted separately; presentation intervals use successful feedback only.`, "",
+    android
+      ? `Perfetto is attached identically to both Android runs. Missing markers, ambiguous layers, stale fixture/session/PID, Debug JS and event/log errors or data loss fail measurement. Scoped derived-GPU-lane depth-limit diagnostics are retained in androidCapture.traceStats, not used for verdicts. Unshown/dropped buffer totals are not inferred from successful fences. Measured queued buffers without matching presentation feedback: ${result.runs.filter(r => !r.warmup).reduce((sum, r) => sum + (r.unmatchedQueuedBuffers ?? 0), 0)}.`
+      : "Instruments may omit swap events: its intervals are saved separately as traceDiagnostics, never used for pacing verdicts. Missing native callbacks, overflow and stale capture identities fail measurement.", "",
+    ...(android ? [] : [`Measured dropped/unshown drawables (zero presentedTime): ${rows.reduce((sum, r) => sum + r.droppedDrawables, 0)}. Counted separately; presentation intervals use successful feedback only.`, ""]),
     "First presentation = median of per-trial median times from UI animation start to the first drawable presentation; not input latency or proof of its animation value. Reported separately from inter-frame jitter.", "",
   ];
   if (previous) {

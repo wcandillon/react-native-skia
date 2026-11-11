@@ -2,7 +2,14 @@
 // queue must not be confused with the end of an animation. The example-only
 // observer records drawable presentation feedback, not CPU handoff timestamps.
 import React, { memo, useEffect, useMemo, useState } from "react";
-import { NativeModules, StyleSheet, Text, View } from "react-native";
+import {
+  AppState,
+  NativeModules,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import {
   Easing,
   cancelAnimation,
@@ -43,7 +50,11 @@ const Scene = memo(
       { scale: 1 + 2 * t.value },
     ]);
     return (
-      <Canvas testID={CANVAS_TEST_ID} style={StyleSheet.absoluteFill}>
+      <Canvas
+        testID={CANVAS_TEST_ID}
+        style={StyleSheet.absoluteFill}
+        android={{ backingView: "SurfaceView", opaque: true }}
+      >
         <Fill color="#20242c" />
         <Group transform={transform}>
           {circles.map((circle, i) => (
@@ -100,10 +111,20 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
     ).nativeLoggingHook;
     if (typeof logger !== "function")
       throw new Error("Pacing benchmark requires RN's native logging hook");
-    const observer: PresentationObserver | undefined =
-      NativeModules.BenchPacing;
+    const android = Platform.OS === "android";
+    // Android observes this Canvas's SurfaceFlinger layer in Perfetto; it
+    // needs no Metal observer or production Skia measurement hooks.
+    const observer: PresentationObserver | undefined = android
+      ? undefined
+      : NativeModules.BenchPacing;
     const session = `pacing-${Date.now()}-${Math.random()}`;
     let alive = true;
+    let interrupted = false;
+    const subscription = android
+      ? AppState.addEventListener("change", (state) => {
+          if (state !== "active") interrupted = true;
+        })
+      : undefined;
     let id = 0;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const wait = (ms: number) =>
@@ -133,6 +154,7 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
           warmup,
           fixture: plan.pacingFixture,
           session,
+          jsDevelopment: __DEV__,
         };
         scheduleOnUI(() => {
           "worklet";
@@ -163,9 +185,11 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
       });
 
     const run = async () => {
-      if (!observer)
+      if (!observer && !android)
         throw new Error("BenchPacing is missing; run pod install and rebuild");
-      await observer.start(plan.pacingFixture, CANVAS_TEST_ID, session);
+      if (android && __DEV__)
+        throw new Error("Android pacing requires Release JS");
+      await observer?.start(plan.pacingFixture, CANVAS_TEST_ID, session);
       if (!alive) return;
       // The runner attaches before the first marker. All later attribution
       // uses device timestamps in the trace, never host-side sleep estimates.
@@ -187,6 +211,8 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
         await wait(config.idleMs);
       }
       if (!alive) return;
+      if (interrupted)
+        throw new Error("Benchmark left the foreground during measurement");
       await new Promise<void>((resolve) => {
         scheduleOnUI(() => {
           "worklet";
@@ -195,13 +221,15 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
             samples: id,
             fixture: plan.pacingFixture,
             session,
+            jsDevelopment: __DEV__,
           });
           scheduleOnRN(resolve);
         });
       });
       // Cross the bridge only after measurement; native waits for every
       // attached drawable callback before atomically saving its result.
-      await observer.finish(session);
+      await observer?.finish(session);
+      subscription?.remove();
       if (!alive) return;
       setDone(true);
     };
@@ -211,6 +239,7 @@ export const PacingBenchmark = ({ plan }: { plan: Plan }) => {
     });
     return () => {
       alive = false;
+      subscription?.remove();
       observer?.abort(session);
       timers.forEach(clearTimeout);
       scheduleOnUI(() => {

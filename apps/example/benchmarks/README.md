@@ -43,10 +43,11 @@ then exits with status 1.
 |---|---|---|
 | `--platform` | `android` | `ios` needs a paired iPhone; `ios-simulator` with `--cold` only |
 | `--cold` | | measure the first draw after a fresh install instead of FPS (see below) |
-| `--pacing` | | iOS burst/continuous displayed-frame intervals (see below) |
+| `--pacing` | | iOS/Android burst/continuous displayed-frame intervals (see below) |
+| `--device` | | Android pacing: adb serial; iOS: device identifier |
 | `--refresh-rate` | | pacing: required actual display cadence in Hz |
-| `--trace` | | pacing: collect optional Instruments diagnostics |
-| `--keep-trace` | | pacing: collect and retain optional Instruments diagnostics |
+| `--trace` | | iOS pacing: collect optional Instruments diagnostics; Android always records Perfetto |
+| `--keep-trace` | | pacing: retain raw Perfetto (Android) or optional Instruments trace (iOS) |
 | `--scenes` | all seven | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
@@ -75,6 +76,58 @@ The phone has to be authorized for adb on the Mac, plugged in, and have no
 secure lock screen. The job locks the panel at `refresh_rate` (120), keeps
 the screen on, and puts both back at the end.
 
+## Short-animation frame pacing (Android)
+
+```sh
+# From apps/example; install the existing Perfetto dependency once.
+python3 -m venv benchmarks/.venv
+benchmarks/.venv/bin/pip install perfetto
+
+node benchmarks/run.mjs --pacing --platform android --device <ADB_SERIAL> \
+  --refresh-rate 60 --reps 3 --label android-baseline
+# Apply the rendering fix, retaining identical benchmark files.
+node benchmarks/run.mjs --pacing --platform android --device <ADB_SERIAL> \
+  --refresh-rate 60 --reps 3 --label android-fixed \
+  --compare benchmarks/results/<android-baseline>.json
+
+python3 -m unittest discover -s benchmarks -p '*_test.py'
+node --test benchmarks/pacing-android.test.mjs
+```
+
+- Builds native Release with embedded `dev=false` JS, targeting arm64. No
+  Debug configuration or Metro connection. Keep USB connected, phone unlocked,
+  app foreground, Low Power Mode off. Emulator runs are rejected.
+- The pacing Canvas explicitly uses an opaque **SurfaceView**, not the default
+  TextureView. Existing FPS/cold scenes and their backing options are unchanged.
+- Captures `android.surfaceflinger.frame` and `android.log` through Perfetto.
+  Presentation intervals come from **PresentFenceSignaled**, for exactly one
+  app SurfaceView layer. There is no fallback to app-window frames or CPU
+  handoffs. This source is verified on the tested Android 17/API 37 device;
+  a different device missing these events fails instead of reporting zero gaps.
+- UI boundaries call RN's transferable native log host function synchronously
+  on UI, as on iOS. Perfetto synchronizes those marker timestamps with surface
+  events. Adb/logcat arrival and host sleeps never determine measured intervals.
+- No production Skia tracing hooks or Android native observer module. The iOS
+  Metal observer remains iOS-only. Both platforms share the same strict window
+  parser, with warmups/idle excluded and the existing 200ms display-drain tail.
+- The runner pins requested min/peak refresh settings, prevents screen sleep,
+  verifies the actual SurfaceFlinger period at capture endpoints, and restores
+  previous settings in cleanup. It saves power/thermal/display endpoint states;
+  these are not continuous thermal or refresh-rate monitoring.
+- Perfetto is always attached to both Android captures. Missing markers,
+  interrupted/incomplete animation, stale PID/session/fixture, Debug JS,
+  ambiguous layers, invalid native clocks, and reported trace data loss fail.
+  Perfetto's `slice_max_depth_exceeded` is diagnostic only when every track
+  at its 512-depth limit is a derived `GPU_` duration lane; raw queue/fence
+  lanes do not use these durations. The scoped warning remains in the JSON.
+  Any affected buffer/event lane or other import error stays fatal.
+  Successful fences do not establish a total dropped/unshown-buffer count or
+  which transform value every frame contains. Do not equate UI FPS with motion.
+- Full frame/marker records remain in each JSON's `androidCapture`.
+  `--keep-trace` additionally retains the raw trace for inspection. Failed
+  captures are retained automatically. Do not compare Android results to iOS,
+  other fixtures, configurations, power modes, display rates or trace states.
+
 ## Short-animation frame pacing (iOS)
 
 `--pacing` measures uneven drawable presentation intervals rather than average
@@ -88,6 +141,9 @@ pan/zoom: two warmups and twelve measured 400ms bursts per load, separated by
 200ms idle periods. Each repetition also includes a five-second continuous
 control at 1024 circles. The Canvas stays mounted during idle; only a load
 change rebuilds its scene. There is no changing status overlay during a run.
+
+Android uses the same workload and window analysis; see the Android section
+above for its different presentation source. This runner remains Release-only.
 
 ```sh
 # From apps/example; required once and after observer-native-source changes.
@@ -103,7 +159,7 @@ node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
 
 # Synthetic parser/report checks; these do not build or measure a phone.
 python3 -m unittest discover -s benchmarks -p '*_test.py'
-node --test benchmarks/pacing.test.mjs
+node --test benchmarks/*.test.mjs
 ```
 
 - Both passes build separate Release binaries. Keep the device, plan, power
