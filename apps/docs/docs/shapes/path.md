@@ -7,6 +7,8 @@ slug: /shapes/path
 
 In Skia, paths are semantically identical to [SVG Paths](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths).
 
+From v2.6.0 and above, the Path API is immutable: build paths with `Skia.PathBuilder` (see the [migration guide](/docs/shapes/path-migration)).
+
 | Name      | Type      |  Description                                                  |
 |:----------|:----------|:--------------------------------------------------------------|
 | path      | `SkPath` or `string` | Path to draw. Can be a string using the [SVG Path notation](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths#line_commands) or an object created with `Skia.PathBuilder`. |

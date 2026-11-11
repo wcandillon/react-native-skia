@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 /* global HTMLCanvasElement */
-import React, { act, StrictMode } from "react";
+import React, { act, Activity, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { SkPicture } from "../../skia/types";
@@ -380,6 +380,129 @@ describe("SkiaView.web", () => {
     await view.unmount();
     expect(canvas.width).toBe(0);
     expect(canvas.height).toBe(0);
+  });
+
+  // React runs the layout effect cleanup of a view when the Activity it is in
+  // gets hidden, then sets display: none on the subtree. The view is mounted
+  // in a wrapper to tell that default from an app that keeps the hidden
+  // subtree displayed, as a backdrop under the screen covering it.
+  const mountInActivity = (nativeID: string, keepDisplayed: boolean) => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    // React hides a host element through style.setProperty and reveals it by
+    // assigning style.display: an app pins the display by refusing both.
+    const pinDisplay = (element: HTMLDivElement | null) => {
+      if (!element || !keepDisplayed) {
+        return;
+      }
+      const { style } = element;
+      const setProperty = style.setProperty.bind(style);
+      Object.defineProperty(style, "setProperty", {
+        configurable: true,
+        value: (property: string, value: string | null, priority?: string) => {
+          if (property !== "display") {
+            setProperty(property, value, priority);
+          }
+        },
+      });
+      Object.defineProperty(style, "display", {
+        configurable: true,
+        get: () => "contents",
+        set: () => {},
+      });
+    };
+    const render = (mode: "visible" | "hidden") =>
+      act(async () => {
+        root.render(
+          <Activity mode={mode}>
+            <div ref={pinDisplay}>
+              <SkiaView
+                nativeID={nativeID}
+                style={{ width: 360, height: 520 }}
+              />
+            </div>
+          </Activity>
+        );
+      });
+    return {
+      render,
+      canvas: () => container.querySelector("canvas")!,
+      unmount: async () => {
+        await act(async () => root.unmount());
+        container.remove();
+      },
+    };
+  };
+
+  it("frees the element's bitmap when the Activity it is in gets hidden", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountInActivity("14", false);
+    await view.render("visible");
+    const canvas = view.canvas();
+    await setPicture(14);
+    expect(canvas.width).toBe(360);
+
+    await view.render("hidden");
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+
+    // Revealed, the same element is sized and painted again.
+    contextOf(canvas).drawImage.mockClear();
+    await view.render("visible");
+    expect(view.canvas()).toBe(canvas);
+    expect(canvas.width).toBe(360);
+    expect(contextOf(canvas).drawImage).toHaveBeenCalledTimes(1);
+
+    await view.unmount();
+  });
+
+  it("keeps the frame of a hidden Activity the app still displays", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountInActivity("15", true);
+    await view.render("visible");
+    const canvas = view.canvas();
+    await setPicture(15);
+    expect(canvas.width).toBe(360);
+    const context = contextOf(canvas);
+    const reset = jest.spyOn(context, "reset");
+
+    // The canvas is still on screen: sizing it would clear what it shows.
+    await view.render("hidden");
+    expect(canvas.width).toBe(360);
+    expect(canvas.height).toBe(520);
+    expect(reset).not.toHaveBeenCalled();
+
+    context.drawImage.mockClear();
+    await view.render("visible");
+    expect(canvas.width).toBe(360);
+    expect(context.drawImage).toHaveBeenCalledTimes(1);
+
+    // Gone for good, the bitmap is freed as before.
+    await view.unmount();
+    expect(canvas.width).toBe(0);
+  });
+
+  it("keeps the frame when StrictMode re-runs the layout effect", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountView("16", { strict: true });
+    const canvas = view.canvas();
+    await setPicture(16);
+    // The first renderer's deferred cleanup found the second one in charge.
+    expect(canvas.width).toBe(360);
+    expect(contextOf(canvas).drawImage).toHaveBeenCalled();
+
+    await view.unmount();
+    expect(canvas.width).toBe(0);
   });
 
   // The first draw of a view runs from a microtask and the following ones
