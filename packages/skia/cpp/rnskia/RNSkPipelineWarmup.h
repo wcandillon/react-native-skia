@@ -22,6 +22,7 @@
 #endif
 
 #include "RNDawnUtils.h"
+#include "RNSkDeviceUses.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineRecord.h"
 #include "rnwgpu/DawnBlobCache.h"
@@ -129,15 +130,17 @@ public:
    Context::makePrecompileContext), in Display P3 as well as sRGB when asked
    (see DawnContext::setPrecompileDisplayP3). The context is used on the
    warmup thread only, and released there. `lost` is the device's loss flag
-   (see DawnContext::Generation), which outlives the warmup: set, the warmup
-   stops at its next step. `device` is that device, whose pipeline cache the
+   and `uses` the calls into it its destruction waits out (see
+   DawnContext::Generation), both outliving the warmup: each call into the
+   device is one of the uses, and none is made once the device is lost, at
+   which the warmup stops. `device` is that device, whose pipeline cache the
    thread then keeps on disk (see storePipelineCache). Any thread; returns at
    once.
    */
   void start(std::unique_ptr<skgpu::graphite::PrecompileContext> context,
-             bool displayP3, const std::atomic<bool> *lost,
-             wgpu::Device device) {
-    if (context == nullptr || lost == nullptr) {
+             bool displayP3, const std::atomic<bool> &lost,
+             RNSkDeviceUses &uses, wgpu::Device device) {
+    if (context == nullptr) {
       return;
     }
     {
@@ -146,14 +149,14 @@ public:
       _precompiledByHash.clear();
     }
     auto *released = context.release();
-    std::thread([this, released, displayP3, lost,
+    std::thread([this, released, displayP3, lost = &lost, uses = &uses,
                  device = std::move(device)]() {
       std::unique_ptr<skgpu::graphite::PrecompileContext> owned(released);
       lowerPriority();
-      run(owned.get(), displayP3, *lost);
+      run(owned.get(), displayP3, *lost, *uses);
       owned = nullptr;
 #if defined(__ANDROID__)
-      storePipelineCache(device, *lost);
+      storePipelineCache(device, *lost, *uses);
 #else
       (void)device;
 #endif
@@ -291,14 +294,20 @@ private:
   // it out of the driver, hashes it and copies it again) would be for
   // nothing.
   static void storePipelineCache(const wgpu::Device &device,
-                                 const std::atomic<bool> &lost) {
+                                 const std::atomic<bool> &lost,
+                                 RNSkDeviceUses &uses) {
     auto &activity = RNSkGpuActivity::getInstance();
     while (!lost.load(std::memory_order_acquire)) {
       if (activity.isIdle(kIdle)) {
-        const uint64_t refused =
-            rnwgpu::DawnBlobCache::refusedStoresOnThisThread();
-        dawn::native::PerformIdleTasks(device);
-        if (rnwgpu::DawnBlobCache::refusedStoresOnThisThread() != refused) {
+        bool storeRefused = false;
+        const bool stored = uses.runUnlessLost(lost, [&]() {
+          const uint64_t refused =
+              rnwgpu::DawnBlobCache::refusedStoresOnThisThread();
+          dawn::native::PerformIdleTasks(device);
+          storeRefused =
+              rnwgpu::DawnBlobCache::refusedStoresOnThisThread() != refused;
+        });
+        if (!stored || storeRefused) {
           return;
         }
       }
@@ -320,7 +329,7 @@ private:
   // The warmup thread (see start): the record first, then, on a launch
   // without one, the built-in set.
   void run(skgpu::graphite::PrecompileContext *context, bool displayP3,
-           const std::atomic<bool> &lost) {
+           const std::atomic<bool> &lost, RNSkDeviceUses &uses) {
     _warmupThread.store(std::this_thread::get_id(), std::memory_order_release);
     const auto started = std::chrono::steady_clock::now();
     const auto before = _precompiled.load(std::memory_order_relaxed);
@@ -358,13 +367,17 @@ private:
     auto &activity = RNSkGpuActivity::getInstance();
     std::vector<Key> kept;
     for (size_t i = 0; i < keys.size(); i++) {
-      if (!activity.waitForIdle(kIdle, lost)) {
+      bool readable = false;
+      if (!activity.waitForIdle(kIdle, lost) ||
+          !uses.runUnlessLost(lost, [&]() {
+            readable = context->precompile(
+                SkData::MakeWithCopy(keys[i].data(), keys[i].size()));
+          })) {
         kept.insert(kept.end(), keys.begin() + static_cast<long>(i),
                     keys.end());
         break;
       }
-      if (context->precompile(
-              SkData::MakeWithCopy(keys[i].data(), keys[i].size()))) {
+      if (readable) {
         kept.push_back(keys[i]);
       }
     }
@@ -382,7 +395,7 @@ private:
     const auto afterRecord = _precompiled.load(std::memory_order_relaxed);
 
     if (keys.empty()) {
-      warmBuiltIn(context, displayP3, lost);
+      warmBuiltIn(context, displayP3, lost, uses);
     }
 
     const auto after = _precompiled.load(std::memory_order_relaxed);
@@ -399,7 +412,8 @@ private:
 
   // The built-in set, for a launch without a record.
   static void warmBuiltIn(skgpu::graphite::PrecompileContext *context,
-                          bool displayP3, const std::atomic<bool> &lost) {
+                          bool displayP3, const std::atomic<bool> &lost,
+                          RNSkDeviceUses &uses) {
     namespace graphite = skgpu::graphite;
     using graphite::DrawTypeFlags;
     using graphite::PaintOptions;
@@ -435,12 +449,14 @@ private:
             std::initializer_list<DrawTypeFlags> drawTypes) {
           for (const auto drawType : drawTypes) {
             for (size_t i = 0; i < passCount; i++) {
-              if (!activity.waitForIdle(kIdle, lost)) {
+              if (!activity.waitForIdle(kIdle, lost) ||
+                  !uses.runUnlessLost(lost, [&]() {
+                    graphite::Precompile(
+                        context, options, drawType,
+                        SkSpan<const RenderPassProperties>(&passes[i], 1));
+                  })) {
                 return false;
               }
-              graphite::Precompile(
-                  context, options, drawType,
-                  SkSpan<const RenderPassProperties>(&passes[i], 1));
             }
           }
           return true;
