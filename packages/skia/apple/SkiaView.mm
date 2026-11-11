@@ -438,7 +438,7 @@ usesP3ColorSpace(const std::string &colorSpace,
 - (void)unregisterView {
   auto manager = _manager.lock();
   if (manager != nullptr && _nativeId != 0) {
-    manager->unregisterSkiaView(_nativeId);
+    manager->unregisterSkiaView(_nativeId, _view.get());
   }
   _nativeId = 0;
 }

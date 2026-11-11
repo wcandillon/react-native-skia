@@ -58,11 +58,13 @@ const reportUnsupportedReanimated = () => {
  * on the render thread pool. The Reanimated mapper only pushes the shared
  * values into that recorder through the view id: no Skia object is captured
  * by a worklet, so nothing on the UI runtime holds native memory. The JS
- * wrapper is disposed right after the handoff, so the view is the sole owner
- * and the resources referenced by the recording (images, pictures) are
- * released when the view replaces it or is torn down, not when a garbage
- * collector gets around to a wrapper. A recording without shared values is
- * turned into a picture by the view.
+ * wrapper is disposed right after the handoff, so the native side is the
+ * sole owner: the view, and the view registry, which keeps the recording for
+ * the next view while the canvas is mounted. The resources referenced by the
+ * recording (images, pictures) are released when a new recording replaces
+ * it, or once the canvas has unmounted and its view is torn down, not when a
+ * garbage collector gets around to a wrapper. A recording without shared
+ * values is turned into a picture by the view.
  *
  * Recording reads no shared value: on Reanimated 4, a read on the JS thread
  * is a blocking round trip to the UI thread, and reading a picture held by a
@@ -72,15 +74,20 @@ const reportUnsupportedReanimated = () => {
  * recording from that first read on (see RNSkGraphiteProducer) and keeps
  * showing the previous frame until then.
  *
- * Unmounting does not clear the view: the native view can outlive the React
- * tree (exit animations, screen transitions) and keeps showing its last frame
- * until it is torn down, which is when the recording is released.
+ * While mounted, the canvas retains its view id (retainView): the recording
+ * outlives the native views Fabric tears down under it (display: none, view
+ * recycling), and the next one draws it. Unmounting releases the id but does
+ * not clear the view: the native view can outlive the React tree (exit
+ * animations, screen transitions) and keeps showing its last frame until it
+ * is torn down, which is when the recording is released.
  *
  * Offscreen (no view), the recording is played into a picture right away,
  * which drawOnCanvas() draws.
  */
 class NativeContainer extends Container {
   private mapperId: number | null = null;
+  /** Whether this canvas holds its view id (see mount()). */
+  private retained = false;
   private picture: SkPicture | null = null;
   /** The recording the view owns and its shared values, if any. */
   private installed: {
@@ -95,12 +102,25 @@ class NativeContainer extends Container {
     }
   }
 
+  // render() mounts the container on every change: the id is retained once.
+  mount() {
+    super.mount();
+    if (this.nativeId !== -1 && !this.retained) {
+      this.retained = true;
+      SkiaViewApi.retainView(this.nativeId);
+    }
+  }
+
   unmount() {
     super.unmount();
     this.stopMapper();
     this.installed = null;
     this.picture?.dispose();
     this.picture = null;
+    if (this.retained) {
+      this.retained = false;
+      SkiaViewApi.releaseView(this.nativeId);
+    }
   }
 
   protected drawFrame(canvas: SkCanvas) {
@@ -140,8 +160,8 @@ class NativeContainer extends Container {
   }
 
   /**
-   * Hands the recording to the view, which owns it from here on, and drives
-   * its shared values from the UI thread.
+   * Hands the recording to the native side, which owns it from here on, and
+   * drives its shared values from the UI thread.
    */
   private installRecording(recorder: JsiRecorder) {
     const { nativeId } = this;
@@ -150,8 +170,8 @@ class NativeContainer extends Container {
     // mapper can still fire after the new recording is installed. Tagging the
     // updates with the recording id lets the view ignore them.
     const recorderId = recorder.getId();
-    // The view takes ownership of the recorder and draws it (right away for a
-    // static scene, from the first update on otherwise).
+    // The native side takes ownership of the recorder, and the view draws it
+    // (right away for a static scene, from the first update on otherwise).
     SkiaViewApi.setJsiProperty(nativeId, "recorder", recorder);
     if (sharedValues.length === 0) {
       return;

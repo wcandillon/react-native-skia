@@ -139,8 +139,7 @@ protected:
     if (manager == nullptr) {
       return;
     }
-    manager->setSkiaView(_view->getNativeId(), nullptr);
-    manager->unregisterSkiaView(_view->getNativeId());
+    manager->unregisterSkiaView(_view->getNativeId(), _view.get());
   }
 
   // Present thread: the vsync the scheduler asked the Java view for (see

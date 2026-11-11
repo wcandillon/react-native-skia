@@ -43,15 +43,10 @@ public:
   /**
    * Unregisters the RNSkView from the list of registered views
    * @param nativeId Native view Id
+   * @param view The view being torn down: nothing happens when another view
+   * has taken the id over since
    */
-  void unregisterSkiaView(size_t nativeId);
-
-  /**
-   Sets the view pointed to by nativeId to the provided value.
-   Used when we want to remove a view without unregistering it
-   - this happens typically on iOS.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view);
+  void unregisterSkiaView(size_t nativeId, const RNSkView *view);
 
   /**
    * @return The platform context
