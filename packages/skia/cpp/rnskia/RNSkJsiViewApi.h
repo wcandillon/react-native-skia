@@ -340,32 +340,31 @@ public:
   }
 
   /**
-   Returns the recording side of a view: (nativeId, width, height, opaque,
+   Returns the recording side of a view: (nativeId, width, height,
    highBitDepth, deviceIndependentFonts), the size in points as laid out, the
-   props the surface format follows from and the font option of the
-   recordings (set again through setJsiProperty when it changes). The view may
-   not exist yet; the context binds to it by id when it does, and the registry
-   owns the target in between, so a frame submitted before then is kept whether
-   or not JS keeps the context.
+   bit depth its surface will have, as JS resolves it from the props, and the
+   font option of the recordings (set again through setJsiProperty when it
+   changes). The view may not exist yet; the context binds to it by id when it
+   does, and the registry owns the target in between, so a frame submitted
+   before then is kept whether or not JS keeps the context.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
         !arguments[2].isNumber()) {
       throw jsi::JSError(runtime, "makeGraphiteContext: expected (nativeId, "
-                                  "width, height, opaque, highBitDepth, "
+                                  "width, height, highBitDepth, "
                                   "deviceIndependentFonts)");
     }
     auto nativeId = static_cast<size_t>(arguments[0].asNumber());
     auto width = static_cast<float>(arguments[1].asNumber());
     auto height = static_cast<float>(arguments[2].asNumber());
-    bool opaque = count > 3 && arguments[3].isBool() && arguments[3].getBool();
     bool highBitDepth =
-        count > 4 && arguments[4].isBool() && arguments[4].getBool();
+        count > 3 && arguments[3].isBool() && arguments[3].getBool();
     auto target = RNSkGraphiteTargetRegistry::getInstance().getOrCreate(
         nativeId, _platformContext);
-    target->setLayout(width, height, opaque, highBitDepth);
-    target->setDeviceIndependentFonts(count > 5 && arguments[5].isBool() &&
-                                      arguments[5].getBool());
+    target->setLayout(width, height, highBitDepth);
+    target->setDeviceIndependentFonts(count > 4 && arguments[4].isBool() &&
+                                      arguments[4].getBool());
     return makeJsiObject(runtime, std::make_shared<JsiSkGraphiteContext>(
                                       _platformContext, std::move(target)));
   }

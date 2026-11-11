@@ -11,6 +11,22 @@ import androidx.annotation.NonNull;
 public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callback {
 
     SkiaViewAPI mApi;
+    private final SurfaceZOrder mZOrder = new SurfaceZOrder(new SurfaceZOrder.Target() {
+        @Override
+        public void setZOrderOnTop(boolean onTop) {
+            SkiaSurfaceView.this.setZOrderOnTop(onTop);
+        }
+
+        @Override
+        public void setZOrderMediaOverlay(boolean mediaOverlay) {
+            SkiaSurfaceView.this.setZOrderMediaOverlay(mediaOverlay);
+        }
+
+        @Override
+        public void invalidate() {
+            SkiaSurfaceView.this.invalidate();
+        }
+    });
 
     public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean zOrderOnTop,
             boolean zOrderMediaOverlay, boolean opaque) {
@@ -28,19 +44,11 @@ public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         getHolder().setFormat(opaque ? PixelFormat.OPAQUE : PixelFormat.TRANSLUCENT);
     }
 
-    // The sublayer the surface is composited at, relative to the window: above
-    // it (on top), or below it, above the other SurfaceViews there (media
-    // overlay) or among them (the default). setZOrderOnTop(false) resets the
-    // request to the default, so it goes first. Before Android 11 the request
-    // is read when the surface is created; from Android 11 on, SurfaceView
-    // applies a changed request with the window's next frame (its pre-draw
-    // listener runs updateSurface()), which invalidate() schedules.
+    // See SurfaceZOrder. Where Android allows it (see BackingViewKind), a live
+    // surface takes a changed request with the window's next frame; elsewhere,
+    // the request is read when the surface is created.
     public void setZOrder(boolean onTop, boolean mediaOverlay) {
-        setZOrderOnTop(onTop);
-        if (!onTop) {
-            setZOrderMediaOverlay(mediaOverlay);
-        }
-        invalidate();
+        mZOrder.request(onTop, mediaOverlay);
     }
 
     @Override

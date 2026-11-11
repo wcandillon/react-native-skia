@@ -58,9 +58,9 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
         view.setBackingView(value);
     }
 
-    @ReactProp(name = "androidOpaque")
-    public void setAndroidOpaque(SkiaView view, boolean value) {
-        view.setOpaque(value);
+    @ReactProp(name = "androidOpacity")
+    public void setAndroidOpacity(SkiaView view, @Nullable String value) {
+        view.setOpacity(value);
     }
 
     @ReactProp(name = "androidZOrderOnTop")
@@ -79,7 +79,7 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     }
 
     // The backing view depends on several props (androidBackingView,
-    // androidOpaque, the z-order props, highBitDepth), so it is created after
+    // androidOpacity, the z-order props, highBitDepth), so it is created after
     // the first transaction, once every prop has arrived, and kept; later
     // transactions only apply what the view takes in place (see
     // SkiaView.updateView).
