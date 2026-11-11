@@ -111,14 +111,17 @@ export interface ISkiaViewApi {
   size: (nativeId: number) => SkSize;
   /**
    * The recording side of a view: its native id, the layout size in points,
-   * and the props its surface format follows from.
+   * the props its surface format follows from, and whether its recordings
+   * use device independent fonts (set again with `setJsiProperty` when the
+   * prop changes).
    */
   makeGraphiteContext: (
     nativeId: number,
     width: number,
     height: number,
     opaque: boolean,
-    highBitDepth: boolean
+    highBitDepth: boolean,
+    deviceIndependentFonts?: boolean
   ) => SkGraphiteContext;
   /**
    * Retires what `makeGraphiteContext` made for a view id, once the view
@@ -155,6 +158,19 @@ export interface SkiaBaseViewProps extends ViewProps {
    * render in sRGB.
    */
   colorSpace?: CanvasColorSpace;
+
+  /**
+   * Draws text with device independent (distance field) fonts: a glyph is
+   * rasterized once and reused under any rotation or scale, instead of
+   * being rasterized again for every new transform. Turn it on for text that
+   * rotates or scales on every frame, where it is many times faster (6,000
+   * rotating text blobs: 4 to 30 fps on an iPhone 14 Pro). It costs more
+   * GPU time per glyph and draws slightly softer glyphs, which text that only
+   * moves pays for nothing, so it is off by default. Glyphs smaller than
+   * about 18 pixels are drawn as usual. Can be changed at any time. Native
+   * only, ignored on web.
+   */
+  deviceIndependentFonts?: boolean;
 
   /**
    * Android-only rendering options: the native view behind the canvas and its
