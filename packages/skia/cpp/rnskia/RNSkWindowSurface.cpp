@@ -32,17 +32,19 @@ namespace {
 
 // The windows alive, so that every surface made on a lost GPU device can be
 // let go of at once before the device is destroyed (see
-// RNSkWindowSurface::retireReplacedDevice). The mutex guards the list, and
+// RNSkWindowSurface::releaseSurfacesOn). The mutex guards the list, and
 // is held for the whole sweep over it, so that no window goes away under
-// the sweep (see the class comment on locks).
+// it (see the class comment on locks). Never destroyed: the presenting
+// thread sweeps the list from the task the replacement of a lost device
+// posts, and a loss can be reported during process teardown.
 std::mutex &windowsMutex() {
-  static std::mutex mutex;
-  return mutex;
+  static auto *mutex = new std::mutex();
+  return *mutex;
 }
 
 std::vector<RNSkWindowSurface *> &windows() {
-  static std::vector<RNSkWindowSurface *> list;
-  return list;
+  static auto *list = new std::vector<RNSkWindowSurface *>();
+  return *list;
 }
 
 } // namespace
@@ -401,24 +403,11 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
   return describe() == target;
 }
 
-void RNSkWindowSurface::retireReplacedDevice() {
-  const auto generation = _generation;
-  if (generation == 0 || generation == DawnContext::generation()) {
-    return;
-  }
-  auto *context = DawnContext::tryGetInstance();
-  if (context == nullptr) {
-    return;
-  }
-  // Once the sweep is through, no window holds a surface on that device:
-  // a window attached meanwhile is configured on the device in use.
-  releaseSurfacesOn(generation);
-  context->destroyRetiredDevice(generation);
-}
-
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
+    RNSURFACE_ASSERT_THREAD(window->_presentingThread,
+                            "RNSkWindowSurface::releaseSurfacesOn");
     if (window->_generation == generation) {
       window->_surface = nullptr;
       window->_generation = 0;
@@ -427,19 +416,15 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
 }
 
 bool RNSkWindowSurface::ensureDevice() {
-  const auto generation = DawnContext::generation();
   if (_surface) {
-    // A surface on a device replaced since the sweep (see
-    // retireReplacedDevice) is let go of on the next frame, not configured
-    // on a device that is gone.
-    return _generation == generation;
+    return true;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
   _device = context->getWGPUDevice();
-  _generation = generation;
+  _generation = DawnContext::generation();
   _surface = context->MakeWGPUSurface(_nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -468,7 +453,6 @@ bool RNSkWindowSurface::presentRecordings(
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::presentRecordings");
   RNSkGpuActivity::Scope activity;
-  retireReplacedDevice();
   // The device check first: it may configure the window again.
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
@@ -504,7 +488,6 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
                                      const sk_sp<SkImage> &image) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
   RNSkGpuActivity::Scope activity;
-  retireReplacedDevice();
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
