@@ -512,11 +512,11 @@ public:
   }
 
   /**
-   Snaps what the recorder recorded, compiling the pipelines the recording
-   needs on the recorder's device: the device in use, whose destruction
-   waits for the snap (see Generation::uses), or one replaced since, which
-   was lost first, and Dawn makes nothing on a lost device. Called on the
-   recorder's thread, without the context lock.
+   Snaps what the recorder recorded, holding the device in use meanwhile
+   (see Generation::uses): the pipelines the snap compiles are on that
+   device, or on one replaced since, which was lost first and on which Dawn
+   compiles nothing. Called on the recorder's thread, without the context
+   lock.
    */
   std::unique_ptr<skgpu::graphite::Recording>
   snap(skgpu::graphite::Recorder *recorder) {
@@ -787,7 +787,8 @@ private:
    destroyed: Dawn reports its loss from any of its threads, at any time,
    and the recorders, surfaces and images made on it keep pointing at it.
    The Dawn device itself is destroyed when it is replaced (see recover),
-   once no call into it is in flight (see uses); the handle stays valid.
+   once the calls that may be compiling on it have ended (see uses); the
+   handle stays valid.
    */
   struct Generation {
     uint64_t id = 0;
@@ -806,9 +807,9 @@ private:
     std::string lostMessage;
     // Why the last attempt to replace the device failed, if it did.
     std::string recoveryFailure;
-    // The snaps and warmup calls into the device, which its destruction
+    // The calls that may be compiling on the device, which its destruction
     // waits out.
-    RNSkDeviceUses uses;
+    RNSkDeviceUses uses{lost};
   };
 
   // insertRecordings(), on `current`: false, with nothing run, while it is
@@ -1046,19 +1047,21 @@ private:
    destroyed, which runs the deletions Dawn deferred on it (a lost device
    never ticks again), the VkSurfaceKHR of each window's old swapchain among
    them, which keeps the window connected until then
-   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). The destroy waits for the
-   snaps and warmup calls in flight on the lost device (see
-   Generation::uses), each past the pipeline it was compiling as the device
-   was lost, after which Dawn makes nothing on it. The Generation, its device
-   handle and its Graphite context stay: what still points at them keeps
-   failing validation, as destroyed rather than lost. A present in flight
-   holds the thread for as long as Graphite takes to replay its frame, the
-   pipelines it compiles included, and this thread waits as long. Called
-   without a lock; the task takes the windows' list, then the context lock,
-   then the lost device's uses and the context lock again (see the class
-   comment on locks in RNSkWindowSurface).
+   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). Before it posts the task,
+   it waits for the snaps and warmup compiles in flight on the lost device
+   (see Generation::uses), the warmup's running at a lower priority than the
+   present thread, which then destroys the device once the snaps begun since
+   have ended. The Generation, its device handle and its Graphite context
+   stay: what still points at them keeps failing validation, as destroyed
+   rather than lost. A present in flight holds the thread for as long as
+   Graphite takes to replay its frame, the pipelines it compiles included,
+   and this thread waits as long. Called without a lock; it takes the lost
+   device's uses, then the task takes the windows' list, then the context
+   lock, then the lost device's uses and the context lock again (see the
+   class comment on locks in RNSkWindowSurface).
    */
   void replaceOnPresentThread(Generation *lost, Generation *next) {
+    lost->uses.waitForUsesInFlight();
     auto done = std::make_shared<std::promise<void>>();
     auto replaced = done->get_future();
     presentThread().post([this, lost, next, done]() {
@@ -1116,8 +1119,8 @@ private:
     // on the warmup thread only.
     RNSkPipelineWarmup::getInstance().start(
         generation->context->makePrecompileContext(),
-        precompileDisplayP3().load(std::memory_order_acquire), generation->lost,
-        generation->uses, generation->backendContext.fDevice);
+        precompileDisplayP3().load(std::memory_order_acquire), generation->uses,
+        generation->backendContext.fDevice);
     return generation;
   }
 

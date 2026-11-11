@@ -66,10 +66,10 @@ namespace RNSkia {
  * The warmup runs while the frames leave the device alone: from the moment
  * the device exists (on the first launch, while the bundle still loads)
  * until the first frame starts, and from then on only while no frame is
- * made or shown and none was for a moment (see RNSkGpuActivity). Each of
- * its compiles holds Dawn's device lock for its duration, so one that ran
- * alongside a frame would hold that frame up; a frame that comes in waits
- * for the compile in flight at most. Its pipelines serve the frames that
+ * made or shown and none was for a moment (see RNSkGpuActivity), so that a
+ * frame that comes in runs beside the compile in flight at most. Dawn builds
+ * a pipeline outside its device lock, so the device's destruction waits for
+ * the compile (see RNSkDeviceUses). Its pipelines serve the frames that
  * follow: the canvases the app mounts next, and the next launch through the
  * blob cache. A device lost meanwhile stops it: its pipelines are good for
  * nothing, and the replacement device starts a warmup of its own.
@@ -129,17 +129,14 @@ public:
    Starts the warmup for the device the precompile context was made on (see
    Context::makePrecompileContext), in Display P3 as well as sRGB when asked
    (see DawnContext::setPrecompileDisplayP3). The context is used on the
-   warmup thread only, and released there. `lost` is the device's loss flag
-   and `uses` the calls into it its destruction waits out (see
-   DawnContext::Generation), both outliving the warmup: each call into the
-   device is one of the uses, and none is made once the device is lost, at
-   which the warmup stops. `device` is that device, whose pipeline cache the
-   thread then keeps on disk (see storePipelineCache). Any thread; returns at
-   once.
+   warmup thread only, and released there. `uses` are the device's (see
+   DawnContext::Generation), which outlive the warmup: each compile is one of
+   them, and none is made once the device is lost, at which the warmup stops.
+   `device` is that device, whose pipeline cache the thread then keeps on
+   disk (see storePipelineCache). Any thread; returns at once.
    */
   void start(std::unique_ptr<skgpu::graphite::PrecompileContext> context,
-             bool displayP3, const std::atomic<bool> &lost,
-             RNSkDeviceUses &uses, wgpu::Device device) {
+             bool displayP3, RNSkDeviceUses &uses, wgpu::Device device) {
     if (context == nullptr) {
       return;
     }
@@ -149,14 +146,14 @@ public:
       _precompiledByHash.clear();
     }
     auto *released = context.release();
-    std::thread([this, released, displayP3, lost = &lost, uses = &uses,
+    std::thread([this, released, displayP3, uses = &uses,
                  device = std::move(device)]() {
       std::unique_ptr<skgpu::graphite::PrecompileContext> owned(released);
       lowerPriority();
-      run(owned.get(), displayP3, *lost, *uses);
+      run(owned.get(), displayP3, *uses);
       owned = nullptr;
 #if defined(__ANDROID__)
-      storePipelineCache(device, *lost, *uses);
+      storePipelineCache(device, uses->lost());
 #else
       (void)device;
 #endif
@@ -294,20 +291,14 @@ private:
   // it out of the driver, hashes it and copies it again) would be for
   // nothing.
   static void storePipelineCache(const wgpu::Device &device,
-                                 const std::atomic<bool> &lost,
-                                 RNSkDeviceUses &uses) {
+                                 const std::atomic<bool> &lost) {
     auto &activity = RNSkGpuActivity::getInstance();
     while (!lost.load(std::memory_order_acquire)) {
       if (activity.isIdle(kIdle)) {
-        bool storeRefused = false;
-        const bool stored = uses.runUnlessLost(lost, [&]() {
-          const uint64_t refused =
-              rnwgpu::DawnBlobCache::refusedStoresOnThisThread();
-          dawn::native::PerformIdleTasks(device);
-          storeRefused =
-              rnwgpu::DawnBlobCache::refusedStoresOnThisThread() != refused;
-        });
-        if (!stored || storeRefused) {
+        const uint64_t refused =
+            rnwgpu::DawnBlobCache::refusedStoresOnThisThread();
+        dawn::native::PerformIdleTasks(device);
+        if (rnwgpu::DawnBlobCache::refusedStoresOnThisThread() != refused) {
           return;
         }
       }
@@ -329,7 +320,7 @@ private:
   // The warmup thread (see start): the record first, then, on a launch
   // without one, the built-in set.
   void run(skgpu::graphite::PrecompileContext *context, bool displayP3,
-           const std::atomic<bool> &lost, RNSkDeviceUses &uses) {
+           RNSkDeviceUses &uses) {
     _warmupThread.store(std::this_thread::get_id(), std::memory_order_release);
     const auto started = std::chrono::steady_clock::now();
     const auto before = _precompiled.load(std::memory_order_relaxed);
@@ -368,8 +359,8 @@ private:
     std::vector<Key> kept;
     for (size_t i = 0; i < keys.size(); i++) {
       bool readable = false;
-      if (!activity.waitForIdle(kIdle, lost) ||
-          !uses.runUnlessLost(lost, [&]() {
+      if (!activity.waitForIdle(kIdle, uses.lost()) ||
+          !uses.runUnlessLost([&]() {
             readable = context->precompile(
                 SkData::MakeWithCopy(keys[i].data(), keys[i].size()));
           })) {
@@ -395,7 +386,7 @@ private:
     const auto afterRecord = _precompiled.load(std::memory_order_relaxed);
 
     if (keys.empty()) {
-      warmBuiltIn(context, displayP3, lost, uses);
+      warmBuiltIn(context, displayP3, uses);
     }
 
     const auto after = _precompiled.load(std::memory_order_relaxed);
@@ -412,8 +403,7 @@ private:
 
   // The built-in set, for a launch without a record.
   static void warmBuiltIn(skgpu::graphite::PrecompileContext *context,
-                          bool displayP3, const std::atomic<bool> &lost,
-                          RNSkDeviceUses &uses) {
+                          bool displayP3, RNSkDeviceUses &uses) {
     namespace graphite = skgpu::graphite;
     using graphite::DrawTypeFlags;
     using graphite::PaintOptions;
@@ -449,8 +439,8 @@ private:
             std::initializer_list<DrawTypeFlags> drawTypes) {
           for (const auto drawType : drawTypes) {
             for (size_t i = 0; i < passCount; i++) {
-              if (!activity.waitForIdle(kIdle, lost) ||
-                  !uses.runUnlessLost(lost, [&]() {
+              if (!activity.waitForIdle(kIdle, uses.lost()) ||
+                  !uses.runUnlessLost([&]() {
                     graphite::Precompile(
                         context, options, drawType,
                         SkSpan<const RenderPassProperties>(&passes[i], 1));
