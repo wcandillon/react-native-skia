@@ -1,0 +1,73 @@
+diff --git a/Common/cpp/reanimated/NativeModules/PropValueProcessor.cpp b/Common/cpp/reanimated/NativeModules/PropValueProcessor.cpp
+index 4d2022d44499a24fcc3be71191b5f96d959829df..86405991f1c053a869a41329ae329bbc7cee3630 100644
+--- a/Common/cpp/reanimated/NativeModules/PropValueProcessor.cpp
++++ b/Common/cpp/reanimated/NativeModules/PropValueProcessor.cpp
+@@ -117,12 +117,22 @@ jsi::Object PropValueProcessor::backgroundImagePreprocessing(const BackgroundIma
+ 
+ jsi::Object PropValueProcessor::linearGradientPreprocessing(const LinearGradient &linearGradient, jsi::Runtime &rt) {
+   jsi::Object direction(rt);
+-  if (std::holds_alternative<Float>(linearGradient.direction)) {
++  // Up to React Native 0.81 (react-native-macos), GradientDirection is a struct
++  // wrapping the variant in `value`; newer versions make it the variant itself.
++  const std::variant<Float, GradientKeyword> &directionValue =
++      [](const auto &gradientDirection) -> const std::variant<Float, GradientKeyword> & {
++    if constexpr (requires { gradientDirection.value; }) {
++      return gradientDirection.value;
++    } else {
++      return gradientDirection;
++    }
++  }(linearGradient.direction);
++  if (std::holds_alternative<Float>(directionValue)) {
+     direction.setProperty(rt, "type", "angle");
+-    direction.setProperty(rt, "value", static_cast<double>(std::get<Float>(linearGradient.direction)));
++    direction.setProperty(rt, "value", static_cast<double>(std::get<Float>(directionValue)));
+   } else {
+     direction.setProperty(rt, "type", "keyword");
+-    switch (std::get<GradientKeyword>(linearGradient.direction)) {
++    switch (std::get<GradientKeyword>(directionValue)) {
+       case GradientKeyword::ToTopRight:
+         direction.setProperty(rt, "value", "to top right");
+         break;
+diff --git a/Common/cpp/reanimated/NativeModules/ReanimatedModuleProxy.cpp b/Common/cpp/reanimated/NativeModules/ReanimatedModuleProxy.cpp
+index 1c45066664dd432d4b4409b9221f433b2a2c4095..5e2fc760d7be6fb55f9b01e0c2aec031dbdb23a0 100644
+--- a/Common/cpp/reanimated/NativeModules/ReanimatedModuleProxy.cpp
++++ b/Common/cpp/reanimated/NativeModules/ReanimatedModuleProxy.cpp
+@@ -917,12 +917,20 @@ AnimationMutations ReanimatedModuleProxy::collectNonLayoutAnimationUpdates() {
+ std::shared_ptr<UIManagerAnimationBackend> ReanimatedModuleProxy::getAnimationBackend() {
+   react_native_assert(
+       uiManager_ != nullptr && "[Reanimated] Animation Backend used before the uiManager was registered");
++#if REACT_NATIVE_VERSION_MINOR >= 85
+   auto locked = uiManager_->unstable_getAnimationBackend().lock();
+   // UIManager owns the backend, so this is just a sanity check.
+   react_native_assert(
+       locked != nullptr &&
+       "[Reanimated] Animation Backend is null (UIManager not wired to a backend yet or already torn down)");
+   return locked;
++#else
++  // react-native-macos is still on React Native 0.81, whose UIManager has no
++  // animation backend. USE_ANIMATION_BACKEND is off there, so this is never
++  // reached.
++  react_native_assert(false && "[Reanimated] The Animation Backend requires React Native 0.85 or newer.");
++  return nullptr;
++#endif
+ }
+ 
+ void ReanimatedModuleProxy::startBackendIfNeeded() {
+@@ -1217,6 +1225,7 @@ void ReanimatedModuleProxy::initializeFabric(const std::shared_ptr<UIManager> &u
+   viewStylesRepository_->setUIManager(uiManager_);
+ 
+   if constexpr (StaticFeatureFlags::getFlag("USE_ANIMATION_BACKEND")) {
++#if REACT_NATIVE_VERSION_MINOR >= 85
+     if (!ReactNativeFeatureFlags::useSharedAnimatedBackend()) {
+       react_native_assert(
+           false &&
+@@ -1225,6 +1234,9 @@ void ReanimatedModuleProxy::initializeFabric(const std::shared_ptr<UIManager> &u
+           "Enable the Experimental Release level in React Native, "
+           "or disable the Reanimated Feature Flag");
+     }
++#else
++    react_native_assert(false && "[Reanimated] USE_ANIMATION_BACKEND requires React Native 0.85 or newer.");
++#endif
+   }
+ 
+   initializeLayoutAnimationsProxyRegistry();
