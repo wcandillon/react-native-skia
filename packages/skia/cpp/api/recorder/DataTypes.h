@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,7 +17,9 @@
 
 namespace RNSkia {
 
-using Uniforms = std::map<std::string, std::vector<float>>;
+// std::less<> lets processUniforms look a uniform up by its string_view name
+// without allocating a std::string on every replay.
+using Uniforms = std::map<std::string, std::vector<float>, std::less<>>;
 
 inline std::vector<float> processArray(jsi::Runtime &runtime,
                                        const jsi::Array &array) {
@@ -161,7 +164,7 @@ inline sk_sp<SkData> processUniforms(const sk_sp<SkRuntimeEffect> &effect,
 
   const auto &sourceUniforms = effect->uniforms();
   for (const auto &uniform : sourceUniforms) {
-    auto it = uniforms.find(std::string(uniform.name));
+    auto it = uniforms.find(uniform.name);
     if (it == uniforms.end()) {
       throw std::runtime_error("Missing uniform value for: " +
                                std::string(uniform.name));
@@ -201,7 +204,7 @@ inline void processUniforms(SkRuntimeShaderBuilder &builder,
 
   const auto &sourceUniforms = effect->uniforms();
   for (const auto &uniform : sourceUniforms) {
-    auto it = uniforms.find(std::string(uniform.name));
+    auto it = uniforms.find(uniform.name);
     if (it == uniforms.end()) {
       throw std::runtime_error("Missing uniform value for: " +
                                std::string(uniform.name));
