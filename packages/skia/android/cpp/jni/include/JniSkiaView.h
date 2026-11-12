@@ -146,7 +146,6 @@ protected:
     if (manager == nullptr) {
       return;
     }
-    manager->setSkiaView(_view->getNativeId(), nullptr);
     manager->unregisterSkiaView(_view->getNativeId());
   }
 
