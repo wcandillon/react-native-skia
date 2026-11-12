@@ -8,7 +8,6 @@
 #include <exception>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
 
 #include "RNSkPlatformContext.h"
@@ -65,20 +64,14 @@ public:
   float getPixelDensity() { return _pixelDensity.load(); }
 
   // The display density changed (a configuration change, see
-  // PlatformContext.java): the platform context and its views follow it.
+  // PlatformContext.java). Read by RNSkAndroidPlatformContext.
   void setPixelDensity(float pixelDensity);
-
-  // The platform context made from this one, kept up to date with the
-  // display density.
-  void setPlatformContext(const std::shared_ptr<RNSkPlatformContext> &context);
 
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
   std::atomic<float> _pixelDensity;
-  std::mutex _platformContextMutex;
-  std::weak_ptr<RNSkPlatformContext> _platformContext;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,

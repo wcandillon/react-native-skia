@@ -20,9 +20,7 @@
 
 #include "JniPresentThread.h"
 #include "RNDawnContext.h"
-#include "RNSkJsiViewApi.h"
 #include "RNSkPresentThread.h"
-#include "RNSkView.h"
 
 namespace RNSkia {
 
@@ -112,33 +110,9 @@ TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
 }
 
 void JniPlatformContext::setPixelDensity(float pixelDensity) {
-  std::shared_ptr<RNSkPlatformContext> context;
-  {
-    std::lock_guard<std::mutex> lock(_platformContextMutex);
-    if (_pixelDensity.exchange(pixelDensity) == pixelDensity) {
-      return;
-    }
-    context = _platformContext.lock();
-    if (context != nullptr) {
-      context->setPixelDensity(pixelDensity);
-    }
-  }
-  if (context == nullptr) {
-    return;
-  }
-  // The surfaces may keep their size in pixels: the views record their
-  // content again at the new scale.
-  for (const auto &view : ViewRegistry::getInstance().getViews()) {
-    view->requestRedraw();
-  }
-}
-
-void JniPlatformContext::setPlatformContext(
-    const std::shared_ptr<RNSkPlatformContext> &context) {
-  std::lock_guard<std::mutex> lock(_platformContextMutex);
-  _platformContext = context;
-  // The density may have changed since the context was made.
-  context->setPixelDensity(_pixelDensity.load());
+  // The views follow their own layout (see SkiaView.onLayout), which React
+  // Native updates after a density change: nothing to redraw here.
+  _pixelDensity.store(pixelDensity);
 }
 
 void JniPlatformContext::performStreamOperation(

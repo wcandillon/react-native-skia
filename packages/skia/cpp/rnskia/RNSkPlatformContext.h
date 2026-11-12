@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -124,17 +123,11 @@ public:
   }
 
   /**
-   * @return Current scale factor for pixels
+   * @return Current scale factor for pixels. A view records its frames with
+   * the density of its own layout when the platform gives one (see
+   * RNSkWindowSurface::setLayoutSize); this one is for everything else.
    */
-  float getPixelDensity() { return _pixelDensity.load(); }
-
-  /**
-   * Updates the scale factor for pixels, for example after the display
-   * density changed. Any thread: views read it on their next frame.
-   */
-  void setPixelDensity(float pixelDensity) {
-    _pixelDensity.store(pixelDensity);
-  }
+  virtual float getPixelDensity() { return _pixelDensity; }
 
   /**
    * Whether views render in Display P3 rather than sRGB: true on Apple
@@ -145,7 +138,7 @@ public:
   virtual bool prefersP3ColorSpace() { return false; }
 
 private:
-  std::atomic<float> _pixelDensity;
+  float _pixelDensity;
   std::shared_ptr<react::CallInvoker> _callInvoker;
 };
 } // namespace RNSkia

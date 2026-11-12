@@ -323,7 +323,7 @@ public:
     std::shared_ptr<RNSkView> view =
         ViewRegistry::getInstance().getView(nativeId);
     if (view != nullptr) {
-      auto pixelDensity = _platformContext->getPixelDensity();
+      auto pixelDensity = view->getPixelDensity();
       auto sizeObj = jsi::Object(runtime);
       sizeObj.setProperty(runtime, "width",
                           view->getScaledWidth() / pixelDensity);
