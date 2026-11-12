@@ -433,6 +433,11 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         postForSurfaceView(() -> surfaceSizeChanged(surface, width, height, true, highBitDepth));
     }
 
+    @Override
+    public boolean hasFrameToShow() {
+        return hasNativeView() && nativeHasFrameToShow();
+    }
+
     // Main thread, before the platform destroys a SurfaceView's surface, which
     // it does as soon as this returns: the window is detached on the present
     // thread, and the main thread waits for that, for the length of a present
@@ -537,6 +542,8 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     private native void surfaceDestroyed();
 
     private native void surfaceAbandoned();
+
+    private native boolean nativeHasFrameToShow();
 
     private native void setLayoutSize(int width, int height);
 

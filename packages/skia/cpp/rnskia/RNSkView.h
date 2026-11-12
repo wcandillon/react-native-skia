@@ -255,6 +255,20 @@ public:
   }
 
   /**
+   Whether a redraw would present anything: content to record, or a last
+   frame that can be shown again (see redraw). A view with neither, such as a
+   canvas whose content has not arrived yet, presents nothing until it gets
+   some. Any thread.
+   */
+  bool hasFrameToShow() {
+    if (_producer->hasContent()) {
+      return true;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _lastPresented != nullptr && _lastPresented->isCurrent();
+  }
+
+  /**
    Renders the view into an offscreen surface and returns a GPU image of it,
    usable by any canvas: declarative content is replayed on the calling
    thread with the latest values, so the snapshot does not wait for a frame;

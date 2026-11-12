@@ -18,6 +18,7 @@ public class FirstFrameDrawGateTest {
         final List<Runnable> posted = new ArrayList<>();
         final List<Long> delays = new ArrayList<>();
         int invalidations = 0;
+        boolean frameToShow = true;
 
         @Override
         public void postDelayed(Runnable action, long delayMillis) {
@@ -33,6 +34,11 @@ public class FirstFrameDrawGateTest {
         @Override
         public void invalidate() {
             invalidations++;
+        }
+
+        @Override
+        public boolean hasFrameToShow() {
+            return frameToShow;
         }
 
         void elapse() {
@@ -393,5 +399,47 @@ public class FirstFrameDrawGateTest {
 
         assertEquals(Arrays.asList(PixelFormat.TRANSLUCENT), asked);
         assertEquals(Arrays.asList(), mReported);
+    }
+
+    @Test
+    public void aViewWithNothingToShowIsNotWaitedFor() {
+        mHost.frameToShow = false;
+        mGate.onSurfaceCreated();
+
+        mGate.onRedrawNeeded(draw("empty"));
+
+        assertEquals(Arrays.asList("empty"), mReported);
+        assertTrue(mHost.posted.isEmpty());
+        assertFalse(mGate.hasFrame());
+    }
+
+    @Test
+    public void aViewWithNothingToShowHoldsNothingFromAndroid14() {
+        FirstFrameDrawGate gate = new FirstFrameDrawGate(mHost, Build.VERSION_CODES.UPSIDE_DOWN_CAKE);
+        mHost.frameToShow = false;
+        gate.onSurfaceCreated();
+
+        gate.onRedrawNeeded(draw("first"));
+        gate.onRedrawNeeded(draw("relayout"));
+
+        assertEquals(Arrays.asList("first", "relayout"), mReported);
+        assertFalse(gate.hasFrame());
+    }
+
+    @Test
+    public void contentArrivingLaterOpensTheHoleWithItsFirstFrame() {
+        mHost.frameToShow = false;
+        mGate.onSurfaceCreated();
+        mGate.onRedrawNeeded(draw("empty"));
+        int invalidations = mHost.invalidations;
+
+        mHost.frameToShow = true;
+        mGate.onRedrawNeeded(draw("held"));
+        assertEquals(Arrays.asList("empty"), mReported);
+
+        mGate.onFirstFramePresented(mGate.currentSurface());
+        assertEquals(Arrays.asList("empty", "held"), mReported);
+        assertTrue(mGate.hasFrame());
+        assertEquals(invalidations + 1, mHost.invalidations);
     }
 }

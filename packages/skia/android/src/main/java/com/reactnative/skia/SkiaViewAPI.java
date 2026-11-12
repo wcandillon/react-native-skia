@@ -26,4 +26,10 @@ public interface SkiaViewAPI {
      * the view leaves the window, after the surface went with it.
      */
     void onSurfaceDestroyed();
+
+    /**
+     * Whether the view would present anything onto its surface now: content
+     * to draw, or a last frame to show again. Main thread.
+     */
+    boolean hasFrameToShow();
 }

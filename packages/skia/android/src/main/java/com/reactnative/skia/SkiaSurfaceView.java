@@ -30,6 +30,11 @@ public class SkiaSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         public void invalidate() {
             SkiaSurfaceView.this.invalidate();
         }
+
+        @Override
+        public boolean hasFrameToShow() {
+            return mApi.hasFrameToShow();
+        }
     }, Build.VERSION.SDK_INT);
 
     public SkiaSurfaceView(Context context, SkiaViewAPI api, boolean zOrderOnTop,

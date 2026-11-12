@@ -549,9 +549,13 @@ bool RNSkWindowSurface::presentTexture() {
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }
-  _surface.Present();
+  const bool presented = _surface.Present() == wgpu::Status::Success;
   _showsFrame = true;
-  didPresent();
+  // A present that failed put nothing in the window: the platform view
+  // waits for one that did (see setDidPresent).
+  if (presented) {
+    didPresent();
+  }
   return true;
 }
 

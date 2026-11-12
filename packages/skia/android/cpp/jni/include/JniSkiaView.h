@@ -49,6 +49,7 @@ public:
          makeNativeMethod("surfaceAvailable", JniSkiaView::surfaceAvailable),
          makeNativeMethod("surfaceDestroyed", JniSkiaView::surfaceDestroyed),
          makeNativeMethod("surfaceAbandoned", JniSkiaView::surfaceAbandoned),
+         makeNativeMethod("nativeHasFrameToShow", JniSkiaView::hasFrameToShow),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
@@ -101,6 +102,12 @@ protected:
   // (see SkiaView.onSurfaceDestroyed): nothing is presented onto it from here
   // until then (see RNSkWindowSurface::abandon).
   void surfaceAbandoned() { _surface->abandon(); }
+
+  // Main thread: whether the view would present anything onto a window now
+  // (see RNSkView::hasFrameToShow). A SurfaceView holds its window's draw
+  // report for the first frame only when one is coming (see
+  // FirstFrameDrawGate.onRedrawNeeded).
+  bool hasFrameToShow() { return _view->hasFrameToShow(); }
 
   /**
    The pixel size the backing view was laid out with. The surface it gets

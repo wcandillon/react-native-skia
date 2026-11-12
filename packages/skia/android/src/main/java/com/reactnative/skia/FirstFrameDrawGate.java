@@ -11,6 +11,9 @@ import java.util.function.IntConsumer;
  * presented into its surface. The window punches the hole a surface behind it
  * shows through once the draw is reported finished, so a report sent before
  * the first frame would open the hole on an empty surface, which shows black.
+ * The report waits only when a frame is coming (Host.hasFrameToShow): a view
+ * with nothing to show yet reports at once and keeps its hole closed, as the
+ * window would otherwise wait on each sync for a frame that may never come.
  * From Android 14 the platform bounds the window's wait for that report
  * itself, so the report waits for the frame however long it takes. Before it,
  * a first frame that does not come within FIRST_FRAME_WAIT_MILLIS is not
@@ -55,6 +58,13 @@ final class FirstFrameDrawGate {
 
         /** hasFrame() changed: the view redraws, opening or closing its hole. */
         void invalidate();
+
+        /**
+         * Whether a frame is coming at all: the view has content to draw, or
+         * a last frame to show again. One without either presents nothing
+         * until it gets some, however long that takes.
+         */
+        boolean hasFrameToShow();
     }
 
     /** What the surface's layer shows; the view opens its hole over a frame only. */
@@ -116,7 +126,12 @@ final class FirstFrameDrawGate {
 
     /** The window asks to be told once the surface has drawn. */
     void onRedrawNeeded(Runnable drawingFinished) {
-        if (mFrameState == FrameState.PRESENTED) {
+        // A view with nothing to show is not waited for: the window would
+        // wait for the platform's bound (TRANSACTION_READY_TIMEOUT) on each
+        // sync, a rotation for one, from Android 14, and for
+        // FIRST_FRAME_WAIT_MILLIS before it. Its hole stays closed until
+        // hasFrame(), as for a frame that is late.
+        if (mFrameState == FrameState.PRESENTED || !mHost.hasFrameToShow()) {
             drawingFinished.run();
             return;
         }
