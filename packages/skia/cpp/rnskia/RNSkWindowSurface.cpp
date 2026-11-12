@@ -47,7 +47,8 @@ std::vector<RNSkWindowSurface *> &windows() {
 
 } // namespace
 
-RNSkWindowSurface::RNSkWindowSurface() {
+RNSkWindowSurface::RNSkWindowSurface(PresentHold presentHold)
+    : _presentHold(presentHold, DawnQueue()) {
   std::lock_guard<std::mutex> lock(windowsMutex());
   windows().push_back(this);
 }
@@ -157,7 +158,14 @@ void RNSkWindowSurface::detachNow() {
 }
 
 void RNSkWindowSurface::releaseWindow() {
-  // The surface goes before the window it draws into.
+  // The frame the window holds goes to it first, if the platform has not
+  // taken the window back, and the surface goes before the window it draws
+  // into (see RNSkPresentHold::releaseFrames).
+  if (_abandoned.load(std::memory_order_acquire)) {
+    _presentHold.dropFrames();
+  } else {
+    _presentHold.releaseFrames([this]() { presentNow(); });
+  }
   _surface = nullptr;
   _needsConfigure = false;
   {
@@ -317,6 +325,9 @@ void RNSkWindowSurface::configureIfNeeded() {
 }
 
 void RNSkWindowSurface::configureSurface() {
+  // A swapchain configured again presents or drops the frame it held (see
+  // RNSkPresentHold::releaseFrames).
+  _presentHold.releaseFrames([this]() { presentNow(); });
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -401,6 +412,11 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
   return describe() == target;
 }
 
+bool RNSkWindowSurface::canPresent() {
+  return readState(nullptr) == RNSkWindowState::kReady &&
+         !_abandoned.load(std::memory_order_acquire);
+}
+
 void RNSkWindowSurface::retireReplacedDevice() {
   const auto generation = _generation;
   if (generation == 0 || generation == DawnContext::generation()) {
@@ -420,6 +436,8 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
     if (window->_generation == generation) {
+      // The frames the window held for that device go with its surface.
+      window->_presentHold.dropFrames();
       window->_surface = nullptr;
       window->_generation = 0;
     }
@@ -462,26 +480,68 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
   }
 }
 
+HeldFrame RNSkWindowSurface::presentHeldFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentHeldFrame");
+  // A frame held on a device replaced since goes with the surface it was
+  // replayed into.
+  retireReplacedDevice();
+  if (!_presentHold.hasHeldFrame() || !canPresent() || !ensureDevice()) {
+    return HeldFrame::kNone;
+  }
+  return _presentHold.presentHeldFrame([this]() { presentNow(); });
+}
+
+bool RNSkWindowSurface::hasHeldFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::hasHeldFrame");
+  return _presentHold.hasHeldFrame();
+}
+
+void RNSkWindowSurface::allowNextPresent() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::allowNextPresent");
+  _presentHold.allowNextPresent();
+}
+
+uint64_t RNSkWindowSurface::framesPresented() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::framesPresented");
+  return _framesPresented;
+}
+
+bool RNSkWindowSurface::takesFrameFor(const RNSkGraphiteTargetInfo &target) {
+  retireReplacedDevice();
+  // The device check first: it may configure the window again. The window
+  // takes one frame between two ticks, and none while the GPU is on the frame
+  // before the one it holds, which stays queued, no image acquired for it
+  // (see RNSkPresentHold).
+  return canPresent() && ensureDevice() && isTarget(target) &&
+         _presentHold.takesFrameOnceConfigured(
+             [this]() { configureIfNeeded(); });
+}
+
 bool RNSkWindowSurface::presentRecordings(
     const RNSkGraphiteTargetInfo &target,
     const std::vector<skgpu::graphite::Recording *> &recordings) {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::presentRecordings");
   RNSkGpuActivity::Scope activity;
-  retireReplacedDevice();
-  // The device check first: it may configure the window again.
-  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
+  if (!takesFrameFor(target)) {
     return false;
   }
-  configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
+    // The window took the frame but has no texture for it: it goes back to
+    // the queue as one it could not take.
+    _presentHold.dropFrames();
     return false;
   }
   auto *recorder = presentRecorder();
   if (recorder == nullptr) {
+    _presentHold.dropFrames();
     return false;
   }
   // The surface only names the replay target; wrapping the swapchain texture
@@ -492,32 +552,49 @@ bool RNSkWindowSurface::presentRecordings(
       recorder, backendTex, DawnUtils::viewColorSpace(_useP3ColorSpace),
       &surfaceProps);
   if (!surface) {
+    _presentHold.dropFrames();
     return false;
   }
   // A recording Graphite rejects is logged there and dropped: it would be
   // rejected again on every frame, and the frames behind it would never come.
   DawnContext::getInstance().insertRecordings(recordings, surface.get());
-  return presentTexture();
+  // The frame goes now, or waits for the GPU on the frame presented before
+  // it and goes once that is done (see RNSkView::presentHeldFrame).
+  _presentHold.presentOrHold([this]() { presentNow(); });
+  return true;
 }
 
-bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
-                                     const sk_sp<SkImage> &image) {
-  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
+RNSkSurface::ImagePresent RNSkWindowSurface::presentImage(
+    const RNSkGraphiteTargetInfo &target,
+    const std::function<sk_sp<SkImage>()> &makeImage) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentImage");
   RNSkGpuActivity::Scope activity;
-  retireReplacedDevice();
-  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
-    return false;
+  if (!takesFrameFor(target)) {
+    return ImagePresent::kDeclined;
   }
-  configureIfNeeded();
+  auto *recorder = presentRecorder();
+  if (recorder == nullptr) {
+    return ImagePresent::kDeclined;
+  }
+  // The image is made before the target texture is acquired, so that none
+  // stays acquired for a frame nothing is made for. It and the recorder
+  // belong to the GPU device in use, which a loss may replace while it is
+  // made, as the app may leave the foreground.
+  const auto generation = _generation;
+  auto image = makeImage();
+  if (image == nullptr) {
+    return ImagePresent::kConsumed;
+  }
+  if (!DawnContext::isCurrent(generation) || !canPresent()) {
+    return ImagePresent::kDeclined;
+  }
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
-    return false;
-  }
-  auto *recorder = presentRecorder();
-  if (recorder == nullptr) {
-    return false;
+    _presentHold.dropFrames();
+    return ImagePresent::kDeclined;
   }
   auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
   SkSurfaceProps surfaceProps;
@@ -525,16 +602,13 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
       recorder, backendTex, _colorType,
       DawnUtils::viewColorSpace(_useP3ColorSpace), &surfaceProps);
   if (!surface) {
-    return false;
+    _presentHold.dropFrames();
+    return ImagePresent::kDeclined;
   }
   drawOnto(surface->getCanvas(), image, surface->width(), surface->height());
   DawnContext::getInstance().submitRecording(recorder);
-  return presentTexture();
-}
-
-bool RNSkWindowSurface::canPresent() {
-  return readState(nullptr) == RNSkWindowState::kReady &&
-         !_abandoned.load(std::memory_order_acquire);
+  _presentHold.presentOrHold([this]() { presentNow(); });
+  return ImagePresent::kPresented;
 }
 
 bool RNSkWindowSurface::presentTexture() {
@@ -543,15 +617,28 @@ bool RNSkWindowSurface::presentTexture() {
 #endif
   // The platform is taking the window back (see abandon, set before the
   // detach that clears it is posted, so always ahead of this check): the
-  // frame is lost with it, and the device is kept. The recordings were
-  // replayed all the same; the caller keeps them and replays them again onto
-  // the next window (see presentRecordings).
+  // frame is lost with it, and the device is kept. The next window's redraw
+  // shows the last frame again (see RNSkView::redraw).
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }
   _surface.Present();
   _showsFrame = true;
   return true;
+}
+
+void RNSkWindowSurface::presentNow() {
+  if (presentTexture()) {
+    _framesPresented++;
+  }
+}
+
+RNSkWindowSurface::DawnQueue::Work RNSkWindowSurface::DawnQueue::track() {
+  return DawnContext::getInstance().trackSubmittedWork();
+}
+
+bool RNSkWindowSurface::DawnQueue::isDone(const Work &work) {
+  return DawnContext::getInstance().isWorkDone(work);
 }
 
 } // namespace RNSkia

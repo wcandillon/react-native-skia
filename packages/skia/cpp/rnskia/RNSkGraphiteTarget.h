@@ -264,7 +264,10 @@ public:
    recording made for a lost GPU device (see RNSkGraphiteRecording::isCurrent):
    it can never be presented, and a client recording on every frame
    regardless would grow the queue without bound, so it is dropped, along
-   with whatever waits in the queue, which was made for that device too.
+   with the queued recordings made for that device. One made for its
+   replacement stays: a client can finish a recording on the lost device
+   after the view recorded for the new one, which the view waits to present
+   (see RNSkReplaySchedule).
    */
   void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
@@ -274,9 +277,12 @@ public:
       // never reads below zero.
       _submitted.fetch_add(1, std::memory_order_relaxed);
       if (!recording->isCurrent()) {
-        // Dropped, with whatever waited: done, as far as pacing goes.
-        _done.fetch_add(_queue.size() + 1, std::memory_order_release);
-        _queue.clear();
+        // Dropped, with the queued recordings made for that device: done, as
+        // far as pacing goes. One made for its replacement stays (the view
+        // waits to present it, see RNSkReplaySchedule).
+        const auto dropped = std::erase_if(
+            _queue, [](const auto &queued) { return !queued->isCurrent(); });
+        _done.fetch_add(dropped + 1, std::memory_order_release);
         return;
       }
       _queue.push_back(std::move(recording));

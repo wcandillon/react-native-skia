@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <memory>
 
@@ -39,6 +40,10 @@ using namespace facebook::react;
 // What the frame scheduler asks of the view (see SkiaViewPresentHost).
 - (void)postFrameCallback;
 - (int)presentFrame;
+- (int)presentFrameOnVsync;
+- (int)presentHeldFrame;
+- (int)tickOnVsync;
+- (void)postHeldFrameRetry:(std::chrono::milliseconds)delay;
 @end
 
 namespace {
@@ -52,7 +57,25 @@ public:
 
   void postFrameCallback() override { [view postFrameCallback]; }
 
-  int presentFrame() override { return [view presentFrame]; }
+  int presentFrame(rnsurface::FrameScheduler::PresentOn on) override {
+    switch (on) {
+    case rnsurface::FrameScheduler::PresentOn::kVsync:
+      return [view presentFrameOnVsync];
+    case rnsurface::FrameScheduler::PresentOn::kWindowDraw:
+      // A CAMetalLayer shows each frame in turn: no window draw paces it.
+    case rnsurface::FrameScheduler::PresentOn::kRequest:
+      return [view presentFrame];
+    case rnsurface::FrameScheduler::PresentOn::kHeldFrameRetry:
+      return [view presentHeldFrame];
+    }
+    return rnsurface::FrameScheduler::kNothingPresented;
+  }
+
+  int tickOnVsync() override { return [view tickOnVsync]; }
+
+  void postHeldFrameRetry(std::chrono::milliseconds delay) override {
+    [view postHeldFrameRetry:delay];
+  }
 };
 
 } // namespace
@@ -264,7 +287,10 @@ usesP3ColorSpace(const std::string &colorSpace,
     return;
   }
   auto context = manager->getPlatformContext();
-  _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
+  // A Metal present does not wait for the GPU: frames go as soon as they are
+  // replayed.
+  _surface =
+      std::make_shared<RNSkia::RNSkWindowSurface>(RNSkia::PresentHold::kNone);
   _surface->setHighBitDepth(_highBitDepth);
   _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
   // The window is left alone while the app is in the background: what the
@@ -519,6 +545,60 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
 #endif
   return result;
+}
+
+// The scheduler presents on a frame of the display (the display link's tick,
+// or the macOS retry a frame later): a present tick, which paces the replays
+// (see RNSkReplaySchedule). Present thread.
+- (int)presentFrameOnVsync {
+  if (_presentView == nullptr) {
+    return rnsurface::FrameScheduler::kNothingPresented;
+  }
+  const int result = _presentView->presentFrameOnVsync();
+#if !TARGET_OS_OSX
+  if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
+    _presentedSinceTick = true;
+  }
+#endif
+  return result;
+}
+
+// The scheduler asks for these three only of a window that holds a frame for
+// the GPU or shows the latest frame, which a CAMetalLayer does not
+// (PresentHold::kNone, Window::kShowsEachFrame). Present thread.
+- (int)presentHeldFrame {
+  if (_presentView == nullptr) {
+    return rnsurface::FrameScheduler::kNothingPresented;
+  }
+  return _presentView->presentHeldFrame();
+}
+
+- (int)tickOnVsync {
+  if (_presentView == nullptr) {
+    return rnsurface::FrameScheduler::kNothingPresented;
+  }
+  return _presentView->tickOnVsync();
+}
+
+- (void)postHeldFrameRetry:(std::chrono::milliseconds)delay {
+  __weak SkiaView *weakSelf = self;
+  auto presenting = _presenting;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW,
+                    static_cast<int64_t>(delay.count()) * NSEC_PER_MSEC),
+      dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        RNSkia::presentThread().post([=]() {
+          if (!*presenting) {
+            return;
+          }
+          SkiaView *strongSelf = weakSelf;
+          if (strongSelf == nil ||
+              !strongSelf->_scheduler->isHeldFrameRetryPosted()) {
+            return;
+          }
+          strongSelf->_scheduler->onHeldFrameRetry();
+        });
+      });
 }
 
 #if !TARGET_OS_OSX

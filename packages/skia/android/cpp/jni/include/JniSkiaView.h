@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -14,6 +15,7 @@
 #include "JniSkiaManager.h"
 #include "RNSkLog.h"
 #include "RNSkPresentThread.h"
+#include "RNSkPresentThreadTimer.h"
 #include "RNSkView.h"
 #include "RNSkWindowSurface.h"
 #include "rnsurface/FrameScheduler.h"
@@ -161,7 +163,13 @@ private:
                        jni::alias_ref<JniSkiaManager::javaobject> skiaManager)
       : _manager(skiaManager->cthis()->getSkiaManager()) {
     auto context = skiaManager->cthis()->getPlatformContext();
-    _surface = std::make_shared<RNSkWindowSurface>();
+    // A window's present waits, on the thread that presents, until the GPU
+    // has finished the frame presented before it (libgui's queueBuffer, for
+    // every Vulkan swapchain), and holds Dawn's device lock meanwhile; its
+    // compositor takes one frame a vsync: a frame replayed that early is
+    // held, and the window takes no second one in a tick.
+    _surface = std::make_shared<RNSkWindowSurface>(
+        PresentHold::kOncePerTickAfterPreviousFrame);
     _view = std::make_shared<RNSkView>(context, _surface);
     // Tasks for the present thread go straight to it (see
     // RNSkPresentThread.h). The Java view, which is called back for its
@@ -194,6 +202,15 @@ private:
         scheduler->requestFrame(forResizedWindow);
       }
     });
+    // What a redraw presented goes to the scheduler as what its own presents
+    // did (see RNSkView::setRedrawPresented), with no frame rate vote: a mount
+    // or a rotation redraws, and a static canvas recorded again a vsync later
+    // would vote as animating. Present thread, like the scheduler.
+    _view->setRedrawPresented([weakScheduler](int result) {
+      if (auto scheduler = weakScheduler.lock()) {
+        scheduler->onRedrawn(result);
+      }
+    });
   }
 
   /**
@@ -217,9 +234,10 @@ private:
 
   /**
    What the scheduler asks of the view, on the present thread: the vsync
-   from the thread's AChoreographer, the present from the native view, and
-   the Java view told of a frame that went to the window, for its frame rate
-   vote (see SkiaView.onFramePresented).
+   from the thread's AChoreographer and the held frame retry from its timer
+   (see PresentThreadTimer), the present and the tick from the native view,
+   and the Java view told of a frame that went to the window, for its frame
+   rate vote (see SkiaView.onFramePresented).
    */
   class PresentHost : public rnsurface::FrameScheduler::Host,
                       public std::enable_shared_from_this<PresentHost> {
@@ -228,7 +246,8 @@ private:
                 std::weak_ptr<RNSkView> view)
         : _javaView(std::move(javaView)), _view(std::move(view)) {}
 
-    // The scheduler the vsync goes to; weak, as it goes before this object.
+    // The scheduler the vsync and the held frame retry go to; weak, as it
+    // goes before this object.
     void setScheduler(std::weak_ptr<rnsurface::FrameScheduler> scheduler) {
       _scheduler = std::move(scheduler);
     }
@@ -280,13 +299,14 @@ private:
       delete token;
     }
 
-    int presentFrame() override {
+    int presentFrame(rnsurface::FrameScheduler::PresentOn on) override {
       auto view = _view.lock();
       if (view == nullptr) {
         return rnsurface::FrameScheduler::kNothingPresented;
       }
-      // The view reports in the scheduler's mask.
-      const int result = view->presentFrame();
+      const int result = presentOn(*view, on);
+      // A frame that went to the window keeps the SurfaceView's frame rate
+      // vote up (a TextureView's window votes for it).
       if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
         // A Java call from the native thread, which is attached (see
         // attachPresentThread). The local reference goes with the scope:
@@ -303,7 +323,41 @@ private:
       return result;
     }
 
+    int tickOnVsync() override {
+      auto view = _view.lock();
+      return view == nullptr ? rnsurface::FrameScheduler::kNothingPresented
+                             : view->tickOnVsync();
+    }
+
+    // A timer task has no cancel: one that fires after a cancel finds the
+    // scheduler asking for no retry and does nothing, or serves a retry asked
+    // for since, as a vsync does (see onVsync).
+    void postHeldFrameRetry(std::chrono::milliseconds delay) override {
+      PresentThreadTimer::getInstance().post(
+          delay, [weakScheduler = _scheduler]() {
+            auto scheduler = weakScheduler.lock();
+            if (scheduler != nullptr && scheduler->isHeldFrameRetryPosted()) {
+              scheduler->onHeldFrameRetry();
+            }
+          });
+    }
+
   private:
+    static int presentOn(RNSkView &view,
+                         rnsurface::FrameScheduler::PresentOn on) {
+      switch (on) {
+      case rnsurface::FrameScheduler::PresentOn::kRequest:
+        return view.presentFrame();
+      case rnsurface::FrameScheduler::PresentOn::kVsync:
+        return view.presentFrameOnVsync();
+      case rnsurface::FrameScheduler::PresentOn::kWindowDraw:
+        return view.presentFrameOnWindowDraw();
+      case rnsurface::FrameScheduler::PresentOn::kHeldFrameRetry:
+        return view.presentHeldFrame();
+      }
+      return rnsurface::FrameScheduler::kNothingPresented;
+    }
+
     std::shared_ptr<JavaView> _javaView;
     std::weak_ptr<RNSkView> _view;
     std::weak_ptr<rnsurface::FrameScheduler> _scheduler;

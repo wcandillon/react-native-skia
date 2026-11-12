@@ -15,6 +15,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkPresentFrameResult.h"
 #include "RNSkRedrawRequest.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
@@ -191,8 +192,12 @@ public:
    replacing the device each asking again; a window that cannot show a
    frame (the app in the background, see RNSkWindowSurface::setCanPresent)
    is owed the redraw until onCanPresent(). A frame the window could not
-   take (no drawable) is queued again and handed to the frame scheduler,
-   which tries it on the view's next frame (see setFrameScheduler).
+   take (no drawable, a frame held, or a frame already taken since its last
+   tick) is queued again, and the frame the window holds goes once the GPU
+   is done, as after any present. What the redraw presented, left over or
+   holds for the GPU goes to the platform view as what its own presents did
+   (see setRedrawPresented), or, without that, to the frame scheduler, which
+   tries what is left on the view's next frame (see setFrameScheduler).
    */
   void redraw() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
@@ -234,6 +239,7 @@ public:
       }
       recordings.push_back(std::move(lastPresented));
     }
+    const auto presentedBefore = _surface->framesPresented();
     const auto presented =
         presentOrKeep(*target, targetInfo, std::move(recordings));
     // The recordings done so far are counted, also when the window could not
@@ -241,15 +247,23 @@ public:
     // presented. The last frame shown again holds none of the producer's
     // slots, which the frame on its way may hold.
     if (!showsLastFrameAgain && presented.done > 0) {
-      _producer->onFramePresented(presented.done);
       target->onRecordingsDone(presented.done);
     }
-    if (presented.allDone) {
+    // The frame this present left held for the GPU goes once it is done, and
+    // the platform view hears what the redraw did as it hears its own
+    // presents (see setRedrawPresented).
+    const bool canPresent = _surface->canPresent();
+    const HeldFrame heldFrame =
+        canPresent ? _surface->presentHeldFrame() : HeldFrame::kNone;
+    const int result =
+        endTicks(presentResult(target, presentedBefore, canPresent, heldFrame));
+    if (_onRedrawPresented) {
+      _onRedrawPresented(result);
       return;
     }
     // Not scheduleFrame(): without a scheduler it redraws, which would fail
     // again and recurse.
-    if (_frameScheduler) {
+    if ((!presented.allDone || holdsFrame(heldFrame)) && _frameScheduler) {
       _frameScheduler(/* forResizedWindow= */ false);
     }
   }
@@ -337,6 +351,19 @@ public:
   }
 
   /**
+   Installed by a platform view whose frame scheduler hears what a redraw
+   presented, as presentFrame() says (rnsurface::FrameScheduler::onRedrawn,
+   on Android), so that what the redraw left over or holds for the GPU is
+   presented as after the scheduler's own presents, and a frame it put in a
+   TextureView's window waits for the window to draw it. Called on the
+   present thread. Without one, the frame scheduler is asked for a frame when
+   one is left (see redraw).
+   */
+  void setRedrawPresented(std::function<void(int result)> onRedrawPresented) {
+    _onRedrawPresented = std::move(onRedrawPresented);
+  }
+
+  /**
    Installed by the platform view: whether its window shows the latest frame
    presented at each of its draws and lets the others go (a TextureView),
    rather than each frame in turn (a SurfaceView, a CAMetalLayer). With it,
@@ -360,62 +387,93 @@ public:
     }
   }
 
-  // What presentFrame() reports, as a mask: the scheduler's own, which the
-  // platform view hands it straight.
-  using PresentResult = rnsurface::FrameScheduler::PresentResult;
-
   /**
-   Present thread. Presents the queued recordings (see setFrameScheduler for
-   when). Says whether a frame went to the window, and whether more are
-   waiting, so that the platform view asks again: also when the window could
-   not take one (no drawable), so that it is tried again on the next frame
-   rather than left waiting for a redraw. Without a window or a GPU device,
-   or while the window cannot show a frame (the app in the background), the
-   queue is left alone: attaching a window, replacing the device and
-   onCanPresent() each present it.
+   Present thread. Presents the frame the window holds once the GPU is done
+   with the one before it, then the queued recordings (see setFrameScheduler
+   for when), for a recording just submitted: no frame of the display asked
+   for it. Says whether a frame went to the window, whether one is left, so
+   that the platform view asks again rather than leave it waiting for a
+   redraw, whether the window holds it for the GPU alone, so that the frame
+   scheduler presents it a moment later (see presentHeldFrame), and whether
+   a replay is coming, all in the scheduler's mask (see
+   RNSkPresentFrameResult.h). Without a window or a GPU device the queue is
+   left alone: attaching a window, replacing the device and onCanPresent()
+   each present it. While the window cannot show a
+   frame (the app in the background) the queue is left alone until
+   onCanPresent(), and only a replay in flight keeps the ticks going, so that
+   they count every frame it takes. A view that asks for no more frames lets
+   the window present its next one, whenever it comes, as a frame of its own
+   (see RNSkPresentHold).
    */
   int presentFrame() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrame");
-    auto target = getTarget();
-    if (target == nullptr) {
-      return PresentResult::kNothingPresented;
-    }
-    RNSkGraphiteTargetInfo targetInfo;
-    if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
-      return PresentResult::kNothingPresented;
-    }
-    auto recordings = target->takeQueued();
-    if (recordings.empty()) {
-      return PresentResult::kNothingPresented;
-    }
-    // One frame per vsync. The producer runs a frame ahead (see
-    // RNSkGraphiteProducer::kMaxQueued), so two recordings can be waiting
-    // here; replaying both would cost the GPU two frames for one shown, which
-    // halves a GPU-bound canvas. The next one waits for the next vsync
-    // (kMoreQueued asks for it). Recordings for a size the window no longer
-    // has still go together: present() drops those for the one behind them.
-    if (recordings.size() > 1 && recordings.front()->hasSizeOf(targetInfo)) {
-      target->requeue({recordings.begin() + 1, recordings.end()});
-      recordings.resize(1);
-    }
-    const auto presented =
-        presentOrKeep(*target, targetInfo, std::move(recordings));
-    const int result = presented.shown ? PresentResult::kPresented
-                                       : PresentResult::kNothingPresented;
-    // Counted also when the window could not take every recording (see
-    // redraw): the ones it kept are presented, and counted, next time.
-    if (presented.done > 0) {
-      _producer->onFramePresented(presented.done);
-      target->onRecordingsDone(presented.done);
-    }
-    if (!presented.allDone) {
-      return result | PresentResult::kMoreQueued;
-    }
-    return target->hasQueued() ? result | PresentResult::kMoreQueued : result;
+    return endTicks(presentWaitingFrames());
   }
 
   /**
-   Main or present thread. The window can show frames again (the app came
+   Present thread. As presentFrame(), on a frame of the display: a present
+   tick (see RNSkReplaySchedule), counted once the present is done so that a
+   replay it starts is charged its own frame. A display link or a
+   Choreographer that comes late for a busy thread hands over one frame for
+   the frames it skipped, and they are one tick: the view could present on
+   none of them. A tick lets the window present a frame again.
+   */
+  int presentFrameOnVsync() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentFrameOnVsync");
+    _surface->allowNextPresent();
+    const int result = presentWaitingFrames();
+    _producer->onPresentTick();
+    return endTicks(result);
+  }
+
+  /**
+   Present thread. As presentFrame(), once an Android TextureView's window
+   drew the frame it was given: such a window takes one frame a draw, so the
+   next may go to it now rather than wait for a tick, which no frame of the
+   display brings while the window has no frame to draw. No tick is counted.
+   */
+  int presentFrameOnWindowDraw() {
+    RNSURFACE_ASSERT_THREAD(_presentThread,
+                            "RNSkView::presentFrameOnWindowDraw");
+    _surface->allowNextPresent();
+    return endTicks(presentWaitingFrames());
+  }
+
+  /**
+   Present thread. Presents the frame the window holds for the GPU once the
+   GPU is done with the one before it, and nothing else: the frame scheduler
+   asks a moment after a present left a frame held (see
+   rnsurface::FrameScheduler::onHeldFrameRetry), between the view's frames,
+   so the queued recordings wait for the next one, before which the window
+   takes none (see RNSkPresentHold::takesFrame), and its ticks are left to
+   it. Says as presentFrame() does.
+   */
+  int presentHeldFrame() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::presentHeldFrame");
+    const bool canPresent = _surface->canPresent();
+    const auto presentedBefore = _surface->framesPresented();
+    const HeldFrame heldFrame =
+        canPresent ? _surface->presentHeldFrame() : HeldFrame::kNone;
+    return presentResult(getTarget(), presentedBefore, canPresent, heldFrame);
+  }
+
+  /**
+   Present thread. A frame of the display passed while the window still has
+   to show the frame it was given (an Android TextureView's window has yet to
+   draw it, see rnsurface::FrameScheduler::onFrame): a present tick, as
+   presentFrameOnVsync() counts one, and nothing presented.
+   */
+  int tickOnVsync() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::tickOnVsync");
+    _surface->allowNextPresent();
+    _producer->onPresentTick();
+    return endTicks(_producer->isReplaying()
+                        ? PresentResult::kReplayComing
+                        : PresentResult::kNothingPresented);
+  }
+
+  /**
+   Present thread. The window can show frames again (the app came
    back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
    owed since one found it could not present is posted (see
    RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
@@ -427,14 +485,9 @@ public:
     DawnContext::requestRecovery();
     if (_redrawRequest.onCanPresent()) {
       postRedraw();
-    } else if (hasQueuedRecordings()) {
+    } else if (hasFrameToShow()) {
       scheduleFrame();
     }
-  }
-
-  bool hasQueuedRecordings() {
-    auto target = getTarget();
-    return target && target->hasQueued();
   }
 
   std::shared_ptr<RNSkPlatformContext> getPlatformContext() {
@@ -442,6 +495,106 @@ public:
   }
 
 private:
+  /**
+   presentFrame()'s body, ticks aside: presents the frame the window holds
+   for the GPU once it is done, then the queued recordings, one of them when
+   the producer left the next on its target.
+   */
+  int presentWaitingFrames() {
+    auto target = getTarget();
+    if (target == nullptr) {
+      return PresentResult::kNothingPresented;
+    }
+    RNSkGraphiteTargetInfo targetInfo;
+    if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
+      return PresentResult::kNothingPresented;
+    }
+    const bool canPresent = _surface->canPresent();
+    const auto presentedBefore = _surface->framesPresented();
+    // The held frame's own answer, never a second read: the GPU can finish
+    // between two (see RNSkPresentHold::presentHeldFrame).
+    HeldFrame heldFrame = HeldFrame::kNone;
+    if (canPresent) {
+      presentWaiting(*target, targetInfo);
+      heldFrame = _surface->presentHeldFrame();
+    }
+    return presentResult(target, presentedBefore, canPresent, heldFrame);
+  }
+
+  /**
+   What a present hands its platform view (see presentFrameResult), once it
+   is done: whether the window's count of frames moved past presentedBefore,
+   whether the window could show one, whether recordings are queued on the
+   target, what the frame the window holds waits for, by the hold's own
+   answer, and whether a replay is in flight.
+   */
+  int presentResult(const std::shared_ptr<RNSkGraphiteTarget> &target,
+                    uint64_t presentedBefore, bool windowCanPresent,
+                    HeldFrame heldFrame) {
+    return presentFrameResult({
+        .framePresented = _surface->framesPresented() != presentedBefore,
+        .windowCanPresent = windowCanPresent,
+        .recordingsQueued = target != nullptr && target->hasQueued(),
+        .heldFrame = heldFrame,
+        .replaying = _producer->isReplaying(),
+    });
+  }
+
+  /**
+   How a present ends, presentFrame() and its variants, tickOnVsync() and
+   redraw() alike: a view that asks for no more frames lets the window
+   present its next one whenever it comes (see presentFrame), and counts none
+   of the frames that pass until it asks again (see
+   RNSkReplaySchedule::ticksEnded). presentHeldFrame() ends none: the present
+   that held the frame asked for the frame of the display that does.
+   */
+  int endTicks(int result) {
+    if (!asksForAnotherFrame(result)) {
+      _surface->allowNextPresent();
+      _producer->onTicksEnded();
+    }
+    return result;
+  }
+
+  /**
+   Presents the frame the window holds for the GPU once the GPU is done with
+   the one before it, then the queued recordings: one for the swapchain of a
+   frame still held, or of a frame presented since the last tick, waits for
+   the next, one for a resized window goes (see
+   RNSkWindowSurface::presentRecordings).
+   */
+  void presentWaiting(RNSkGraphiteTarget &target,
+                      const RNSkGraphiteTargetInfo &targetInfo) {
+    _surface->presentHeldFrame();
+    auto recordings = target.takeQueued();
+    if (recordings.empty()) {
+      return;
+    }
+    // One frame per vsync. The window shows one frame a vsync; replaying both
+    // a frame and its successor would cost the GPU two frames for one shown,
+    // which halves a GPU-bound canvas. The next one waits for the next vsync
+    // (kMoreQueued asks for it). Recordings for a size the window no longer
+    // has still go together: present() drops those for the one behind them.
+    if (recordings.size() > 1 && recordings.front()->hasSizeOf(targetInfo)) {
+      target.requeue({recordings.begin() + 1, recordings.end()});
+      recordings.resize(1);
+    }
+    const auto presented =
+        presentOrKeep(target, targetInfo, std::move(recordings));
+    if (presented.done > 0) {
+      target.onRecordingsDone(presented.done);
+    }
+  }
+
+  /**
+   Whether a frame waits to be shown or is coming: queued on the target, or
+   being replayed.
+   */
+  bool hasFrameToShow() {
+    auto target = getTarget();
+    return (target && target->hasQueued()) || _producer->isReplaying();
+  }
+
   std::shared_ptr<RNSkGraphiteTarget> getTarget() {
     std::lock_guard<std::mutex> lock(_mutex);
     return _target;
@@ -537,12 +690,15 @@ private:
    Presents the recordings onto the window, described by targetInfo, and
    remembers the last one shown. The one the window could not take and the
    ones behind it go back to the front of the target's queue: the window had
-   no drawable, or it changed under the present (the main thread resized it
-   between the read of its description and the present, see
+   no drawable, holds a frame for the GPU or presented one since its last
+   tick, or it changed under the present (the main thread resized it between
+   the read of its description and the present, see
    RNSkWindowSurface::presentRecordings). A window that changed is read
    again and the rest presented onto it as it is now, once, rather than a
    frame later: what was recorded for the previous size shows stretched to
-   it, or is dropped for a frame behind it (see present).
+   it, or is dropped for a frame behind it (see present). The recordings done
+   are told the producer, which waits on its own by identity (see
+   RNSkReplaySchedule::recordingPresented).
    */
   Presented presentOrKeep(
       RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
@@ -554,6 +710,12 @@ private:
           present(*_surface, targetInfo, recordings, /* remember= */ true);
       shown = shown || replayed.shown;
       done += replayed.done;
+      if (replayed.done > 0) {
+        _producer->onRecordingsPresented(
+            std::vector<std::shared_ptr<RNSkGraphiteRecording>>(
+                recordings.begin(),
+                recordings.begin() + static_cast<long>(replayed.done)));
+      }
       if (replayed.done == recordings.size()) {
         return {true, shown, done};
       }
@@ -569,29 +731,31 @@ private:
     }
   }
 
-  /**
-   Replays the recordings onto the surface's target, in order, and remembers
-   the last one shown for the next redraw when asked to (not for a snapshot).
-   Says how many of them are done, from the front, and whether a frame went
-   to the surface. Done are all, unless the surface
-   could not take one (no drawable, or the surface is no longer the target
-   described by targetInfo: resized since it was read), also through a
-   texture; that one and the ones behind it are left to the caller. One made
-   for another format, or whose replay into a texture failed, is skipped:
-   done, not shown. One that declarative content recorded for another size
-   than the target's goes onto the surface as it is when the surface still
-   has that size (the window takes it until the frame for its new size
-   arrives); else it is skipped when another recording follows it or is on
-   its way (see RNSkGraphiteProducer::hasFrameComing), and shown through a
-   texture, stretched to the target, when nothing is (see the comments in
-   the loop).
-   */
+  /** What present() did. */
   struct Replayed {
     // How many of the recordings are done, from the front.
     size_t done;
     // A frame went to the surface.
     bool shown;
   };
+
+  /**
+   Replays the recordings onto the surface's target, in order, and remembers
+   the last one shown for the next redraw when asked to (not for a snapshot).
+   Says how many of them are done, from the front, and whether a frame went
+   to the surface. Done are all, unless the surface
+   could not take one (no drawable, it holds a frame, it presented one since
+   its last tick, or the surface is no longer the target described by
+   targetInfo: resized since it was read), also through a texture; that one
+   and the ones behind it are left to the caller. One made for another
+   format, or whose replay into a texture failed, is skipped: done, not
+   shown. One that declarative content recorded for another size than the
+   target's goes onto the surface as it is when the surface still has that
+   size (the window takes it until the frame for its new size arrives); else
+   it is skipped when another recording follows it or is on its way (see
+   RNSkGraphiteProducer::hasFrameComing), and shown through a texture,
+   stretched to the target, when nothing is (see the comments in the loop).
+   */
   Replayed
   present(RNSkSurface &surface, const RNSkGraphiteTargetInfo &targetInfo,
           const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
@@ -679,11 +843,11 @@ private:
         break;
       }
       const auto result = presentThroughTexture(surface, targetInfo, recording);
-      if (result == TexturePresent::kDeclined) {
+      if (result == RNSkSurface::ImagePresent::kDeclined) {
         taken = false;
         break;
       }
-      if (result == TexturePresent::kPresented) {
+      if (result == RNSkSurface::ImagePresent::kPresented) {
         last = recording;
       }
       done = i + 1;
@@ -698,9 +862,6 @@ private:
     return {done, last != nullptr};
   }
 
-  /** What became of a recording presented through a texture. */
-  enum class TexturePresent { kPresented, kConsumed, kDeclined };
-
   /**
    Presents a recording made for another size than the target's: the size
    JS measured before the surface existed can be a pixel off (the platform
@@ -709,14 +870,18 @@ private:
    and that texture is drawn onto the target, stretched to it (as the
    compositor shows a buffer of another size than its layer), so the frame
    shows, without an empty edge, rather than being dropped; the copy only
-   happens while the sizes differ. The same goes
-   for a recording made in another color space than the target's: the
-   texture is in the color space of the recording, and drawing it converts
-   the colors. A recording that cannot be replayed into such a texture is
-   consumed; one the surface could not take (no drawable, or it is no longer
-   the target described by targetInfo) is declined, for the caller to keep.
+   happens while the sizes differ. The same goes for a recording made in
+   another color space than the target's: the texture is in the color space
+   of the recording, and drawing it converts the colors. The replay happens
+   once the surface takes the frame (see RNSkSurface::presentImage): a
+   recording that cannot be replayed into such a texture is consumed; one the
+   surface does not take (it holds a frame or presented one since its last
+   tick, or it is no longer the target described by targetInfo) is declined
+   unreplayed, and one it can no longer show once the texture is made (its
+   GPU device replaced meanwhile, the app gone to the background, no
+   drawable) is declined with the replay made, either for the caller to keep.
    */
-  TexturePresent presentThroughTexture(
+  RNSkSurface::ImagePresent presentThroughTexture(
       RNSkSurface &surface, const RNSkGraphiteTargetInfo &targetInfo,
       const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     const auto &size = recording->getTarget();
@@ -730,19 +895,19 @@ private:
                                "surface is %dx%d",
                                size.width, size.height, surface.getWidth(),
                                surface.getHeight());
-      return TexturePresent::kConsumed;
+      return RNSkSurface::ImagePresent::kConsumed;
     }
-    auto image = intermediate.presentRecordings(info, {recording->get()})
-                     ? intermediate.makeImage()
-                     : nullptr;
-    if (image == nullptr) {
-      RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, it "
-                               "could not be replayed into a texture",
-                               size.width, size.height);
-      return TexturePresent::kConsumed;
-    }
-    return surface.presentImage(targetInfo, image) ? TexturePresent::kPresented
-                                                   : TexturePresent::kDeclined;
+    return surface.presentImage(targetInfo, [&]() -> sk_sp<SkImage> {
+      auto image = intermediate.presentRecordings(info, {recording->get()})
+                       ? intermediate.makeImage()
+                       : nullptr;
+      if (image == nullptr) {
+        RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, it "
+                                 "could not be replayed into a texture",
+                                 size.width, size.height);
+      }
+      return image;
+    });
   }
 
   std::shared_ptr<RNSkPlatformContext> _platformContext;
@@ -750,6 +915,7 @@ private:
   std::shared_ptr<RNSkGraphiteProducer> _producer;
   size_t _nativeId = 0;
   std::function<void(bool forResizedWindow)> _frameScheduler;
+  std::function<void(int result)> _onRedrawPresented;
   bool _windowTakesLatestFrame = false;
   std::function<void(std::function<void()>)> _runOnPresentThread;
   RNSkRedrawRequest _redrawRequest;
