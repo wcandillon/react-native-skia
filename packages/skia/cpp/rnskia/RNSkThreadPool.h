@@ -32,7 +32,9 @@ namespace RNSkia {
  * after the latest request the thread has not served. A thread that runs it
  * busy owes it a run once it ran no job for the delay, and each job puts that
  * run off: the jobs of the views a request comes from can still be running
- * when it is made. The caller passes the times; it reads no clock.
+ * when it is made. A request does not put it off: the thread runs the task at
+ * whichever comes first, and a run it owes is idle, so it serves the request
+ * too. The caller passes the times; it reads no clock.
  */
 class RNSkIdleTaskSchedule {
 public:
@@ -48,13 +50,18 @@ public:
    */
   std::optional<Clock::time_point> due(uint64_t requests,
                                        Clock::time_point requestTime) const {
+    std::optional<Clock::time_point> due;
     if (requests != _servedRequests) {
-      return requestTime + _delay;
+      due = requestTime + _delay;
     }
     if (_idleRunOwed) {
-      return _lastJobEnd + _delay;
+      // Requests keep coming while views come and go on other threads: one
+      // made since must not keep this thread, which ran no job, from
+      // running the task idle.
+      const auto owed = _lastJobEnd + _delay;
+      due = due ? std::min(*due, owed) : owed;
     }
-    return std::nullopt;
+    return due;
   }
 
   /**

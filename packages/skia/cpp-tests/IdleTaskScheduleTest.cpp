@@ -95,15 +95,33 @@ void requestsAddUp() {
   expect(!schedule.due(3, at(11000)).has_value(), "and leaves none to serve");
 }
 
-void aRequestPutsAnOwedIdleRunOffToItsOwnTime() {
+// A view dropped on another thread, or an image the cache let go of, while
+// this one owes an idle run.
+void aRequestDoesNotPutAnOwedIdleRunOff() {
   RNSkIdleTaskSchedule schedule(kDelay, at(0));
   schedule.ranJob(at(10500));
   expect(!schedule.run(1, at(12000)),
          "a thread that ran a job since the request runs the task busy");
+  expect(schedule.due(2, at(12200)) == at(12500),
+         "a request made since leaves the owed run due first");
+  expect(schedule.due(3, at(14000)) == at(12500),
+         "however many requests come");
+  expect(schedule.run(3, at(12500)), "which runs the task idle");
+  expect(!schedule.due(3, at(14000)).has_value(),
+         "and serves the requests too");
+}
+
+void aRequestComesFirstWhileTheThreadOwingARunKeepsRecording() {
+  RNSkIdleTaskSchedule schedule(kDelay, at(0));
+  schedule.ranJob(at(10500));
+  expect(!schedule.run(1, at(12000)),
+         "a thread that ran a job since the request runs the task busy");
+  schedule.ranJob(at(13000));
   expect(schedule.due(2, at(12200)) == at(14200),
-         "a request made since is due the delay after it");
-  expect(schedule.run(2, at(14200)), "which runs the task idle, for both");
-  expect(!schedule.due(2, at(12200)).has_value(), "and leaves nothing owed");
+         "a request comes first while jobs put the owed run off");
+  expect(!schedule.run(2, at(14200)), "and runs the task busy");
+  expect(schedule.due(2, at(12200)) == at(15000),
+         "the thread still owes the idle run");
 }
 
 } // namespace
@@ -115,7 +133,8 @@ int main() {
   aThreadStartedSinceTheRequestCountsItsStartAsItsLastJob();
   aThreadKeptBusyRunsTheTaskIdleOnceItsJobsStop();
   requestsAddUp();
-  aRequestPutsAnOwedIdleRunOffToItsOwnTime();
+  aRequestDoesNotPutAnOwedIdleRunOff();
+  aRequestComesFirstWhileTheThreadOwingARunKeepsRecording();
   if (failures > 0) {
     return 1;
   }
