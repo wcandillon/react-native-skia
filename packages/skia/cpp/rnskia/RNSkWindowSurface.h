@@ -57,10 +57,13 @@ namespace RNSkia {
  * window exists (see getLayoutSize).
  *
  * The windows of a process all present on the same thread, so the sweep over
- * them (see releaseSurfacesOn) runs with no window in use; the list itself
- * is guarded, as windows are made and destroyed on other threads too. Locks,
- * innermost last: the list of windows, the GPU context's (DawnContext); the
- * target description's mutex is leaf and never held across either.
+ * them (see releaseSurfacesOn), which the replacement of a lost device has
+ * that thread run before the device is destroyed (see DawnContext::recover),
+ * runs with no window in use; the list itself is guarded, as windows are
+ * made and destroyed on other threads too. Locks, innermost last: the list
+ * of windows, a lost device's uses (see DawnContext::Generation::uses), the
+ * GPU context's (DawnContext); the target description's mutex is leaf and
+ * never held across any of them.
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
@@ -144,8 +147,9 @@ public:
   void abandon();
 
   /**
-   Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDevice). Presenting thread.
+   Whether a window is attached. Its Dawn surface is away from the
+   replacement of a lost GPU device until the window's next frame (see
+   ensureDevice). Presenting thread.
    */
   bool isAttached();
 
@@ -223,6 +227,18 @@ public:
   }
 
   /**
+   Lets go of the Dawn surface of every window configured on the given
+   generation (see DawnContext::generation()): the replacement of a lost
+   device does so before it puts the new device in place and destroys the
+   lost one (see DawnContext::recover).
+   The windows make their surface again by their next frame (see
+   ensureDevice). Presenting thread, where no present or attach overlaps
+   the release, as the windows have no lock of their own (see the class
+   comment).
+   */
+  static void releaseSurfacesOn(uint64_t generation);
+
+  /**
    What a frame presented now would meet: no window, no GPU device (lost,
    and not replaced yet), a window that cannot show a frame (the platform
    view says so, see setCanPresent), or one ready for a frame, which `info`,
@@ -283,28 +299,12 @@ private:
   // or a device replacement configured it again (see ensureDevice), between
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
-  // Lets go of the surfaces made on the GPU device this window was
-  // configured on when that device was lost and replaced since (see
-  // DawnContext), the window's own included, and destroys the device: the
-  // surface cannot follow to the new device (a Vulkan swapchain cannot move
-  // to another device, Dawn refuses it), and the VkSurfaceKHR of the old
-  // swapchain keeps the window connected until the lost device runs its
-  // deferred deletions, which only its destruction does. Dawn does not
-  // destroy swapchains with their device, and detaching one afterwards
-  // crashes, so every window on that device lets go of its surface first
-  // (see releaseSurfacesOn), then the device is destroyed, and the windows
-  // get a surface on the new device on their next frame (see ensureDevice).
-  void retireReplacedDevice();
-  // Lets go of the Dawn surface of every window configured on the given
-  // generation (see retireReplacedDevice). Presenting thread, the one every
-  // window presents on.
-  static void releaseSurfacesOn(uint64_t generation);
   // Configures the window on the GPU device in use when it has no surface:
-  // when the device it was configured on was lost and replaced since (see
-  // retireReplacedDevice), the surface is made again on the new device, the
-  // window itself stays. Returns false without a context, without a
-  // surface, or with one made for a device replaced since the sweep (the
-  // next frame sweeps again).
+  // the replacement of a lost device let go of it (see releaseSurfacesOn),
+  // and it is made again on the new device (a Vulkan swapchain cannot move
+  // to another device, Dawn refuses it); the window itself stays. Returns
+  // false without a context, or when no surface can be made over the
+  // window.
   bool ensureDevice();
   // Configures the swapchain for the current size, format and usage.
   void configureSurface();
@@ -347,11 +347,11 @@ private:
     }
   }
 
-  // The device the window is configured on, and its generation (see
-  // DawnContext::generation()): a lost device is replaced, and the window
-  // configured again on the new one (see retireReplacedDevice). The surface
-  // is null between the two, and while the window is detached; the
-  // generation is 0 then.
+  // The device the window's surface was made on, and its generation (see
+  // DawnContext::generation()), by which the replacement of a lost device
+  // lets go of the surface (see releaseSurfacesOn); the window's next frame
+  // makes it again on the new device (see ensureDevice). The generation is 0
+  // while the window is detached, and once the surface was let go of.
   wgpu::Device _device;
   uint64_t _generation = 0;
   wgpu::Surface _surface;

@@ -48,14 +48,14 @@ namespace rnsurface {
  * window surface asks for a redraw from inside attach(), which runs here,
  * and a redraw on the spot would present mid-attach).
  *
- * Nothing waits for a task but postAndWait, with a bound: a present holds
- * the thread for as long as its pipelines take to compile, and a main
- * thread made to wait for that is an ANR or a frozen app. The one caller is
- * Android's surfaceDestroyed, which the platform destroys the surface after
+ * No main thread waits for a task but through postAndWait, with a bound: a
+ * present holds the thread for as long as its pipelines take to compile, and a
+ * main thread made to wait for that is an ANR or a frozen app. The one caller
+ * is Android's surfaceDestroyed, which the platform destroys the surface after
  * (see SkiaView.onSurfaceDestroyed): a wait that times out marks the thread
- * held up until the task it waited for runs, and every wait meanwhile
- * returns at once, so that the bound is paid once per hold-up, not once per
- * canvas, and the mark never outlives its task.
+ * held up until the task it waited for runs, and every wait meanwhile returns
+ * at once, so that the bound is paid once per hold-up, not once per canvas, and
+ * the mark never outlives its task.
  */
 class RenderThread {
 public:
