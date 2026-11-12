@@ -139,8 +139,10 @@ public:
   }
 
   /**
-   The view left its window, or the window lost its surface: the host
-   removed its callbacks, and the scheduler forgets what it asked for.
+   The view left its window, or the window lost its surface: the scheduler
+   forgets what it asked for. The host removes its frame callback, or, where
+   a vsync has no cancel, does not call onFrame() for one that is no longer
+   asked for (see isFrameCallbackPosted).
    */
   void cancel() {
     _frameCallbackPosted = false;
