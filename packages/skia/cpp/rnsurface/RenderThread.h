@@ -73,6 +73,12 @@ public:
     if (_thread.joinable()) {
       _thread.join();
     }
+#if defined(__ANDROID__) || defined(__linux__)
+    // The loop can observe _stopping after a wakeup already in flight, before
+    // the wake above. Keep its descriptor open until the join makes that
+    // write and every loop access finish.
+    close(_wakeup);
+#endif
   }
 
   RenderThread(const RenderThread &) = delete;
@@ -222,9 +228,17 @@ private:
       objc_autoreleasePoolPop(pool);
     }
     drain();
-    CFRunLoopRemoveSource(_runLoop, _source, kCFRunLoopCommonModes);
-    CFRelease(_source);
-    CFRelease(_runLoop);
+    // wake() holds this mutex while it signals the source. Clearing these
+    // pointers under the same mutex leaves a wake that arrives after teardown
+    // with nothing to signal, rather than a released Core Foundation object.
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto *source = _source;
+    auto *runLoop = _runLoop;
+    _source = nullptr;
+    _runLoop = nullptr;
+    CFRunLoopRemoveSource(runLoop, source, kCFRunLoopCommonModes);
+    CFRelease(source);
+    CFRelease(runLoop);
   }
 
   void wake() {
@@ -264,7 +278,6 @@ private:
     drain();
     ALooper_removeFd(_looper, _wakeup);
     ALooper_release(_looper);
-    close(_wakeup);
   }
 
   void wake() { eventfd_write(_wakeup, 1); }
@@ -289,7 +302,6 @@ private:
       }
     }
     drain();
-    close(_wakeup);
   }
 
   void wake() { eventfd_write(_wakeup, 1); }

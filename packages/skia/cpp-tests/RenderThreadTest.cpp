@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <future>
 #include <thread>
 #include <vector>
 
@@ -27,8 +28,10 @@ void expect(bool condition, const char *what) {
 }
 
 // Posts a marker and waits for it: everything posted before has run.
-void settle(RenderThread &thread) {
-  expect(thread.postAndWait([]() {}, 5s), "the thread drains");
+bool settle(RenderThread &thread) {
+  const bool settled = thread.postAndWait([]() {}, 5s);
+  expect(settled, "the thread drains");
+  return settled;
 }
 
 } // namespace
@@ -36,65 +39,74 @@ void settle(RenderThread &thread) {
 int main() {
   alarm(60);
   {
-    RenderThread thread("test");
-    expect(!thread.isCurrent(), "the caller is not the thread");
     std::vector<int> order;
     std::thread::id ranOn;
-    bool onTheSpot = true;
+    RenderThread thread("test");
+    expect(!thread.isCurrent(), "the caller is not the thread");
     thread.post([&]() {
       ranOn = std::this_thread::get_id();
       order.push_back(1);
     });
-    onTheSpot = !order.empty();
     thread.post([&]() { order.push_back(2); });
-    settle(thread);
-    expect(!onTheSpot, "a post never runs on the spot");
-    expect(ranOn == std::thread::id() ? false
-                                      : ranOn != std::this_thread::get_id(),
-           "a task runs on the thread");
-    expect(order == std::vector<int>({1, 2}), "tasks run in order");
+    if (settle(thread)) {
+      expect(ranOn == std::thread::id() ? false
+                                        : ranOn != std::this_thread::get_id(),
+             "a post never runs on the caller thread");
+      expect(order == std::vector<int>({1, 2}), "tasks run in order");
+    }
   }
   {
     // A task posted from the thread itself runs after the one posting it.
-    RenderThread thread("test");
     std::vector<int> order;
+    std::promise<void> nestedPosted;
+    auto posted = nestedPosted.get_future();
+    RenderThread thread("test");
     thread.post([&]() {
       thread.post([&]() { order.push_back(2); });
       expect(order.empty(), "a post from the thread does not run on the spot");
       expect(thread.isCurrent(), "a task sees itself on the thread");
       order.push_back(1);
+      nestedPosted.set_value();
     });
-    settle(thread);
-    expect(order == std::vector<int>({1, 2}), "a nested post runs after");
+    // The marker must be after the nested task, not merely after the task
+    // that will post it. Its completion then synchronizes the vector read.
+    const bool nestedWasPosted =
+        posted.wait_for(5s) == std::future_status::ready;
+    expect(nestedWasPosted, "the outer task posts the nested task");
+    if (nestedWasPosted && settle(thread)) {
+      expect(order == std::vector<int>({1, 2}), "a nested post runs after");
+    }
   }
   {
     // The checker is bound to the thread.
-    RenderThread thread("test");
     rnsurface::ThreadChecker::Site site;
     bool passedOnThread = false;
+    RenderThread thread("test");
     thread.post(
         [&]() { passedOnThread = thread.checker().assertCurrent(site, "on"); });
-    settle(thread);
-    expect(passedOnThread, "the entry check passes on the thread");
-    rnsurface::ThreadChecker::Site other;
-    expect(!thread.checker().assertCurrent(other, "off"),
-           "the entry check fails off the thread");
+    if (settle(thread)) {
+      expect(passedOnThread, "the entry check passes on the thread");
+      rnsurface::ThreadChecker::Site other;
+      expect(!thread.checker().assertCurrent(other, "off"),
+             "the entry check fails off the thread");
+    }
   }
   {
     // A bounded wait: in time, then held up by a slow task, once per hold-up.
+    std::atomic<bool> release{false};
+    bool ran = false;
+    bool secondRan = false;
     RenderThread thread("test");
     expect(thread.postAndWait([]() {}, 1s),
            "a quick task runs within the bound");
     expect(!thread.isHeldUp(), "not held up after a wait that made it");
 
-    std::atomic<bool> release{false};
     thread.post([&]() {
       while (!release.load()) {
         std::this_thread::sleep_for(1ms);
       }
     });
     // The present in flight (above) holds the thread: the wait times out.
-    bool ran = false;
     const auto before = std::chrono::steady_clock::now();
     expect(!thread.postAndWait([&]() { ran = true; }, 50ms),
            "a wait behind a slow task times out");
@@ -103,7 +115,6 @@ int main() {
 
     // Another canvas going meanwhile does not wait at all.
     const auto start = std::chrono::steady_clock::now();
-    bool secondRan = false;
     expect(!thread.postAndWait([&]() { secondRan = true; }, 1s),
            "a wait while held up returns false");
     expect(std::chrono::steady_clock::now() - start < 500ms,
@@ -118,18 +129,20 @@ int main() {
       std::this_thread::sleep_for(1ms);
     }
     expect(!thread.isHeldUp(), "the task waited for takes the mark down");
-    settle(thread);
-    expect(ran && secondRan, "the tasks ran once the thread was free");
+    if (settle(thread)) {
+      expect(ran && secondRan, "the tasks ran once the thread was free");
+    }
     (void)before;
   }
   {
-    // The destructor runs what is queued before it stops.
-    bool ran = false;
-    {
+    // The destructor runs what is queued before it stops. Repeating it makes
+    // this also exercise shutdown while a prior queue wakeup is in flight.
+    int ran = 0;
+    for (int i = 0; i < 100; ++i) {
       RenderThread thread("test");
-      thread.post([&]() { ran = true; });
+      thread.post([&]() { ran++; });
     }
-    expect(ran, "a task posted before the stop runs");
+    expect(ran == 100, "a task posted before the stop runs");
   }
   if (failures == 0) {
     std::printf("RenderThreadTest: passed\n");
