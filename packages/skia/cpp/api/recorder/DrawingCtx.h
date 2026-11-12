@@ -121,7 +121,7 @@ public:
     if (paints.empty()) {
       throw std::runtime_error("No paint available");
     }
-    auto paint = paints.back();
+    auto paint = std::move(paints.back());
     paints.pop_back();
     opacities.pop_back();
     return paint;
