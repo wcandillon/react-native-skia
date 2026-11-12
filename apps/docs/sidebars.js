@@ -64,7 +64,6 @@ const sidebars = {
       label: "Shapes",
       items: [
         "shapes/path",
-        "shapes/path-migration",
         "shapes/polygons",
         "shapes/ellipses",
         "shapes/atlas",
