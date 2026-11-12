@@ -40,7 +40,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto paint = ctx->getPaint();
+    const auto &paint = ctx->getPaint();
     if (props.c.has_value()) {
       ctx->canvas->drawCircle(props.c.value(), props.r, paint);
     } else {
@@ -75,7 +75,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [x, y, width, height, rect] = props;
+    const auto &[x, y, width, height, rect] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRect(rect.value(), ctx->getPaint());
     } else {
@@ -120,88 +120,78 @@ public:
     bool willMutatePath =
         hasStartOffset || hasEndOffset || hasStrokeOptions || hasFillType;
 
-    std::shared_ptr<const SkPath> pathToUse;
+    if (!willMutatePath) {
+      // Draw the recorded path directly
+      ctx->canvas->drawPath(props.path, ctx->getPaint());
+      return;
+    }
 
-    if (willMutatePath) {
-      // Create a filtered path for modifications
-      SkPath filteredPath(props.path);
+    // Create a filtered path for modifications
+    SkPath filteredPath(props.path);
 
-      // Handle path trimming
-      if (hasStartOffset || hasEndOffset) {
-        auto pe =
-            SkTrimPathEffect::Make(start, end, SkTrimPathEffect::Mode::kNormal);
-        if (pe != nullptr) {
-          SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
-          SkPathBuilder filteredBuilder;
-          if (!pe->filterPath(&filteredBuilder, filteredPath, &rec)) {
-            throw std::runtime_error(
-                "Failed trimming path with parameters start: " +
-                std::to_string(start) + ", end: " + std::to_string(end));
-          }
-          filteredPath = filteredBuilder.detach();
-        } else {
+    // Handle path trimming
+    if (hasStartOffset || hasEndOffset) {
+      auto pe =
+          SkTrimPathEffect::Make(start, end, SkTrimPathEffect::Mode::kNormal);
+      if (pe != nullptr) {
+        SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
+        SkPathBuilder filteredBuilder;
+        if (!pe->filterPath(&filteredBuilder, filteredPath, &rec)) {
           throw std::runtime_error(
               "Failed trimming path with parameters start: " +
               std::to_string(start) + ", end: " + std::to_string(end));
         }
-      }
-
-      // Set fill type
-      auto p = std::make_shared<SkPath>(filteredPath);
-      if (props.fillType.has_value()) {
-        p->setFillType(props.fillType.value());
-      }
-      // Handle stroke options
-      if (hasStrokeOptions) {
-        const auto &stroke = props.stroke.value();
-        SkPaint strokePaint;
-        // A default SkPaint is fill-style, and FillPathWithPaint only
-        // outlines a paint that strokes.
-        strokePaint.setStyle(SkPaint::kStroke_Style);
-
-        if (stroke.cap.has_value()) {
-          strokePaint.setStrokeCap(stroke.cap.value());
-        }
-
-        if (stroke.join.has_value()) {
-          strokePaint.setStrokeJoin(stroke.join.value());
-        }
-
-        if (stroke.width.has_value()) {
-          strokePaint.setStrokeWidth(stroke.width.value());
-        }
-
-        if (stroke.miter_limit.has_value()) {
-          strokePaint.setStrokeMiter(stroke.miter_limit.value());
-        }
-
-        float precision = stroke.precision.value_or(1.0f);
-
-        SkPathBuilder resultBuilder;
-        auto ctm = SkMatrix::Scale(precision, precision);
-        if (skpathutils::FillPathWithPaint(*p, strokePaint, &resultBuilder,
-                                           nullptr, ctm)) {
-          pathToUse = std::make_shared<const SkPath>(resultBuilder.snapshot());
-        } else {
-          // The JS player keeps the unstroked path when Path.Stroke returns
-          // null (e.g. a hairline width of 0).
-          pathToUse = std::const_pointer_cast<const SkPath>(p);
-        }
+        filteredPath = filteredBuilder.detach();
       } else {
-        pathToUse = std::const_pointer_cast<const SkPath>(p);
+        throw std::runtime_error(
+            "Failed trimming path with parameters start: " +
+            std::to_string(start) + ", end: " + std::to_string(end));
       }
-    } else {
-      // Use the original path directly
-      pathToUse = std::make_shared<const SkPath>(props.path);
     }
 
-    if (!pathToUse) {
-      throw std::runtime_error(
-          "Path node could not resolve path props correctly.");
+    // Set fill type
+    if (hasFillType) {
+      filteredPath.setFillType(props.fillType.value());
+    }
+
+    // Handle stroke options
+    if (hasStrokeOptions) {
+      const auto &stroke = props.stroke.value();
+      SkPaint strokePaint;
+      // A default SkPaint is fill-style, and FillPathWithPaint only
+      // outlines a paint that strokes.
+      strokePaint.setStyle(SkPaint::kStroke_Style);
+
+      if (stroke.cap.has_value()) {
+        strokePaint.setStrokeCap(stroke.cap.value());
+      }
+
+      if (stroke.join.has_value()) {
+        strokePaint.setStrokeJoin(stroke.join.value());
+      }
+
+      if (stroke.width.has_value()) {
+        strokePaint.setStrokeWidth(stroke.width.value());
+      }
+
+      if (stroke.miter_limit.has_value()) {
+        strokePaint.setStrokeMiter(stroke.miter_limit.value());
+      }
+
+      float precision = stroke.precision.value_or(1.0f);
+
+      SkPathBuilder resultBuilder;
+      auto ctm = SkMatrix::Scale(precision, precision);
+      if (skpathutils::FillPathWithPaint(filteredPath, strokePaint,
+                                         &resultBuilder, nullptr, ctm)) {
+        filteredPath = resultBuilder.detach();
+      }
+      // Otherwise keep the unstroked path, like the JS player does when
+      // Path.Stroke returns null (e.g. a hairline width of 0).
     }
 
     // Draw the final path
-    ctx->canvas->drawPath(*pathToUse, ctx->getPaint());
+    ctx->canvas->drawPath(filteredPath, ctx->getPaint());
   }
 };
 
@@ -249,14 +239,16 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [font, text, path, initialOffset] = props;
+    const auto &[font, text, path, initialOffset] = props;
+    // Number of bytes of text that end up on the path
+    size_t textLength = text.length();
     if (font.has_value()) {
       // Get glyphs
       auto numGlyphIds =
           font->countText(text.c_str(), text.length(), SkTextEncoding::kUTF8);
 
       std::vector<SkGlyphID> glyphIds;
-      glyphIds.reserve(numGlyphIds);
+      glyphIds.resize(numGlyphIds);
       auto ids = font->textToGlyphs(
           text.c_str(), text.length(), SkTextEncoding::kUTF8,
           SkSpan(static_cast<SkGlyphID *>(glyphIds.data()), numGlyphIds));
@@ -294,7 +286,7 @@ public:
           if (cont == nullptr) {
             // We have come to the end of the path - terminate the string
             // right here.
-            text = text.substr(0, i);
+            textLength = i;
             break;
           }
           dist = width / 2;
@@ -320,7 +312,7 @@ public:
       }
       auto x = SkSpan(rsx.data(), rsx.size());
       auto blob =
-          SkTextBlob::MakeFromRSXform(text.c_str(), text.length(), x, *font);
+          SkTextBlob::MakeFromRSXform(text.c_str(), textLength, x, *font);
       ctx->canvas->drawTextBlob(blob, 0, 0, ctx->getPaint());
     }
   }
@@ -347,12 +339,11 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [font, text, x, y] = props;
-    auto paint = ctx->getPaint();
+    const auto &[font, text, x, y] = props;
     if (font.has_value()) {
       ctx->canvas->drawSimpleText(text.c_str(), text.length(),
                                   SkTextEncoding::kUTF8, x, y, font.value(),
-                                  paint);
+                                  ctx->getPaint());
     }
   }
 };
@@ -421,7 +412,7 @@ public:
   void play(DrawingCtx *ctx) override {
 
     // Get current paint properties
-    auto paint = ctx->getPaint();
+    const auto &paint = ctx->getPaint();
     float opacity = paint.getAlphaf();
 
     // Convert box to RRect if needed
@@ -511,9 +502,9 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [x, y, width, height, rect, fit, image, sampling] = props;
+    const auto &[x, y, width, height, rect, fit, image, sampling] = props;
     if (image.has_value()) {
-      auto img = image.value();
+      const auto &img = image.value();
       auto hasRect =
           rect.has_value() || (width.has_value() && height.has_value());
       if (hasRect) {
@@ -581,7 +572,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [rect, x, y, width, height, r] = props;
+    const auto &[rect, x, y, width, height, r] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRRect(rect.value(), ctx->getPaint());
     } else {
@@ -619,7 +610,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto [rect, x, y, width, height] = props;
+    const auto &[rect, x, y, width, height] = props;
     if (rect.has_value()) {
       ctx->canvas->drawOval(rect.value(), ctx->getPaint());
     } else {
@@ -812,12 +803,14 @@ public:
   PictureCmdProps props;
 
   PictureCmd(jsi::Runtime &runtime, const jsi::Object &object,
-           Variables &variables)
+             Variables &variables)
       : Command(CommandType::DrawPicture) {
     convertProperty(runtime, object, "picture", props.picture, variables);
   }
 
-  void play(DrawingCtx *ctx) override { ctx->canvas->drawPicture(props.picture); }
+  void play(DrawingCtx *ctx) override {
+    ctx->canvas->drawPicture(props.picture);
+  }
 };
 
 struct ImageSVGCmdProps {

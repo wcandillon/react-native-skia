@@ -39,8 +39,7 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto source = props.source;
-    auto uniforms = props.uniforms;
+    const auto &source = props.source;
     auto m3 = processTransform(props.matrix, props.transform, props.origin);
     auto uniformsData = processUniforms(source, props.uniforms);
 
@@ -93,21 +92,21 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto x = props.x;
-    auto y = props.y;
-    auto width = props.width;
-    auto height = props.height;
-    auto rect = props.rect;
-    if (props.image.has_value()) {
-      auto img = props.image.value();
+    const auto &image = props.image;
+    if (image.has_value()) {
+      const auto &img = image.value();
       SkMatrix m33;
+      const auto &rect = props.rect;
+      const auto &width = props.width;
+      const auto &height = props.height;
       auto hasRect =
           rect.has_value() || (width.has_value() && height.has_value());
       if (hasRect) {
         auto src = SkRect::MakeXYWH(0, 0, img->width(), img->height());
         auto dst = rect.has_value()
                        ? rect.value()
-                       : SkRect::MakeXYWH(x, y, width.value(), height.value());
+                       : SkRect::MakeXYWH(props.x, props.y, width.value(),
+                                          height.value());
         auto rects = RNSkiaImage::fitRects(props.fit, src, dst);
         auto m = RNSkiaImage::rect2rect(rects.src, rects.dst);
         m33.preConcat(m);

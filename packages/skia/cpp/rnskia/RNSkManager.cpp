@@ -114,6 +114,8 @@ ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
   } else if (auto recorder =
                  RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
     _value = recorder->getObject();
+  } else if (value.isBool()) {
+    _value.emplace<bool>(value.getBool());
   }
 }
 

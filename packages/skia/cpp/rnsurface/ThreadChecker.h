@@ -62,6 +62,12 @@ public:
     _thread.store(std::this_thread::get_id(), std::memory_order_release);
   }
 
+  /** Whether the calling thread is the bound one; false while unbound. */
+  bool isCurrent() const {
+    const auto bound = _thread.load(std::memory_order_acquire);
+    return bound != std::thread::id() && bound == std::this_thread::get_id();
+  }
+
   /**
    The entry check: whether the calling thread is the bound one, or none is
    bound yet. A wrong one aborts in debug builds, and is logged once per
