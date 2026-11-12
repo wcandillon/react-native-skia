@@ -495,11 +495,6 @@ public:
         _platformContext(platformContext) {}
 
   /**
-   Call to remove all draw view infos
-   */
-  void unregisterAll() { ViewRegistry::getInstance().clear(); }
-
-  /**
    * Registers a skia view
    * @param nativeId Id of view to register
    * @param view View to register

@@ -160,14 +160,16 @@ private:
       cmd->play(ctx);
       return;
     }
-    // A drawing is played once per paint declared on the node (its <Paint>
-    // children), then with the node's own paint.
-    auto paints = ctx->paintDeclarations;
+    // A drawing is played with the node's own paint, then once per paint
+    // declared on the node (its <Paint> children), as the JS player does.
     SkPaint paint(ctx->getPaint());
     paint.setAlphaf(paint.getAlphaf() * ctx->getOpacity());
-    paints.push_back(paint);
+    auto declarations = std::move(ctx->paintDeclarations);
     ctx->paintDeclarations.clear();
-    for (auto &layerPaint : paints) {
+    ctx->pushPaint(paint);
+    cmd->play(ctx);
+    ctx->restorePaint();
+    for (auto &layerPaint : declarations) {
       ctx->pushPaint(layerPaint);
       cmd->play(ctx);
       ctx->restorePaint();
