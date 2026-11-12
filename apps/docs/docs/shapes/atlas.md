@@ -19,9 +19,9 @@ Atlas transforms can be animated with near-zero cost using worklets. This makes 
 | blendMode? | `BlendMode` | Optional. Blend mode used for layer compositing (how the Atlas is drawn onto the canvas). |
 | sampling? | `Sampling` | The method used to sample the image. see ([sampling options](/docs/images#sampling-options)). |
 
-:::warning[Performance on Graphite]
+:::tip
 
-In v3, Skia Graphite draws an atlas one sprite at a time. Very large atlases run slower than they did in v2. See [Performance](#performance) below.
+If your sprites are filled rectangles, rounded rectangles or circles, [Shape Blob](/docs/shapes/shape-blob) builds the atlas for you: it rasterizes each distinct shape at the device's pixel density and keeps its vertices between frames.
 
 :::
 
@@ -172,21 +172,19 @@ export const Demo = () => {
 In v2, Skia drew the whole atlas as a single GPU operation: the Ganesh backend packed every sprite into one vertex buffer and submitted it as one draw (`DrawAtlasOp`).
 
 In v3, React Native Skia renders with [Graphite](/docs/getting-started/migration), and Graphite does not have a dedicated atlas renderer yet.
-Its `drawAtlas` implementation (`src/gpu/graphite/Device.cpp` in Skia) loops over the sprites and records one rectangle draw per sprite, each with its own transform and, when `colors` are provided, its own paint parameters.
-Graphite can still merge consecutive sprites that share the same pipeline into one instanced GPU draw, but the recording cost on the render thread grows with the number of sprites.
-On the Skia side, the cost is close to drawing each sprite individually. The `Atlas` component still saves you one React component and one recorded command per sprite, but it is no longer a single GPU operation.
+Its own `drawAtlas`, added in Skia m152 (before that, Graphite drew nothing for an atlas), records one rectangle draw per sprite.
+The recording cost grows with the number of sprites on every platform, and when `colors` are given, Android pays a separate draw call per distinct color on backends without storage buffers.
+React Native Skia does not use it. The `Atlas` component and `canvas.drawAtlas()` turn the sprites into a single `drawVertices` call, the generic path Skia uses for devices without an atlas renderer (`SkDevice::drawAtlas`), so the whole atlas is one draw on every platform, as in v2.
 
-What this changes for you:
+What this means for you:
 
 - Animating the transforms with [`useRSXformBuffer`](/docs/animations/hooks#usersxformbuffer) remains cheap on the JS and UI threads: the buffers are updated in place and nothing is re-recorded there.
-- With a few hundred sprites, the difference is usually not noticeable.
-- With tens of thousands of sprites, expect lower frame rates than in v2. Pass `colors` only when you need them, since each per-sprite color adds its own paint parameters to record.
-
-This is a limitation of Skia Graphite rather than of React Native Skia. The `Atlas` component will get faster when Skia ships a batched atlas renderer for Graphite.
+- Each frame, the render thread writes six vertices per sprite (position, texture coordinates and, when `colors` are given, the sprite's color) before the single draw.
+- For filled rectangles, rounded rectangles and circles, a [Shape Blob](/docs/shapes/shape-blob) skips that per-frame step: it keeps its vertices and only updates the shapes you change.
 
 ### Drawing sprites with WebGPU
 
-If you need to draw a very large number of sprites, [React Native WebGPU](/docs/webgpu) is an alternative.
+If you need more control over how the sprites are drawn, [React Native WebGPU](/docs/webgpu) is an alternative.
 Because Skia and WebGPU share the same GPU device in v3, you can draw the sprites with an instanced WebGPU render pipeline and compose the result in a Skia canvas without any copy:
 
 1. Export the atlas image as a WebGPU texture with `Skia.Image.MakeGPUTextureFromImage()` (see [exporting an image](/docs/webgpu#exporting-an-image)).

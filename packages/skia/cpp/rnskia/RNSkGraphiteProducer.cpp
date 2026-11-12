@@ -43,10 +43,15 @@ RNSkThreadPool &renderPool() {
 
 } // namespace
 
+RNSkGraphiteProducer::RNSkGraphiteProducer()
+    : _lane(renderPool().acquireLane()) {}
+
 RNSkGraphiteProducer::~RNSkGraphiteProducer() {
-  // The content goes away with the view: what the recorders of the render
-  // threads still cache for it is freed once they are idle.
-  renderPool().requestIdleTask();
+  auto &pool = renderPool();
+  pool.releaseLane(_lane);
+  // The content goes away with the view: what the recorder of its render
+  // thread still caches for it is freed once the thread is idle.
+  pool.requestIdleTask();
 }
 
 void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
@@ -194,7 +199,9 @@ void RNSkGraphiteProducer::kickLocked() {
   }
   _inFlight = true;
   std::weak_ptr<RNSkGraphiteProducer> weakThis = weak_from_this();
-  renderPool().post([weakThis]() {
+  // Always on the same thread (see RNSkThreadPool::acquireLane), so that
+  // the frames of this view find a warm recorder.
+  renderPool().post(_lane, [weakThis]() {
     if (auto self = weakThis.lock()) {
       self->produce();
     }
@@ -220,14 +227,17 @@ void RNSkGraphiteProducer::produce() {
   std::shared_ptr<RNSkGraphiteRecording> recording;
   if (target && (recorder || picture)) {
     SkCanvas *canvas = nullptr;
-    try {
-      // On the recorder of this pool thread: a view holds no recorder of
-      // its own (see RNSkGraphiteTarget::beginRecording).
-      canvas = target->beginRecording(
-          DawnContext::getInstance().getThreadRecorder());
-    } catch (const std::exception &) {
-      // No surface and no layout yet: the view asks for a frame once it
-      // has a size. Or no GPU at all.
+    // Without a GPU nothing records, and Skia.gpu says why.
+    if (auto *context = DawnContext::tryGetInstance()) {
+      try {
+        // On the recorder of this pool thread, the same for every frame of
+        // the view: a view holds no recorder of its own (see
+        // RNSkGraphiteTarget::beginRecording).
+        canvas = target->beginRecording(context->getThreadRecorder());
+      } catch (const std::exception &e) {
+        RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
+                                 e.what());
+      }
     }
     if (canvas != nullptr) {
       try {

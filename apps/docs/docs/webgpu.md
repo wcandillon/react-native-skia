@@ -39,15 +39,49 @@ const { isAvailable, backend, device, description, error } = Skia.gpu;
 | `vendor`, `architecture`, `device`, `description` | The adapter, in the terms of WebGPU's `GPUAdapterInfo` (native only) |
 | `error` | Why the GPU is unavailable; `null` when it is |
 | `lost` | The promise of the loss of the device, see [device loss](#device-loss) |
+| `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [background and foreground](#background-and-foreground) |
 
 ### Availability
 
 On a device without a GPU Skia can render with (on Android, one without Vulkan 1.1, see [the Vulkan section of the installation guide](/docs/getting-started/installation#vulkan)), the app still runs.
 `Skia.gpu.isAvailable` is false and `Skia.gpu.error` says why: every canvas stays blank, CPU work (paths, decoding, raster images) still runs, and the APIs that need the GPU (offscreen surfaces, snapshots, texture images) throw an error with the same message.
 
+### Background and foreground
+
+iOS refuses GPU work from an app in the background, and refused work used to lose the device.
+React Native Skia now holds the GPU work submitted while the app is in the background and runs it when the app comes back: nothing is lost and nothing is refused.
+The same applies to the device `Skia.getNativeDevice()` shares with React Native WebGPU.
+Canvases present nothing meanwhile and catch up on return.
+
+Holding is not free: every frame drawn in the background keeps what it uses in memory until the return.
+A frame callback or a video player that keeps drawing while the app is in the background should stop instead.
+`Skia.gpu.foreground` is false from the moment the app starts to resign active (a lock, a swipe home, an incoming call) until it is active again.
+It can be read synchronously on every runtime, a worklet included, and it flips before any `AppState` event reaches JS.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+import { useFrameCallback } from "react-native-reanimated";
+
+const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+
+useFrameCallback(() => {
+  "worklet";
+  if (!Skia.gpu.foreground) {
+    // Nothing to show: skip the frame rather than queue it.
+    return;
+  }
+  surface.getCanvas().drawColor(Skia.Color("cyan"));
+  surface.flush();
+});
+```
+
+Held work does not finish until the app comes back, so `surface.flush(true)`, which waits for the GPU, blocks its thread until then. Check `Skia.gpu.foreground` before calling it.
+
+On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.
+
 ### Device loss
 
-The device can be lost while the app runs: a driver reset, the GPU out of memory, or GPU work refused while the app was in the background on iOS.
+The device can be lost while the app runs: a driver reset, or the GPU out of memory.
 React Native Skia then replaces it with a new device, and canvases render again on their own.
 Everything made on the lost device is gone for good, though safe to use (it draws nothing): offscreen surfaces and the images taken from them, texture images, snapshots of views, and the device `Skia.getNativeDevice()` returned.
 
@@ -90,6 +124,19 @@ const Demo = () => {
 
 Code sharing the device with React Native WebGPU imports it again the same way, see [sharing the device](#sharing-the-device).
 
+### Pipeline compilation
+
+The GPU compiles a pipeline for each kind of drawing the first time a canvas calls for it: a solid rounded rectangle, an image, a gradient-filled path, a line of text.
+A compile takes from a few milliseconds to a few hundred on a fresh install, and the frame that needs the pipeline waits for it, so a screen that introduces several at once comes up late the first time it appears.
+React Native Skia compiles these pipelines ahead of the frames, on a thread of its own, while the frames leave the GPU alone.
+On a launch without a record, it compiles a built-in set: solid colors, images and gradients on every shape, text, and drop shadows.
+From then on, it records the pipelines the app actually uses in its cache directory (`rnskia/pipelines.bin`) and compiles those at the next launch, so the screens the app showed come up without a compile on the frame.
+A pipeline the record does not cover is compiled when first needed, as before, and recorded.
+A pipeline whose paint uses a runtime effect, one of Skia's own (a blur, a morphology, the luma color filter) or one of yours, is compiled when first needed too, but not recorded: Graphite can only compile it on the context that drew it.
+The compiled shaders themselves, and on Android the driver's pipeline cache, are kept in the same directory by Dawn's blob cache: the one React Native WebGPU keeps for the devices it creates (see its [pipeline cache](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-api#pipeline-cache)), here for Skia's device, so a later launch mostly reads them back.
+Both are caches: clearing the app's cache directory costs the next launch a built-in set and the compiles, and a React Native Skia update that changes what Graphite or Dawn read starts them over.
+The log reports what each launch compiled ahead of the frames.
+
 ## Sharing the device
 
 Install React Native WebGPU next to React Native Skia, and follow its [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) for the rest of the setup:
@@ -102,7 +149,9 @@ Pick the versions of the two packages from one row of this table; the [React Nat
 
 | react-native-skia | react-native-webgpu |
 | --- | --- |
-| 3.7.0 and later | 0.17.0 and later |
+| 3.10.0 and later | 0.21.3 and later |
+| 3.9.0 to 3.9.2 | 0.20.0 to 0.21.2 |
+| 3.7.0 to 3.8.1 | 0.17.0 to 0.19.2 |
 | 3.4.0 to 3.6.3 | 0.13.1 to 0.16.1, or 0.12.1 |
 | 3.1.0 to 3.3.0 | 0.13.0, or 0.12.1 |
 | 3.0.6 to 3.0.8 | 0.12.1, or 0.13.0 and later with react-native-skia 3.0.8 |
@@ -127,7 +176,7 @@ Everything you create with this device (textures, buffers, pipelines) lives on t
 A few things to know about it:
 
 - The device is owned by Skia, which keeps it alive for as long as it renders with it.
-- The device can be lost: a driver reset, the GPU out of memory, GPU work refused while the app was in the background on iOS. Skia then replaces it with a new device (see [device loss](#device-loss)). The imported `GPUDevice` does not learn of the loss (its `lost` promise never settles) and everything created on it is gone: import the new device and create your resources again, with `useGpu()` in React or `Skia.gpu.lost` elsewhere.
+- The device can be lost: a driver reset, or the GPU out of memory. Skia then replaces it with a new device (see [device loss](#device-loss)). The imported `GPUDevice` does not learn of the loss (its `lost` promise never settles) and everything created on it is gone: import the new device and create your resources again, with `useGpu()` in React or `Skia.gpu.lost` elsewhere.
 - `navigator.gpu.requestAdapter()` and `requestDevice()` still work as usual. Use a device of your own when you want your GPU work isolated from Skia's command queue, but keep in mind that a texture created on another device cannot be shared with Skia.
 
 ```tsx

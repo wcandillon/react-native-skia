@@ -62,19 +62,25 @@ describe("Texture interop (Graphite)", () => {
         }
         dst.getCanvas().drawImage(roundTripped, 0, 0);
         dst.flush();
-        const pixels = dst.getCanvas().readPixels(0, 0, {
-          width: size,
-          height: size,
-          colorType: ctx.colorType,
-          alphaType: ctx.alphaType,
-        });
-        if (!pixels) {
-          return "readPixels returned null";
-        }
-        const px = (x: number, y: number) =>
-          Array.from(pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4));
-        // One sample from the center of each half.
-        return [...px(16, 32), ...px(48, 32)];
+        return dst
+          .getCanvas()
+          .readPixels(0, 0, {
+            width: size,
+            height: size,
+            colorType: ctx.colorType,
+            alphaType: ctx.alphaType,
+          })
+          .then((pixels) => {
+            if (!pixels) {
+              return "readPixels returned null";
+            }
+            const px = (x: number, y: number) =>
+              Array.from(
+                pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+              );
+            // One sample from the center of each half.
+            return [...px(16, 32), ...px(48, 32)];
+          });
       },
       { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
     );
@@ -124,20 +130,24 @@ describe("Texture interop (Graphite)", () => {
           }
           dst.getCanvas().drawImage(image, 0, 0);
           dst.flush();
-          const pixels = dst.getCanvas().readPixels(0, 0, {
-            width: size,
-            height: size,
-            colorType: ctx.colorType,
-            alphaType: ctx.alphaType,
-          });
-          if (!pixels) {
-            return "readPixels returned null";
-          }
-          const px = (x: number, y: number) =>
-            Array.from(
-              pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
-            );
-          return [...px(16, 32), ...px(48, 32)];
+          return dst
+            .getCanvas()
+            .readPixels(0, 0, {
+              width: size,
+              height: size,
+              colorType: ctx.colorType,
+              alphaType: ctx.alphaType,
+            })
+            .then((pixels) => {
+              if (!pixels) {
+                return "readPixels returned null";
+              }
+              const px = (x: number, y: number) =>
+                Array.from(
+                  pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+                );
+              return [...px(16, 32), ...px(48, 32)];
+            });
         },
         { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
       );

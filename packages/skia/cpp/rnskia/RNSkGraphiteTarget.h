@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <deque>
 #include <functional>
@@ -12,6 +13,7 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
+#include "RNSkGpuActivity.h"
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkWindowSurface.h"
@@ -22,6 +24,7 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImageInfo.h"
+#include "include/core/SkSurfaceProps.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/TextureInfo.h"
@@ -159,6 +162,17 @@ public:
     _highBitDepth = highBitDepth;
   }
 
+  /**
+   Whether the next recordings use device independent fonts (see
+   recordingSurfacePropsLocked). Any thread; applies from the next recording
+   on. Returns whether the option changed.
+   */
+  bool setDeviceIndependentFonts(bool deviceIndependentFonts) {
+    std::lock_guard<std::mutex> lock(_stateMutex);
+    return std::exchange(_deviceIndependentFonts, deviceIndependentFonts) !=
+           deviceIndependentFonts;
+  }
+
   /** Current width of the target, in points. */
   float getWidth() {
     return resolveTargetInfo().width / _context->getPixelDensity();
@@ -172,13 +186,15 @@ public:
   /**
    Returns a canvas that records the next frame, in points, on the recorder
    of the calling thread (see DawnContext::getThreadRecorder): the render
-   thread pool records the declarative content of every view this way, each
-   job on whichever thread is free, so a view holds no recorder of its own
-   and the recorders of a few threads serve every view, with their caches
-   and atlases. finishRecording() snaps it, on the same thread, before the
-   thread records anything else (a recorder takes one deferred canvas at a
-   time). The canvas is deleted by finishRecording(). Throws while a
-   recording is already open, or while the view has no size.
+   thread pool records the declarative content of every view this way, a
+   view always on the same thread (see RNSkThreadPool::acquireLane), so a
+   view holds no recorder of its own and the recorders of a few threads
+   serve every view, each with a warm cache and atlases for its views.
+   finishRecording() snaps it, on the same thread, before the thread records
+   anything else (a recorder takes one deferred canvas at a time). The canvas
+   is deleted by finishRecording(). Returns nullptr while the view has no
+   size. Throws while a recording is already open, or when no deferred canvas
+   can be made.
    */
   SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
     auto target = resolveTargetInfo();
@@ -192,7 +208,7 @@ public:
    once the GPU device it was made for is lost: for JS, which records across
    calls (SkiaViewApi.makeGraphiteContext) and may open a recording on
    another target before finishing this one. Throws while a recording is
-   already open, while the view has no size, or when no recorder can be made.
+   already open, or when no recorder or deferred canvas can be made.
    */
   SkCanvas *beginRecording() {
     auto target = resolveTargetInfo();
@@ -227,6 +243,9 @@ public:
     _recording = false;
     auto *recorder = std::exchange(_openRecorder, nullptr);
     auto owner = std::move(_openOwner);
+    // The snap compiles the pipelines the frame needs, inline: GPU work the
+    // warmup stays behind (see RNSkGpuActivity).
+    RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
     if (recording == nullptr) {
       throw std::runtime_error(
@@ -251,7 +270,12 @@ public:
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
+      // Counted before anything can be done with it, so pendingFrames()
+      // never reads below zero.
+      _submitted.fetch_add(1, std::memory_order_relaxed);
       if (!recording->isCurrent()) {
+        // Dropped, with whatever waited: done, as far as pacing goes.
+        _done.fetch_add(_queue.size() + 1, std::memory_order_release);
         _queue.clear();
         return;
       }
@@ -327,11 +351,56 @@ public:
     return !_queue.empty();
   }
 
+  /**
+   Main thread. `count` recordings taken from the queue are done: presented,
+   or dropped by the present for a size the window no longer has. The same
+   signal the declarative producer paces on (RNSkGraphiteProducer::
+   onFramePresented).
+   */
+  void onRecordingsDone(size_t count) {
+    _done.fetch_add(count, std::memory_order_release);
+  }
+
+  /**
+   Any thread. Recordings submitted and not yet presented (or dropped). A
+   client recording on every vsync keeps this at or below a budget, as the
+   declarative producer does with kMaxQueued, so that a GPU-bound view does
+   not build a queue that is never dropped.
+   */
+  uint64_t pendingFrames() const {
+    const auto done = _done.load(std::memory_order_acquire);
+    const auto submitted = _submitted.load(std::memory_order_relaxed);
+    return submitted > done ? submitted - done : 0;
+  }
+
 private:
   /**
+   The surface props a recording is made with, under the state lock. With
+   the defaults Graphite rasterizes a glyph for the exact transform it is
+   drawn with, so text that rotates or scales every frame is masked again,
+   and its blobs rebuilt (findOrCreateBlob), on every frame. With device
+   independent fonts (the deviceIndependentFonts prop), glyphs in the SDF
+   size range are rasterized once as distance fields and reused under any
+   rotation or scale; the smallest sizes keep using masks, and the largest
+   paths, as with the defaults. It is opt-in: distance fields cost more GPU
+   time per glyph than masks, which text that does not rotate or scale pays
+   for nothing (1.3 to 1.9 times the GPU time on 4,000 to 12,000 translating
+   blobs on an iPhone 14 Pro). The pixel geometry stays unknown either way:
+   the target may be translucent or composited, and the recording is
+   replayed onto whatever texture the view has at that point, so LCD text is
+   never an option here.
+   */
+  SkSurfaceProps recordingSurfacePropsLocked() const {
+    return SkSurfaceProps(_deviceIndependentFonts
+                              ? SkSurfaceProps::kUseDeviceIndependentFonts_Flag
+                              : 0,
+                          kUnknown_SkPixelGeometry);
+  }
+
+  /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
-   recorder alive when it is the target's own. Called with the state lock
-   held.
+   recorder alive when it is the target's own. Returns nullptr while the view
+   has no size. Called with the state lock held.
    */
   SkCanvas *openRecordingLocked(skgpu::graphite::Recorder *recorder,
                                 uint64_t generation,
@@ -342,12 +411,14 @@ private:
                                "call finishRecording() first.");
     }
     if (target.width <= 0 || target.height <= 0) {
-      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
+      return nullptr;
     }
     auto imageInfo = SkImageInfo::Make(
         target.width, target.height, target.colorType, kPremul_SkAlphaType,
         DawnUtils::viewColorSpace(target.useP3ColorSpace));
-    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo);
+    auto surfaceProps = recordingSurfacePropsLocked();
+    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo,
+                                                &surfaceProps);
     if (canvas == nullptr) {
       throw std::runtime_error(
           "SkiaGraphiteView: could not create a deferred canvas.");
@@ -369,7 +440,9 @@ private:
    JS measured; in the last two cases with the format and the color space
    the surface has, or will have: the bit depth the platform view knows
    (the one of its backing view, which keeps it, see SkiaView.java), else
-   the one the props call for, following the same rules.
+   the one the props call for, following the same rules; the color space
+   the platform view knows (the colorSpace prop, see SkiaView.mm), else
+   the platform's default.
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkWindowSurface> surface;
@@ -416,7 +489,11 @@ private:
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
-    info.useP3ColorSpace = _context->prefersP3ColorSpace();
+    bool useP3ColorSpace = _context->prefersP3ColorSpace();
+    if (surface) {
+      surface->getUseP3ColorSpace(&useP3ColorSpace);
+    }
+    info.useP3ColorSpace = useP3ColorSpace;
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,
@@ -444,11 +521,16 @@ private:
   float _layoutHeight = 0;
   bool _opaque = false;
   bool _highBitDepth = false;
+  bool _deviceIndependentFonts = false;
 
   // Hand-off to the main thread.
   std::mutex _queueMutex;
   std::deque<std::shared_ptr<RNSkGraphiteRecording>> _queue;
   std::function<void()> _requestFrame;
+
+  // Pacing counters, see pendingFrames().
+  std::atomic<uint64_t> _submitted{0};
+  std::atomic<uint64_t> _done{0};
 };
 
 /**

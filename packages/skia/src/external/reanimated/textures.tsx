@@ -28,21 +28,28 @@ const createTextureFromImage = (
   }
 };
 
+const renderPicture = (picture: SkPicture, size: SkSize) => {
+  "worklet";
+  const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
+  const canvas = surface.getCanvas();
+  canvas.drawPicture(picture);
+  surface.flush();
+  return surface.makeImageSnapshot();
+};
+
 const createTexture = (
   texture: SharedValue<SkImage | null>,
   picture: SkPicture,
   size: SkSize
 ) => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
-  const canvas = surface.getCanvas();
-  canvas.drawPicture(picture);
-  surface.flush();
-  texture.value = surface.makeImageSnapshot();
-  if (Platform.OS === "web") {
-    texture.value = texture.value.makeRasterImageSync();
-  }
+  texture.value = renderPicture(picture, size);
 };
+
+// On the web a WebGL texture belongs to the context that made it: the
+// texture is a CPU copy, drawable by any canvas, read back asynchronously.
+const createRasterTexture = (picture: SkPicture, size: SkSize) =>
+  renderPicture(picture, size).makeRasterImage();
 
 export const useTexture = (
   element: ReactElement,
@@ -74,9 +81,32 @@ export const usePictureAsTexture = (
   // replaced, it is made again on the new one.
   const gpu = useGpu();
   useEffect(() => {
-    if (picture !== null) {
-      Worklets.scheduleOnUI(createTexture, texture, picture, size);
+    if (picture === null) {
+      return undefined;
     }
+    if (Platform.OS === "web") {
+      // Readbacks settle in any order: only the latest picture's may land,
+      // and a failed one (a lost WebGL context) leaves no texture rather
+      // than an unhandled rejection.
+      let current = true;
+      createRasterTexture(picture, size).then(
+        (raster) => {
+          if (current) {
+            texture.value = raster;
+          }
+        },
+        () => {
+          if (current) {
+            texture.value = null;
+          }
+        }
+      );
+      return () => {
+        current = false;
+      };
+    }
+    Worklets.scheduleOnUI(createTexture, texture, picture, size);
+    return undefined;
   }, [picture, size, texture, gpu]);
   return texture;
 };

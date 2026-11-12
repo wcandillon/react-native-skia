@@ -22,6 +22,7 @@ import {
   Glassmorphism,
   Neumorphism,
   PerformanceDrawingTest,
+  TextBlobsBenchmark,
   Wallpaper,
   Vertices,
   Wallet,
@@ -36,6 +37,7 @@ import {
   HighBitDepth,
   Graphite,
   GraphiteCanvasExample,
+  BackgroundGpu,
   AndroidViews,
 } from "./Examples";
 import { CI, Tests } from "./Tests";
@@ -44,10 +46,20 @@ import type { StackParamList } from "./types";
 import { useAssets } from "./Tests/useAssets";
 import { Chess } from "./Examples/Chess";
 import { apiScreenPaths } from "./Examples/API/linking";
+import { Benchmark } from "./Examples/Benchmark";
+import { BAKED_PLAN } from "./Examples/Benchmark/plan";
 import "./resolveAssetSourcePolyfill";
 // The two lines below are needed by three.js
 import "fast-text-encoding";
 window.parent = window;
+
+// A benchmark build (benchmarks/run.mjs) opens straight on its screen.
+const initialRoute = (() => {
+  if (BAKED_PLAN.autostart) {
+    return "Benchmark";
+  }
+  return CI ? "Tests" : "Home";
+})();
 
 const linking: LinkingOptions<StackParamList> = {
   config: {
@@ -75,6 +87,8 @@ const linking: LinkingOptions<StackParamList> = {
       Animation: "animation",
       Reanimated: "reanimated",
       Performance: "performance",
+      TextBlobs: "text-blobs",
+      Benchmark: "benchmark",
       Tests: "test",
       Transitions: "transitions",
       Stickers: "stickers",
@@ -86,6 +100,7 @@ const linking: LinkingOptions<StackParamList> = {
       Graphite: "graphite",
       GraphiteCanvas: "graphite-canvas",
       AndroidViews: "android-views",
+      BackgroundGpu: "background-gpu",
     },
   },
   // react-native-test-app registers its bundle id as the iOS URL scheme, and
@@ -97,6 +112,9 @@ const linking: LinkingOptions<StackParamList> = {
     "rnskia://",
     "com.microsoft.ReactTestApp://",
     "com.microsoft.reacttestapp://",
+    // Device builds signed with another bundle id register that id instead.
+    "com.microsoft.ReactTestAppSkia42://",
+    "com.microsoft.reacttestappskia42://",
   ],
 };
 
@@ -132,7 +150,7 @@ const App = () => {
             screenOptions={{
               headerLeft: HeaderLeft,
             }}
-            initialRouteName={CI ? "Tests" : "Home"}
+            initialRouteName={initialRoute}
           >
             <Stack.Screen
               name="Home"
@@ -242,6 +260,16 @@ const App = () => {
               name="Performance"
               component={PerformanceDrawingTest}
             />
+            <Stack.Screen
+              name="TextBlobs"
+              component={TextBlobsBenchmark}
+              options={{ title: "🔤 Text Blobs" }}
+            />
+            <Stack.Screen
+              name="Benchmark"
+              component={Benchmark}
+              options={{ headerShown: !BAKED_PLAN.autostart }}
+            />
             <Stack.Screen name="Pictures" component={Pictures} />
             <Stack.Screen
               name="WebGPU"
@@ -257,6 +285,11 @@ const App = () => {
               component={GraphiteCanvasExample}
             />
             <Stack.Screen name="AndroidViews" component={AndroidViews} />
+            <Stack.Screen
+              name="BackgroundGpu"
+              component={BackgroundGpu}
+              options={{ title: "🌙 Background GPU" }}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

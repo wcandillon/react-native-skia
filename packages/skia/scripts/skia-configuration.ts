@@ -1,3 +1,5 @@
+import fs from "fs";
+import { execSync } from "child_process";
 import path from "path";
 
 import { $, fileOps } from "./utils";
@@ -310,10 +312,43 @@ const copyModule = (module: string) => {
   fileOps.cp(srcDir, destDir);
 };
 
+// Dawn headers: from the Dawn built locally with `yarn build-dawn` when there is
+// one (it is what the native builds then link), otherwise from the
+// react-native-webgpu-dawn package, the same way Gradle and the podspec pick the
+// library.
+const resolveDawnInclude = () => {
+  const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
+  if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
+    console.log(
+      "   📦 Copying Dawn headers from the local build (libs/dawn)..."
+    );
+    return localDawnInclude;
+  }
+  let dawnPackage: string;
+  try {
+    dawnPackage = path.dirname(
+      require.resolve("react-native-webgpu-dawn/package.json")
+    );
+  } catch (e) {
+    throw new Error(
+      "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
+    );
+  }
+  console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
+  return path.join(dawnPackage, "include");
+};
+
 export const copyHeaders = () => {
-  const fs = require("fs");
   console.log("⚙️ Copying Skia headers...");
   process.chdir(PackageRoot);
+
+  // Sources first: a run that cannot copy leaves the current headers in place.
+  if (!fs.existsSync("../../externals/skia/include")) {
+    throw new Error(
+      "No Skia headers found in externals/skia: check out the submodules with `git submodule update --init --recursive`"
+    );
+  }
+  const dawnInclude = resolveDawnInclude();
 
   console.log("   Cleaning up existing directories...");
   fileOps.rm("./cpp/skia");
@@ -338,32 +373,7 @@ export const copyHeaders = () => {
     );
   }
 
-  // Dawn headers: from the Dawn built locally with `yarn build-dawn` when there
-  // is one (it is what the native builds then link), otherwise from the
-  // react-native-webgpu-dawn package, the same way Gradle and the podspec pick
-  // the library.
   {
-    const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
-    let dawnInclude: string;
-    if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
-      console.log(
-        "   📦 Copying Dawn headers from the local build (libs/dawn)..."
-      );
-      dawnInclude = localDawnInclude;
-    } else {
-      let dawnPackage: string;
-      try {
-        dawnPackage = path.dirname(
-          require.resolve("react-native-webgpu-dawn/package.json")
-        );
-      } catch (e) {
-        throw new Error(
-          "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
-        );
-      }
-      console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
-      dawnInclude = path.join(dawnPackage, "include");
-    }
     fileOps.mkdir("./cpp/dawn/include");
     fileOps.cp(path.join(dawnInclude, "dawn"), "./cpp/dawn/include/dawn");
     fileOps.cp(path.join(dawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
@@ -545,5 +555,50 @@ export const copyHeaders = () => {
     );
     process.exit(1);
   }
+  applyPatchesToHeaders();
   console.log("✅ Skia headers copied to ./cpp/skia");
+};
+
+// build-skia applies scripts/skia-*.patch to the Skia checkout before it
+// compiles, so the prebuilt binaries are built from patched headers. The
+// copies above come from the unpatched submodule: apply the hunks of the
+// patches that touch a copied file, or the wrapper compiles against
+// declarations the binaries do not define (e.g. the SkSurfaceProps argument
+// of Recorder::makeDeferredCanvas, an undefined symbol at link time).
+const applyPatchesToHeaders = () => {
+  const copiedRoot = path.join(PackageRoot, "cpp/skia");
+  const patches = fs
+    .readdirSync(__dirname)
+    .filter((f) => f.startsWith("skia-") && f.endsWith(".patch"))
+    .sort();
+  for (const name of patches) {
+    const sections = fs
+      .readFileSync(path.join(__dirname, name), "utf-8")
+      .split(/^(?=diff --git )/m)
+      .filter((section) => {
+        const target = section.match(/^diff --git a\/\S+ b\/(\S+)/)?.[1];
+        return target && fs.existsSync(path.join(copiedRoot, target));
+      });
+    if (sections.length === 0) {
+      continue;
+    }
+    const filtered = path.join(copiedRoot, `.${name}`);
+    fs.writeFileSync(filtered, sections.join(""));
+    try {
+      // Inside this repository, git apply silently skips paths outside the
+      // current directory and the ignored cpp/skia. Stopping repository
+      // discovery at cpp/skia makes it patch the files there like `patch -p1`.
+      execSync(`git apply ${filtered}`, {
+        cwd: copiedRoot,
+        env: {
+          ...process.env,
+          GIT_CEILING_DIRECTORIES: path.dirname(copiedRoot),
+        },
+        stdio: "inherit",
+      });
+    } finally {
+      fs.rmSync(filtered);
+    }
+    console.log(`   🩹 ${name} applied to the copied headers`);
+  }
 };

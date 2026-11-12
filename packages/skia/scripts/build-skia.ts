@@ -153,8 +153,39 @@ export const copyLib = (
  * - apple-ios: arm64-iphoneos + lipo'd iphonesimulator (arm64 + x64) + lipo'd maccatalyst (arm64 + x64)
  * - apple-tvos: arm64-tvos + lipo'd tvsimulator (arm64 + x64)
  * - apple-macos: lipo'd macosx (arm64 + x64)
+ * A slice whose targets were not built (e.g. `yarn build-skia
+ * apple-ios-arm64-iphoneos` to test on a device) is left out, and a lipo'd
+ * slice keeps the architectures that were built.
  */
-const buildXCFramework = (platformName: ApplePlatformName) => {
+const xcframeworkSlices: Record<
+  ApplePlatformName,
+  { name: string; targets: string[] }[]
+> = {
+  "apple-ios": [
+    { name: "arm64-iphoneos", targets: ["arm64-iphoneos"] },
+    {
+      name: "iphonesimulator",
+      targets: ["x64-iphonesimulator", "arm64-iphonesimulator"],
+    },
+    {
+      name: "maccatalyst",
+      targets: ["x64-maccatalyst", "arm64-maccatalyst"],
+    },
+  ],
+  "apple-tvos": [
+    { name: "arm64-tvos", targets: ["arm64-tvos"] },
+    {
+      name: "tvsimulator",
+      targets: ["x64-tvsimulator", "arm64-tvsimulator"],
+    },
+  ],
+  "apple-macos": [{ name: "macosx", targets: ["x64-macosx", "arm64-macosx"] }],
+};
+
+const buildXCFramework = (
+  platformName: ApplePlatformName,
+  builtTargets: string[]
+) => {
   const config = configurations[platformName];
   const { outputNames } = config;
 
@@ -172,39 +203,23 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     console.log(`🍏 Building XCFramework for ${name} (${platformName})`);
 
     let xcframeworkCmd = "xcodebuild -create-xcframework ";
-
-    if (shortPlatform === "ios") {
-      // iOS: device + lipo'd simulator (arm64 + x64) + lipo'd Mac Catalyst (arm64 + x64)
-      $(`mkdir -p ${prefix}/iphonesimulator`);
-      $(`rm -rf ${prefix}/iphonesimulator/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-iphonesimulator/${name} ${prefix}/arm64-iphonesimulator/${name} -output ${prefix}/iphonesimulator/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/arm64-iphoneos/${name} `;
-      xcframeworkCmd += `-library ${prefix}/iphonesimulator/${name} `;
-      $(`mkdir -p ${prefix}/maccatalyst`);
-      $(`rm -rf ${prefix}/maccatalyst/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-maccatalyst/${name} ${prefix}/arm64-maccatalyst/${name} -output ${prefix}/maccatalyst/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/maccatalyst/${name} `;
-    } else if (shortPlatform === "tvos") {
-      // tvOS: device + lipo'd simulator (arm64 + x64)
-      $(`mkdir -p ${prefix}/tvsimulator`);
-      $(`rm -rf ${prefix}/tvsimulator/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-tvsimulator/${name} ${prefix}/arm64-tvsimulator/${name} -output ${prefix}/tvsimulator/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/arm64-tvos/${name} `;
-      xcframeworkCmd += `-library ${prefix}/tvsimulator/${name} `;
-    } else if (shortPlatform === "macos") {
-      // macOS: lipo arm64 + x64
-      $(`mkdir -p ${prefix}/macosx`);
-      $(`rm -rf ${prefix}/macosx/${name}`);
-      $(
-        `lipo -create ${prefix}/x64-macosx/${name} ${prefix}/arm64-macosx/${name} -output ${prefix}/macosx/${name}`
-      );
-      xcframeworkCmd += `-library ${prefix}/macosx/${name} `;
+    for (const slice of xcframeworkSlices[platformName]) {
+      const inputs = slice.targets
+        .filter((target) => builtTargets.includes(target))
+        .map((target) => `${prefix}/${target}/${name}`);
+      if (inputs.length === 0) {
+        continue;
+      }
+      if (slice.targets.length === 1) {
+        xcframeworkCmd += `-library ${inputs[0]} `;
+      } else {
+        $(`mkdir -p ${prefix}/${slice.name}`);
+        $(`rm -rf ${prefix}/${slice.name}/${name}`);
+        $(
+          `lipo -create ${inputs.join(" ")} -output ${prefix}/${slice.name}/${name}`
+        );
+        xcframeworkCmd += `-library ${prefix}/${slice.name}/${name} `;
+      }
     }
 
     const [lib] = name.split(".");
@@ -496,13 +511,21 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
     const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
     $(`git apply ${catalystPatch}`);
-    // A runtime effect local named like main's parameters ("pos") broke
-    // Graphite's SkSL, and the failed pipeline then crashed insertRecording.
-    const runtimeEffectPatch = path.join(
+    // A pipeline that failed to build crashed insertRecording instead of
+    // failing it (https://skia-review.googlesource.com/c/skia/+/1421717).
+    const nullPipelinePatch = path.join(
       __dirname,
-      "skia-graphite-runtime-effect-names.patch"
+      "skia-graphite-null-pipeline.patch"
     );
-    $(`git apply ${runtimeEffectPatch}`);
+    $(`git apply ${nullPipelinePatch}`);
+    // Recorder::makeDeferredCanvas takes the surface props the canvas a view
+    // records into draws with, e.g. device independent fonts
+    // (https://skia-review.googlesource.com/c/skia/+/1421716).
+    const deferredCanvasPropsPatch = path.join(
+      __dirname,
+      "skia-graphite-deferred-canvas-props.patch"
+    );
+    $(`git apply ${deferredCanvasPropsPatch}`);
     // The GN build compiles the same Dawn checkout as build-dawn.ts.
     // Without this, Mac Catalyst compilation will be failed.
     applyDawnPatches();
@@ -541,12 +564,13 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   }
 
   // Build XCFrameworks for each Apple platform that was built
-  const applePlatforms = buildTargets
-    .filter((bt) => isApplePlatform(bt.platform))
-    .map((bt) => bt.platform as ApplePlatformName);
-
-  for (const applePlatform of applePlatforms) {
-    buildXCFramework(applePlatform);
+  for (const { platform, targets } of buildTargets) {
+    if (isApplePlatform(platform)) {
+      buildXCFramework(
+        platform as ApplePlatformName,
+        targets || mapKeys(configurations[platform].targets).map(String)
+      );
+    }
   }
 
   copyHeaders();

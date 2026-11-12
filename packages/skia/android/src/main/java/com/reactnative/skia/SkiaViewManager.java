@@ -40,13 +40,18 @@ public class SkiaViewManager extends ReactViewManager implements SkiaViewManager
     public void setNativeId(@NonNull ReactViewGroup view, @Nullable String nativeId) {
         super.setNativeId(view, nativeId);
         int nativeIdResolved = Integer.parseInt(nativeId);
-        ((SkiaView) view).registerView(nativeIdResolved);
+        ((SkiaView) view).bindNativeId(nativeIdResolved);
     }
 
     @ReactProp(name = "highBitDepth")
     public void setHighBitDepth(SkiaView view, boolean value) {
         view.setHighBitDepth(value);
     }
+
+    // Android renders in sRGB whatever the prop says (see
+    // JniSkiaView::attachWindow).
+    @ReactProp(name = "colorSpace")
+    public void setColorSpace(SkiaView view, @Nullable String value) {}
 
     @ReactProp(name = "androidBackingView")
     public void setAndroidBackingView(SkiaView view, @Nullable String value) {

@@ -1,12 +1,13 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library), the Android build without its emulator run, and the SwiftPM
-# build. The native builds and the emulator/simulator runs happen on pull
-# requests and in the merge queue, so a merge does not pay for the full suite
-# twice. The Android build runs on push because a pull request can only
-# restore caches saved by its own earlier runs or by its base branch (see
-# build-test-android). The SwiftPM build runs on push, and on the pull
-# requests whose diff can affect it (see spm-changes).
+# build-library), the Android build (with its emulator run on main only), the
+# SwiftPM build, and (on main only) the macOS build. The native builds and
+# the emulator/simulator runs happen on pull requests and in the merge queue,
+# so a merge does not pay for the full suite twice. The Android build runs on
+# push because a pull request can only restore caches saved by its own
+# earlier runs or by its base branch (see build-test-android). The SwiftPM
+# build runs on push, and on the pull requests whose diff can affect it (see
+# spm-changes).
 on:
   push:
     branches:
@@ -129,9 +130,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # On pull requests and in the merge queue this builds the example app and
-  # runs the e2e suite on the emulator. On push it stops after the build: its
-  # only purpose there is to save the Gradle cache and the ccache on the base
-  # branch, where every pull request can restore them. Without that producer
+  # runs the e2e suite on the emulator. On push it saves the Gradle cache and
+  # the ccache on the base branch, where every pull request can restore them,
+  # and on main it also runs the emulator suite, so main itself has Android
+  # e2e coverage; on next it stops after the build. Without that producer
   # each pull request started cold (0 ccache hits, 28 minutes of C++) and saved
   # its own 1.8 GB Gradle cache, which kept the repository above its 10 GB
   # cache limit and evicted every entry within hours.
@@ -163,7 +165,7 @@ jobs:
           swap-storage: false
 
       - name: Install JDK
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -252,24 +254,24 @@ jobs:
           path: ~/.cache/ccache
           key: ${{ runner.os }}-ccache-android-${{ github.sha }}
 
-      # Everything below is the emulator run, skipped on push (see the job
-      # comment).
+      # Everything below is the emulator run, skipped on pushes other than to
+      # main (see the job comment).
       - name: Unit test the Android library
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         working-directory: apps/example/android
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
         run: ./gradlew :react-native-skia:testDebugUnitTest
 
       - name: Upload Android APK artifact
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         with:
           name: android-example-apk
           path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Enable KVM group perms
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -280,7 +282,7 @@ jobs:
       # while the emulator boots, so the app's own first request is served in
       # seconds instead of minutes.
       - name: Start Package Manager
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         working-directory: apps/example/
         run: |
           E2E=true yarn start &
@@ -295,9 +297,11 @@ jobs:
       # The whole e2e suite, as the iOS job does. `yarn e2e` sets E2E=true,
       # which is what makes the tests run on the emulator: without it the
       # harness uses CanvasKit in Node and never talks to the app. Paragraphs
-      # stays excluded, as it was before the Graphite switch.
+      # stays excluded, as it was before the Graphite switch. ClippedSubviews
+      # is excluded on the emulator only, where it is flaky; it still runs on
+      # iOS and on a physical Android device.
       - name: Run Android Emulator Tests
-        if: github.event_name != 'push'
+        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -317,26 +321,26 @@ jobs:
             # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
             ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
             adb wait-for-device shell monkey -p com.reactnativeskia.example 1
-            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns Paragraphs
+            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns "Paragraphs|ClippedSubviews"
 
       # The *.test.png images of failed checks: a failed comparison's, and
       # the image of a check without a reference.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && github.event_name != 'push'
+        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: packages/skia/src/__tests__/snapshots/**/*.test.png
           name: tests-snapshots-screenshots
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && github.event_name != 'push'
+        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: logcat.txt
           name: android-logcat
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: failure() && github.event_name != 'push'
+        if: failure() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
         with:
           path: apps/docs/static/
           name: tests-docs-screenshots
@@ -353,8 +357,8 @@ jobs:
       #   8082   4243         skia-ci     (this job)
       #   8083   4244         webgpu-ci   (react-native-webgpu)
       #   8084   4245         skia-agent  (agent.yml)
-      # RCT_METRO_PORT is compiled into the app by xcodebuild; E2E_PORT is
-      # inlined into the JS bundle (useClient) and read by the jest
+      # The app finds Metro through the RCT_jsLocation launch argument; E2E_PORT
+      # is inlined into the JS bundle (useClient) and read by the jest
       # globalSetup, so the app and the test server agree on the port.
       METRO_PORT: 8082
       E2E_PORT: 4243
@@ -419,7 +423,6 @@ jobs:
       # Plain xcodebuild rather than `yarn ios`: the CLI insists on opening
       # Simulator.app from the Xcode bundle, which Xcode 27 no longer ships
       # there, and a headless booted simulator is all the tests need.
-      # RCT_METRO_PORT feeds React-Core's GCC_PREPROCESSOR_DEFINITIONS.
       # The derived data lives outside the workspace, which the checkout
       # cleans on every run: kept there, the build is incremental and only
       # the sources that changed since the previous run are compiled.
@@ -434,7 +437,6 @@ jobs:
             -destination "id=$IOS_SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            RCT_METRO_PORT=$METRO_PORT \
             build | tee xcodebuild.log | xcpretty || {
               # xcpretty drops some errors (e.g. project-level ones), so show
               # them from the raw log.
@@ -442,10 +444,16 @@ jobs:
               exit 1
             }
 
+      # React Native's prebuilt core, which the example installs since 0.88, is
+      # compiled with Metro on 8081: an RCT_METRO_PORT build setting no longer
+      # reaches it.
+      # RCTBundleURLProvider reads the RCT_jsLocation user default first, and
+      # `-key value` launch arguments land in the user defaults.
       - name: Install and launch app on simulator
         run: |
           xcrun simctl install "$IOS_SIMULATOR_UDID" "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ReactTestApp.app"
-          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp
+          xcrun simctl launch "$IOS_SIMULATOR_UDID" com.microsoft.ReactTestApp \
+            -RCT_jsLocation "localhost:$METRO_PORT"
 
       - name: Run e2e tests
         working-directory: packages/skia
@@ -470,8 +478,17 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
 
+  # Builds the example for macOS on pushes to main (and manual runs) only, on
+  # a hosted Mac so it never holds the self-hosted one. Pull requests and the
+  # merge queue skip it, which still satisfies the required check:
+  # build-test-ios already compiles the same Apple and C++ sources, and the
+  # apple-sdks workflow checks the platform-specific Apple code against the
+  # iOS, macOS and tvOS SDKs on every pull request that touches it. What only
+  # this job catches (a macOS link error, react-native-macos drift) shows up
+  # on main instead.
   build-test-macos:
-    runs-on: [self-hosted, macOS]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: macos-latest
     timeout-minutes: 60
     steps:
       - name: Checkout

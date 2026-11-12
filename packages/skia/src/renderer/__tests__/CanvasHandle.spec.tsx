@@ -25,7 +25,12 @@ jest.doMock("../../external", () => ({ HAS_REANIMATED_3: true }));
 
 jest.doMock("../../views/api", () => {
   let nextNativeId = 1000;
-  return { SkiaViewApi: { allocateNativeId: () => nextNativeId++ } };
+  return {
+    SkiaViewApi: {
+      allocateNativeId: () => nextNativeId++,
+      setJsiProperty: () => {},
+    },
+  };
 });
 
 jest.doMock("../../skia", () => ({ Skia: {} }));
