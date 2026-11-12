@@ -40,6 +40,9 @@ Please [make a PR](https://github.com/wcandillon/react-native-skia/edit/main/app
 ## ✨ Image Filters
 * 🔘 [Neumorphism in React Native ](https://www.youtube.com/watch?v=GFssmWUhwww)
 
+## 🖼️ Image Processing
+* 📦 [Compressing a React Native image to a strict byte budget with Skia](https://github.com/MarshallBear1/juno-open-health-tools/blob/main/tutorials/react-native-skia-image-byte-budget.md)
+
 ## 🌈 Gradients
 * 🌈 [Introducing Gen-Z Mode ](https://www.youtube.com/watch?v=0FC8O9mRUmg)
 * 📱 [iPhone wallpapers, but in React Native Skia](https://www.youtube.com/watch?v=Apqd749v34I)
