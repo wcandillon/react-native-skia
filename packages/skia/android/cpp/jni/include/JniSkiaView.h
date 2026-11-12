@@ -162,12 +162,33 @@ private:
       : _manager(skiaManager->cthis()->getSkiaManager()) {
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
+    // The Java view, which is called back for its frame rate vote and for
+    // the first frame of a SurfaceView's window, is reached through a weak
+    // reference: it owns this object through its hybrid data, and the
+    // surface is shared with the view and can outlive this object.
+    auto javaView = std::make_shared<JavaView>(jThis);
+    // The first frame presented into a SurfaceView's window, on the present
+    // thread: the Java view opens its draw gate on the main thread. A Java
+    // call from the native thread, which is attached (see
+    // attachPresentThread), as in PresentHost::presentFrame.
+    _surface->setDidPresent([javaView,
+                             awaitingFirstFrame = _awaitingFirstFrame]() {
+      if (!*awaitingFirstFrame) {
+        return;
+      }
+      *awaitingFirstFrame = false;
+      callJavaFromPresentThread([&]() {
+        jni::JniLocalScope localScope(jni::Environment::current(), 4);
+        if (auto javaPart = javaView->weak->lockLocal()) {
+          static const auto method =
+              javaPart->getClass()->getMethod<void()>("onFirstFramePresented");
+          method(javaPart);
+        }
+      });
+    });
     _view = std::make_shared<RNSkView>(context, _surface);
     // Tasks for the present thread go straight to it (see
-    // RNSkPresentThread.h). The Java view, which is called back for its
-    // frame rate vote, is reached through a weak reference: it owns this
-    // object through its hybrid data.
-    auto javaView = std::make_shared<JavaView>(jThis);
+    // RNSkPresentThread.h).
     auto runOnPresentThread = [](std::function<void()> task) {
       presentThread().post(std::move(task));
     };
@@ -357,6 +378,9 @@ private:
       releaseWindow(nullptr, ownedSurface);
       return;
     }
+    // A SurfaceView waits for its first frame before it lets the window show
+    // the surface (SkiaSurfaceView.surfaceRedrawNeededAsync).
+    *_awaitingFirstFrame = isSurface;
     _surface->attach(window, width, height, highBitDepth,
                      /* useP3ColorSpace= */ false,
                      [ownedSurface](void *nativeHandle) {
@@ -387,6 +411,10 @@ private:
   }
 
   std::weak_ptr<RNSkManager> _manager;
+  // Set when a SurfaceView's window is attached, cleared by its first present
+  // (see attachWindow, setDidPresent). Present thread, and shared with the
+  // surface, which can outlive this object.
+  std::shared_ptr<bool> _awaitingFirstFrame = std::make_shared<bool>(false);
   // Declared before the view, which unbinds itself from the surface when it
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;

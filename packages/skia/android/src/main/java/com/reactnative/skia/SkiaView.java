@@ -78,6 +78,13 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     // onto it. Written on the main thread, read on the present thread.
     private volatile int mSurfaceGeneration = 0;
 
+    // The draw gate's number for the SurfaceView surface the native side
+    // presents into (see SkiaSurfaceView.currentSurface), set by the posted
+    // attach or resize that hands the surface over (see postForSurfaceView),
+    // so that a first frame names the surface it went into, even one that went
+    // since (see onFirstFramePresented). Present thread.
+    private int mPresentingSurface = 0;
+
     // Props. opaque is applied in place, unless the buffer format implies it
     // (see setOpaque), and so are the z-order props where Android allows it
     // (see takesZOrder); the others are read once, when the backing view is
@@ -313,6 +320,17 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         });
     }
 
+    // Runs a SurfaceView's attach or resize on the present thread (see
+    // postForSurface), with the draw gate's number for the surface it hands
+    // over (see mPresentingSurface). Main thread.
+    private void postForSurfaceView(Runnable task) {
+        int surface = ((SkiaSurfaceView) mView).currentSurface();
+        postForSurface(() -> {
+            mPresentingSurface = surface;
+            task.run();
+        });
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -328,6 +346,18 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     }
 
     // Frames --------------------------------------------------------------
+
+    /**
+     * The first frame was presented into a SurfaceView's surface, the only
+     * window kind the native side reports it for. Present thread; called from
+     * native. The draw gate opens on the main thread, unless the surface went
+     * meanwhile.
+     */
+    @DoNotStrip
+    public void onFirstFramePresented() {
+        final int surface = mPresentingSurface;
+        post(() -> ((SkiaSurfaceView) mView).onFirstFramePresented(surface));
+    }
 
     /**
      * A frame went to the window. Only a SurfaceView votes (attached in
@@ -390,7 +420,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         }
         mSurfaceAttached = true;
         boolean highBitDepth = mSurfaceHighBitDepth;
-        postForSurface(() -> surfaceAvailable(surface, width, height, true, highBitDepth));
+        postForSurfaceView(() -> surfaceAvailable(surface, width, height, true, highBitDepth));
     }
 
     @Override
@@ -400,7 +430,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
             return;
         }
         boolean highBitDepth = mSurfaceHighBitDepth;
-        postForSurface(() -> surfaceSizeChanged(surface, width, height, true, highBitDepth));
+        postForSurfaceView(() -> surfaceSizeChanged(surface, width, height, true, highBitDepth));
     }
 
     // Main thread, before the platform destroys a SurfaceView's surface, which

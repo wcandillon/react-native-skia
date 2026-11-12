@@ -230,6 +230,15 @@ public:
    */
   RNSkWindowState readState(RNSkGraphiteTargetInfo *info);
 
+  /**
+   Installed by the platform view: called after each frame the window
+   presents, on the presenting thread, where a detach runs after it (see
+   detach). It must neither block nor call back into this surface.
+   */
+  void setDidPresent(std::function<void()> didPresent) {
+    _didPresent = std::move(didPresent);
+  }
+
   // RNSkSurface -------------------------------------------------------------
 
   /** Width of the window, in pixels; 0 without a window. Any thread. */
@@ -346,6 +355,12 @@ private:
       _requestRedraw();
     }
   }
+  // Tells the platform view a frame went to the window (see setDidPresent).
+  void didPresent() {
+    if (_didPresent) {
+      _didPresent();
+    }
+  }
 
   // The device the window is configured on, and its generation (see
   // DawnContext::generation()): a lost device is replaced, and the window
@@ -391,6 +406,7 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+  std::function<void()> _didPresent;
 
   // The thread the window belongs to (see the class comment).
   rnsurface::ThreadChecker _presentingThread;

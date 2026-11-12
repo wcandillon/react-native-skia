@@ -551,6 +551,7 @@ bool RNSkWindowSurface::presentTexture() {
   }
   _surface.Present();
   _showsFrame = true;
+  didPresent();
   return true;
 }
 
