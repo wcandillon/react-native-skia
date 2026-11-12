@@ -176,6 +176,7 @@ React Native WebGPU offers it as an opt-in on Android 10 and later; React Native
 
 `opaque` is a compositing hint, applied in place whenever it changes.
 On a `TextureView` it calls `setOpaque`, so the UI toolkit skips blending the view; on a `SurfaceView` it picks `PixelFormat.OPAQUE` or `PixelFormat.TRANSLUCENT`, so the compositor skips blending the layer and can show it through a hardware overlay.
+A `TextureView` always blends on Android 10, where the UI toolkit can leave an opaque one blank; a canvas that covers its bounds draws the same pixels.
 A translucent `SurfaceView` blends against what is below the window, usually black, rather than the React Native views beneath it, which are punched out: this is why a `SurfaceView` is opaque unless asked otherwise.
 
 ```tsx twoslash
