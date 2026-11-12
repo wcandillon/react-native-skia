@@ -1,47 +1,56 @@
 #pragma once
 
+#include <fbjni/fbjni.h>
+#include <jni.h>
+
 #include <utility>
 
-#include <fbjni/fbjni.h>
-
-#include "JsiSkDispatcher.h"
-#include "RNSkLog.h"
-#include "RNSkLooperTasks.h"
-
 namespace RNSkia {
-namespace jni = facebook::jni;
 
 /**
- * The JNI side of PresentThread, the thread every canvas presents on: the
- * thread runs its dispatcher's queue from its looper (see
- * Dispatcher::bindCurrentThread), so that it trims what it records once idle
- * (see RNSkThreadTrims). PresentThread binds it as the thread's first task,
- * where the looper can watch an eventfd.
+ * Hands a Java exception to the uncaught exception handler of the calling
+ * thread, as the runtime does for a thread of its own: the app's crash
+ * reporting gets the Java stack, and the default handler ends the process.
  */
-class JniPresentThread : public jni::JavaClass<JniPresentThread> {
-public:
-  static auto constexpr kJavaDescriptor =
-      "Lcom/reactnative/skia/PresentThread;";
+inline void reportUncaughtJavaException(JNIEnv *env, jthrowable throwable) {
+  jclass threadClass = env->FindClass("java/lang/Thread");
+  jmethodID currentThread = env->GetStaticMethodID(threadClass, "currentThread",
+                                                   "()Ljava/lang/Thread;");
+  jobject thread = env->CallStaticObjectMethod(threadClass, currentThread);
+  jmethodID getHandler =
+      env->GetMethodID(threadClass, "getUncaughtExceptionHandler",
+                       "()Ljava/lang/Thread$UncaughtExceptionHandler;");
+  jobject handler = env->CallObjectMethod(thread, getHandler);
+  jclass handlerClass =
+      env->FindClass("java/lang/Thread$UncaughtExceptionHandler");
+  jmethodID uncaughtException =
+      env->GetMethodID(handlerClass, "uncaughtException",
+                       "(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
+  env->CallVoidMethod(handler, uncaughtException, thread, throwable);
+  // A handler that returns, or throws itself, leaves the thread running.
+  env->ExceptionClear();
+  env->DeleteLocalRef(handlerClass);
+  env->DeleteLocalRef(handler);
+  env->DeleteLocalRef(thread);
+  env->DeleteLocalRef(threadClass);
+}
 
-  static void registerNatives() {
-    javaClassStatic()->registerNatives(
-        {makeNativeMethod("bindDispatcher", JniPresentThread::bindDispatcher)});
+/**
+ * Runs a call into Java made from the present thread, which is the native
+ * side's (see rnsurface::RenderThread): no Java frame is below it to take
+ * an exception the call throws, which fbjni turns into a C++ one. Left to
+ * unwind through the looper, that ends in std::terminate, a native abort
+ * with no Java stack; a Java thread would have reported it as uncaught,
+ * which is what happens here.
+ */
+template <typename Call> void callJavaFromPresentThread(Call &&call) {
+  try {
+    std::forward<Call>(call)();
+  } catch (const facebook::jni::JniException &exception) {
+    auto throwable = exception.getThrowable();
+    reportUncaughtJavaException(facebook::jni::Environment::current(),
+                                throwable.get());
   }
-
-private:
-  // On the present thread itself. What is posted to it wakes its looper
-  // through an eventfd, as the main thread's tasks do, so the posting thread
-  // calls no Java. Without one the thread runs no surface call that would run
-  // its queue, so it never trims.
-  static void bindDispatcher(jni::alias_ref<jclass>) {
-    auto scheduler = LooperTasks::schedulerForCurrentThread();
-    if (!scheduler) {
-      RNSkLogger::logToConsole("The present thread could not watch an eventfd: "
-                               "its recorders are not trimmed");
-      return;
-    }
-    Dispatcher::bindCurrentThread(std::move(scheduler));
-  }
-};
+}
 
 } // namespace RNSkia

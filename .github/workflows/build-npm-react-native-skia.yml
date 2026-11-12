@@ -59,3 +59,12 @@ jobs:
           NPM_TOKEN: ''
           NPM_CONFIG_PROVENANCE: true
 
+  # Deploy the documentation of the version that was just released. Only for
+  # main: 2.x would overwrite the site with the v2 documentation, which is
+  # served from the frozen docs-v2 branch.
+  docs:
+    needs: build
+    if: ${{ github.ref_name == 'main' }}
+    permissions:
+      contents: write # to push the site to the gh-pages branch
+    uses: ./.github/workflows/docs.yml

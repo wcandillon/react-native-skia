@@ -168,6 +168,30 @@ const fontMgr = useFonts({
 const font = matchFont(fontStyle, fontMgr);
 ```
 
+## Animated Text
+
+By default, a glyph is rasterized for the exact transform it is drawn with.
+Text that only moves reuses its glyphs, but text that rotates or scales on every frame is rasterized again on every frame, which quickly becomes the cost of the whole frame.
+With the `deviceIndependentFonts` prop of the canvas, glyphs are rasterized once as distance fields and reused under any rotation or scale: on 6,000 rotating text blobs, an iPhone 14 Pro goes from 4 to 30 frames per second, and a Pixel 8 from 5 to 25.
+It applies to all the text the canvas draws: `Text`, `Glyphs`, `TextPath`, `TextBlob` and paragraphs.
+
+```tsx twoslash
+import {Canvas, Text, matchFont} from "react-native-skia";
+
+const font = matchFont({ fontFamily: "sans-serif", fontSize: 32 });
+
+const Demo = () => (
+  <Canvas style={{ flex: 1 }} deviceIndependentFonts>
+    <Text x={32} y={64} text="Hello" font={font} transform={[{ rotate: 0.3 }]} />
+  </Canvas>
+);
+```
+
+It is off by default: distance fields cost more GPU time per glyph than regular glyphs and look slightly softer, which text that does not rotate or scale pays for nothing.
+Glyphs smaller than about 18 pixels are drawn as usual either way.
+The prop can be changed at any time, and the [Graphite View](/docs/canvas/graphite#animated-text) takes it too.
+It is ignored on the Web.
+
 ## Low-level API
 
 The basic usage of the system font manager is as follows.

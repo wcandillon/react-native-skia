@@ -101,6 +101,23 @@ describe("SkiaGraphiteView on the web", () => {
     await view.unmount();
   });
 
+  it("counts submitted recordings as pending until they are drawn", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountView();
+    const ctx = view.ref.current!.getContext();
+    expect(ctx.pendingFrames).toBe(0);
+    submitFrame(ctx);
+    submitFrame(ctx);
+    expect(ctx.pendingFrames).toBe(2);
+    await flushMicrotasks();
+    expect(ctx.pendingFrames).toBe(0);
+
+    await view.unmount();
+  });
+
   it("keeps a recording submitted while unmeasured and presents it on first resize", async () => {
     const { CanvasKitMock, rawCanvas } = installCanvasKit();
 
