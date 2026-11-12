@@ -63,12 +63,14 @@ public:
   void setTarget(std::shared_ptr<RNSkGraphiteTarget> target);
 
   /**
-   Takes ownership of the recorder (or releases it with nullptr). A recording
+   Takes the recorder to draw (or releases it with nullptr). A recording
    without shared values is played once into a picture: nothing will ever
    update it, and drawing a picture is cheaper than replaying commands. The
-   recorder is owned here rather than by a JS wrapper: its commands hold
-   every native resource the canvas draws (images, pictures, paths), and
-   tying their lifetime to the garbage collector of a runtime that rarely
+   recorder is owned on the native side, here and by the view registry
+   (which keeps it for the next view of a mounted canvas, see
+   RNSkViewRegistry), rather than by a JS wrapper: its commands hold every
+   native resource the canvas draws (images, pictures, paths), and tying
+   their lifetime to the garbage collector of a runtime that rarely
    allocates (the UI runtime) kept them resident long after unmount.
    */
   void setRecorder(std::shared_ptr<Recorder> recorder);

@@ -66,7 +66,6 @@ global.SkiaViewApi = {
     delete this.deferedPictures[nativeId];
   },
   // Native only: web views keep what they show while they exist.
-  retainView() {},
   releaseView() {},
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setJsiProperty(nativeId: number, name: string, value: any) {

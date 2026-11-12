@@ -19,6 +19,7 @@ import { androidNativeProps, useBackingViewWarning } from "../views/android";
 import type { AndroidCanvasProps, CanvasColorSpace } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
+import { useNativeViewId } from "../views/useNativeViewId";
 import type { NativeView } from "../views/measureLayout";
 import type { SkImage, SkRect, SkSize } from "../skia/types";
 import { SkiaSGRoot } from "../sksg/Reconciler";
@@ -112,7 +113,7 @@ const useCanvasRoot = ({
 }: Pick<CanvasProps, "children" | "deviceIndependentFonts" | "ref">) => {
   const viewRef = useRef<NativeView>(null);
   // Native ID
-  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
+  const nativeId = useNativeViewId();
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);

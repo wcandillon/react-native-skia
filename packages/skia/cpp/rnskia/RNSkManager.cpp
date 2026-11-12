@@ -51,9 +51,9 @@ RNSkManager::~RNSkManager() {
   RNSkGraphiteTargetRegistry::getInstance().clear();
   // Likewise for the view registry: Fabric tears the bundle's views down with
   // no ordering against this destructor, and their late unregistrations are
-  // no-ops (the views only hold the manager weakly). Dropped here, the
-  // entries of views torn down after this point, and the tombstones of the
-  // ones torn down before it, do not stay for the life of the process.
+  // no-ops (the views only hold the manager weakly). The components of the
+  // bundle never unmount either (the runtime is going away), so their
+  // entries are dropped here rather than kept for the life of the process.
   ViewRegistry::getInstance().clear();
   // Free up any references
   _viewApi = nullptr;

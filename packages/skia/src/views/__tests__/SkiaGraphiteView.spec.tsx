@@ -27,6 +27,7 @@ jest.mock("../api", () => {
       makeGraphiteContext: jest.fn(),
       destroyGraphiteContext: jest.fn(),
       setJsiProperty: jest.fn(),
+      releaseView: jest.fn(),
     },
   };
 });
@@ -36,6 +37,7 @@ const { SkiaViewApi } = jest.requireMock<{
     makeGraphiteContext: jest.Mock;
     destroyGraphiteContext: jest.Mock;
     setJsiProperty: jest.Mock;
+    releaseView: jest.Mock;
   };
 }>("../api");
 
@@ -77,6 +79,7 @@ beforeEach(() => {
   SkiaViewApi.makeGraphiteContext.mockReset();
   SkiaViewApi.destroyGraphiteContext.mockReset();
   SkiaViewApi.setJsiProperty.mockReset();
+  SkiaViewApi.releaseView.mockReset();
 });
 
 // A host laid out at 200 × 100 points and drawn at half that size: measured
@@ -182,5 +185,48 @@ describe("SkiaGraphiteView on native", () => {
       false
     );
     await unmount();
+  });
+
+  // The native side keeps the properties of the id while the component is
+  // mounted, for the native views Fabric creates for it over time: the
+  // unmount lets go of them (see useNativeViewId).
+  it("releases its id on unmount", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView();
+    expect(SkiaViewApi.releaseView).not.toHaveBeenCalled();
+    await unmount();
+    expect(SkiaViewApi.releaseView.mock.calls).toEqual([[view.getNativeId()]]);
+  });
+
+  // The simulated unmount lets go of the properties too: they have to be
+  // set again after it, or the view would lose its options.
+  it("sets its properties again after StrictMode's simulated unmount", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({
+      strict: true,
+      deviceIndependentFonts: true,
+    });
+    const nativeId = view.getNativeId();
+    expect(SkiaViewApi.releaseView.mock.calls).toEqual([[nativeId]]);
+    expect(SkiaViewApi.setJsiProperty).toHaveBeenCalledTimes(2);
+    expect(SkiaViewApi.releaseView.mock.invocationCallOrder[0]).toBeLessThan(
+      SkiaViewApi.setJsiProperty.mock.invocationCallOrder[1]
+    );
+    await unmount();
+    expect(SkiaViewApi.releaseView).toHaveBeenCalledTimes(2);
+  });
+
+  // A bundle newer than the native binary (an over-the-air update): the
+  // binary lets go of the properties by itself.
+  it("unmounts on a binary without releaseView", async () => {
+    mockHost = createScaledHost();
+    const { releaseView } = SkiaViewApi;
+    Object.assign(SkiaViewApi, { releaseView: undefined });
+    try {
+      const { unmount } = mountView();
+      await unmount();
+    } finally {
+      Object.assign(SkiaViewApi, { releaseView });
+    }
   });
 });

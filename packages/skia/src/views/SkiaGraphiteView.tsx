@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import React, { useEffect, useImperativeHandle, useRef } from "react";
 
 import type { SkGraphiteContext } from "../skia/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
@@ -11,6 +11,7 @@ import {
 } from "./android";
 import type { SkiaGraphiteViewNativeProps } from "./types";
 import { measureLayout } from "./measureLayout";
+import { useNativeViewId } from "./useNativeViewId";
 
 export interface SkiaGraphiteViewRef {
   /**
@@ -37,7 +38,7 @@ export const SkiaGraphiteView = ({
   ref,
   ...viewProps
 }: SkiaGraphiteViewProps) => {
-  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
+  const nativeId = useNativeViewId();
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
   useBackingViewWarning({ highBitDepth, android });

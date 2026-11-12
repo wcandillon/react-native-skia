@@ -10,6 +10,7 @@ import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { IsOnMainThread } from "./IsOnMainThread";
 import { OnLayout } from "./OnLayout";
+import { RecreatedView } from "./RecreatedView";
 import { ResizeGrow, ResizeShrink } from "./Resize";
 import { SharedImage } from "./SharedImage";
 import { SharedValueReads } from "./SharedValueReads";
@@ -39,6 +40,7 @@ export const Screens: Readonly<Record<string, Screen>> = {
   GraphiteViewTransform: shown(GraphiteViewTransform),
   IsOnMainThread: shown(IsOnMainThread),
   OnLayout: shown(OnLayout),
+  RecreatedView: settling(RecreatedView),
   ResizeGrow: shown(ResizeGrow),
   ResizeShrink: shown(ResizeShrink),
   SharedImage: shown(SharedImage),

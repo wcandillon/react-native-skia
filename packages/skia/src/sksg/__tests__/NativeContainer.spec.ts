@@ -2,12 +2,11 @@
 // screen it hands the recording to the view (which owns it) and drives
 // animations through the view id only. These tests pin down that no recorder
 // or picture is captured by a worklet, that the wrapper is disposed once the
-// view owns the recording, that a mounted canvas retains its view id once (so
-// the recording outlives a native view torn down under it), that unmount
-// leaves the view's last frame in place, that offscreen rendering plays the
-// recording into a picture, that the JS thread reads no shared value (the
-// mapper does, on the UI thread) except for a snapshot, and that a recording
-// that fails never throws out of React's commit.
+// view owns the recording, that unmount leaves the view's last frame in place,
+// that offscreen rendering plays the recording into a picture, that the JS
+// thread reads no shared value (the mapper does, on the UI thread) except
+// for a snapshot, and that a recording that fails never throws out of
+// React's commit.
 
 type MockPicture = { dispose: jest.Mock };
 type MockRecorder = {
@@ -70,7 +69,6 @@ const mockRecorder = (): MockRecorder => {
 const mockSkia = { Recorder: mockRecorder };
 
 type TestContainer = {
-  mount: () => void;
   redraw: () => void;
   recordAfterCommit: () => void;
   unmount: () => void;
@@ -82,8 +80,6 @@ const setup = (nativeId = 7) => {
   const SkiaViewApi = {
     setJsiProperty: jest.fn(),
     applyUpdates: jest.fn(),
-    retainView: jest.fn(),
-    releaseView: jest.fn(),
   };
   (globalThis as unknown as { SkiaViewApi: unknown }).SkiaViewApi = SkiaViewApi;
   let container: TestContainer | null = null;
@@ -206,34 +202,6 @@ describe("NativeContainer", () => {
     container.redraw();
     expect(mockRecorders).toHaveLength(1);
     expect(mockStartMapper).toHaveBeenCalledTimes(1);
-  });
-
-  it("retains the view id while mounted, so the next native view gets the recording", () => {
-    const { SkiaViewApi, container } = setup();
-    // Fabric can tear the native view down while the canvas stays mounted
-    // (display: none, view recycling): the registry keeps the recording for
-    // the next view only while the canvas holds the id.
-    container.mount();
-    container.redraw();
-    // render() mounts the container again on every change.
-    container.mount();
-    expect(SkiaViewApi.retainView).toHaveBeenCalledTimes(1);
-    expect(SkiaViewApi.retainView).toHaveBeenCalledWith(7);
-    expect(SkiaViewApi.releaseView).not.toHaveBeenCalled();
-    container.unmount();
-    expect(SkiaViewApi.releaseView).toHaveBeenCalledTimes(1);
-    expect(SkiaViewApi.releaseView).toHaveBeenCalledWith(7);
-    // Mounted again, as StrictMode does: the id is retained again.
-    container.mount();
-    expect(SkiaViewApi.retainView).toHaveBeenCalledTimes(2);
-  });
-
-  it("retains no view id offscreen", () => {
-    const { SkiaViewApi, container } = setup(-1);
-    container.mount();
-    container.unmount();
-    expect(SkiaViewApi.retainView).not.toHaveBeenCalled();
-    expect(SkiaViewApi.releaseView).not.toHaveBeenCalled();
   });
 
   it("reads the shared values on this thread for a snapshot", () => {

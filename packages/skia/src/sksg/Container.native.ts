@@ -74,20 +74,18 @@ const reportUnsupportedReanimated = () => {
  * recording from that first read on (see RNSkGraphiteProducer) and keeps
  * showing the previous frame until then.
  *
- * While mounted, the canvas retains its view id (retainView): the recording
- * outlives the native views Fabric tears down under it (display: none, view
- * recycling), and the next one draws it. Unmounting releases the id but does
- * not clear the view: the native view can outlive the React tree (exit
- * animations, screen transitions) and keeps showing its last frame until it
- * is torn down, which is when the recording is released.
+ * The registry keeps the recording for as long as the canvas is mounted
+ * (see useNativeViewId): it outlives the native views Fabric tears down
+ * under the canvas (display: none, view recycling), and the next one draws
+ * it. Unmounting does not clear the view: the native view can outlive the
+ * React tree (exit animations, screen transitions) and keeps showing its
+ * last frame until it is torn down, which is when the recording is released.
  *
  * Offscreen (no view), the recording is played into a picture right away,
  * which drawOnCanvas() draws.
  */
 class NativeContainer extends Container {
   private mapperId: number | null = null;
-  /** Whether this canvas holds its view id (see mount()). */
-  private retained = false;
   private picture: SkPicture | null = null;
   /** The recording the view owns and its shared values, if any. */
   private installed: {
@@ -102,25 +100,12 @@ class NativeContainer extends Container {
     }
   }
 
-  // render() mounts the container on every change: the id is retained once.
-  mount() {
-    super.mount();
-    if (this.nativeId !== -1 && !this.retained) {
-      this.retained = true;
-      SkiaViewApi.retainView(this.nativeId);
-    }
-  }
-
   unmount() {
     super.unmount();
     this.stopMapper();
     this.installed = null;
     this.picture?.dispose();
     this.picture = null;
-    if (this.retained) {
-      this.retained = false;
-      SkiaViewApi.releaseView(this.nativeId);
-    }
   }
 
   protected drawFrame(canvas: SkCanvas) {
