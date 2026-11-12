@@ -36,18 +36,6 @@ public:
         listenOnCurrentThread();
     return tasks;
   }
-
-  // What posts a task to the current thread's looper through those tasks, as
-  // a Dispatcher::Scheduler, or none where they cannot be made.
-  static std::function<void(std::function<void()>)>
-  schedulerForCurrentThread() {
-    auto tasks = forCurrentThread();
-    if (tasks == nullptr) {
-      return nullptr;
-    }
-    return
-        [tasks](std::function<void()> task) { tasks->post(std::move(task)); };
-  }
 #endif
 
   ~LooperTasks() {

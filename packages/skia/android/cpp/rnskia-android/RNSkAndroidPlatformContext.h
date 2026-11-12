@@ -61,10 +61,13 @@ public:
   // so can end the process when Java's heap is full. The JS thread is a
   // looper thread: it is woken through an eventfd, as the main thread is.
   Dispatcher::Scheduler makeJavascriptThreadScheduler() override {
-    if (auto scheduler = LooperTasks::schedulerForCurrentThread()) {
-      return scheduler;
+    auto tasks = LooperTasks::forCurrentThread();
+    if (tasks == nullptr) {
+      return RNSkPlatformContext::makeJavascriptThreadScheduler();
     }
-    return RNSkPlatformContext::makeJavascriptThreadScheduler();
+    return [tasks](Dispatcher::Operation operation) {
+      tasks->post(std::move(operation));
+    };
   }
 
 private:

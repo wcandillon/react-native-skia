@@ -24,6 +24,7 @@
 #include <unistd.h>
 #endif
 
+#include "rnskia/RNSkPresentThread.h"
 #include "rnskia/RNSkThreadPool.h"
 #include "rnskia/RNSkThreadTrimSchedule.h"
 #include "rnskia/RNSkThreadTrims.h"
@@ -970,6 +971,29 @@ int checkTrims() {
   return 0;
 }
 
+// The present thread, which the library starts (see presentThread), trims on
+// itself from its own loop: nothing it presents runs its queue.
+int checkPresentThread() {
+  // Never destroyed, as the instance the library uses: its thread is detached.
+  auto *trims = new RNSkThreadTrims(30ms);
+  auto *log = new TrimLog();
+  trims->setIdleTask([log](bool idle) { log->add(idle); });
+  auto presentThreadOn = std::make_shared<std::promise<std::thread::id>>();
+  auto presentThread = presentThreadOn->get_future();
+  RNSkia::presentThread().post([trims, presentThreadOn]() {
+    trims->ranWorkOnCurrentThread();
+    presentThreadOn->set_value(std::this_thread::get_id());
+  });
+  const auto present = presentThread.get();
+  if (!eventually([&]() { return log->countOn(present) == 1; })) {
+    return fail("the present thread does not trim on itself once idle");
+  }
+  if (!log->allIdle()) {
+    return fail("the present thread trims busy once idle");
+  }
+  return 0;
+}
+
 } // namespace
 
 #if defined(__linux__)
@@ -1083,6 +1107,9 @@ int main() {
     return failed;
   }
   if (int failed = checkTrims()) {
+    return failed;
+  }
+  if (int failed = checkPresentThread()) {
     return failed;
   }
   std::printf("ThreadTrimsTest: passed\n");
