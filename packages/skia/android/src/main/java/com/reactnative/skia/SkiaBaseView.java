@@ -133,19 +133,45 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
         }
+        // After a display density change React Native lays the view out
+        // again. A new size reaches the native side with the surface, along
+        // with its density (see surfaceDensity()); a surface that keeps its
+        // size gets the new density here.
+        float density = getResources().getDisplayMetrics().density;
+        if (mSurfaceDensity > 0 && density != mSurfaceDensity
+                && right - left == mSurfaceWidth && bottom - top == mSurfaceHeight) {
+            mSurfaceDensity = density;
+            setPixelDensity(density);
+        }
+    }
+
+    // The size and density the native side knows the surface with: frames are
+    // scaled by the density of the layout the surface has the size of, never
+    // by a density that layout is not made for yet.
+    private int mSurfaceWidth;
+    private int mSurfaceHeight;
+    private float mSurfaceDensity;
+
+    private float surfaceDensity(int width, int height) {
+        mSurfaceWidth = width;
+        mSurfaceHeight = height;
+        mSurfaceDensity = getResources().getDisplayMetrics().density;
+        return mSurfaceDensity;
     }
 
     // SurfaceView callbacks: the native side receives an android.view.Surface.
 
     @Override
     public void onSurfaceCreated(Surface surface, int width, int height) {
-        surfaceAvailable(surface, width, height, true, mAppliedHighBitDepth);
+        surfaceAvailable(surface, width, height, surfaceDensity(width, height), true,
+                mAppliedHighBitDepth);
     }
 
     @Override
     public void onSurfaceChanged(Surface surface, int width, int height) {
         Log.i(tag, "onSurfaceChanged " + width + "/" + height);
-        surfaceSizeChanged(surface, width, height, true, mAppliedHighBitDepth);
+        surfaceSizeChanged(surface, width, height, surfaceDensity(width, height), true,
+                mAppliedHighBitDepth);
     }
 
     // TextureView callbacks: the native side receives the SurfaceTexture and
@@ -153,13 +179,13 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     @Override
     public void onSurfaceTextureCreated(SurfaceTexture surface, int width, int height) {
-        surfaceAvailable(surface, width, height, false, false);
+        surfaceAvailable(surface, width, height, surfaceDensity(width, height), false, false);
     }
 
     @Override
     public void onSurfaceTextureChanged(SurfaceTexture surface, int width, int height) {
         Log.i(tag, "onSurfaceTextureSizeChanged " + width + "/" + height);
-        surfaceSizeChanged(surface, width, height, false, false);
+        surfaceSizeChanged(surface, width, height, surfaceDensity(width, height), false, false);
     }
 
     @Override
@@ -169,9 +195,12 @@ public abstract class SkiaBaseView extends ReactViewGroup implements SkiaViewAPI
 
     // isSurface tells the native side whether `surface` is an
     // android.view.Surface (SurfaceView) or a SurfaceTexture (TextureView).
-    protected abstract void surfaceAvailable(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
+    protected abstract void surfaceAvailable(Object surface, int width, int height, float pixelDensity, boolean isSurface, boolean highBitDepth);
 
-    protected abstract void surfaceSizeChanged(Object surface, int width, int height, boolean isSurface, boolean highBitDepth);
+    protected abstract void surfaceSizeChanged(Object surface, int width, int height, float pixelDensity, boolean isSurface, boolean highBitDepth);
+
+    // The density changed while the surface kept its size.
+    protected abstract void setPixelDensity(float pixelDensity);
 
     protected abstract void surfaceDestroyed();
 

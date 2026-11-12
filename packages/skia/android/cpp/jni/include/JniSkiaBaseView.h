@@ -35,15 +35,21 @@ public:
 
 protected:
   virtual void surfaceAvailable(jobject surface, int width, int height,
-                                bool isSurface, bool highBitDepth) {
-    _skiaAndroidView->surfaceAvailable(surface, width, height, isSurface,
-                                       highBitDepth);
+                                float pixelDensity, bool isSurface,
+                                bool highBitDepth) {
+    _skiaAndroidView->surfaceAvailable(surface, width, height, pixelDensity,
+                                       isSurface, highBitDepth);
   }
 
   virtual void surfaceSizeChanged(jobject surface, int width, int height,
-                                  bool isSurface, bool highBitDepth) {
-    _skiaAndroidView->surfaceSizeChanged(surface, width, height, isSurface,
-                                         highBitDepth);
+                                  float pixelDensity, bool isSurface,
+                                  bool highBitDepth) {
+    _skiaAndroidView->surfaceSizeChanged(surface, width, height, pixelDensity,
+                                         isSurface, highBitDepth);
+  }
+
+  virtual void setPixelDensity(float pixelDensity) {
+    _skiaAndroidView->setPixelDensity(pixelDensity);
   }
 
   virtual void surfaceDestroyed() { _skiaAndroidView->surfaceDestroyed(); }

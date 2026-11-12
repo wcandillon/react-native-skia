@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -89,8 +90,26 @@ public:
    */
   virtual bool renderToCanvas(const std::function<void(SkCanvas *)> &) = 0;
 
+  /**
+   The pixel density of the layout the surface has the size of, when the
+   platform gives one (on Android the view's own, which follows display
+   density changes along with its size). Any thread.
+   */
+  void setPixelDensity(float pixelDensity) {
+    _pixelDensity.store(pixelDensity);
+  }
+
+  /** The density set with setPixelDensity(), else `fallback`. Any thread. */
+  float getPixelDensity(float fallback) const {
+    auto pixelDensity = _pixelDensity.load();
+    return pixelDensity > 0 ? pixelDensity : fallback;
+  }
+
 protected:
   std::function<void()> _requestRedraw;
+
+private:
+  std::atomic<float> _pixelDensity{0};
 };
 
 class RNSkRenderer {
@@ -133,9 +152,12 @@ public:
     }
     sk_sp<SkImage> image;
     if (bounds != nullptr) {
+      // The density of the view the snapshot is of (see
+      // RNSkView::makeImageSnapshot), else the platform's.
+      const float pd = getPixelDensity(_pd);
       SkIRect b =
-          SkIRect::MakeXYWH(bounds->x() * _pd, bounds->y() * _pd,
-                            bounds->width() * _pd, bounds->height() * _pd);
+          SkIRect::MakeXYWH(bounds->x() * pd, bounds->y() * pd,
+                            bounds->width() * pd, bounds->height() * pd);
       image = _surface->makeImageSnapshot(b);
     } else {
       image = _surface->makeImageSnapshot();
@@ -280,6 +302,7 @@ public:
     auto provider = std::make_shared<RNSkOffscreenCanvasProvider>(
         getPlatformContext(), std::bind(&RNSkView::requestRedraw, this),
         _canvasProvider->getWidth(), _canvasProvider->getHeight());
+    provider->setPixelDensity(getPixelDensity());
 
     _renderer->renderImmediate(provider);
     return provider->makeSnapshot(bounds);
@@ -291,6 +314,15 @@ public:
    Returns the scaled width of the view
    */
   int getScaledWidth() { return _canvasProvider->getWidth(); }
+
+  /**
+   Pixels per point of the view: the density of its surface when the platform
+   gives one (see RNSkCanvasProvider::setPixelDensity), else the platform's.
+   */
+  float getPixelDensity() {
+    return _canvasProvider->getPixelDensity(
+        getPlatformContext()->getPixelDensity());
+  }
 
   /**
    Returns the scaled height of the view

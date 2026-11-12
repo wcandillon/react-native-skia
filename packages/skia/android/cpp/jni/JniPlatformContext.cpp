@@ -76,19 +76,9 @@ TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
 }
 
 void JniPlatformContext::setPixelDensity(float pixelDensity) {
-  std::lock_guard<std::mutex> lock(_platformContextMutex);
+  // The views follow the density of their own surface (see
+  // SkiaBaseView.java): nothing to redraw here.
   _pixelDensity.store(pixelDensity);
-  if (auto context = _platformContext.lock()) {
-    context->setPixelDensity(pixelDensity);
-  }
-}
-
-void JniPlatformContext::setPlatformContext(
-    const std::shared_ptr<RNSkPlatformContext> &context) {
-  std::lock_guard<std::mutex> lock(_platformContextMutex);
-  _platformContext = context;
-  // The density may have changed since the context was made.
-  context->setPixelDensity(_pixelDensity.load());
 }
 
 jni::global_ref<jobject>

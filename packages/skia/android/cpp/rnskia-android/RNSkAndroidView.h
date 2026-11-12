@@ -12,12 +12,17 @@ namespace RNSkia {
 class RNSkBaseAndroidView {
 public:
   virtual void surfaceAvailable(jobject surface, int width, int height,
-                                bool isSurface, bool highBitDepth) = 0;
+                                float pixelDensity, bool isSurface,
+                                bool highBitDepth) = 0;
 
   virtual void surfaceDestroyed() = 0;
 
   virtual void surfaceSizeChanged(jobject surface, int width, int height,
-                                  bool isSurface, bool highBitDepth) = 0;
+                                  float pixelDensity, bool isSurface,
+                                  bool highBitDepth) = 0;
+
+  // The density changed while the surface kept its size.
+  virtual void setPixelDensity(float pixelDensity) = 0;
 
   virtual float getPixelDensity() = 0;
 
@@ -34,10 +39,16 @@ public:
           std::make_shared<RNSkOpenGLCanvasProvider>(
               std::bind(&RNSkia::RNSkView::requestRedraw, this), context)) {}
 
-  void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
+  // The density is the one of the layout the surface has the size of: frames
+  // drawn into it are scaled by it (see RNSkCanvasProvider::setPixelDensity).
+  void surfaceAvailable(jobject surface, int width, int height,
+                        float pixelDensity, bool isSurface,
                         bool highBitDepth) override {
-    std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
-        ->surfaceAvailable(surface, width, height, isSurface, highBitDepth);
+    auto provider = std::static_pointer_cast<RNSkOpenGLCanvasProvider>(
+        T::getCanvasProvider());
+    // Before the surface: it draws as soon as it has one.
+    provider->setPixelDensity(pixelDensity);
+    provider->surfaceAvailable(surface, width, height, isSurface, highBitDepth);
     RNSkView::redraw();
   }
 
@@ -47,16 +58,24 @@ public:
   }
 
   void surfaceSizeChanged(jobject surface, int width, int height,
-                          bool isSurface, bool highBitDepth) override {
-    std::static_pointer_cast<RNSkOpenGLCanvasProvider>(T::getCanvasProvider())
-        ->surfaceSizeChanged(surface, width, height, isSurface, highBitDepth);
+                          float pixelDensity, bool isSurface,
+                          bool highBitDepth) override {
+    auto provider = std::static_pointer_cast<RNSkOpenGLCanvasProvider>(
+        T::getCanvasProvider());
+    // Before the new size: the surface redraws as soon as it has it.
+    provider->setPixelDensity(pixelDensity);
+    provider->surfaceSizeChanged(surface, width, height, isSurface,
+                                 highBitDepth);
     // Paint the new size right away rather than on the next scheduled redraw.
     RNSkView::redraw();
   }
 
-  float getPixelDensity() override {
-    return T::getPlatformContext()->getPixelDensity();
+  void setPixelDensity(float pixelDensity) override {
+    T::getCanvasProvider()->setPixelDensity(pixelDensity);
+    RNSkView::requestRedraw();
   }
+
+  float getPixelDensity() override { return RNSkView::getPixelDensity(); }
 
   void setShowDebugInfo(bool show) override { T::setShowDebugOverlays(show); }
 

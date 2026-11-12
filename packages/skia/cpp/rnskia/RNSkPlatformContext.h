@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -194,20 +193,14 @@ public:
   }
 
   /**
-   * @return Current scale factor for pixels
+   * @return Current scale factor for pixels. A view draws with the density of
+   * its own surface when the platform gives one (see
+   * RNSkCanvasProvider::setPixelDensity); this one is for everything else.
    */
-  float getPixelDensity() { return _pixelDensity.load(); }
-
-  /**
-   * Updates the scale factor for pixels, for example after the display
-   * density changed. Any thread: views read it on their next frame.
-   */
-  void setPixelDensity(float pixelDensity) {
-    _pixelDensity.store(pixelDensity);
-  }
+  virtual float getPixelDensity() { return _pixelDensity; }
 
 private:
-  std::atomic<float> _pixelDensity;
+  float _pixelDensity;
   std::shared_ptr<react::CallInvoker> _callInvoker;
 };
 } // namespace RNSkia

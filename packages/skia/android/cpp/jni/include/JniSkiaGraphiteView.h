@@ -44,6 +44,8 @@ public:
                           JniSkiaGraphiteView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaGraphiteView::surfaceSizeChanged),
+         makeNativeMethod("setPixelDensity",
+                          JniSkiaGraphiteView::setPixelDensity),
          makeNativeMethod("setDebugMode", JniSkiaGraphiteView::setDebugMode),
          makeNativeMethod("registerView", JniSkiaGraphiteView::registerView),
          makeNativeMethod("unregisterView",
@@ -53,16 +55,22 @@ public:
   }
 
 protected:
-  void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
+  void surfaceAvailable(jobject surface, int width, int height,
+                        float pixelDensity, bool isSurface,
                         bool highBitDepth) override {
-    JniSkiaBaseView::surfaceAvailable(surface, width, height, isSurface,
-                                      highBitDepth);
+    JniSkiaBaseView::surfaceAvailable(surface, width, height, pixelDensity,
+                                      isSurface, highBitDepth);
   }
 
-  void surfaceSizeChanged(jobject surface, int width, int height, bool isSurface,
+  void surfaceSizeChanged(jobject surface, int width, int height,
+                          float pixelDensity, bool isSurface,
                           bool highBitDepth) override {
-    JniSkiaBaseView::surfaceSizeChanged(surface, width, height, isSurface,
-                                        highBitDepth);
+    JniSkiaBaseView::surfaceSizeChanged(surface, width, height, pixelDensity,
+                                        isSurface, highBitDepth);
+  }
+
+  void setPixelDensity(float pixelDensity) override {
+    JniSkiaBaseView::setPixelDensity(pixelDensity);
   }
 
   void surfaceDestroyed() override { JniSkiaBaseView::surfaceDestroyed(); }
@@ -146,6 +154,8 @@ public:
                           JniSkiaGraphiteView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaGraphiteView::surfaceSizeChanged),
+         makeNativeMethod("setPixelDensity",
+                          JniSkiaGraphiteView::setPixelDensity),
          makeNativeMethod("setDebugMode", JniSkiaGraphiteView::setDebugMode),
          makeNativeMethod("registerView", JniSkiaGraphiteView::registerView),
          makeNativeMethod("unregisterView",
@@ -155,8 +165,9 @@ public:
   }
 
 protected:
-  void surfaceAvailable(jobject, int, int, bool, bool) {}
-  void surfaceSizeChanged(jobject, int, int, bool, bool) {}
+  void surfaceAvailable(jobject, int, int, float, bool, bool) {}
+  void surfaceSizeChanged(jobject, int, int, float, bool, bool) {}
+  void setPixelDensity(float) {}
   void surfaceDestroyed() {}
   void setDebugMode(bool) {}
   void registerView(int) {}

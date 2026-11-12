@@ -40,6 +40,11 @@ public:
                             jniPlatformContext->getPixelDensity()),
         _jniPlatformContext(jniPlatformContext) {}
 
+  // Follows display density changes (see PlatformContext.java).
+  float getPixelDensity() override {
+    return _jniPlatformContext->getPixelDensity();
+  }
+
   ~RNSkAndroidPlatformContext() override = default;
 
   void performStreamOperation(

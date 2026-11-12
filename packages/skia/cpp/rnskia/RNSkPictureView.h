@@ -157,7 +157,10 @@ private:
   void replay(SkCanvas *canvas, Recorder *recorder);
 
   bool performDraw(std::shared_ptr<RNSkCanvasProvider> canvasProvider) {
-    auto pd = _platformContext->getPixelDensity();
+    // The density of the surface drawn into, which follows display density
+    // changes along with its size (see RNSkCanvasProvider::setPixelDensity).
+    auto pd =
+        canvasProvider->getPixelDensity(_platformContext->getPixelDensity());
     return canvasProvider->renderToCanvas(
         [this, pd](SkCanvas *canvas) { drawInto(canvas, pd); });
   }

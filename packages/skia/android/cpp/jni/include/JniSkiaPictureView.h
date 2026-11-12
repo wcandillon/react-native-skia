@@ -56,6 +56,8 @@ public:
                           JniSkiaPictureView::surfaceDestroyed),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaPictureView::surfaceSizeChanged),
+         makeNativeMethod("setPixelDensity",
+                          JniSkiaPictureView::setPixelDensity),
          makeNativeMethod("setDebugMode", JniSkiaPictureView::setDebugMode),
          makeNativeMethod("registerView", JniSkiaPictureView::registerView),
          makeNativeMethod("unregisterView", JniSkiaPictureView::unregisterView),
@@ -63,16 +65,22 @@ public:
   }
 
 protected:
-  void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
+  void surfaceAvailable(jobject surface, int width, int height,
+                        float pixelDensity, bool isSurface,
                         bool highBitDepth) override {
-    JniSkiaBaseView::surfaceAvailable(surface, width, height, isSurface,
-                                      highBitDepth);
+    JniSkiaBaseView::surfaceAvailable(surface, width, height, pixelDensity,
+                                      isSurface, highBitDepth);
   }
 
   void surfaceSizeChanged(jobject surface, int width, int height,
-                          bool isSurface, bool highBitDepth) override {
-    JniSkiaBaseView::surfaceSizeChanged(surface, width, height, isSurface,
-                                        highBitDepth);
+                          float pixelDensity, bool isSurface,
+                          bool highBitDepth) override {
+    JniSkiaBaseView::surfaceSizeChanged(surface, width, height, pixelDensity,
+                                        isSurface, highBitDepth);
+  }
+
+  void setPixelDensity(float pixelDensity) override {
+    JniSkiaBaseView::setPixelDensity(pixelDensity);
   }
 
   void surfaceDestroyed() override { JniSkiaBaseView::surfaceDestroyed(); }
