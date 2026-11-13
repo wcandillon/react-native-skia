@@ -357,6 +357,7 @@ jobs:
       #   8082   4243         skia-ci     (this job)
       #   8083   4244         webgpu-ci   (react-native-webgpu)
       #   8084   4245         skia-agent  (agent.yml)
+      #   8086   4247         Pixel 8     (android-device.yml)
       # The app finds Metro through the RCT_jsLocation launch argument; E2E_PORT
       # is inlined into the JS bundle (useClient) and read by the jest
       # globalSetup, so the app and the test server agree on the port.
