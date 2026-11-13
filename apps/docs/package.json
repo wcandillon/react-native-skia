@@ -13,7 +13,7 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0",
+    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --fix",
     "lint:ci": "eslint . --ext .ts,.tsx  --max-warnings 0",
     "test": "ts-node src/validate-twoslash.ts"
   },
