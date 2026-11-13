@@ -120,12 +120,22 @@ protected:
   void surfaceAbandoned() { _surface->abandon(); }
 
   /**
-   The pixel size the backing view was laid out with. The surface it gets
-   (SurfaceView or TextureView) has exactly this size, so a frame recorded
-   before the surface exists already matches it. Main thread.
+   The pixel size the backing view was laid out with, and the density of that
+   layout. The surface it gets (SurfaceView or TextureView) has exactly this
+   size, so a frame recorded before the surface exists already matches it.
+   The density changes along with the layout (a display density change lays
+   the view out again), so frames keep the scale of the size they are
+   recorded for. Main thread.
    */
-  void setLayoutSize(int width, int height) {
-    _surface->setLayoutSize(width, height);
+  void setLayoutSize(int width, int height, float pixelDensity) {
+    float previous = 0;
+    bool known = _surface->getPixelDensity(&previous);
+    _surface->setLayoutSize(width, height, pixelDensity);
+    // A new size redraws once the surface follows it; a new density alone
+    // does not change the surface.
+    if (known && previous != pixelDensity) {
+      _view->requestRedraw();
+    }
   }
 
   /**
@@ -225,7 +235,6 @@ protected:
     if (manager == nullptr) {
       return;
     }
-    manager->setSkiaView(_view->getNativeId(), nullptr);
     manager->unregisterSkiaView(_view->getNativeId());
   }
 

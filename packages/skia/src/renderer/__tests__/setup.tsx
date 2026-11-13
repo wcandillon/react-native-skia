@@ -5,7 +5,7 @@ import path from "path";
 
 import React from "react";
 import type { ReactNode } from "react";
-import type { WebSocket, WebSocketServer } from "ws";
+import type { WebSocketServer } from "ws";
 
 import type * as SkiaExports from "../../index";
 import { JsiSkApi } from "../../skia/web/JsiSkia";
@@ -18,6 +18,7 @@ import { SkiaSGRoot } from "../../sksg/Reconciler";
 import type { Node } from "../../sksg/Node";
 
 import { SkiaObject } from "./e2e/setup";
+import type { Channel } from "./e2e/setup/Channel";
 
 jest.setTimeout(180 * 1000);
 
@@ -25,7 +26,7 @@ type TestOS = "ios" | "android" | "web" | "node" | "macos";
 
 declare global {
   var testServer: WebSocketServer;
-  var testConnection: { client: WebSocket | null };
+  var testConnection: { channel: Channel | null };
   var testOS: TestOS;
 }
 export let surface: TestingSurface;
@@ -312,24 +313,6 @@ export const loseGpuDevice = () =>
       readonly watchMilliseconds: number;
     }
   );
-
-// Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start
-// with the 0x89 signature and base64/other JSON responses won't carry $$error,
-// so we only attempt a parse when the buffer looks like a JSON object.
-const parseErrorResponse = (raw: Buffer): string | null => {
-  if (raw[0] !== 0x7b) {
-    return null;
-  }
-  try {
-    const obj = JSON.parse(raw.toString());
-    if (obj && typeof obj === "object" && "$$error" in obj) {
-      return String(obj.$$error);
-    }
-  } catch {
-    // Not a JSON object; treat as a normal payload.
-  }
-  return null;
-};
 
 export const resolveFile = (uri: string) =>
   fs.readFileSync(path.resolve(__dirname, `../../${uri}`));
@@ -669,8 +652,7 @@ export class RemoteSurface implements TestingSurface {
     context?: Ctx
   ): Promise<R> {
     const ctx = await this.prepareContext(context);
-    const body = { code: fn.toString(), ctx };
-    return this.handleImageResponse<R>(JSON.stringify(body), true);
+    return this.channel.call<R>("eval", { code: fn.toString(), ctx });
   }
 
   async drawOffscreen<Ctx extends EvalContext>(
@@ -691,34 +673,24 @@ canvas.restore();
 surface.flush();
 return surface.makeImageSnapshot().encodeToBase64();
 }`;
-    const body = { code, ctx };
-    const base64 = await this.handleImageResponse<string>(
-      JSON.stringify(body),
-      true
-    );
-    const Skia = global.SkiaApi;
-    const data = Skia.Data.fromBase64(base64);
-    const image = Skia.Image.MakeFromEncoded(data);
-    if (image === null) {
-      throw new Error("Unable to decode image");
-    }
-    return image;
+    return decodeImage(await this.channel.call<string>("eval", { code, ctx }));
   }
 
   async draw(node: ReactNode) {
-    return this.handleImageResponse(await serialize(node));
+    const tree = JSON.parse(await serialize(node));
+    return decodeImage(await this.channel.call<string>("draw", tree));
   }
 
-  screen(screen: string) {
-    return this.handleImageResponse(JSON.stringify({ screen }));
+  async screen(name: string) {
+    return decodeImage(await this.channel.call<string>("screen", { name }));
   }
 
-  private get client() {
-    const { client } = global.testConnection;
-    if (client === null) {
+  private get channel() {
+    const { channel } = global.testConnection;
+    if (channel === null) {
       throw new Error("Client is not connected. Did you call init?");
     }
-    return client;
+    return channel;
   }
 
   private async prepareContext<Ctx extends EvalContext>(
@@ -732,49 +704,14 @@ return surface.makeImageSnapshot().encodeToBase64();
     }
     return ctx;
   }
-
-  private handleImageResponse<R = SkImage>(
-    body: string,
-    json?: boolean
-  ): Promise<R> {
-    // Guard against an eval that never replies (e.g. the device threw before it
-    // could post a result back). Without this the host would await forever and
-    // a single failing case would stall the whole serial suite.
-    const EVAL_TIMEOUT_MS = 30 * 1000;
-    return new Promise((resolve, reject) => {
-      const { client } = this;
-      const onMessage = (raw: Buffer) => {
-        clearTimeout(timeout);
-        // The device reports a thrown error as { $$error: message } (always
-        // JSON, even for image responses) so the matching test can `.rejects`
-        // instead of hanging or trying to decode an error string as a PNG.
-        const error = parseErrorResponse(raw);
-        if (error !== null) {
-          reject(new Error(error));
-          return;
-        }
-        resolve(json ? JSON.parse(raw.toString()) : this.decodeImage(raw));
-      };
-      const timeout = setTimeout(() => {
-        client.off("message", onMessage);
-        reject(
-          new Error(
-            `eval timed out after ${EVAL_TIMEOUT_MS}ms without a response from the device`
-          )
-        );
-      }, EVAL_TIMEOUT_MS);
-      client.once("message", onMessage);
-      client.send(body);
-    });
-  }
-
-  private decodeImage(raw: Buffer) {
-    const Skia = global.SkiaApi;
-    const data = Skia.Data.fromBytes(new Uint8Array(raw));
-    const image = Skia.Image.MakeFromEncoded(data);
-    if (image === null) {
-      throw new Error("Unable to decode image");
-    }
-    return image;
-  }
 }
+
+// The app sends every image as a base64 PNG.
+const decodeImage = (base64: string) => {
+  const Skia = global.SkiaApi;
+  const image = Skia.Image.MakeFromEncoded(Skia.Data.fromBase64(base64));
+  if (image === null) {
+    throw new Error("Unable to decode image");
+  }
+  return image;
+};

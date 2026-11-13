@@ -40,8 +40,8 @@ export const Neumorphism = () => {
   const transform = rect2rect(rects.src, rects.dst);
   const translateY = useSharedValue(0);
   const t = useLoop({ duration: 3000 });
-  const x = useDerivedValue(() => mix(t.value, 0, 180), [t]);
-  const progress = useDerivedValue(() => x.value / 192, [x]);
+  const x = useDerivedValue(() => mix(t.value, 0, 180));
+  const progress = useDerivedValue(() => x.value / 192);
   const font = useFont(require("./components/SF-Pro-Display-Bold.otf"), 17);
 
   return (

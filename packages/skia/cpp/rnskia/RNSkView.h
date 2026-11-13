@@ -270,10 +270,12 @@ public:
    */
   sk_sp<SkImage> makeImageSnapshot(SkRect *bounds) {
     if (_producer->hasContent()) {
+      const float pixelDensity = getPixelDensity();
       RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
                                    getScaledHeight());
+      surface.setPixelDensity(pixelDensity);
       if (auto *canvas = surface.getCanvas()) {
-        _producer->renderInto(canvas, _platformContext->getPixelDensity());
+        _producer->renderInto(canvas, pixelDensity);
       }
       return surface.makeSnapshot(bounds);
     }
@@ -282,6 +284,7 @@ public:
         frame != nullptr && frame->getTarget().useP3ColorSpace;
     RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
                                  getScaledHeight(), useP3ColorSpace);
+    surface.setPixelDensity(getPixelDensity());
     if (frame != nullptr) {
       renderFrame(surface, frame);
     }
@@ -290,6 +293,19 @@ public:
 
   /** Width of the surface, in pixels. */
   int getScaledWidth() { return _surface->getWidth(); }
+
+  /**
+   Pixels per point of the view: the density of its platform layout when the
+   platform gives one (see RNSkWindowSurface::setLayoutSize), else the
+   platform's.
+   */
+  float getPixelDensity() {
+    float pixelDensity;
+    if (_surface->getPixelDensity(&pixelDensity)) {
+      return pixelDensity;
+    }
+    return _platformContext->getPixelDensity();
+  }
 
   /** Height of the surface, in pixels. */
   int getScaledHeight() { return _surface->getHeight(); }

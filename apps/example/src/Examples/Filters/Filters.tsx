@@ -27,10 +27,7 @@ export const Filters = () => {
   const progress = useLoop({ duration: 1500 });
   const [, setState] = React.useState(0);
 
-  const uniforms = useDerivedValue(
-    () => ({ r: mix(progress.value, 1, 100) }),
-    [progress]
-  );
+  const uniforms = useDerivedValue(() => ({ r: mix(progress.value, 1, 100) }));
 
   const image = useImageAsTexture(require("../../assets/oslo.jpg"));
 

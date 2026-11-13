@@ -175,12 +175,14 @@ public:
 
   /** Current width of the target, in points. */
   float getWidth() {
-    return resolveTargetInfo().width / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.width / info.pixelDensity;
   }
 
   /** Current height of the target, in points. */
   float getHeight() {
-    return resolveTargetInfo().height / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.height / info.pixelDensity;
   }
 
   /**
@@ -424,8 +426,7 @@ private:
           "SkiaGraphiteView: could not create a deferred canvas.");
     }
     // The canvas loads whatever the target holds: the producer clears.
-    auto pd = _context->getPixelDensity();
-    canvas->scale(pd, pd);
+    canvas->scale(target.pixelDensity, target.pixelDensity);
     _recording = true;
     _openRecorder = recorder;
     _openGeneration = generation;
@@ -460,8 +461,21 @@ private:
     }
     RNSkGraphiteTargetInfo info;
     if (surface && surface->getTargetInfo(&info)) {
+      // The density of the layout the window has the size of (see
+      // RNSkWindowSurface::updateTargetInfo), else the platform's.
+      if (info.pixelDensity <= 0) {
+        info.pixelDensity = _context->getPixelDensity();
+      }
       return info;
     }
+    // The density the platform laid the view out with, which follows
+    // display density changes along with its size (see
+    // RNSkWindowSurface::setLayoutSize), else the platform's.
+    float pixelDensity = 0;
+    if (!surface || !surface->getPixelDensity(&pixelDensity)) {
+      pixelDensity = _context->getPixelDensity();
+    }
+    info.pixelDensity = pixelDensity;
 #if defined(__ANDROID__)
     // The 10-bit buffer format only has 2 bits of alpha: translucent views
     // stay 8-bit.
@@ -482,10 +496,8 @@ private:
       // Not laid out yet (JS gets its onLayout before the platform lays the
       // view out): the size JS measured, in points. The layout is on the
       // pixel grid, so the product is an integer up to rounding errors.
-      double pd = _context->getPixelDensity();
-      info.width = static_cast<int>(std::lround(width * pd));
-      info.height = static_cast<int>(std::lround(height * pd));
-    } else {
+      info.width = static_cast<int>(std::lround(width * pixelDensity));
+      info.height = static_cast<int>(std::lround(height * pixelDensity));
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;

@@ -88,6 +88,11 @@ public:
         []() { static thread_local jni::ThreadScope attached; });
   }
 
+  // Follows display density changes (see PlatformContext.java).
+  float getPixelDensity() override {
+    return _jniPlatformContext->getPixelDensity();
+  }
+
   ~RNSkAndroidPlatformContext() override = default;
 
   void performStreamOperation(

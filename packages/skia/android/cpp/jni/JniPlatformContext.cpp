@@ -39,6 +39,8 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::setForegroundNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
+      makeNativeMethod("setPixelDensityNative",
+                       JniPlatformContext::setPixelDensity),
   });
   // The statics of PresentThread.java, which has no native peer of its own.
   jni::registerNatives(
@@ -105,6 +107,12 @@ void JniPlatformContext::setCacheDirectoryNative(
 TSelf JniPlatformContext::initHybrid(jni::alias_ref<jhybridobject> jThis,
                                      float pixelDensity) {
   return makeCxxInstance(jThis, pixelDensity);
+}
+
+void JniPlatformContext::setPixelDensity(float pixelDensity) {
+  // The views follow their own layout (see SkiaView.onLayout), which React
+  // Native updates after a density change: nothing to redraw here.
+  _pixelDensity.store(pixelDensity);
 }
 
 void JniPlatformContext::performStreamOperation(
