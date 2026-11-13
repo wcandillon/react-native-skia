@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "lint": "turbo run lint",
+    "lint:ci": "turbo run lint:ci",
     "tsc": "turbo run tsc",
     "test": "turbo run test",
     "test:web": "playwright test --config apps/example/playwright.config.ts",
