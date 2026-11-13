@@ -73,10 +73,7 @@ export const ViewSnapshot = () => {
   }, []);
 
   const progress = useLoop({ duration: 1500 });
-  const uniforms = useDerivedValue(
-    () => ({ r: mix(progress.value, 1, 100) }),
-    [progress]
-  );
+  const uniforms = useDerivedValue(() => ({ r: mix(progress.value, 1, 100) }));
 
   const image = useSharedValue<SkImage | null>(null);
   const texture = useRef<GPUTexture | null>(null);

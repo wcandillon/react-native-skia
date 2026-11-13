@@ -27,9 +27,8 @@ interface ProgressBarProps {
 }
 
 export const ProgressBar = ({ progress, x, y, width }: ProgressBarProps) => {
-  const rct3 = useDerivedValue(
-    () => rrect(rect(2, 2, mix(progress.value, 0, 116), 4), 12, 12),
-    [progress]
+  const rct3 = useDerivedValue(() =>
+    rrect(rect(2, 2, mix(progress.value, 0, 116), 4), 12, 12)
   );
   return (
     <FitBox src={container} dst={rect(x, y, width, width * aspectRatio)}>

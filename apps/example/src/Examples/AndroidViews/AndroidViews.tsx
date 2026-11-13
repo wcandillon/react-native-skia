@@ -161,10 +161,7 @@ export const AndroidViews = () => {
   const [animate, setAnimate] = useState(true);
   const [extraShapes, setExtraShapes] = useState(0);
   const clock = useClock();
-  const cx = useDerivedValue(
-    () => 100 + 60 * Math.sin(clock.value / 500),
-    [clock]
-  );
+  const cx = useDerivedValue(() => 100 + 60 * Math.sin(clock.value / 500));
   const frameRate = useSharedValue(0);
   const fps = useFrameCallback(({ timeSincePreviousFrame }) => {
     if (timeSincePreviousFrame !== null && timeSincePreviousFrame > 0) {
@@ -176,8 +173,7 @@ export const AndroidViews = () => {
     fps.setActive(animate);
   }, [fps, animate]);
   const frameRateLabel = useDerivedValue(
-    () => `${Math.round(frameRate.value)} fps`,
-    [frameRate]
+    () => `${Math.round(frameRate.value)} fps`
   );
   const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), 18);
   // The backing view is created when the canvas mounts, so a change of the
