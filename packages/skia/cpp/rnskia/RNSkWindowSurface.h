@@ -168,6 +168,20 @@ public:
   void setLayoutSize(int width, int height);
 
   /**
+   The same, along with the pixel density that layout was made with (on
+   Android the view's own, which follows display density changes along with
+   its layout, see SkiaView.onLayout). Any thread.
+   */
+  void setLayoutSize(int width, int height, float pixelDensity);
+
+  /**
+   The pixel density of the platform layout (see setLayoutSize): the one of
+   the layout the window has the size of, else the latest. False until the
+   platform gave one. Any thread.
+   */
+  bool getPixelDensity(float *pixelDensity);
+
+  /**
    The size in pixels the surface will have, known from the platform layout
    before the surface itself exists (on Android the surface only appears a
    frame after the view is laid out). Safe to call from any thread; returns
@@ -378,6 +392,7 @@ private:
   bool _hasTargetInfo = false;
   int _layoutWidth = 0;
   int _layoutHeight = 0;
+  float _layoutPixelDensity = 0;
   // The size resize() noted, for the next present to take (see
   // takePendingSize).
   int _pendingWidth = 0;

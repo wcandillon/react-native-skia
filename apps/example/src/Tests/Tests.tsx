@@ -1,15 +1,15 @@
-import type { ComponentRef } from "react";
+import type { ComponentRef, ReactElement } from "react";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Canvas, Group, Skia, useCanvasRef } from "react-native-skia";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PixelRatio, Text, View } from "react-native";
 
-import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
 import { forceGpuDeviceLoss, getSharedDevice } from "./GpuDevice";
 import { ScreenDoneContext } from "./ScreenDone";
 import type { Screen } from "./Screens";
 import { Screens } from "./Screens";
+import { serve } from "./serve";
 import { useClient } from "./useClient";
 import { workletSerialization } from "./workletSerialization";
 
@@ -18,23 +18,10 @@ const s = 3;
 const scale = s / PixelRatio.get();
 const size = 256 * scale;
 const timeToDraw = CI ? 1500 : 500;
+const noop = () => {};
 
-// Report a failure back to the host as { $$error: message } so the matching
-// test can `.rejects` instead of hanging on a missing reply, and so the throw
-// is not surfaced as an unhandled exception that could break the socket for
-// subsequent tests.
-const errorEnvelope = (error: unknown) =>
-  JSON.stringify({
-    $$error: error instanceof Error ? error.message : String(error),
-  });
-
-// JSON.stringify returns undefined for a result JSON cannot carry: undefined, a function, a symbol.
-const resultMessage = (result: unknown) => {
-  const json: string | undefined = JSON.stringify(result);
-  return json === undefined
-    ? errorEnvelope(`The snippet's result has no JSON form: ${typeof result}`)
-    : json;
-};
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // A buffer of the device Skia renders with, mapped as it is made, which tells
 // a destroyed device from a lost one (the Gpu spec): Dawn unmaps the buffers
@@ -48,6 +35,37 @@ const mapGpuBuffer = () => {
   });
 };
 const mappedGpuBufferState = () => mappedBuffer?.mapState ?? null;
+
+// Runs a snippet the host sent, with the app's Skia.
+const evaluate = (
+  { code, ctx }: { code: string; ctx: any },
+  assets: TestsProps["assets"],
+  setCanvasShown: (canvasShown: boolean) => void
+) =>
+  eval(
+    `(function Main() {
+        const __addDisposableResource = (e, o) => { return o; };
+        const __disposeResources = () => {};
+        return (${code})(this.Skia, this.ctx, this.size, this.scale);
+      })`
+  ).call({
+    Skia,
+    // The worklet serializer spec needs app-side worklets (see
+    // workletSerialization.ts), and the Gpu spec a way to lose the device, to
+    // tell whether it was destroyed and to unmount the harness's canvas; hand
+    // them over through the context.
+    ctx: {
+      ...parseProps(ctx, assets),
+      workletSerialization,
+      forceGpuDeviceLoss,
+      mapGpuBuffer,
+      mappedGpuBufferState,
+      hideCanvas: () => setCanvasShown(false),
+      showCanvas: () => setCanvasShown(true),
+    },
+    size: size * PixelRatio.get(),
+    scale: s,
+  });
 
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
 // into a texture of the shared device, and Skia wraps that texture. This is
@@ -73,7 +91,7 @@ const encodeView = async (
     );
     const image = Skia.Image.MakeFromGPUTexture(texture);
     try {
-      return await image.encodeToBytes();
+      return image.encodeToBase64();
     } finally {
       image.dispose();
     }
@@ -90,137 +108,59 @@ export const Tests = ({ assets }: TestsProps) => {
   const viewRef = useRef<ComponentRef<typeof View>>(null);
   const ref = useCanvasRef();
   const [client, hostname] = useClient();
-  const [drawing, setDrawing] = useState<any>(null);
-  // The screen shown and the key it is mounted with. Requested again, a
-  // screen that settles is mounted again, so that it settles again; any other
-  // keeps its instance and what it shows.
+  const [drawing, setDrawing] = useState<ReactElement | null>(null);
+  // The screen shown, the key it is mounted with, and what it calls once it
+  // has settled (see useScreenDone). Requested again, a screen that settles is
+  // mounted again, so that it settles again; any other keeps its instance and
+  // what it shows.
   const [shown, setShown] = useState<{
     readonly screen: Screen;
     readonly key: number;
+    readonly done: () => void;
   } | null>(null);
   const screenMounts = useRef(0);
-  // Whether the screen shown has settled (see useScreenDone).
-  const [screenDone, setScreenDone] = useState(false);
-  const markScreenDone = useCallback(() => setScreenDone(true), []);
   // The harness's own canvas holds a window on the GPU device: the Gpu spec
   // unmounts it while it loses a device no window holds, and mounts it again
   // after. A drawing mounts it too, as it draws in it.
   const [canvasShown, setCanvasShown] = useState(true);
 
   useEffect(() => {
-    if (client !== null) {
-      // Define the message handler as a separate function
-      const handleMessage = (e: MessageEvent) => {
-        const tree: any = JSON.parse(e.data);
-        if (tree.code) {
-          try {
-            const result = eval(
-              `(function Main() {
-                  const __addDisposableResource = (e, o) => { return o; };
-                  const __disposeResources = () => {};
-                  return (${tree.code})(this.Skia, this.ctx, this.size, this.scale);
-                })`
-            ).call({
-              Skia,
-              // The worklet serializer spec needs app-side worklets (see
-              // workletSerialization.ts), and the Gpu spec a way to lose the
-              // device, to tell whether it was destroyed and to unmount the
-              // harness's canvas; hand them over through the context.
-              ctx: {
-                ...parseProps(tree.ctx, assets),
-                workletSerialization,
-                forceGpuDeviceLoss,
-                mapGpuBuffer,
-                mappedGpuBufferState,
-                hideCanvas: () => setCanvasShown(false),
-                showCanvas: () => setCanvasShown(true),
-              },
-              size: size * PixelRatio.get(),
-              scale: s,
-            });
-            if (result instanceof Promise) {
-              result
-                .then((r) => client.send(resultMessage(r)))
-                .catch((error) => client.send(errorEnvelope(error)));
-            } else {
-              client.send(resultMessage(result));
-            }
-          } catch (error) {
-            client.send(errorEnvelope(error));
-          }
-        } else if (typeof tree.screen === "string") {
-          const screen = Screens[tree.screen];
-          if (!screen) {
-            throw new Error(`Unknown screen: ${tree.screen}`);
-          }
-          if (screen.snapshot === "onDone") {
-            screenMounts.current += 1;
-          }
-          setScreenDone(false);
-          setShown({ screen, key: screenMounts.current });
-        } else {
-          const node = parseNode(tree, assets);
-          setDrawing(node as SerializedNode);
-          setCanvasShown(true);
-        }
-      };
-
-      // Use addEventListener instead of onmessage
-      client.addEventListener("message", handleMessage);
-
-      // Clean up: remove the specific event listener
-      return () => {
-        client.removeEventListener("message", handleMessage);
-      };
+    if (client === null) {
+      return;
     }
-    return;
-  }, [assets, client]);
-
-  useEffect(() => {
-    if (drawing && client) {
-      const it = setTimeout(async () => {
-        if (ref.current) {
-          try {
-            const image = ref.current.makeImageSnapshot({
-              x: 0,
-              y: 0,
-              width: size,
-              height: size,
-            });
-            client.send(await image.encodeToBytes());
-          } catch (e) {
-            console.error(e);
-            client.send(errorEnvelope(e));
-          }
+    return serve(client, {
+      eval: (params) => evaluate(params, assets, setCanvasShown),
+      draw: async (tree) => {
+        setDrawing(parseNode(tree, assets));
+        setCanvasShown(true);
+        await sleep(timeToDraw);
+        if (ref.current === null) {
+          throw new Error("The canvas is not mounted");
         }
-      }, timeToDraw);
-      return () => {
-        clearTimeout(it);
-      };
-    }
-    return;
-  }, [client, drawing, ref]);
-
-  useEffect(() => {
-    if (
-      shown !== null &&
-      client !== null &&
-      (shown.screen.snapshot === "onMount" || screenDone)
-    ) {
-      const it = setTimeout(async () => {
-        try {
-          client.send(await encodeView(viewRef));
-        } catch (e) {
-          console.error(e);
-          client.send(errorEnvelope(e));
+        return ref.current
+          .makeImageSnapshot({ x: 0, y: 0, width: size, height: size })
+          .encodeToBase64();
+      },
+      screen: async ({ name }: { name: string }) => {
+        const screen = Screens[name];
+        if (!screen) {
+          throw new Error(`Unknown screen: ${name}`);
         }
-      }, timeToDraw);
-      return () => {
-        clearTimeout(it);
-      };
-    }
-    return;
-  }, [client, shown, screenDone]);
+        if (screen.snapshot === "onDone") {
+          screenMounts.current += 1;
+        }
+        const key = screenMounts.current;
+        const done = new Promise<void>((resolve) =>
+          setShown({ screen, key, done: resolve })
+        );
+        if (screen.snapshot === "onDone") {
+          await done;
+        }
+        await sleep(timeToDraw);
+        return encodeView(viewRef);
+      },
+    });
+  }, [assets, client, ref]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
@@ -239,7 +179,7 @@ export const Tests = ({ assets }: TestsProps) => {
         ref={viewRef}
         collapsable={false}
       >
-        <ScreenDoneContext.Provider value={markScreenDone}>
+        <ScreenDoneContext.Provider value={shown?.done ?? noop}>
           {shown === null
             ? null
             : React.createElement(shown.screen.component, { key: shown.key })}

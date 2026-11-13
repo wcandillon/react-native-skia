@@ -15,10 +15,10 @@ const n = 49;
 export const FreezeExample = () => {
   const font = useFont(require("../../assets/SF-Mono-Semibold.otf"), 32);
   const clock = useClock();
-  const transform = useDerivedValue(
-    () => [{ translateY: 100 }, { rotate: (Math.PI * clock.value) / 4000 }],
-    [clock]
-  );
+  const transform = useDerivedValue(() => [
+    { translateY: 100 },
+    { rotate: (Math.PI * clock.value) / 4000 },
+  ]);
 
   return (
     <Canvas style={{ flex: 1, margin: 50 }}>
