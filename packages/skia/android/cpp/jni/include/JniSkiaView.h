@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <utility>
+#include <variant>
 
 #include <android/choreographer.h>
 #include <android/native_window.h>
@@ -14,6 +15,7 @@
 #include "JniSkiaManager.h"
 #include "RNSkLog.h"
 #include "RNSkPresentThread.h"
+#include "RNSkPresentedFrame.h"
 #include "RNSkView.h"
 #include "RNSkWindowSurface.h"
 #include "rnsurface/FrameScheduler.h"
@@ -27,11 +29,15 @@ namespace jni = facebook::jni;
  * or TextureView, whose ANativeWindow it acquires for the surface. The view
  * presents on the present thread (see RNSkPresentThread.h), and the Java
  * view posts the surface callbacks there too, as the window belongs to that
- * thread (see RNSkWindowSurface); this object is destroyed there as well
- * (see SkiaView.dropInstance), so no call below runs under a present. The
- * frame scheduler lives here too (see rnsurface::FrameScheduler), with the
- * AChoreographer of the thread as its vsync (see PresentHost); the Java view
- * hands it the TextureView's draws.
+ * thread (see RNSkWindowSurface); a window canvas's object is destroyed there
+ * as well (see SkiaView.dropInstance), so no call below runs under a present.
+ * The frame scheduler lives here too (see rnsurface::FrameScheduler), with
+ * the AChoreographer of the thread as its vsync (see PresentHost); the Java
+ * view hands it the TextureView's draws. A static canvas has no backing view:
+ * it presents its frames as images, on the images' worker, which the Java
+ * view's image child shows (see presentAsImages); its object is destroyed on
+ * the main thread, as each task of that worker holds the native view while it
+ * runs (see RNSkView::layOutImagePresenter).
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
 public:
@@ -52,6 +58,11 @@ public:
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
+         makeNativeMethod("presentThroughWindow",
+                          JniSkiaView::presentThroughWindow),
+         makeNativeMethod("presentAsImages", JniSkiaView::presentAsImages),
+         makeNativeMethod("imagePresenterLaidOut",
+                          JniSkiaView::imagePresenterLaidOut),
          makeNativeMethod("setSurfaceHighBitDepth",
                           JniSkiaView::setSurfaceHighBitDepth),
          makeNativeMethod("registerView", JniSkiaView::registerView),
@@ -67,6 +78,12 @@ public:
   // manager: holding a weak reference makes a late unregister a no-op and a
   // concurrent one keep the manager alive for the duration of the call.
   std::shared_ptr<RNSkManager> getSkiaManager() { return _manager.lock(); }
+
+  ~JniSkiaView() override {
+    if (auto *images = std::get_if<ImageFrames>(&_presentation)) {
+      images->frame->close();
+    }
+  }
 
 protected:
   // Present thread. Attaching the window asks the view for a frame, posted
@@ -122,6 +139,75 @@ protected:
   }
 
   /**
+   The canvas presents through its backing view's window, on the present
+   thread (see RNSkPresentThread.h), its frames paced by the frame scheduler.
+   Main thread, before the view is registered (see SkiaView.updateView), in
+   place of presentAsImages().
+   */
+  void presentThroughWindow() {
+    _view->setPresentThread([](std::function<void()> task) {
+      presentThread().post(std::move(task));
+    });
+    // A submitted recording goes to the scheduler, on the present thread,
+    // which asks the thread's AChoreographer for a vsync (or presents on the
+    // spot, for a window resized since the frame it shows: see
+    // rnsurface::FrameScheduler::requestFrame). Weak: the view may outlive
+    // this object in the registry for a moment, with the scheduler gone.
+    auto host = std::make_shared<PresentHost>(_javaView, _view);
+    auto scheduler = std::make_shared<rnsurface::FrameScheduler>(*host);
+    std::weak_ptr<rnsurface::FrameScheduler> weakScheduler = scheduler;
+    host->setScheduler(weakScheduler);
+    _presentation.emplace<WindowFrames>(
+        WindowFrames{std::move(host), std::move(scheduler)});
+    _view->setFrameScheduler([weakScheduler](bool forResizedWindow) {
+      if (auto scheduler = weakScheduler.lock()) {
+        scheduler->requestFrame(forResizedWindow);
+      }
+    });
+  }
+
+  /**
+   The canvas is static: its frames are presented as images, on the images'
+   worker (see RNSkView::presentAsImages). Main thread, before the view is
+   registered (see SkiaView.updateView), in place of presentThroughWindow().
+   */
+  void presentAsImages() {
+    auto javaView = _javaView;
+    _presentation.emplace<ImageFrames>(
+        ImageFrames{std::make_shared<RNSkPresentedFrame>(
+            _view->getPlatformContext(), [javaView](uint32_t imageId) {
+              jni::ThreadScope threadScope;
+              auto javaPart = javaView->weak->lockLocal();
+              if (!javaPart) {
+                return;
+              }
+              static const auto method =
+                  javaPart->getClass()->getMethod<void(jlong)>(
+                      "showPresentedImage");
+              method(javaPart, static_cast<jlong>(imageId));
+            })});
+    _view->presentAsImages();
+  }
+
+  /**
+   A static canvas was laid out at this pixel size, which its images take
+   (see RNSkView::layOutImagePresenter), each shown through the Java view's
+   image child by the id of its image (see SkiaView.showPresentedImage).
+   Android never renders in Display P3. Main thread.
+   */
+  void imagePresenterLaidOut(int width, int height) {
+    auto *images = std::get_if<ImageFrames>(&_presentation);
+    if (images == nullptr) {
+      return;
+    }
+    _view->layOutImagePresenter(
+        width, height, /* useP3ColorSpace= */ false,
+        [frame = images->frame](const sk_sp<SkImage> &image) {
+          frame->present(image);
+        });
+  }
+
+  /**
    The bit depth the backing view was created with, which its surface gets
    (see SkiaView.updateView), so that a frame recorded before the surface
    exists, or while it is away, is recorded for its format. Main thread.
@@ -139,11 +225,11 @@ protected:
   }
 
   // Main thread: React dropped the Java view. The Java side destroys this
-  // object right after, on the present thread (SkiaView.dropInstance), and
-  // with it the native view and its surface: their destructors give back the
-  // GPU memory the view holds. Left to the garbage collector, that memory
-  // would wait for the Java object to be finalized, which may never happen:
-  // the collector cannot see it.
+  // object right after (SkiaView.dropInstance), on the present thread for a
+  // window canvas, and with it the native view and its surface: their
+  // destructors give back the GPU memory the view holds. Left to the garbage
+  // collector, that memory would wait for the Java object to be finalized,
+  // which may never happen: the collector cannot see it.
   void unregisterView() {
     auto manager = getSkiaManager();
     if (manager == nullptr) {
@@ -155,13 +241,21 @@ protected:
   // Present thread: the TextureView drew the frame it was given (see
   // SkiaView.onSurfaceTextureUpdated). This object is destroyed on that
   // thread too (see SkiaView.dropInstance), never under the call.
-  void frameConsumed() { _scheduler->onFrameConsumed(); }
+  void frameConsumed() {
+    if (auto *scheduler = windowScheduler()) {
+      scheduler->onFrameConsumed();
+    }
+  }
 
   // Present thread: the view left its window, or the window lost its
   // surface (see SkiaView.cancelFrames). A vsync already asked for still
   // fires, as AChoreographer has no cancel: the host drops it, or hands it
   // to a request made since (see PresentHost::onVsync).
-  void cancelScheduledFrames() { _scheduler->cancel(); }
+  void cancelScheduledFrames() {
+    if (auto *scheduler = windowScheduler()) {
+      scheduler->cancel();
+    }
+  }
 
 private:
   friend HybridBase;
@@ -172,37 +266,10 @@ private:
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
     _view = std::make_shared<RNSkView>(context, _surface);
-    // Tasks for the present thread go straight to it (see
-    // RNSkPresentThread.h). The Java view, which is called back for its
-    // frame rate vote, is reached through a weak reference: it owns this
-    // object through its hybrid data.
-    auto javaView = std::make_shared<JavaView>(jThis);
-    auto runOnPresentThread = [](std::function<void()> task) {
-      presentThread().post(std::move(task));
-    };
-    _view->setPresentThread(runOnPresentThread);
-    // The entries of the view and its window that belong to the present
-    // thread are bound to it there (see RNSkView::bindPresentThread), ahead
-    // of the surface callbacks the Java view posts behind this: the thread
-    // runs its tasks in order.
-    runOnPresentThread([surface = _surface, view = _view]() {
-      surface->bindPresentingThread();
-      view->bindPresentThread();
-    });
-    // A submitted recording goes to the scheduler, on the present thread,
-    // which arms the Java view's frame callback (or presents on the spot,
-    // for a window resized since the frame it shows: see
-    // rnsurface::FrameScheduler::requestFrame). Weak: the view may outlive
-    // this object in the registry for a moment, with the scheduler gone.
-    _presentHost = std::make_shared<PresentHost>(javaView, _view);
-    _scheduler = std::make_shared<rnsurface::FrameScheduler>(*_presentHost);
-    std::weak_ptr<rnsurface::FrameScheduler> weakScheduler = _scheduler;
-    _presentHost->setScheduler(weakScheduler);
-    _view->setFrameScheduler([weakScheduler](bool forResizedWindow) {
-      if (auto scheduler = weakScheduler.lock()) {
-        scheduler->requestFrame(forResizedWindow);
-      }
-    });
+    // The Java view, which is called back for its frame rate vote and for a
+    // static canvas's frames, is reached through a weak reference: it owns
+    // this object through its hybrid data.
+    _javaView = std::make_shared<JavaView>(jThis);
   }
 
   /**
@@ -336,9 +403,11 @@ private:
     // frames show in turn (see RNSkView::setWindowTakesLatestFrame), and the
     // scheduler paces each its own way.
     _view->setWindowTakesLatestFrame(!isSurface);
-    _scheduler->setWindow(
-        isSurface ? rnsurface::FrameScheduler::Window::kShowsEachFrame
-                  : rnsurface::FrameScheduler::Window::kShowsLatestFrame);
+    if (auto *scheduler = windowScheduler()) {
+      scheduler->setWindow(
+          isSurface ? rnsurface::FrameScheduler::Window::kShowsEachFrame
+                    : rnsurface::FrameScheduler::Window::kShowsLatestFrame);
+    }
     JNIEnv *env = jni::Environment::current();
     jobject jSurface = surface;
     // The Surface created over a TextureView's SurfaceTexture; it lives as
@@ -395,14 +464,32 @@ private:
     }
   }
 
+  // A window's frames, paced by the scheduler. The host outlives the
+  // scheduler, which refers to it.
+  struct WindowFrames {
+    std::shared_ptr<PresentHost> host;
+    std::shared_ptr<rnsurface::FrameScheduler> scheduler;
+  };
+  // A static canvas's frames, shown as images.
+  struct ImageFrames {
+    std::shared_ptr<RNSkPresentedFrame> frame;
+  };
+
+  // The window's frame scheduler; none for a static canvas.
+  rnsurface::FrameScheduler *windowScheduler() {
+    auto *window = std::get_if<WindowFrames>(&_presentation);
+    return window == nullptr ? nullptr : window->scheduler.get();
+  }
+
   std::weak_ptr<RNSkManager> _manager;
+  std::shared_ptr<JavaView> _javaView;
   // Declared before the view, which unbinds itself from the surface when it
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;
   std::shared_ptr<RNSkView> _view;
-  // The host outlives the scheduler, which refers to it.
-  std::shared_ptr<PresentHost> _presentHost;
-  std::shared_ptr<rnsurface::FrameScheduler> _scheduler;
+  // How the view presents, decided once by the Java view (see
+  // presentThroughWindow and presentAsImages).
+  std::variant<std::monostate, WindowFrames, ImageFrames> _presentation;
 };
 
 } // namespace RNSkia

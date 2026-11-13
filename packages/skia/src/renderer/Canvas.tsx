@@ -79,6 +79,15 @@ export interface CanvasProps extends ViewProps {
    */
   colorSpace?: CanvasColorSpace;
   /**
+   * Draws each frame into an image that a plain view shows, with no surface,
+   * swapchain or display link of its own: the canvas mounts and unmounts at
+   * the cost of a view. A change of its content draws it again the same way,
+   * through a readback, so it suits content that changes rarely. Read once,
+   * when the canvas mounts; it takes precedence over `android.backingView`
+   * and `highBitDepth`.
+   */
+  static?: boolean;
+  /**
    * Draws text with device independent (distance field) fonts: a glyph is
    * rasterized once and reused under any rotation or scale, instead of
    * being rasterized again for every new transform. Turn it on for text that
@@ -195,6 +204,7 @@ export const Canvas = ({
   highBitDepth = false,
   deviceIndependentFonts = false,
   colorSpace,
+  static: staticPresentation = false,
   android,
   ref,
   ...viewProps
@@ -204,7 +214,7 @@ export const Canvas = ({
     deviceIndependentFonts,
     ref,
   });
-  useBackingViewWarning({ highBitDepth, android });
+  useBackingViewWarning({ highBitDepth, android, static: staticPresentation });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}
@@ -212,6 +222,7 @@ export const Canvas = ({
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
       colorSpace={colorSpace ?? ""}
+      staticPresentation={staticPresentation}
       {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />

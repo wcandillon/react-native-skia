@@ -2,13 +2,14 @@ import type { RefObject, ComponentRef } from "react";
 import React, { memo, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, View } from "react-native";
-import type { CanvasRef } from "react-native-skia";
+import type { CanvasRef, SkImage } from "react-native-skia";
 import {
   Canvas,
   createPicture,
   Fill,
   Picture,
   Skia,
+  SkiaImageView,
   useCanvasRef,
 } from "react-native-skia";
 import { useAnimatedReaction, useSharedValue } from "react-native-reanimated";
@@ -23,6 +24,13 @@ const ROW_HEIGHT = 1000;
 const AWAY = 4 * ROW_HEIGHT;
 
 const cyan = createPicture((canvas) => canvas.drawColor(Skia.Color("cyan")));
+
+const makeCyanImage = () => {
+  const surface = Skia.Surface.MakeOffscreen(16, 16)!;
+  surface.getCanvas().drawColor(Skia.Color("cyan"));
+  surface.flush();
+  return surface.makeImageSnapshot();
+};
 
 // A canvas whose content never changes: React leaves it alone when the screen
 // renders again, so all it is asked for then is a redraw.
@@ -39,25 +47,63 @@ const PictureCanvas = memo(PictureCanvasContent);
 
 type Change = "nothing" | "state" | "sharedValue";
 
+// The views in the row: a canvas beside a canvas drawing a picture and a
+// graphite view, or a static canvas beside an image view.
+type Row = "canvas" | "static";
+
+const isStaticRow: Readonly<Record<Row, boolean>> = {
+  canvas: false,
+  static: true,
+};
+
+interface RowNeighboursProps {
+  row: Row;
+  cyanImage: SkImage;
+  pictureCanvas: RefObject<CanvasRef | null>;
+}
+
+// The views beside the row's first canvas.
+const RowNeighbours = ({
+  row,
+  cyanImage,
+  pictureCanvas,
+}: RowNeighboursProps) => {
+  switch (row) {
+    case "canvas":
+      return (
+        <>
+          <PictureCanvas canvasRef={pictureCanvas} />
+          <CyanGraphiteView style={{ flex: 1 }} />
+        </>
+      );
+    case "static":
+      return <SkiaImageView style={{ flex: 1 }} image={cyanImage} />;
+    default:
+      return exhaustiveCheck(row);
+  }
+};
+
 interface ClippedSubviewsProps {
   change: Change;
   roundTrips: number;
+  row: Row;
 }
 
 // A canvas (red, or cyan once changed) beside a canvas drawing a picture and
-// a graphite view (both cyan), at the top of a scroll view that clips its
-// subviews. They mount unclipped, so that their native views are in the window
-// first; then clipping is turned on and the scroll view goes away and back,
-// roundTrips times, each step once the scroll view reports the offset of the
-// one before. A change is made while away: React state or a shared value.
-// React Native flattens the row, so the views themselves leave their superview
-// while away.
-const ClippedSubviews = ({ change, roundTrips }: ClippedSubviewsProps) => {
+// a graphite view (both cyan), or a static canvas (the same) beside an image
+// view (cyan), at the top of a scroll view that clips its subviews. They mount
+// unclipped, so that their native views are in the window first; then clipping
+// is turned on and the scroll view goes away and back, roundTrips times, each
+// step once the scroll view reports the offset of the one before. A change is
+// made while away: React state or a shared value. React Native flattens the
+// row, so the views themselves leave their superview while away.
+const ClippedSubviews = ({ change, roundTrips, row }: ClippedSubviewsProps) => {
   const scrollView = useRef<ComponentRef<typeof ScrollView>>(null);
   const tripsLeft = useRef(roundTrips);
   const [clipped, setClipped] = useState(false);
   const [color, setColor] = useState("red");
   const sharedColor = useSharedValue("red");
+  const [cyanImage] = useState(makeCyanImage);
   const pictureCanvas = useCanvasRef();
   const done = useScreenDone();
   const scrollBack = () =>
@@ -128,11 +174,14 @@ const ClippedSubviews = ({ change, roundTrips }: ClippedSubviewsProps) => {
       style={{ flex: 1 }}
     >
       <View style={{ flexDirection: "row", height: ROW_HEIGHT }}>
-        <Canvas style={{ flex: 1 }}>
+        <Canvas style={{ flex: 1 }} static={isStaticRow[row]}>
           <Fill color={change === "sharedValue" ? sharedColor : color} />
         </Canvas>
-        <PictureCanvas canvasRef={pictureCanvas} />
-        <CyanGraphiteView style={{ flex: 1 }} />
+        <RowNeighbours
+          row={row}
+          cyanImage={cyanImage}
+          pictureCanvas={pictureCanvas}
+        />
       </View>
       <View style={{ height: 2 * AWAY }} />
     </ScrollView>
@@ -140,17 +189,33 @@ const ClippedSubviews = ({ change, roundTrips }: ClippedSubviewsProps) => {
 };
 
 export const ClippedSubviewsBack = () => (
-  <ClippedSubviews change="nothing" roundTrips={1} />
+  <ClippedSubviews change="nothing" roundTrips={1} row="canvas" />
 );
 
 export const ClippedSubviewsTwice = () => (
-  <ClippedSubviews change="nothing" roundTrips={2} />
+  <ClippedSubviews change="nothing" roundTrips={2} row="canvas" />
 );
 
 export const ClippedSubviewsStateChanged = () => (
-  <ClippedSubviews change="state" roundTrips={1} />
+  <ClippedSubviews change="state" roundTrips={1} row="canvas" />
 );
 
 export const ClippedSubviewsSharedValueChanged = () => (
-  <ClippedSubviews change="sharedValue" roundTrips={1} />
+  <ClippedSubviews change="sharedValue" roundTrips={1} row="canvas" />
+);
+
+export const ClippedStaticBack = () => (
+  <ClippedSubviews change="nothing" roundTrips={1} row="static" />
+);
+
+export const ClippedStaticTwice = () => (
+  <ClippedSubviews change="nothing" roundTrips={2} row="static" />
+);
+
+export const ClippedStaticStateChanged = () => (
+  <ClippedSubviews change="state" roundTrips={1} row="static" />
+);
+
+export const ClippedStaticSharedValueChanged = () => (
+  <ClippedSubviews change="sharedValue" roundTrips={1} row="static" />
 );

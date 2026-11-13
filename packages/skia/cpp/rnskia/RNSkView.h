@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -13,8 +14,10 @@
 #include "RNSkGraphiteProducer.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkGraphiteTargetInfo.h"
+#include "RNSkImagePresenterLayout.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkPresentedImages.h"
 #include "RNSkRedrawRequest.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
@@ -46,15 +49,17 @@ namespace jsi = facebook::jsi;
  * surface once the platform view's surface can show a new frame (see
  * setFrameScheduler), on the thread the platform view presents on: the main
  * thread, or a thread of its own (Android and Apple canvases each present on
- * one shared by every canvas of the platform, see setPresentThread).
+ * one shared by every canvas of the platform, see setPresentThread). A static
+ * canvas presents its frames as images, on the images' worker (see
+ * presentAsImages).
  *
  * Threading: the registry side (RNSkJsiViewApi) runs on the JS thread, except
  * applyUpdates() which a Reanimated mapper calls on the UI runtime; snapshots
  * replay on the calling thread. Presenting (redraw, presentFrame,
  * scheduleFrame) runs on the present thread, and only there, which the
- * entries check once the platform view has bound it (see
- * bindPresentThread), and so does everything the platform view does to the
- * window (see RNSkWindowSurface): nothing waits for a present.
+ * entries check once the view has bound it (see installPresentThread), and
+ * so does everything the platform view does to the window (see
+ * RNSkWindowSurface): nothing waits for a present.
  */
 class RNSkView : public std::enable_shared_from_this<RNSkView> {
 public:
@@ -247,8 +252,8 @@ public:
     if (presented.allDone) {
       return;
     }
-    // Not scheduleFrame(): without a scheduler it redraws, which would fail
-    // again and recurse.
+    // The frame scheduler tries it again on the view's next frame; without
+    // one, it waits for the next recording or redraw (see setFrameScheduler).
     if (_frameScheduler) {
       _frameScheduler(/* forResizedWindow= */ false);
     }
@@ -317,20 +322,19 @@ public:
    draws use to compile, which must not hold the main thread (and an Android
    platform context runs a task handed over on the main thread on the spot,
    see JniPlatformContext). Installed once, before the view is bound to its
-   id.
+   id, in place of presentAsImages().
    */
   void setPresentThread(std::function<void(std::function<void()>)> run) {
-    _runOnPresentThread = std::move(run);
+    installPresentThread(std::move(run));
   }
 
   /**
-   Present thread: binds the entries that belong to it (redraw,
-   presentFrame, scheduleFrame; see rnsurface::ThreadChecker) to the calling
-   thread, before the first of them. The platform view posts it to its
-   present thread as it installs it (see setPresentThread), ahead of
-   everything it posts there.
+   Runs a task on the thread the view presents on (see setPresentThread),
+   when it gets to it, in order with what the view posts there. Any thread.
    */
-  void bindPresentThread() { _presentThread.bindToCurrentThread(); }
+  void postToPresentThread(std::function<void()> task) {
+    _runOnPresentThread(std::move(task));
+  }
 
   /**
    Installed by the platform view, which calls presentFrame() once its surface
@@ -366,13 +370,77 @@ public:
     _windowTakesLatestFrame = takesLatestFrame;
   }
 
+  /**
+   Presents the view's frames as images, for a static canvas: on the images'
+   worker (see RNSkPresentedImages::worker), as soon as it gets to them, into
+   the image presenter the platform view attaches in place of a window (see
+   RNSkWindowSurface::attachImagePresenter). No window takes them, so they
+   need neither the main thread nor the present thread every window shares,
+   which a screen of static canvases mounting at once would hold up, and no
+   frame scheduler. Installed once, before the view is bound to its id, in
+   place of setPresentThread(). That worker is no window's thread: the
+   surface leaves the windows whose surfaces a lost device's replacement
+   releases on theirs (see RNSkWindowSurface::presentAsImages).
+   */
+  void presentAsImages() {
+    _surface->presentAsImages();
+    installPresentThread([](std::function<void()> task) {
+      RNSkPresentedImages::worker().post(std::move(task));
+    });
+  }
+
+  /**
+   A static canvas was laid out at this size in pixels, in this color space,
+   which its images take (see presentAsImages). Main thread: a layout is
+   handed on to the images' worker only when it changes (see
+   RNSkImagePresenterLayout). There, when it gets to it, the first layout and
+   a new color space attach the image presenter, and a new size resizes it.
+   The task holds the view while it runs, so the surface never calls back
+   into a view the platform let go of meanwhile (see
+   RNSkWindowSurface::setRequestRedraw).
+   */
+  void layOutImagePresenter(int width, int height, bool useP3ColorSpace,
+                            RNSkWindowSurface::ImagePresenter presenter) {
+    const RNSkImagePresenterLayout::Layout layout{width, height,
+                                                  useP3ColorSpace};
+    const auto change = _imagePresenterLayout.layOut(layout);
+    if (change == RNSkImagePresenterLayout::Change::kNone) {
+      return;
+    }
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    _runOnPresentThread(
+        [weakThis, change, layout, presenter = std::move(presenter)]() {
+          auto view = weakThis.lock();
+          if (view == nullptr) {
+            return;
+          }
+          auto &surface = *view->_surface;
+          switch (change) {
+          case RNSkImagePresenterLayout::Change::kNone:
+            return;
+          case RNSkImagePresenterLayout::Change::kAttach:
+            surface.attachImagePresenter(layout.width, layout.height,
+                                         layout.useP3ColorSpace, presenter);
+            return;
+          case RNSkImagePresenterLayout::Change::kResize:
+            if (surface.isAttached()) {
+              surface.resize(layout.width, layout.height);
+            } else {
+              surface.attachImagePresenter(layout.width, layout.height,
+                                           layout.useP3ColorSpace, presenter);
+            }
+            return;
+          }
+        });
+  }
+
   /** Present thread: a recording is waiting. */
   void scheduleFrame() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::scheduleFrame");
     if (_frameScheduler) {
       _frameScheduler(hasFrameForResizedWindow());
     } else {
-      redraw();
+      presentFrame();
     }
   }
 
@@ -410,7 +478,10 @@ public:
     // halves a GPU-bound canvas. The next one waits for the next vsync
     // (kMoreQueued asks for it). Recordings for a size the window no longer
     // has still go together: present() drops those for the one behind them.
-    if (recordings.size() > 1 && recordings.front()->hasSizeOf(targetInfo)) {
+    // A view with no frame scheduler (a static canvas) has no vsync to wait
+    // for and nothing that asks again: it presents them together.
+    if (_frameScheduler && recordings.size() > 1 &&
+        recordings.front()->hasSizeOf(targetInfo)) {
       target->requeue({recordings.begin() + 1, recordings.end()});
       recordings.resize(1);
     }
@@ -435,16 +506,16 @@ public:
    back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
    owed since one found it could not present is posted (see
    RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
-   frame scheduler. Nothing is replayed on the spot. A GPU device lost in the
-   background (where iOS refuses GPU work) is replaced now that the app is
-   back, and the view is asked for a frame once it is.
+   frame scheduler, on the present thread. Nothing is replayed on the spot. A
+   GPU device lost in the background (where iOS refuses GPU work) is replaced
+   now that the app is back, and the view is asked for a frame once it is.
    */
   void onCanPresent() {
     DawnContext::requestRecovery();
     if (_redrawRequest.onCanPresent()) {
       postRedraw();
     } else if (hasQueuedRecordings()) {
-      scheduleFrame();
+      postScheduleFrame();
     }
   }
 
@@ -521,6 +592,34 @@ private:
     }
     return present(surface, targetInfo, {recording}, /* remember= */ false)
                .done == 1;
+  }
+
+  /**
+   Installs the runner of the thread the view presents on (see
+   setPresentThread and presentAsImages), and binds the entries of the view
+   and of its window that belong to that thread (redraw, presentFrame,
+   scheduleFrame; see rnsurface::ThreadChecker) to it there, ahead of
+   everything posted to it after.
+   */
+  void installPresentThread(std::function<void(std::function<void()>)> run) {
+    _runOnPresentThread = std::move(run);
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    _runOnPresentThread([weakThis]() {
+      if (auto view = weakThis.lock()) {
+        view->_surface->bindPresentingThread();
+        view->_presentThread.bindToCurrentThread();
+      }
+    });
+  }
+
+  /** Runs scheduleFrame() on the present thread, when it gets to it. */
+  void postScheduleFrame() {
+    std::weak_ptr<RNSkView> weakThis = weak_from_this();
+    _runOnPresentThread([weakThis]() {
+      if (auto view = weakThis.lock()) {
+        view->scheduleFrame();
+      }
+    });
   }
 
   /**
@@ -736,10 +835,20 @@ private:
       RNSkSurface &surface, const RNSkGraphiteTargetInfo &targetInfo,
       const std::shared_ptr<RNSkGraphiteRecording> &recording) {
     const auto &size = recording->getTarget();
-    RNSkOffscreenSurface intermediate(_platformContext, size.width, size.height,
-                                      size.useP3ColorSpace);
+    // DawnContext::MakeOffscreen throws for a texture or a recorder it cannot
+    // get, and a present never throws, the worker's for a static canvas
+    // included: the recording is consumed.
+    std::optional<RNSkOffscreenSurface> intermediate;
+    try {
+      intermediate.emplace(_platformContext, size.width, size.height,
+                           size.useP3ColorSpace);
+    } catch (const std::exception &error) {
+      RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording: %s",
+                               size.width, size.height, error.what());
+      return TexturePresent::kConsumed;
+    }
     RNSkGraphiteTargetInfo info;
-    if (!intermediate.getTargetInfo(&info) ||
+    if (!intermediate->getTargetInfo(&info) ||
         !recording->isCompatibleWith(info)) {
       // No texture of that size and format: the frame is consumed.
       RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, the "
@@ -748,8 +857,8 @@ private:
                                surface.getHeight());
       return TexturePresent::kConsumed;
     }
-    auto image = intermediate.presentRecordings(info, {recording->get()})
-                     ? intermediate.makeImage()
+    auto image = intermediate->presentRecordings(info, {recording->get()})
+                     ? intermediate->makeImage()
                      : nullptr;
     if (image == nullptr) {
       RNSkLogger::logToConsole("SkiaView: skipping a %dx%d recording, it "
@@ -771,6 +880,9 @@ private:
   RNSkRedrawRequest _redrawRequest;
   // The thread the view presents on (see the class comment).
   rnsurface::ThreadChecker _presentThread;
+  // A static canvas's layout, as handed on to the images' worker (see
+  // layOutImagePresenter). Main thread.
+  RNSkImagePresenterLayout _imagePresenterLayout;
 
   // The target is bound on the JS thread and read on the present thread and
   // by snapshots; the last presented frame is written by the present thread

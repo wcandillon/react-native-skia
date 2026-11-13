@@ -30,9 +30,9 @@ import com.facebook.react.views.view.ReactViewGroup;
  * window belongs to the present thread (see PresentThread, owned by the
  * native side), where the frames are presented, the frame scheduler
  * (rnsurface::FrameScheduler) and its vsync (AChoreographer) live, and the
- * native view is destroyed (see dropInstance): the surface callbacks post
- * the attach, the resize and the detach there, so that the main thread
- * never waits for a present in flight. A present holds the window for as
+ * native view of a window canvas is destroyed (see dropInstance): the surface
+ * callbacks post the attach, the resize and the detach there, so that the main
+ * thread never waits for a present in flight. A present holds the window for as
  * long as Graphite takes to replay the frame, which includes compiling the
  * pipelines it needs, seconds on a slow GPU, and a main thread made to wait
  * for that is an ANR (#4394). A TextureView tells the main thread when it
@@ -43,6 +43,10 @@ import com.facebook.react.views.view.ReactViewGroup;
  * the platform's, which destroys it as soon as surfaceDestroyed returns, so
  * there the main thread waits for the detach, for the length of a present at
  * most (see onSurfaceDestroyed).
+ *
+ * A static canvas has no backing view: an image child (see SkiaImageView)
+ * shows its frames, which the native side presents as images on a thread of
+ * its own (see RNSkView::presentAsImages), never through the frame scheduler.
  */
 public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     private static final String TAG = "SkiaView";
@@ -60,8 +64,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
 
     // Set by dropInstance(), on the main thread: no native method is called
     // from there after that, but for surfaceAbandoned, under the hybrid data's
-    // lock (see onSurfaceDestroyed). The native view itself goes on the
-    // present thread, where the hybrid data says whether it is still there.
+    // lock (see onSurfaceDestroyed). A window canvas's native view itself goes
+    // on the present thread, where the hybrid data says whether it is still
+    // there; a static canvas's goes here.
     private boolean mDropped = false;
 
     // Whether a SurfaceView's surface is attached, for the main thread: set as
@@ -83,6 +88,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     // (see takesZOrder); the others are read once, when the backing view is
     // created (see updateView()).
     private BackingViewKind mBackingView = BackingViewKind.TEXTURE_VIEW;
+    private boolean mStaticPresentation = false;
     private boolean mOpaque = false;
     private boolean mZOrderOnTop = false;
     private boolean mZOrderMediaOverlay = false;
@@ -96,6 +102,10 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     @Nullable
     private BackingViewKind mKind = null;
     private boolean mSurfaceHighBitDepth = false;
+
+    // The id the last transaction set, registered once the transaction is
+    // complete (see registerPendingView); 0 when there is none to register.
+    private int mPendingNativeId = 0;
 
     private final SurfaceFrameRateVote mFrameRateVote = new SurfaceFrameRateVote(this);
     private final Runnable mOnFrameConsumed = this::onFrameConsumed;
@@ -145,6 +155,14 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
             return;
         }
         mBackingView = BackingViewKind.fromBackingView(value);
+    }
+
+    public void setStaticPresentation(boolean value) {
+        if (mKind != null) {
+            warnIgnoredOnceMounted("static");
+            return;
+        }
+        mStaticPresentation = value;
     }
 
     public void setOpaque(boolean value) {
@@ -232,11 +250,21 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
             switch (kind) {
                 case SURFACE_VIEW -> ((SkiaSurfaceView) mView).setOpaque(opaque);
                 case TEXTURE_VIEW -> ((SkiaTextureView) mView).setOpaque(opaque);
+                case IMAGE -> {
+                }
             }
             return;
         }
-        kind = mBackingView;
+        kind = mStaticPresentation ? BackingViewKind.IMAGE : mBackingView;
         mKind = kind;
+        // How the native view presents is decided once, before the view
+        // registers its id (see registerPendingView).
+        if (hasNativeView()) {
+            switch (kind) {
+                case SURFACE_VIEW, TEXTURE_VIEW -> presentThroughWindow();
+                case IMAGE -> presentAsImages();
+            }
+        }
         mSurfaceHighBitDepth = BackingViewKind.resolveHighBitDepth(kind, mHighBitDepth);
         if (mHighBitDepth && !mSurfaceHighBitDepth) {
             Log.w(TAG, "highBitDepth needs a SurfaceView on Android, keeping the 8-bit format");
@@ -251,6 +279,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
             case SURFACE_VIEW -> new SkiaSurfaceView(getContext(), this, mZOrderOnTop,
                     mZOrderMediaOverlay, opaque);
             case TEXTURE_VIEW -> new SkiaTextureView(getContext(), this, opaque);
+            case IMAGE -> new SkiaImageView(getContext());
         };
         addView(mView);
         // React Native sizes native children explicitly through onLayout, so
@@ -258,7 +287,39 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         // child ourselves or it stays 0x0 and never gets a surface.
         if (getWidth() > 0 || getHeight() > 0) {
             mView.layout(0, 0, getWidth(), getHeight());
+            if (kind == BackingViewKind.IMAGE && hasNativeView()) {
+                imagePresenterLaidOut(getWidth(), getHeight());
+            }
         }
+    }
+
+    void setPendingNativeId(int nativeId) {
+        mPendingNativeId = nativeId;
+    }
+
+    // Registers the id the transaction set, once updateView() has applied the
+    // transaction: a static canvas's native view takes the thread it presents
+    // on before it is bound to its id (see updateView).
+    void registerPendingView() {
+        if (mPendingNativeId != 0 && hasNativeView()) {
+            registerView(mPendingNativeId);
+        }
+        mPendingNativeId = 0;
+    }
+
+    /**
+     * The frame a static canvas shows now, by image id (see SkiaImageView). Called from native on the thread that
+     * presents the frames; shown on the main thread in order with the bitmaps' publish and discard, unless the view
+     * was dropped meanwhile. Not View.post(), which off the main thread holds the request until the view is
+     * attached to a window again.
+     */
+    @DoNotStrip
+    public void showPresentedImage(long imageId) {
+        SkiaPresentedImages.post(() -> {
+            if (hasNativeView() && mView instanceof SkiaImageView imageView) {
+                imageView.setPresentedImageId(imageId);
+            }
+        });
     }
 
     // React drops the view for good: it is never recycled (ReactViewManager
@@ -277,16 +338,38 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         // The registry's entry goes now: a successor may take this view's id,
         // on this thread, before the present thread gets to the drop.
         unregisterView();
+        if (mKind == BackingViewKind.IMAGE) {
+            // A static canvas's native view is reached from the worker alone,
+            // whose tasks hold it while they run (see
+            // RNSkView::layOutImagePresenter), so it goes now.
+            if (mView instanceof SkiaImageView imageView) {
+                imageView.setPresentedImageId(0);
+            }
+            mHybridData.resetNative();
+            return;
+        }
         // The native view and its window go on the present thread, after the
         // present in flight, if any: nothing waits for it here.
         PresentThread.post(mHybridData::resetNative);
     }
 
+    // Whether the native view presents through the backing view's window, and
+    // so has a frame scheduler (see updateView). Main thread.
+    private boolean hasFrameScheduler() {
+        if (mKind == null) {
+            return false;
+        }
+        return switch (mKind) {
+            case SURFACE_VIEW, TEXTURE_VIEW -> true;
+            case IMAGE -> false;
+        };
+    }
+
     // Whether the native view still exists, for the main thread: it is dropped
     // there (see dropInstance), and no native method is called from there
     // after that, but for the one onSurfaceDestroyed makes under the hybrid
-    // data's lock. The present thread, where it is destroyed, asks the hybrid
-    // data instead (see presentFrame).
+    // data's lock. The present thread, where a window canvas's is destroyed,
+    // asks the hybrid data instead (see postToNativeView).
     private boolean hasNativeView() {
         return !mDropped;
     }
@@ -329,6 +412,9 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         }
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
+        }
+        if (mKind == BackingViewKind.IMAGE && hasNativeView()) {
+            imagePresenterLaidOut(right - left, bottom - top);
         }
     }
 
@@ -375,7 +461,12 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         removeCallbacks(mFrameConsumedPosted);
-        PresentThread.post(mCancelFrames);
+        // Only a window's frames are scheduled: a static canvas asks for none,
+        // and its native view is dropped on the main thread, not behind this
+        // task (see dropInstance).
+        if (hasFrameScheduler()) {
+            PresentThread.post(mCancelFrames);
+        }
     }
 
     // Surfaces ------------------------------------------------------------
@@ -515,19 +606,15 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
 
     private native void setLayoutSize(int width, int height, float pixelDensity);
 
+    private native void presentThroughWindow();
+
+    private native void presentAsImages();
+
+    private native void imagePresenterLaidOut(int width, int height);
+
     private native void setSurfaceHighBitDepth(boolean highBitDepth);
 
     private native void registerView(int nativeId);
-
-    // Binds the view to its id, for the view manager. Main thread; a dropped
-    // view is left alone, like every other native call made from there (see
-    // hasNativeView).
-    void bindNativeId(int nativeId) {
-        if (!hasNativeView()) {
-            return;
-        }
-        registerView(nativeId);
-    }
 
     private native void unregisterView();
 

@@ -47,3 +47,48 @@ describe("A Skia view a scroll view takes out of the window", () => {
     });
   });
 });
+
+// The ClippedStatic screens put a static canvas on the left and an image view
+// on the right. A static canvas keeps its native view and its frame while it
+// is away.
+const readStaticSides = async (image: SkImage) => ({
+  staticCanvas: await readScreenColor(image, 1 / 4),
+  imageView: await readScreenColor(image, 3 / 4),
+});
+
+describe("A static canvas a scroll view takes out of the window", () => {
+  itRunsE2eOnly("shows its frame again once scrolled back", async () => {
+    const image = await surface.screen("ClippedStaticBack");
+    expect(await readStaticSides(image)).toEqual({
+      staticCanvas: "red",
+      imageView: "cyan",
+    });
+  });
+
+  itRunsE2eOnly(
+    "shows its frame again each time it is scrolled back",
+    async () => {
+      const image = await surface.screen("ClippedStaticTwice");
+      expect(await readStaticSides(image)).toEqual({
+        staticCanvas: "red",
+        imageView: "cyan",
+      });
+    }
+  );
+
+  itRunsE2eOnly("shows what React changed while it was away", async () => {
+    const image = await surface.screen("ClippedStaticStateChanged");
+    expect(await readStaticSides(image)).toEqual({
+      staticCanvas: "cyan",
+      imageView: "cyan",
+    });
+  });
+
+  itRunsE2eOnly("shows the shared values set while it was away", async () => {
+    const image = await surface.screen("ClippedStaticSharedValueChanged");
+    expect(await readStaticSides(image)).toEqual({
+      staticCanvas: "cyan",
+      imageView: "cyan",
+    });
+  });
+});

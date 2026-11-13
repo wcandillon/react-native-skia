@@ -21,9 +21,11 @@
 
 #import "RNSkManager.h"
 #include "RNSkPresentThread.h"
+#import "RNSkPresentedFrame.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#import "SkiaPresentedImageLayer.h"
 #include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
@@ -98,6 +100,17 @@ usesP3ColorSpace(const std::string &colorSpace,
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
+  // Whether the native view presents as images, a static canvas: read from
+  // the props when the native view is made.
+  bool _staticPresentation;
+  // The image layer of a static canvas, and the frame it shows (see
+  // presentedFrame).
+  SkiaPresentedImageLayer *_imageLayer;
+  std::shared_ptr<RNSkia::RNSkPresentedFrame> _presentedFrame;
+  // Advanced each time the view lets go of its frames (see
+  // releaseShownFrame): an image the worker sent for frames let go of is not
+  // shown.
+  uint64_t _presentedFrameGeneration;
   // Owned by the module (see finalizeUpdates:). A view can outlive its
   // manager: on a reload the module is invalidated on the JS thread while
   // Fabric still holds the views of the old bundle, which it deallocates
@@ -167,6 +180,9 @@ usesP3ColorSpace(const std::string &colorSpace,
     _manager = [RNSkiaModule latestActiveSkManager];
     _nativeId = 0;
     _highBitDepth = false;
+    _staticPresentation = false;
+    _imageLayer = nil;
+    _presentedFrameGeneration = 0;
     _canPresent = std::make_shared<std::atomic<bool>>(!appIsBackgrounded());
     _presenting = std::make_shared<bool>(false);
     _windowAttached = false;
@@ -232,6 +248,26 @@ usesP3ColorSpace(const std::string &colorSpace,
   if (newSuperView == nullptr || manager == nullptr) {
     return;
   }
+  if (_view == nullptr) {
+    [self makeNativeView:manager];
+    return;
+  }
+  if (_staticPresentation) {
+    // The image layer stays with the view across a superview change: the
+    // view keeps its frame, and its frames keep presenting on the worker.
+    if (_imageLayer == nil) {
+      _imageLayer = [SkiaPresentedImageLayer layer];
+      [self.layer addSublayer:_imageLayer];
+      [self setNeedsLayout];
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _imageLayer.frame =
+        CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+    [self updateImagePresenter];
+    [CATransaction commit];
+    return;
+  }
   if (_layer == nil) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
@@ -260,13 +296,18 @@ usesP3ColorSpace(const std::string &colorSpace,
       [CATransaction commit];
     }
   }
-  if (_view != nullptr) {
-    return;
-  }
+  // Here the view is put back with a new layer, above (see
+  // willMoveToSuperview:).
+}
+
+// The native view, its window surface and how it presents, as the props ask:
+// read once, like the backing view on Android. A static canvas has no window:
+// its frames are images, which the worker presents (see
+// RNSkView::presentAsImages); a window belongs to the present thread, where
+// it is attached and presented (see RNSkWindowSurface).
+- (void)makeNativeView:(const std::shared_ptr<RNSkia::RNSkManager> &)manager {
   auto context = manager->getPlatformContext();
   _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
-  _surface->setHighBitDepth(_highBitDepth);
-  _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
   // The window is left alone while the app is in the background: what the
   // view holds is presented on its next frame once the app is back (see
   // appWillEnterForeground:). Dawn holds GPU work committed meanwhile anyway
@@ -274,43 +315,55 @@ usesP3ColorSpace(const std::string &colorSpace,
   _surface->setCanPresent(
       [canPresent = _canPresent]() { return canPresent->load(); });
   _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
-  // Presents, redraws and frame requests go to the present thread, where
-  // the view is the one the tasks posted before see.
-  _view->setPresentThread([](std::function<void()> task) {
-    RNSkia::presentThread().post(std::move(task));
-  });
-  // The entries of the view and its window that belong to the present
-  // thread are bound to it there (see RNSkView::bindPresentThread), ahead
-  // of everything posted behind this.
-  {
-    auto surface = _surface;
-    auto view = _view;
-    RNSkia::presentThread().post([=]() {
-      surface->bindPresentingThread();
-      view->bindPresentThread();
+  if (_staticPresentation) {
+    // The images are 8-bit whatever the prop says, and the frames are
+    // recorded for them from the first. The worker presents them.
+    _surface->setHighBitDepth(false);
+    _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
+    _view->presentAsImages();
+    _imageLayer = [SkiaPresentedImageLayer layer];
+    [self.layer addSublayer:_imageLayer];
+    [self setNeedsLayout];
+  } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    _layer = [CAMetalLayer layer];
+#pragma clang diagnostic pop
+    [self.layer addSublayer:_layer];
+    // AppKit lays out a view put in a superview only when asked: the layout
+    // attaches the window's surface to the layer (see layoutSubviews).
+    [self setNeedsLayout];
+    _surface->setHighBitDepth(_highBitDepth);
+    _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
+    // Presents, redraws and frame requests go to the present thread, where
+    // the view is the one the tasks posted before see.
+    _view->setPresentThread([](std::function<void()> task) {
+      RNSkia::presentThread().post(std::move(task));
     });
+    [self enterPresentThread];
+    // A submitted recording goes to the scheduler, on the present thread,
+    // which arms the display link, or presents on the spot for a window
+    // resized since the frame it shows (see
+    // rnsurface::FrameScheduler::requestFrame).
+    __weak SkiaView *weakSelf = self;
+    _view->setFrameScheduler(
+        [weakSelf, presenting = _presenting](bool forResizedWindow) {
+          if (*presenting) {
+            [weakSelf scheduleFrame:forResizedWindow];
+          }
+        });
   }
-  [self enterPresentThread];
-  // A submitted recording goes to the scheduler, on the present thread,
-  // which arms the display link, or presents on the spot for a window
-  // resized since the frame it shows (see
-  // rnsurface::FrameScheduler::requestFrame).
-  __weak SkiaView *weakSelf = self;
-  _view->setFrameScheduler(
-      [weakSelf, presenting = _presenting](bool forResizedWindow) {
-        if (*presenting) {
-          [weakSelf scheduleFrame:forResizedWindow];
-        }
-      });
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
 }
 
 - (void)removeFromSuperview {
-  [self leavePresentThread];
-  [_layer removeFromSuperlayer];
-  _layer = nil;
+  if (!_staticPresentation) {
+    [self leavePresentThread];
+    [_layer removeFromSuperlayer];
+    _layer = nil;
+  }
   [super removeFromSuperview];
 }
 
@@ -386,6 +439,7 @@ usesP3ColorSpace(const std::string &colorSpace,
 // leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [self releaseShownFrame];
   [self unregisterView];
   // The scheduler before the host it refers to; the present thread is done
   // with both (see leavePresentThread).
@@ -413,6 +467,14 @@ usesP3ColorSpace(const std::string &colorSpace,
 // registry's lock: it goes as the present thread lets go of it.
 - (void)releaseNativeView {
   [self unregisterView];
+  if (_staticPresentation) {
+    [self releaseShownFrame];
+    [_imageLayer removeFromSuperlayer];
+    _imageLayer = nil;
+    _view = nullptr;
+    _surface = nullptr;
+    return;
+  }
   [self leavePresentThread];
   [_layer removeFromSuperlayer];
   _view = nullptr;
@@ -452,7 +514,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   _canPresent->store(true);
   if (_view != nullptr) {
     auto view = _view;
-    RNSkia::presentThread().post([=]() { view->onCanPresent(); });
+    view->postToPresentThread([view]() { view->onCanPresent(); });
   }
 }
 
@@ -617,8 +679,9 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 - (void)drawRect:(CGRect)rect {
   // The OS asked for a draw: present what the view holds on the present
-  // thread's next turn.
-  if (_view != nullptr) {
+  // thread's next turn. A static canvas's layer keeps the image it shows,
+  // and its frames are presented on the worker.
+  if (_view != nullptr && !_staticPresentation) {
     _view->requestRedraw();
   }
 }
@@ -627,13 +690,77 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 - (void)layoutSubviews {
   [super layoutSubviews];
-  if (_surface != nullptr && _layer != nil) {
+  if (_surface == nullptr) {
+    return;
+  }
+  if (_staticPresentation) {
+    if (_imageLayer != nil) {
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      _imageLayer.frame =
+          CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+      [self updateImagePresenter];
+      [CATransaction commit];
+    }
+    return;
+  }
+  if (_layer != nil) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _layer.frame =
         CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
     [self updateWindowSize];
     [CATransaction commit];
+  }
+}
+
+// A static canvas presents into images of the view's size, in its color
+// space (see RNSkView::layOutImagePresenter). Main thread.
+- (void)updateImagePresenter {
+  const float pd = _view->getPlatformContext()->getPixelDensity();
+  const int w = static_cast<int>(std::lround(self.bounds.size.width * pd));
+  const int h = static_cast<int>(std::lround(self.bounds.size.height * pd));
+  _surface->setLayoutSize(w, h);
+  auto presentedFrame = [self presentedFrame];
+  _view->layOutImagePresenter(
+      w, h, usesP3ColorSpace(_colorSpace, _view->getPlatformContext()),
+      [presentedFrame](const sk_sp<SkImage> &frame) {
+        presentedFrame->present(frame);
+      });
+}
+
+// The frames a static canvas presents on the worker, which the layer shows on
+// the main thread by image id, keeping the previous one until the next one's
+// pixels arrive (see RNSkPresentedFrame).
+- (std::shared_ptr<RNSkia::RNSkPresentedFrame>)presentedFrame {
+  if (_presentedFrame == nullptr) {
+    __weak SkiaView *weakSelf = self;
+    const auto generation = ++_presentedFrameGeneration;
+    _presentedFrame = std::make_shared<RNSkia::RNSkPresentedFrame>(
+        _view->getPlatformContext(), [weakSelf, generation](uint32_t imageId) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf showPresentedImage:imageId ofGeneration:generation];
+          });
+        });
+  }
+  return _presentedFrame;
+}
+
+- (void)showPresentedImage:(uint32_t)imageId ofGeneration:(uint64_t)generation {
+  if (_imageLayer != nil && _presentedFrameGeneration == generation) {
+    [_imageLayer showImageId:imageId];
+  }
+}
+
+// Gives back the frames a static canvas holds: it is recycled or deallocated.
+- (void)releaseShownFrame {
+  if (_presentedFrame != nullptr) {
+    _presentedFrame->close();
+    _presentedFrame = nullptr;
+    ++_presentedFrameGeneration;
+  }
+  if (_imageLayer != nil) {
+    [_imageLayer showImageId:0];
   }
 }
 
@@ -759,6 +886,10 @@ usesP3ColorSpace(const std::string &colorSpace,
   int nativeId =
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
+  // Read when the native view is made, like the backing view on Android.
+  if (_view == nullptr) {
+    _staticPresentation = newProps.staticPresentation;
+  }
   [self setHighBitDepth:newProps.highBitDepth];
   [self setColorSpace:newProps.colorSpace];
   // The android* props (backing view, opacity, z-order) select and set up the
@@ -780,7 +911,8 @@ usesP3ColorSpace(const std::string &colorSpace,
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface == nullptr) {
+  // A static canvas's images keep the 8-bit format.
+  if (_surface == nullptr || _staticPresentation) {
     return;
   }
   // The layer is re-attached with the new format; until then (or without a
@@ -803,6 +935,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   // until then, frames are recorded for it.
   _surface->setUseP3ColorSpace(
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
+  if (_staticPresentation) {
+    if (_imageLayer != nil) {
+      [self updateImagePresenter];
+    }
+    return;
+  }
   if (_windowAttached) {
     [self attachSurface];
   }

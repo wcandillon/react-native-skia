@@ -23,10 +23,24 @@ const noop = () => {};
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// A buffer of the device Skia renders with, mapped as it is made, which tells
+// a destroyed device from a lost one (the Gpu spec): Dawn unmaps the buffers
+// of a destroyed device, and a loss alone leaves them mapped.
+let mappedBuffer: GPUBuffer | null = null;
+const mapGpuBuffer = () => {
+  mappedBuffer = getSharedDevice().createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+    mappedAtCreation: true,
+  });
+};
+const mappedGpuBufferState = () => mappedBuffer?.mapState ?? null;
+
 // Runs a snippet the host sent, with the app's Skia.
 const evaluate = (
   { code, ctx }: { code: string; ctx: any },
-  assets: TestsProps["assets"]
+  assets: TestsProps["assets"],
+  setCanvasShown: (shown: boolean) => void
 ) =>
   eval(
     `(function Main() {
@@ -37,12 +51,17 @@ const evaluate = (
   ).call({
     Skia,
     // The worklet serializer spec needs app-side worklets (see
-    // workletSerialization.ts), and the Gpu spec a way to lose the device;
+    // workletSerialization.ts), and the Gpu spec a way to lose the device,
+    // to tell whether it was destroyed and to unmount the harness's canvas;
     // hand them over through the context.
     ctx: {
       ...parseProps(ctx, assets),
       workletSerialization,
       forceGpuDeviceLoss,
+      mapGpuBuffer,
+      mappedGpuBufferState,
+      hideCanvas: () => setCanvasShown(false),
+      showCanvas: () => setCanvasShown(true),
     },
     size: size * PixelRatio.get(),
     scale: s,
@@ -100,15 +119,20 @@ export const Tests = ({ assets }: TestsProps) => {
     readonly done: () => void;
   } | null>(null);
   const screenMounts = useRef(0);
+  // The harness's own canvas holds a window on the GPU device: the Gpu spec
+  // unmounts it while it loses a device no window holds, and mounts it again
+  // after. A drawing mounts it too, as it draws in it.
+  const [canvasShown, setCanvasShown] = useState(true);
 
   useEffect(() => {
     if (client === null) {
       return;
     }
     return serve(client, {
-      eval: (params) => evaluate(params, assets),
+      eval: (params) => evaluate(params, assets, setCanvasShown),
       draw: async (tree) => {
         setDrawing(parseNode(tree, assets));
+        setCanvasShown(true);
         await sleep(timeToDraw);
         if (ref.current === null) {
           throw new Error("The canvas is not mounted");
@@ -145,9 +169,11 @@ export const Tests = ({ assets }: TestsProps) => {
           ? `⚪️ Connecting to ${hostname}. Use yarn e2e to run tests.`
           : "🟢 Waiting for the server to send tests"}
       </Text>
-      <Canvas style={{ width: size, height: size }} ref={ref}>
-        <Group transform={[{ scale }]}>{drawing}</Group>
-      </Canvas>
+      {canvasShown ? (
+        <Canvas style={{ width: size, height: size }} ref={ref}>
+          <Group transform={[{ scale }]}>{drawing}</Group>
+        </Canvas>
+      ) : null}
       <View
         style={{ width: size, height: size }}
         ref={viewRef}

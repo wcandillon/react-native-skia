@@ -3,7 +3,9 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "RNSkGraphiteTargetInfo.h"
@@ -27,17 +29,19 @@ namespace RNSkia {
 
 /**
  * The window a platform view presents into: a CAMetalLayer on Apple
- * platforms, an ANativeWindow on Android, configured as a Dawn surface. The
- * platform view only acquires the native handle and forwards its lifecycle
- * (attach, resize, detach); everything else lives here.
+ * platforms, an ANativeWindow on Android, configured as a Dawn surface; or,
+ * for a static canvas, an image presenter in place of a window (see
+ * attachImagePresenter). The platform view only acquires the native handle
+ * and forwards its lifecycle (attach, resize, detach); everything else lives
+ * here.
  *
  * Threading: the window belongs to the thread the view presents on (see
  * RNSkView::setPresentThread): the present thread of the process, one for
- * every canvas (see RNSkPresentThread.h, a rnsurface::RenderThread), where
+ * every window (see RNSkPresentThread.h, a rnsurface::RenderThread), where
  * the platform view posts the attach and the detach from the main thread.
  * Everything that touches the Dawn surface runs there, one call after the
- * other, and nothing waits for it; the entries check it once the platform view
- * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
+ * other, and nothing waits for it; the entries check it once the view has bound
+ * the thread (see RNSkView::installPresentThread and rnsurface::ThreadChecker:
  * an entry from another thread aborts in debug builds and is logged once in
  * release builds). A resize is the exception: it notes a size and posts a
  * redraw, from any thread. Nothing waits for a present: a present holds the
@@ -56,11 +60,21 @@ namespace RNSkia {
  * runtime, the render thread pool) can read it from any thread, also before the
  * window exists (see getLayoutSize).
  *
+ * An image presenter holds no Dawn surface: each frame is replayed into a
+ * texture of its own at the window's size and handed to the presenter, so the
+ * view needs no surface or swapchain. It is attached, resized and presented
+ * on the images' worker rather than on the present thread, where the view
+ * posts its layouts (see RNSkView::layOutImagePresenter), and is not one of
+ * the windows below (see presentAsImages).
+ *
  * The windows of a process all present on the same thread, so the sweep over
- * them (see releaseSurfacesOn) runs with no window in use; the list itself
- * is guarded, as windows are made and destroyed on other threads too. Locks,
- * innermost last: the list of windows, the GPU context's (DawnContext); the
- * target description's mutex is leaf and never held across either.
+ * them (see releaseSurfacesOn), which the replacement of a lost device has
+ * that thread run before the device is destroyed (see DawnContext::recover),
+ * runs with no window in use; the list itself is guarded, as windows are
+ * made and destroyed on other threads too. Locks, innermost last: the list
+ * of windows, a lost device's uses (see DawnContext::Generation::uses), the
+ * GPU context's (DawnContext); the target description's mutex is leaf and
+ * never held across any of them.
  */
 class RNSkWindowSurface final : public RNSkSurface {
 public:
@@ -71,6 +85,12 @@ public:
    */
   using Releaser = std::function<void(void *nativeHandle)>;
 
+  /**
+   Shows a finished frame as an image, in place of a window (see
+   attachImagePresenter). Called on the presenting thread.
+   */
+  using ImagePresenter = std::function<void(const sk_sp<SkImage> &frame)>;
+
   RNSkWindowSurface();
 
   ~RNSkWindowSurface() override;
@@ -80,15 +100,27 @@ public:
 
   /**
    Configures the native window (a CAMetalLayer or an ANativeWindow) as the
-   Dawn surface of this view, at the given size in pixels. A window already
-   attached is detached first. highBitDepth asks for the 16-bit float (Apple)
-   or 10-bit (Android) format, granted when the surface supports it;
-   useP3ColorSpace renders in Display P3 rather than sRGB. The releaser, if
-   any, gives the handle back when the window is detached. Requests a redraw.
-   Presenting thread.
+   Dawn surface of this view, at the given size in pixels. A window or an
+   image presenter already attached is detached first. highBitDepth asks for
+   the 16-bit float (Apple) or 10-bit (Android) format, granted when the
+   surface supports it; useP3ColorSpace renders in Display P3 rather than
+   sRGB. The releaser, if any, gives the handle back when the window is
+   detached. Requests a redraw. Presenting thread.
    */
   void attach(void *nativeHandle, int width, int height, bool highBitDepth,
               bool useP3ColorSpace, Releaser releaser);
+
+  /**
+   Presents without a window, for a static canvas: each frame is replayed
+   into a texture of its own at the given size in pixels, which the presenter
+   is handed as an image, so the view needs no surface or swapchain. In the
+   8-bit format; useP3ColorSpace renders in Display P3 rather than sRGB. A
+   window or presenter already attached is detached first; resize() and
+   detach() apply to the presenter as to a window. Requests a redraw.
+   Presenting thread.
+   */
+  void attachImagePresenter(int width, int height, bool useP3ColorSpace,
+                            ImagePresenter presenter);
 
   /**
    Takes note of a new size, in pixels: what frames are recorded for from
@@ -102,11 +134,11 @@ public:
 
   /**
    Destroys the Dawn surface and gives the native handle back to its
-   releaser: the platform may destroy the window right after. The target
-   description goes away with it; the layout size stays. Takes down the
-   abandon, if any (see abandon): this is the detach it waits for.
-   Presenting thread; the destructor does the same on whichever thread
-   lets go of the window last (see detachNow).
+   releaser, or drops the image presenter: the platform may destroy the
+   window right after. The target description goes away with it; the layout
+   size stays. Takes down the abandon, if any (see abandon): this is the
+   detach it waits for. Presenting thread; the destructor does the same on
+   whichever thread lets go of the window last (see detachNow).
    */
   void detach();
 
@@ -121,9 +153,9 @@ public:
 
   /**
    Presenting thread: binds the entries that belong to it (see the class
-   comment) to the calling thread, before the first of them; the platform
-   view posts it to the thread it presents on as it makes the surface (see
-   RNSkView::bindPresentThread).
+   comment) to the calling thread, before the first of them; the view posts
+   it to the thread it presents on as it installs that thread (see
+   RNSkView::installPresentThread).
    */
   void bindPresentingThread() { _presentingThread.bindToCurrentThread(); }
 
@@ -144,16 +176,17 @@ public:
   void abandon();
 
   /**
-   Whether a window is attached. Its Dawn surface may be away for a frame
-   while the GPU device is replaced (see ensureDevice). Presenting thread.
+   Whether a window or an image presenter is attached. A window's Dawn
+   surface is away from the replacement of a lost GPU device until the
+   window's next frame (see ensureDevice). Presenting thread.
    */
   bool isAttached();
 
   /**
-   Whether the window shows a frame the view presented: a window attached in
-   place of another (a new layer, on iOS) shows nothing until one is
-   presented, while the same window attached again keeps what it shows.
-   Presenting thread.
+   Whether the window or image presenter shows a frame the view presented: a
+   window attached in place of another (a new layer, on iOS) shows nothing
+   until one is presented, while the same window attached again keeps what
+   it shows. Presenting thread.
    */
   bool showsFrame();
 
@@ -237,10 +270,33 @@ public:
   }
 
   /**
-   What a frame presented now would meet: no window, no GPU device (lost,
-   and not replaced yet), a window that cannot show a frame (the platform
-   view says so, see setCanPresent), or one ready for a frame, which `info`,
-   when given, then describes. Presenting thread.
+   For a static canvas, before anything is attached: the surface presents
+   images and never a window (see attachImagePresenter), on the images'
+   worker rather than on the present thread (see RNSkView::presentAsImages).
+   It leaves the windows: the release of their surfaces on a lost device
+   runs on the present thread (see releaseSurfacesOn), where this surface's
+   state, which the worker writes, is out of reach, and an image presenter
+   holds no Dawn surface to let go of. Any thread.
+   */
+  void presentAsImages();
+
+  /**
+   Lets go of the Dawn surface of every window configured on the given
+   generation (see DawnContext::generation()): the replacement of a lost
+   device does so before it puts the new device in place and destroys the
+   lost one (see DawnContext::recover).
+   The windows make their surface again by their next frame (see
+   ensureDevice). Presenting thread, where no present or attach overlaps
+   the release, as the windows have no lock of their own (see the class
+   comment).
+   */
+  static void releaseSurfacesOn(uint64_t generation);
+
+  /**
+   What a frame presented now would meet: no window or image presenter, no
+   GPU device (lost, and not replaced yet), a window that cannot show a frame
+   (the platform view says so, see setCanPresent), or one ready for a frame,
+   which `info`, when given, then describes. Presenting thread.
    */
   RNSkWindowState readState(RNSkGraphiteTargetInfo *info);
 
@@ -255,30 +311,31 @@ public:
   bool getTargetInfo(RNSkGraphiteTargetInfo *info) override;
 
   /**
-   Replays the recordings onto the window and presents it, on the thread the
-   view presents on; the swapchain texture is wrapped for the recorder of
-   that thread. Returns false when the window cannot present right now:
-   there is none, the app is in the background, the GPU device is lost, the
-   platform took the window back (see abandon), the window had no drawable,
-   or the window is no longer the target given: it was resized, or
-   configured again on a new device, since the caller read it (see
-   getTargetInfo), and the recordings chosen for that target would not fit
-   it. The redraw the change asked for presents onto the window as it is
-   now. The recordings are then the caller's to present again, untouched in
-   every case but one: a window taken back while the frame was being
-   replayed (see presentTexture) has had the recordings replayed onto a
-   swapchain texture that is never shown, and they are replayed once more
-   onto the next window; a Graphite recording can be replayed any number of
-   times.
+   Replays the recordings onto the window and presents it, or for an image
+   presenter replays them into an image of the window's size and hands it to
+   the presenter, on the thread the view presents on; the swapchain texture is
+   wrapped for the recorder of that thread. Returns false when the window
+   cannot present right now: there is none, the app is in the background, the
+   GPU device is lost, the platform took the window back (see abandon), the
+   window had no drawable, or the window is no longer the target given: it was
+   resized, or configured again on a new device, since the caller read it (see
+   getTargetInfo), and the recordings chosen for that target would not fit it.
+   The redraw the change asked for presents onto the window as it is now. The
+   recordings are then the caller's to present again, untouched in every case
+   but one: a window taken back while the frame was being replayed (see
+   presentTexture) has had the recordings replayed onto a swapchain texture
+   that is never shown, and they are replayed once more onto the next window;
+   a Graphite recording can be replayed any number of times.
    */
   bool presentRecordings(
       const RNSkGraphiteTargetInfo &target,
       const std::vector<skgpu::graphite::Recording *> &recordings) override;
 
   /**
-   Draws an image at the origin of the window and presents it, on the thread
-   the view presents on, with the recorder of that thread. Same target and
-   return value as presentRecordings().
+   Draws an image at the origin of the window and presents it, or for an
+   image presenter draws it into an image of the window's size and hands it
+   to the presenter, on the thread the view presents on, with the recorder of
+   that thread. Same target and return value as presentRecordings().
    */
   bool presentImage(const RNSkGraphiteTargetInfo &target,
                     const sk_sp<SkImage> &image) override;
@@ -288,44 +345,65 @@ private:
   // wherever the last owner lets go of the window.
   void detachNow();
   // Lets go of the Dawn surface and gives the window back to its releaser,
-  // leaving the abandon, if any, up: what detach() does before it takes the
-  // abandon down, and what attach() does to the previous window.
-  void releaseWindow();
+  // or drops the image presenter, leaving the abandon, if any, up: what
+  // detach() does before it takes the abandon down, and what attach() does
+  // to the previous one.
+  void releaseAttachment();
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
   // see takePendingSize). It is neither when the window was resized again,
   // or a device replacement configured it again (see ensureDevice), between
   // the read and the present.
   bool isTarget(const RNSkGraphiteTargetInfo &target);
-  // Lets go of the surfaces made on the GPU device this window was
-  // configured on when that device was lost and replaced since (see
-  // DawnContext), the window's own included, and destroys the device: the
-  // surface cannot follow to the new device (a Vulkan swapchain cannot move
-  // to another device, Dawn refuses it), and the VkSurfaceKHR of the old
-  // swapchain keeps the window connected until the lost device runs its
-  // deferred deletions, which only its destruction does. Dawn does not
-  // destroy swapchains with their device, and detaching one afterwards
-  // crashes, so every window on that device lets go of its surface first
-  // (see releaseSurfacesOn), then the device is destroyed, and the windows
-  // get a surface on the new device on their next frame (see ensureDevice).
-  void retireReplacedDevice();
-  // Lets go of the Dawn surface of every window configured on the given
-  // generation (see retireReplacedDevice). Presenting thread, the one every
-  // window presents on.
-  static void releaseSurfacesOn(uint64_t generation);
-  // Configures the window on the GPU device in use when it has no surface:
-  // when the device it was configured on was lost and replaced since (see
-  // retireReplacedDevice), the surface is made again on the new device, the
-  // window itself stays. Returns false without a context, without a
-  // surface, or with one made for a device replaced since the sweep (the
-  // next frame sweeps again).
+  // A Dawn surface, the device it was made on and that device's generation
+  // (see DawnContext::generation()), by which the replacement of a lost
+  // device lets go of it (see releaseSurfacesOn).
+  struct DawnSurface {
+    wgpu::Surface handle;
+    wgpu::Device device;
+    uint64_t generation = 0;
+  };
+  // A window: the native handle, the releaser that gives it back, and the
+  // Dawn surface over it (see attach).
+  struct Window {
+    void *nativeHandle = nullptr;
+    Releaser releaser;
+    // None from the release of the surfaces on a lost device (see
+    // releaseSurfacesOn), or a make that failed, until the next frame makes
+    // it on the device in use (see ensureDevice).
+    std::optional<DawnSurface> surface;
+    // Attached or resized since the swapchain was configured (see
+    // configureIfNeeded).
+    bool needsConfigure = false;
+  };
+  // A static canvas's image frames, presented in place of a window (see
+  // attachImagePresenter): each frame is made in a texture of its own, on
+  // the device given, of the generation given (see ensureDevice).
+  struct ImageFrames {
+    ImagePresenter presenter;
+    wgpu::Device device;
+    uint64_t generation = 0;
+  };
+  // Brings what is attached onto the GPU device in use; false when it cannot
+  // present on it (see the overloads).
   bool ensureDevice();
-  // Configures the swapchain for the current size, format and usage.
-  void configureSurface();
+  // Configures the window on the GPU device in use when it has no surface:
+  // the replacement of a lost device let go of it (see releaseSurfacesOn),
+  // and it is made again on the new device (a Vulkan swapchain cannot move
+  // to another device, Dawn refuses it); the window itself stays. Returns
+  // false without a context, or when no surface can be made over the
+  // window.
+  bool ensureDevice(Window &window, uint64_t generation);
+  // Takes the device in use for the frames' textures when it was replaced
+  // since the last frame; false without a context.
+  bool ensureDevice(ImageFrames &frames, uint64_t generation);
+  // Configures the window's swapchain for the current size, format and
+  // usage.
+  void configureSurface(const Window &window);
   // Configures the swapchain when the window attached or resized since it
   // was last configured (see attach, takePendingSize), by the present that
   // follows.
-  void configureIfNeeded();
+  void configureIfNeeded(Window &window);
   // Takes the size resize() noted, if any: the window's size from now, and
   // the swapchain's by the next present (see configureIfNeeded).
   void takePendingSize();
@@ -337,17 +415,28 @@ private:
   // Whether a frame can go onto the window now: it is ready (see readState)
   // and the platform has not taken it back (see abandon).
   bool canPresent();
+  // presentRecordings() and presentImage() onto what is attached, once the
+  // target checks passed.
+  bool presentRecordings(
+      Window &window,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentRecordings(
+      ImageFrames &frames,
+      const std::vector<skgpu::graphite::Recording *> &recordings);
+  bool presentImage(Window &window, const sk_sp<SkImage> &image);
+  bool presentImage(ImageFrames &frames, const sk_sp<SkImage> &image);
   // Presents the swapchain texture the frame was replayed onto, unless the
   // platform took the window back meanwhile (see abandon). Returns whether
   // it did.
-  bool presentTexture();
+  bool presentTexture(const Window &window);
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
   // splits the pass), and CopySrc for copy tasks. Only request what the
   // surface reports as supported.
-  wgpu::TextureUsage supportedSurfaceUsage();
-  bool surfaceSupportsFormat(wgpu::TextureFormat format);
+  wgpu::TextureUsage supportedSurfaceUsage(const DawnSurface &surface);
+  bool surfaceSupportsFormat(const DawnSurface &surface,
+                             wgpu::TextureFormat format);
   // The texture description a deferred canvas must be recorded with to be
   // replayed onto this window.
   skgpu::graphite::TextureInfo getTextureInfo() const;
@@ -355,32 +444,30 @@ private:
   // wraps the swapchain texture for and presentImage() draws on; nullptr
   // when none can be made.
   static skgpu::graphite::Recorder *presentRecorder();
+  // A texture of the window's size, format and usage for the next of the
+  // frames, on their device, wrapped for the calling thread's recorder when
+  // it was made for that device too; nullptr when it was not (the device was
+  // replaced since ensureDevice()), or the texture cannot be made.
+  sk_sp<SkSurface> makeImageTarget(const ImageFrames &frames);
+  // Hands the image of an image target, drawn into before the GPU reads it,
+  // to the image presenter.
+  void showFrame(const ImageFrames &frames, const sk_sp<SkImage> &frame);
   void requestRedraw() {
     if (_requestRedraw) {
       _requestRedraw();
     }
   }
 
-  // The device the window is configured on, and its generation (see
-  // DawnContext::generation()): a lost device is replaced, and the window
-  // configured again on the new one (see retireReplacedDevice). The surface
-  // is null between the two, and while the window is detached; the
-  // generation is 0 then.
-  wgpu::Device _device;
-  uint64_t _generation = 0;
-  wgpu::Surface _surface;
-  void *_nativeHandle = nullptr;
+  // What the surface presents into: nothing, a window or a static canvas's
+  // image frames.
+  std::variant<std::monostate, Window, ImageFrames> _attachment;
   bool _showsFrame = false;
-  Releaser _releaser;
   int _width = 0;
   int _height = 0;
   wgpu::TextureFormat _format = wgpu::TextureFormat::Undefined;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
-  // The window attached or resized since the swapchain was configured (see
-  // configureIfNeeded).
-  bool _needsConfigure = false;
   // The platform took the window back before detach() ran (see abandon).
-  // Taken down by detach() alone, never by attach() (see releaseWindow).
+  // Taken down by detach() alone, never by attach() (see releaseAttachment).
   std::atomic<bool> _abandoned{false};
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;

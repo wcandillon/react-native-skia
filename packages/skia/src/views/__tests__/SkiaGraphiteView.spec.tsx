@@ -6,7 +6,10 @@ import type { Ref } from "react";
 import { createRoot } from "react-dom/client";
 
 import { SkiaGraphiteView } from "../SkiaGraphiteView";
-import type { SkiaGraphiteViewRef } from "../SkiaGraphiteView";
+import type {
+  SkiaGraphiteViewProps,
+  SkiaGraphiteViewRef,
+} from "../SkiaGraphiteView";
 
 // The host instance of the native view, which getContext() measures.
 let mockHost: object = {};
@@ -39,22 +42,28 @@ const { SkiaViewApi } = jest.requireMock<{
   };
 }>("../api");
 
-const mountView = ({ strict = false, deviceIndependentFonts = false } = {}) => {
+type MountedProps = Omit<SkiaGraphiteViewProps, "ref">;
+
+const mountView = ({
+  strict = false,
+  props = {},
+}: {
+  strict?: boolean;
+  props?: MountedProps;
+} = {}) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
-  const render = (fonts: boolean) => {
-    const element = (
-      <SkiaGraphiteView ref={ref} deviceIndependentFonts={fonts} />
-    );
+  const render = (renderedProps: MountedProps) => {
+    const element = <SkiaGraphiteView ref={ref} {...renderedProps} />;
     act(() => {
       root.render(
         strict ? <React.StrictMode>{element}</React.StrictMode> : element
       );
     });
   };
-  render(deviceIndependentFonts);
+  render(props);
   const view = ref.current;
   if (view === null) {
     throw new Error("SkiaGraphiteView did not attach its ref");
@@ -153,12 +162,46 @@ describe("SkiaGraphiteView on native", () => {
     ]);
   });
 
+  it("records a high bit depth view's frames at high bit depth", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({ props: { highBitDepth: true } });
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
+      view.getNativeId(),
+      200,
+      100,
+      false,
+      true,
+      false
+    );
+    await unmount();
+  });
+
+  // A static view presents 8-bit images whatever highBitDepth says, and
+  // drops a frame recorded for another format.
+  it("records a static view's frames for its 8-bit images", async () => {
+    mockHost = createScaledHost();
+    const { view, unmount } = mountView({
+      props: { highBitDepth: true, static: true },
+    });
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
+      view.getNativeId(),
+      200,
+      100,
+      false,
+      false,
+      false
+    );
+    await unmount();
+  });
+
   // Off by default; the context is made with it, and a change reaches the
   // target the context already holds through the view's properties.
   it("passes deviceIndependentFonts to the context and its changes to the view", async () => {
     mockHost = createScaledHost();
     const { view, render, unmount } = mountView({
-      deviceIndependentFonts: true,
+      props: { deviceIndependentFonts: true },
     });
     const nativeId = view.getNativeId();
     view.getContext();
@@ -175,7 +218,7 @@ describe("SkiaGraphiteView on native", () => {
       "deviceIndependentFonts",
       true
     );
-    render(false);
+    render({ deviceIndependentFonts: false });
     expect(SkiaViewApi.setJsiProperty).toHaveBeenLastCalledWith(
       nativeId,
       "deviceIndependentFonts",

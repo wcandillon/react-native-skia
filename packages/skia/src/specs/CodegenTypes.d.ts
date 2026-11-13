@@ -7,4 +7,7 @@ declare module "react-native/Libraries/Types/CodegenTypes" {
     Type extends number | boolean | string | ReadonlyArray<string>,
     Value extends Type | string | undefined | null,
   > = Type | undefined | null;
+  // SkiaImageViewNativeComponent's prop tells codegen a 64-bit number by this
+  // bare name, as the view's spec tells WithDefault.
+  export type Double = number;
 }
