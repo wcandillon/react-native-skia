@@ -31,20 +31,15 @@ export const Slider: React.FC<GraphProps> = ({ height, width }) => {
   );
 
   const label = useDerivedValue(
-    () => "$ " + (touchPos.value ? (touchPos.value.y * -1).toFixed(2) : "-"),
-    [touchPos]
+    () => "$ " + (touchPos.value ? (touchPos.value.y * -1).toFixed(2) : "-")
   );
 
-  const textX = useDerivedValue(() => touchPos.value.x - 24, [touchPos]);
-  const textY = useDerivedValue(() => touchPos.value.y - 18, [touchPos]);
-  const lineP1 = useDerivedValue(
-    () => vec(touchPos.value.x, touchPos.value.y + 14),
-    [touchPos]
+  const textX = useDerivedValue(() => touchPos.value.x - 24);
+  const textY = useDerivedValue(() => touchPos.value.y - 18);
+  const lineP1 = useDerivedValue(() =>
+    vec(touchPos.value.x, touchPos.value.y + 14)
   );
-  const lineP2 = useDerivedValue(
-    () => vec(touchPos.value.x, height),
-    [touchPos]
-  );
+  const lineP2 = useDerivedValue(() => vec(touchPos.value.x, height));
 
   const gesture = Gesture.Pan().onChange((e) => {
     touchPos.value = getPointAtPositionInPath(e.x, width, 60, path);

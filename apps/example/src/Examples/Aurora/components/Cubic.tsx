@@ -13,17 +13,15 @@ interface CubicProps {
 }
 
 export const Cubic = ({ mesh, index, color }: CubicProps) => {
-  const c1 = useDerivedValue(() => mesh.value[index].c1, [mesh]);
-  const c1S = useDerivedValue(
-    () => symmetric(mesh.value[index].c1, mesh.value[index].pos),
-    [mesh]
+  const c1 = useDerivedValue(() => mesh.value[index].c1);
+  const c1S = useDerivedValue(() =>
+    symmetric(mesh.value[index].c1, mesh.value[index].pos)
   );
-  const c2 = useDerivedValue(() => mesh.value[index].c2, [mesh]);
-  const c2S = useDerivedValue(
-    () => symmetric(mesh.value[index].c2, mesh.value[index].pos),
-    [mesh]
+  const c2 = useDerivedValue(() => mesh.value[index].c2);
+  const c2S = useDerivedValue(() =>
+    symmetric(mesh.value[index].c2, mesh.value[index].pos)
   );
-  const pos = useDerivedValue(() => mesh.value[index].pos, [mesh]);
+  const pos = useDerivedValue(() => mesh.value[index].pos);
   return (
     <>
       <Line strokeWidth={2} color="white" p1={c1} p2={c1S} />

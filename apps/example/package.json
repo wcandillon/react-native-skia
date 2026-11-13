@@ -12,6 +12,7 @@
     "build:macos": "react-native build-macos --scheme ReactTestApp --mode Debug",
     "ios": "react-native run-ios",
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache --fix",
+    "lint:ci": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache",
     "mkdist": "node -e \"require('node:fs').mkdirSync('dist', { recursive: true, mode: 0o755 })\"",
     "pod:install": "cd ios && pod install",
     "test": "jest",
