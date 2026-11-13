@@ -65,6 +65,8 @@ private:
   std::shared_ptr<RNSkPlatformContext> _platformContext;
   std::shared_ptr<facebook::react::CallInvoker> _jsCallInvoker;
   std::shared_ptr<RNSkJsiViewApi> _viewApi;
+  // The first id of this manager's bundle (see ViewRegistry::beginBundle).
+  size_t _idFloor = 0;
   // Asks every view for a frame once a lost GPU device is replaced (see
   // DawnContext::addLossListener).
   size_t _lossListener = 0;

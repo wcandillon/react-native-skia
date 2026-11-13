@@ -2,8 +2,10 @@
 
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -49,6 +51,46 @@ public:
   // its predecessor would hand its first picture to the predecessor's
   // tombstone and show nothing until its next one (#4312).
   size_t allocateId() { return _nextId.fetch_add(1); }
+
+  // A bundle's manager is being made: the ids allocated from here on, until
+  // the next bundle's manager is made, are the ids of its views. Returns the
+  // bundle's floor, the first of them, which endBundle takes back. The floor
+  // is allocated like a view id, so that no two bundles share one (two
+  // reloads with no canvas mounted in between). Floors increase with the
+  // order the bundles were made in, and a bundle allocates no id before its
+  // manager installed the bindings, so the ids of a bundle's views are those
+  // between its floor and the next bundle's.
+  size_t beginBundle() {
+    auto floor = allocateId();
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    _bundles.insert(floor);
+    return floor;
+  }
+
+  // The bundle's manager is going away: the entries and the tombstones of
+  // its views are dropped, so that they do not stay for the life of the
+  // process (Fabric tears the views down with no ordering against the
+  // manager, and their late unregistrations are no-ops, as the views only
+  // hold the manager weakly). Only those are dropped: the manager may go
+  // away after the next bundle's views registered, when its JS thread was
+  // busy when the reload came (#4376), and those keep drawing. Returns the
+  // range of ids dropped, [floor, next bundle's floor), for the registries
+  // keyed the same way.
+  std::pair<size_t, size_t> endBundle(size_t floor) {
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    _bundles.erase(floor);
+    auto next = _bundles.upper_bound(floor);
+    auto ceiling =
+        next == _bundles.end() ? std::numeric_limits<size_t>::max() : *next;
+    for (auto it = _registry.begin(); it != _registry.end();) {
+      it = it->first >= floor && it->first < ceiling ? _registry.erase(it)
+                                                     : ++it;
+    }
+    for (auto it = _unregistered.begin(); it != _unregistered.end();) {
+      it = *it >= floor && *it < ceiling ? _unregistered.erase(it) : ++it;
+    }
+    return {floor, ceiling};
+  }
 
   void removeViewInfo(size_t id) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -119,17 +161,13 @@ public:
     return views;
   }
 
-  void clear() {
-    std::unique_lock<std::shared_mutex> lock(_mutex);
-    _registry.clear();
-    _unregistered.clear();
-  }
-
 private:
   ViewRegistry() = default;
   mutable std::shared_mutex _mutex;
   std::unordered_map<size_t, std::shared_ptr<RNSkViewInfo>> _registry;
   std::unordered_set<size_t> _unregistered;
+  // The floors of the bundles whose manager is alive (see beginBundle).
+  std::set<size_t> _bundles;
   std::atomic<size_t> _nextId{1000};
 };
 
