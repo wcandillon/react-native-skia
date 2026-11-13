@@ -7,7 +7,6 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
-#include "RNMetalLayerColorSpace.h"
 #include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
 
@@ -362,13 +361,10 @@ void RNSkWindowSurface::configureSurface() {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
+  // The colorspace of a CAMetalLayer is not set here: the platform view tags
+  // the layer on the main thread before it posts the attach (see
+  // RNMetalLayerColorSpace.h).
   _surface.Configure(&config);
-#ifdef __APPLE__
-  // The layer is tagged with the gamut the window renders in; float formats
-  // need the (gamma-encoded) extended variant so the values display
-  // identically to the 8-bit path.
-  applyCAMetalLayerColorSpace(_nativeHandle, _format, _useP3ColorSpace);
-#endif
 }
 
 wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {

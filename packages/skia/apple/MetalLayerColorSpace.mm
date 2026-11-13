@@ -1,7 +1,6 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
-#import <QuartzCore/CATransaction.h>
 
 #include "MetalLayerColorSpaceUtils.h"
 #include "rnskia/RNMetalLayerColorSpace.h"
@@ -22,16 +21,15 @@ void applyCAMetalLayerColorSpace(void *nativeSurface,
     return;
   }
   auto metalLayer = static_cast<CAMetalLayer *>(layer);
+  // Main thread only: the property lands in the calling thread's implicit
+  // CATransaction, which the main run loop commits. Committing it from any
+  // other thread ([CATransaction flush]) commits the whole layer tree there,
+  // and lays out whatever UIKit view has a layout pending, off the main
+  // thread (#4474).
+  NSCAssert(NSThread.isMainThread,
+            @"applyCAMetalLayerColorSpace must be called on the main thread");
   setCAMetalLayerColorSpace(
       metalLayer, format == wgpu::TextureFormat::RGBA16Float, useP3ColorSpace);
-  // The change must be set synchronously so the first present already sees
-  // it, and it must reach the render server. On a non-main thread (RN JS or
-  // worklet runtime) the property lands in that thread's implicit
-  // CATransaction, which may never commit on threads without a spinning
-  // runloop, so flush it now. On the main thread the runloop commits it.
-  if (!NSThread.isMainThread) {
-    [CATransaction flush];
-  }
 }
 
 } // namespace RNSkia
