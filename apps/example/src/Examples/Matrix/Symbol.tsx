@@ -35,21 +35,19 @@ export const Symbol = ({
   const glyphs = useDerivedValue(() => {
     const idx = offset.current + Math.floor(timestamp.value / range.current);
     return [{ id: symbols[idx % symbols.length], pos }];
-  }, [timestamp]);
+  });
 
   const opacity = useDerivedValue(() => {
     const idx = Math.round(timestamp.value / 75);
     return stream[(stream.length - j + idx) % stream.length];
-  }, [timestamp]);
+  });
 
-  const color = useDerivedValue(
-    () =>
-      interpolateColors(
-        opacity.value,
-        [0.8, 1],
-        ["rgb(0, 255, 70)", "rgb(140, 255, 170)"]
-      ),
-    [opacity]
+  const color = useDerivedValue(() =>
+    interpolateColors(
+      opacity.value,
+      [0.8, 1],
+      ["rgb(0, 255, 70)", "rgb(140, 255, 170)"]
+    )
   );
 
   return (

@@ -44,7 +44,14 @@ export const Data = () => {
   return (
     <Canvas style={{ width: 256, height: 512 }}>
       <Image image={img} x={0} y={0} width={256} height={256} fit="cover" />
-      <Image image={raster} x={0} y={256} width={256} height={256} fit="cover" />
+      <Image
+        image={raster}
+        x={0}
+        y={256}
+        width={256}
+        height={256}
+        fit="cover"
+      />
     </Canvas>
   );
 };

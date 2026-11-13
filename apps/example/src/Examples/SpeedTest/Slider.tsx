@@ -74,7 +74,7 @@ export const Slider: React.FC<Props> = ({
         { scale: scale.value },
       ],
     };
-  }, []);
+  });
 
   const gesture = Gesture.Pan()
     .onBegin(() => {

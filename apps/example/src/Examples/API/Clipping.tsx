@@ -39,7 +39,7 @@ export const Clipping = () => {
   );
 
   const progress = useLoop({ duration: 3000 });
-  const x = useDerivedValue(() => mix(progress.value, 0, 200), [progress]);
+  const x = useDerivedValue(() => mix(progress.value, 0, 200));
   const oslo = useImage(require("../../assets/oslo.jpg"));
 
   return (
