@@ -39,7 +39,8 @@
     "dist/**"
   ],
   "scripts": {
-    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache",
+    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache --fix",
+    "lint:ci": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache",
     "tsc": "tsc --noEmit",
     "test": "jest",
     "e2e": "E2E=true yarn test -i e2e",

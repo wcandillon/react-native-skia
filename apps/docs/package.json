@@ -14,6 +14,7 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0",
+    "lint:ci": "eslint . --ext .ts,.tsx  --max-warnings 0",
     "test": "ts-node src/validate-twoslash.ts"
   },
   "dependencies": {
