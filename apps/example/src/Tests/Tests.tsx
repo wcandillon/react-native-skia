@@ -1,7 +1,7 @@
 import type { ComponentRef, ReactElement } from "react";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Canvas, Group, Skia, useCanvasRef } from "react-native-skia";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PixelRatio, Text, View } from "react-native";
 
 import { parseNode, parseProps } from "./deserialize";
@@ -9,6 +9,7 @@ import { forceGpuDeviceLoss, getSharedDevice } from "./GpuDevice";
 import { ScreenDoneContext } from "./ScreenDone";
 import type { Screen } from "./Screens";
 import { Screens } from "./Screens";
+import { serve } from "./serve";
 import { useClient } from "./useClient";
 import { workletSerialization } from "./workletSerialization";
 
@@ -17,37 +18,35 @@ const s = 3;
 const scale = s / PixelRatio.get();
 const size = 256 * scale;
 const timeToDraw = CI ? 1500 : 500;
+const noop = () => {};
 
-// Every reply names the request it answers (its $$id), so that the host can
-// drop a reply that comes after its request timed out instead of handing it
-// to the next one.
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Report a failure back to the host as { $$id, $$error: message } so the
-// matching test can `.rejects` instead of hanging on a missing reply, and so
-// the throw is not surfaced as an unhandled exception that could break the
-// socket for subsequent tests.
-const errorEnvelope = (id: number, error: unknown) =>
-  JSON.stringify({
-    $$id: id,
-    $$error: error instanceof Error ? error.message : String(error),
+// Runs a snippet the host sent, with the app's Skia.
+const evaluate = (
+  { code, ctx }: { code: string; ctx: any },
+  assets: TestsProps["assets"]
+) =>
+  eval(
+    `(function Main() {
+        const __addDisposableResource = (e, o) => { return o; };
+        const __disposeResources = () => {};
+        return (${code})(this.Skia, this.ctx, this.size, this.scale);
+      })`
+  ).call({
+    Skia,
+    // The worklet serializer spec needs app-side worklets (see
+    // workletSerialization.ts), and the Gpu spec a way to lose the device;
+    // hand them over through the context.
+    ctx: {
+      ...parseProps(ctx, assets),
+      workletSerialization,
+      forceGpuDeviceLoss,
+    },
+    size: size * PixelRatio.get(),
+    scale: s,
   });
-
-// JSON.stringify returns undefined for a result JSON cannot carry: undefined, a function, a symbol.
-const resultMessage = (id: number, result: unknown) =>
-  JSON.stringify(result) === undefined
-    ? errorEnvelope(
-        id,
-        `The snippet's result has no JSON form: ${typeof result}`
-      )
-    : JSON.stringify({ $$id: id, result });
-
-// An image reply: the request id as a big-endian uint32, then the PNG.
-const imageMessage = (id: number, png: Uint8Array) => {
-  const message = new Uint8Array(4 + png.length);
-  new DataView(message.buffer).setUint32(0, id);
-  message.set(png, 4);
-  return message;
-};
 
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
 // into a texture of the shared device, and Skia wraps that texture. This is
@@ -73,7 +72,7 @@ const encodeView = async (
     );
     const image = Skia.Image.MakeFromGPUTexture(texture);
     try {
-      return await image.encodeToBytes();
+      return image.encodeToBase64();
     } finally {
       image.dispose();
     }
@@ -90,131 +89,54 @@ export const Tests = ({ assets }: TestsProps) => {
   const viewRef = useRef<ComponentRef<typeof View>>(null);
   const ref = useCanvasRef();
   const [client, hostname] = useClient();
-  const [drawing, setDrawing] = useState<{
-    readonly node: ReactElement;
-    readonly id: number;
-  } | null>(null);
-  // The screen shown and the key it is mounted with. Requested again, a
-  // screen that settles is mounted again, so that it settles again; any other
-  // keeps its instance and what it shows.
+  const [drawing, setDrawing] = useState<ReactElement | null>(null);
+  // The screen shown, the key it is mounted with, and what it calls once it
+  // has settled (see useScreenDone). Requested again, a screen that settles is
+  // mounted again, so that it settles again; any other keeps its instance and
+  // what it shows.
   const [shown, setShown] = useState<{
     readonly screen: Screen;
     readonly key: number;
-    readonly id: number;
+    readonly done: () => void;
   } | null>(null);
   const screenMounts = useRef(0);
-  // Whether the screen shown has settled (see useScreenDone).
-  const [screenDone, setScreenDone] = useState(false);
-  const markScreenDone = useCallback(() => setScreenDone(true), []);
 
   useEffect(() => {
-    if (client !== null) {
-      // Define the message handler as a separate function
-      const handleMessage = (e: MessageEvent) => {
-        const { $$id: id, ...tree }: any = JSON.parse(e.data);
-        if (tree.code) {
-          try {
-            const result = eval(
-              `(function Main() {
-                  const __addDisposableResource = (e, o) => { return o; };
-                  const __disposeResources = () => {};
-                  return (${tree.code})(this.Skia, this.ctx, this.size, this.scale);
-                })`
-            ).call({
-              Skia,
-              // The worklet serializer spec needs app-side worklets (see
-              // workletSerialization.ts), and the Gpu spec a way to lose the
-              // device; hand them over through the context.
-              ctx: {
-                ...parseProps(tree.ctx, assets),
-                workletSerialization,
-                forceGpuDeviceLoss,
-              },
-              size: size * PixelRatio.get(),
-              scale: s,
-            });
-            if (result instanceof Promise) {
-              result
-                .then((r) => client.send(resultMessage(id, r)))
-                .catch((error) => client.send(errorEnvelope(id, error)));
-            } else {
-              client.send(resultMessage(id, result));
-            }
-          } catch (error) {
-            client.send(errorEnvelope(id, error));
-          }
-        } else if (typeof tree.screen === "string") {
-          const screen = Screens[tree.screen];
-          if (!screen) {
-            throw new Error(`Unknown screen: ${tree.screen}`);
-          }
-          if (screen.snapshot === "onDone") {
-            screenMounts.current += 1;
-          }
-          setScreenDone(false);
-          setShown({ screen, key: screenMounts.current, id });
-        } else {
-          const node = parseNode(tree, assets);
-          setDrawing({ node, id });
-        }
-      };
-
-      // Use addEventListener instead of onmessage
-      client.addEventListener("message", handleMessage);
-
-      // Clean up: remove the specific event listener
-      return () => {
-        client.removeEventListener("message", handleMessage);
-      };
+    if (client === null) {
+      return;
     }
-    return;
-  }, [assets, client]);
-
-  useEffect(() => {
-    if (drawing && client) {
-      const it = setTimeout(async () => {
-        if (ref.current) {
-          try {
-            const image = ref.current.makeImageSnapshot({
-              x: 0,
-              y: 0,
-              width: size,
-              height: size,
-            });
-            client.send(imageMessage(drawing.id, await image.encodeToBytes()));
-          } catch (e) {
-            console.error(e);
-            client.send(errorEnvelope(drawing.id, e));
-          }
+    return serve(client, {
+      eval: (params) => evaluate(params, assets),
+      draw: async (tree) => {
+        setDrawing(parseNode(tree, assets));
+        await sleep(timeToDraw);
+        if (ref.current === null) {
+          throw new Error("The canvas is not mounted");
         }
-      }, timeToDraw);
-      return () => {
-        clearTimeout(it);
-      };
-    }
-    return;
-  }, [client, drawing, ref]);
-
-  useEffect(() => {
-    if (
-      shown !== null &&
-      client !== null &&
-      (shown.screen.snapshot === "onMount" || screenDone)
-    ) {
-      const it = setTimeout(async () => {
-        try {
-          client.send(imageMessage(shown.id, await encodeView(viewRef)));
-        } catch (e) {
-          console.error(e);
-          client.send(errorEnvelope(shown.id, e));
+        return ref.current
+          .makeImageSnapshot({ x: 0, y: 0, width: size, height: size })
+          .encodeToBase64();
+      },
+      screen: async ({ name }: { name: string }) => {
+        const screen = Screens[name];
+        if (!screen) {
+          throw new Error(`Unknown screen: ${name}`);
         }
-      }, timeToDraw);
-      return () => {
-        clearTimeout(it);
-      };
-    }
-    return;
-  }, [client, shown, screenDone]);
+        if (screen.snapshot === "onDone") {
+          screenMounts.current += 1;
+        }
+        const key = screenMounts.current;
+        const done = new Promise<void>((resolve) =>
+          setShown({ screen, key, done: resolve })
+        );
+        if (screen.snapshot === "onDone") {
+          await done;
+        }
+        await sleep(timeToDraw);
+        return encodeView(viewRef);
+      },
+    });
+  }, [assets, client, ref]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
@@ -224,14 +146,14 @@ export const Tests = ({ assets }: TestsProps) => {
           : "🟢 Waiting for the server to send tests"}
       </Text>
       <Canvas style={{ width: size, height: size }} ref={ref}>
-        <Group transform={[{ scale }]}>{drawing?.node}</Group>
+        <Group transform={[{ scale }]}>{drawing}</Group>
       </Canvas>
       <View
         style={{ width: size, height: size }}
         ref={viewRef}
         collapsable={false}
       >
-        <ScreenDoneContext.Provider value={markScreenDone}>
+        <ScreenDoneContext.Provider value={shown?.done ?? noop}>
           {shown === null
             ? null
             : React.createElement(shown.screen.component, { key: shown.key })}

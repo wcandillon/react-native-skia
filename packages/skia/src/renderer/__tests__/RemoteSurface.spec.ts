@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 
 import type { WebSocket } from "ws";
 
+import { CALL_TIMEOUT_MS, Channel } from "./e2e/setup/Channel";
 import { RemoteSurface } from "./setup";
 
 class FakeSocket extends EventEmitter {
@@ -11,11 +12,8 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-const asWebSocket = (socket: FakeSocket) => socket as unknown as WebSocket;
-
-// What the example app's Tests screen sends back for an eval.
-const reply = (request: string, result: unknown) =>
-  Buffer.from(JSON.stringify({ $$id: JSON.parse(request).$$id, result }));
+const channelOn = (socket: FakeSocket) =>
+  new Channel(socket as unknown as WebSocket);
 
 describe("RemoteSurface", () => {
   beforeEach(() => {
@@ -26,55 +24,35 @@ describe("RemoteSurface", () => {
     jest.useRealTimers();
   });
 
-  it("times out on the socket it sent the eval to when another app says hello meanwhile", async () => {
+  it("sends a screen request by name", async () => {
+    const socket = new FakeSocket();
+    const channel = channelOn(socket);
+    global.testConnection = { channel };
+    const response = new RemoteSurface().screen("GraphiteView");
+    await Promise.resolve();
+    expect(JSON.parse(socket.sent[0])).toEqual({
+      id: 1,
+      method: "screen",
+      params: { name: "GraphiteView" },
+    });
+    channel.close();
+    await expect(response).rejects.toThrow("screen failed");
+  });
+
+  it("times out on the socket it sent the call to when another app says hello meanwhile", async () => {
     const first = new FakeSocket();
     const second = new FakeSocket();
-    global.testConnection = { client: asWebSocket(first) };
+    global.testConnection = { channel: channelOn(first) };
     const response = new RemoteSurface().screen("GraphiteView");
-    global.testConnection.client = asWebSocket(second);
-    jest.advanceTimersByTime(30 * 1000);
-    await expect(response).rejects.toThrow("eval timed out");
+    global.testConnection.channel = channelOn(second);
+    jest.advanceTimersByTime(CALL_TIMEOUT_MS);
+    await expect(response).rejects.toThrow("screen timed out");
     expect(first.sent).toHaveLength(1);
-    expect(first.listenerCount("message")).toBe(0);
-    expect(second.listenerCount("message")).toBe(0);
-  });
-
-  it("drops a reply that comes after its request timed out", async () => {
-    const socket = new FakeSocket();
-    global.testConnection = { client: asWebSocket(socket) };
-    const surface = new RemoteSurface();
-    const first = surface.eval(() => "first");
-    const timedOut = await expect(first).rejects.toThrow("eval timed out");
-    await jest.advanceTimersByTimeAsync(30 * 1000);
-    await timedOut;
-    const second = surface.eval(() => "second");
-    await Promise.resolve();
-    jest.spyOn(console, "warn").mockImplementation(() => {});
-    const [firstRequest, secondRequest] = socket.sent;
-    socket.emit("message", reply(firstRequest, "first"));
-    socket.emit("message", reply(secondRequest, "second"));
-    await expect(second).resolves.toBe("second");
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(socket.listenerCount("message")).toBe(0);
-  });
-
-  it("rejects with the error the device reports for its request", async () => {
-    const socket = new FakeSocket();
-    global.testConnection = { client: asWebSocket(socket) };
-    const response = new RemoteSurface().eval(() => {
-      throw new Error("boom");
-    });
-    await Promise.resolve();
-    const { $$id } = JSON.parse(socket.sent[0]);
-    socket.emit(
-      "message",
-      Buffer.from(JSON.stringify({ $$id, $$error: "boom" }))
-    );
-    await expect(response).rejects.toThrow("boom");
+    expect(second.sent).toHaveLength(0);
   });
 
   it("rejects without arming its timeout while no app has said hello", async () => {
-    global.testConnection = { client: null };
+    global.testConnection = { channel: null };
     await expect(new RemoteSurface().screen("GraphiteView")).rejects.toThrow(
       "Client is not connected"
     );
