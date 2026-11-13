@@ -42,6 +42,12 @@ public:
 
   ~RNSkOffscreenSurface() override = default;
 
+  /**
+   Pixels per point of the snapshot bounds (see makeSnapshot), when not the
+   platform's: a view's own density (see RNSkView::getPixelDensity).
+   */
+  void setPixelDensity(float pixelDensity) { _pd = pixelDensity; }
+
   /** The canvas of the surface, in pixels; nullptr without a surface. */
   SkCanvas *getCanvas() { return _surface ? _surface->getCanvas() : nullptr; }
 

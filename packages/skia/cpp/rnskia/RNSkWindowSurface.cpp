@@ -129,6 +129,9 @@ void RNSkWindowSurface::resize(int width, int height) {
     // present (see takePendingSize).
     _targetInfo.width = width;
     _targetInfo.height = height;
+    // The platform laid the view out at this size first: with that layout's
+    // density (see setLayoutSize).
+    _targetInfo.pixelDensity = _layoutPixelDensity;
     _pendingWidth = width;
     _pendingHeight = height;
     _hasPendingSize = true;
@@ -192,6 +195,32 @@ void RNSkWindowSurface::setLayoutSize(int width, int height) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   _layoutWidth = width;
   _layoutHeight = height;
+}
+
+void RNSkWindowSurface::setLayoutSize(int width, int height,
+                                      float pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _layoutWidth = width;
+  _layoutHeight = height;
+  _layoutPixelDensity = pixelDensity;
+  // A window that already has this size takes the density now: no resize
+  // will come for it (see updateTargetInfo).
+  if (_hasTargetInfo && _targetInfo.width == width &&
+      _targetInfo.height == height) {
+    _targetInfo.pixelDensity = pixelDensity;
+  }
+}
+
+bool RNSkWindowSurface::getPixelDensity(float *pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  // The one that goes with the window's size, until it has one.
+  float density =
+      _hasTargetInfo ? _targetInfo.pixelDensity : _layoutPixelDensity;
+  if (density <= 0) {
+    return false;
+  }
+  *pixelDensity = density;
+  return true;
 }
 
 bool RNSkWindowSurface::getLayoutSize(int *width, int *height) {
@@ -268,6 +297,10 @@ void RNSkWindowSurface::updateTargetInfo() {
     _targetInfo.width = _pendingWidth;
     _targetInfo.height = _pendingHeight;
   }
+  // The platform lays the view out before its window follows the new size:
+  // the density of that layout goes with the size, rather than the one of
+  // the layout the window had until now.
+  _targetInfo.pixelDensity = _layoutPixelDensity;
   _hasTargetInfo = true;
   // What the surface granted, kept once the window is detached: it is what
   // the window comes back with.
