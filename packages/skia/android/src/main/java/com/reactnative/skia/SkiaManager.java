@@ -29,11 +29,21 @@ public class SkiaManager {
         }
 
         mPlatformContext = new PlatformContext(context);
+        try {
+            mHybridData = initHybrid(context.getJavaScriptContextHolder().get(),
+                    (CallInvokerHolderImpl) jsCallInvokerHolder, mPlatformContext);
 
-        mHybridData = initHybrid(context.getJavaScriptContextHolder().get(),
-                (CallInvokerHolderImpl) jsCallInvokerHolder, mPlatformContext);
-
-        initializeRuntime();
+            initializeRuntime();
+        } catch (RuntimeException e) {
+            // destroy() is never called on a manager that failed to build: let
+            // go of what the platform context registered (its application
+            // callbacks would keep the React context alive for good).
+            mPlatformContext.destroy();
+            if (mHybridData != null) {
+                mHybridData.resetNative();
+            }
+            throw e;
+        }
     }
 
     public void destroy() {
