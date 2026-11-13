@@ -11,7 +11,7 @@
     "build:ios": "npm run mkdist && react-native bundle --entry-file index.js --platform ios --dev true --bundle-output dist/main.ios.jsbundle --assets-dest dist",
     "build:macos": "react-native build-macos --scheme ReactTestApp --mode Debug",
     "ios": "react-native run-ios",
-    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache --fix",
+    "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache",
     "mkdist": "node -e \"require('node:fs').mkdirSync('dist', { recursive: true, mode: 0o755 })\"",
     "pod:install": "cd ios && pod install",
     "test": "jest",
