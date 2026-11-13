@@ -6,7 +6,8 @@ import { WebSocketServer } from "ws";
 declare global {
   var testServer: WebSocketServer;
   // Each test file keeps a global's first value, so the client is a property.
-  var testConnection: { client: WebSocket | null };
+  // requests: the id of the latest request sent to the app (see setup.tsx).
+  var testConnection: { client: WebSocket | null; requests?: number };
   var testOS: "ios" | "android" | "web" | "node" | "macos";
 }
 

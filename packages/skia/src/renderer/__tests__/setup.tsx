@@ -25,7 +25,7 @@ type TestOS = "ios" | "android" | "web" | "node" | "macos";
 
 declare global {
   var testServer: WebSocketServer;
-  var testConnection: { client: WebSocket | null };
+  var testConnection: { client: WebSocket | null; requests?: number };
   var testOS: TestOS;
 }
 export let surface: TestingSurface;
@@ -178,22 +178,34 @@ export const readScreenColor = async (image: SkImage, fraction: number) =>
     )
   );
 
-// Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start
-// with the 0x89 signature and base64/other JSON responses won't carry $$error,
-// so we only attempt a parse when the buffer looks like a JSON object.
-const parseErrorResponse = (raw: Buffer): string | null => {
-  if (raw[0] !== 0x7b) {
+// Every reply names the request it answers. A JSON reply (text, starting with
+// "{") carries it as $$id, next to the result or the device's error, which it
+// reports as $$error; an image reply (binary, a PNG) is prefixed with it as a
+// big-endian uint32. A request id never reaches 0x7b000000, so the first byte
+// tells the two apart.
+type Reply =
+  | { id: number; error: string }
+  | { id: number; result: unknown }
+  | { id: number; image: Buffer };
+
+export const parseReply = (raw: Buffer): Reply | null => {
+  if (raw[0] === 0x7b) {
+    try {
+      const obj = JSON.parse(raw.toString());
+      if (typeof obj.$$id !== "number") {
+        return null;
+      }
+      return "$$error" in obj
+        ? { id: obj.$$id, error: String(obj.$$error) }
+        : { id: obj.$$id, result: obj.result };
+    } catch {
+      return null;
+    }
+  }
+  if (raw.length < 4) {
     return null;
   }
-  try {
-    const obj = JSON.parse(raw.toString());
-    if (obj && typeof obj === "object" && "$$error" in obj) {
-      return String(obj.$$error);
-    }
-  } catch {
-    // Not a JSON object; treat as a normal payload.
-  }
-  return null;
+  return { id: raw.readUInt32BE(0), image: raw.subarray(4) };
 };
 
 export const resolveFile = (uri: string) =>
@@ -535,7 +547,7 @@ export class RemoteSurface implements TestingSurface {
   ): Promise<R> {
     const ctx = await this.prepareContext(context);
     const body = { code: fn.toString(), ctx };
-    return this.handleImageResponse<R>(JSON.stringify(body), true);
+    return this.handleImageResponse<R>(body, true);
   }
 
   async drawOffscreen<Ctx extends EvalContext>(
@@ -557,10 +569,7 @@ surface.flush();
 return surface.makeImageSnapshot().encodeToBase64();
 }`;
     const body = { code, ctx };
-    const base64 = await this.handleImageResponse<string>(
-      JSON.stringify(body),
-      true
-    );
+    const base64 = await this.handleImageResponse<string>(body, true);
     const Skia = global.SkiaApi;
     const data = Skia.Data.fromBase64(base64);
     const image = Skia.Image.MakeFromEncoded(data);
@@ -571,11 +580,11 @@ return surface.makeImageSnapshot().encodeToBase64();
   }
 
   async draw(node: ReactNode) {
-    return this.handleImageResponse(await serialize(node));
+    return this.handleImageResponse(JSON.parse(await serialize(node)));
   }
 
   screen(screen: string) {
-    return this.handleImageResponse(JSON.stringify({ screen }));
+    return this.handleImageResponse({ screen });
   }
 
   private get client() {
@@ -599,7 +608,7 @@ return surface.makeImageSnapshot().encodeToBase64();
   }
 
   private handleImageResponse<R = SkImage>(
-    body: string,
+    body: object,
     json?: boolean
   ): Promise<R> {
     // Guard against an eval that never replies (e.g. the device threw before it
@@ -608,17 +617,41 @@ return surface.makeImageSnapshot().encodeToBase64();
     const EVAL_TIMEOUT_MS = 30 * 1000;
     return new Promise((resolve, reject) => {
       const { client } = this;
+      // Counted on the connection every test file shares, so that a late
+      // reply to a previous file's request can't match either.
+      const connection = global.testConnection;
+      const id = (connection.requests = (connection.requests ?? 0) + 1);
       const onMessage = (raw: Buffer) => {
-        clearTimeout(timeout);
-        // The device reports a thrown error as { $$error: message } (always
-        // JSON, even for image responses) so the matching test can `.rejects`
-        // instead of hanging or trying to decode an error string as a PNG.
-        const error = parseErrorResponse(raw);
-        if (error !== null) {
-          reject(new Error(error));
+        const reply = parseReply(raw);
+        // A reply to a request that timed out arrives late, or never. Taking
+        // it as this request's would fail this case with another's result.
+        if (reply === null || reply.id !== id) {
+          console.warn(
+            `e2e: dropped a reply to request ${reply?.id ?? "?"} while waiting for ${id}`
+          );
           return;
         }
-        resolve(json ? JSON.parse(raw.toString()) : this.decodeImage(raw));
+        client.off("message", onMessage);
+        clearTimeout(timeout);
+        // The device reports a thrown error so that the matching test can
+        // `.rejects` instead of hanging or decoding an error as a PNG.
+        if ("error" in reply) {
+          reject(new Error(reply.error));
+        } else if (json) {
+          if ("result" in reply) {
+            resolve(reply.result as R);
+          } else {
+            reject(new Error("Expected a JSON reply, received an image"));
+          }
+        } else if ("image" in reply) {
+          try {
+            resolve(this.decodeImage(reply.image) as R);
+          } catch (e) {
+            reject(e);
+          }
+        } else {
+          reject(new Error("Expected an image reply, received JSON"));
+        }
       };
       const timeout = setTimeout(() => {
         client.off("message", onMessage);
@@ -628,8 +661,8 @@ return surface.makeImageSnapshot().encodeToBase64();
           )
         );
       }, EVAL_TIMEOUT_MS);
-      client.once("message", onMessage);
-      client.send(body);
+      client.on("message", onMessage);
+      client.send(JSON.stringify({ ...body, $$id: id }));
     });
   }
 

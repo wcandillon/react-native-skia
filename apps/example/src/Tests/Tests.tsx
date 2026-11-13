@@ -1,10 +1,9 @@
-import type { ComponentRef } from "react";
+import type { ComponentRef, ReactElement } from "react";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Canvas, Group, Skia, useCanvasRef } from "react-native-skia";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { PixelRatio, Text, View } from "react-native";
 
-import type { SerializedNode } from "./deserialize";
 import { parseNode, parseProps } from "./deserialize";
 import { forceGpuDeviceLoss, getSharedDevice } from "./GpuDevice";
 import { ScreenDoneContext } from "./ScreenDone";
@@ -19,21 +18,35 @@ const scale = s / PixelRatio.get();
 const size = 256 * scale;
 const timeToDraw = CI ? 1500 : 500;
 
-// Report a failure back to the host as { $$error: message } so the matching
-// test can `.rejects` instead of hanging on a missing reply, and so the throw
-// is not surfaced as an unhandled exception that could break the socket for
-// subsequent tests.
-const errorEnvelope = (error: unknown) =>
+// Every reply names the request it answers (its $$id), so that the host can
+// drop a reply that comes after its request timed out instead of handing it
+// to the next one.
+
+// Report a failure back to the host as { $$id, $$error: message } so the
+// matching test can `.rejects` instead of hanging on a missing reply, and so
+// the throw is not surfaced as an unhandled exception that could break the
+// socket for subsequent tests.
+const errorEnvelope = (id: number, error: unknown) =>
   JSON.stringify({
+    $$id: id,
     $$error: error instanceof Error ? error.message : String(error),
   });
 
 // JSON.stringify returns undefined for a result JSON cannot carry: undefined, a function, a symbol.
-const resultMessage = (result: unknown) => {
-  const json: string | undefined = JSON.stringify(result);
-  return json === undefined
-    ? errorEnvelope(`The snippet's result has no JSON form: ${typeof result}`)
-    : json;
+const resultMessage = (id: number, result: unknown) =>
+  JSON.stringify(result) === undefined
+    ? errorEnvelope(
+        id,
+        `The snippet's result has no JSON form: ${typeof result}`
+      )
+    : JSON.stringify({ $$id: id, result });
+
+// An image reply: the request id as a big-endian uint32, then the PNG.
+const imageMessage = (id: number, png: Uint8Array) => {
+  const message = new Uint8Array(4 + png.length);
+  new DataView(message.buffer).setUint32(0, id);
+  message.set(png, 4);
+  return message;
 };
 
 // The encoded pixels of a native view: React Native WebGPU rasterizes the view
@@ -77,13 +90,17 @@ export const Tests = ({ assets }: TestsProps) => {
   const viewRef = useRef<ComponentRef<typeof View>>(null);
   const ref = useCanvasRef();
   const [client, hostname] = useClient();
-  const [drawing, setDrawing] = useState<any>(null);
+  const [drawing, setDrawing] = useState<{
+    readonly node: ReactElement;
+    readonly id: number;
+  } | null>(null);
   // The screen shown and the key it is mounted with. Requested again, a
   // screen that settles is mounted again, so that it settles again; any other
   // keeps its instance and what it shows.
   const [shown, setShown] = useState<{
     readonly screen: Screen;
     readonly key: number;
+    readonly id: number;
   } | null>(null);
   const screenMounts = useRef(0);
   // Whether the screen shown has settled (see useScreenDone).
@@ -94,7 +111,7 @@ export const Tests = ({ assets }: TestsProps) => {
     if (client !== null) {
       // Define the message handler as a separate function
       const handleMessage = (e: MessageEvent) => {
-        const tree: any = JSON.parse(e.data);
+        const { $$id: id, ...tree }: any = JSON.parse(e.data);
         if (tree.code) {
           try {
             const result = eval(
@@ -118,13 +135,13 @@ export const Tests = ({ assets }: TestsProps) => {
             });
             if (result instanceof Promise) {
               result
-                .then((r) => client.send(resultMessage(r)))
-                .catch((error) => client.send(errorEnvelope(error)));
+                .then((r) => client.send(resultMessage(id, r)))
+                .catch((error) => client.send(errorEnvelope(id, error)));
             } else {
-              client.send(resultMessage(result));
+              client.send(resultMessage(id, result));
             }
           } catch (error) {
-            client.send(errorEnvelope(error));
+            client.send(errorEnvelope(id, error));
           }
         } else if (typeof tree.screen === "string") {
           const screen = Screens[tree.screen];
@@ -135,10 +152,10 @@ export const Tests = ({ assets }: TestsProps) => {
             screenMounts.current += 1;
           }
           setScreenDone(false);
-          setShown({ screen, key: screenMounts.current });
+          setShown({ screen, key: screenMounts.current, id });
         } else {
           const node = parseNode(tree, assets);
-          setDrawing(node as SerializedNode);
+          setDrawing({ node, id });
         }
       };
 
@@ -164,10 +181,10 @@ export const Tests = ({ assets }: TestsProps) => {
               width: size,
               height: size,
             });
-            client.send(await image.encodeToBytes());
+            client.send(imageMessage(drawing.id, await image.encodeToBytes()));
           } catch (e) {
             console.error(e);
-            client.send(errorEnvelope(e));
+            client.send(errorEnvelope(drawing.id, e));
           }
         }
       }, timeToDraw);
@@ -186,10 +203,10 @@ export const Tests = ({ assets }: TestsProps) => {
     ) {
       const it = setTimeout(async () => {
         try {
-          client.send(await encodeView(viewRef));
+          client.send(imageMessage(shown.id, await encodeView(viewRef)));
         } catch (e) {
           console.error(e);
-          client.send(errorEnvelope(e));
+          client.send(errorEnvelope(shown.id, e));
         }
       }, timeToDraw);
       return () => {
@@ -207,7 +224,7 @@ export const Tests = ({ assets }: TestsProps) => {
           : "🟢 Waiting for the server to send tests"}
       </Text>
       <Canvas style={{ width: size, height: size }} ref={ref}>
-        <Group transform={[{ scale }]}>{drawing}</Group>
+        <Group transform={[{ scale }]}>{drawing?.node}</Group>
       </Canvas>
       <View
         style={{ width: size, height: size }}
