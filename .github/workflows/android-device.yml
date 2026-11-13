@@ -1,0 +1,202 @@
+name: Android device
+# Builds the example app for arm64 and runs the e2e suite on the Pixel 8
+# plugged into the self-hosted Mac. The hosted emulator job in ci.yml renders
+# through SwiftShader; this one runs Graphite on a real Mali GPU and Vulkan
+# driver, which is where the device-specific bugs live.
+#
+# The job runs on its own runner listener (label `android-device`), so it
+# does not queue behind build-test-ios on the Mac, and so only one job at a
+# time ever drives the phone. Ports, next to the table in ci.yml:
+#   8086  4247  android-device (this job)
+#
+# The phone must have no secure lock screen (Settings > Security > Screen
+# lock > None) and USB debugging authorized for the runner user's adb key.
+# If more than one device is attached, set ANDROID_SERIAL in the listener's
+# .env file.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: android-device-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-android-device:
+    runs-on: [self-hosted, macOS, android-device]
+    timeout-minutes: 60
+    env:
+      METRO_PORT: 8086
+      E2E_PORT: 4247
+      APP_ID: com.reactnativeskia.example
+      # Only the phone's ABI.
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install NDK
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        id: setup-ndk
+        with:
+          ndk-version: r27d
+
+      # The SDK is installed once on the machine (the same lookup as the
+      # react-native-webgpu workflow). Gradle downloads missing platforms and
+      # build tools into it on first use.
+      - name: Set up Android SDK
+        run: |
+          echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+          if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+            for candidate in "$HOME/Library/Android/sdk" "$HOME/android-sdk" \
+              /opt/homebrew/share/android-commandlinetools; do
+              if [ -d "$candidate" ]; then ANDROID_HOME=$candidate; break; fi
+            done
+          fi
+          if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
+            echo "::error::No Android SDK with platform-tools found on the runner"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "sdk.dir=$ANDROID_HOME" > apps/example/android/local.properties
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          fi
+
+      # Fail in seconds, with a readable message, when the phone is missing,
+      # unauthorized or one of several devices.
+      - name: Check the device
+        run: |
+          adb start-server
+          adb devices -l
+          if [ -z "$ANDROID_SERIAL" ]; then
+            SERIALS=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+            if [ "$(echo "$SERIALS" | grep -c .)" != 1 ]; then
+              echo "::error::Expected exactly one authorized device, found: ${SERIALS:-none}. Set ANDROID_SERIAL in the runner's .env."
+              exit 1
+            fi
+            ANDROID_SERIAL=$SERIALS
+          fi
+          echo "ANDROID_SERIAL=$ANDROID_SERIAL" >> "$GITHUB_ENV"
+          echo "Using $(adb -s "$ANDROID_SERIAL" shell getprop ro.product.model) ($ANDROID_SERIAL), Android $(adb -s "$ANDROID_SERIAL" shell getprop ro.build.version.release)"
+
+      # The machine is persistent: ~/.gradle and the ccache directory survive
+      # between runs on disk, so neither goes through GitHub's cache. ccache
+      # is used when it is installed (brew install ccache).
+      - name: Build example for Android
+        run: |
+          if command -v ccache > /dev/null; then
+            export CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            export CCACHE_DIR="$HOME/.cache/ccache-skia-android" CCACHE_MAXSIZE=10G CCACHE_COMPILERCHECK=content
+            ccache --zero-stats
+          fi
+          yarn turbo run build:android --concurrency 1
+          if command -v ccache > /dev/null; then ccache --show-stats; fi
+
+      - name: Ensure Metro and test server ports are free
+        run: |
+          lsof -ti tcp:$METRO_PORT -sTCP:LISTEN | xargs -r kill -9 || true
+          lsof -ti tcp:$E2E_PORT -sTCP:LISTEN | xargs -r kill -9 || true
+
+      # CI=true opens the app on the Tests screen; E2E_PORT is inlined into
+      # the bundle. --reset-cache because the transform cache in $TMPDIR
+      # outlives the run on this machine. The background request warms the
+      # bundle while the app installs.
+      - name: Start Package Manager
+        working-directory: apps/example
+        run: |
+          CI=true E2E=true yarn start --port $METRO_PORT --reset-cache > "$RUNNER_TEMP/metro.log" 2>&1 &
+          (sleep 10 && curl -sf --retry 30 --retry-connrefused --retry-delay 5 -o /dev/null "http://localhost:$METRO_PORT/index.bundle?platform=android&dev=true&minify=false") &
+
+      # Wake and unlock (works only without a secure lock screen), keep the
+      # screen on while plugged in for the duration of the run, turn the
+      # animations off, and never test a binary left by an earlier run. The
+      # app asks for Metro at its own localhost:8081, mapped here to this
+      # job's port; the test server port is reversed by the jest globalSetup.
+      - name: Prepare the device and install the app
+        run: |
+          adb shell input keyevent KEYCODE_WAKEUP
+          adb shell wm dismiss-keyguard
+          if [ "$(adb shell locksettings get-disabled | tr -d '\r')" != "true" ]; then
+            echo "::warning::The device has a secure lock screen: a reboot or a power button press will lock it and the run will time out. Set Screen lock to None."
+          fi
+          # `true` rather than `usb`: the phone reports its port as AC power.
+          adb shell svc power stayon true
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb uninstall "$APP_ID" || true
+          adb install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk
+          adb reverse tcp:8081 tcp:$METRO_PORT
+          adb logcat -c
+          nohup adb logcat -v time > "$RUNNER_TEMP/logcat.txt" 2>&1 &
+          echo $! > "$RUNNER_TEMP/logcat.pid"
+
+      # The app is launched fresh (just installed, so no instance from an
+      # earlier run can connect to this server first) and retries the
+      # socket until the test server is up. Paragraphs is excluded until the
+      # two RTL cases have -android reference images.
+      - name: Run e2e tests
+        run: |
+          adb shell monkey -p "$APP_ID" 1 > /dev/null
+          cd packages/skia
+          CI=true E2E_CONNECT_TIMEOUT=300 yarn e2e --testPathIgnorePatterns "Paragraphs"
+
+      - name: Screenshot the device
+        if: failure()
+        run: adb exec-out screencap -p > "$RUNNER_TEMP/screen.png" || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/logcat.pid" ] && kill "$(cat "$RUNNER_TEMP/logcat.pid")" || true
+          lsof -ti tcp:$METRO_PORT -sTCP:LISTEN | xargs -r kill -9 || true
+          lsof -ti tcp:$E2E_PORT -sTCP:LISTEN | xargs -r kill -9 || true
+          if [ -n "$ANDROID_SERIAL" ]; then
+            adb shell am force-stop "$APP_ID" || true
+            # Only this job's mappings: the test server's is removed by the
+            # jest globalTeardown, Metro's here.
+            adb reverse --remove tcp:8081 || true
+            adb reverse --remove tcp:$E2E_PORT || true
+            # Let the screen sleep between runs (an always-on OLED burns in).
+            adb shell svc power stayon false || true
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          name: android-device-snapshots
+          path: packages/skia/src/__tests__/snapshots/**/*.test.png
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          name: android-device-logs
+          path: |
+            ${{ runner.temp }}/logcat.txt
+            ${{ runner.temp }}/metro.log
+            ${{ runner.temp }}/screen.png
+          if-no-files-found: ignore
