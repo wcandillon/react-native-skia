@@ -45,7 +45,7 @@ jobs:
       - run: cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens,-build/include_what_you_use --exclude=packages/skia/cpp/skia --exclude=packages/skia/cpp/dawn --recursive packages/skia/cpp packages/skia/android/cpp
 
       - name: Lint files
-        run: yarn lint
+        run: yarn lint:ci
 
       - name: Typecheck files
         run: yarn tsc
