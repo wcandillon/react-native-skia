@@ -169,11 +169,14 @@ jobs:
           fi
           # `true` rather than `usb`: the phone reports its port as AC power.
           adb shell svc power stayon true
-          # The e2e job leaves the animations off, and at a scale of 0
-          # Reanimated skips the rotation the scenes are measured under.
-          scale=$(adb shell settings get global animator_duration_scale | tr -d '\r')
-          echo "ANIMATOR_SCALE=$scale" >> "$GITHUB_ENV"
-          adb shell settings put global animator_duration_scale 1
+          # The e2e job leaves the animations off, and Reanimated reads a
+          # transition scale of 0 as "reduce motion": it skips the rotation
+          # the scenes are measured under.
+          for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
+            value=$(adb shell settings get global $setting | tr -d '\r')
+            echo "SAVED_$setting=$value" >> "$GITHUB_ENV"
+            adb shell settings put global $setting 1
+          done
 
       # ---- baseline -----------------------------------------------------------
 
@@ -279,8 +282,11 @@ jobs:
             adb shell settings put system peak_refresh_rate 0 || true
             adb shell settings put system min_refresh_rate 0 || true
           fi
-          if [ -n "$ANIMATOR_SCALE" ] && [ "$ANIMATOR_SCALE" != "null" ]; then
-            adb shell settings put global animator_duration_scale "$ANIMATOR_SCALE" || true
-          fi
+          for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
+            saved=SAVED_$setting
+            if [ -n "${!saved}" ] && [ "${!saved}" != "null" ]; then
+              adb shell settings put global $setting "${!saved}" || true
+            fi
+          done
           adb shell svc power stayon false || true
           adb shell am force-stop com.reactnativeskia.example || true

@@ -142,7 +142,7 @@ Android:
 adb shell settings put system peak_refresh_rate 120   # lock the panel at its top rate
 adb shell settings put system min_refresh_rate 120
 adb shell svc power stayon usb                        # keep the screen on
-adb shell settings get global animator_duration_scale # must be 1
+adb shell settings get global transition_animation_scale # not 0: Reanimated reads 0 as "reduce motion"
 ```
 
 Restore `peak_refresh_rate`/`min_refresh_rate` to `0` and `svc power stayon

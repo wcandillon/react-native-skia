@@ -287,6 +287,14 @@ async function threadsAndroid() {
 // The launcher activity, whatever its class: react-native-test-app's lives
 // in its own Java package.
 async function launchAndroid() {
+  // Reanimated reads this setting as "reduce motion" and skips the rotation
+  // the scenes are measured under: every scene would present 0 FPS.
+  const scale = (await adb("shell", "settings", "get", "global", "transition_animation_scale")).trim();
+  if (Number(scale) === 0) {
+    throw new Error(
+      "transition_animation_scale is 0 on the phone: run `adb shell settings put global transition_animation_scale 1` first"
+    );
+  }
   await adb("shell", "input", "keyevent", "KEYCODE_WAKEUP");
   await adb("shell", "wm", "dismiss-keyguard");
   const out = await adb("shell", "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", PACKAGE);
@@ -866,4 +874,10 @@ writeFileSync(`${base}.md`, table + "\n");
 console.log(`\n${table}\n`);
 console.log(`[bench] wrote ${base}.json`);
 const regressions = previous && table.includes("| regression |");
-process.exit(regressions ? 1 : 0);
+// A scene that presented nothing was not measured: the report is not one to
+// compare with.
+const empty = COLD ? [] : (result.runs ?? []).filter((r) => !(r.present > 0)).map((r) => r.scene);
+if (empty.length > 0) {
+  console.error(`[bench] no frame presented for ${[...new Set(empty)].join(", ")}: the measurement failed`);
+}
+process.exit(regressions || empty.length > 0 ? 1 : 0);
