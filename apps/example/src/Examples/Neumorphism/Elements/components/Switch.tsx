@@ -26,11 +26,10 @@ interface SwitchProps {
 }
 
 export const Switch = ({ x, y, width, pressed }: SwitchProps) => {
-  const transform = useDerivedValue(
-    () => [{ translateX: mix(pressed.value, 0, 24) }],
-    [pressed]
-  );
-  const r = useDerivedValue(() => mix(pressed.value, 0, 2), [pressed]);
+  const transform = useDerivedValue(() => [
+    { translateX: mix(pressed.value, 0, 24) },
+  ]);
+  const r = useDerivedValue(() => mix(pressed.value, 0, 2));
   return (
     <FitBox src={rect(0, 0, 48, 24)} dst={rect(x, y, width, width * 2)}>
       <Box box={border} color={Theme.white1}>
