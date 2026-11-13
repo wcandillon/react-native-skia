@@ -61,11 +61,13 @@ the default plan, without measurements.
 The `Benchmark` workflow (`.github/workflows/benchmark.yml`, Actions tab, "Run
 workflow") runs the FPS benchmark on the Android phone plugged into the
 self-hosted Mac. There is no iPhone on that machine, so it is Android only.
-It measures the `baseline` ref (default `main`) and then the candidate (`ref`,
-default the dispatched branch, `refs/pull/<n>/head` for a pull request) on the
-same phone, compares the two with `--compare` and fails on a regression. The
-reports go to the job summary and the JSON to the `benchmark-android`
-artifact. A baseline without this benchmark is skipped.
+It measures the candidate (`ref`, default the dispatched branch,
+`refs/pull/<n>/head` for a pull request) and publishes the report to the job
+summary and the JSON to the `benchmark-android` artifact. Given a `baseline`
+ref, it measures that first on the same phone, compares the two with
+`--compare` and fails on a regression. A baseline without this benchmark is
+skipped. The job runs on the runner of CI's Android device job, so the two
+never drive the phone at the same time.
 
 The phone has to be authorized for adb on the Mac, plugged in, and have no
 secure lock screen. The job locks the panel at `refresh_rate` (120), keeps

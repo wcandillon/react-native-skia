@@ -3,6 +3,8 @@ name: Benchmark
 # hand, on the Android phone plugged into the self-hosted Mac. The Mac has no
 # iPhone, so the job is Android only.
 #
+# Without a baseline (the default) the job measures the candidate and
+# publishes its report: the job summary and the benchmark-android artifact.
 # With a baseline, the job measures the baseline first and the candidate
 # second, on the same phone in the same run, and compares the two: the
 # benchmark's own --compare flags a present FPS drop of more than 10% or a
@@ -28,7 +30,7 @@ on:
       baseline:
         description: Baseline to compare with (a branch, tag or SHA), empty for none
         type: string
-        default: main
+        default: ""
       scenes:
         description: Scenes, comma-separated (shapes,shapeBlob,images,shader,pattern,paths,text), empty for all
         type: string
@@ -67,10 +69,12 @@ permissions:
 
 jobs:
   android:
-    runs-on: [self-hosted, macOS]
+    # The runner that owns the phone, the one of CI's build-test-android-device
+    # job: the two queue behind each other instead of driving the phone at the
+    # same time.
+    runs-on: [self-hosted, macOS, android-device]
     timeout-minutes: 240
     env:
-      ANDROID_SERIAL: ${{ inputs.serial }}
       # Only the phone's ABI: the other three would double the C++ build.
       ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
       JAVA_OPTS: "-XX:MaxHeapSize=6g"
@@ -89,22 +93,28 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r27d
-          local-cache: true
 
-      - name: Set ANDROID_NDK
-        run: echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-        with:
-          packages: platform-tools
-
-      - name: Install Android SDK tools
+      # The SDK is installed once on the machine (the same lookup as CI's
+      # build-test-android-device job). Gradle downloads missing platforms
+      # and build tools into it on first use.
+      - name: Set up Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
+          echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+          if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+            for candidate in "$HOME/Library/Android/sdk" "$HOME/android-sdk" \
+              /opt/homebrew/share/android-commandlinetools; do
+              if [ -d "$candidate" ]; then ANDROID_HOME=$candidate; break; fi
+            done
+          fi
+          if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
+            echo "::error::No Android SDK with platform-tools found on the runner"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          fi
 
       - name: Python for the frame trace
         run: |
@@ -130,29 +140,40 @@ jobs:
             echo "No ccache on this machine: full C++ builds."
           fi
 
-      # The settings README.md asks for, put back in the last step.
+      # The settings README.md asks for, put back in the last step. The
+      # serial is the input, else the runner's own ANDROID_SERIAL (.env), else
+      # the only device attached.
       - name: Prepare the phone
         env:
           REFRESH_RATE: ${{ inputs.refresh_rate }}
+          SERIAL: ${{ inputs.serial }}
         run: |
           adb start-server
-          count=$(adb devices | awk 'NR > 1 && $2 == "device"' | wc -l | tr -d ' ')
-          if [ -z "$ANDROID_SERIAL" ] && [ "$count" != 1 ]; then
-            adb devices -l
-            echo "::error::Expected one authorized Android device, found $count. Plug the phone in, authorize the Mac, or give its serial."
-            exit 1
+          adb devices -l
+          SERIAL=${SERIAL:-$ANDROID_SERIAL}
+          if [ -z "$SERIAL" ]; then
+            SERIALS=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+            if [ "$(echo "$SERIALS" | grep -c .)" != 1 ]; then
+              echo "::error::Expected exactly one authorized device, found: ${SERIALS:-none}. Plug the phone in, authorize the Mac, or give its serial."
+              exit 1
+            fi
+            SERIAL=$SERIALS
           fi
+          export ANDROID_SERIAL=$SERIAL
+          echo "ANDROID_SERIAL=$ANDROID_SERIAL" >> "$GITHUB_ENV"
           adb wait-for-device
           echo "Phone: $(adb shell getprop ro.product.model | tr -d '\r') (Android SDK $(adb shell getprop ro.build.version.sdk | tr -d '\r'))"
           if [ -n "$REFRESH_RATE" ]; then
             adb shell settings put system peak_refresh_rate "$REFRESH_RATE"
             adb shell settings put system min_refresh_rate "$REFRESH_RATE"
           fi
-          adb shell svc power stayon usb
+          # `true` rather than `usb`: the phone reports its port as AC power.
+          adb shell svc power stayon true
+          # The e2e job leaves the animations off, and at a scale of 0
+          # Reanimated skips the rotation the scenes are measured under.
           scale=$(adb shell settings get global animator_duration_scale | tr -d '\r')
-          if [ "$scale" != "null" ] && [ "$scale" != "1" ] && [ "$scale" != "1.0" ]; then
-            echo "::warning::animator_duration_scale is $scale; the scenes' rotation assumes 1."
-          fi
+          echo "ANIMATOR_SCALE=$scale" >> "$GITHUB_ENV"
+          adb shell settings put global animator_duration_scale 1
 
       # ---- baseline -----------------------------------------------------------
 
@@ -257,6 +278,9 @@ jobs:
           if [ -n "${{ inputs.refresh_rate }}" ]; then
             adb shell settings put system peak_refresh_rate 0 || true
             adb shell settings put system min_refresh_rate 0 || true
+          fi
+          if [ -n "$ANIMATOR_SCALE" ] && [ "$ANIMATOR_SCALE" != "null" ]; then
+            adb shell settings put global animator_duration_scale "$ANIMATOR_SCALE" || true
           fi
           adb shell svc power stayon false || true
           adb shell am force-stop com.reactnativeskia.example || true
