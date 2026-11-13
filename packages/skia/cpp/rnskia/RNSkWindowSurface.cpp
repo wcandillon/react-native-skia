@@ -68,7 +68,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
-  // A layout attaches the same window again, which keeps what it shows.
+  // The window held already, attached again (Apple's attachSurface, as the
+  // bit depth or the color space changes), keeps what it shows. A layout
+  // does not attach: it resizes the attached window (see resize).
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
   // Not detach(): an abandon that lands while this runs (the platform taking
   // the window back as it attaches) must be kept for the detach posted
