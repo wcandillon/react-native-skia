@@ -6,13 +6,13 @@ body:
     attributes:
       value: |
         Please provide all the information requested. Issues that do not follow this format are likely to stall.
-        Write this issue yourself first, in your own words. A partial understanding is fine; what matters is that you own the problem. Agentic content after that is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
+        We happily accept contributions made with coding agents. Start with a few sentences in your own words (not paraphrased by the agent); agent-written content is welcome in the last section. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
         
   - type: textarea
-    id: description
+    id: own_words
     attributes:
-      label: Description
-      description: Briefly describe the issue and the expected versus actual behavior.
+      label: In your own words
+      description: How did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What did you expect versus what happened, and what is your own understanding of the issue? A partial understanding is fine.
     validations:
       required: true
 
@@ -60,3 +60,11 @@ body:
         A reproducer is mandatory. Issues without reproducers are more likely to stall and may be closed.
     validations:
       required: true
+
+  - type: textarea
+    id: agent_content
+    attributes:
+      label: Agent-written content
+      description: Optional. If a coding agent was involved, paste its analysis, root cause investigation, or proposed fix here.
+    validations:
+      required: false

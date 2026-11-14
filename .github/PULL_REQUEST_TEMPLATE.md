@@ -1,5 +1,9 @@
-<!-- Write a brief description yourself first, in your own words. A partial understanding is fine; what matters is that you own the change. Agentic content after that is welcome. See https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents -->
+<!-- We happily accept contributions made with coding agents. Start with a few sentences in your own words (not paraphrased by the agent); agent-written content is welcome after that. See https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents -->
 
-## Description
+## In your own words
 
-<!-- A few sentences on what changed and why. -->
+<!-- How did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What is your own understanding of the issue and of the fix? A partial understanding is fine. -->
+
+## Agent-written content
+
+<!-- Optional. If a coding agent was involved, paste its summary, analysis, or test notes here. -->
