@@ -5,11 +5,21 @@ body:
   - type: markdown
     attributes:
       value: |
-        Write this issue yourself first, in your own words. A partial understanding is fine; what matters is that you own the problem. Agentic content after that is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
+        We happily accept contributions made with coding agents. But first, we want to hear from you directly. After that, agent-written content is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
 
   - type: textarea
-    id: description
+    id: own_words
     attributes:
       label: Description
+      description: >-
+        In your own words: what are you trying to build, and what is missing today? Did you run into this yourself, or did it come up in an audit? How much of a pain point is it? A partial understanding is fine.
     validations:
       required: true
+
+  - type: textarea
+    id: agent_content
+    attributes:
+      label: Agent-written content
+      description: Optional. If a coding agent was involved, paste its analysis, root cause investigation, or proposed fix here.
+    validations:
+      required: false
