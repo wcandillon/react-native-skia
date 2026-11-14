@@ -24,6 +24,7 @@
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#include "rnsurface/FrameClock.h"
 #include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
@@ -36,24 +37,29 @@ using namespace facebook::react;
 @end
 
 @interface SkiaView ()
-// What the frame scheduler asks of the view (see SkiaViewPresentHost).
-- (void)postFrameCallback;
-- (int)presentFrame;
+// What the view's frame scheduler asks of the platform view (see
+// RNSkView::FrameHost).
+- (void)requestFrameSignal;
 @end
 
 namespace {
 
-// What the scheduler asks of the view (see rnsurface::FrameScheduler), on
-// the present thread: the display link for the vsync, the native view for
-// the present.
-class SkiaViewPresentHost : public rnsurface::FrameScheduler::Host {
-public:
-  __weak SkiaView *view = nil;
+// A time of Core Animation's clock (seconds of mach absolute time) on the
+// clock of the frame scheduler (see rnsurface::frameClockNow).
+rnsurface::FrameScheduler::Nanos frameNanos(CFTimeInterval seconds) {
+  return static_cast<rnsurface::FrameScheduler::Nanos>(seconds * 1.0e9);
+}
 
-  void postFrameCallback() override { [view postFrameCallback]; }
-
-  int presentFrame() override { return [view presentFrame]; }
-};
+// A frame of the display, as the scheduler reads it. A frame presented makes
+// the frame of the display that ends at `end` as long as the compositor
+// finds it there when it builds that frame, a moment before: a quarter of a
+// frame is left for it, and a frame ready later than that waits for the next
+// signal rather than land in a frame of the display that gets one already.
+rnsurface::FrameScheduler::FrameSignal frameSignal(CFTimeInterval start,
+                                                   CFTimeInterval end) {
+  const auto interval = frameNanos(end - start);
+  return {frameNanos(start), interval, frameNanos(end) - interval / 4};
+}
 
 } // namespace
 
@@ -128,15 +134,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   // set and cleared there, by tasks posted in order with those that present
   // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
-  // Whether the window is attached, as the posted attach and detach left it
-  // (see attachWindowWithWidth:height: and detachWindow): without one the
-  // frames wait, and the display link stays paused. Present thread.
-  bool _hasWindow;
-  // Decides when the queued recordings are presented (see scheduleFrame:).
-  // Made on the main thread, used on the present thread only. The host
-  // outlives the scheduler, which refers to it (see dealloc).
-  std::unique_ptr<SkiaViewPresentHost> _presentHost;
-  std::unique_ptr<rnsurface::FrameScheduler> _scheduler;
 #if !TARGET_OS_OSX
   // Present thread.
   CADisplayLink *_displayLink;
@@ -146,11 +143,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   // The display's rate, read on the main thread as the view enters a window
   // (UIKit), 0 until then.
   std::atomic<float> _maximumFramesPerSecond;
-  // Whether a frame went to the window since the display link's last tick,
-  // and when the interval of that tick ends (see scheduleFrame:). Present
-  // thread.
-  bool _presentedSinceTick;
-  CFTimeInterval _tickTarget;
 #else
   // Whether a tick is scheduled, when the last one ran (see
   // presentAgainLater), and which ticks are still wanted: the leave moves
@@ -172,12 +164,6 @@ usesP3ColorSpace(const std::string &colorSpace,
     _windowAttached = false;
     _attachedWidth = 0;
     _attachedHeight = 0;
-    _hasWindow = false;
-    _presentHost = std::make_unique<SkiaViewPresentHost>();
-    _presentHost->view = self;
-    _scheduler = std::make_unique<rnsurface::FrameScheduler>(*_presentHost);
-    // A CAMetalLayer shows each frame presented in turn.
-    _scheduler->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
 #if TARGET_OS_OSX
     _presentAgainScheduled = false;
     _lastTick = 0;
@@ -185,8 +171,6 @@ usesP3ColorSpace(const std::string &colorSpace,
 #else
     _fullFrameRateRequested = false;
     _maximumFramesPerSecond = 0;
-    _presentedSinceTick = false;
-    _tickTarget = 0;
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -290,18 +274,21 @@ usesP3ColorSpace(const std::string &colorSpace,
       view->bindPresentThread();
     });
   }
-  [self enterPresentThread];
-  // A submitted recording goes to the scheduler, on the present thread,
-  // which arms the display link, or presents on the spot for a window
-  // resized since the frame it shows (see
-  // rnsurface::FrameScheduler::requestFrame).
+  // A CAMetalLayer shows each frame presented in turn. The view's frame
+  // scheduler asks for the display's frames on the present thread: the
+  // display link, while the view is in a superview. Out of it the view has
+  // no window and its scheduler asks for nothing; a request from a view let
+  // go of since (see leavePresentThread) stops at _presenting.
+  _view->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
   __weak SkiaView *weakSelf = self;
-  _view->setFrameScheduler(
-      [weakSelf, presenting = _presenting](bool forResizedWindow) {
-        if (*presenting) {
-          [weakSelf scheduleFrame:forResizedWindow];
-        }
-      });
+  RNSkia::RNSkView::FrameHost host;
+  host.requestFrameSignal = [weakSelf, presenting = _presenting]() {
+    if (*presenting) {
+      [weakSelf requestFrameSignal];
+    }
+  };
+  _view->setFrameHost(std::move(host));
+  [self enterPresentThread];
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
@@ -335,10 +322,10 @@ usesP3ColorSpace(const std::string &colorSpace,
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
-// goes in the same task: a frame scheduled between two would make a new one
-// that outlives the leave (see scheduleFrame). The view goes on the main
-// thread, where UIKit expects it to, as this task owns the last reference to
-// it once Fabric let go of it (see invalidate). A strong capture cannot
+// goes in the same task: a frame signal asked for between two would make a new
+// one that outlives the leave (see requestFrameSignal). The view goes on the
+// main thread, where UIKit expects it to, as this task owns the last reference
+// to it once Fabric let go of it (see invalidate). A strong capture cannot
 // promise that: the block would let go on the present thread, racing the main
 // thread for the last release. So the reference is taken here, by hand, and
 // let go of only on the main thread, once the autorelease pool of the work is
@@ -358,13 +345,14 @@ usesP3ColorSpace(const std::string &colorSpace,
       __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
       *view->_presenting = false;
       // Whatever the scheduler asked for goes with the link.
-      view->_scheduler->cancel();
+      if (view->_presentView != nullptr) {
+        view->_presentView->cancelFrames();
+      }
 #if !TARGET_OS_OSX
       [view->_displayLink invalidate];
       view->_displayLink = nil;
       // The request belonged to that link: the next one must ask again.
       view->_fullFrameRateRequested = false;
-      view->_presentedSinceTick = false;
 #else
       // A tick scheduled is let go of (see presentAgainLater): the scheduler
       // forgot it, and the next request schedules one of its own.
@@ -373,7 +361,6 @@ usesP3ColorSpace(const std::string &colorSpace,
 #endif
       view->_presentView = nullptr;
       surface->detach((__bridge void *)layer);
-      view->_hasWindow = false;
     }
     dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
                      [](void *retained) { CFRelease(retained); });
@@ -387,10 +374,6 @@ usesP3ColorSpace(const std::string &colorSpace,
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
-  // The scheduler before the host it refers to; the present thread is done
-  // with both (see leavePresentThread).
-  _scheduler = nullptr;
-  _presentHost = nullptr;
 }
 
 // Fabric either recycles an unmounted view (prepareForRecycle) or, with the
@@ -458,40 +441,13 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 #pragma mark - Frames
 
-// A recording is waiting (see RNSkView::setFrameScheduler): the scheduler
-// arms the display link for it, or presents it on the spot when it is for a
-// window resized since the frame it shows. Present thread.
-- (void)scheduleFrame:(bool)forResizedWindow {
-  // Out of its superview, or at a size of zero, the view has no window: the
-  // frames wait, and attaching one redraws them (see
-  // RNSkWindowSurface::attach). A link would only tick for nothing, and out
-  // of the superview hold the view.
-  if (_presentView == nullptr || !_hasWindow) {
-    return;
-  }
-#if !TARGET_OS_OSX
-  // One present per vsync. A frame for a resized window goes on the spot
-  // only while nothing went to the window since the display link's last
-  // tick: a second present in the same interval shows no sooner (the
-  // display takes one frame per vsync), and takes a second of the layer's
-  // three drawables; once they are all in flight, the next present blocks
-  // this thread until one comes back. The frame waits for the next tick
-  // instead, like any other.
-  if (forResizedWindow && _presentedSinceTick &&
-      CACurrentMediaTime() < _tickTarget) {
-    forResizedWindow = false;
-  }
-#endif
-  _scheduler->requestFrame(forResizedWindow);
-}
-
-// The scheduler asks for the next vsync: the display link, which ticks on
-// the present thread, started and unpaused here and paused again once the
-// scheduler has nothing outstanding (see onFrame:), so that an idle view
-// does not keep the display at its full rate. macOS has no CADisplayLink on
-// the minimum deployment target, so the frame is presented a frame later
-// there (see presentAgainLater). Present thread.
-- (void)postFrameCallback {
+// The view's frame scheduler asks for the next frame of the display (see
+// RNSkView::FrameHost): the display link, which ticks on the present thread,
+// started and unpaused here and paused again once the scheduler asks for no
+// more (see onFrame:), so that an idle view does not keep the display at its
+// full rate. macOS has no CADisplayLink on the minimum deployment target, so
+// a tick stands in for it there (see presentAgainLater). Present thread.
+- (void)requestFrameSignal {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
@@ -504,21 +460,6 @@ usesP3ColorSpace(const std::string &colorSpace,
 #else
   [self presentAgainLater];
 #endif
-}
-
-// The scheduler presents: the queued recordings go to the window (see
-// RNSkView::presentFrame). Present thread.
-- (int)presentFrame {
-  if (_presentView == nullptr) {
-    return rnsurface::FrameScheduler::kNothingPresented;
-  }
-  const int result = _presentView->presentFrame();
-#if !TARGET_OS_OSX
-  if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
-    _presentedSinceTick = true;
-  }
-#endif
-  return result;
 }
 
 #if !TARGET_OS_OSX
@@ -562,12 +503,14 @@ usesP3ColorSpace(const std::string &colorSpace,
 // present thread's loop returns after each tick and drains its pool then
 // (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
-  _presentedSinceTick = false;
-  _tickTarget = link.targetTimestamp;
-  _scheduler->onFrame();
-  // The scheduler asked for another tick while recordings are left: more
-  // were submitted meanwhile, or the window could not take one.
-  if (!_scheduler->isFrameCallbackPosted()) {
+  // A frame of the display, from this tick to the next. The scheduler hears
+  // of the signals it asked for only, and asks for the next while frames are
+  // left or keep coming.
+  if (_presentView != nullptr && _presentView->wantsFrameSignal()) {
+    _presentView->onFrameSignal(
+        frameSignal(link.timestamp, link.targetTimestamp));
+  }
+  if (_presentView == nullptr || !_presentView->wantsFrameSignal()) {
     link.paused = YES;
   }
 }
@@ -606,8 +549,12 @@ usesP3ColorSpace(const std::string &colorSpace,
                        return;
                      }
                      strongSelf->_presentAgainScheduled = false;
-                     strongSelf->_lastTick = CACurrentMediaTime();
-                     strongSelf->_scheduler->onFrame();
+                     const CFTimeInterval now = CACurrentMediaTime();
+                     strongSelf->_lastTick = now;
+                     auto view = strongSelf->_presentView;
+                     if (view != nullptr && view->wantsFrameSignal()) {
+                       view->onFrameSignal(frameSignal(now, now + interval));
+                     }
                    });
                  });
 }
@@ -698,7 +645,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   _windowAttached = true;
   _attachedWidth = w;
   _attachedHeight = h;
-  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   const bool highBitDepth = _highBitDepth;
@@ -719,10 +665,6 @@ usesP3ColorSpace(const std::string &colorSpace,
         (latestWidth != width || latestHeight != height)) {
       surface->resize(latestWidth, latestHeight);
     }
-    SkiaView *strongSelf = weakSelf;
-    if (strongSelf != nil) {
-      strongSelf->_hasWindow = surface->isAttached();
-    }
   });
 }
 
@@ -734,16 +676,10 @@ usesP3ColorSpace(const std::string &colorSpace,
     return;
   }
   _windowAttached = false;
-  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
-  RNSkia::presentThread().post([=]() {
-    surface->detach((__bridge void *)layer);
-    SkiaView *strongSelf = weakSelf;
-    if (strongSelf != nil) {
-      strongSelf->_hasWindow = surface->isAttached();
-    }
-  });
+  RNSkia::presentThread().post(
+      [=]() { surface->detach((__bridge void *)layer); });
 }
 
 #pragma mark - Props

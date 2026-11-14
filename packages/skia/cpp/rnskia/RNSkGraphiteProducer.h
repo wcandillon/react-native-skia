@@ -2,8 +2,12 @@
 
 #include <memory>
 #include <mutex>
+#include <utility>
+#include <vector>
 
 #include <jsi/jsi.h>
+
+#include "rnsurface/FrameScheduler.h"
 
 #include "include/core/SkRefCnt.h"
 
@@ -15,6 +19,7 @@ namespace RNSkia {
 namespace jsi = facebook::jsi;
 
 class Recorder;
+class RNSkGraphiteRecording;
 class RNSkGraphiteTarget;
 
 /**
@@ -38,22 +43,31 @@ class RNSkGraphiteTarget;
  * until then, one UI frame at most, rather than a frame with unset
  * properties.
  *
- * Pacing: a view has at most one job in flight, and the pool keeps at most one
- * frame ahead of the display: a job may start while the previous recording is
- * still waiting for its vsync, so that the replay of one frame overlaps the
- * present of the other, but not while two are waiting. Updates that arrive
- * meanwhile only mark the content dirty; the next job (started by the update,
- * by the end of the job before, or by a presented frame) picks them up. A
- * producer that outruns the display therefore records once per vsync, and
- * the queue of the target never grows. On a Vulkan window the present alone
- * takes two to three milliseconds of the main thread, so a replay that only
- * started once the frame was on screen missed every other vsync at 120 Hz.
+ * Pacing: the view's frame scheduler (rnsurface::FrameScheduler) lives here,
+ * under the producer's lock, as its record side is called from these three
+ * threads and its present side from the thread the view presents on (see
+ * pace). It decides when a job starts: a view has at most one in flight, one
+ * recording ready on the target, and one that ended before the window took
+ * the ready one, which waits here (see onFramesTaken). Updates that arrive
+ * meanwhile only mark the content dirty; the next job picks them up. While a
+ * job fits in a frame of the display, the next starts once the window took
+ * the ready recording; once it does not, as soon as the previous job ends, so
+ * that the replay of one frame overlaps the present of the other. The ready
+ * recording is known by identity: the view presents recordings that are not
+ * this producer's too (a client's, the last frame shown again), and those
+ * free no slot.
  */
 class RNSkGraphiteProducer
     : public std::enable_shared_from_this<RNSkGraphiteProducer> {
 public:
-  /** Takes a thread of the render pool for the life of the producer. */
-  RNSkGraphiteProducer();
+  using Scheduler = rnsurface::FrameScheduler;
+
+  /**
+   Takes a thread of the render pool for the life of the producer. `policy`
+   is the pacing policy of the platform (see RNSkPacingPolicy.h); what the
+   window shows is known once the view has one (see setWindow).
+   */
+  explicit RNSkGraphiteProducer(Scheduler::Policy policy);
   ~RNSkGraphiteProducer();
 
   /**
@@ -79,9 +93,10 @@ public:
   bool hasContent();
 
   /**
-   Whether a frame is on its way: one is being recorded, or was asked for
-   and starts once there is room for it (see requestFrame). The view drops
-   a frame recorded for a size the surface no longer has when one is.
+   Whether a frame is on its way: one is being recorded, waits for the
+   window to take the one before it, or was asked for and starts once there
+   is room for it (see requestFrame). The view drops a frame recorded for a
+   size the surface no longer has when one is.
    */
   bool hasFrameComing();
 
@@ -108,11 +123,45 @@ public:
    */
   bool requestFrame();
 
+  // Pacing -------------------------------------------------------------------
+
   /**
-   The view presented `presented` recordings (every one it had taken from the
-   queue): as many slots free up for the next jobs.
+   Runs an entry of the scheduler's present side, `entry(scheduler)`, under
+   the producer's lock, and returns the actions it asks for, which the view
+   runs outside of it. Present thread.
    */
-  void onFramePresented(size_t presented);
+  template <typename Entry> Scheduler::Actions pace(Entry &&entry) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return std::forward<Entry>(entry)(_scheduler);
+  }
+
+  /** What the view's window shows (see Scheduler::Window). Present thread. */
+  void setWindow(Scheduler::Window window);
+
+  /** The view left its window (see Scheduler::cancel). Present thread. */
+  void cancelFrames();
+
+  /**
+   Whether a frame signal is asked for and has not come (see
+   Scheduler::wantsFrameSignal). Present thread.
+   */
+  bool wantsFrameSignal();
+
+  /**
+   The view took these recordings off the target, for its window: the ready
+   recording among them, if it is, leaves its slot now, before its replay,
+   so that the next job overlaps it. Present thread.
+   */
+  void onFramesTaken(
+      const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings);
+
+  /**
+   The window could not take these after all (no drawable), and they are
+   back on the target: the recording that left the ready slot for them, if
+   it is among them, is the ready one again. Present thread.
+   */
+  void onFramesReturned(
+      const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings);
 
   /**
    Replays the current content into a canvas, on the calling thread (a
@@ -141,7 +190,24 @@ private:
    read its shared values (see Recorder::isReady). Under the lock.
    */
   bool hasContentLocked() const;
-  void kickLocked();
+  /**
+   Asks the scheduler for a recording, if there is something to record and
+   a target to record it into. Under the lock.
+   */
+  void requestRecordingLocked();
+  /** Does what the scheduler's record side asks for. Under the lock. */
+  void applyLocked(const Scheduler::Actions &actions);
+  /**
+   Queues the ready recording on the target. One the target drops (made for
+   a GPU device lost since) is done with on the spot. Under the lock.
+   */
+  void queueReadyLocked();
+  /**
+   Lets go of the ready recording when it can never be presented: made for a
+   GPU device lost since, which the target dropped, or the view skips. Under
+   the lock.
+   */
+  void forgetUnpresentableLocked();
   void produce();
 
   // Content and scheduling state.
@@ -149,12 +215,15 @@ private:
   std::shared_ptr<RNSkGraphiteTarget> _target;
   std::shared_ptr<Recorder> _recorder;
   sk_sp<SkPicture> _picture;
-  // Recordings submitted to the current target and not presented yet. A job
-  // starts while there is room for its recording in the queue.
-  static constexpr size_t kMaxQueued = 2;
   bool _dirty = false;
-  bool _inFlight = false;
-  size_t _queued = 0;
+  // When the view's jobs start and its frames go to the window (see the
+  // class comment), and the recordings it paces: the one ready on the
+  // target, the one that ended before the window took it, and the one the
+  // window took last, should it give it back.
+  Scheduler _scheduler;
+  std::shared_ptr<RNSkGraphiteRecording> _ready;
+  std::shared_ptr<RNSkGraphiteRecording> _waiting;
+  std::weak_ptr<RNSkGraphiteRecording> _taken;
   // The render thread every job of this producer runs on, so that its
   // frames are always recorded on the same Graphite recorder (see
   // RNSkThreadPool::acquireLane). Set once, read without the lock.
