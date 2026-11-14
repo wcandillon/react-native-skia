@@ -340,12 +340,30 @@ public:
 
   void play(DrawingCtx *ctx) override {
     const auto &[font, text, x, y] = props;
-    if (font.has_value()) {
-      ctx->canvas->drawSimpleText(text.c_str(), text.length(),
-                                  SkTextEncoding::kUTF8, x, y, font.value(),
-                                  ctx->getPaint());
+    if (!font.has_value()) {
+      return;
+    }
+    // The same blob for as long as the text and the font stay the same, so
+    // that Graphite finds the glyph runs it made for it on the previous frame
+    // (it caches them by blob, under any whole pixel translation) and their
+    // glyphs in its atlas: drawSimpleText() shapes the text and looks up
+    // every glyph again on each frame. Played under the recorder's lock.
+    if (_blob == nullptr || _blobText != text || _blobFont != font.value()) {
+      _blob = SkTextBlob::MakeFromText(text.c_str(), text.length(),
+                                       font.value(), SkTextEncoding::kUTF8);
+      _blobText = text;
+      _blobFont = font.value();
+    }
+    // No blob for a text without glyphs.
+    if (_blob != nullptr) {
+      ctx->canvas->drawTextBlob(_blob, x, y, ctx->getPaint());
     }
   }
+
+private:
+  sk_sp<SkTextBlob> _blob;
+  std::string _blobText;
+  SkFont _blobFont;
 };
 
 struct BoxShadowCmdProps {
