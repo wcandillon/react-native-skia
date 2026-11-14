@@ -445,17 +445,11 @@ public:
   void onAcknowledgementPoll() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onAcknowledgementPoll");
     _acknowledgementWatched = false;
-    _acknowledgementWatchedAgain = false;
     const auto window = windowState();
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
       return scheduler.onAcknowledgementPoll(now, window);
     }));
-    // A poll that found what it watched for asked for no other: the next
-    // watch starts over with short delays.
-    if (!_acknowledgementWatchedAgain) {
-      _acknowledgementWatchedSince = 0;
-    }
   }
 
   /**
@@ -521,11 +515,12 @@ private:
                       _surface->readState(nullptr) == RNSkWindowState::kReady;
     state.queued = target != nullptr && target->hasQueued();
     state.held = _surface->hasHeldFrame();
-    // Asked only where the answer decides something: a frame is held for
-    // it, or is queued where a present waits for it.
-    const bool waits =
-        _surface->getAcknowledgement() != Scheduler::Acknowledgement::kNone;
-    state.acknowledged = state.held || (waits && state.queued)
+    // Asked only where the answer decides something, as each answer is a
+    // call into Dawn: a frame is held for it, or waits queued for it where
+    // frames are declined.
+    const bool declines = _surface->getAcknowledgement() ==
+                          Scheduler::Acknowledgement::kDeclinesFrame;
+    state.acknowledged = state.held || (declines && state.queued)
                              ? _surface->isAcknowledged()
                              : true;
     return state;
@@ -641,28 +636,17 @@ private:
   }
 
   /**
-   Asks for the next poll of the acknowledgement. A frame held at the
-   display's rate is released within a millisecond or two, and each moment
-   it is released late may cost it its slot: the first polls come
-   kShortPoll apart. A frame the GPU is long over (a canvas bound by its
-   GPU) gains nothing from that: past kShortPolls, they come kLongPoll
-   apart.
+   Asks for the next poll of the acknowledgement, kAcknowledgementPoll from
+   now: a frame held is presented that late at most.
    */
   void watchAcknowledgement() {
-    _acknowledgementWatchedAgain = true;
     if (_acknowledgementWatched) {
       return;
     }
     _acknowledgementWatched = true;
-    const auto now = rnsurface::frameClockNow();
-    if (_acknowledgementWatchedSince == 0) {
-      _acknowledgementWatchedSince = now;
-    }
-    const auto delay = now - _acknowledgementWatchedSince < kShortPolls
-                           ? kShortPoll
-                           : kLongPoll;
     if (_frameHost.watchAcknowledgement) {
-      _frameHost.watchAcknowledgement(std::chrono::nanoseconds(delay));
+      _frameHost.watchAcknowledgement(
+          std::chrono::nanoseconds(kAcknowledgementPoll));
       return;
     }
     // No timer: asked again a task behind those queued.
@@ -1054,17 +1038,11 @@ private:
   FrameHost _frameHost;
   bool _windowTakesLatestFrame = false;
   // A poll for the acknowledgement is on its way (see
-  // watchAcknowledgement), whether the poll under way asked for another,
-  // and since when the view has been polling without an answer. Present
-  // thread.
+  // watchAcknowledgement). Present thread.
   bool _acknowledgementWatched = false;
-  bool _acknowledgementWatchedAgain = false;
-  Scheduler::Nanos _acknowledgementWatchedSince = 0;
-  // How far apart the polls are (see watchAcknowledgement): 100 µs for the
-  // first 1.5 ms, 500 µs from then on.
-  static constexpr Scheduler::Nanos kShortPoll = 100000;
-  static constexpr Scheduler::Nanos kLongPoll = 500000;
-  static constexpr Scheduler::Nanos kShortPolls = 1500000;
+  // How far apart the polls are while a frame is held: each asks a fence
+  // and nothing else.
+  static constexpr Scheduler::Nanos kAcknowledgementPoll = 500000;
   // What a view without a platform view to signal the display's frames
   // takes a frame to last (see requestFrameSignal).
   static constexpr Scheduler::Nanos kUnpacedInterval = 16666667;

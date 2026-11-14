@@ -130,7 +130,9 @@ public:
     bool queued = false;
     // A frame is submitted and its present is held.
     bool held = false;
-    // The GPU is done with the frame presented last, or none was.
+    // The GPU is done with the frame presented last, or none was. Read
+    // where the answer decides something: while a frame is held, and where
+    // a frame is declined until the GPU is done.
     bool acknowledged = true;
   };
 
@@ -520,12 +522,12 @@ private:
       // The window took its frame for this slot.
       return Verdict::kWaitsForFrameSignal;
     }
-    // Whether the frame would be presented within this slot, taken now: its
-    // submit ends before the slot does, and its present is not held.
-    const bool landsInSlot =
-        now + _submitEstimate < slot.end &&
-        (window.acknowledged ||
-         _policy.acknowledgement != Acknowledgement::kHoldsPresent);
+    // Whether the frame makes this slot's deadline, taken now. Where a
+    // present waits for the GPU, a frame taken while the GPU is on the one
+    // before is held, and released into this slot or a later one: whether
+    // the GPU is done is not asked here, as each answer costs a call into
+    // Dawn.
+    const bool landsInSlot = now + _submitEstimate < slot.end;
     const bool slotHasPresent = this->slotHasPresent(now);
     if (on == On::kUrgentFrame) {
       _stats.takenUrgent++;
