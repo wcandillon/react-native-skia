@@ -11,6 +11,7 @@
 #include "RNSkRuntimeScheduler.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
+#include "api/JsiSkDispatcher.h"
 #include "api/JsiSkPicture.h"
 #include "api/recorder/JsiRecorder.h"
 #include "jsi/BoxedNativeObject.h"
@@ -38,6 +39,22 @@ RNSkManager::RNSkManager(
           view->requestRedraw();
         }
       });
+  // A surface collected or disposed off the thread that made it is destroyed
+  // on that thread (see Dispatcher): the JS thread, which installs the
+  // module, and the main thread, where the UI runtime runs, destroy it when
+  // their loop runs the queue. The main thread is bound by a task posted to it.
+  // The main thread's binding keeps the context it posts through: that thread
+  // outlives this manager, and another instance may still let go, from
+  // another thread, of the surfaces its UI runtime made there, until the next
+  // install binds the main thread again.
+  Dispatcher::bindCurrentThread(
+      platformContext->makeJavascriptThreadScheduler());
+  platformContext->runOnMainThread([platformContext]() {
+    Dispatcher::bindCurrentThread(
+        [platformContext](Dispatcher::Operation operation) {
+          platformContext->runOnMainThread(std::move(operation));
+        });
+  });
   // Install bindings
   installBindings();
 }
