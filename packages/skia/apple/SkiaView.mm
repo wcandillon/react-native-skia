@@ -107,8 +107,11 @@ usesP3ColorSpace(const std::string &colorSpace,
   // the duration of the call.
   std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
+  // The highBitDepth and colorSpace props (see usesP3ColorSpace) as they are
+  // when the native view is created: the format and the color space of the
+  // canvas are chosen then and kept, as the backing view is on Android (see
+  // setHighBitDepth:).
   bool _highBitDepth;
-  // The colorSpace prop, see usesP3ColorSpace.
   std::string _colorSpace;
   // Whether the window can show a frame (see appIsBackgrounded). Written on
   // the main thread, read on the present thread, by the surface, which holds
@@ -243,8 +246,17 @@ usesP3ColorSpace(const std::string &colorSpace,
     // thread. A CAMetalLayer is opaque by default, so the first of those
     // calls would change the layer there, in an implicit CATransaction that
     // the thread's run loop then commits: a commit of the layer tree off the
-    // main thread (#4474). Set here, Dawn's call changes nothing.
+    // main thread (#4474). Set here, Dawn's call changes nothing (see the
+    // asserts in attachWindowWithWidth:height:).
     _layer.opaque = NO;
+    // The layer is tagged with its colorspace as it is made, on the main
+    // thread, and committed with it: no frame is shown under another tag, and
+    // the present thread configures the surface without touching a
+    // CATransaction (#4474). The bit depth and the color space are those of
+    // the native view, which do not change (see setHighBitDepth:).
+    RNSkia::applyCAMetalLayerColorSpace(
+        _layer, _highBitDepth,
+        usesP3ColorSpace(_colorSpace, manager->getPlatformContext()));
     [self.layer addSublayer:_layer];
     // AppKit lays out a view put in a superview only when asked: the layout
     // attaches the window's surface to the layer (see layoutSubviews).
@@ -676,9 +688,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 // Configures the layer as the Dawn surface of the view, at the layer's size:
-// as the view comes back into a superview with a new layer, and again when
-// the bit depth or the color space changes so that the layer's pixel format
-// follows (see attachWindowWithWidth:height:).
+// as the view comes back into a superview with a new layer (see
+// attachWindowWithWidth:height:).
 - (void)attachSurface {
   int w = 0;
   int h = 0;
@@ -712,21 +723,28 @@ usesP3ColorSpace(const std::string &colorSpace,
   const bool highBitDepth = _highBitDepth;
   const bool useP3ColorSpace =
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
-  // The layer is tagged with its colorspace here, on the main thread, whose
-  // run loop commits it with the layer: the present thread configures the
-  // surface without touching a CATransaction (#4474). For the bit depth the
+  // The layer was tagged with the colorspace of this bit depth and color
+  // space when it was made (see willMoveToSuperview:), for the format the
   // attach asks for, which a Metal surface grants (see
   // RNSkWindowSurface::attach).
-  RNSkia::applyCAMetalLayerColorSpace(layer, highBitDepth, useP3ColorSpace);
   RNSkia::presentThread().post([=]() {
     int width = 0;
     int height = 0;
     if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
       return;
     }
+    // Configuring the surface must not change the layer, which would open a
+    // CATransaction on this thread (#4474). Dawn sets the layer's opacity
+    // from the alpha mode: the view made the layer non-opaque for the
+    // premultiplied mode of RNSkWindowSurface::configureSurface, and the two
+    // must stay in step.
+    NSCAssert(!layer.opaque, @"The CAMetalLayer must be made non-opaque on "
+                             @"the main thread before the attach");
     // The layer is owned by the view: nothing to release with the window.
     surface->attach((__bridge void *)layer, width, height, highBitDepth,
                     useP3ColorSpace, nullptr);
+    NSCAssert(!layer.opaque, @"Configuring the surface changed the opacity of "
+                             @"the CAMetalLayer on the present thread");
     int latestWidth = 0;
     int latestHeight = 0;
     if (surface->getLayoutSize(&latestWidth, &latestHeight) &&
@@ -789,37 +807,24 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
 }
 
+// The bit depth and the color space are read when the native view is created
+// and kept until it goes (see releaseNativeView), as the backing view and its
+// format are on Android: a change on a mounted canvas is ignored, with a
+// warning in development from JS (see views/apple.ts). The layer is
+// then tagged once, as it is made, and its pixel format never changes under a
+// frame it shows.
 - (void)setHighBitDepth:(bool)highBitDepth {
-  if (_highBitDepth == highBitDepth) {
+  if (_surface != nullptr) {
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface == nullptr) {
-    return;
-  }
-  // The layer is re-attached with the new format; until then (or without a
-  // size), frames are recorded for it.
-  _surface->setHighBitDepth(highBitDepth);
-  if (_windowAttached) {
-    [self attachSurface];
-  }
 }
 
 - (void)setColorSpace:(const std::string &)colorSpace {
-  if (_colorSpace == colorSpace) {
+  if (_surface != nullptr) {
     return;
   }
   _colorSpace = colorSpace;
-  if (_surface == nullptr) {
-    return;
-  }
-  // Like the bit depth: the layer is re-attached in the new color space;
-  // until then, frames are recorded for it.
-  _surface->setUseP3ColorSpace(
-      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
-  if (_windowAttached) {
-    [self attachSurface];
-  }
 }
 
 @end

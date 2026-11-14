@@ -9,6 +9,7 @@ import {
   resolveOpaque,
   useBackingViewWarning,
 } from "./android";
+import { useAppleFormatWarning } from "./apple";
 import type { SkiaGraphiteViewNativeProps } from "./types";
 import { measureLayout } from "./measureLayout";
 
@@ -41,6 +42,7 @@ export const SkiaGraphiteView = ({
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
   useBackingViewWarning({ highBitDepth, android });
+  useAppleFormatWarning({ highBitDepth, colorSpace });
   // What the surface format follows from on Android, see makeGraphiteContext.
   const opaque = resolveOpaque({ highBitDepth, android });
   // Retires the native target made for this id on unmount, in case no native

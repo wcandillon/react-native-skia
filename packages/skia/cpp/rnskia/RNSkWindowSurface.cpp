@@ -362,8 +362,9 @@ void RNSkWindowSurface::configureSurface() {
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
   // The colorspace of a CAMetalLayer is not set here: the platform view tags
-  // the layer on the main thread before it posts the attach (see
-  // apple/MetalLayerColorSpace.h).
+  // the layer on the main thread as it makes it (see
+  // apple/MetalLayerColorSpace.h), and makes it non-opaque for the alpha mode
+  // above, so that nothing here changes the layer on the present thread.
   _surface.Configure(&config);
 }
 
