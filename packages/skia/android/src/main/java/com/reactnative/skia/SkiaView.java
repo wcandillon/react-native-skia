@@ -286,7 +286,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
     // there (see dropInstance), and no native method is called from there
     // after that, but for the one onSurfaceDestroyed makes under the hybrid
     // data's lock. The present thread, where it is destroyed, asks the hybrid
-    // data instead (see presentFrame).
+    // data instead (see onFrameConsumed).
     private boolean hasNativeView() {
         return !mDropped;
     }

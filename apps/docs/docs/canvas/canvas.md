@@ -122,8 +122,8 @@ The children of a `Canvas` are rendered by Skia's own React renderer, and its fr
 
 1. On every React commit, the JS thread records the drawing into a native display list and hands it to the view.
 2. When a Reanimated value used by the drawing changes, the UI thread writes the new value into the display list. It does not draw anything.
-3. A dedicated native thread pool replays the display list into a Graphite frame whenever its content changed, keeping at most one frame ahead of the display.
-4. The view presents the frame on the next vsync.
+3. A dedicated native thread pool replays the display list into a Graphite frame whenever its content changed. While a replay fits in a frame of the display, the next one starts once the view has presented the previous frame; when it takes longer, replays run one frame ahead of the display, so that the canvas keeps the display's rate.
+4. The view presents one frame per frame of the display: as soon as the frame is ready when it still makes the display's deadline, on the next frame of the display otherwise. On Android, a frame presented while the GPU is still working on the previous one has its work submitted and its present held until the GPU is done, so that no canvas waits for another's GPU work.
 
 An animation frame costs no React render, no work on the JS thread, and no drawing on the UI thread.
 A canvas without animation values is drawn once, and the view keeps its frame.

@@ -161,8 +161,11 @@ void RNSkWindowSurface::detachNow() {
 }
 
 void RNSkWindowSurface::releaseWindow() {
-  // The surface goes before the window it draws into.
+  // The surface goes before the window it draws into, and with it the frame
+  // it held. The next window has presented nothing yet.
   _surface = nullptr;
+  _heldFrame = false;
+  _hasPresentedWork = false;
   _needsConfigure = false;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
@@ -190,6 +193,45 @@ bool RNSkWindowSurface::isAttached() {
 bool RNSkWindowSurface::showsFrame() {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showsFrame");
   return _showsFrame;
+}
+
+bool RNSkWindowSurface::isAcknowledged() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::isAcknowledged");
+  if (!_hasPresentedWork) {
+    return true;
+  }
+  auto *context = DawnContext::tryGetInstance();
+  if (context != nullptr &&
+      !context->isDone(_presentedWork, _presentedWorkGeneration)) {
+    return false;
+  }
+  _hasPresentedWork = false;
+  return true;
+}
+
+bool RNSkWindowSurface::hasHeldFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::hasHeldFrame");
+  return _heldFrame;
+}
+
+bool RNSkWindowSurface::presentHeldFrame() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentHeldFrame");
+  if (!_heldFrame) {
+    return false;
+  }
+  _heldFrame = false;
+  // The window the platform took back gets nothing (see abandon), and a
+  // device lost since has nothing to present with: the frame is lost with
+  // either, and the view shows its last one again on what comes next.
+  if (!_surface || _abandoned.load(std::memory_order_acquire) ||
+      DawnContext::isDeviceLost()) {
+    return false;
+  }
+  RNSkGpuActivity::Scope activity;
+  presentNow();
+  return true;
 }
 
 void RNSkWindowSurface::setLayoutSize(int width, int height) {
@@ -351,6 +393,9 @@ void RNSkWindowSurface::configureIfNeeded() {
 }
 
 void RNSkWindowSurface::configureSurface() {
+  // The swapchain is made again: Dawn destroys the image the previous one
+  // had acquired, and the frame held in it with it.
+  _heldFrame = false;
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -453,6 +498,8 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   for (auto *window : windows()) {
     if (window->_generation == generation) {
       window->_surface = nullptr;
+      window->_heldFrame = false;
+      window->_hasPresentedWork = false;
       window->_generation = 0;
     }
   }
@@ -505,6 +552,10 @@ bool RNSkWindowSurface::presentRecordings(
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
+  // Before the window acquires an image: a frame declined holds nothing.
+  if (!takesFrame()) {
+    return false;
+  }
   configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
@@ -538,6 +589,10 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
+    return false;
+  }
+  // Before the window acquires an image: a frame declined holds nothing.
+  if (!takesFrame()) {
     return false;
   }
   configureIfNeeded();
@@ -581,9 +636,34 @@ bool RNSkWindowSurface::presentTexture() {
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
   }
+  // The GPU is still on the frame presented before: a present now would
+  // wait for it, here, with every other canvas behind. The work is
+  // submitted, so the GPU goes on to it without a pause; the present is
+  // the view's to make once the GPU is done (see presentHeldFrame). The
+  // same for a frame the view asked to hold (see holdNextPresent).
+  if (_acknowledgement ==
+          rnsurface::FrameScheduler::Acknowledgement::kHoldsPresent &&
+      (_holdNextPresent || !isAcknowledged())) {
+    _heldFrame = true;
+    return true;
+  }
+  presentNow();
+  return true;
+}
+
+void RNSkWindowSurface::presentNow() {
   _surface.Present();
   _showsFrame = true;
-  return true;
+  _presentCount++;
+  if (_acknowledgement == rnsurface::FrameScheduler::Acknowledgement::kNone) {
+    return;
+  }
+  // Everything submitted so far, this frame's work included: what the fence
+  // of its buffer waits for, and the next present for that fence.
+  if (auto *context = DawnContext::tryGetInstance()) {
+    _presentedWork = context->submittedWork(&_presentedWorkGeneration);
+    _hasPresentedWork = true;
+  }
 }
 
 } // namespace RNSkia

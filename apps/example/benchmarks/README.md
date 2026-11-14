@@ -48,6 +48,7 @@ then exits with status 1.
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
 | `--backing` | `surface` | Android: `texture` puts the canvas on a TextureView |
+| `--pacing` | the platform's | measure another frame pacing policy on the same build: `two` (a fixed depth of two frames instead of the adaptive one), `decline` or `nowait` (Android: what a present does while the GPU is on the previous frame, instead of `hold`); see `packages/skia/cpp/rnskia/RNSkPacingPolicy.h` |
 | `--label` | `local` | names the result files |
 | `--compare` | | an earlier result JSON |
 | `--no-build` | | reuse the installed app (its plan is the one it was built with) |

@@ -267,8 +267,9 @@ public:
    it can never be presented, and a client recording on every frame
    regardless would grow the queue without bound, so it is dropped, along
    with whatever waits in the queue, which was made for that device too.
+   Returns whether the recording was queued.
    */
-  void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
+  bool submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
@@ -279,7 +280,7 @@ public:
         // Dropped, with whatever waited: done, as far as pacing goes.
         _done.fetch_add(_queue.size() + 1, std::memory_order_release);
         _queue.clear();
-        return;
+        return false;
       }
       _queue.push_back(std::move(recording));
       requestFrame = _requestFrame;
@@ -287,6 +288,7 @@ public:
     if (requestFrame) {
       requestFrame();
     }
+    return true;
   }
 
   // View side ----------------------------------------------------------------
@@ -354,10 +356,11 @@ public:
   }
 
   /**
-   Main thread. `count` recordings taken from the queue are done: presented,
-   or dropped by the present for a size the window no longer has. The same
-   signal the declarative producer paces on (RNSkGraphiteProducer::
-   onFramePresented).
+   Present thread. `count` recordings taken from the queue are done:
+   presented, or dropped by the present for a size the window no longer has.
+   What a client pacing on pendingFrames() waits for; the declarative
+   producer hears of its own recording by identity instead (see
+   RNSkGraphiteProducer::onFramesTaken).
    */
   void onRecordingsDone(size_t count) {
     _done.fetch_add(count, std::memory_order_release);
@@ -366,8 +369,8 @@ public:
   /**
    Any thread. Recordings submitted and not yet presented (or dropped). A
    client recording on every vsync keeps this at or below a budget, as the
-   declarative producer does with kMaxQueued, so that a GPU-bound view does
-   not build a queue that is never dropped.
+   view's frame scheduler does for the declarative producer, so that a
+   GPU-bound view does not build a queue that is never dropped.
    */
   uint64_t pendingFrames() const {
     const auto done = _done.load(std::memory_order_acquire);

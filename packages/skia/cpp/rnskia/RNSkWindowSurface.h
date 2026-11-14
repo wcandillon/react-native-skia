@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowState.h"
+#include "rnsurface/FrameScheduler.h"
 #include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
@@ -51,6 +52,10 @@ namespace RNSkia {
  * stretches to the view. A present is made for the target the view read before
  * (see getTargetInfo); the window checks that it still is that target, and
  * declines a present made for a window resized since (see presentRecordings).
+ * Where a present waits for the GPU to finish the frame presented before
+ * (Android, see setAcknowledgement), a frame that comes meanwhile has its work
+ * submitted and its present held, for the view to make once the GPU is done
+ * (see presentHeldFrame): nothing blocks the thread every canvas presents on.
  * The description of the target texture is kept in a copy of its own, under a
  * mutex, so that whoever records for the view (the JS thread, a worklet
  * runtime, the render thread pool) can read it from any thread, also before the
@@ -148,6 +153,70 @@ public:
    while the GPU device is replaced (see ensureDevice). Presenting thread.
    */
   bool isAttached();
+
+  /**
+   Installed by the platform view, before the window attaches: what a
+   present does while the GPU is still on the frame presented before (see
+   rnsurface::FrameScheduler::Acknowledgement). On Android a present waits
+   for that frame, on the thread that presents and inside Dawn's device
+   lock: libgui's queueBuffer waits on the fence of the buffer queued last,
+   for every Vulkan swapchain. Holding, the window submits the frame's work
+   and keeps its present for presentHeldFrame(); declining, the view leaves
+   the frame queued (see isAcknowledged), and a frame it presents all the
+   same waits as before. Without one, a present goes at once: a Metal
+   present does not wait for the GPU.
+   */
+  void setAcknowledgement(
+      rnsurface::FrameScheduler::Acknowledgement acknowledgement) {
+    _acknowledgement = acknowledgement;
+  }
+
+  rnsurface::FrameScheduler::Acknowledgement getAcknowledgement() const {
+    return _acknowledgement;
+  }
+
+  /**
+   Whether the GPU is done with the frame presented last: with everything
+   submitted up to its present, other windows' work included, which is when
+   the fence of its buffer signals. Asked without waiting (see
+   DawnContext::isDone). True when no frame was presented onto this window,
+   and where a present does not wait for the GPU. Presenting thread.
+   */
+  bool isAcknowledged();
+
+  /**
+   Whether the window holds a frame: its work is submitted, its present
+   waits for the GPU to be done with the frame before it. The window takes
+   no other frame meanwhile. A held frame goes away unpresented with the
+   swapchain it was replayed into (a resize, a detach, a device replaced):
+   Dawn destroys the image it acquired, and the frame that follows is made
+   for the window as it is then. Presenting thread.
+   */
+  bool hasHeldFrame();
+
+  /**
+   Holds the present of the next frame the window takes, whatever the GPU
+   is on, where a present can be held (see setAcknowledgement): the view
+   asks for it when the frame's work should go to the GPU now and its
+   present later (see rnsurface::FrameScheduler::Actions::holdPresent).
+   Presenting thread.
+   */
+  void holdNextPresent(bool hold) { _holdNextPresent = hold; }
+
+  /**
+   How many frames went to the window so far: what tells a frame presented
+   from one whose present is held, or dropped with its swapchain, across a
+   call that may do either. Presenting thread.
+   */
+  uint64_t presentCount() const { return _presentCount; }
+
+  /**
+   Presents the held frame, whatever the GPU is on: the view calls it once
+   isAcknowledged(). Returns whether a frame went to the window: none was
+   held, or the platform took the window back meanwhile (see abandon).
+   Presenting thread.
+   */
+  bool presentHeldFrame();
 
   /**
    Whether the window shows a frame the view presented: a window attached in
@@ -338,10 +407,17 @@ private:
   // Whether a frame can go onto the window now: it is ready (see readState)
   // and the platform has not taken it back (see abandon).
   bool canPresent();
-  // Presents the swapchain texture the frame was replayed onto, unless the
-  // platform took the window back meanwhile (see abandon). Returns whether
-  // it did.
+  // Presents the swapchain texture the frame was replayed onto, or holds
+  // its present while the GPU is on the frame before it (see
+  // setAcknowledgement), unless the platform took the window back meanwhile
+  // (see abandon). Returns whether the window took the frame.
   bool presentTexture();
+  // Presents the swapchain texture, and remembers the work submitted up to
+  // here as what the next present waits for.
+  void presentNow();
+  // Whether the window takes a frame: it holds none, or the swapchain that
+  // one was replayed into is about to be configured again.
+  bool takesFrame() const { return !_heldFrame || _needsConfigure; }
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
@@ -383,6 +459,17 @@ private:
   // The platform took the window back before detach() ran (see abandon).
   // Taken down by detach() alone, never by attach() (see releaseWindow).
   std::atomic<bool> _abandoned{false};
+  // What a present does while the GPU is on the frame before it, the frame
+  // whose present is held, and the work submitted up to the last present,
+  // until the GPU is done with it (see isAcknowledged).
+  rnsurface::FrameScheduler::Acknowledgement _acknowledgement =
+      rnsurface::FrameScheduler::Acknowledgement::kNone;
+  bool _heldFrame = false;
+  bool _holdNextPresent = false;
+  uint64_t _presentCount = 0;
+  bool _hasPresentedWork = false;
+  wgpu::Future _presentedWork{};
+  uint64_t _presentedWorkGeneration = 0;
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;
 
