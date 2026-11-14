@@ -89,6 +89,15 @@ export interface ISkiaViewApi {
    */
   allocateNativeId: () => number;
   setJsiProperty: <T>(nativeId: number, name: string, value: T) => void;
+  /**
+   * Marks the canvas for the id as mounted. Native only. While it is, the
+   * properties set for the id outlive the native views torn down under the
+   * canvas (`display: none`, view recycling), and the next view for the id
+   * draws them.
+   */
+  retainView: (nativeId: number) => void;
+  /** Marks the canvas for the id as unmounted. Native only. */
+  releaseView: (nativeId: number) => void;
   requestRedraw: (nativeId: number) => void;
   /**
    * Reads the shared values into the recording held for the view and

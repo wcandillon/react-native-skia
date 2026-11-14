@@ -43,8 +43,10 @@ public:
   /**
    * Unregisters the RNSkView from the list of registered views
    * @param nativeId Native view Id
+   * @param view The view being torn down: nothing happens when another view
+   * has taken the id over since
    */
-  void unregisterSkiaView(size_t nativeId);
+  void unregisterSkiaView(size_t nativeId, const RNSkView *view);
 
   /**
    * @return The platform context

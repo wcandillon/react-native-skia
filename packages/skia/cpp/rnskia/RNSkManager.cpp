@@ -67,8 +67,8 @@ void RNSkManager::registerSkiaView(size_t nativeId,
   _viewApi->registerSkiaView(nativeId, std::move(view));
 }
 
-void RNSkManager::unregisterSkiaView(size_t nativeId) {
-  _viewApi->unregisterSkiaView(nativeId);
+void RNSkManager::unregisterSkiaView(size_t nativeId, const RNSkView *view) {
+  _viewApi->unregisterSkiaView(nativeId, view);
 }
 
 void RNSkManager::installBindings() {

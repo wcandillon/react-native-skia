@@ -149,7 +149,7 @@ protected:
     if (manager == nullptr) {
       return;
     }
-    manager->unregisterSkiaView(_view->getNativeId());
+    manager->unregisterSkiaView(_view->getNativeId(), _view.get());
   }
 
   // Present thread: the TextureView drew the frame it was given (see
