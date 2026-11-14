@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Please provide all the information requested. Issues that do not follow this format are likely to stall.
-        We happily accept contributions made with coding agents. Start with a few sentences in your own words (not paraphrased by the agent); agent-written content is welcome in the last section. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
+        We happily accept contributions made with coding agents. But first, we want to hear from you and your own words. After that, agent-written content is welcomed. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
         
   - type: textarea
     id: own_words
