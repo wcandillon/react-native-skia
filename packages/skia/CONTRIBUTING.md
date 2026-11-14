@@ -11,9 +11,29 @@
 `2.x` is the maintenance branch of the v2 line, which keeps the Ganesh backend and the platforms Graphite does not support (Android TV).
 Open pull requests against `main`, unless the change only applies to v2.
 
+## Reporting an issue
+
+You do not need to understand a problem to report it. The context only you have is often worth more to us than a root cause analysis: how you ran into the problem, and how much of a pain point it is for you. The issue template asks for both. In practice:
+
+- **Start with what you see.** A crash, a freeze, a black frame, memory that keeps growing: describe what you or your users experience, on which device and OS version, and how often. The code path that explains it, if you have one, comes after.
+- **Tell us how you found it.** A crash in production, a glitch you noticed while developing, and a defect found by reading the source or running an audit are all welcome, but we do not prioritize them the same way. If your app has never met the problem, say so in the first lines; otherwise it is the first question we will ask.
+- **Tell us how much it hurts.** Is it blocking a release? Do you have a workaround, and what does it cost you? How many of your users are affected? "It does not affect me, I noticed it in passing" is a perfectly good answer, and it saves everyone a round trip.
+- **Tell us what you need.** The API you were trying to use and what you were building with it help us find the right fix, which is sometimes a different one than the issue suggests.
+- **Rank what you send.** If a review of the code turns up several findings, lead with the ones that affect a real app, and group the theoretical ones in a single issue rather than filing one for each.
+
+## Opening a pull request
+
+- **One change per pull request.** If you find other things worth fixing along the way, send them separately: small pull requests are merged quickly, mixed ones wait.
+- **Talk to us before a large change.** Anything that changes the behavior of the native views, adds an API, or runs to hundreds of lines should start as an issue or a discussion. We may already have a direction in mind, or prefer a smaller approach, and we would rather tell you before you have written it.
+- **Say why it matters to you.** Does the pull request fix something you hit in your app, or something you spotted in the code? The same context we ask for in issues helps us weigh the complexity a fix adds against what it buys.
+- **Show us how to see the problem on `main`.** A small standalone example we can run is better than a long description of the evidence.
+- **Keep the description short.** What was wrong from the user's point of view, what changed, and anything you are unsure about.
+
 ## Contributing with coding agents
 
 We happily accept contributions made with coding agents. Our ask is simple: if you send us agent-written content, start with a few sentences in your own words. It will speed things up. A partial understanding is fine; any attempt at owning the change goes a long way. Agent-written content after that is welcome. We will deeply appreciate the effort.
+
+Those few sentences are the place for what an agent cannot know: how you came across the problem, whether you experienced it yourself, and how much it matters to you (see [Reporting an issue](#reporting-an-issue)). An agent can explain the code in detail; it cannot tell us whether the problem is worth solving for you. Please also read what your agent wrote before you send it, and trim it to what a reviewer needs.
 
 ## Library Development
 

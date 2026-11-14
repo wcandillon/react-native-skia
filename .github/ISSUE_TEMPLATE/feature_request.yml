@@ -11,5 +11,15 @@ body:
     id: description
     attributes:
       label: Description
+      description: What would you like to see in React Native Skia?
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What are you building, and how much does this matter to you?
+      description: |
+        Tell us about the app or the effect you need this for, what you do today without it, and what that workaround costs you. A concrete use case helps us more than a detailed design.
     validations:
       required: true
