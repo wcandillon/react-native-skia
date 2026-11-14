@@ -9,11 +9,14 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -25,9 +28,11 @@
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
+#include "RNSkMemoryReleaseSchedule.h"
 #include "RNSkPipelineWarmup.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
+#include "utils/RNSkOverloaded.h"
 
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkData.h"
@@ -451,6 +456,36 @@ public:
   }
 
   /**
+   Asks Dawn to give back the GPU memory it keeps until asked: its staging
+   buffers and scratch resources, and on Vulkan the heaps of the textures and
+   buffers freed, which it keeps for reuse, and what was freed after the last
+   submit, which it deletes only once a later submit completes (the
+   swapchains and textures of views gone, when nothing draws any more). A
+   render thread asks once it trimmed its recorders (see
+   RNSkGraphiteProducer), a window once it let go of its surface (see
+   RNSkWindowSurface::releaseWindow), and a recorder's holder once it let go
+   of the recorder (see RNSkGraphiteRecorder and ThreadRecorder). A thread of
+   its own gives it back once the frames left the GPU idle for
+   kMemoryReleaseIdleTime (see RNSkGpuActivity), asking Dawn only when it
+   reports no work in flight (see runMemoryRelease and
+   RNSkMemoryReleaseSchedule). Any thread, a destructor's included; returns
+   at once.
+   */
+  static void requestMemoryRelease() noexcept {
+    auto *instance = tryGetInstance();
+    if (instance == nullptr) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(instance->_memoryReleaseMutex);
+    const bool nothingOwed = instance->_memoryRelease.requested();
+    if (!instance->_memoryReleaseStarted) {
+      instance->startMemoryReleaseLocked();
+    } else if (nothingOwed) {
+      instance->_memoryReleaseCondition.notify_one();
+    }
+  }
+
+  /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
    thread's (see getRecorder), also behind the surfaces made on it; any
    other submits nothing. A recording made for a lost device (see
@@ -797,7 +832,8 @@ private:
 
   /**
    The recorder of one thread, with the generation it was made for (see
-   currentRecorder). Forgotten when the thread ends.
+   currentRecorder). Forgotten when the thread ends, and Dawn asked for what
+   it held (see requestMemoryRelease).
    */
   struct ThreadRecorder {
     std::unique_ptr<skgpu::graphite::Recorder> recorder;
@@ -809,6 +845,8 @@ private:
       if (auto *instance = tryGetInstance()) {
         instance->forgetRecorder(recorder.get());
       }
+      recorder = nullptr;
+      requestMemoryRelease();
     }
   };
 
@@ -842,9 +880,9 @@ private:
   static const Probe &probe() noexcept {
     // Attempted once: a device without a usable GPU does not get one by
     // asking again, and the attempt enumerates drivers. The context is never
-    // destroyed: the readback poller is a detached thread using it, which
-    // the process takes down at exit instead of a static destructor tearing
-    // the context down under it.
+    // destroyed: the readback and memory release threads are detached threads
+    // using it, which the process takes down at exit instead of a static
+    // destructor tearing the context down under it.
     static const Probe *result = []() noexcept {
       auto *probe = new Probe();
       try {
@@ -1228,6 +1266,117 @@ private:
     }
   }
 
+  // The memory release -------------------------------------------------------
+
+  /**
+   Starts the release's thread, which finds the requests owed. A process at
+   its thread limit gets none: Dawn keeps the memory, and the next request
+   tries again. With _memoryReleaseMutex held.
+   */
+  void startMemoryReleaseLocked() noexcept {
+    try {
+      std::thread([this]() { runMemoryRelease(); }).detach();
+      _memoryReleaseStarted = true;
+    } catch (const std::system_error &error) {
+      RNSkLogger::logToConsole(
+          "React Native Skia could not start its memory release thread: %s",
+          error.what());
+    }
+  }
+
+  /**
+   The memory release's thread: a release asked for runs when its schedule
+   says, between frames (see RNSkMemoryReleaseSchedule). It sleeps
+   otherwise.
+   */
+  void runMemoryRelease() {
+#if defined(__APPLE__)
+    pthread_setname_np("RNSkia Memory");
+#elif defined(__ANDROID__)
+    pthread_setname_np(pthread_self(), "RNSkia Memory");
+#endif
+    using Release = RNSkMemoryReleaseSchedule;
+    std::unique_lock<std::mutex> lock(_memoryReleaseMutex);
+    for (;;) {
+      // The round to run now, if any; otherwise the thread waits and looks
+      // again.
+      const auto now = std::chrono::steady_clock::now();
+      const auto release = std::visit(
+          Overloaded{[&](const Release::WaitForRequest &)
+                         -> std::optional<Release::RunRound> {
+                       _memoryReleaseCondition.wait(lock);
+                       return std::nullopt;
+                     },
+                     [&](const Release::WaitUntil &wait)
+                         -> std::optional<Release::RunRound> {
+                       // A sleep, not wait_until, which libc++ times by the
+                       // wall clock below Android API 30: no request wakes
+                       // the thread while one is owed (see
+                       // RNSkMemoryReleaseSchedule::requested).
+                       lock.unlock();
+                       std::this_thread::sleep_for(
+                           wait.time - std::chrono::steady_clock::now());
+                       lock.lock();
+                       return std::nullopt;
+                     },
+                     [](const Release::RunRound &run)
+                         -> std::optional<Release::RunRound> { return run; }},
+          _memoryRelease.next(RNSkGpuActivity::getInstance().lastUse(now),
+                              now));
+      if (!release.has_value()) {
+        continue;
+      }
+      lock.unlock();
+      auto round = Release::Round::kContextBusy;
+      {
+        // Whoever holds the context lock is using the context: skip the round
+        // rather than wait for the lock and hold up whoever needs it next.
+        std::unique_lock<std::mutex> contextLock(_mutex, std::try_to_lock);
+        if (contextLock.owns_lock()) {
+          round = reduceMemoryUsageLocked(*release);
+        }
+      }
+      lock.lock();
+      _memoryRelease.ranRound(*release, round,
+                              std::chrono::steady_clock::now());
+    }
+  }
+
+  /**
+   One round of a memory release (see runMemoryRelease), under the context
+   lock. Dawn is asked nothing once the frames used the GPU since the round
+   was decided, as the frames that follow would allocate again what it gave
+   up: looked at before the finished work is let go of (see
+   checkFinishedWork), and again after, as that waits on Dawn's device lock
+   behind a frame's snap. Nor while the device has work in flight that
+   RNSkGpuActivity does not see: Dawn's own submit after a round,
+   react-native-webgpu drawing on the shared device, or Skia's submissions
+   Dawn holds while an iOS app is in the background.
+   */
+  RNSkMemoryReleaseSchedule::Round
+  reduceMemoryUsageLocked(const RNSkMemoryReleaseSchedule::RunRound &run) {
+    using Round = RNSkMemoryReleaseSchedule::Round;
+    if (gpuUsedSince(run)) {
+      return Round::kGpuUsed;
+    }
+    checkFinishedWorkLocked();
+    if (gpuUsedSince(run)) {
+      return Round::kGpuUsed;
+    }
+    const auto device = getWGPUDevice();
+    if (dawn::native::DeviceTick(device.Get())) {
+      return Round::kDeviceBusy;
+    }
+    return dawn::native::ReduceMemoryUsage(device.Get()) ? Round::kAgain
+                                                         : Round::kDone;
+  }
+
+  /** Whether the frames used the GPU since the round was decided. */
+  static bool gpuUsedSince(const RNSkMemoryReleaseSchedule::RunRound &run) {
+    return RNSkGpuActivity::getInstance().lastUse(
+               std::chrono::steady_clock::now()) != run.lastWork;
+  }
+
   /**
    Lets the GPU work that finished release its resources (command buffers
    hold on to what they use until the context sees them done), and Dawn run
@@ -1235,6 +1384,11 @@ private:
    */
   void checkFinishedWork() {
     std::lock_guard<std::mutex> lock(_mutex);
+    checkFinishedWorkLocked();
+  }
+
+  /** checkFinishedWork() with the context lock held. */
+  void checkFinishedWorkLocked() {
     tick();
     _current.load(std::memory_order_acquire)
         ->context->checkAsyncWorkCompletion();
@@ -1331,6 +1485,28 @@ private:
   std::mutex _readbacksMutex;
   std::condition_variable _readbacksCondition;
   std::deque<Readback> _readbacks;
+
+  // The memory release: its schedule and whether its thread runs (see
+  // requestMemoryRelease), which _memoryReleaseMutex guards, held across no
+  // lock but RNSkGpuActivity's (see runMemoryRelease). A release waits until
+  // the frames left the GPU idle for kMemoryReleaseIdleTime (see
+  // RNSkGpuActivity), then runs up to kMemoryReleaseRounds rounds
+  // kMemoryReleaseRoundInterval apart from the last request while the device
+  // has work in flight or Dawn says more remains, and past them looks at a
+  // device still busy once per kMemoryReleaseIdleTime (see
+  // RNSkMemoryReleaseSchedule), so what a release costs react-native-webgpu
+  // drawing on the device, which RNSkGpuActivity does not see, stays bounded.
+  // What a round frees is only what nothing uses: a view that draws again
+  // finds its own textures in its recorder.
+  static constexpr std::chrono::milliseconds kMemoryReleaseIdleTime{1000};
+  static constexpr std::chrono::milliseconds kMemoryReleaseRoundInterval{10};
+  static constexpr int kMemoryReleaseRounds = 6;
+  RNSkMemoryReleaseSchedule _memoryRelease{kMemoryReleaseIdleTime,
+                                           kMemoryReleaseRoundInterval,
+                                           kMemoryReleaseRounds};
+  bool _memoryReleaseStarted = false;
+  std::mutex _memoryReleaseMutex;
+  std::condition_variable _memoryReleaseCondition;
 };
 
 } // namespace RNSkia

@@ -74,6 +74,18 @@ public:
            std::chrono::steady_clock::now() - _lastEnd >= idle;
   }
 
+  /**
+   When the frames last used the device: `now` while work is marked,
+   otherwise when the last marked work ended (the epoch before any did). For
+   a thread that decides with the times it is given (see
+   RNSkMemoryReleaseSchedule). Any thread.
+   */
+  std::chrono::steady_clock::time_point
+  lastUse(std::chrono::steady_clock::time_point now) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _inFlight > 0 ? now : _lastEnd;
+  }
+
 private:
   RNSkGpuActivity() = default;
 
