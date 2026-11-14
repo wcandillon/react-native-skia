@@ -531,8 +531,12 @@ jobs:
             ${{ runner.temp }}/screen.png
           if-no-files-found: ignore
 
+  # ios-simulator is a label only the ghrunner listener carries. The Mac runs
+  # a second listener for the phone (android-device) that also matches
+  # [self-hosted, macOS]: without the extra label two of these jobs ran at
+  # once, on the same ports and the same simulator, and failed each other.
   build-test-ios:
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, macOS, ios-simulator]
     timeout-minutes: 90
     env:
       # Three repositories share this self-hosted machine. Each job runs on its

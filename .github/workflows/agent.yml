@@ -63,7 +63,8 @@ permissions:
 jobs:
   ios:
     if: inputs.platform != 'android'
-    runs-on: [self-hosted, macOS]
+    # ios-simulator keeps the job off the phone's listener (see ci.yml).
+    runs-on: [self-hosted, macOS, ios-simulator]
     timeout-minutes: 150
     env:
       AGENT_PLATFORM: ios
