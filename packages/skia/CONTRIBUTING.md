@@ -13,7 +13,7 @@ Open pull requests against `main`, unless the change only applies to v2.
 
 ## Contributing with coding agents
 
-We happily accept contributions made with coding agents. Our ask is simple: if you send us agent-written content, start with a few sentences in your own words. It will speed things up. A partial understanding is fine; any attempt at owning the change goes a long way. Agent-written content after that is welcome. We will deeply appreciate the effort.
+We happily accept contributions made with coding agents. Our ask is simple: if you send us agent-written content, in a pull request or an issue, start with a few sentences in your own words covering how you came across the problem, whether you experienced it yourself or it came up in an audit, a sense of how much of a pain point it is, and what your own understanding of the issue is. A partial understanding is fine; any attempt at owning the change goes a long way. Agent-written content after that is welcome.
 
 ## Library Development
 
