@@ -14,14 +14,6 @@
 #include <utility>
 #include <vector>
 
-#if defined(__APPLE__)
-#include <pthread.h>
-#include <pthread/qos.h>
-#elif defined(__ANDROID__)
-#include <pthread.h>
-#include <sys/resource.h>
-#endif
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
@@ -32,6 +24,8 @@
 #include "include/gpu/graphite/Recorder.h"
 
 #pragma clang diagnostic pop
+
+#include "RNSkThreadPriority.h"
 
 namespace RNSkia {
 
@@ -458,15 +452,7 @@ private:
      its recorder's cache through a queue.
      */
     void reap() {
-#if defined(__APPLE__)
-      pthread_setname_np("RNSkia Images");
-      pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
-#elif defined(__ANDROID__)
-      pthread_setname_np(pthread_self(), "RNSkia Images");
-      // ANDROID_PRIORITY_BACKGROUND, for this thread only (see
-      // RNSkThreadPool).
-      setpriority(PRIO_PROCESS, 0, 10);
-#endif
+      configureCurrentThread("RNSkia Images", RNSkThreadPriority::kBackground);
       std::vector<sk_sp<SkImage>> released;
       std::unique_lock<std::mutex> lock(_mutex);
       for (;;) {

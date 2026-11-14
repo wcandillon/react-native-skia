@@ -9,8 +9,11 @@
 #include "RNSkGraphiteTarget.h"
 #include "RNSkJsiViewApi.h"
 #include "RNSkRuntimeScheduler.h"
+#include "RNSkThreadPool.h"
+#include "RNSkThreadTrims.h"
 #include "RNSkView.h"
 #include "api/JsiSkApi.h"
+#include "api/JsiSkDispatcher.h"
 #include "api/JsiSkPicture.h"
 #include "api/recorder/JsiRecorder.h"
 #include "jsi/BoxedNativeObject.h"
@@ -38,6 +41,34 @@ RNSkManager::RNSkManager(
           view->requestRedraw();
         }
       });
+  // A surface collected or disposed off the thread that made it is destroyed
+  // on that thread (see Dispatcher): the JS thread, which installs the
+  // module, and the main thread, where the UI runtime runs, destroy it when
+  // their loop runs the queue. The main thread is bound by a task posted to it.
+  // The main thread's binding keeps the context it posts through: that thread
+  // outlives this manager, and another instance may still let go, from
+  // another thread, of the surfaces its UI runtime made there, until the next
+  // install binds the main thread again.
+  Dispatcher::bindCurrentThread(
+      platformContext->makeJavascriptThreadScheduler());
+  platformContext->runOnMainThread([platformContext]() {
+    Dispatcher::bindCurrentThread(
+        [platformContext](Dispatcher::Operation operation) {
+          platformContext->runOnMainThread(std::move(operation));
+        });
+  });
+  // Those threads, and every other one outside the render pool that runs GPU
+  // work, trim their recorders on themselves through their dispatchers (see
+  // RNSkThreadTrims), with the task the render threads run (see
+  // RNSkGraphiteProducer).
+  RNSkThreadTrims::getInstance().setIdleTask(&DawnContext::trimThreadRecorders);
+  // A texture the image cache lets go of goes back to the upload recorder of
+  // the thread that uploaded it, a render thread or any other, also in an app
+  // that never shows a canvas.
+  ImageProvider::setReleaseListener([]() {
+    RNSkThreadPool::requestIdleTaskIfStarted();
+    RNSkThreadTrims::getInstance().requestAll();
+  });
   // Install bindings
   installBindings();
 }

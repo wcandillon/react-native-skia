@@ -20,9 +20,13 @@ for test in cpp-tests/*.cpp; do
   esac
   # On a Mac the render thread is a CFRunLoop with autorelease pools.
   libs=""
-  if [ "$name" = RenderThreadTest ] && [ "$(uname)" = Darwin ]; then
-    libs="-framework CoreFoundation -lobjc"
-  fi
+  case "$name" in
+    RenderThreadTest | ThreadTrimsTest)
+      if [ "$(uname)" = Darwin ]; then
+        libs="-framework CoreFoundation -lobjc"
+      fi
+      ;;
+  esac
   # shellcheck disable=SC2086
   "$CXX" -std=c++20 -I "$SKIA_INCLUDE" -I "$DAWN_INCLUDE" -I cpp -I android/cpp "$test" $sources $libs -o "$OUT/$name"
   "$OUT/$name"

@@ -8,6 +8,7 @@
 #include "RNDawnContext.h"
 
 #include "JniPlatformContext.h"
+#include "RNSkLooperTasks.h"
 #include "RNSkPlatformContext.h"
 
 #pragma clang diagnostic push
@@ -58,6 +59,20 @@ public:
 
   void runOnMainThread(std::function<void()> task) override {
     _jniPlatformContext->runTaskOnMainThread(std::move(task));
+  }
+
+  // The CallInvoker wakes an idle JS thread through Java
+  // (JMessageQueueThread::runOnQueue), which attaches the posting thread and
+  // so can end the process when Java's heap is full. The JS thread is a
+  // looper thread: it is woken through an eventfd, as the main thread is.
+  Dispatcher::Scheduler makeJavascriptThreadScheduler() override {
+    auto tasks = LooperTasks::forCurrentThread();
+    if (tasks == nullptr) {
+      return RNSkPlatformContext::makeJavascriptThreadScheduler();
+    }
+    return [tasks](Dispatcher::Operation operation) {
+      tasks->post(std::move(operation));
+    };
   }
 
 private:
