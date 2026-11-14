@@ -12,7 +12,7 @@ body:
     attributes:
       label: Description
       description: >-
-        In your own words (not paraphrased by the agent): what are you trying to build, and what is missing today? Did you run into this yourself, or did it come up in an audit? How much of a pain point is it? A partial understanding is fine.
+        In your own words: what are you trying to build, and what is missing today? Did you run into this yourself, or did it come up in an audit? How much of a pain point is it? A partial understanding is fine.
     validations:
       required: true
 

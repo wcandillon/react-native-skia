@@ -12,7 +12,7 @@ body:
     attributes:
       label: Description
       description: >-
-        In your own words (not paraphrased by the agent): what were you trying to do, and what in the documentation is wrong, missing, or confusing? Did you run into this yourself, or did it come up in an audit? A partial understanding is fine.
+        In your own words: what were you trying to do, and what in the documentation is wrong, missing, or confusing? Did you run into this yourself, or did it come up in an audit? A partial understanding is fine.
     validations:
       required: true
 

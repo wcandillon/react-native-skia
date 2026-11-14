@@ -2,7 +2,7 @@
 
 ## Description
 
-<!-- In your own words (not paraphrased by the agent): how did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What is your own understanding of the issue and of the fix? A partial understanding is fine. -->
+<!-- In your own words: how did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What is your own understanding of the issue and of the fix? A partial understanding is fine. -->
 
 ## Agent-written content
 
