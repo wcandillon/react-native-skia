@@ -44,6 +44,11 @@ then exits with status 1.
 |---|---|---|
 | `--platform` | `android` | `ios` needs a paired iPhone; `ios-simulator` with `--cold` only |
 | `--cold` | | measure the first draw after a fresh install instead of FPS (see below) |
+| `--pacing` | | iOS/Android burst/continuous displayed-frame intervals (see below) |
+| `--device` | | Android pacing: adb serial; iOS: device identifier |
+| `--refresh-rate` | | pacing: required actual display cadence in Hz |
+| `--trace` | | iOS pacing: collect optional Instruments diagnostics; Android always records Perfetto |
+| `--keep-trace` | | pacing: retain raw Perfetto (Android) or optional Instruments trace (iOS) |
 | `--scenes` | all eight | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
@@ -71,6 +76,199 @@ artifact. A baseline without this benchmark is skipped.
 The phone has to be authorized for adb on the Mac, plugged in, and have no
 secure lock screen. The job locks the panel at `refresh_rate` (120), keeps
 the screen on, and puts both back at the end.
+
+## Short-animation frame pacing
+
+`--pacing` measures uneven presentation intervals, not average FPS. Android
+and iOS use the same workload and window parser, with different native
+presentation sources. Existing FPS/cold modes remain unchanged.
+
+### Shared workload and measurement
+
+- A memoized Canvas runs pan/zoom over 128, 1024, 2048, 4096, 8192 and 16384
+  deterministic circles. Each repetition includes two warmups and twelve
+  measured 400ms bursts per load, separated by 200ms idle periods, plus a
+  five-second continuous control at 1024 circles. The Canvas stays mounted
+  during idle; only a load change rebuilds its scene. No changing status
+  overlay runs during measurement. Keep the load sweep: scheduling races can
+  appear at an intermediate count and disappear at a larger one. This is not
+  simply a GPU-saturation test.
+- UI boundaries call RN's transferable native logging host function
+  synchronously on UI. Each platform supplies a common device clock for
+  markers and presentation feedback. Host sleeps, bridge hops, logcat arrival,
+  callback arrival and guessed clock alignment never determine the intervals.
+- UI completion is not display completion. Each window includes its 200ms
+  idle-drain tail for queued final frames. Only successive presentations
+  **inside that window** form intervals: no synthetic gap after the last
+  surface, or across to the next animation. Warmups are excluded. Overlapping
+  windows and matched presentations beyond the configured drain fail.
+- Reports show p99 (median of per-repetition p99s), worst observed interval,
+  and windows with at least one gap longer than 1.5 display periods. UI maximum
+  gap is a control metric, not a substitute for displayed frames.
+  First-presentation time is separate (median of per-repetition medians from
+  UI start); remaining drain time is retained too. These measure cadence and
+  onset delay, not input latency or proof of each frame's animation value.
+  A p99 increase over 25% **and** a quarter display period flags a regression;
+  smaller or rarer changes remain visible in maximum/gap counts.
+
+### Run and compare
+
+- Both passes build separate native Release binaries with embedded `dev=false`
+  JS. No Metro connection. Use a physical device, keep USB connected, phone
+  unlocked, app foreground, Low Power Mode off, without touching it.
+  `--settle` is at least 10 seconds before measurement.
+- First merge the benchmark independently: baseline and candidate must both
+  contain identical benchmark files. Keep device, plan, configuration, power
+  mode, display rate, measurement source and trace settings the same.
+  Comparisons reject mismatches; changed Low Power Mode endpoints invalidate
+  a capture. Device identifiers are hashed in results.
+- `--refresh-rate` must match the actual active cadence, not the panel's
+  maximum. A 60Hz measurement does not establish 120Hz behavior. Power and
+  thermal endpoint snapshots are saved, not monitored continuously.
+- `--scenes`, `--gap` and `--backing` are not accepted by this fixed-workload
+  mode. `--no-build` reuses an installed binary: its workload fingerprint is
+  checked, but it cannot prove which native revision was installed. Rebuild
+  for revision comparisons.
+
+#### Android
+
+```sh
+# From apps/example; install the existing Perfetto dependency once.
+python3 -m venv benchmarks/.venv
+benchmarks/.venv/bin/pip install perfetto
+
+node benchmarks/run.mjs --pacing --platform android --device <ADB_SERIAL> \
+  --refresh-rate 60 --reps 3 --label android-baseline
+# Apply the rendering fix, retaining identical benchmark files.
+node benchmarks/run.mjs --pacing --platform android --device <ADB_SERIAL> \
+  --refresh-rate 60 --reps 3 --label android-fixed \
+  --compare benchmarks/results/<android-baseline>.json
+```
+
+- Targets arm64/API 33+; emulator runs are rejected.
+- The pacing Canvas explicitly uses an opaque **SurfaceView**, not the default
+  TextureView. Existing FPS/cold scenes and their backing options are unchanged.
+- Captures `android.surfaceflinger.frame` and `android.log` through Perfetto.
+  Presentation intervals come from **PresentFenceSignaled**, for exactly one
+  app SurfaceView layer. There is no fallback to app-window frames or CPU
+  handoffs. This source is verified on the tested Android 17/API 37 device;
+  a different device missing these events fails instead of reporting zero gaps.
+- Perfetto synchronizes UI marker timestamps with surface events. No production
+  Skia tracing hooks or Android native observer module.
+- The runner pins requested min/peak refresh settings, prevents screen sleep,
+  verifies the actual SurfaceFlinger period at capture endpoints, and restores
+  previous settings in cleanup. It saves power/thermal/display endpoint states;
+  these are not continuous thermal or refresh-rate monitoring.
+- Perfetto is always attached to both Android captures. Missing markers,
+  interrupted/incomplete animation, stale PID/session/fixture, Debug JS,
+  ambiguous layers, invalid native clocks, and reported trace data loss fail.
+  Perfetto's `slice_max_depth_exceeded` is diagnostic only when every track
+  at its 512-depth limit is a derived `GPU_` duration lane; raw queue/fence
+  lanes do not use these durations. The scoped warning remains in the JSON.
+  Any affected buffer/event lane or other import error stays fatal.
+  Successful fences do not establish a total dropped/unshown-buffer count or
+  which transform value every frame contains. Do not equate UI FPS with motion.
+- Full frame/marker records remain in each JSON's `androidCapture`.
+  `--keep-trace` additionally retains the raw trace for inspection. Failed
+  captures are retained automatically.
+
+#### iOS
+
+Run `pod install` first to include the example-only `BenchPacing` observer.
+Repeat when its native source changes: a compiled observer hash rejects stale
+builds. The runner builds/installs the app, not its pods.
+
+```sh
+# From apps/example; required once and after observer-native-source changes.
+(cd ios && pod install)
+
+node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
+  --reps 3 --label baseline --team <TEAM> --bundle-id <APP_ID>
+
+# Switch to the candidate checkout, with the same benchmark implementation.
+node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60 \
+  --reps 3 --label candidate --team <TEAM> --bundle-id <APP_ID> \
+  --compare benchmarks/results/<baseline>.json
+```
+
+- The primary clock is Metal's `MTLDrawable.presentedTime`, not Instruments
+  swap counts. The observer temporarily prevents auto-lock and restores the
+  previous setting on cleanup. Configure the actual iPhone cadence yourself;
+  `--refresh-rate` does not change it.
+- The native helper finds the tagged benchmark Canvas and observes only its
+  Metal layer's drawables. It registers `addPresentedHandler` callbacks and
+  buffers their `presentedTime` feedback in preallocated memory. No per-frame
+  bridge calls, logging, JSON or disk writes. The observer is installed only
+  for a pacing capture, restored on finish/abort, and never changes production
+  Skia's scheduling, queue limits or GPU synchronization.
+- UI-boundary markers use RN's native logging host function, transferred to and
+  called synchronously on UI. The helper temporarily wraps RN's public native
+  log function, preserves normal logging, and timestamps only this capture's
+  markers with `CACurrentMediaTime`. Markers and drawable feedback share the
+  same clock: no Instruments discovery, JS/RN bridge hop, host-sleep estimate,
+  callback-arrival time, or cross-clock alignment determines the windows.
+  The prior logger is restored on finish/abort. Missing markers fail explicitly.
+  Native Low Power Mode and thermal snapshots are saved at capture endpoints;
+  endpoints alone do not establish temperature stability throughout a run.
+- Optional `--trace`/`--keep-trace` uses `Logging`, `Display` and `Thermal State`
+  for secondary `traceDiagnostics`, never pacing verdicts. Normal runs do not
+  require Instruments to attach. Diagnostic attachment failure is recorded and
+  warned about, not converted into a pacing failure or substituted frame data.
+  Instruments can omit swaps: a matched check found apparent ~50ms trace gaps
+  containing two regular intermediate drawable presentations. Both streams
+  stay available for inspection; missing trace events neither invent stalls
+  nor cause native timestamps to be filled, filtered or replaced.
+- The native helper drains all attached callbacks before saving. Zero
+  `presentedTime` means dropped/unshown, counted separately; a missing callback
+  is incomplete evidence and fails. Cancellation, foreground interruption,
+  ambiguous/lost layers, overflow (60,000-frame buffer), insufficient feedback,
+  invalid clocks and stale PID/session/native hashes fail explicitly.
+  Old trace-only JSON is not comparable: rebuild and rerun both baseline and
+  candidate with this observer.
+- `--keep-trace` requests and retains the raw Instruments recording for
+  inspection. Failed measurements/diagnostic recordings retain their capture
+  directory. Otherwise, temporary files are removed after intervals and the
+  full native feedback buffer are saved in result JSON (`nativeCapture`).
+
+### CI
+
+- `Benchmark frame pacing` (`.github/workflows/benchmark-pacing.yml`) runs
+  the Release pacing CLI, not the FPS scenes in the existing `Benchmark`
+  workflow. Dispatch it manually, or call it from a trusted CI workflow:
+
+  ```yaml
+  jobs:
+    pacing:
+      uses: ./.github/workflows/benchmark-pacing.yml
+      with:
+        platform: android # or ios
+        ref: <candidate-ref>
+        baseline: <baseline-ref>
+        refresh_rate: "60"
+        reps: "3"
+  ```
+
+- Both refs must contain the identical pacing benchmark described above. A
+  missing/mismatched baseline fails; it is not silently skipped. An empty
+  `baseline` requests a candidate-only run. The candidate SHA is frozen before
+  checking out the baseline. Results/logs survive checkout and upload even on
+  failure; flagged regressions fail CI.
+- Runner setup:
+
+  - **Android:** self-hosted macOS runner labeled `skia-android`, authorized
+    physical arm64/API 33+ phone with the required Perfetto events. Supply
+    `device` when multiple phones are connected. The Python Perfetto package
+    is pinned to the tested version. The pacing runner handles refresh/sleep
+    settings; the workflow does not apply the FPS workflow's overrides.
+  - **iOS:** self-hosted Mac labeled `skia-ios`, Xcode, CocoaPods, Python 3,
+    paired/unlocked iPhone with Developer Mode enabled, and unattended
+    signing/keychain access configured. Set repository variables
+    `BENCH_IOS_TEAM` and `BENCH_IOS_BUNDLE_ID` to the signing team and provisioned
+    app ID. Pods install for each ref, including `BenchPacing`. Configure the
+    iPhone cadence to match `refresh_rate`; Instruments is not required.
+- Keep the device foreground, Low Power Mode off, with no secure lock or
+  interactive provisioning prompts. Device jobs serialize by platform;
+  Android shares its lock with the FPS workflow.
 
 ## Cold first draw
 

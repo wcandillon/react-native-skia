@@ -21,3 +21,4 @@ playwright-report/
 xcodebuild-*.log
 benchmarks/results/
 benchmarks/.venv/
+benchmarks/__pycache__/

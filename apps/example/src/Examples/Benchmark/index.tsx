@@ -23,6 +23,7 @@ import {
 import { Canvas, Fill } from "react-native-skia";
 
 import { ColdMount } from "./cold";
+import { PacingBenchmark } from "./pacing";
 import { BAKED_PLAN, type Scene } from "./plan";
 import { BenchScene } from "./scenes";
 
@@ -32,12 +33,12 @@ const POSE_MS = 2_500;
 const ANIMATE_MS = 3_500;
 
 // mode=cold measures first draws instead (see cold.tsx).
-export const Benchmark = () =>
-  BAKED_PLAN.mode === "cold" ? (
-    <ColdMount plan={BAKED_PLAN} />
-  ) : (
-    <FpsBenchmark />
-  );
+export const Benchmark = () => {
+  if (BAKED_PLAN.mode === "cold") return <ColdMount plan={BAKED_PLAN} />;
+  if (BAKED_PLAN.mode === "pacing")
+    return <PacingBenchmark plan={BAKED_PLAN} />;
+  return <FpsBenchmark />;
+};
 
 const FpsBenchmark = () => {
   const plan = BAKED_PLAN;

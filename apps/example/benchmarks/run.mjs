@@ -6,6 +6,8 @@
 //        [--no-build] [--compare benchmarks/results/<file>.json]
 //   node benchmarks/run.mjs --cold --platform android|ios|ios-simulator
 //        [--scenes ...] [--reps 3] [--settle 10] [--label main] [--compare ...]
+//   node benchmarks/run.mjs --pacing --platform ios --refresh-rate 60
+//        [--reps 3] [--settle 10] [--trace] [--keep-trace] [--compare ...]
 //
 // --cold measures the first draw of each scene after a fresh install instead
 // of present FPS: the longest UI thread gap while it mounts, then again for a
@@ -44,6 +46,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { fixture, measurePacing, reportPacing } from "./pacing.mjs";
+import { measurePacingAndroid } from "./pacing-android.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const exampleDir = dirname(here);
 const resultsDir = join(here, "results");
@@ -63,6 +68,9 @@ const BACKING = arg("backing", "surface");
 const LABEL = arg("label", "local");
 const COMPARE = arg("compare", null);
 const COLD = flag("cold");
+const PACING = flag("pacing");
+const ANDROID_DEVICE = PACING && PLATFORM === "android" ? arg("device", process.env.ANDROID_SERIAL) : null;
+const REFRESH_RATE = Number(arg("refresh-rate", "0"));
 // Cold mode: seconds the app idles with no canvas after launch, and seconds
 // a rebooted simulator settles before the install.
 const SETTLE = Number(arg("settle", "10"));
@@ -74,6 +82,14 @@ const TRACE_SECONDS = 8;
 const TRACE_AT_SECONDS = 9;
 const SETTLE_TICKS = 4;
 const HZ = 100; // Linux USER_HZ
+
+if (PACING && (COLD || !["ios", "android"].includes(PLATFORM) || !Number.isFinite(REFRESH_RATE) || REFRESH_RATE <= 0 ||
+  !Number.isInteger(REPS) || REPS < 1 || !Number.isFinite(SETTLE) || SETTLE < 10)) {
+  throw new Error("--pacing requires --platform ios|android, --refresh-rate <Hz>, integer --reps >=1 and --settle >=10; not --cold");
+}
+if (PACING && ["--scenes", "--gap", "--backing"].some((option) => args.includes(option))) {
+  throw new Error("--pacing requires its fixed workload; --scenes, --gap and --backing belong to FPS/cold modes");
+}
 
 if (!["android", "ios", "ios-simulator"].includes(PLATFORM)) {
   throw new Error("--platform must be android, ios or ios-simulator");
@@ -91,11 +107,12 @@ for (const scene of SCENES) {
 }
 
 const sh = (cmd, cmdArgs, opts = {}) =>
-  new Promise((resolve, reject) =>
-    execFile(
+  new Promise((resolve, reject) => {
+    const { input, ...processOpts } = opts;
+    const child = execFile(
       cmd,
-      cmdArgs,
-      { maxBuffer: 256 * 1024 * 1024, ...opts },
+      cmd === "adb" && ANDROID_DEVICE ? ["-s", ANDROID_DEVICE, ...cmdArgs] : cmdArgs,
+      { maxBuffer: 256 * 1024 * 1024, ...processOpts },
       (error, stdout, stderr) =>
         error
           ? reject(
@@ -108,8 +125,9 @@ const sh = (cmd, cmdArgs, opts = {}) =>
               )
             )
           : resolve(stdout.toString())
-    )
-  );
+    );
+    if (input !== undefined) child.stdin.end(input);
+  });
 const quiet = (p) => p.catch(() => null);
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 const median = (values) => {
@@ -131,7 +149,9 @@ const PYTHON =
 // ---- build -----------------------------------------------------------------
 
 // Cold mode: one pass per install, the runner installs again for every rep.
-const plan = COLD
+const plan = PACING
+  ? `mode=pacing&reps=${REPS}&settle=${SETTLE}&fixture=${fixture}&autostart=1`
+  : COLD
   ? `scenes=${SCENES.join(",")}&reps=1&backing=${BACKING}&mode=cold&settle=${SETTLE}&autostart=1`
   : `scenes=${SCENES.join(",")}&reps=${REPS}&gap=${GAP}&backing=${BACKING}&autostart=1`;
 
@@ -176,7 +196,9 @@ async function buildAndroid() {
   const restore = await bundle("android");
   console.log("[bench] gradle assembleRelease");
   try {
-    await sh("./gradlew", ["assembleRelease", "--console=plain", "-q"], {
+    // Pacing measures one physical arm64 phone; leave the FPS defaults alone.
+    await sh("./gradlew", ["assembleRelease", "--console=plain", "-q",
+      ...(PACING ? ["-PreactNativeArchitectures=arm64-v8a"] : [])], {
       cwd: join(exampleDir, "android"),
     });
   } finally {
@@ -762,6 +784,9 @@ function report(result, previous) {
   if (result.mode === "cold") {
     return reportCold(result, previous);
   }
+  if (result.mode === "pacing") {
+    return reportPacing(result, previous);
+  }
   const rows = summarize(result);
   const before = previous ? new Map(summarize(previous).map((r) => [r.scene, r])) : null;
   const fmt = (v, digits = 1) => (v == null ? "?" : v.toFixed(digits));
@@ -839,14 +864,18 @@ if (COLD) {
     await buildAndroid();
     await installAndroid();
   }
-  measured = await measureAndroid();
+  measured = PACING
+    ? await measurePacingAndroid({ sh, python: PYTHON, reps: REPS, settle: SETTLE, refreshRate: REFRESH_RATE, keepTrace: flag("keep-trace") })
+    : await measureAndroid();
 } else {
   const device = await iosDevice();
   if (!flag("no-build")) {
     await buildIos(device);
     await installIos(device);
   }
-  measured = await measureIos(device);
+  measured = PACING
+    ? await measurePacing({ device, app: IOS_APP, sh, reps: REPS, settle: SETTLE, refreshRate: REFRESH_RATE, keepTrace: flag("keep-trace"), collectTrace: flag("trace") || flag("keep-trace") })
+    : await measureIos(device);
 }
 
 const result = {

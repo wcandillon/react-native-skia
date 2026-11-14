@@ -1,0 +1,236 @@
+name: Benchmark frame pacing
+
+# No pull_request trigger: candidate code runs on a physical self-hosted host.
+# Maintainers can dispatch this job or call it from a trusted CI workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Physical device platform
+        type: choice
+        options: [android, ios]
+        default: android
+      ref:
+        description: Candidate ref, empty for the dispatched branch
+        type: string
+        default: ""
+      baseline:
+        description: Baseline ref with identical pacing benchmark, empty for no comparison
+        type: string
+        default: main
+      device:
+        description: Android adb serial or paired iPhone identifier, empty for auto-selection
+        type: string
+        default: ""
+      refresh_rate:
+        description: Actual display cadence in Hz (iOS must be configured on the device)
+        type: string
+        default: "60"
+      reps:
+        description: Repetitions of the complete pacing plan
+        type: string
+        default: "3"
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        default: android
+      ref:
+        type: string
+        default: ""
+      baseline:
+        type: string
+        default: main
+      device:
+        type: string
+        default: ""
+      refresh_rate:
+        type: string
+        default: "60"
+      reps:
+        type: string
+        default: "3"
+
+permissions:
+  contents: read
+
+# Share the Android device lock with benchmark.yml, not just pacing jobs.
+concurrency:
+  group: benchmark-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  pacing:
+    # Device labels prevent an Android job landing on an iPhone-only Mac.
+    runs-on: ${{ inputs.platform == 'ios' && fromJSON('["self-hosted", "macOS", "skia-ios"]') || fromJSON('["self-hosted", "macOS", "skia-android"]') }}
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLATFORM: ${{ inputs.platform }}
+      DEVICE: ${{ inputs.device }}
+      ANDROID_SERIAL: ${{ inputs.platform == 'android' && inputs.device || '' }}
+      REFRESH_RATE: ${{ inputs.refresh_rate }}
+      REPS: ${{ inputs.reps }}
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+      JAVA_OPTS: "-XX:MaxHeapSize=6g"
+      BENCH_IOS_TEAM: ${{ vars.BENCH_IOS_TEAM }}
+      BENCH_IOS_BUNDLE_ID: ${{ vars.BENCH_IOS_BUNDLE_ID }}
+    steps:
+      - name: Checkout candidate identity
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate plan and freeze candidate identity
+        id: candidate
+        run: |
+          case "$PLATFORM" in android|ios) ;; *) echo "::error::platform must be android or ios"; exit 1 ;; esac
+          bench_out="$RUNNER_TEMP/pacing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$PLATFORM"
+          mkdir -p "$bench_out"
+          echo "BENCH_OUT=$bench_out" >> "$GITHUB_ENV"
+          echo "BENCH_PYTHON=$RUNNER_TEMP/pacing-venv/bin/python" >> "$GITHUB_ENV"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fixture=$(node --input-type=module -e 'import { fixture } from "./apps/example/benchmarks/pacing.mjs"; console.log(fixture)')
+          echo "BENCH_EXPECTED_FIXTURE=$fixture" >> "$GITHUB_ENV"
+          if [ "$PLATFORM" = ios ]; then
+            test -n "$BENCH_IOS_TEAM" && test -n "$BENCH_IOS_BUNDLE_ID" || {
+              echo "::error::Configure BENCH_IOS_TEAM and BENCH_IOS_BUNDLE_ID repository variables and unattended signing on the runner"
+              exit 1
+            }
+          fi
+
+      - name: Install JDK
+        if: inputs.platform == 'android'
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Install NDK
+        if: inputs.platform == 'android'
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        id: ndk
+        with:
+          ndk-version: r27d
+          local-cache: true
+
+      - name: Setup Android SDK
+        if: inputs.platform == 'android'
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+
+      - name: Prepare Android tracing and device
+        if: inputs.platform == 'android'
+        env:
+          NDK_PATH: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          echo "ANDROID_NDK=$NDK_PATH" >> "$GITHUB_ENV"
+          python3 -m venv "$(dirname "$(dirname "$BENCH_PYTHON")")"
+          # Pin the parser used in physical-device validation, across both passes.
+          "$BENCH_PYTHON" -m pip install --quiet perfetto==0.59.1
+          adb start-server
+          adb get-state
+          # The pacing runner pins/verifies refresh rate and restores settings;
+          # do not wrap it in benchmark.yml's separate FPS device overrides.
+
+      - name: Checkout baseline
+        if: inputs.baseline != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          ref: ${{ inputs.baseline }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check baseline fixture
+        if: inputs.baseline != ''
+        run: |
+          # Missing/older benchmarks must fail, never silently skip comparison.
+          node --input-type=module -e '
+            import { fixture } from "./apps/example/benchmarks/pacing.mjs";
+            if (fixture !== process.env.BENCH_EXPECTED_FIXTURE) throw new Error("Baseline must contain the identical pacing benchmark; apply the same benchmark to both refs first");'
+
+      - name: Setup baseline
+        if: inputs.baseline != ''
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install baseline pods
+        if: inputs.baseline != '' && inputs.platform == 'ios'
+        working-directory: apps/example/ios
+        run: pod install
+
+      - name: Benchmark baseline
+        if: inputs.baseline != ''
+        working-directory: apps/example
+        run: |
+          if [ "$PLATFORM" = android ]; then echo "sdk.dir=$ANDROID_HOME" > android/local.properties; fi
+          args=(--pacing --platform "$PLATFORM" --refresh-rate "$REFRESH_RATE" --reps "$REPS" --label baseline)
+          if [ -n "$DEVICE" ]; then args+=(--device "$DEVICE"); fi
+          status=0
+          node benchmarks/run.mjs "${args[@]}" 2>&1 | tee "$BENCH_OUT/baseline.log" || status=$?
+          for ext in json md; do
+            reports=(benchmarks/results/baseline-"$PLATFORM"-*."$ext")
+            if [ -f "${reports[0]}" ]; then cp "${reports[0]}" "$BENCH_OUT/baseline.$ext"; fi
+          done
+          exit "$status"
+
+      - name: Checkout frozen candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          ref: ${{ steps.candidate.outputs.sha }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup candidate
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install candidate pods
+        if: inputs.platform == 'ios'
+        working-directory: apps/example/ios
+        run: pod install
+
+      - name: Benchmark candidate
+        working-directory: apps/example
+        run: |
+          if [ "$PLATFORM" = android ]; then echo "sdk.dir=$ANDROID_HOME" > android/local.properties; fi
+          args=(--pacing --platform "$PLATFORM" --refresh-rate "$REFRESH_RATE" --reps "$REPS" --label candidate)
+          if [ -n "$DEVICE" ]; then args+=(--device "$DEVICE"); fi
+          if [ -f "$BENCH_OUT/baseline.json" ]; then args+=(--compare "$BENCH_OUT/baseline.json"); fi
+          status=0
+          node benchmarks/run.mjs "${args[@]}" 2>&1 | tee "$BENCH_OUT/candidate.log" || status=$?
+          # Preserve reports even when --compare exits 1 for a regression.
+          for ext in json md; do
+            reports=(benchmarks/results/candidate-"$PLATFORM"-*."$ext")
+            if [ -f "${reports[0]}" ]; then cp "${reports[0]}" "$BENCH_OUT/candidate.$ext"; fi
+          done
+          exit "$status"
+
+      - name: Report
+        if: always() && env.BENCH_OUT != ''
+        run: |
+          for pass in baseline candidate; do
+            if [ -f "$BENCH_OUT/$pass.md" ]; then
+              cat "$BENCH_OUT/$pass.md" >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload results and logs
+        if: always() && env.BENCH_OUT != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        with:
+          name: benchmark-pacing-${{ inputs.platform }}
+          path: ${{ env.BENCH_OUT }}
+          if-no-files-found: ignore
