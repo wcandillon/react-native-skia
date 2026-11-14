@@ -733,18 +733,16 @@ usesP3ColorSpace(const std::string &colorSpace,
     if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
       return;
     }
-    // Configuring the surface must not change the layer, which would open a
-    // CATransaction on this thread (#4474). Dawn sets the layer's opacity
-    // from the alpha mode: the view made the layer non-opaque for the
-    // premultiplied mode of RNSkWindowSurface::configureSurface, and the two
-    // must stay in step.
+    // Configuring the surface, at the first present after this, must not
+    // change the layer, which would open a CATransaction on this thread
+    // (#4474). Dawn sets the layer's opacity from the alpha mode: the view
+    // made the layer non-opaque for the premultiplied mode of
+    // RNSkWindowSurface::configureSurface, and the two must stay in step.
     NSCAssert(!layer.opaque, @"The CAMetalLayer must be made non-opaque on "
                              @"the main thread before the attach");
     // The layer is owned by the view: nothing to release with the window.
     surface->attach((__bridge void *)layer, width, height, highBitDepth,
                     useP3ColorSpace, nullptr);
-    NSCAssert(!layer.opaque, @"Configuring the surface changed the opacity of "
-                             @"the CAMetalLayer on the present thread");
     int latestWidth = 0;
     int latestHeight = 0;
     if (surface->getLayoutSize(&latestWidth, &latestHeight) &&
