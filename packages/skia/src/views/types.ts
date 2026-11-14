@@ -145,8 +145,9 @@ export interface SkiaBaseViewProps extends ViewProps {
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. On Android
    * it needs a `SurfaceView` (see `android.backingView`), which it makes
-   * opaque, as the 10-bit format only has 2 bits of alpha; it is read once,
-   * when the canvas mounts.
+   * opaque, as the 10-bit format only has 2 bits of alpha. Read once, when
+   * the canvas mounts: a change is ignored, with a warning in development;
+   * remount the canvas (with a `key`) to change it.
    */
   highBitDepth?: boolean;
 
@@ -155,7 +156,7 @@ export interface SkiaBaseViewProps extends ViewProps {
    * devices with a wide color gamut display, sRGB everywhere else. Use
    * `"srgb"` to match offscreen rendering (`drawAsImage`,
    * `Skia.Surface.MakeOffscreen`, snapshots). Android and the web always
-   * render in sRGB.
+   * render in sRGB. Read once, when the canvas mounts, like `highBitDepth`.
    */
   colorSpace?: CanvasColorSpace;
 

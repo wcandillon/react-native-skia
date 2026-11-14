@@ -16,6 +16,7 @@ import type {
 
 import { SkiaViewApi } from "../views/api";
 import { androidNativeProps, useBackingViewWarning } from "../views/android";
+import { useAppleFormatWarning } from "../views/apple";
 import type { AndroidCanvasProps, CanvasColorSpace } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
@@ -67,7 +68,9 @@ export interface CanvasProps extends ViewProps {
    * identical to the default 8-bit surface, only with more precision (this is
    * about bit depth, not HDR). On Android it needs a `SurfaceView` (see
    * `android.backingView`), which it makes opaque, as the 10-bit format only
-   * has 2 bits of alpha; it is read once, when the canvas mounts.
+   * has 2 bits of alpha. Read once, when the canvas mounts: a change is
+   * ignored, with a warning in development; remount the canvas (with a `key`)
+   * to change it.
    */
   highBitDepth?: boolean;
   /**
@@ -75,7 +78,7 @@ export interface CanvasProps extends ViewProps {
    * devices with a wide color gamut display, sRGB everywhere else. Use
    * `"srgb"` to match offscreen rendering (`drawAsImage`,
    * `Skia.Surface.MakeOffscreen`, snapshots). Android and the web always
-   * render in sRGB.
+   * render in sRGB. Read once, when the canvas mounts, like `highBitDepth`.
    */
   colorSpace?: CanvasColorSpace;
   /**
@@ -205,6 +208,7 @@ export const Canvas = ({
     ref,
   });
   useBackingViewWarning({ highBitDepth, android });
+  useAppleFormatWarning({ highBitDepth, colorSpace });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}

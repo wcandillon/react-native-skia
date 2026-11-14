@@ -191,7 +191,8 @@ public:
   /**
    The bit depth the platform view will attach the window with, known before
    it does: on Android the one of the backing view, chosen when the canvas
-   mounts (see SkiaView.updateView); on Apple platforms the prop. Any thread.
+   mounts (see SkiaView.updateView); on Apple platforms the prop as the
+   native view is created. Any thread.
    */
   void setHighBitDepth(bool highBitDepth);
 

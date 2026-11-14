@@ -264,9 +264,11 @@ const Demo = () => {
 On Android, `highBitDepth` needs a `SurfaceView` (`android={{ backingView: "SurfaceView" }}`): a `TextureView` composites through an 8-bit pass anyway, so on any other backing view the canvas keeps the 8-bit format, with a warning in development.
 The 10-bit format only has 2 bits of alpha, so a `highBitDepth` canvas is opaque, whatever `android.opaque` says.
 When the device does not support the 10-bit format, the canvas falls back to 8-bit.
-The format is chosen when the canvas mounts: to change it, remount the canvas with a new `key`.
 
 :::
+
+The format is chosen when the canvas mounts, on every platform: a change of `highBitDepth` on a mounted canvas is ignored, with a warning in development.
+To change it, remount the canvas with a new `key`.
 
 ## Color space
 
@@ -291,6 +293,9 @@ const Demo = () => (
   </Canvas>
 );
 ```
+
+Like the bit depth, the color space is chosen when the canvas mounts: a change of `colorSpace` on a mounted canvas is ignored, with a warning in development.
+To change it, remount the canvas with a new `key`.
 
 On Android and on the Web, the canvas always renders in sRGB.
 
