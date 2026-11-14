@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -355,12 +356,12 @@ public:
      */
     std::function<void()> requestFrameSignal;
     /**
-     Has onAcknowledgementPoll() called shortly, once. The GPU being done
-     with a frame is no event the view hears (see DawnContext::isDone), so a
-     platform whose presents wait for it polls, from a timer of the present
-     thread. Never asked for elsewhere.
+     Has onAcknowledgementPoll() called once `delay` has passed. The GPU
+     being done with a frame is no event the view hears (see
+     DawnContext::isDone), so a platform whose presents wait for it polls,
+     from a timer of the present thread. Never asked for elsewhere.
      */
-    std::function<void()> watchAcknowledgement;
+    std::function<void(std::chrono::nanoseconds delay)> watchAcknowledgement;
     /** A frame went to the window. */
     std::function<void()> onFramePresented;
   };
@@ -444,11 +445,17 @@ public:
   void onAcknowledgementPoll() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onAcknowledgementPoll");
     _acknowledgementWatched = false;
+    _acknowledgementWatchedAgain = false;
     const auto window = windowState();
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
       return scheduler.onAcknowledgementPoll(now, window);
     }));
+    // A poll that found what it watched for asked for no other: the next
+    // watch starts over with short delays.
+    if (!_acknowledgementWatchedAgain) {
+      _acknowledgementWatchedSince = 0;
+    }
   }
 
   /**
@@ -633,13 +640,29 @@ private:
     });
   }
 
+  /**
+   Asks for the next poll of the acknowledgement. A frame held at the
+   display's rate is released within a millisecond or two, and each moment
+   it is released late may cost it its slot: the first polls come
+   kShortPoll apart. A frame the GPU is long over (a canvas bound by its
+   GPU) gains nothing from that: past kShortPolls, they come kLongPoll
+   apart.
+   */
   void watchAcknowledgement() {
+    _acknowledgementWatchedAgain = true;
     if (_acknowledgementWatched) {
       return;
     }
     _acknowledgementWatched = true;
+    const auto now = rnsurface::frameClockNow();
+    if (_acknowledgementWatchedSince == 0) {
+      _acknowledgementWatchedSince = now;
+    }
+    const auto delay = now - _acknowledgementWatchedSince < kShortPolls
+                           ? kShortPoll
+                           : kLongPoll;
     if (_frameHost.watchAcknowledgement) {
-      _frameHost.watchAcknowledgement();
+      _frameHost.watchAcknowledgement(std::chrono::nanoseconds(delay));
       return;
     }
     // No timer: asked again a task behind those queued.
@@ -1031,8 +1054,17 @@ private:
   FrameHost _frameHost;
   bool _windowTakesLatestFrame = false;
   // A poll for the acknowledgement is on its way (see
-  // watchAcknowledgement). Present thread.
+  // watchAcknowledgement), whether the poll under way asked for another,
+  // and since when the view has been polling without an answer. Present
+  // thread.
   bool _acknowledgementWatched = false;
+  bool _acknowledgementWatchedAgain = false;
+  Scheduler::Nanos _acknowledgementWatchedSince = 0;
+  // How far apart the polls are (see watchAcknowledgement): 100 µs for the
+  // first 1.5 ms, 500 µs from then on.
+  static constexpr Scheduler::Nanos kShortPoll = 100000;
+  static constexpr Scheduler::Nanos kLongPoll = 500000;
+  static constexpr Scheduler::Nanos kShortPolls = 1500000;
   // What a view without a platform view to signal the display's frames
   // takes a frame to last (see requestFrameSignal).
   static constexpr Scheduler::Nanos kUnpacedInterval = 16666667;

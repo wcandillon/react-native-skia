@@ -204,13 +204,14 @@ private:
         signals->request();
       }
     };
-    host.watchAcknowledgement = [weakView]() {
-      PresentThreadTimer::getInstance().post(
-          kAcknowledgementPoll, [weakView]() {
-            if (auto view = weakView.lock()) {
-              view->onAcknowledgementPoll();
-            }
-          });
+    // Each poll asks a fence and nothing else (see
+    // RNSkWindowSurface::isAcknowledged).
+    host.watchAcknowledgement = [weakView](std::chrono::nanoseconds delay) {
+      PresentThreadTimer::getInstance().post(delay, [weakView]() {
+        if (auto view = weakView.lock()) {
+          view->onAcknowledgementPoll();
+        }
+      });
     };
     // The Java view's frame rate vote (see SkiaView.onFramePresented). A
     // Java call from the native thread, which is attached (see
@@ -228,11 +229,6 @@ private:
     };
     _view->setFrameHost(std::move(host));
   }
-
-  // How often a view asks whether the GPU is done while its window holds a
-  // frame for it (see RNSkWindowSurface::presentHeldFrame). Each poll asks a
-  // fence and nothing else; a frame held is presented this late at most.
-  static constexpr std::chrono::microseconds kAcknowledgementPoll{500};
 
   /**
    A weak reference to the Java view for the callbacks the native view hands
