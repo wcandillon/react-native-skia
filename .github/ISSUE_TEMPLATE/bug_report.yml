@@ -11,7 +11,7 @@ body:
   - type: textarea
     id: own_words
     attributes:
-      label: In your own words
+      label: Description
       description: How did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What did you expect versus what happened, and what is your own understanding of the issue? A partial understanding is fine.
     validations:
       required: true
