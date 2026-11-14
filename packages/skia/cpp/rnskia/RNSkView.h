@@ -133,6 +133,9 @@ public:
 
   size_t getNativeId() { return _nativeId; }
 
+  /** Keep the Apple display link current while a queued replay finishes. */
+  bool hasFrameInFlight() { return _producer->hasFrameInFlight(); }
+
   /**
    Declarative content: the recorder of <Canvas>, or a picture; and the
    deviceIndependentFonts option, set on the target (the view's recordings

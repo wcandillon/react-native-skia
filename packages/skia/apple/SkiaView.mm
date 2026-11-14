@@ -24,6 +24,7 @@
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#include "rnsurface/DisplayLinkPacing.h"
 #include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
@@ -149,8 +150,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   // Whether a frame went to the window since the display link's last tick,
   // and when the interval of that tick ends (see scheduleFrame:). Present
   // thread.
-  bool _presentedSinceTick;
-  CFTimeInterval _tickTarget;
+  rnsurface::DisplayLinkPacing _pacing;
 #else
   // Whether a tick is scheduled, when the last one ran (see
   // presentAgainLater), and which ticks are still wanted: the leave moves
@@ -185,8 +185,7 @@ usesP3ColorSpace(const std::string &colorSpace,
 #else
     _fullFrameRateRequested = false;
     _maximumFramesPerSecond = 0;
-    _presentedSinceTick = false;
-    _tickTarget = 0;
+    _pacing.reset();
 #endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
@@ -364,7 +363,7 @@ usesP3ColorSpace(const std::string &colorSpace,
       view->_displayLink = nil;
       // The request belonged to that link: the next one must ask again.
       view->_fullFrameRateRequested = false;
-      view->_presentedSinceTick = false;
+      view->_pacing.reset();
 #else
       // A tick scheduled is let go of (see presentAgainLater): the scheduler
       // forgot it, and the next request schedules one of its own.
@@ -470,6 +469,15 @@ usesP3ColorSpace(const std::string &colorSpace,
     return;
   }
 #if !TARGET_OS_OSX
+  const CFTimeInterval now = CACurrentMediaTime();
+  // A replay can finish just after the callback with most of its interval
+  // still available. Use it only if no frame went to that interval yet.
+  // Idle/stale deadlines and intervals already used follow normal pacing.
+  if (!forResizedWindow && _pacing.canPresentLate(now) &&
+      _canPresent->load()) {
+    _scheduler->requestFrameInCurrentInterval();
+    return;
+  }
   // One present per vsync. A frame for a resized window goes on the spot
   // only while nothing went to the window since the display link's last
   // tick: a second present in the same interval shows no sooner (the
@@ -477,8 +485,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   // three drawables; once they are all in flight, the next present blocks
   // this thread until one comes back. The frame waits for the next tick
   // instead, like any other.
-  if (forResizedWindow && _presentedSinceTick &&
-      CACurrentMediaTime() < _tickTarget) {
+  if (forResizedWindow && _pacing.hasPresentedInInterval(now)) {
     forResizedWindow = false;
   }
 #endif
@@ -487,8 +494,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 // The scheduler asks for the next vsync: the display link, which ticks on
 // the present thread, started and unpaused here and paused again once the
-// scheduler has nothing outstanding (see onFrame:), so that an idle view
-// does not keep the display at its full rate. macOS has no CADisplayLink on
+// scheduler has nothing outstanding, no replay is in flight and one empty
+// callback has confirmed idle (see onFrame:). macOS has no CADisplayLink on
 // the minimum deployment target, so the frame is presented a frame later
 // there (see presentAgainLater). Present thread.
 - (void)postFrameCallback {
@@ -515,7 +522,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   const int result = _presentView->presentFrame();
 #if !TARGET_OS_OSX
   if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
-    _presentedSinceTick = true;
+    _pacing.onPresented();
+    // Late-ready and resized frames can present while the link is paused.
+    // Give them the same following callback as a frame presented in a tick.
+    if (_displayLink == nil || _displayLink.paused) {
+      [self postFrameCallback];
+    }
   }
 #endif
   return result;
@@ -562,13 +574,19 @@ usesP3ColorSpace(const std::string &colorSpace,
 // present thread's loop returns after each tick and drains its pool then
 // (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
-  _presentedSinceTick = false;
-  _tickTarget = link.targetTimestamp;
+  _pacing.onTick(link.targetTimestamp);
   _scheduler->onFrame();
-  // The scheduler asked for another tick while recordings are left: more
-  // were submitted meanwhile, or the window could not take one.
+  // A successful present keeps one following callback even if the next UI
+  // update has not started replay yet. That callback refreshes the unused
+  // interval for late-ready admission. Dirty content alone does not keep
+  // ticking: an empty callback with no replay queued/running confirms idle.
   if (!_scheduler->isFrameCallbackPosted()) {
-    link.paused = YES;
+    const bool keepTicking =
+        _presentView != nullptr && _hasWindow && _canPresent->load() &&
+        (_pacing.hasPresented() || _presentView->hasFrameInFlight());
+    if (!keepTicking) {
+      link.paused = YES;
+    }
   }
 }
 #else

@@ -85,6 +85,12 @@ public:
    */
   bool hasFrameComing();
 
+  /** A replay is queued on the pool or running there, not merely dirty. */
+  bool hasFrameInFlight() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _inFlight;
+  }
+
   /**
    Reads the shared values on the calling runtime into the recorder and
    schedules a frame. Returns false when there is no recorder to update, or
