@@ -642,10 +642,11 @@ bool RNSkWindowSurface::presentTexture() {
   // The GPU is still on the frame presented before: a present now would
   // wait for it, here, with every other canvas behind. The work is
   // submitted, so the GPU goes on to it without a pause; the present is
-  // the view's to make once the GPU is done (see presentHeldFrame).
+  // the view's to make once the GPU is done (see presentHeldFrame). The
+  // same for a frame the view asked to hold (see holdNextPresent).
   if (_acknowledgement ==
           rnsurface::FrameScheduler::Acknowledgement::kHoldsPresent &&
-      !isAcknowledged()) {
+      (_holdNextPresent || !isAcknowledged())) {
     _heldFrame = true;
     return true;
   }

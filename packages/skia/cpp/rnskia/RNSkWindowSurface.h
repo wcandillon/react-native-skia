@@ -195,6 +195,15 @@ public:
   bool hasHeldFrame();
 
   /**
+   Holds the present of the next frame the window takes, whatever the GPU
+   is on, where a present can be held (see setAcknowledgement): the view
+   asks for it when the frame's work should go to the GPU now and its
+   present later (see rnsurface::FrameScheduler::Actions::holdPresent).
+   Presenting thread.
+   */
+  void holdNextPresent(bool hold) { _holdNextPresent = hold; }
+
+  /**
    How many frames went to the window so far: what tells a frame presented
    from one whose present is held, or dropped with its swapchain, across a
    call that may do either. Presenting thread.
@@ -455,6 +464,7 @@ private:
   rnsurface::FrameScheduler::Acknowledgement _acknowledgement =
       rnsurface::FrameScheduler::Acknowledgement::kNone;
   bool _heldFrame = false;
+  bool _holdNextPresent = false;
   uint64_t _presentCount = 0;
   bool _hasPresentedWork = false;
   wgpu::Future _presentedWork{};

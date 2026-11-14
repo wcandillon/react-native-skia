@@ -165,19 +165,25 @@ public:
     // Present side: have onFrameSignal() called on the next frame signal.
     bool requestFrameSignal = false;
     // Present side: submit one queued frame and present it, or hold its
-    // present while the window state says it must; then report
+    // present while the GPU is on the frame before it; then report
     // onFrameTaken().
     bool takeFrame = false;
+    // With takeFrame: hold the present of that frame whatever the GPU is on.
+    // The slot it is taken in has a frame already (one presented late), so
+    // its work goes to the GPU now and its present waits for the next slot.
+    bool holdPresent = false;
     // Present side: present the held frame, then report
     // onHeldFramePresented().
     bool presentHeldFrame = false;
-    // Present side: call onAcknowledgementPoll() again shortly, as nothing
-    // announces the GPU being done.
+    // Present side: call onAcknowledgementPoll() again shortly: a frame waits
+    // for the GPU to be done, which nothing announces, or a held frame for
+    // its slot.
     bool watchAcknowledgement = false;
 
     bool none() const {
       return !startRecording && !queueRecording && !requestFrameSignal &&
-             !takeFrame && !presentHeldFrame && !watchAcknowledgement;
+             !takeFrame && !holdPresent && !presentHeldFrame &&
+             !watchAcknowledgement;
     }
   };
 
@@ -451,6 +457,7 @@ private:
   /** Why a queued frame goes, or what it waits for. */
   enum class Verdict {
     kTake,
+    kTakeAndHold,
     kWaitsForAcknowledgement,
     kWaitsForFrameSignal,
     kWaitsForWindowDraw,
@@ -475,14 +482,23 @@ private:
     if (_interval <= 0) {
       return {false, 0, 0};
     }
-    if (now < _deadline) {
-      const Nanos end =
-          _deadline - ((_deadline - now - 1) / _interval) * _interval;
+    // A slot includes its deadline, not the one before it.
+    if (now <= _deadline) {
+      const Nanos end = _deadline - ((_deadline - now) / _interval) * _interval;
       return {true, end - _interval, end};
     }
-    const Nanos slots = (now - _deadline) / _interval;
+    const Nanos slots = (now - _deadline - 1) / _interval;
     return {false, _deadline + slots * _interval,
             _deadline + (slots + 1) * _interval};
+  }
+
+  /**
+   Whether a frame went to the window in the slot `now` is in, where the
+   window shows each frame in turn.
+   */
+  bool slotHasPresent(Nanos now) const {
+    return _policy.window == Window::kShowsEachFrame && _presented &&
+           _interval > 0 && _lastPresent > slotAt(now).start;
   }
 
   Verdict verdict(Nanos now, const WindowState &window, On on) {
@@ -510,19 +526,26 @@ private:
         now + _submitEstimate < slot.end &&
         (window.acknowledged ||
          _policy.acknowledgement != Acknowledgement::kHoldsPresent);
-    const bool slotHasPresent =
-        _presented && _interval > 0 && _lastPresent > slot.start;
+    const bool slotHasPresent = this->slotHasPresent(now);
     if (on == On::kUrgentFrame) {
       _stats.takenUrgent++;
       return Verdict::kTake;
     }
     if (on == On::kFrameSignal) {
-      // A frame goes on each frame signal, whatever its submit takes. The
-      // one exception: a frame presented late (held for the GPU, or after a
-      // long submit) is in this slot already, and this one would join it
-      // there rather than land in the next.
-      if (slotHasPresent && landsInSlot) {
-        return Verdict::kWaitsForFrameSignal;
+      // A frame goes on each frame signal, whatever its submit takes, so
+      // that the GPU is never left waiting for one. When a frame presented
+      // late (held for the GPU, or after a long submit) is in this slot
+      // already, this one must not join it there: where a present can be
+      // held, it is, until the next slot; elsewhere the frame waits for the
+      // next signal, unless its submit takes it into the next slot anyway.
+      if (slotHasPresent) {
+        if (_policy.acknowledgement == Acknowledgement::kHoldsPresent) {
+          _stats.takenOnSignal++;
+          return Verdict::kTakeAndHold;
+        }
+        if (landsInSlot) {
+          return Verdict::kWaitsForFrameSignal;
+        }
       }
       _stats.takenOnSignal++;
       return Verdict::kTake;
@@ -547,8 +570,10 @@ private:
     }
     if (window.held) {
       // The held frame goes first, and alone: the window takes no other
-      // meanwhile.
-      if (window.acknowledged) {
+      // meanwhile. It goes once the GPU is done with the frame before it,
+      // into a slot of its own: released into the slot that frame went to,
+      // it would wait a frame behind it in the compositor.
+      if (window.acknowledged && !slotHasPresent(now)) {
         actions.presentHeldFrame = true;
         return actions;
       }
@@ -557,6 +582,10 @@ private:
       switch (verdict(now, window, on)) {
       case Verdict::kTake:
         actions.takeFrame = true;
+        return actions;
+      case Verdict::kTakeAndHold:
+        actions.takeFrame = true;
+        actions.holdPresent = true;
         return actions;
       case Verdict::kWaitsForAcknowledgement:
         actions.watchAcknowledgement = true;

@@ -156,8 +156,9 @@ public:
 
   /** The slot of the compositor a present at `time` lands in. */
   Nanos slotOf(Nanos time) const {
-    // Slots end at the deadlines.
-    return (time - deadlineAfterSignal + 100 * interval) / interval;
+    // Slots end at the deadlines, which they include.
+    return (time - deadlineAfterSignal + 100 * interval + interval - 1) /
+           interval;
   }
 
   /** The most frames any slot of the compositor was given. */
@@ -275,7 +276,7 @@ private:
       post(std::max(now + 1, _acknowledgedAt), Event::kAcknowledgementPoll);
     }
     if (actions.takeFrame) {
-      beginSubmit();
+      beginSubmit(actions.holdPresent);
     }
     if (actions.presentHeldFrame) {
       expect(held, "only a held frame is presented as one");
@@ -285,7 +286,8 @@ private:
     }
   }
 
-  void beginSubmit() {
+  void beginSubmit(bool holdPresent) {
+    _holdPresent = holdPresent;
     if (!refusals.empty()) {
       const Take refusal = refusals.front();
       refusals.erase(refusals.begin());
@@ -316,7 +318,7 @@ private:
     const Nanos workDoneAt = std::max(_gpuFreeAt, now) + gpuTime;
     _gpuFreeAt = workDoneAt;
     if (scheduler.policy().acknowledgement == Acknowledgement::kHoldsPresent &&
-        !isAcknowledged()) {
+        (_holdPresent || !isAcknowledged())) {
       held = true;
       holds++;
       _heldWorkDoneAt = workDoneAt;
@@ -338,6 +340,7 @@ private:
   std::multimap<Nanos, Event> _events;
   Nanos _presentBusyUntil = 0;
   bool _submitting = false;
+  bool _holdPresent = false;
   Nanos _gpuFreeAt = 0;
   Nanos _acknowledgedAt = 0;
   Nanos _heldWorkDoneAt = 0;
@@ -575,6 +578,33 @@ void anAcknowledgedFrameIsNotHeld() {
   expectEqual(sim.holds, 0, "light scene: nothing is ever held");
   expectEqual(sim.acknowledgementPolls, 0,
               "light scene: the acknowledgement is never polled for");
+}
+
+void noSlotGetsTwoFramesWhateverTheGpuDoes() {
+  // A GPU that takes anything from a quarter of a frame to almost two over
+  // each frame, in no order: frames are held and released early or late in
+  // a slot, and a frame taken behind one released late must not join it.
+  for (Nanos deadline : {900, 1500, 2300}) {
+    for (Nanos submitTime : {150, 450, 850}) {
+      Sim sim(eachFrame(Acknowledgement::kHoldsPresent));
+      sim.deadlineAfterSignal = deadline;
+      sim.submitTime = submitTime;
+      sim.animate(0, 2000 * kFrame, 100);
+      unsigned long long seed = 12345;
+      const Nanos gpuTimes[] = {250, 400, 650, 900, 1350, 1600, 1900};
+      for (Nanos frame = 0; frame < 2000; frame++) {
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        sim.gpuTime = gpuTimes[(seed >> 33) % 7];
+        sim.runUntil(frame * kFrame + 50);
+      }
+      sim.runUntil(2010 * kFrame);
+      expect(sim.holds > 100, "any GPU: frames are held");
+      expectEqual(sim.mostPresentsInASlot(), 1,
+                  "any GPU: no slot of the compositor gets two frames");
+      expectEqual(static_cast<long long>(sim.presents.size()), sim.recorded,
+                  "any GPU: every frame recorded is presented");
+    }
+  }
 }
 
 void aDecliningWindowLeavesTheFrameQueued() {
@@ -968,6 +998,7 @@ int main() {
   anUrgentFrameGoesAtOnceButNotTwiceInASlot();
   aFrameIsHeldUntilTheGpuIsDoneWithTheOneBefore();
   anAcknowledgedFrameIsNotHeld();
+  noSlotGetsTwoFramesWhateverTheGpuDoes();
   aDecliningWindowLeavesTheFrameQueued();
   holdingKeepsAGpuBoundViewAtTheGpusRate();
   holdingKeepsTheGpuFedThroughALongSubmit();

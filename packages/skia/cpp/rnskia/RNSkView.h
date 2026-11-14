@@ -515,10 +515,10 @@ private:
     state.queued = target != nullptr && target->hasQueued();
     state.held = _surface->hasHeldFrame();
     // Asked only where the answer decides something: a frame is held for
-    // it, or waits queued for it.
-    const bool declines = _surface->getAcknowledgement() ==
-                          Scheduler::Acknowledgement::kDeclinesFrame;
-    state.acknowledged = state.held || (declines && state.queued)
+    // it, or is queued where a present waits for it.
+    const bool waits =
+        _surface->getAcknowledgement() != Scheduler::Acknowledgement::kNone;
+    state.acknowledged = state.held || (waits && state.queued)
                              ? _surface->isAcknowledged()
                              : true;
     return state;
@@ -537,7 +537,9 @@ private:
         watchAcknowledgement();
       }
       if (actions.takeFrame) {
+        _surface->holdNextPresent(actions.holdPresent);
         const auto taken = takeFrame();
+        _surface->holdNextPresent(false);
         const auto window = windowState();
         const auto now = rnsurface::frameClockNow();
         actions = _producer->pace([&](Scheduler &scheduler) {
