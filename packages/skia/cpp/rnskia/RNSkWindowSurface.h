@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowState.h"
+#include "rnsurface/PresentGate.h"
 #include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
@@ -148,6 +149,17 @@ public:
    while the GPU device is replaced (see ensureDevice). Presenting thread.
    */
   bool isAttached();
+
+  /**
+   Whether a frame presented now would go to the window without waiting for
+   the GPU. On Android a present waits until the GPU is done with the frame
+   presented before it (see rnsurface::PresentGate): a frame that comes
+   meanwhile is declined by presentRecordings() and presentImage(), as one
+   the window has no drawable for, and the caller tries it again on the next
+   vsync. Always on Apple platforms, where a present does not wait for the
+   GPU. Presenting thread.
+   */
+  bool takesFrameNow();
 
   /**
    Whether the window shows a frame the view presented: a window attached in
@@ -406,6 +418,21 @@ private:
 
   std::function<void()> _requestRedraw;
   std::function<bool()> _canPresent;
+
+#if defined(__ANDROID__)
+  // The GPU work a present waits for, as Dawn tracks it (see
+  // DawnContext::submittedWork).
+  struct SubmittedGpuWork {
+    struct Work {
+      wgpu::Future done;
+      uint64_t generation;
+    };
+    Work track() const;
+    bool isDone(const Work &work) const;
+  };
+  // Closed while the GPU is on the frame presented last (see takesFrameNow).
+  rnsurface::PresentGate<SubmittedGpuWork> _presentGate;
+#endif
 
   // The thread the window belongs to (see the class comment).
   rnsurface::ThreadChecker _presentingThread;

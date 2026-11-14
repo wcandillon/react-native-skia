@@ -164,6 +164,9 @@ void RNSkWindowSurface::detachNow() {
 void RNSkWindowSurface::releaseWindow() {
   // The surface goes before the window it draws into.
   _surface = nullptr;
+#if defined(__ANDROID__)
+  _presentGate.reset();
+#endif
   _needsConfigure = false;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
@@ -508,6 +511,10 @@ bool RNSkWindowSurface::presentRecordings(
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
+  // Before the window acquires an image: a frame declined holds nothing.
+  if (!takesFrameNow()) {
+    return false;
+  }
   configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
@@ -541,6 +548,10 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
+    return false;
+  }
+  // Before the window acquires an image: a frame declined holds nothing.
+  if (!takesFrameNow()) {
     return false;
   }
   configureIfNeeded();
@@ -585,8 +596,35 @@ bool RNSkWindowSurface::presentTexture() {
     return false;
   }
   _surface.Present();
+#if defined(__ANDROID__)
+  _presentGate.onPresented();
+#endif
   _showsFrame = true;
   return true;
 }
+
+bool RNSkWindowSurface::takesFrameNow() {
+#if defined(__ANDROID__)
+  return _presentGate.isOpen();
+#else
+  return true;
+#endif
+}
+
+#if defined(__ANDROID__)
+RNSkWindowSurface::SubmittedGpuWork::Work
+RNSkWindowSurface::SubmittedGpuWork::track() const {
+  Work work{};
+  if (auto *context = DawnContext::tryGetInstance()) {
+    work.done = context->submittedWork(&work.generation);
+  }
+  return work;
+}
+
+bool RNSkWindowSurface::SubmittedGpuWork::isDone(const Work &work) const {
+  auto *context = DawnContext::tryGetInstance();
+  return context == nullptr || context->isDone(work.done, work.generation);
+}
+#endif
 
 } // namespace RNSkia
