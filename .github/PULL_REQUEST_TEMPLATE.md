@@ -1,4 +1,4 @@
-<!-- We happily accept contributions made with coding agents. First, we want to hear from you directly. After that, agent-written content is welcome. See https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents -->
+<!-- We happily accept contributions made with coding agents. But first, we want to hear from you directly. After that, agent-written content is welcome. See https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents -->
 
 ## Description
 

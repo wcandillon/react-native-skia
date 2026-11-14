@@ -5,13 +5,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        We happily accept contributions made with coding agents. First, we want to hear from you directly. After that, agent-written content is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
+        We happily accept contributions made with coding agents. But first, we want to hear from you directly. After that, agent-written content is welcome. See [Contributing with coding agents](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents).
 
   - type: textarea
     id: own_words
     attributes:
       label: Description
-      description: What are you trying to build, and what is missing today? Did you run into this yourself, or did it come up in an audit? How much of a pain point is it? A partial understanding is fine.
+      description: >-
+        In your own words (not paraphrased by the agent): what are you trying to build, and what is missing today? Did you run into this yourself, or did it come up in an audit? How much of a pain point is it? A partial understanding is fine.
     validations:
       required: true
 
