@@ -1,8 +1,8 @@
 <!-- We happily accept contributions made with coding agents. Start with a few sentences in your own words (not paraphrased by the agent); agent-written content is welcome after that. See https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md#contributing-with-coding-agents -->
 
-## In your own words
+## Description
 
-<!-- How did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What is your own understanding of the issue and of the fix? A partial understanding is fine. -->
+<!-- In your own words (not paraphrased by the agent): how did you come across the problem? Did you experience it yourself, or did it come up in an audit? How much of a pain point is it? What is your own understanding of the issue and of the fix? A partial understanding is fine. -->
 
 ## Agent-written content
 
