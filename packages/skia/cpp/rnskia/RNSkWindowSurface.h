@@ -264,21 +264,19 @@ public:
    configured again on a new device, since the caller read it (see
    getTargetInfo), and the recordings chosen for that target would not fit
    it. The redraw the change asked for presents onto the window as it is
-   now. The recordings are then the caller's to present again, untouched in
-   every case but one: a window taken back while the frame was being
-   replayed (see presentTexture) has had the recordings replayed onto a
-   swapchain texture that is never shown, and they are replayed once more
-   onto the next window; a Graphite recording can be replayed any number of
-   times.
+   now. If the window is taken back after insertion, unordered recordings
+   can be replayed onto the next window. An ordered recording is consumed
+   as soon as insertion is attempted.
    */
-  bool presentRecordings(
+  RecordingPresent presentRecordings(
       const RNSkGraphiteTargetInfo &target,
-      const std::vector<skgpu::graphite::Recording *> &recordings) override;
+      const std::vector<skgpu::graphite::Recording *> &recordings,
+      uint64_t orderedGeneration) override;
 
   /**
    Draws an image at the origin of the window and presents it, on the thread
-   the view presents on, with the recorder of that thread. Same target and
-   return value as presentRecordings().
+   the view presents on, with the recorder of that thread. Returns whether
+   the surface took the image.
    */
   bool presentImage(const RNSkGraphiteTargetInfo &target,
                     const sk_sp<SkImage> &image) override;

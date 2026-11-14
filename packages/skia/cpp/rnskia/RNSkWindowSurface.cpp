@@ -497,27 +497,28 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
   }
 }
 
-bool RNSkWindowSurface::presentRecordings(
+RNSkSurface::RecordingPresent RNSkWindowSurface::presentRecordings(
     const RNSkGraphiteTargetInfo &target,
-    const std::vector<skgpu::graphite::Recording *> &recordings) {
+    const std::vector<skgpu::graphite::Recording *> &recordings,
+    uint64_t orderedGeneration) {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::presentRecordings");
   RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
   // The device check first: it may configure the window again.
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
-    return false;
+    return RecordingPresent::kDeclined;
   }
   configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
   if (!texture) {
-    return false;
+    return RecordingPresent::kDeclined;
   }
   auto *recorder = presentRecorder();
   if (recorder == nullptr) {
-    return false;
+    return RecordingPresent::kDeclined;
   }
   // The surface only names the replay target; wrapping the swapchain texture
   // records nothing on the recorder.
@@ -527,12 +528,20 @@ bool RNSkWindowSurface::presentRecordings(
       recorder, backendTex, DawnUtils::viewColorSpace(_useP3ColorSpace),
       &surfaceProps);
   if (!surface) {
-    return false;
+    return RecordingPresent::kDeclined;
   }
   // A recording Graphite rejects is logged there and dropped: it would be
   // rejected again on every frame, and the frames behind it would never come.
-  DawnContext::getInstance().insertRecordings(recordings, surface.get());
-  return presentTexture();
+  const bool inserted = DawnContext::getInstance().insertRecordings(
+      recordings, surface.get(), orderedGeneration);
+  if (orderedGeneration != 0 && !inserted) {
+    return RecordingPresent::kConsumed;
+  }
+  if (presentTexture()) {
+    return RecordingPresent::kPresented;
+  }
+  return orderedGeneration != 0 ? RecordingPresent::kConsumed
+                                : RecordingPresent::kDeclined;
 }
 
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
@@ -579,7 +588,7 @@ bool RNSkWindowSurface::presentTexture() {
   // The platform is taking the window back (see abandon, set before the
   // detach that clears it is posted, so always ahead of this check): the
   // frame is lost with it, and the device is kept. The recordings were
-  // replayed all the same; the caller keeps them and replays them again onto
+  // replayed all the same; the caller can replay unordered recordings onto
   // the next window (see presentRecordings).
   if (_abandoned.load(std::memory_order_acquire)) {
     return false;
