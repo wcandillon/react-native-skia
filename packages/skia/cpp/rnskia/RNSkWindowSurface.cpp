@@ -363,7 +363,7 @@ void RNSkWindowSurface::configureSurface() {
 #endif
   // The colorspace of a CAMetalLayer is not set here: the platform view tags
   // the layer on the main thread before it posts the attach (see
-  // RNMetalLayerColorSpace.h).
+  // apple/MetalLayerColorSpace.h).
   _surface.Configure(&config);
 }
 

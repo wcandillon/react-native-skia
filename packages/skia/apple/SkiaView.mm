@@ -19,8 +19,7 @@
 #include <cmath>
 #include <memory>
 
-#include "RNDawnUtils.h"
-#include "RNMetalLayerColorSpace.h"
+#include "MetalLayerColorSpace.h"
 #import "RNSkManager.h"
 #include "RNSkPresentThread.h"
 #import "RNSkView.h"
@@ -708,14 +707,10 @@ usesP3ColorSpace(const std::string &colorSpace,
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
   // The layer is tagged with its colorspace here, on the main thread, whose
   // run loop commits it with the layer: the present thread configures the
-  // surface without touching a CATransaction (#4474). For the format the
+  // surface without touching a CATransaction (#4474). For the bit depth the
   // attach asks for, which a Metal surface grants (see
   // RNSkWindowSurface::attach).
-  RNSkia::applyCAMetalLayerColorSpace(
-      (__bridge void *)layer,
-      highBitDepth ? RNSkia::DawnUtils::HighBitDepthTextureFormat
-                   : RNSkia::DawnUtils::PreferredTextureFormat,
-      useP3ColorSpace);
+  RNSkia::applyCAMetalLayerColorSpace(layer, highBitDepth, useP3ColorSpace);
   RNSkia::presentThread().post([=]() {
     int width = 0;
     int height = 0;
