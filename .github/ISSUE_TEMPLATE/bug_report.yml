@@ -12,32 +12,17 @@ body:
     id: description
     attributes:
       label: Description
-      description: |
-        Briefly describe the issue and the expected versus actual behavior.
-        Start with what you or your users see (a crash, a freeze, a visual glitch, memory growth), on which device and OS version. You do not need to understand the cause; if you have an analysis of the code, add it after.
-    validations:
-      required: true
-
-  - type: dropdown
-    id: origin
-    attributes:
-      label: How did you run into this?
-      description: Every kind of report is welcome, but we prioritize them differently.
-      options:
-        - It happens in my app, in production
-        - It happens in my app, during development
-        - I can reproduce it in a test project or the example app, but my app is not affected
-        - I found it by reading the code or running an automated audit, and have not seen it happen
+      description: Briefly describe the issue and the expected versus actual behavior. Start with what you or your users see; you do not need to understand the cause.
     validations:
       required: true
 
   - type: textarea
-    id: impact
+    id: context
     attributes:
-      label: How much of a pain point is this for you?
+      label: Context
       description: |
-        This is the context only you have, and it is extremely useful to us even if you do not understand the problem.
-        What were you building when you hit it? How often does it happen, and for how many of your users? Is it blocking you, or do you have a workaround, and what does it cost? "It does not affect me" is a fine answer.
+        How did you run into this (in your app, or by reading the code), and how much of a pain point is it for you?
+        This is extremely useful to us, even if you do not understand the problem. "It does not affect me" is a fine answer.
     validations:
       required: true
 

@@ -2,8 +2,4 @@
 
 ## Description
 
-<!-- A few sentences on what changed and why. One change per pull request, please. -->
-
-## Context
-
-<!-- How did you come across this? Did you hit it in your own app, or spot it in the code? How much does it matter to you, and how can we see the problem on main? -->
+<!-- A few sentences on what changed and why. If it fixes a problem, tell us how you ran into it and how much it matters to you. -->
