@@ -18,15 +18,18 @@ namespace RNSkia {
  * it, so a frame that comes meanwhile has its present held; a Metal present
  * does not wait. The depth follows the measured time of the recordings.
  *
- * Read once. For measuring one policy against another on the same build, a
- * comma separated list overrides it: the system property
+ * For measuring one policy against another on the same build, a comma
+ * separated list overrides it, read once per process: the system property
  * `debug.rnskia.pacing` on Android (`adb shell setprop debug.rnskia.pacing
  * decline,two`), the environment variable `RNSKIA_PACING` elsewhere. `hold`,
  * `decline` and `nowait` choose what a present does while the GPU is on the
  * frame before (`nowait` presents and waits, as before there was a policy);
  * `adaptive` and `two` choose the depth; `log` has each view log what its
  * scheduler did, once a second while it presents (see RNSkView::logPacing).
+ * The benchmark runner sets it with `--pacing` (apps/example/benchmarks).
  */
+
+/** Whether the override list names `word`. */
 inline bool pacingOverride(const char *word) {
   static const std::string overrides = []() {
 #if defined(__ANDROID__)
@@ -41,13 +44,13 @@ inline bool pacingOverride(const char *word) {
   return overrides.find(std::string(",") + word + ",") != std::string::npos;
 }
 
-/** Whether the views log what their schedulers do (see platformPacingPolicy).
- */
+/** Whether the views log what their schedulers do. */
 inline bool platformPacingLogs() {
   static const bool logs = pacingOverride("log");
   return logs;
 }
 
+/** The policy every view of the process paces its frames with. */
 inline rnsurface::FrameScheduler::Policy platformPacingPolicy() {
   using Scheduler = rnsurface::FrameScheduler;
   static const Scheduler::Policy policy = []() {
@@ -57,17 +60,16 @@ inline rnsurface::FrameScheduler::Policy platformPacingPolicy() {
 #else
     made.acknowledgement = Scheduler::Acknowledgement::kNone;
 #endif
-    const auto has = [](const char *word) { return pacingOverride(word); };
-    if (has("hold")) {
+    if (pacingOverride("hold")) {
       made.acknowledgement = Scheduler::Acknowledgement::kHoldsPresent;
-    } else if (has("decline")) {
+    } else if (pacingOverride("decline")) {
       made.acknowledgement = Scheduler::Acknowledgement::kDeclinesFrame;
-    } else if (has("nowait")) {
+    } else if (pacingOverride("nowait")) {
       made.acknowledgement = Scheduler::Acknowledgement::kNone;
     }
-    if (has("two")) {
+    if (pacingOverride("two")) {
       made.depth = Scheduler::Depth::kTwo;
-    } else if (has("adaptive")) {
+    } else if (pacingOverride("adaptive")) {
       made.depth = Scheduler::Depth::kAdaptive;
     }
     return made;

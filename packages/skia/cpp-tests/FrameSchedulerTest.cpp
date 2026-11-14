@@ -444,8 +444,27 @@ void aSlowSubmitNeverStarvesTheWindow() {
   sim.submitTime = 1300;
   sim.animate(0, 30 * kFrame, 100);
   sim.runUntil(32 * kFrame);
-  expectBetween(sim.presentsBetween(4 * kFrame, 30 * kFrame), 12, 14,
-                "slow submit: a frame every other signal, not none");
+  // 26 frames of the display, a submit every 1.3 of them.
+  expectBetween(sim.presentsBetween(4 * kFrame, 30 * kFrame), 19, 20,
+                "slow submit: the rate the submit allows, not none");
+}
+
+void aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs() {
+  // A submit of most of a frame ends in the slot after the one it started
+  // in when the deadline falls in the middle of the frame: the next frame
+  // still goes on the next signal, into a slot of its own.
+  for (Nanos deadline : {900, 1500, 2300}) {
+    Sim sim(eachFrame(Acknowledgement::kNone, Depth::kTwo));
+    sim.deadlineAfterSignal = deadline;
+    sim.submitTime = 850;
+    sim.recordTime = 1300;
+    sim.animate(0, 400 * kFrame, 100);
+    sim.runUntil(400 * kFrame);
+    // 360 frames of the display, a recording every 1.3 of them.
+    expectBetween(sim.presentsBetween(40 * kFrame, 400 * kFrame), 272, 278,
+                  "long submit: the rate the recording allows");
+    expectEqual(sim.mostPresentsInASlot(), 1, "long submit: one frame a slot");
+  }
 }
 
 void clientsFramesGoOneAFrame() {
@@ -594,6 +613,25 @@ void holdingKeepsAGpuBoundViewAtTheGpusRate() {
   expectBetween(declined, 110, 131,
                 "decline: the GPU idles while the next frame is submitted");
   expect(held > declined, "hold presents more frames than decline");
+}
+
+void holdingKeepsTheGpuFedThroughALongSubmit() {
+  // The Samsung's heaviest scene: a submit of most of a frame, a GPU that
+  // takes 1.7 frames, a deadline in the middle of the frame.
+  for (Nanos deadline : {900, 1500, 2300}) {
+    Sim sim(eachFrame(Acknowledgement::kHoldsPresent, Depth::kTwo));
+    sim.deadlineAfterSignal = deadline;
+    sim.gpuTime = 1700;
+    sim.submitTime = 850;
+    sim.recordTime = 1300;
+    sim.animate(0, 400 * kFrame, 100);
+    sim.runUntil(400 * kFrame);
+    // 360 frames of the display: the GPU can do 211 frames in that time.
+    expectBetween(sim.presentsBetween(40 * kFrame, 400 * kFrame), 207, 212,
+                  "hold, long submit: the GPU never idles");
+    expectEqual(sim.mostPresentsInASlot(), 1,
+                "hold, long submit: one frame a slot");
+  }
 }
 
 // A bounded pipeline ---------------------------------------------------------
@@ -923,6 +961,7 @@ int main() {
   aMissedDeadlineSkipsTheFrame();
   aSubmitThatWouldMissTheDeadlineWaitsForTheSignal();
   aSlowSubmitNeverStarvesTheWindow();
+  aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs();
   clientsFramesGoOneAFrame();
   aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame();
   aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs();
@@ -931,6 +970,7 @@ int main() {
   anAcknowledgedFrameIsNotHeld();
   aDecliningWindowLeavesTheFrameQueued();
   holdingKeepsAGpuBoundViewAtTheGpusRate();
+  holdingKeepsTheGpuFedThroughALongSubmit();
   holdingOneFrameTheNextRecordingWaitsForTheWindow();
   requestsWhileRecordingAreOneRequest();
   twoFramesDeepARecordingThatEndsEarlyWaitsAndNoneStarts();

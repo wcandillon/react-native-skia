@@ -25,7 +25,10 @@ namespace rnsurface {
  *   one slot of the compositor: a frame presented in a slot that already got
  *   one would wait a frame behind it (a SurfaceView, a CAMetalLayer), so it
  *   stays queued until the next frame signal instead. A frame ready before
- *   the deadline of a slot that got none goes at once.
+ *   the deadline of a slot that got none goes at once. The window takes one
+ *   frame per slot, counted from when it takes it: a submit can last most of
+ *   a frame, and a frame taken on each signal lands in a slot of its own
+ *   however long its submit is.
  * - No present without an acknowledgement, where a present waits for the GPU
  *   to finish the frame before it (Android, see Acknowledgement). A frame
  *   whose predecessor is not acknowledged has its work submitted and its
@@ -366,10 +369,12 @@ public:
                        const WindowState &window) {
     switch (taken.take) {
     case Take::kPresented:
+      noteTake(now - taken.duration);
       notePresent(now);
       noteSubmitTime(taken.duration);
       break;
     case Take::kHeld:
+      noteTake(now - taken.duration);
       _active = true;
       _stats.holds++;
       noteSubmitTime(taken.duration);
@@ -495,17 +500,37 @@ private:
                  : Verdict::kWaitsForWindowDraw;
     }
     const Slot slot = slotAt(now);
-    if (_presented && _interval > 0 && _lastPresent > slot.start) {
-      // The slot has its frame.
+    if (_taken && _interval > 0 && _lastTake > slot.start) {
+      // The window took its frame for this slot.
       return Verdict::kWaitsForFrameSignal;
     }
-    if (on != On::kEvent) {
-      (on == On::kFrameSignal ? _stats.takenOnSignal : _stats.takenUrgent)++;
+    // Whether the frame would be presented within this slot, taken now: its
+    // submit ends before the slot does, and its present is not held.
+    const bool landsInSlot =
+        now + _submitEstimate < slot.end &&
+        (window.acknowledged ||
+         _policy.acknowledgement != Acknowledgement::kHoldsPresent);
+    const bool slotHasPresent =
+        _presented && _interval > 0 && _lastPresent > slot.start;
+    if (on == On::kUrgentFrame) {
+      _stats.takenUrgent++;
       return Verdict::kTake;
     }
-    if (!slot.known || now + _submitEstimate >= slot.end) {
-      // No slot is known to be open, or the frame would miss its deadline.
-      if (slot.known && !_missedDeadline) {
+    if (on == On::kFrameSignal) {
+      // A frame goes on each frame signal, whatever its submit takes. The
+      // one exception: a frame presented late (held for the GPU, or after a
+      // long submit) is in this slot already, and this one would join it
+      // there rather than land in the next.
+      if (slotHasPresent && landsInSlot) {
+        return Verdict::kWaitsForFrameSignal;
+      }
+      _stats.takenOnSignal++;
+      return Verdict::kTake;
+    }
+    if (!slot.known || slotHasPresent || !landsInSlot) {
+      // Between two signals a frame only goes into a slot known to be open,
+      // and when it makes that slot's deadline.
+      if (slot.known && !slotHasPresent && !_missedDeadline) {
         _missedDeadline = true;
         _stats.missedDeadlines++;
       }
@@ -548,6 +573,11 @@ private:
       actions.requestFrameSignal = true;
     }
     return actions;
+  }
+
+  void noteTake(Nanos start) {
+    _taken = true;
+    _lastTake = start;
   }
 
   void notePresent(Nanos now) {
@@ -659,7 +689,11 @@ private:
   Nanos _interval = 0;
   Nanos _deadline = 0;
   bool _signalRequested = false;
-  // When a frame last went to the window.
+  // When the window last took a frame (its submit started), and when a
+  // frame last went to it: the same moment but for the submit, unless the
+  // present was held.
+  bool _taken = false;
+  Nanos _lastTake = 0;
   bool _presented = false;
   Nanos _lastPresent = 0;
   // A window that shows the latest frame has one it has not drawn yet.
