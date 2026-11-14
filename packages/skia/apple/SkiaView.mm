@@ -238,6 +238,13 @@ usesP3ColorSpace(const std::string &colorSpace,
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
     _layer = [CAMetalLayer layer];
 #pragma clang diagnostic pop
+    // The surface is configured with a premultiplied alpha mode, for which
+    // Dawn sets the layer non-opaque on every Configure, on the present
+    // thread. A CAMetalLayer is opaque by default, so the first of those
+    // calls would change the layer there, in an implicit CATransaction that
+    // the thread's run loop then commits: a commit of the layer tree off the
+    // main thread (#4474). Set here, Dawn's call changes nothing.
+    _layer.opaque = NO;
     [self.layer addSublayer:_layer];
     // AppKit lays out a view put in a superview only when asked: the layout
     // attaches the window's surface to the layer (see layoutSubviews).
