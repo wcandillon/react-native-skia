@@ -322,12 +322,6 @@ public:
     _signalRequested = false;
     _declined = false;
     _stats.frameSignals++;
-    // The slot before this one ends where it begins. After a stretch without
-    // signals the previous deadline says nothing about it.
-    const bool follows =
-        _deadline != 0 && signal.deadline > _deadline &&
-        2 * (signal.deadline - _deadline) < 3 * signal.interval;
-    _previousDeadline = follows ? _deadline : signal.deadline - signal.interval;
     _deadline = signal.deadline;
     _interval = signal.interval;
     _signalTime = signal.time;
@@ -433,6 +427,8 @@ public:
   bool hasWaitingRecording() const { return _waiting; }
   Nanos submitEstimate() const { return _submitEstimate; }
   Nanos interval() const { return _interval; }
+  /** How long after the latest frame signal its deadline is. */
+  Nanos deadlineAfterSignal() const { return _deadline - _signalTime; }
   const Stats &stats() const { return _stats; }
 
 private:
@@ -463,15 +459,21 @@ private:
     Nanos end;
   };
 
+  /**
+   The slot `now` is in. The slots end a frame of the display apart, at the
+   deadline of the latest signal and before and after it: a deadline can be
+   more than a frame past its signal (Android's frame timeline), so that the
+   slot a frame lands in when it is taken right at a signal is one, two or
+   more slots before the one that signal announces.
+   */
   Slot slotAt(Nanos now) const {
     if (_interval <= 0) {
       return {false, 0, 0};
     }
-    if (now < _previousDeadline) {
-      return {true, _previousDeadline - _interval, _previousDeadline};
-    }
     if (now < _deadline) {
-      return {true, _previousDeadline, _deadline};
+      const Nanos end =
+          _deadline - ((_deadline - now - 1) / _interval) * _interval;
+      return {true, end - _interval, end};
     }
     const Nanos slots = (now - _deadline) / _interval;
     return {false, _deadline + slots * _interval,
@@ -652,12 +654,10 @@ private:
   unsigned _lateHistory = 0;
   Nanos _recordingSignal = 0;
 
-  // Present side: the latest frame signal, and the end of the slot before
-  // the one it announces.
+  // Present side: the latest frame signal.
   Nanos _signalTime = 0;
   Nanos _interval = 0;
   Nanos _deadline = 0;
-  Nanos _previousDeadline = 0;
   bool _signalRequested = false;
   // When a frame last went to the window.
   bool _presented = false;

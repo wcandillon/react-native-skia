@@ -195,6 +195,13 @@ public:
   bool hasHeldFrame();
 
   /**
+   How many frames went to the window so far: what tells a frame presented
+   from one whose present is held, or dropped with its swapchain, across a
+   call that may do either. Presenting thread.
+   */
+  uint64_t presentCount() const { return _presentCount; }
+
+  /**
    Presents the held frame, whatever the GPU is on: the view calls it once
    isAcknowledged(). Returns whether a frame went to the window: none was
    held, or the platform took the window back meanwhile (see abandon).
@@ -448,6 +455,7 @@ private:
   rnsurface::FrameScheduler::Acknowledgement _acknowledgement =
       rnsurface::FrameScheduler::Acknowledgement::kNone;
   bool _heldFrame = false;
+  uint64_t _presentCount = 0;
   bool _hasPresentedWork = false;
   wgpu::Future _presentedWork{};
   uint64_t _presentedWorkGeneration = 0;

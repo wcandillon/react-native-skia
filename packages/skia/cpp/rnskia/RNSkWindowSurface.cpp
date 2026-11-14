@@ -656,6 +656,7 @@ bool RNSkWindowSurface::presentTexture() {
 void RNSkWindowSurface::presentNow() {
   _surface.Present();
   _showsFrame = true;
+  _presentCount++;
   if (_acknowledgement == rnsurface::FrameScheduler::Acknowledgement::kNone) {
     return;
   }

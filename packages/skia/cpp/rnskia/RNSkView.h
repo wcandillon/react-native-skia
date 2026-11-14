@@ -576,11 +576,13 @@ private:
     Scheduler::Stats stats;
     bool deep = false;
     Scheduler::Nanos interval = 0;
+    Scheduler::Nanos deadline = 0;
     Scheduler::Nanos submit = 0;
     _producer->pace([&](Scheduler &scheduler) {
       stats = scheduler.stats();
       deep = scheduler.isDeep();
       interval = scheduler.interval();
+      deadline = scheduler.deadlineAfterSignal();
       submit = scheduler.submitEstimate();
       return Scheduler::Actions();
     });
@@ -589,11 +591,13 @@ private:
       return static_cast<unsigned long long>(now - before);
     };
     RNSkLogger::logToConsole(
-        "pacing view=%zu depth=%d frame=%.2fms submit=%.2fms signals=%llu "
+        "pacing view=%zu depth=%d frame=%.2fms deadline=+%.2fms submit=%.2fms "
+        "signals=%llu "
         "presents=%llu held=%llu onSignal=%llu inSlot=%llu urgent=%llu "
         "missed=%llu declined=%llu recordings=%llu late=%llu waiting=%llu "
         "depthChanges=%llu",
         _nativeId, deep ? 2 : 1, static_cast<double>(interval) / 1.0e6,
+        static_cast<double>(deadline) / 1.0e6,
         static_cast<double>(submit) / 1.0e6,
         since(stats.frameSignals, last.frameSignals),
         since(stats.presents, last.presents), since(stats.holds, last.holds),
@@ -693,7 +697,7 @@ private:
     if (fromQueue) {
       _producer->onFramesTaken(recordings);
     }
-    const bool heldBefore = _surface->hasHeldFrame();
+    const auto presentsBefore = _surface->presentCount();
     const auto startedAt = rnsurface::frameClockNow();
     const auto presented =
         presentOrKeep(target, targetInfo, std::move(recordings));
@@ -702,13 +706,15 @@ private:
     if (fromQueue && presented.done > 0) {
       target.onRecordingsDone(presented.done);
     }
-    if (!heldBefore && _surface->hasHeldFrame()) {
-      taken.take = Scheduler::Take::kHeld;
-    } else if (presented.shown) {
+    if (_surface->presentCount() != presentsBefore) {
       taken.take = Scheduler::Take::kPresented;
       if (_frameHost.onFramePresented) {
         _frameHost.onFramePresented();
       }
+    } else if (presented.shown && _surface->hasHeldFrame()) {
+      // The window took the frame and holds its present: also when it
+      // dropped the frame it held before with its swapchain (a resize).
+      taken.take = Scheduler::Take::kHeld;
     } else if (!presented.allDone) {
       taken.take = Scheduler::Take::kDeclined;
     }

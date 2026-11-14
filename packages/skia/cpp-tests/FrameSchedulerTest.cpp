@@ -131,9 +131,11 @@ public:
       const auto [time, event] = *_events.begin();
       _events.erase(_events.begin());
       // The present thread does one thing at a time: what reaches it while
-      // it submits waits for the submit to end.
-      if (isPresentSide(event) && time < _presentBusyUntil) {
-        post(_presentBusyUntil, event);
+      // it submits waits for the submit to end, also what reaches it at the
+      // very moment it ends.
+      if (isPresentSide(event) && event != Event::kSubmitEnded &&
+          (_submitting || time < _presentBusyUntil)) {
+        post(std::max(time, _presentBusyUntil), event);
         continue;
       }
       now = std::max(now, time);
@@ -303,11 +305,13 @@ private:
       // that the next recording overlaps it.
       run(scheduler.onReadyFrameTaken(now));
     }
+    _submitting = true;
     _presentBusyUntil = now + submitTime;
     post(_presentBusyUntil, Event::kSubmitEnded);
   }
 
   void endSubmit() {
+    _submitting = false;
     // The GPU works through what it is handed in order.
     const Nanos workDoneAt = std::max(_gpuFreeAt, now) + gpuTime;
     _gpuFreeAt = workDoneAt;
@@ -333,6 +337,7 @@ private:
 
   std::multimap<Nanos, Event> _events;
   Nanos _presentBusyUntil = 0;
+  bool _submitting = false;
   Nanos _gpuFreeAt = 0;
   Nanos _acknowledgedAt = 0;
   Nanos _heldWorkDoneAt = 0;
@@ -467,6 +472,28 @@ void aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame() {
               "late deadline: no slot of the compositor gets two frames");
   expectBetween(sim.presentsBetween(4 * kFrame, 40 * kFrame), 35, 36,
                 "late deadline: a frame each");
+}
+
+void aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs() {
+  // From a CADisplayLink's deadline, short of the next signal, to a frame
+  // timeline's, up to three frames past its signal.
+  for (Nanos deadline : {900, 1000, 1300, 2000, 2300, 3100}) {
+    Sim sim(eachFrame(Acknowledgement::kNone));
+    sim.deadlineAfterSignal = deadline;
+    // Frames keep coming, so that the slots are known; then twenty at once,
+    // and more a few at a time, a quarter of a frame apart.
+    sim.animate(0, 10 * kFrame, 100);
+    for (int frame = 0; frame < 20; frame++) {
+      sim.queueClientFrameAt(10 * kFrame + 50);
+    }
+    for (Nanos time = 12 * kFrame; time < 20 * kFrame; time += 250) {
+      sim.queueClientFrameAt(time);
+    }
+    sim.runUntil(80 * kFrame);
+    expectEqual(sim.queued, 0, "burst: every frame is shown");
+    expectEqual(sim.mostPresentsInASlot(), 1,
+                "burst: no slot of the compositor gets two frames");
+  }
 }
 
 void anUrgentFrameGoesAtOnceButNotTwiceInASlot() {
@@ -898,6 +925,7 @@ int main() {
   aSlowSubmitNeverStarvesTheWindow();
   clientsFramesGoOneAFrame();
   aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame();
+  aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs();
   anUrgentFrameGoesAtOnceButNotTwiceInASlot();
   aFrameIsHeldUntilTheGpuIsDoneWithTheOneBefore();
   anAcknowledgedFrameIsNotHeld();
