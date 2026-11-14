@@ -1,7 +1,8 @@
 // The run plan of the benchmark screen, as `key=value` pairs joined by `&`
 // (the query string of a URL, without the `?`):
 //
-//   scenes=shapes,shapeBlob,images,shader,pattern,paths,text   (default: all)
+//   scenes=shapes,shapeBlob,images,shader,pattern,paths,text,textSlide
+//                                                    (default: all)
 //   reps=2                                           (default: 1)
 //   gap=30        seconds idle, no canvas, between scenes (default: 0)
 //   backing=surface|texture   Android only: SurfaceView or TextureView
@@ -27,6 +28,7 @@ export const SCENES = [
   "pattern",
   "paths",
   "text",
+  "textSlide",
 ] as const;
 export type Scene = (typeof SCENES)[number];
 

@@ -16,7 +16,8 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 CanvasKitInit({
-  locateFile: (file) => `https://unpkg.com/canvaskit-wasm@0.41.1/bin/full/${file}`,
+  locateFile: (file) =>
+    `https://unpkg.com/canvaskit-wasm@0.41.1/bin/full/${file}`,
 }).then((CanvasKit) => {
   window.CanvasKit = global.CanvasKit = CanvasKit;
   AppRegistry.runApplication(appName, { rootTag });

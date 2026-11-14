@@ -60,7 +60,7 @@ const arg = (name, fallback) => {
   return at >= 0 && args[at + 1] !== undefined ? args[at + 1] : fallback;
 };
 const PLATFORM = arg("platform", "android");
-const ALL_SCENES = ["shapes", "shapeBlob", "images", "shader", "pattern", "paths", "text"];
+const ALL_SCENES = ["shapes", "shapeBlob", "images", "shader", "pattern", "paths", "text", "textSlide"];
 const SCENES = arg("scenes", ALL_SCENES.join(",")).split(",");
 const REPS = Number(arg("reps", "1"));
 const GAP = Number(arg("gap", "0"));

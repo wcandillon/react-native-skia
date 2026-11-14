@@ -1,6 +1,6 @@
 # Performance regression benchmark
 
-Seven scenes that stress different parts of React Native Skia, run on a real
+Eight scenes that stress different parts of React Native Skia, run on a real
 phone, measured by the system compositor. Run it before a release and compare
 with the previous one.
 
@@ -13,6 +13,7 @@ with the previous one.
 | `pattern` | a repeating image shader over the whole screen |
 | `paths` | 900 cubic squiggles, half filled, half stroked: path rendering |
 | `text` | 6,000 short labels: glyph atlas and text draws |
+| `textSlide` | the same 6,000 labels sliding by whole pixels instead of rotating: the glyph masks stay the same from one frame to the next |
 
 The layouts match `apps/benchmark` in react-native-tgfx, so the numbers can be
 compared with that engine too (`shapeBlob` has no counterpart there; compare
@@ -48,7 +49,7 @@ then exits with status 1.
 | `--refresh-rate` | | pacing: required actual display cadence in Hz |
 | `--trace` | | iOS pacing: collect optional Instruments diagnostics; Android always records Perfetto |
 | `--keep-trace` | | pacing: retain raw Perfetto (Android) or optional Instruments trace (iOS) |
-| `--scenes` | all seven | e.g. `shader,paths` |
+| `--scenes` | all eight | e.g. `shader,paths` |
 | `--reps` | `1` | the present FPS reported is the median over reps |
 | `--gap` | `0` | seconds with no canvas between scenes, so heat does not carry over |
 | `--backing` | `surface` | Android: `texture` puts the canvas on a TextureView |
@@ -318,7 +319,7 @@ Logging trace.
   `/proc/<pid>/task/*/stat`, divided by the frames presented in it. Present
   FPS stops at the panel rate, so a scene that already runs at 120 FPS hides
   any regression in its cost; render ms/frame does not. It is the number to
-  watch for CPU-bound scenes (`shapes`, `shapeBlob`, `images`, `paths`, `text`). It counts
+  watch for CPU-bound scenes (`shapes`, `shapeBlob`, `images`, `paths`, `text`, `textSlide`). It counts
   time on a core only, not time blocked on the GPU, so a GPU-bound scene
   (`shader`, `pattern`) shows its regressions in present FPS instead.
 - Android also reports JS/UI thread FPS, the busiest threads (% of a core)
