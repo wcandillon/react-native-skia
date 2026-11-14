@@ -105,7 +105,7 @@ function copyFile(from, to) {
   console.log(
     gray(
       `› To load React Native Skia Web,
-follow these instructions: https://shopify.github.io/react-native-skia/docs/getting-started/web`
+follow these instructions: https://wcandillon.github.io/react-native-skia/docs/getting-started/web`
     )
   );
 })();
