@@ -1,12 +1,14 @@
 import { execFileSync } from "child_process";
 
-import type { WebSocket } from "ws";
 import { WebSocketServer } from "ws";
+
+import { Channel } from "../renderer/__tests__/e2e/setup/Channel";
 
 declare global {
   var testServer: WebSocketServer;
-  // Each test file keeps a global's first value, so the client is a property.
-  var testConnection: { client: WebSocket | null };
+  // Each test file keeps a global's first value, so the channel is a property.
+  // It is the channel to the app that said hello last (see Channel).
+  var testConnection: { channel: Channel | null };
   var testOS: "ios" | "android" | "web" | "node" | "macos";
 }
 
@@ -47,7 +49,7 @@ const globalSetup = () => {
     }
     const port = testPort();
     reversePort(port);
-    global.testConnection = { client: null };
+    global.testConnection = { channel: null };
     global.testServer = new WebSocketServer({ port });
     console.log(
       `\n\nTest server listening on port ${port} (waiting for the example app to open on E2E tests screen)`
@@ -69,7 +71,7 @@ const globalSetup = () => {
           throw new Error("Unknown testing platform: " + OS);
         }
         // Only a socket that says hello is the app's, and the latest one wins.
-        global.testConnection.client = client;
+        global.testConnection.channel = new Channel(client);
         global.testOS = OS;
         console.log(`${OS} device connected`);
         resolve();

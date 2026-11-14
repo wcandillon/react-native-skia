@@ -4,6 +4,7 @@
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -60,13 +61,17 @@ public:
 
   static void runMainThreadTasks(jni::alias_ref<jclass>);
 
-  float getPixelDensity() { return _pixelDensity; }
+  float getPixelDensity() { return _pixelDensity.load(); }
+
+  // The display density changed (a configuration change, see
+  // PlatformContext.java). Read by RNSkAndroidPlatformContext.
+  void setPixelDensity(float pixelDensity);
 
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
-  float _pixelDensity;
+  std::atomic<float> _pixelDensity;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,
