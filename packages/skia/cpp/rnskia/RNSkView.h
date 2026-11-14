@@ -15,6 +15,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkOffscreenSurface.h"
 #include "RNSkPlatformContext.h"
+#include "RNSkPresentOrKeep.h"
 #include "RNSkRedrawRequest.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowSurface.h"
@@ -238,10 +239,10 @@ public:
         presentOrKeep(*target, targetInfo, std::move(recordings));
     // The recordings done so far are counted, also when the window could not
     // take the ones behind them: those go back to the queue and count once
-    // presented. The last frame shown again holds none of the producer's
+    // presented. The last frame shown again was counted when it was first
+    // presented: it is not counted again, and holds none of the producer's
     // slots, which the frame on its way may hold.
     if (!showsLastFrameAgain && presented.done > 0) {
-      _producer->onFramePresented(presented.done);
       target->onRecordingsDone(presented.done);
     }
     if (presented.allDone) {
@@ -419,9 +420,9 @@ public:
     const int result = presented.shown ? PresentResult::kPresented
                                        : PresentResult::kNothingPresented;
     // Counted also when the window could not take every recording (see
-    // redraw): the ones it kept are presented, and counted, next time.
+    // redraw): the ones it kept are presented, and counted, next time. The
+    // producer's slots are freed by the release callback, per attempt.
     if (presented.done > 0) {
-      _producer->onFramePresented(presented.done);
       target->onRecordingsDone(presented.done);
     }
     if (!presented.allDone) {
@@ -538,51 +539,32 @@ private:
     });
   }
 
-  /** What presentOrKeep() did. */
-  struct Presented {
-    // Every recording is done: shown, or skipped (see present).
-    bool allDone;
-    // A frame went to the window.
-    bool shown;
-    // How many of the recordings are done, from the front; the rest went
-    // back to the queue.
-    size_t done;
-  };
-
   /**
    Presents the recordings onto the window, described by targetInfo, and
-   remembers the last one shown. The one the window could not take and the
-   ones behind it go back to the front of the target's queue: the window had
-   no drawable, or it changed under the present (the main thread resized it
-   between the read of its description and the present, see
-   RNSkWindowSurface::presentRecordings). A window that changed is read
-   again and the rest presented onto it as it is now, once, rather than a
-   frame later: what was recorded for the previous size shows stretched to
-   it, or is dropped for a frame behind it (see present).
+   remembers the last one shown (see RNSkPresentOrKeep.h). The one the window
+   could not take and the ones behind it go back to the front of the
+   target's queue: the window had no drawable, or it changed under the
+   present (see RNSkWindowSurface::presentRecordings), in which case the rest
+   is presented once more onto it as it is now: what was recorded for the
+   previous size shows stretched to it, or is dropped for a frame behind it
+   (see present). The recordings done give the producer back the slots they
+   hold (see RNSkGraphiteProducer::onRecordingsDone).
    */
-  Presented presentOrKeep(
-      RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
+  RNSkPresented presentOrKeep(
+      RNSkGraphiteTarget &target, const RNSkGraphiteTargetInfo &targetInfo,
       std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings) {
-    bool shown = false;
-    size_t done = 0;
-    for (int attempt = 0;; attempt++) {
-      const auto replayed =
-          present(*_surface, targetInfo, recordings, /* remember= */ true);
-      shown = shown || replayed.shown;
-      done += replayed.done;
-      if (replayed.done == recordings.size()) {
-        return {true, shown, done};
-      }
-      recordings.erase(recordings.begin(),
-                       recordings.begin() + static_cast<long>(replayed.done));
-      RNSkGraphiteTargetInfo now;
-      if (attempt == 0 && _surface->getTargetInfo(&now) && now != targetInfo) {
-        targetInfo = now;
-        continue;
-      }
-      target.requeue(std::move(recordings));
-      return {false, shown, done};
-    }
+    return RNSkia::presentOrKeep(
+        targetInfo, std::move(recordings),
+        [this](const RNSkGraphiteTargetInfo &info, const auto &queued) {
+          return present(*_surface, info, queued, /* remember= */ true);
+        },
+        [this](const auto &queued, size_t done) {
+          _producer->onRecordingsDone(queued, done);
+        },
+        [this](RNSkGraphiteTargetInfo *now) {
+          return _surface->getTargetInfo(now);
+        },
+        [&target](auto rest) { target.requeue(std::move(rest)); });
   }
 
   /**
