@@ -400,6 +400,13 @@ public:
     if (_surface->readState(&targetInfo) != RNSkWindowState::kReady) {
       return PresentResult::kNothingPresented;
     }
+    // The GPU is still on the frame presented last, which a present would
+    // wait for (see RNSkWindowSurface::takesFrameNow): the queue is left as
+    // it is, for the next vsync.
+    if (!_surface->takesFrameNow()) {
+      return target->hasQueued() ? PresentResult::kMoreQueued
+                                 : PresentResult::kNothingPresented;
+    }
     auto recordings = target->takeQueued();
     if (recordings.empty()) {
       return PresentResult::kNothingPresented;

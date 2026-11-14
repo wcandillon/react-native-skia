@@ -527,6 +527,35 @@ public:
     current->context->submit();
   }
 
+  // Submitted work -----------------------------------------------------------
+
+  /**
+   A future that completes once the GPU is done with everything submitted so
+   far on the device in use, whose generation `generation` receives: what a
+   present made now waits for on Android (see rnsurface::PresentGate). Asked
+   about with isDone().
+   */
+  wgpu::Future submittedWork(uint64_t *generation) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto *current = _current.load(std::memory_order_acquire);
+    *generation = current->id;
+    return workDone(current);
+  }
+
+  /**
+   Whether the GPU is done with the work `work` stands for (see
+   submittedWork), without waiting for it. Work submitted to a device
+   replaced since is done: nothing presents onto that device any more. So is
+   work Dawn cannot tell about, rather than never.
+   */
+  bool isDone(wgpu::Future work, uint64_t generation) {
+    if (generation != _current.load(std::memory_order_acquire)->id) {
+      return true;
+    }
+    wgpu::Instance waiter(instance->Get());
+    return waiter.WaitAny(work, 0) != wgpu::WaitStatus::TimedOut;
+  }
+
   // GPU objects --------------------------------------------------------------
 
   /**
