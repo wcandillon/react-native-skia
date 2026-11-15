@@ -3,7 +3,7 @@
 //
 //   node benchmarks/run.mjs --platform android|ios [--scenes shapes,paths]
 //        [--reps 2] [--gap 20] [--backing surface|texture] [--label main]
-//        [--no-build] [--compare benchmarks/results/<file>.json]
+//        [--pacing two] [--no-build] [--compare benchmarks/results/<file>.json]
 //   node benchmarks/run.mjs --cold --platform android|ios|ios-simulator
 //        [--scenes ...] [--reps 3] [--settle 10] [--label main] [--compare ...]
 //
@@ -61,6 +61,12 @@ const REPS = Number(arg("reps", "1"));
 const GAP = Number(arg("gap", "0"));
 const BACKING = arg("backing", "surface");
 const LABEL = arg("label", "local");
+// The pacing policy to measure, when not the platform's own: a comma separated
+// list read by packages/skia/cpp/rnskia/RNSkPacingPolicy.h (hold, decline or
+// nowait; adaptive or two). Android reads it from a system property, set here
+// before each launch and cleared when none is asked for, so that a previous
+// run's does not leak into this one; iOS from the environment of the launch.
+const PACING = arg("pacing", "");
 const COMPARE = arg("compare", null);
 const COLD = flag("cold");
 // Cold mode: seconds the app idles with no canvas after launch, and seconds
@@ -289,6 +295,7 @@ async function threadsAndroid() {
 async function launchAndroid() {
   await adb("shell", "input", "keyevent", "KEYCODE_WAKEUP");
   await adb("shell", "wm", "dismiss-keyguard");
+  await adb("shell", "setprop", "debug.rnskia.pacing", PACING === "" ? "''" : PACING);
   const out = await adb("shell", "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", PACKAGE);
   await adb("shell", "am", "start", "-n", out.trim().split("\n").at(-1).trim());
 }
@@ -472,7 +479,8 @@ async function measureIos(device) {
   // Traces attach by pid: xctrace does not always find the app by name.
   const launch = async () => {
     const json = join(dir, "launch.json");
-    await sh("xcrun", ["devicectl", "device", "process", "launch", "--device", device.id, "--terminate-existing", "--json-output", json, bundleId]);
+    const environment = PACING === "" ? [] : ["--environment-variables", JSON.stringify({ RNSKIA_PACING: PACING })];
+    await sh("xcrun", ["devicectl", "device", "process", "launch", "--device", device.id, "--terminate-existing", ...environment, "--json-output", json, bundleId]);
     return JSON.parse(readFileSync(json, "utf8")).result?.process?.processIdentifier;
   };
   // A first launch after an install is slow (shader caches, dyld): spend it
@@ -768,7 +776,7 @@ function report(result, previous) {
   const lines = [
     `# React Native Skia benchmark: ${result.label}, ${result.platform}`,
     "",
-    `${result.device}, react-native-skia ${result.skia}, ${result.date}. Plan: \`${result.plan}\`.`,
+    `${result.device}, react-native-skia ${result.skia}, ${result.date}. Plan: \`${result.plan}\`.${result.pacing ? ` Pacing: \`${result.pacing}\`.` : ""}`,
     `Present FPS is the median over reps of frames the compositor showed (${TRACE_SECONDS} s per scene).`,
     ...(result.platform === "android"
       ? ["Render and present ms/frame: CPU time of the `RNSkia Render` pool and the `RNSkia Present` thread over the same window, divided by the frames presented (median over reps). They keep measuring when present FPS sits at the panel rate."]
@@ -855,6 +863,7 @@ const result = {
   skia: `${skia.name} ${skiaVersion}`,
   date: new Date().toISOString(),
   plan,
+  ...(PACING === "" ? {} : { pacing: PACING }),
   ...measured,
 };
 const previous = COMPARE ? JSON.parse(readFileSync(COMPARE, "utf8")) : null;
