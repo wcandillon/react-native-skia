@@ -194,24 +194,20 @@ private:
     });
     // What the view's frame scheduler asks of the platform, on the present
     // thread (see RNSkView::FrameHost). Weak: the view may outlive this
-    // object in the registry for a moment, and the timer's tasks the view.
+    // object in the registry for a moment.
     _animationFrames = std::make_shared<AnimationFrames>(_view);
     std::weak_ptr<AnimationFrames> weakFrames = _animationFrames;
-    std::weak_ptr<RNSkView> weakView = _view;
     RNSkView::FrameHost host;
     host.requestAnimationFrame = [weakFrames]() {
       if (auto frames = weakFrames.lock()) {
         frames->request();
       }
     };
-    // Each poll asks a fence and nothing else (see
-    // RNSkWindowSurface::isPreviousWorkDone).
-    host.pollSubmittedWorkDone = [weakView](std::chrono::nanoseconds delay) {
-      PresentThreadTimer::getInstance().setTimeout(delay, [weakView]() {
-        if (auto view = weakView.lock()) {
-          view->onSubmittedWorkDonePoll();
-        }
-      });
+    // The timer the view polls the GPU and waits for the end of a slot with
+    // (see RNSkView::pollSubmittedWorkDone and waitForSlotEnd).
+    host.setTimeout = [](std::chrono::nanoseconds delay,
+                         std::function<void()> task) {
+      PresentThreadTimer::getInstance().setTimeout(delay, std::move(task));
     };
     // The Java view's frame rate vote (see SkiaView.onFramePresented). A
     // Java call from the native thread, which is attached (see

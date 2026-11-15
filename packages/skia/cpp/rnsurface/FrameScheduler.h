@@ -209,15 +209,13 @@ public:
     // report onDeferredFramePresented().
     bool presentDeferredFrame = false;
     // Present side: call onSubmittedWorkDonePoll() again shortly: a frame
-    // waits for the GPU to be done, which nothing announces, or a deferred
-    // present for its slot.
+    // waits for the GPU to be done, which nothing announces.
     bool pollSubmittedWorkDone = false;
-
-    bool none() const {
-      return !startRecording && !queueRecording && !requestAnimationFrame &&
-             !submitFrame && !deferPresent && !presentDeferredFrame &&
-             !pollSubmittedWorkDone;
-    }
+    // Present side, when not 0: call onSlotEnded() once the clock is past
+    // this moment, the end of the slot a deferred present is in. That slot
+    // has its frame, so the present goes into the next one whatever the GPU
+    // is on: when that is is known, and nothing is polled for until then.
+    Nanos slotEnd = 0;
   };
 
   /** What the scheduler did so far, for the logs and the tests. */
@@ -243,8 +241,10 @@ public:
     std::uint64_t lateRecordings = 0;
     std::uint64_t waitingRecordings = 0;
     std::uint64_t framesInFlightChanges = 0;
-    // Polls for the previous work (see Actions::pollSubmittedWorkDone).
+    // Polls for the previous work (see Actions::pollSubmittedWorkDone), and
+    // waits for the end of a slot (see Actions::slotEnd).
     std::uint64_t polls = 0;
+    std::uint64_t slotWaits = 0;
   };
 
   // A recording is late once it finishes this far into the frame it started
@@ -401,6 +401,12 @@ public:
   /** The poll asked for with Actions::pollSubmittedWorkDone. */
   Actions onSubmittedWorkDonePoll(Nanos now, const WindowState &window) {
     _stats.polls++;
+    return step(now, window, On::kEvent, /* wantsFrame= */ false);
+  }
+
+  /** The moment asked about with Actions::slotEnd has passed. */
+  Actions onSlotEnded(Nanos now, const WindowState &window) {
+    _stats.slotWaits++;
     return step(now, window, On::kEvent, /* wantsFrame= */ false);
   }
 
@@ -630,11 +636,18 @@ private:
       // other frame meanwhile. It goes once the GPU is done with the frame
       // before it, into a slot of its own: released into the slot that
       // frame went to, it would wait a frame behind it in the compositor.
-      if (window.previousWorkDone && !slotHasPresent(now)) {
+      const bool slotHasPresent = this->slotHasPresent(now);
+      if (window.previousWorkDone && !slotHasPresent) {
         actions.presentDeferredFrame = true;
         return actions;
       }
-      actions.pollSubmittedWorkDone = true;
+      if (slotHasPresent) {
+        // Not before this slot ends, whether the GPU is done or not: the
+        // caller is told when that is, and polls for nothing until then.
+        actions.slotEnd = slotAt(now).end;
+      } else {
+        actions.pollSubmittedWorkDone = true;
+      }
     } else if (window.queued) {
       switch (verdict(now, window, on)) {
       case Verdict::kSubmit:

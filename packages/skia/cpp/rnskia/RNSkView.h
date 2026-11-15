@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -360,12 +361,17 @@ public:
      */
     std::function<void()> requestAnimationFrame;
     /**
-     Has onSubmittedWorkDonePoll() called once `delay` has passed. The GPU
-     being done with the work submitted is no event the view hears (see
-     DawnContext::isDone), so a platform whose presents wait for it polls,
-     from a timer of the present thread. Never asked for elsewhere.
+     Runs `task` on the present thread once `delay` has passed, never on the
+     spot: the web's setTimeout(), from a timer of the present thread. What
+     the view polls the GPU with while a present is deferred (the GPU being
+     done with the work submitted is no event the view hears, see
+     DawnContext::isDone), and waits for the end of a slot with. Only asked
+     for where a present can be deferred. Without one, the task runs behind
+     those queued, and is asked for again until its time has come.
      */
-    std::function<void(std::chrono::nanoseconds delay)> pollSubmittedWorkDone;
+    std::function<void(std::chrono::nanoseconds delay,
+                       std::function<void()> task)>
+        setTimeout;
     /** A frame went to the window. */
     std::function<void()> onFramePresented;
   };
@@ -439,21 +445,6 @@ public:
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
       return scheduler.onFrameConsumed(now, window);
-    }));
-  }
-
-  /**
-   Present thread: the poll asked for with FrameHost::pollSubmittedWorkDone.
-   The deferred present goes if the GPU is done with the frame before it.
-   */
-  void onSubmittedWorkDonePoll() {
-    RNSURFACE_ASSERT_THREAD(_presentThread,
-                            "RNSkView::onSubmittedWorkDonePoll");
-    _submittedWorkDonePollPending = false;
-    const auto window = windowState();
-    const auto now = rnsurface::frameClockNow();
-    run(_producer->pace([&](Scheduler &scheduler) {
-      return scheduler.onSubmittedWorkDonePoll(now, window);
     }));
   }
 
@@ -549,6 +540,9 @@ private:
       if (actions.pollSubmittedWorkDone) {
         pollSubmittedWorkDone();
       }
+      if (actions.slotEnd != 0) {
+        waitForSlotEnd(actions.slotEnd);
+      }
       if (actions.submitFrame) {
         _surface->deferNextPresent(actions.deferPresent);
         const auto submitted = submitFrame();
@@ -609,7 +603,8 @@ private:
         "pacing view=%zu inFlight=%d frame=%.2fms deadline=+%.2fms "
         "submit=%.2fms frames=%llu presents=%llu deferred=%llu onFrame=%llu "
         "inSlot=%llu urgent=%llu missed=%llu noTexture=%llu recordings=%llu "
-        "late=%llu waiting=%llu inFlightChanges=%llu polls=%llu",
+        "late=%llu waiting=%llu inFlightChanges=%llu polls=%llu "
+        "slotWaits=%llu",
         _nativeId, framesInFlight, static_cast<double>(interval) / 1.0e6,
         static_cast<double>(deadline) / 1.0e6,
         static_cast<double>(submit) / 1.0e6,
@@ -625,7 +620,7 @@ private:
         since(stats.lateRecordings, last.lateRecordings),
         since(stats.waitingRecordings, last.waitingRecordings),
         since(stats.framesInFlightChanges, last.framesInFlightChanges),
-        since(stats.polls, last.polls));
+        since(stats.polls, last.polls), since(stats.slotWaits, last.slotWaits));
     _pacingLoggedAt = now;
     _pacingLogged = stats;
   }
@@ -657,18 +652,67 @@ private:
       return;
     }
     _submittedWorkDonePollPending = true;
-    if (_frameHost.pollSubmittedWorkDone) {
-      _frameHost.pollSubmittedWorkDone(
-          std::chrono::nanoseconds(kSubmittedWorkDonePoll));
+    setTimeout(kSubmittedWorkDonePoll, &RNSkView::onSubmittedWorkDonePoll);
+  }
+
+  /**
+   Present thread: the poll asked for with pollSubmittedWorkDone(). The
+   deferred present goes if the GPU is done with the frame before it.
+   */
+  void onSubmittedWorkDonePoll() {
+    RNSURFACE_ASSERT_THREAD(_presentThread,
+                            "RNSkView::onSubmittedWorkDonePoll");
+    _submittedWorkDonePollPending = false;
+    const auto window = windowState();
+    const auto now = rnsurface::frameClockNow();
+    run(_producer->pace([&](Scheduler &scheduler) {
+      return scheduler.onSubmittedWorkDonePoll(now, window);
+    }));
+  }
+
+  /**
+   Has the scheduler stepped once the slot that ends at `slotEnd` is over:
+   one timer, where the deferred present that waits for it was polled for.
+   A slot includes its end, so the first moment after it.
+   */
+  void waitForSlotEnd(Scheduler::Nanos slotEnd) {
+    if (_slotEndPending) {
       return;
     }
-    // No timer: asked again a task behind those queued.
+    _slotEndPending = true;
+    const auto now = rnsurface::frameClockNow();
+    setTimeout(std::max<Scheduler::Nanos>(slotEnd - now, 0) + 1,
+               &RNSkView::onSlotEnded);
+  }
+
+  /** Present thread: the wait asked for with waitForSlotEnd() is over. */
+  void onSlotEnded() {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onSlotEnded");
+    _slotEndPending = false;
+    const auto window = windowState();
+    const auto now = rnsurface::frameClockNow();
+    run(_producer->pace([&](Scheduler &scheduler) {
+      return scheduler.onSlotEnded(now, window);
+    }));
+  }
+
+  /**
+   Runs an entry of the view on the present thread once `delay` has passed
+   (see FrameHost::setTimeout), if the view is still there.
+   */
+  void setTimeout(Scheduler::Nanos delay, void (RNSkView::*entry)()) {
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
-    _runOnPresentThread([weakThis]() {
+    auto task = [weakThis, entry]() {
       if (auto view = weakThis.lock()) {
-        view->onSubmittedWorkDonePoll();
+        (view.get()->*entry)();
       }
-    });
+    };
+    if (_frameHost.setTimeout) {
+      _frameHost.setTimeout(std::chrono::nanoseconds(delay), std::move(task));
+      return;
+    }
+    // No timer: a task behind those queued.
+    _runOnPresentThread(std::move(task));
   }
 
   /**
@@ -1066,8 +1110,10 @@ private:
   FrameHost _frameHost;
   bool _windowIsMailbox = false;
   // A poll for the previous work being done is on its way (see
-  // pollSubmittedWorkDone). Present thread.
+  // pollSubmittedWorkDone), and so is the end of a slot (see
+  // waitForSlotEnd). Present thread.
   bool _submittedWorkDonePollPending = false;
+  bool _slotEndPending = false;
   // How far apart the polls are while a present is deferred: each asks a fence
   // and nothing else.
   static constexpr Scheduler::Nanos kSubmittedWorkDonePoll = 500000;

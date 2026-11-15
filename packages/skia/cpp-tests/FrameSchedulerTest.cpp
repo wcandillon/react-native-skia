@@ -188,6 +188,7 @@ private:
     kUrgentClientFrame,
     kSubmitEnded,
     kSubmittedWorkDonePoll,
+    kSlotEnded,
     kWindowDraw,
     kCanPresent,
   };
@@ -245,6 +246,10 @@ private:
       submittedWorkDonePolls++;
       run(scheduler.onSubmittedWorkDonePoll(now, windowState()));
       break;
+    case Event::kSlotEnded:
+      _slotEndPosted = false;
+      run(scheduler.onSlotEnded(now, windowState()));
+      break;
     case Event::kWindowDraw:
       run(scheduler.onFrameConsumed(now, windowState()));
       break;
@@ -276,6 +281,12 @@ private:
       _pollPosted = true;
       post(std::max(now + 1, _previousWorkDoneAt),
            Event::kSubmittedWorkDonePoll);
+    }
+    if (actions.slotEnd != 0 && !_slotEndPosted) {
+      // One timer, for the first moment after the slot.
+      expect(actions.slotEnd >= now, "a slot waited for has not ended");
+      _slotEndPosted = true;
+      post(actions.slotEnd + 1, Event::kSlotEnded);
     }
     if (actions.submitFrame) {
       beginSubmit(actions.deferPresent);
@@ -353,6 +364,7 @@ private:
   Nanos _deferredWorkDoneAt = 0;
   int _clientFrames = 0;
   bool _pollPosted = false;
+  bool _slotEndPosted = false;
 };
 
 constexpr Nanos kFrame = Sim::kFrame;
@@ -648,6 +660,10 @@ void anUrgentFrameDoesNotJoinAFramePresentedLate() {
       expectBetween(sim.presents.back(), 7 * kFrame + 750, 7 * kFrame + 760,
                     "urgent, late frame: and its present as the next slot "
                     "starts");
+      expectEqual(static_cast<long long>(sim.scheduler.stats().slotWaits), 1,
+                  "urgent, late frame: one wait for the end of the slot");
+      expectEqual(sim.submittedWorkDonePolls, 0,
+                  "urgent, late frame: and no poll, the GPU being done");
     }
     expectEqual(sim.mostPresentsInASlot(), 1,
                 "urgent, late frame: one frame per slot");
@@ -718,6 +734,9 @@ void noSlotGetsTwoFramesWhateverTheGpuDoes() {
       }
       sim.runUntil(2010 * kFrame);
       expect(sim.deferredPresents > 100, "any GPU: presents are deferred");
+      expect(sim.submittedWorkDonePolls <= sim.deferredPresents,
+             "any GPU: the GPU is polled for in a free slot only, so once "
+             "per deferred present here");
       expectEqual(sim.mostPresentsInASlot(), 1,
                   "any GPU: no slot of the compositor gets two frames");
       expectEqual(static_cast<long long>(sim.presents.size()), sim.recorded,

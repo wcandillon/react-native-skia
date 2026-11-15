@@ -22,12 +22,12 @@ namespace RNSkia {
 /**
  * Runs tasks on the present thread once their delay has passed: a timerfd on
  * the thread's looper (see rnsurface::RenderThread), armed for the task due
- * first: the setTimeout() of the present thread. What a view polls the GPU
- * with while its window has a present deferred (see
- * RNSkView::FrameHost::pollSubmittedWorkDone): nothing announces the GPU
- * being done, and a wait for it would hold up every submit (see
- * DawnContext::isDone). One for the process, as the thread is, made on that
- * thread at its first timeout.
+ * first: the setTimeout() of the present thread (see
+ * RNSkView::FrameHost::setTimeout). What a view polls the GPU with while its
+ * window has a present deferred, as nothing announces the GPU being done and
+ * a wait for it would hold up every submit (see DawnContext::isDone), and
+ * what it waits for the end of a slot with. One for the process, as the thread
+ * is, made on that thread at its first timeout.
  */
 class PresentThreadTimer {
 public:
