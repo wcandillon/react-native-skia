@@ -431,7 +431,7 @@ public:
   }
 
   /**
-   Main or present thread. The window can show frames again (the app came
+   Present thread. The window can show frames again (the app came
    back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
    owed since one found it could not present is posted (see
    RNSkRedrawRequest), else the recordings queued meanwhile are handed to the

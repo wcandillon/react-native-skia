@@ -7,7 +7,6 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
-#include "RNMetalLayerColorSpace.h"
 #include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
 
@@ -70,7 +69,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
-  // A layout attaches the same window again, which keeps what it shows.
+  // The window held already, attached again (Apple's attachSurface, as the
+  // bit depth or the color space changes), keeps what it shows. A layout
+  // does not attach: it resizes the attached window (see resize).
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
   // Not detach(): an abandon that lands while this runs (the platform taking
   // the window back as it attaches) must be kept for the detach posted
@@ -362,13 +363,11 @@ void RNSkWindowSurface::configureSurface() {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
+  // The colorspace of a CAMetalLayer is not set here: the platform view tags
+  // the layer on the main thread as it makes it (see
+  // apple/MetalLayerColorSpace.h), and makes it non-opaque for the alpha mode
+  // above, so that nothing here changes the layer on the present thread.
   _surface.Configure(&config);
-#ifdef __APPLE__
-  // The layer is tagged with the gamut the window renders in; float formats
-  // need the (gamma-encoded) extended variant so the values display
-  // identically to the 8-bit path.
-  applyCAMetalLayerColorSpace(_nativeHandle, _format, _useP3ColorSpace);
-#endif
 }
 
 wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {
