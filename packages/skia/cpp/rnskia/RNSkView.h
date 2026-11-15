@@ -571,7 +571,7 @@ private:
         const auto now = rnsurface::frameClockNow();
         actions = _producer->pace([&](Scheduler &scheduler) {
           return presented ? scheduler.onDeferredFramePresented(now, window)
-                           : scheduler.onSubmittedWorkDonePoll(now, window);
+                           : scheduler.onDeferredFrameLost(now, window);
         });
         continue;
       }
@@ -609,7 +609,7 @@ private:
         "pacing view=%zu inFlight=%d frame=%.2fms deadline=+%.2fms "
         "submit=%.2fms frames=%llu presents=%llu deferred=%llu onFrame=%llu "
         "inSlot=%llu urgent=%llu missed=%llu noTexture=%llu recordings=%llu "
-        "late=%llu waiting=%llu inFlightChanges=%llu",
+        "late=%llu waiting=%llu inFlightChanges=%llu polls=%llu",
         _nativeId, framesInFlight, static_cast<double>(interval) / 1.0e6,
         static_cast<double>(deadline) / 1.0e6,
         static_cast<double>(submit) / 1.0e6,
@@ -624,7 +624,8 @@ private:
         since(stats.recordings, last.recordings),
         since(stats.lateRecordings, last.lateRecordings),
         since(stats.waitingRecordings, last.waitingRecordings),
-        since(stats.framesInFlightChanges, last.framesInFlightChanges));
+        since(stats.framesInFlightChanges, last.framesInFlightChanges),
+        since(stats.polls, last.polls));
     _pacingLoggedAt = now;
     _pacingLogged = stats;
   }

@@ -243,6 +243,8 @@ public:
     std::uint64_t lateRecordings = 0;
     std::uint64_t waitingRecordings = 0;
     std::uint64_t framesInFlightChanges = 0;
+    // Polls for the previous work (see Actions::pollSubmittedWorkDone).
+    std::uint64_t polls = 0;
   };
 
   // A recording is late once it finishes this far into the frame it started
@@ -398,6 +400,7 @@ public:
 
   /** The poll asked for with Actions::pollSubmittedWorkDone. */
   Actions onSubmittedWorkDonePoll(Nanos now, const WindowState &window) {
+    _stats.polls++;
     return step(now, window, On::kEvent, /* wantsFrame= */ false);
   }
 
@@ -436,6 +439,15 @@ public:
    */
   Actions onDeferredFramePresented(Nanos now, const WindowState &window) {
     notePresent(now);
+    return step(now, window, On::kEvent, /* wantsFrame= */ false);
+  }
+
+  /**
+   The frame whose present was deferred went nowhere: the window lost it
+   before Actions::presentDeferredFrame (taken back by the platform, or its
+   GPU device lost).
+   */
+  Actions onDeferredFrameLost(Nanos now, const WindowState &window) {
     return step(now, window, On::kEvent, /* wantsFrame= */ false);
   }
 

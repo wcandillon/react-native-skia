@@ -694,6 +694,8 @@ void aPresentIsNotDeferredOnceThePreviousWorkIsDone() {
               "light scene: no present is ever deferred");
   expectEqual(sim.submittedWorkDonePolls, 0,
               "light scene: the previous work is never polled for");
+  expectEqual(static_cast<long long>(sim.scheduler.stats().polls), 0,
+              "light scene: and the scheduler counts no poll");
 }
 
 void noSlotGetsTwoFramesWhateverTheGpuDoes() {
