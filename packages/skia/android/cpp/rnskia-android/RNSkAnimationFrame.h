@@ -12,27 +12,28 @@
 namespace RNSkia {
 
 /**
- * The frame signal of Android (see rnsurface::FrameScheduler::FrameSignal),
- * from the AChoreographer of the calling thread, which calls back on that
- * thread's looper.
+ * The animation frames of Android (see
+ * rnsurface::FrameScheduler::AnimationFrame), from the AChoreographer of the
+ * calling thread, which calls back on that thread's looper: what the
+ * browser's rendering loop is to requestAnimationFrame().
  *
- * What a signal knows depends on the device. From API 33 on, the
+ * What an animation frame knows depends on the device. From API 33 on, the
  * choreographer hands out the frame timeline it expects the app to make:
  * when the frame started, when the compositor wakes up for it (the deadline)
  * and when it and the one after are shown (the interval). The entry points
  * are looked up at run time, as the library builds for API 26. Before that
- * there is no deadline to read: the signal says that it ends where it
- * starts, so that a frame only goes on a signal, as it did before the
- * scheduler knew of deadlines, and the interval is the time between two
- * signals in a row.
+ * there is no deadline to read: the animation frame says that it ends where
+ * it starts, so that a frame only goes on an animation frame, as it did
+ * before the scheduler knew of deadlines, and the interval is the time
+ * between two animation frames in a row.
  */
-class FrameSignalSource {
+class AnimationFrameSource {
 public:
-  using FrameSignal = rnsurface::FrameScheduler::FrameSignal;
-  using Callback = void (*)(const FrameSignal &signal, void *data);
+  using AnimationFrame = rnsurface::FrameScheduler::AnimationFrame;
+  using Callback = void (*)(const AnimationFrame &frame, void *data);
 
   /**
-   Has `callback(signal, data)` called at the next frame of the display, on
+   Has `callback(frame, data)` called at the next frame of the display, on
    the calling thread. Returns false when the thread has no choreographer
    (no connection to the display's events): nothing is posted then.
    */
@@ -63,8 +64,11 @@ public:
     return true;
   }
 
-  /** A signal for a thread without a choreographer: a frame that starts now. */
-  static FrameSignal unpaced() {
+  /**
+   An animation frame for a thread without a choreographer: a frame that
+   starts now.
+   */
+  static AnimationFrame unpaced() {
     const auto now = rnsurface::frameClockNow();
     return {now, kDefaultInterval, now};
   }
@@ -124,8 +128,9 @@ private:
     return entries;
   }
 
-  // The time between two signals in a row is the display's interval; a
-  // longer one is a stretch without signals, which says nothing about it.
+  // The time between two animation frames in a row is the display's
+  // interval; a longer one is a stretch without any, which says nothing
+  // about it.
   static int64_t intervalSince(int64_t time) {
     thread_local int64_t lastTime = 0;
     thread_local int64_t interval = kDefaultInterval;
@@ -137,44 +142,44 @@ private:
     return interval;
   }
 
-  static void onVsync(const FrameData *frame, void *data) {
+  static void onVsync(const FrameData *frameData, void *data) {
     const auto &entries = api();
-    FrameSignal signal;
-    signal.time = entries.frameTime(frame);
-    signal.interval = intervalSince(signal.time);
-    const size_t timelines = entries.timelinesLength(frame);
-    const size_t preferred = entries.preferredTimeline(frame);
+    AnimationFrame frame;
+    frame.time = entries.frameTime(frameData);
+    frame.interval = intervalSince(frame.time);
+    const size_t timelines = entries.timelinesLength(frameData);
+    const size_t preferred = entries.preferredTimeline(frameData);
     if (preferred < timelines) {
       // The compositor wakes up at the deadline, and takes what is there:
       // a frame a moment short of it may not be.
-      signal.deadline = entries.deadline(frame, preferred) - kDeadlineMargin;
+      frame.deadline = entries.deadline(frameData, preferred) - kDeadlineMargin;
       if (preferred + 1 < timelines) {
         const int64_t shown =
-            entries.expectedPresentationTime(frame, preferred + 1) -
-            entries.expectedPresentationTime(frame, preferred);
+            entries.expectedPresentationTime(frameData, preferred + 1) -
+            entries.expectedPresentationTime(frameData, preferred);
         if (shown >= kShortestInterval && shown <= kLongestInterval) {
-          signal.interval = shown;
+          frame.interval = shown;
         }
       }
     } else {
-      signal.deadline = signal.time;
+      frame.deadline = frame.time;
     }
-    finish(static_cast<Request *>(data), signal);
+    finish(static_cast<Request *>(data), frame);
   }
 
   static void onFrame64(int64_t frameTime, void *data) {
     deliver(static_cast<Request *>(data), frameTime);
   }
 
-  // A signal without a timeline: it ends where it starts.
+  // An animation frame without a timeline: it ends where it starts.
   static void deliver(Request *request, int64_t time) {
     finish(request, {time, intervalSince(time), time});
   }
 
-  static void finish(Request *request, const FrameSignal &signal) {
+  static void finish(Request *request, const AnimationFrame &frame) {
     const Request copy = *request;
     delete request;
-    copy.callback(signal, copy.data);
+    copy.callback(frame, copy.data);
   }
 
   // 60 Hz until the display says otherwise; the rates a display runs at

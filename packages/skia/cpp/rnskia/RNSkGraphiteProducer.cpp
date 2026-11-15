@@ -194,9 +194,9 @@ bool RNSkGraphiteProducer::requestFrame() {
   return _target != nullptr && hasContentLocked();
 }
 
-void RNSkGraphiteProducer::setWindow(Scheduler::Window window) {
+void RNSkGraphiteProducer::setPresentMode(Scheduler::PresentMode presentMode) {
   std::lock_guard<std::mutex> lock(_mutex);
-  _scheduler.setWindow(window);
+  _scheduler.setPresentMode(presentMode);
 }
 
 void RNSkGraphiteProducer::cancelFrames() {
@@ -204,9 +204,9 @@ void RNSkGraphiteProducer::cancelFrames() {
   _scheduler.cancel();
 }
 
-bool RNSkGraphiteProducer::wantsFrameSignal() {
+bool RNSkGraphiteProducer::hasPendingAnimationFrame() {
   std::lock_guard<std::mutex> lock(_mutex);
-  return _scheduler.wantsFrameSignal();
+  return _scheduler.hasPendingAnimationFrame();
 }
 
 void RNSkGraphiteProducer::onFramesTaken(
@@ -336,8 +336,8 @@ void RNSkGraphiteProducer::produce() {
   std::lock_guard<std::mutex> lock(_mutex);
   const auto now = rnsurface::frameClockNow();
   if (recording != nullptr && target == _target) {
-    const auto actions =
-        _scheduler.onRecordingEnded(now, now - startedAt, /* produced= */ true);
+    const auto actions = _scheduler.onRecordingFinished(now, now - startedAt,
+                                                        /* produced= */ true);
     if (actions.queueRecording) {
       _ready = std::move(recording);
       queueReadyLocked();
@@ -366,8 +366,8 @@ void RNSkGraphiteProducer::produce() {
   // landed while this job ran (binding a new target is one) was only noted;
   // it starts the next job now.
   _dirty = true;
-  applyLocked(
-      _scheduler.onRecordingEnded(now, now - startedAt, /* produced= */ false));
+  applyLocked(_scheduler.onRecordingFinished(now, now - startedAt,
+                                             /* produced= */ false));
 }
 
 void RNSkGraphiteProducer::renderInto(SkCanvas *canvas, float pixelDensity) {

@@ -531,14 +531,15 @@ public:
 
   /**
    A future of everything submitted so far to the device in use, whose
-   generation `generation` receives, to ask isDone() about: what a present
-   made now waits for on Android (see RNSkWindowSurface::isAcknowledged).
+   generation `generation` receives, to ask isDone() about: WebGPU's
+   queue.onSubmittedWorkDone(), and what a present made now waits for on
+   Android (see RNSkWindowSurface::isPreviousWorkDone).
    Dawn forgets it once the work is done and its events are processed, so
    one nobody asks about again (a frame dropped with its window) is not kept
    for the instance's lifetime, as a WaitAnyOnly future would be. Any
    thread.
    */
-  wgpu::Future submittedWork(uint64_t *generation) {
+  wgpu::Future onSubmittedWorkDone(uint64_t *generation) {
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     *generation = current->id;
@@ -549,10 +550,10 @@ public:
 
   /**
    Whether the GPU is done with the work `work` stands for (see
-   submittedWork), without waiting for it. It never waits: on Vulkan a wait
-   for the queue holds the list of its fences for as long as it lasts, which
-   a submit needs, so a thread waiting there would hold up every frame; the
-   zero timeout only asks the fence. Work submitted to a device replaced
+   onSubmittedWorkDone), without waiting for it. It never waits: on Vulkan a
+   wait for the queue holds the list of its fences for as long as it lasts,
+   which a submit needs, so a thread waiting there would hold up every frame;
+   the zero timeout only asks the fence. Work submitted to a device replaced
    since is done: nothing presents onto that device any more. So is work
    Dawn cannot tell about, rather than never. Any thread.
    */

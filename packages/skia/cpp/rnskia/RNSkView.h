@@ -48,10 +48,10 @@ namespace jsi = facebook::jsi;
  * recordings are queued on the target; the view presents them onto its window
  * surface when its frame scheduler says so (rnsurface::FrameScheduler, one
  * per view, kept with the producer whose jobs it paces too): one frame per
- * frame of the display, on the frame signals the platform view hands it (see
- * setFrameHost and onFrameSignal), and none while the GPU is still on the
- * frame before where a present would wait for it (see
- * RNSkWindowSurface::setAcknowledgement). The view is the scheduler's
+ * frame of the display, on the animation frames the platform view hands it
+ * (see setFrameHost and onAnimationFrame), and none while the GPU is still on
+ * the frame before where a present would wait for it (see
+ * RNSkWindowSurface::setWaitForPreviousWork). The view is the scheduler's
  * hands: it reads what the window holds before each of the scheduler's
  * entries (see windowState) and does what the entry asks for (see run). All
  * of it on the thread the platform view presents on: the main thread, or a
@@ -75,7 +75,8 @@ public:
             std::make_shared<RNSkGraphiteProducer>(platformPacingPolicy())) {
     // Whether a present waits for the GPU is the window's to deal with: the
     // scheduler only reads what the window holds.
-    _surface->setAcknowledgement(platformPacingPolicy().acknowledgement);
+    _surface->setWaitForPreviousWork(
+        platformPacingPolicy().waitForPreviousWork);
     // Until the platform view installs a present thread (see
     // setPresentThread), the view presents on the main thread. Without this
     // view: the runner is copied into callbacks that may outlive it.
@@ -208,10 +209,11 @@ public:
    the display: the window asked for it as it attached or resized, and shows
    nothing, or a stretched frame, until it has run. The frame scheduler
    hears of it as of a frame it asked for, and paces what the redraw left: a
-   frame the window could not take (no drawable), which is queued again, or
-   one whose present the window holds. A window that holds a frame already
-   takes none (unless it was resized, see RNSkWindowSurface::hasHeldFrame):
-   the last frame shown again is the one it holds, and the redraw is done.
+   frame the window had no texture for (no drawable), which is queued again,
+   or one whose present the window defers. A window with a deferred present
+   takes no other frame (unless it was resized, see
+   RNSkWindowSurface::hasDeferredPresent): the last frame shown again is the
+   one whose present it defers, and the redraw is done.
    */
   void redraw() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
@@ -252,18 +254,18 @@ public:
         recordings.push_back(std::move(lastPresented));
       }
     }
-    Scheduler::Taken taken;
+    Scheduler::Submitted submitted;
     if (!recordings.empty()) {
       // The last frame shown again holds none of the producer's slots, which
       // the frame on its way may hold, and was counted when it was first
       // presented.
-      taken = presentTaken(*target, targetInfo, std::move(recordings),
-                           /* fromQueue= */ !showsLastFrameAgain);
+      submitted = submitRecordings(*target, targetInfo, std::move(recordings),
+                                   /* fromQueue= */ !showsLastFrameAgain);
     }
     const auto window = windowState();
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
-      return scheduler.onFrameTaken(taken, now, window);
+      return scheduler.onFrameSubmitted(submitted, now, window);
     }));
   }
 
@@ -338,7 +340,7 @@ public:
 
   /**
    Present thread: binds the entries that belong to it (redraw,
-   scheduleFrame, onFrameSignal; see rnsurface::ThreadChecker) to the calling
+   scheduleFrame, onAnimationFrame; see rnsurface::ThreadChecker) to the calling
    thread, before the first of them. The platform view posts it to its
    present thread as it installs it (see setPresentThread), ahead of
    everything it posts there.
@@ -350,20 +352,20 @@ public:
   /** What the view asks of its platform view, on the present thread. */
   struct FrameHost {
     /**
-     Has onFrameSignal() called at the next frame of the display: a display
+     Has onAnimationFrame() called at the next frame of the display: a display
      link on iOS, the AChoreographer of the present thread on Android. One
-     request, one signal: the view asks again for the next. Without one,
-     the view signals itself as soon as the present thread gets to it, and
-     presents unpaced.
+     request, one callback, as with the web's requestAnimationFrame(): the
+     view asks again for the next. Without one, the view calls itself back
+     as soon as the present thread gets to it, and presents unpaced.
      */
-    std::function<void()> requestFrameSignal;
+    std::function<void()> requestAnimationFrame;
     /**
-     Has onAcknowledgementPoll() called once `delay` has passed. The GPU
-     being done with a frame is no event the view hears (see
+     Has onSubmittedWorkDonePoll() called once `delay` has passed. The GPU
+     being done with the work submitted is no event the view hears (see
      DawnContext::isDone), so a platform whose presents wait for it polls,
      from a timer of the present thread. Never asked for elsewhere.
      */
-    std::function<void(std::chrono::nanoseconds delay)> watchAcknowledgement;
+    std::function<void(std::chrono::nanoseconds delay)> pollSubmittedWorkDone;
     /** A frame went to the window. */
     std::function<void()> onFramePresented;
   };
@@ -377,24 +379,24 @@ public:
   /**
    Installed by the platform view, before the window attaches: whether its
    window shows the latest frame presented at each of its draws and lets the
-   others go (a TextureView), each frame in turn (a SurfaceView, a
-   CAMetalLayer), or nothing yet. The scheduler paces each its own way, and
-   a window that shows the latest frame gets a frame recorded for the size
+   others go (a TextureView, kMailbox), each frame in turn (a SurfaceView, a
+   CAMetalLayer, kFifo), or nothing yet. The scheduler paces each its own way,
+   and a window that shows the latest frame gets a frame recorded for the size
    it still has ahead of the frame for its new size (see present): it costs
    a present and nothing else, and keeps the window moving should the latter
    be late. Where each frame shows in turn, such a frame would take a turn
    of its own and hold the latter back by a frame. Present thread.
    */
-  void setWindow(Scheduler::Window window) {
-    _windowTakesLatestFrame = window == Scheduler::Window::kShowsLatestFrame;
-    _producer->setWindow(window);
+  void setPresentMode(Scheduler::PresentMode presentMode) {
+    _windowIsMailbox = presentMode == Scheduler::PresentMode::kMailbox;
+    _producer->setPresentMode(presentMode);
   }
 
   /**
    Present thread: a recording is waiting. It is urgent when the window was
    resized since the frame it shows was made, so that it shows that frame
    stretched to its size (see presentThroughTexture), and the recording is
-   for its size: it goes ahead of the frame signal or of the draw it would
+   for its size: it goes ahead of the animation frame or of the draw it would
    otherwise wait for, so that a view resized on every frame is drawn at the
    right size on every frame.
    */
@@ -409,18 +411,18 @@ public:
   }
 
   /**
-   Present thread: the frame signal asked for with
-   FrameHost::requestFrameSignal. A frame of the display started at
-   `signal.time`, lasts `signal.interval`, and a frame presented by
-   `signal.deadline` still makes it, all on rnsurface::frameClockNow()'s
+   Present thread: the animation frame asked for with
+   FrameHost::requestAnimationFrame. A frame of the display started at
+   `frame.time`, lasts `frame.interval`, and a frame presented by
+   `frame.deadline` still makes it, all on rnsurface::frameClockNow()'s
    clock.
    */
-  void onFrameSignal(const Scheduler::FrameSignal &signal) {
-    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onFrameSignal");
+  void onAnimationFrame(const Scheduler::AnimationFrame &frame) {
+    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onAnimationFrame");
     const auto window = windowState();
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
-      return scheduler.onFrameSignal(signal, now, window);
+      return scheduler.onAnimationFrame(frame, now, window);
     }));
     if (platformPacingLogs()) {
       logPacing(now);
@@ -441,24 +443,25 @@ public:
   }
 
   /**
-   Present thread: the poll asked for with FrameHost::watchAcknowledgement.
-   The held frame goes if the GPU is done with the one before it.
+   Present thread: the poll asked for with FrameHost::pollSubmittedWorkDone.
+   The deferred present goes if the GPU is done with the frame before it.
    */
-  void onAcknowledgementPoll() {
-    RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::onAcknowledgementPoll");
-    _acknowledgementWatched = false;
+  void onSubmittedWorkDonePoll() {
+    RNSURFACE_ASSERT_THREAD(_presentThread,
+                            "RNSkView::onSubmittedWorkDonePoll");
+    _submittedWorkDonePollPending = false;
     const auto window = windowState();
     const auto now = rnsurface::frameClockNow();
     run(_producer->pace([&](Scheduler &scheduler) {
-      return scheduler.onAcknowledgementPoll(now, window);
+      return scheduler.onSubmittedWorkDonePoll(now, window);
     }));
   }
 
   /**
    Present thread: the view left its window, or the window lost its surface.
-   The scheduler forgets the frame signal it asked for: the platform view
-   cancels it, or does not call onFrameSignal() for it (see
-   wantsFrameSignal). The recordings stay, for the next window.
+   The scheduler forgets the animation frame it asked for: the platform view
+   cancels it, or does not call onAnimationFrame() for it (see
+   hasPendingAnimationFrame). The recordings stay, for the next window.
    */
   void cancelFrames() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::cancelFrames");
@@ -466,11 +469,13 @@ public:
   }
 
   /**
-   Present thread: whether a frame signal is asked for and has not come. A
-   platform view that ticks on its own (a display link) pauses when none is,
-   and one whose signal has no cancel drops a signal nobody asks for.
+   Present thread: whether an animation frame is asked for and has not come.
+   A platform view that ticks on its own (a display link) pauses when none
+   is, and one whose callback has no cancel drops one nobody asks for.
    */
-  bool wantsFrameSignal() { return _producer->wantsFrameSignal(); }
+  bool hasPendingAnimationFrame() {
+    return _producer->hasPendingAnimationFrame();
+  }
 
   /**
    Present thread. The window can show frames again (the app came
@@ -486,11 +491,12 @@ public:
     if (_redrawRequest.onCanPresent()) {
       postRedraw();
     } else {
-      // What was queued meanwhile, or held, is the scheduler's again.
+      // What was queued meanwhile, or had its present deferred, is the
+      // scheduler's again.
       const auto window = windowState();
       const auto now = rnsurface::frameClockNow();
       run(_producer->pace([&](Scheduler &scheduler) {
-        return scheduler.onWindowAvailable(now, window);
+        return scheduler.onCanPresent(now, window);
       }));
     }
   }
@@ -508,23 +514,26 @@ private:
   /**
    What the window holds right now, for the scheduler (see
    Scheduler::WindowState): read before each of its entries, outside of the
-   producer's lock, as the acknowledgement asks Dawn. Present thread.
+   producer's lock, as whether the previous work is done is asked of Dawn.
+   Present thread.
    */
   Scheduler::WindowState windowState() {
     Scheduler::WindowState state;
     auto target = getTarget();
-    state.available = target != nullptr &&
-                      _surface->readState(nullptr) == RNSkWindowState::kReady;
+    state.canPresent = target != nullptr &&
+                       _surface->readState(nullptr) == RNSkWindowState::kReady;
     state.queued = target != nullptr && target->hasQueued();
-    state.held = _surface->hasHeldFrame();
+    state.presentDeferred = _surface->hasDeferredPresent();
     // Asked only where the answer decides something, as each answer is a
-    // call into Dawn: a frame is held for it, or waits queued for it where
-    // frames are declined.
-    const bool declines = _surface->getAcknowledgement() ==
-                          Scheduler::Acknowledgement::kDeclinesFrame;
-    state.acknowledged = state.held || (declines && state.queued)
-                             ? _surface->isAcknowledged()
-                             : true;
+    // call into Dawn: a present is deferred for it, or a frame waits queued
+    // for it where the wait is before the submit.
+    const bool waitsBeforeSubmit =
+        _surface->getWaitForPreviousWork() ==
+        Scheduler::WaitForPreviousWork::kBeforeSubmit;
+    state.previousWorkDone =
+        state.presentDeferred || (waitsBeforeSubmit && state.queued)
+            ? _surface->isPreviousWorkDone()
+            : true;
     return state;
   }
 
@@ -534,35 +543,35 @@ private:
    */
   void run(Scheduler::Actions actions) {
     for (;;) {
-      if (actions.requestFrameSignal) {
-        requestFrameSignal();
+      if (actions.requestAnimationFrame) {
+        requestAnimationFrame();
       }
-      if (actions.watchAcknowledgement) {
-        watchAcknowledgement();
+      if (actions.pollSubmittedWorkDone) {
+        pollSubmittedWorkDone();
       }
-      if (actions.takeFrame) {
-        _surface->holdNextPresent(actions.holdPresent);
-        const auto taken = takeFrame();
-        _surface->holdNextPresent(false);
+      if (actions.submitFrame) {
+        _surface->deferNextPresent(actions.deferPresent);
+        const auto submitted = submitFrame();
+        _surface->deferNextPresent(false);
         const auto window = windowState();
         const auto now = rnsurface::frameClockNow();
         actions = _producer->pace([&](Scheduler &scheduler) {
-          return scheduler.onFrameTaken(taken, now, window);
+          return scheduler.onFrameSubmitted(submitted, now, window);
         });
         continue;
       }
-      if (actions.presentHeldFrame) {
-        // A held frame the window lost meanwhile (taken back by the
+      if (actions.presentDeferredFrame) {
+        // A deferred present the window lost meanwhile (taken back by the
         // platform, or its GPU device lost) went nowhere.
-        const bool presented = _surface->presentHeldFrame();
+        const bool presented = _surface->presentDeferredFrame();
         if (presented && _frameHost.onFramePresented) {
           _frameHost.onFramePresented();
         }
         const auto window = windowState();
         const auto now = rnsurface::frameClockNow();
         actions = _producer->pace([&](Scheduler &scheduler) {
-          return presented ? scheduler.onHeldFramePresented(now, window)
-                           : scheduler.onAcknowledgementPoll(now, window);
+          return presented ? scheduler.onDeferredFramePresented(now, window)
+                           : scheduler.onSubmittedWorkDonePoll(now, window);
         });
         continue;
       }
@@ -572,7 +581,7 @@ private:
 
   /**
    Logs what the scheduler did since the last log, at most once a second and
-   only while frame signals come: for measuring a pacing policy on a device
+   only while animation frames come: for measuring a pacing policy on a device
    (see platformPacingPolicy). Present thread.
    */
   void logPacing(Scheduler::Nanos now) {
@@ -580,15 +589,15 @@ private:
       return;
     }
     Scheduler::Stats stats;
-    bool deep = false;
+    int framesInFlight = 1;
     Scheduler::Nanos interval = 0;
     Scheduler::Nanos deadline = 0;
     Scheduler::Nanos submit = 0;
     _producer->pace([&](Scheduler &scheduler) {
       stats = scheduler.stats();
-      deep = scheduler.isDeep();
+      framesInFlight = scheduler.framesInFlight();
       interval = scheduler.interval();
-      deadline = scheduler.deadlineAfterSignal();
+      deadline = scheduler.deadlineAfterFrameStart();
       submit = scheduler.submitEstimate();
       return Scheduler::Actions();
     });
@@ -597,81 +606,82 @@ private:
       return static_cast<unsigned long long>(now - before);
     };
     RNSkLogger::logToConsole(
-        "pacing view=%zu depth=%d frame=%.2fms deadline=+%.2fms submit=%.2fms "
-        "signals=%llu "
-        "presents=%llu held=%llu onSignal=%llu inSlot=%llu urgent=%llu "
-        "missed=%llu declined=%llu recordings=%llu late=%llu waiting=%llu "
-        "depthChanges=%llu",
-        _nativeId, deep ? 2 : 1, static_cast<double>(interval) / 1.0e6,
+        "pacing view=%zu inFlight=%d frame=%.2fms deadline=+%.2fms "
+        "submit=%.2fms frames=%llu presents=%llu deferred=%llu onFrame=%llu "
+        "inSlot=%llu urgent=%llu missed=%llu noTexture=%llu recordings=%llu "
+        "late=%llu waiting=%llu inFlightChanges=%llu",
+        _nativeId, framesInFlight, static_cast<double>(interval) / 1.0e6,
         static_cast<double>(deadline) / 1.0e6,
         static_cast<double>(submit) / 1.0e6,
-        since(stats.frameSignals, last.frameSignals),
-        since(stats.presents, last.presents), since(stats.holds, last.holds),
-        since(stats.takenOnSignal, last.takenOnSignal),
-        since(stats.takenInSlot, last.takenInSlot),
-        since(stats.takenUrgent, last.takenUrgent),
+        since(stats.animationFrames, last.animationFrames),
+        since(stats.presents, last.presents),
+        since(stats.deferredPresents, last.deferredPresents),
+        since(stats.submittedOnFrame, last.submittedOnFrame),
+        since(stats.submittedInSlot, last.submittedInSlot),
+        since(stats.submittedUrgent, last.submittedUrgent),
         since(stats.missedDeadlines, last.missedDeadlines),
-        since(stats.declined, last.declined),
+        since(stats.noTexture, last.noTexture),
         since(stats.recordings, last.recordings),
         since(stats.lateRecordings, last.lateRecordings),
         since(stats.waitingRecordings, last.waitingRecordings),
-        since(stats.depthChanges, last.depthChanges));
+        since(stats.framesInFlightChanges, last.framesInFlightChanges));
     _pacingLoggedAt = now;
     _pacingLogged = stats;
   }
 
-  void requestFrameSignal() {
-    if (_frameHost.requestFrameSignal) {
-      _frameHost.requestFrameSignal();
+  void requestAnimationFrame() {
+    if (_frameHost.requestAnimationFrame) {
+      _frameHost.requestAnimationFrame();
       return;
     }
-    // No platform view to signal the display's frames: the view signals
-    // itself, a task behind those queued, and presents unpaced.
+    // No platform view to announce the display's frames: the view calls
+    // itself back, a task behind those queued, and presents unpaced.
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
     _runOnPresentThread([weakThis]() {
       auto view = weakThis.lock();
-      if (view != nullptr && view->wantsFrameSignal()) {
+      if (view != nullptr && view->hasPendingAnimationFrame()) {
         const auto now = rnsurface::frameClockNow();
-        view->onFrameSignal({now, kUnpacedInterval, now});
+        view->onAnimationFrame({now, kUnpacedInterval, now});
       }
     });
   }
 
   /**
-   Asks for the next poll of the acknowledgement, kAcknowledgementPoll from
-   now: a frame held is presented that late at most.
+   Asks for the next poll of whether the previous work is done,
+   kSubmittedWorkDonePoll from now: a deferred present goes that late at
+   most.
    */
-  void watchAcknowledgement() {
-    if (_acknowledgementWatched) {
+  void pollSubmittedWorkDone() {
+    if (_submittedWorkDonePollPending) {
       return;
     }
-    _acknowledgementWatched = true;
-    if (_frameHost.watchAcknowledgement) {
-      _frameHost.watchAcknowledgement(
-          std::chrono::nanoseconds(kAcknowledgementPoll));
+    _submittedWorkDonePollPending = true;
+    if (_frameHost.pollSubmittedWorkDone) {
+      _frameHost.pollSubmittedWorkDone(
+          std::chrono::nanoseconds(kSubmittedWorkDonePoll));
       return;
     }
     // No timer: asked again a task behind those queued.
     std::weak_ptr<RNSkView> weakThis = weak_from_this();
     _runOnPresentThread([weakThis]() {
       if (auto view = weakThis.lock()) {
-        view->onAcknowledgementPoll();
+        view->onSubmittedWorkDonePoll();
       }
     });
   }
 
   /**
-   Present thread. Takes one frame off the target for the window, as the
-   scheduler asked: the producer runs up to a frame ahead, and clients queue
-   what they like, so more than one recording can be waiting; replaying two
-   would cost the GPU two frames for one shown, which halves a GPU-bound
-   canvas. The others wait for their own frame of the display. Recordings
-   for a size the window no longer has still go together: present() drops
-   those for the one behind them. Without a window that can show a frame,
+   Present thread. Takes one frame off the target and submits it to the
+   window, as the scheduler asked: the producer runs up to a frame ahead, and
+   clients queue what they like, so more than one recording can be waiting;
+   replaying two would cost the GPU two frames for one shown, which halves a
+   GPU-bound canvas. The others wait for their own frame of the display.
+   Recordings for a size the window no longer has still go together: present()
+   drops those for the one behind them. Without a window that can show a frame,
    the queue is left alone: attaching a window, replacing the device and
    onCanPresent() each step the scheduler again.
    */
-  Scheduler::Taken takeFrame() {
+  Scheduler::Submitted submitFrame() {
     auto target = getTarget();
     RNSkGraphiteTargetInfo targetInfo;
     if (target == nullptr ||
@@ -686,25 +696,24 @@ private:
       target->requeue({recordings.begin() + 1, recordings.end()});
       recordings.resize(1);
     }
-    return presentTaken(*target, targetInfo, std::move(recordings),
-                        /* fromQueue= */ true);
+    return submitRecordings(*target, targetInfo, std::move(recordings),
+                            /* fromQueue= */ true);
   }
 
   /**
-   Presents recordings onto the window and says what came of it, in the
-   scheduler's terms. Those taken off the target (`fromQueue`) are the
-   producer's to know of, by identity, as its ready recording leaves its slot
-   when the window takes it (see RNSkGraphiteProducer::onFramesTaken), and
-   count as done for the clients pacing on the target (see
-   RNSkGraphiteTarget::pendingFrames), also when the window could not take
-   every one: the ones it kept went back to the queue, and count once
-   presented.
+   Submits recordings to the window, which presents them or defers their
+   present, and says what came of it, in the scheduler's terms. Those taken off
+   the target (`fromQueue`) are the producer's to know of, by identity, as its
+   ready recording leaves its slot when the window takes it (see
+   RNSkGraphiteProducer::onFramesTaken), and count as done for the clients
+   pacing on the target (see RNSkGraphiteTarget::pendingFrames), also when the
+   window had no texture for every one: the ones it kept went back to the queue,
+   and count once presented.
    */
-  Scheduler::Taken
-  presentTaken(RNSkGraphiteTarget &target,
-               const RNSkGraphiteTargetInfo &targetInfo,
-               std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings,
-               bool fromQueue) {
+  Scheduler::Submitted submitRecordings(
+      RNSkGraphiteTarget &target, const RNSkGraphiteTargetInfo &targetInfo,
+      std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings,
+      bool fromQueue) {
     if (fromQueue) {
       _producer->onFramesTaken(recordings);
     }
@@ -712,24 +721,24 @@ private:
     const auto startedAt = rnsurface::frameClockNow();
     const auto presented =
         presentOrKeep(target, targetInfo, std::move(recordings), fromQueue);
-    Scheduler::Taken taken;
-    taken.duration = rnsurface::frameClockNow() - startedAt;
+    Scheduler::Submitted submitted;
+    submitted.duration = rnsurface::frameClockNow() - startedAt;
     if (fromQueue && presented.done > 0) {
       target.onRecordingsDone(presented.done);
     }
     if (_surface->presentCount() != presentsBefore) {
-      taken.take = Scheduler::Take::kPresented;
+      submitted.result = Scheduler::SubmitResult::kPresented;
       if (_frameHost.onFramePresented) {
         _frameHost.onFramePresented();
       }
-    } else if (presented.shown && _surface->hasHeldFrame()) {
-      // The window took the frame and holds its present: also when it
-      // dropped the frame it held before with its swapchain (a resize).
-      taken.take = Scheduler::Take::kHeld;
+    } else if (presented.shown && _surface->hasDeferredPresent()) {
+      // The window took the frame and defers its present: also when it
+      // dropped the one it deferred before with its swapchain (a resize).
+      submitted.result = Scheduler::SubmitResult::kPresentDeferred;
     } else if (!presented.allDone) {
-      taken.take = Scheduler::Take::kDeclined;
+      submitted.result = Scheduler::SubmitResult::kNoTexture;
     }
-    return taken;
+    return submitted;
   }
 
   /**
@@ -810,7 +819,7 @@ private:
   /** What presentOrKeep() did. */
   struct Presented {
     // Every recording is done: shown, skipped (see present), or the last
-    // frame the window holds already.
+    // frame, whose present the window defers already.
     bool allDone;
     // A frame went to the window.
     bool shown;
@@ -830,9 +839,9 @@ private:
    frame later: what was recorded for the previous size shows stretched to
    it, or is dropped for a frame behind it (see present). The last frame,
    shown again by a redraw rather than taken off the queue (not
-   `fromQueue`), is the frame a window that holds one holds (it is the last
-   the window took, and it takes no other meanwhile): the present of the
-   held frame shows it, and queued once more it would be presented twice.
+   `fromQueue`), is the frame a window with a deferred present has (it is
+   the last the window took, and it takes no other meanwhile): that present
+   shows it, and queued once more it would be presented twice.
    One the window could not take for another reason is queued as a frame
    submitted again, as it counts as done once presented like every
    recording taken off the queue (see RNSkGraphiteTarget::requeuePresented).
@@ -858,7 +867,7 @@ private:
         targetInfo = now;
         continue;
       }
-      if (!fromQueue && _surface->hasHeldFrame()) {
+      if (!fromQueue && _surface->hasDeferredPresent()) {
         return {true, shown, done};
       }
       // Back in the queue, and the producer's ready recording back in its
@@ -951,7 +960,7 @@ private:
         // onto the window while the window still has that size (the
         // platform stretches it to the view until the frame for the new
         // size lands) when the window shows the latest frame presented
-        // rather than each in turn (see setWindow): it costs
+        // rather than each in turn (see setPresentMode): it costs
         // a present and nothing else there. An imperative one does not, as
         // no frame for the new size need follow it. Otherwise it is dropped
         // when another recording follows it or a declarative frame is on its
@@ -966,7 +975,7 @@ private:
           taken = false;
           break;
         }
-        if (_producer->hasContent() && _windowTakesLatestFrame &&
+        if (_producer->hasContent() && _windowIsMailbox &&
             &surface == _surface.get() &&
             surface.presentRecordings(recording->getTarget(),
                                       {recording->get()})) {
@@ -1054,15 +1063,15 @@ private:
   std::shared_ptr<RNSkGraphiteProducer> _producer;
   size_t _nativeId = 0;
   FrameHost _frameHost;
-  bool _windowTakesLatestFrame = false;
-  // A poll for the acknowledgement is on its way (see
-  // watchAcknowledgement). Present thread.
-  bool _acknowledgementWatched = false;
-  // How far apart the polls are while a frame is held: each asks a fence
+  bool _windowIsMailbox = false;
+  // A poll for the previous work being done is on its way (see
+  // pollSubmittedWorkDone). Present thread.
+  bool _submittedWorkDonePollPending = false;
+  // How far apart the polls are while a present is deferred: each asks a fence
   // and nothing else.
-  static constexpr Scheduler::Nanos kAcknowledgementPoll = 500000;
-  // What a view without a platform view to signal the display's frames
-  // takes a frame to last (see requestFrameSignal).
+  static constexpr Scheduler::Nanos kSubmittedWorkDonePoll = 500000;
+  // What a view without a platform view to announce the display's frames
+  // takes a frame to last (see requestAnimationFrame).
   static constexpr Scheduler::Nanos kUnpacedInterval = 16666667;
   // What the last log of the scheduler's doings showed, and when (see
   // logPacing). Present thread.

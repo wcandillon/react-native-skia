@@ -40,7 +40,7 @@ using namespace facebook::react;
 @interface SkiaView ()
 // What the view's frame scheduler asks of the platform view (see
 // RNSkView::FrameHost).
-- (void)requestFrameSignal;
+- (void)requestAnimationFrame;
 @end
 
 namespace {
@@ -55,9 +55,10 @@ rnsurface::FrameScheduler::Nanos frameNanos(CFTimeInterval seconds) {
 // the frame of the display that ends at `end` as long as the compositor
 // finds it there when it builds that frame, a moment before: a quarter of a
 // frame is left for it, and a frame ready later than that waits for the next
-// signal rather than land in a frame of the display that gets one already.
-rnsurface::FrameScheduler::FrameSignal frameSignal(CFTimeInterval start,
-                                                   CFTimeInterval end) {
+// animation frame rather than land in a frame of the display that gets one
+// already.
+rnsurface::FrameScheduler::AnimationFrame animationFrame(CFTimeInterval start,
+                                                         CFTimeInterval end) {
   const auto interval = frameNanos(end - start);
   return {frameNanos(start), interval, frameNanos(end) - interval / 4};
 }
@@ -299,12 +300,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   // display link, while the view is in a superview. Out of it the view has
   // no window and its scheduler asks for nothing; a request from a view let
   // go of since (see leavePresentThread) stops at _presenting.
-  _view->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
+  _view->setPresentMode(rnsurface::FrameScheduler::PresentMode::kFifo);
   __weak SkiaView *weakSelf = self;
   RNSkia::RNSkView::FrameHost host;
-  host.requestFrameSignal = [weakSelf, presenting = _presenting]() {
+  host.requestAnimationFrame = [weakSelf, presenting = _presenting]() {
     if (*presenting) {
-      [weakSelf requestFrameSignal];
+      [weakSelf requestAnimationFrame];
     }
   };
   _view->setFrameHost(std::move(host));
@@ -342,14 +343,14 @@ usesP3ColorSpace(const std::string &colorSpace,
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
-// goes in the same task: a frame signal asked for between two would make a new
-// one that outlives the leave (see requestFrameSignal). The view goes on the
-// main thread, where UIKit expects it to, as this task owns the last reference
-// to it once Fabric let go of it (see invalidate). A strong capture cannot
-// promise that: the block would let go on the present thread, racing the main
-// thread for the last release. So the reference is taken here, by hand, and
-// let go of only on the main thread, once the autorelease pool of the work is
-// drained. Every task posted before this one runs under that reference, also
+// goes in the same task: an animation frame asked for between two would make a
+// new one that outlives the leave (see requestAnimationFrame). The view goes on
+// the main thread, where UIKit expects it to, as this task owns the last
+// reference to it once Fabric let go of it (see invalidate). A strong capture
+// cannot promise that: the block would let go on the present thread, racing the
+// main thread for the last release. So the reference is taken here, by hand,
+// and let go of only on the main thread, once the autorelease pool of the work
+// is drained. Every task posted before this one runs under that reference, also
 // where it loads a weak one. Nothing of the present thread loads one after
 // this task (a recording from a stale RNSkView stops at _presenting), and the
 // surface asks _canPresent rather than the view.
@@ -467,7 +468,7 @@ usesP3ColorSpace(const std::string &colorSpace,
 // more (see onFrame:), so that an idle view does not keep the display at its
 // full rate. macOS has no CADisplayLink on the minimum deployment target, so
 // a tick stands in for it there (see presentAgainLater). Present thread.
-- (void)requestFrameSignal {
+- (void)requestAnimationFrame {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
@@ -524,13 +525,13 @@ usesP3ColorSpace(const std::string &colorSpace,
 // (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
   // A frame of the display, from this tick to the next. The scheduler hears
-  // of the signals it asked for only, and asks for the next while frames are
-  // left or keep coming.
-  if (_presentView != nullptr && _presentView->wantsFrameSignal()) {
-    _presentView->onFrameSignal(
-        frameSignal(link.timestamp, link.targetTimestamp));
+  // of the animation frames it asked for only, and asks for the next while
+  // frames are left or keep coming.
+  if (_presentView != nullptr && _presentView->hasPendingAnimationFrame()) {
+    _presentView->onAnimationFrame(
+        animationFrame(link.timestamp, link.targetTimestamp));
   }
-  if (_presentView == nullptr || !_presentView->wantsFrameSignal()) {
+  if (_presentView == nullptr || !_presentView->hasPendingAnimationFrame()) {
     link.paused = YES;
   }
 }
@@ -553,30 +554,30 @@ usesP3ColorSpace(const std::string &colorSpace,
   const uint64_t generation = _tickGeneration;
   __weak SkiaView *weakSelf = self;
   auto presenting = _presenting;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                               static_cast<int64_t>(delay * NSEC_PER_SEC)),
-                 dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-                   RNSkia::presentThread().post([=]() {
-                     if (!*presenting) {
-                       return;
-                     }
-                     SkiaView *strongSelf = weakSelf;
-                     if (strongSelf == nil ||
-                         strongSelf->_tickGeneration != generation) {
-                       // Left meanwhile (see leavePresentThread): the scheduler
-                       // forgot what it asked for, and asks again for what
-                       // comes next.
-                       return;
-                     }
-                     strongSelf->_presentAgainScheduled = false;
-                     const CFTimeInterval now = CACurrentMediaTime();
-                     strongSelf->_lastTick = now;
-                     auto view = strongSelf->_presentView;
-                     if (view != nullptr && view->wantsFrameSignal()) {
-                       view->onFrameSignal(frameSignal(now, now + interval));
-                     }
-                   });
-                 });
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW,
+                    static_cast<int64_t>(delay * NSEC_PER_SEC)),
+      dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        RNSkia::presentThread().post([=]() {
+          if (!*presenting) {
+            return;
+          }
+          SkiaView *strongSelf = weakSelf;
+          if (strongSelf == nil || strongSelf->_tickGeneration != generation) {
+            // Left meanwhile (see leavePresentThread): the scheduler
+            // forgot what it asked for, and asks again for what
+            // comes next.
+            return;
+          }
+          strongSelf->_presentAgainScheduled = false;
+          const CFTimeInterval now = CACurrentMediaTime();
+          strongSelf->_lastTick = now;
+          auto view = strongSelf->_presentView;
+          if (view != nullptr && view->hasPendingAnimationFrame()) {
+            view->onAnimationFrame(animationFrame(now, now + interval));
+          }
+        });
+      });
 }
 #endif
 

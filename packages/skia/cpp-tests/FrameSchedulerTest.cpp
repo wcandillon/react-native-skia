@@ -1,5 +1,5 @@
 // Host-side check of rnsurface::FrameScheduler (see run.sh). A simulator
-// stands in for everything the scheduler paces: a display that signals each
+// stands in for everything the scheduler paces: a display that announces each
 // of its frames, a thread that records, a present thread that submits, and a
 // GPU that works through what it is handed in order. Each case sets a scene
 // (how long a recording, a submit and the GPU take) and reads what reached
@@ -18,10 +18,10 @@ namespace {
 
 using rnsurface::FrameScheduler;
 using Nanos = FrameScheduler::Nanos;
-using Window = FrameScheduler::Window;
-using Acknowledgement = FrameScheduler::Acknowledgement;
-using Depth = FrameScheduler::Depth;
-using Take = FrameScheduler::Take;
+using PresentMode = FrameScheduler::PresentMode;
+using WaitForPreviousWork = FrameScheduler::WaitForPreviousWork;
+using FramesInFlight = FrameScheduler::FramesInFlight;
+using SubmitResult = FrameScheduler::SubmitResult;
 using Actions = FrameScheduler::Actions;
 
 int failures = 0;
@@ -67,20 +67,20 @@ public:
 
   // The scene ----------------------------------------------------------------
 
-  // The display: a frame every `interval`, and how long after its signal a
+  // The display: a frame every `interval`, and how long after it starts a
   // frame presented still makes it. A CADisplayLink's deadline is just short
-  // of the next signal; Android's can be past it.
+  // of the next frame; Android's can be past it.
   Nanos interval = kFrame;
-  Nanos deadlineAfterSignal = 900;
+  Nanos deadlineAfterFrameStart = 900;
   // How long a recording, a submit and the GPU take, per frame.
   Nanos recordTime = 100;
   Nanos submitTime = 50;
   Nanos gpuTime = 0;
-  // What the window answers the next takes with, instead of taking the
-  // frame; a frame is taken once these run out.
-  std::vector<Take> refusals;
+  // What the window answers the next submits with, instead of taking the
+  // frame; a frame is submitted once these run out.
+  std::vector<SubmitResult> refusals;
   // Whether the window can show a frame: not in the background.
-  bool available = true;
+  bool canPresent = true;
 
   // What happened
   // --------------------------------------------------------------
@@ -91,12 +91,12 @@ public:
   std::vector<Nanos> presents;
   std::vector<Nanos> recordingStarts;
   int recorded = 0;
-  int frameSignals = 0;
-  int holds = 0;
-  int acknowledgementPolls = 0;
+  int animationFrames = 0;
+  int deferredPresents = 0;
+  int submittedWorkDonePolls = 0;
   // Frames waiting on the target.
   int queued = 0;
-  bool held = false;
+  bool presentDeferred = false;
 
   // Driving it
   // -----------------------------------------------------------------
@@ -105,8 +105,8 @@ public:
   void changeContentAt(Nanos time) { post(time, Event::kContentChanged); }
 
   /**
-   The content changes once a frame, `phase` after each frame signal from
-   `from` up to `until`: an animation driven from another thread's vsync.
+   The content changes once a frame, `phase` after each animation frame starts,
+   from `from` up to `until`: an animation driven from another thread's vsync.
    */
   void animate(Nanos from, Nanos until, Nanos phase) {
     for (Nanos time = from; time < until; time += interval) {
@@ -122,9 +122,7 @@ public:
   /** The window draws the frame it was given, at `time` (a TextureView). */
   void consumeAt(Nanos time) { post(time, Event::kWindowDraw); }
 
-  void makeWindowAvailableAt(Nanos time) {
-    post(time, Event::kWindowAvailable);
-  }
+  void letWindowPresentAt(Nanos time) { post(time, Event::kCanPresent); }
 
   void runUntil(Nanos end) {
     while (!_events.empty() && _events.begin()->first <= end) {
@@ -157,7 +155,7 @@ public:
   /** The slot of the compositor a present at `time` lands in. */
   Nanos slotOf(Nanos time) const {
     // Slots end at the deadlines, which they include.
-    return (time - deadlineAfterSignal + 100 * interval + interval - 1) /
+    return (time - deadlineAfterFrameStart + 100 * interval + interval - 1) /
            interval;
   }
 
@@ -173,10 +171,10 @@ public:
 
   FrameScheduler::WindowState windowState() const {
     FrameScheduler::WindowState state;
-    state.available = available;
+    state.canPresent = canPresent;
     state.queued = queued > 0;
-    state.held = held;
-    state.acknowledged = isAcknowledged();
+    state.presentDeferred = presentDeferred;
+    state.previousWorkDone = isPreviousWorkDone();
     return state;
   }
 
@@ -184,44 +182,47 @@ private:
   enum class Event {
     kDisplayFrame,
     kContentChanged,
-    kRecordingEnded,
+    kRecordingFinished,
     kFrameQueued,
     kClientFrame,
     kUrgentClientFrame,
     kSubmitEnded,
-    kAcknowledgementPoll,
+    kSubmittedWorkDonePoll,
     kWindowDraw,
-    kWindowAvailable,
+    kCanPresent,
   };
 
   static bool isPresentSide(Event event) {
-    return event != Event::kContentChanged && event != Event::kRecordingEnded;
+    return event != Event::kContentChanged &&
+           event != Event::kRecordingFinished;
   }
 
   void post(Nanos time, Event event) { _events.emplace(time, event); }
 
-  bool isAcknowledged() const {
-    return scheduler.policy().acknowledgement == Acknowledgement::kNone ||
-           now >= _acknowledgedAt;
+  bool isPreviousWorkDone() const {
+    return scheduler.policy().waitForPreviousWork ==
+               WaitForPreviousWork::kNever ||
+           now >= _previousWorkDoneAt;
   }
 
   void handle(Event event) {
     switch (event) {
     case Event::kDisplayFrame:
       post(now - (now % interval) + interval, Event::kDisplayFrame);
-      if (scheduler.wantsFrameSignal()) {
-        frameSignals++;
+      if (scheduler.hasPendingAnimationFrame()) {
+        animationFrames++;
         const Nanos time = now - (now % interval);
-        run(scheduler.onFrameSignal(
-            {time, interval, time + deadlineAfterSignal}, now, windowState()));
+        run(scheduler.onAnimationFrame(
+            {time, interval, time + deadlineAfterFrameStart}, now,
+            windowState()));
       }
       break;
     case Event::kContentChanged:
       run(scheduler.onRecordingRequested(now));
       break;
-    case Event::kRecordingEnded:
+    case Event::kRecordingFinished:
       recorded++;
-      run(scheduler.onRecordingEnded(now, recordTime, /* produced= */ true));
+      run(scheduler.onRecordingFinished(now, recordTime, /* produced= */ true));
       break;
     case Event::kFrameQueued:
       run(scheduler.onFrameQueued(now, windowState(), /* urgent= */ false));
@@ -239,17 +240,17 @@ private:
     case Event::kSubmitEnded:
       endSubmit();
       break;
-    case Event::kAcknowledgementPoll:
+    case Event::kSubmittedWorkDonePoll:
       _pollPosted = false;
-      acknowledgementPolls++;
-      run(scheduler.onAcknowledgementPoll(now, windowState()));
+      submittedWorkDonePolls++;
+      run(scheduler.onSubmittedWorkDonePoll(now, windowState()));
       break;
     case Event::kWindowDraw:
       run(scheduler.onFrameConsumed(now, windowState()));
       break;
-    case Event::kWindowAvailable:
-      available = true;
-      run(scheduler.onWindowAvailable(now, windowState()));
+    case Event::kCanPresent:
+      canPresent = true;
+      run(scheduler.onCanPresent(now, windowState()));
       break;
     }
   }
@@ -263,39 +264,41 @@ private:
     }
     if (actions.startRecording) {
       recordingStarts.push_back(now);
-      post(now + recordTime, Event::kRecordingEnded);
+      post(now + recordTime, Event::kRecordingFinished);
     }
-    if (actions.requestFrameSignal) {
-      expect(scheduler.wantsFrameSignal(),
-             "a frame signal asked for is one the scheduler wants");
+    if (actions.requestAnimationFrame) {
+      expect(scheduler.hasPendingAnimationFrame(),
+             "an animation frame asked for is one the scheduler has pending");
     }
-    if (actions.watchAcknowledgement && !_pollPosted) {
+    if (actions.pollSubmittedWorkDone && !_pollPosted) {
       // The poll that finds the GPU done: how often a host polls until then
       // is the host's business.
       _pollPosted = true;
-      post(std::max(now + 1, _acknowledgedAt), Event::kAcknowledgementPoll);
+      post(std::max(now + 1, _previousWorkDoneAt),
+           Event::kSubmittedWorkDonePoll);
     }
-    if (actions.takeFrame) {
-      beginSubmit(actions.holdPresent);
+    if (actions.submitFrame) {
+      beginSubmit(actions.deferPresent);
     }
-    if (actions.presentHeldFrame) {
-      expect(held, "only a held frame is presented as one");
-      held = false;
-      present(_heldWorkDoneAt);
-      run(scheduler.onHeldFramePresented(now, windowState()));
+    if (actions.presentDeferredFrame) {
+      expect(presentDeferred, "only a deferred present is presented as one");
+      presentDeferred = false;
+      present(_deferredWorkDoneAt);
+      run(scheduler.onDeferredFramePresented(now, windowState()));
     }
   }
 
-  void beginSubmit(bool holdPresent) {
-    _holdPresent = holdPresent;
+  void beginSubmit(bool deferPresent) {
+    _deferPresent = deferPresent;
     if (!refusals.empty()) {
-      const Take refusal = refusals.front();
+      const SubmitResult refusal = refusals.front();
       refusals.erase(refusals.begin());
-      run(scheduler.onFrameTaken({refusal, 0}, now, windowState()));
+      run(scheduler.onFrameSubmitted({refusal, 0}, now, windowState()));
       return;
     }
     if (queued == 0) {
-      run(scheduler.onFrameTaken({Take::kNothing, 0}, now, windowState()));
+      run(scheduler.onFrameSubmitted({SubmitResult::kNothing, 0}, now,
+                                     windowState()));
       return;
     }
     queued--;
@@ -319,81 +322,84 @@ private:
     // The GPU works through what it is handed in order.
     const Nanos workDoneAt = std::max(_gpuFreeAt, now) + gpuTime;
     _gpuFreeAt = workDoneAt;
-    if (scheduler.policy().acknowledgement == Acknowledgement::kHoldsPresent &&
-        (_holdPresent || !isAcknowledged())) {
-      held = true;
-      holds++;
-      _heldWorkDoneAt = workDoneAt;
-      run(scheduler.onFrameTaken({Take::kHeld, _submitTook}, now,
-                                 windowState()));
+    if (scheduler.policy().waitForPreviousWork ==
+            WaitForPreviousWork::kBeforePresent &&
+        (_deferPresent || !isPreviousWorkDone())) {
+      presentDeferred = true;
+      deferredPresents++;
+      _deferredWorkDoneAt = workDoneAt;
+      run(scheduler.onFrameSubmitted(
+          {SubmitResult::kPresentDeferred, _submitTook}, now, windowState()));
       return;
     }
     present(workDoneAt);
-    run(scheduler.onFrameTaken({Take::kPresented, _submitTook}, now,
-                               windowState()));
+    run(scheduler.onFrameSubmitted({SubmitResult::kPresented, _submitTook}, now,
+                                   windowState()));
   }
 
   void present(Nanos workDoneAt) {
     presents.push_back(now);
     // The next present waits for the GPU to be done with this frame.
-    _acknowledgedAt = workDoneAt;
+    _previousWorkDoneAt = workDoneAt;
   }
 
   std::multimap<Nanos, Event> _events;
   Nanos _presentBusyUntil = 0;
   bool _submitting = false;
   Nanos _submitTook = 0;
-  bool _holdPresent = false;
+  bool _deferPresent = false;
   Nanos _gpuFreeAt = 0;
-  Nanos _acknowledgedAt = 0;
-  Nanos _heldWorkDoneAt = 0;
+  Nanos _previousWorkDoneAt = 0;
+  Nanos _deferredWorkDoneAt = 0;
   int _clientFrames = 0;
   bool _pollPosted = false;
 };
 
 constexpr Nanos kFrame = Sim::kFrame;
 
-FrameScheduler::Policy eachFrame(Acknowledgement acknowledgement,
-                                 Depth depth = Depth::kAdaptive) {
-  return {Window::kShowsEachFrame, acknowledgement, depth};
+FrameScheduler::Policy
+eachFrame(WaitForPreviousWork wait,
+          FramesInFlight framesInFlight = FramesInFlight::kAdaptive) {
+  return {PresentMode::kFifo, wait, framesInFlight};
 }
 
-FrameScheduler::Policy latestFrame(Acknowledgement acknowledgement) {
-  return {Window::kShowsLatestFrame, acknowledgement, Depth::kAdaptive};
+FrameScheduler::Policy latestFrame(WaitForPreviousWork wait) {
+  return {PresentMode::kMailbox, wait, FramesInFlight::kAdaptive};
 }
 
 // One present per frame of the display ---------------------------------------
 
-void aFrameWithoutAKnownSlotGoesOnTheNextFrameSignal() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void aFrameWithoutAKnownSlotGoesOnTheNextAnimationFrame() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.changeContentAt(300);
   sim.runUntil(900);
   expectEqual(sim.recorded, 1, "idle view: the change is recorded at once");
   expectEqual(static_cast<long long>(sim.presents.size()), 0,
-              "idle view: nothing is presented before a frame signal");
+              "idle view: nothing is presented before an animation frame");
   sim.runUntil(2 * kFrame);
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "idle view: the frame goes on the frame signal");
+              "idle view: the frame goes on the animation frame");
   expectBetween(sim.presents[0], kFrame, kFrame + 100,
-                "idle view: at the signal, not later");
+                "idle view: as that frame starts, not later");
 }
 
 void aFrameReadyBeforeTheDeadlineOfAFreeSlotGoesAtOnce() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.changeContentAt(300);
   sim.runUntil(2 * kFrame + 50);
-  // The view was active: its frame signals keep coming for now, and the
+  // The view was active: its animation frames keep coming for now, and the
   // slot of the frame that starts at 2000 has no frame yet.
   sim.changeContentAt(2 * kFrame + 200);
   sim.runUntil(3 * kFrame - 1);
-  expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "free slot: the frame does not wait for the next signal");
+  expectEqual(
+      static_cast<long long>(sim.presents.size()), 2,
+      "free slot: the frame does not wait for the next animation frame");
   expectBetween(sim.presents[1], 2 * kFrame + 300, 2 * kFrame + 400,
                 "free slot: presented as soon as it is submitted");
 }
 
 void aSlotGetsOneFrame() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   // Two changes in each frame of the display, both recorded in time.
   sim.animate(0, 20 * kFrame, 100);
   sim.animate(0, 20 * kFrame, 500);
@@ -405,10 +411,11 @@ void aSlotGetsOneFrame() {
 }
 
 void aMissedDeadlineSkipsTheFrame() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.changeContentAt(300);
   sim.runUntil(2 * kFrame + 50);
-  // Ready 50 before the next signal, past the deadline (100 before it).
+  // Ready 50 before the next animation frame, past the deadline (100 before
+  // it).
   sim.recordTime = 700;
   sim.changeContentAt(2 * kFrame + 250);
   sim.runUntil(3 * kFrame - 1);
@@ -416,21 +423,22 @@ void aMissedDeadlineSkipsTheFrame() {
               "missed deadline: the frame does not go late");
   sim.runUntil(4 * kFrame - 1);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "missed deadline: it goes on the next frame signal");
+              "missed deadline: it goes on the next animation frame");
   expectBetween(sim.presents[1], 3 * kFrame, 3 * kFrame + 100,
-                "missed deadline: at the signal");
-  expect(!sim.scheduler.isDeep(), "missed deadline: the depth does not change");
+                "missed deadline: as it starts");
+  expect(sim.scheduler.framesInFlight() == 1,
+         "missed deadline: the frames in flight do not change");
 }
 
-void aSubmitThatWouldMissTheDeadlineWaitsForTheSignal() {
+void aSubmitThatWouldMissTheDeadlineWaitsForTheAnimationFrame() {
   // The same frame, ready 400 or 200 before the deadline, with a submit that
   // takes 300.
   const auto presentedAt = [](Nanos recordTime) {
-    Sim sim(eachFrame(Acknowledgement::kNone));
+    Sim sim(eachFrame(WaitForPreviousWork::kNever));
     sim.submitTime = 300;
     sim.animate(0, 5 * kFrame, 100);
-    // The last of these frames goes at 5000, and the signal at 6000 finds
-    // the view idle: its slot, which ends at 6900, has no frame.
+    // The last of these frames goes at 5000, and the animation frame at 6000
+    // finds the view idle: its slot, which ends at 6900, has no frame.
     sim.runUntil(6 * kFrame + 50);
     sim.recordTime = recordTime;
     sim.changeContentAt(6 * kFrame + 200);
@@ -441,67 +449,74 @@ void aSubmitThatWouldMissTheDeadlineWaitsForTheSignal() {
                 "submit estimate: a frame that makes the deadline goes");
   expectBetween(presentedAt(500), 7 * kFrame + 300, 7 * kFrame + 310,
                 "submit estimate: one that would land late waits for the "
-                "signal");
+                "animation frame");
 }
 
 void oneLongSubmitSaysNothingOfTheNext() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   // The first frame compiles its pipelines: its submit lasts twenty frames
-  // of the display. It is taken on the signal at 1000 and presented at
-  // 21850, 50 before the deadline of the slot it lands in.
+  // of the display. It is submitted on the animation frame at 1000 and
+  // presented at 21850, 50 before the deadline of the slot it lands in.
   sim.submitTime = 20 * kFrame + 850;
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(110);
   sim.runUntil(2 * kFrame);
   sim.submitTime = 50;
   sim.runUntil(22 * kFrame - 1);
-  expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "long first submit: the next frame is not taken into the slot "
-              "the first landed in on the strength of that submit");
+  expectEqual(
+      static_cast<long long>(sim.presents.size()), 1,
+      "long first submit: the next frame is not submitted into the slot "
+      "the first landed in on the strength of that submit");
   sim.runUntil(23 * kFrame);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "long first submit: it goes on the next frame signal");
+              "long first submit: it goes on the next animation frame");
   expectEqual(sim.mostPresentsInASlot(), 1,
               "long first submit: one frame per slot");
   // A frame ready before the deadline of a free slot goes at once all the
   // same: the long submit is not what the next one is expected to take.
   sim.changeContentAt(23 * kFrame + 100);
   sim.runUntil(24 * kFrame - 1);
-  expectBetween(sim.presents.back(), 23 * kFrame + 200, 23 * kFrame + 300,
-                "long first submit: a frame still goes between two signals");
+  expectBetween(
+      sim.presents.back(), 23 * kFrame + 200, 23 * kFrame + 300,
+      "long first submit: a frame still goes between two animation frames");
   expectEqual(sim.mostPresentsInASlot(), 1,
               "long first submit: one frame per slot afterwards");
 }
 
 void aSubmitNeverCountsForMoreThanAFrame() {
-  FrameScheduler scheduler(eachFrame(Acknowledgement::kNone));
+  FrameScheduler scheduler(eachFrame(WaitForPreviousWork::kNever));
   FrameScheduler::WindowState window;
-  // Two redraws before any frame signal, each thirty frames long: the frame
+  // Two redraws before any animation frame, each thirty frames long: the frame
   // of the display is not known yet.
-  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 30 * kFrame, window);
+  scheduler.onFrameSubmitted({SubmitResult::kPresented, 30 * kFrame},
+                             30 * kFrame, window);
   expectEqual(scheduler.submitEstimate(), 0,
               "submit estimate: one submit alone is not an estimate");
-  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 60 * kFrame, window);
+  scheduler.onFrameSubmitted({SubmitResult::kPresented, 30 * kFrame},
+                             60 * kFrame, window);
   expectEqual(scheduler.submitEstimate(), 30 * kFrame,
               "submit estimate: two long submits are");
-  scheduler.onFrameSignal({61 * kFrame, kFrame, 61 * kFrame + 900}, 61 * kFrame,
-                          window);
+  scheduler.onAnimationFrame({61 * kFrame, kFrame, 61 * kFrame + 900},
+                             61 * kFrame, window);
   expectEqual(scheduler.submitEstimate(), kFrame,
               "submit estimate: a frame at most once the frame is known");
   // Short submits from now on, but for a long one: it leaves no trace.
   for (Nanos frame = 62; frame < 82; frame++) {
-    scheduler.onFrameTaken({Take::kPresented, 50}, frame * kFrame, window);
+    scheduler.onFrameSubmitted({SubmitResult::kPresented, 50}, frame * kFrame,
+                               window);
   }
   expectBetween(scheduler.submitEstimate(), 50, 60,
                 "submit estimate: follows the submits");
-  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 112 * kFrame, window);
-  scheduler.onFrameTaken({Take::kPresented, 50}, 113 * kFrame, window);
+  scheduler.onFrameSubmitted({SubmitResult::kPresented, 30 * kFrame},
+                             112 * kFrame, window);
+  scheduler.onFrameSubmitted({SubmitResult::kPresented, 50}, 113 * kFrame,
+                             window);
   expectBetween(scheduler.submitEstimate(), 50, 60,
                 "submit estimate: one long submit does not move it");
 }
 
 void aSlowSubmitNeverStarvesTheWindow() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   // A submit longer than a frame: no frame could ever make a deadline.
   sim.submitTime = 1300;
   sim.animate(0, 30 * kFrame, 100);
@@ -511,13 +526,13 @@ void aSlowSubmitNeverStarvesTheWindow() {
                 "slow submit: the rate the submit allows, not none");
 }
 
-void aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs() {
+void aLongSubmitStartsOnEachAnimationFrameWhereverTheDeadlineIs() {
   // A submit of most of a frame ends in the slot after the one it started
   // in when the deadline falls in the middle of the frame: the next frame
-  // still goes on the next signal, into a slot of its own.
+  // still goes on the next animation frame, into a slot of its own.
   for (Nanos deadline : {900, 1500, 2300}) {
-    Sim sim(eachFrame(Acknowledgement::kNone, Depth::kTwo));
-    sim.deadlineAfterSignal = deadline;
+    Sim sim(eachFrame(WaitForPreviousWork::kNever, FramesInFlight::kTwo));
+    sim.deadlineAfterFrameStart = deadline;
     sim.submitTime = 850;
     sim.recordTime = 1300;
     sim.animate(0, 400 * kFrame, 100);
@@ -530,7 +545,7 @@ void aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs() {
 }
 
 void clientsFramesGoOneAFrame() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(110);
   sim.queueClientFrameAt(120);
@@ -539,14 +554,14 @@ void clientsFramesGoOneAFrame() {
               "client frames: all of them are shown");
   expectEqual(sim.mostPresentsInASlot(), 1, "client frames: one per frame");
   expectBetween(sim.presents[2], 3 * kFrame, 3 * kFrame + 100,
-                "client frames: on three signals in a row");
+                "client frames: on three animation frames in a row");
 }
 
-void aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame() {
+void aDeadlinePastTheNextAnimationFrameStillGivesEachSlotOneFrame() {
   // Android's frame timeline: a frame can be presented until a third of a
-  // frame past the next signal and still make it.
-  Sim sim(eachFrame(Acknowledgement::kNone));
-  sim.deadlineAfterSignal = 1300;
+  // frame past the next animation frame and still make it.
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
+  sim.deadlineAfterFrameStart = 1300;
   sim.animate(0, 40 * kFrame, 100);
   sim.runUntil(42 * kFrame);
   expectEqual(sim.mostPresentsInASlot(), 1,
@@ -556,11 +571,11 @@ void aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame() {
 }
 
 void aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs() {
-  // From a CADisplayLink's deadline, short of the next signal, to a frame
-  // timeline's, up to three frames past its signal.
+  // From a CADisplayLink's deadline, short of the next animation frame, to a
+  // frame timeline's, up to three frames past the start of its frame.
   for (Nanos deadline : {900, 1000, 1300, 2000, 2300, 3100}) {
-    Sim sim(eachFrame(Acknowledgement::kNone));
-    sim.deadlineAfterSignal = deadline;
+    Sim sim(eachFrame(WaitForPreviousWork::kNever));
+    sim.deadlineAfterFrameStart = deadline;
     // Frames keep coming, so that the slots are known; then twenty at once,
     // and more a few at a time, a quarter of a frame apart.
     sim.animate(0, 10 * kFrame, 100);
@@ -578,38 +593,39 @@ void aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs() {
 }
 
 void anUrgentFrameGoesAtOnceButNotTwiceInASlot() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   // A first frame, so that the view knows the display's frames; then it is
-  // idle, and no frame signal comes.
+  // idle, and no animation frame comes.
   sim.changeContentAt(300);
   sim.runUntil(3 * kFrame + 900);
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
               "urgent: a first frame was shown");
-  // Past the deadline at 3900, with no frame signal to say so.
+  // Past the deadline at 3900, with no animation frame to say so.
   sim.queueClientFrameAt(3 * kFrame + 950, /* urgent= */ true);
   sim.runUntil(4 * kFrame + 10);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "urgent: goes at once, without a frame signal");
+              "urgent: goes at once, without an animation frame");
   sim.queueClientFrameAt(4 * kFrame + 50, /* urgent= */ true);
   sim.runUntil(5 * kFrame - 1);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
               "urgent: the slot has its frame, the second waits");
   sim.runUntil(5 * kFrame + 100);
   expectEqual(static_cast<long long>(sim.presents.size()), 3,
-              "urgent: the second goes on the next frame signal");
+              "urgent: the second goes on the next animation frame");
   expectEqual(sim.mostPresentsInASlot(), 1, "urgent: one frame per slot");
 }
 
 void anUrgentFrameDoesNotJoinAFramePresentedLate() {
-  for (Acknowledgement acknowledgement :
-       {Acknowledgement::kNone, Acknowledgement::kHoldsPresent}) {
-    Sim sim(eachFrame(acknowledgement));
-    // A CADisplayLink's deadline: the slots end 750 after each signal.
-    sim.deadlineAfterSignal = 750;
+  for (WaitForPreviousWork wait :
+       {WaitForPreviousWork::kNever, WaitForPreviousWork::kBeforePresent}) {
+    Sim sim(eachFrame(wait));
+    // A CADisplayLink's deadline: the slots end 750 after each animation frame
+    // starts.
+    sim.deadlineAfterFrameStart = 750;
     sim.animate(0, 5 * kFrame, 100);
     sim.runUntil(5 * kFrame + 900);
-    // A frame taken on the signal at 6000, whose submit runs past the
-    // deadline at 6750: it is presented at 6800, in the next slot.
+    // A frame submitted on the animation frame at 6000, whose submit runs past
+    // the deadline at 6750: it is presented at 6800, in the next slot.
     sim.submitTime = 800;
     sim.queueClientFrameAt(5 * kFrame + 950);
     sim.runUntil(6 * kFrame + 500);
@@ -625,10 +641,10 @@ void anUrgentFrameDoesNotJoinAFramePresentedLate() {
     sim.runUntil(9 * kFrame);
     expectEqual(static_cast<long long>(sim.presents.size()), presentsSoFar + 2,
                 "urgent, late frame: it goes into the next slot");
-    if (acknowledgement == Acknowledgement::kHoldsPresent) {
-      expectEqual(sim.holds, 1,
+    if (wait == WaitForPreviousWork::kBeforePresent) {
+      expectEqual(sim.deferredPresents, 1,
                   "urgent, late frame: its work goes to the GPU at once where "
-                  "a present can be held");
+                  "a present can be deferred");
       expectBetween(sim.presents.back(), 7 * kFrame + 750, 7 * kFrame + 760,
                     "urgent, late frame: and its present as the next slot "
                     "starts");
@@ -638,53 +654,57 @@ void anUrgentFrameDoesNotJoinAFramePresentedLate() {
   }
 }
 
-// No present without an acknowledgement --------------------------------------
+// No present before the previous work is done ------------------------------
 
-void aFrameIsHeldUntilTheGpuIsDoneWithTheOneBefore() {
-  Sim sim(eachFrame(Acknowledgement::kHoldsPresent));
+void aPresentIsDeferredUntilThePreviousWorkIsDone() {
+  Sim sim(eachFrame(WaitForPreviousWork::kBeforePresent));
   // The GPU takes a frame and a half per frame.
   sim.gpuTime = 1500;
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(110);
   sim.queueClientFrameAt(120);
   sim.runUntil(2 * kFrame + 100);
-  // The first went on the signal at 1000 (submitted by 1050, done by 2550);
-  // the second was submitted on the signal at 2000 and is held.
+  // The first went on the animation frame at 1000 (submitted by 1050, done by
+  // 2550); the second was submitted on the animation frame at 2000 and its
+  // present is deferred.
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "hold: the second frame is not presented yet");
-  expect(sim.held, "hold: its work is submitted, its present held");
+              "deferred: the second frame is not presented yet");
+  expect(sim.presentDeferred,
+         "deferred: its work is submitted, its present deferred");
   expectEqual(sim.queued, 1,
-              "hold: the window takes no other frame while it holds one");
+              "deferred: the window takes no other frame meanwhile");
   sim.runUntil(3 * kFrame - 1);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "hold: the acknowledgement releases it");
+              "deferred: the previous work being done releases it");
   expectBetween(sim.presents[1], 2550, 2560,
-                "hold: when the GPU is done, not on a frame signal");
+                "deferred: when the GPU is done, not on an animation frame");
   expectEqual(sim.queued, 1,
-              "hold: the third waits for a frame signal, as any frame");
+              "deferred: the third waits for an animation frame, as any frame");
   sim.runUntil(8 * kFrame);
   expectEqual(static_cast<long long>(sim.presents.size()), 3,
-              "hold: every frame is shown in the end");
+              "deferred: every frame is shown in the end");
 }
 
-void anAcknowledgedFrameIsNotHeld() {
-  Sim sim(eachFrame(Acknowledgement::kHoldsPresent));
+void aPresentIsNotDeferredOnceThePreviousWorkIsDone() {
+  Sim sim(eachFrame(WaitForPreviousWork::kBeforePresent));
   sim.gpuTime = 300;
   sim.animate(0, 20 * kFrame, 100);
   sim.runUntil(22 * kFrame);
-  expectEqual(sim.holds, 0, "light scene: nothing is ever held");
-  expectEqual(sim.acknowledgementPolls, 0,
-              "light scene: the acknowledgement is never polled for");
+  expectEqual(sim.deferredPresents, 0,
+              "light scene: no present is ever deferred");
+  expectEqual(sim.submittedWorkDonePolls, 0,
+              "light scene: the previous work is never polled for");
 }
 
 void noSlotGetsTwoFramesWhateverTheGpuDoes() {
   // A GPU that takes anything from a quarter of a frame to almost two over
-  // each frame, in no order: frames are held and released early or late in
-  // a slot, and a frame taken behind one released late must not join it.
+  // each frame, in no order: presents are deferred and released early or late
+  // in a slot, and a frame submitted behind one released late must not join
+  // it.
   for (Nanos deadline : {900, 1500, 2300}) {
     for (Nanos submitTime : {150, 450, 850}) {
-      Sim sim(eachFrame(Acknowledgement::kHoldsPresent));
-      sim.deadlineAfterSignal = deadline;
+      Sim sim(eachFrame(WaitForPreviousWork::kBeforePresent));
+      sim.deadlineAfterFrameStart = deadline;
       sim.submitTime = submitTime;
       sim.animate(0, 2000 * kFrame, 100);
       unsigned long long seed = 12345;
@@ -695,7 +715,7 @@ void noSlotGetsTwoFramesWhateverTheGpuDoes() {
         sim.runUntil(frame * kFrame + 50);
       }
       sim.runUntil(2010 * kFrame);
-      expect(sim.holds > 100, "any GPU: frames are held");
+      expect(sim.deferredPresents > 100, "any GPU: presents are deferred");
       expectEqual(sim.mostPresentsInASlot(), 1,
                   "any GPU: no slot of the compositor gets two frames");
       expectEqual(static_cast<long long>(sim.presents.size()), sim.recorded,
@@ -704,27 +724,28 @@ void noSlotGetsTwoFramesWhateverTheGpuDoes() {
   }
 }
 
-void aDecliningWindowLeavesTheFrameQueued() {
-  Sim sim(eachFrame(Acknowledgement::kDeclinesFrame));
+void waitingBeforeSubmitLeavesTheFrameQueued() {
+  Sim sim(eachFrame(WaitForPreviousWork::kBeforeSubmit));
   sim.gpuTime = 1500;
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(110);
   sim.runUntil(2 * kFrame + 100);
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "decline: the second frame is not presented yet");
-  expect(!sim.held, "decline: nothing is held");
-  expectEqual(sim.queued, 1, "decline: it stays queued");
+              "wait before submit: the second frame is not presented yet");
+  expect(!sim.presentDeferred, "wait before submit: no present is deferred");
+  expectEqual(sim.queued, 1, "wait before submit: it stays queued");
   sim.runUntil(3 * kFrame - 1);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
-              "decline: it goes once the GPU is done");
-  expectBetween(sim.presents[1], 2600, 2610,
-                "decline: its submit starts at the acknowledgement");
+              "wait before submit: it goes once the GPU is done");
+  expectBetween(
+      sim.presents[1], 2600, 2610,
+      "wait before submit: its submit starts once the previous work is done");
 }
 
-void holdingKeepsAGpuBoundViewAtTheGpusRate() {
+void deferringThePresentKeepsAGpuBoundViewAtTheGpusRate() {
   // The GPU takes a frame and a fifth per frame, a submit a fifth of one.
-  const auto frames = [](Acknowledgement acknowledgement) {
-    Sim sim(eachFrame(acknowledgement, Depth::kTwo));
+  const auto frames = [](WaitForPreviousWork wait) {
+    Sim sim(eachFrame(wait, FramesInFlight::kTwo));
     sim.gpuTime = 1200;
     sim.submitTime = 200;
     sim.animate(0, 200 * kFrame, 100);
@@ -734,20 +755,24 @@ void holdingKeepsAGpuBoundViewAtTheGpusRate() {
     return sim.presentsBetween(20 * kFrame, 200 * kFrame);
   };
   // 180 frames of the display: the GPU can do 150 frames in that time.
-  const int held = frames(Acknowledgement::kHoldsPresent);
-  const int declined = frames(Acknowledgement::kDeclinesFrame);
-  expectBetween(held, 146, 151, "hold: the GPU never idles");
-  expectBetween(declined, 110, 131,
-                "decline: the GPU idles while the next frame is submitted");
-  expect(held > declined, "hold presents more frames than decline");
+  const int beforePresent = frames(WaitForPreviousWork::kBeforePresent);
+  const int beforeSubmit = frames(WaitForPreviousWork::kBeforeSubmit);
+  expectBetween(beforePresent, 146, 151,
+                "wait before present: the GPU never idles");
+  expectBetween(beforeSubmit, 110, 131,
+                "wait before submit: the GPU idles while the next frame is "
+                "submitted");
+  expect(beforePresent > beforeSubmit,
+         "waiting before the present shows more frames than before the submit");
 }
 
-void holdingKeepsTheGpuFedThroughALongSubmit() {
+void deferringThePresentKeepsTheGpuFedThroughALongSubmit() {
   // The Samsung's heaviest scene: a submit of most of a frame, a GPU that
   // takes 1.7 frames, a deadline in the middle of the frame.
   for (Nanos deadline : {900, 1500, 2300}) {
-    Sim sim(eachFrame(Acknowledgement::kHoldsPresent, Depth::kTwo));
-    sim.deadlineAfterSignal = deadline;
+    Sim sim(
+        eachFrame(WaitForPreviousWork::kBeforePresent, FramesInFlight::kTwo));
+    sim.deadlineAfterFrameStart = deadline;
     sim.gpuTime = 1700;
     sim.submitTime = 850;
     sim.recordTime = 1300;
@@ -755,30 +780,30 @@ void holdingKeepsTheGpuFedThroughALongSubmit() {
     sim.runUntil(400 * kFrame);
     // 360 frames of the display: the GPU can do 211 frames in that time.
     expectBetween(sim.presentsBetween(40 * kFrame, 400 * kFrame), 207, 212,
-                  "hold, long submit: the GPU never idles");
+                  "deferred, long submit: the GPU never idles");
     expectEqual(sim.mostPresentsInASlot(), 1,
-                "hold, long submit: one frame a slot");
+                "deferred, long submit: one frame a slot");
   }
 }
 
 // A bounded pipeline ---------------------------------------------------------
 
-void holdingOneFrameTheNextRecordingWaitsForTheWindow() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void withOneFrameInFlightTheNextRecordingWaitsForTheWindow() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.changeContentAt(100);
   sim.changeContentAt(400);
   sim.runUntil(900);
   expectEqual(static_cast<long long>(sim.recordingStarts.size()), 1,
-              "one frame deep: no recording while the ready frame waits");
+              "one frame in flight: no recording while the ready frame waits");
   sim.runUntil(2 * kFrame);
   expectEqual(static_cast<long long>(sim.recordingStarts.size()), 2,
-              "one frame deep: the next starts once the window took it");
+              "one frame in flight: the next starts once the window took it");
   expectBetween(sim.recordingStarts[1], kFrame, kFrame + 10,
-                "one frame deep: as its submit starts, not after it");
+                "one frame in flight: as its submit starts, not after it");
 }
 
 void requestsWhileRecordingAreOneRequest() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.recordTime = 300;
   for (Nanos time = 100; time < 400; time += 10) {
     sim.changeContentAt(time);
@@ -788,32 +813,34 @@ void requestsWhileRecordingAreOneRequest() {
               "coalescing: one recording in flight, one for all the rest");
 }
 
-void twoFramesDeepARecordingThatEndsEarlyWaitsAndNoneStarts() {
-  Sim sim(eachFrame(Acknowledgement::kNone, Depth::kTwo));
-  // No window takes anything before the first frame signal at 1000.
+void withTwoFramesInFlightARecordingThatFinishesEarlyWaitsAndNoneStarts() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever, FramesInFlight::kTwo));
+  // Nothing is submitted before the first animation frame at 1000.
   for (Nanos time = 100; time < 900; time += 50) {
     sim.changeContentAt(time);
   }
   sim.runUntil(900);
-  expectEqual(sim.recorded, 2, "two frames deep: one ready, one behind it");
-  expectEqual(sim.queued, 1, "two frames deep: one frame on the target");
+  expectEqual(sim.recorded, 2,
+              "two frames in flight: one ready, one behind it");
+  expectEqual(sim.queued, 1, "two frames in flight: one frame on the target");
   expect(sim.scheduler.hasWaitingRecording(),
-         "two frames deep: the second waits for the ready slot");
+         "two frames in flight: the second waits for the ready slot");
   expectEqual(static_cast<long long>(sim.recordingStarts.size()), 2,
-              "two frames deep: no third recording starts");
+              "two frames in flight: no third recording starts");
   sim.runUntil(kFrame + 300);
-  expectEqual(sim.queued, 1,
-              "two frames deep: the one that waited is ready once the first "
-              "is taken");
+  expectEqual(
+      sim.queued, 1,
+      "two frames in flight: the one that waited is ready once the first "
+      "is taken");
   expectEqual(static_cast<long long>(sim.recordingStarts.size()), 3,
-              "two frames deep: and the next recording starts");
+              "two frames in flight: and the next recording starts");
 }
 
 void aFrameTheWindowGivesBackIsTheReadyFrameAgain() {
-  FrameScheduler scheduler(eachFrame(Acknowledgement::kNone));
+  FrameScheduler scheduler(eachFrame(WaitForPreviousWork::kNever));
   expect(scheduler.onRecordingRequested(100).startRecording,
          "given back: a first recording starts");
-  expect(scheduler.onRecordingEnded(200, 100, true).queueRecording,
+  expect(scheduler.onRecordingFinished(200, 100, true).queueRecording,
          "given back: it is the ready frame");
   // The window takes it, the next recording starts, and the window then has
   // no drawable for it after all.
@@ -822,17 +849,18 @@ void aFrameTheWindowGivesBackIsTheReadyFrameAgain() {
          "given back: the next recording starts as the window takes it");
   scheduler.onReadyFrameReturned();
   expect(scheduler.hasReadyFrame(), "given back: the frame is ready again");
-  expect(!scheduler.onRecordingEnded(400, 100, true).queueRecording,
-         "given back: the recording that ended meanwhile waits behind it");
+  expect(!scheduler.onRecordingFinished(400, 100, true).queueRecording,
+         "given back: the recording that finished meanwhile waits behind it");
   expect(scheduler.hasWaitingRecording(), "given back: one waits");
   expect(scheduler.onReadyFrameTaken(500).queueRecording,
          "given back: and is ready once the window took the first");
 }
 
 void everyFrameRecordedIsShown() {
-  for (Depth depth : {Depth::kAdaptive, Depth::kTwo}) {
+  for (FramesInFlight framesInFlight :
+       {FramesInFlight::kAdaptive, FramesInFlight::kTwo}) {
     for (Nanos recordTime : {100, 600, 900, 1300, 2700}) {
-      Sim sim(eachFrame(Acknowledgement::kHoldsPresent, depth));
+      Sim sim(eachFrame(WaitForPreviousWork::kBeforePresent, framesInFlight));
       sim.recordTime = recordTime;
       sim.gpuTime = 700;
       sim.animate(0, 100 * kFrame, 150);
@@ -847,121 +875,130 @@ void everyFrameRecordedIsShown() {
   }
 }
 
-// Depth follows the measured time --------------------------------------------
+// The frames in flight follow the measured time -----------------------------
 
-void aRecordingThatFitsKeepsTheViewOneFrameDeep() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void aRecordingThatFitsKeepsOneFrameInFlight() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.recordTime = 300;
   sim.animate(0, 100 * kFrame, 100);
   sim.runUntil(102 * kFrame);
-  expect(!sim.scheduler.isDeep(), "fits: one frame deep");
+  expect(sim.scheduler.framesInFlight() == 1, "fits: one frame in flight");
   expectBetween(sim.presentsBetween(4 * kFrame, 100 * kFrame), 95, 96,
                 "fits: a frame each");
 }
 
 void aRecordingLongerThanAFrameOverlapsThePresents() {
   // 120 Hz, a recording of 10 ms: a frame is 8333 units here.
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.interval = 8333;
-  sim.deadlineAfterSignal = 7500;
+  sim.deadlineAfterFrameStart = 7500;
   sim.recordTime = 10000;
   sim.submitTime = 300;
   sim.animate(0, 1200 * 8333, 800);
   sim.runUntil(1200 * 8333);
-  expect(sim.scheduler.isDeep(), "long recording: two frames deep");
+  expect(sim.scheduler.framesInFlight() == 2,
+         "long recording: two frames in flight");
   // 1000 frames of the display, 8.333 s: a recording every 10 ms is 833
   // frames, where a recording that waited for each present would show 500.
   expectBetween(sim.presentsBetween(200 * 8333, 1200 * 8333), 820, 834,
                 "long recording: the rate the recording allows");
 }
 
-void oneLateRecordingDoesNotChangeTheDepth() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void oneLateRecordingDoesNotChangeTheFramesInFlight() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.animate(0, 12 * kFrame, 100);
   sim.runUntil(5 * kFrame + 50);
   sim.recordTime = 950;
   sim.runUntil(6 * kFrame + 50);
   sim.recordTime = 100;
   sim.runUntil(14 * kFrame);
-  expect(!sim.scheduler.isDeep(), "one spike: still one frame deep");
+  expect(sim.scheduler.framesInFlight() == 1,
+         "one spike: still one frame in flight");
 }
 
-void twoLateRecordingsOutOfFourGoDeeperAndASecondOfFitsComesBack() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void twoLateRecordingsOutOfFourPutTwoFramesInFlightAndASecondOfFitsComesBack() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.recordTime = 950;
   sim.animate(0, 200 * kFrame, 100);
   sim.runUntil(6 * kFrame);
-  expect(sim.scheduler.isDeep(), "late recordings: two frames deep");
+  expect(sim.scheduler.framesInFlight() == 2,
+         "late recordings: two frames in flight");
   sim.recordTime = 100;
-  sim.runUntil(6 * kFrame + (FrameScheduler::kFramesToGoShallow - 5) * kFrame);
-  expect(sim.scheduler.isDeep(),
+  sim.runUntil(6 * kFrame +
+               (FrameScheduler::kFramesForOneInFlight - 5) * kFrame);
+  expect(sim.scheduler.framesInFlight() == 2,
          "hysteresis: not back before recordings fit for long enough");
-  sim.runUntil(6 * kFrame + (FrameScheduler::kFramesToGoShallow + 5) * kFrame);
-  expect(!sim.scheduler.isDeep(),
+  sim.runUntil(6 * kFrame +
+               (FrameScheduler::kFramesForOneInFlight + 5) * kFrame);
+  expect(sim.scheduler.framesInFlight() == 1,
          "hysteresis: back once they have for about a second");
 }
 
-void aViewDisturbedNowAndThenStaysTwoFramesDeep() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void aViewDisturbedNowAndThenKeepsTwoFramesInFlight() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.animate(0, 400 * kFrame, 100);
   int changes = 0;
-  bool deep = false;
+  bool two = false;
   for (Nanos frame = 0; frame < 400; frame++) {
     // Two late recordings every forty frames: three times a second at
     // 120 Hz.
     sim.recordTime = frame % 40 < 2 ? 950 : 100;
     sim.runUntil(frame * kFrame + 50);
-    if (sim.scheduler.isDeep() != deep) {
-      deep = !deep;
+    if ((sim.scheduler.framesInFlight() == 2) != two) {
+      two = !two;
       changes++;
     }
   }
-  expectEqual(changes, 1,
-              "disturbed: the depth changes once, not at each disturbance");
-  expect(sim.scheduler.isDeep(), "disturbed: two frames deep");
+  expectEqual(
+      changes, 1,
+      "disturbed: the frames in flight change once, not at each disturbance");
+  expect(sim.scheduler.framesInFlight() == 2,
+         "disturbed: two frames in flight");
 }
 
-void aRecordingThatHoversAroundAFrameDoesNotFlipTheDepth() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void aRecordingThatHoversAroundAFrameDoesNotFlipTheFramesInFlight() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.animate(0, 200 * kFrame, 100);
   int switches = 0;
-  bool deep = false;
+  bool two = false;
   for (Nanos frame = 0; frame < 200; frame++) {
     // Between 70% and 100% of a frame, back and forth.
     sim.recordTime = 700 + (frame % 4) * 100;
     sim.runUntil(frame * kFrame + 50);
-    if (sim.scheduler.isDeep() != deep) {
-      deep = !deep;
+    if ((sim.scheduler.framesInFlight() == 2) != two) {
+      two = !two;
       switches++;
     }
   }
-  expectEqual(switches, 1, "hovering: the depth settles, it does not flip");
+  expectEqual(switches, 1,
+              "hovering: the frames in flight settle, they do not flip");
 }
 
-void aFixedDepthOfTwoNeverChanges() {
-  Sim sim(eachFrame(Acknowledgement::kNone, Depth::kTwo));
+void twoFramesInFlightByPolicyNeverChange() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever, FramesInFlight::kTwo));
   sim.animate(0, 60 * kFrame, 100);
   sim.runUntil(62 * kFrame);
-  expect(sim.scheduler.isDeep(), "fixed depth: two frames deep throughout");
+  expect(sim.scheduler.framesInFlight() == 2,
+         "fixed by policy: two frames in flight throughout");
 }
 
 // A window that shows the latest frame ---------------------------------------
 
 void aTextureViewTakesAFrameAtOnceWhileItHasNone() {
-  Sim sim(latestFrame(Acknowledgement::kNone));
+  Sim sim(latestFrame(WaitForPreviousWork::kNever));
   sim.changeContentAt(300);
   sim.runUntil(600);
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "latest frame: presented without a frame signal");
+              "latest frame: presented without an animation frame");
 }
 
 void aTextureViewTakesTheNextFrameOnceItDrewThePrevious() {
-  Sim sim(latestFrame(Acknowledgement::kNone));
+  Sim sim(latestFrame(WaitForPreviousWork::kNever));
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(110);
   sim.runUntil(5 * kFrame);
   expectEqual(static_cast<long long>(sim.presents.size()), 1,
-              "latest frame: one at a time, whatever signals pass");
+              "latest frame: one at a time, whatever animation frames pass");
   sim.consumeAt(5 * kFrame + 200);
   sim.runUntil(5 * kFrame + 400);
   expectEqual(static_cast<long long>(sim.presents.size()), 2,
@@ -973,7 +1010,7 @@ void aTextureViewTakesTheNextFrameOnceItDrewThePrevious() {
 }
 
 void anUrgentFrameReplacesTheOneATextureViewHasNotDrawn() {
-  Sim sim(latestFrame(Acknowledgement::kNone));
+  Sim sim(latestFrame(WaitForPreviousWork::kNever));
   sim.queueClientFrameAt(100);
   sim.queueClientFrameAt(300, /* urgent= */ true);
   sim.runUntil(600);
@@ -982,146 +1019,153 @@ void anUrgentFrameReplacesTheOneATextureViewHasNotDrawn() {
               "the draw");
 }
 
-void aFrameTheWindowDeclinesIsTriedOnTheNextFrameSignal() {
-  for (Window window : {Window::kShowsEachFrame, Window::kShowsLatestFrame}) {
-    Sim sim({window, Acknowledgement::kNone, Depth::kAdaptive});
+void aFrameWithoutAWindowTextureIsTriedOnTheNextAnimationFrame() {
+  for (PresentMode presentMode : {PresentMode::kFifo, PresentMode::kMailbox}) {
+    Sim sim(
+        {presentMode, WaitForPreviousWork::kNever, FramesInFlight::kAdaptive});
     sim.queueClientFrameAt(100);
     sim.runUntil(kFrame + 100);
     const auto presentsSoFar = sim.presents.size();
     sim.consumeAt(kFrame + 150);
     // No drawable for the next frame.
-    sim.refusals.push_back(Take::kDeclined);
-    sim.queueClientFrameAt(window == Window::kShowsEachFrame ? 2 * kFrame - 50
+    sim.refusals.push_back(SubmitResult::kNoTexture);
+    sim.queueClientFrameAt(presentMode == PresentMode::kFifo ? 2 * kFrame - 50
                                                              : kFrame + 200);
     sim.runUntil(2 * kFrame - 1);
-    if (window == Window::kShowsLatestFrame) {
+    if (presentMode == PresentMode::kMailbox) {
       expectEqual(static_cast<long long>(sim.presents.size()),
                   static_cast<long long>(presentsSoFar),
-                  "declined: not tried again before a frame signal");
+                  "no texture: not tried again before an animation frame");
     }
     sim.runUntil(4 * kFrame);
     expectEqual(static_cast<long long>(sim.presents.size()),
                 static_cast<long long>(presentsSoFar) + 1,
-                "declined: tried again on a frame signal");
+                "no texture: tried again on an animation frame");
   }
 }
 
 // The window comes and goes --------------------------------------------------
 
 void withoutAWindowFramesAreRecordedAndWait() {
-  Sim sim({Window::kNone, Acknowledgement::kNone, Depth::kAdaptive});
+  Sim sim({PresentMode::kNone, WaitForPreviousWork::kNever,
+           FramesInFlight::kAdaptive});
   sim.animate(0, 10 * kFrame, 100);
   sim.runUntil(12 * kFrame);
   expectEqual(sim.recorded, 1, "no window: one frame is recorded, and waits");
-  expectEqual(sim.frameSignals, 0, "no window: no frame signal is asked for");
+  expectEqual(sim.animationFrames, 0,
+              "no window: no animation frame is asked for");
   expectEqual(static_cast<long long>(sim.presents.size()), 0,
               "no window: nothing is presented");
 }
 
 void aWindowThatCannotShowAFrameIsLeftAloneUntilItCan() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   // The app is in the background.
-  sim.available = false;
+  sim.canPresent = false;
   sim.queueClientFrameAt(100);
   sim.animate(0, 10 * kFrame, 100);
   sim.runUntil(10 * kFrame);
   expectEqual(static_cast<long long>(sim.presents.size()), 0,
-              "unavailable: nothing is presented");
-  expectEqual(sim.frameSignals, 0,
-              "unavailable: no frame signal is asked for meanwhile");
-  expectEqual(sim.recorded, 1, "unavailable: one frame is recorded, and waits");
-  sim.makeWindowAvailableAt(10 * kFrame + 100);
+              "cannot present: nothing is presented");
+  expectEqual(sim.animationFrames, 0,
+              "cannot present: no animation frame is asked for meanwhile");
+  expectEqual(sim.recorded, 1,
+              "cannot present: one frame is recorded, and waits");
+  sim.letWindowPresentAt(10 * kFrame + 100);
   sim.runUntil(14 * kFrame);
   // The client's frame, the frame that waited, and one more for everything
   // that changed meanwhile.
   expectEqual(static_cast<long long>(sim.presents.size()), 3,
-              "unavailable: the frames go once the window can show them");
+              "cannot present: the frames go once the window can show them");
   expectEqual(sim.recorded, 2,
-              "unavailable: what changed meanwhile is one recording");
+              "cannot present: what changed meanwhile is one recording");
 }
 
-void anIdleViewAsksForNoFrameSignals() {
-  Sim sim(eachFrame(Acknowledgement::kNone));
+void anIdleViewAsksForNoAnimationFrames() {
+  Sim sim(eachFrame(WaitForPreviousWork::kNever));
   sim.animate(0, 10 * kFrame, 100);
   sim.runUntil(40 * kFrame);
-  // A signal per frame presented, and one after the last to find the view
-  // idle: a display link pauses then.
-  expectBetween(sim.frameSignals, 10, 12,
-                "idle: the frame signals stop with the frames");
-  expect(!sim.scheduler.wantsFrameSignal(),
+  // An animation frame per frame presented, and one after the last to find
+  // the view idle: a display link pauses then.
+  expectBetween(sim.animationFrames, 10, 12,
+                "idle: the animation frames stop with the frames");
+  expect(!sim.scheduler.hasPendingAnimationFrame(),
          "idle: a display link is told it may pause");
 }
 
-void cancelForgetsTheSignalAndTheFrameInTheWindow() {
-  FrameScheduler scheduler(latestFrame(Acknowledgement::kNone));
+void cancelForgetsTheAnimationFrameAndTheFrameInTheWindow() {
+  FrameScheduler scheduler(latestFrame(WaitForPreviousWork::kNever));
   FrameScheduler::WindowState window;
   window.queued = true;
-  expect(scheduler.onFrameQueued(100, window, false).takeFrame,
+  expect(scheduler.onFrameQueued(100, window, false).submitFrame,
          "cancel: a first frame goes to the window");
-  auto actions = scheduler.onFrameTaken({Take::kPresented, 10}, 110, window);
-  expect(!actions.takeFrame, "cancel: the second waits for the draw");
-  expect(scheduler.wantsFrameSignal(), "cancel: a frame signal is asked for");
+  auto actions =
+      scheduler.onFrameSubmitted({SubmitResult::kPresented, 10}, 110, window);
+  expect(!actions.submitFrame, "cancel: the second waits for the draw");
+  expect(scheduler.hasPendingAnimationFrame(),
+         "cancel: an animation frame is asked for");
   scheduler.cancel();
-  expect(!scheduler.wantsFrameSignal(), "cancel: the signal is forgotten");
-  expect(scheduler.onFrameQueued(200, window, false).takeFrame,
+  expect(!scheduler.hasPendingAnimationFrame(),
+         "cancel: the animation frame is forgotten");
+  expect(scheduler.onFrameQueued(200, window, false).submitFrame,
          "cancel: so is the frame the window had");
 }
 
 void aWindowOfAnotherKindHasDrawnNothingYet() {
-  FrameScheduler scheduler(latestFrame(Acknowledgement::kNone));
+  FrameScheduler scheduler(latestFrame(WaitForPreviousWork::kNever));
   FrameScheduler::WindowState window;
   window.queued = true;
   scheduler.onFrameQueued(100, window, false);
-  scheduler.onFrameTaken({Take::kPresented, 10}, 110, window);
-  scheduler.setWindow(Window::kShowsEachFrame);
-  scheduler.setWindow(Window::kShowsLatestFrame);
-  expect(scheduler.onFrameQueued(200, window, false).takeFrame,
+  scheduler.onFrameSubmitted({SubmitResult::kPresented, 10}, 110, window);
+  scheduler.setPresentMode(PresentMode::kFifo);
+  scheduler.setPresentMode(PresentMode::kMailbox);
+  expect(scheduler.onFrameQueued(200, window, false).submitFrame,
          "new window: it takes a frame at once");
 }
 
 } // namespace
 
 int main() {
-  aFrameWithoutAKnownSlotGoesOnTheNextFrameSignal();
+  aFrameWithoutAKnownSlotGoesOnTheNextAnimationFrame();
   aFrameReadyBeforeTheDeadlineOfAFreeSlotGoesAtOnce();
   aSlotGetsOneFrame();
   aMissedDeadlineSkipsTheFrame();
-  aSubmitThatWouldMissTheDeadlineWaitsForTheSignal();
+  aSubmitThatWouldMissTheDeadlineWaitsForTheAnimationFrame();
   oneLongSubmitSaysNothingOfTheNext();
   aSubmitNeverCountsForMoreThanAFrame();
   aSlowSubmitNeverStarvesTheWindow();
-  aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs();
+  aLongSubmitStartsOnEachAnimationFrameWhereverTheDeadlineIs();
   clientsFramesGoOneAFrame();
-  aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame();
+  aDeadlinePastTheNextAnimationFrameStillGivesEachSlotOneFrame();
   aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs();
   anUrgentFrameGoesAtOnceButNotTwiceInASlot();
   anUrgentFrameDoesNotJoinAFramePresentedLate();
-  aFrameIsHeldUntilTheGpuIsDoneWithTheOneBefore();
-  anAcknowledgedFrameIsNotHeld();
+  aPresentIsDeferredUntilThePreviousWorkIsDone();
+  aPresentIsNotDeferredOnceThePreviousWorkIsDone();
   noSlotGetsTwoFramesWhateverTheGpuDoes();
-  aDecliningWindowLeavesTheFrameQueued();
-  holdingKeepsAGpuBoundViewAtTheGpusRate();
-  holdingKeepsTheGpuFedThroughALongSubmit();
-  holdingOneFrameTheNextRecordingWaitsForTheWindow();
+  waitingBeforeSubmitLeavesTheFrameQueued();
+  deferringThePresentKeepsAGpuBoundViewAtTheGpusRate();
+  deferringThePresentKeepsTheGpuFedThroughALongSubmit();
+  withOneFrameInFlightTheNextRecordingWaitsForTheWindow();
   requestsWhileRecordingAreOneRequest();
-  twoFramesDeepARecordingThatEndsEarlyWaitsAndNoneStarts();
+  withTwoFramesInFlightARecordingThatFinishesEarlyWaitsAndNoneStarts();
   aFrameTheWindowGivesBackIsTheReadyFrameAgain();
   everyFrameRecordedIsShown();
-  aRecordingThatFitsKeepsTheViewOneFrameDeep();
+  aRecordingThatFitsKeepsOneFrameInFlight();
   aRecordingLongerThanAFrameOverlapsThePresents();
-  oneLateRecordingDoesNotChangeTheDepth();
-  twoLateRecordingsOutOfFourGoDeeperAndASecondOfFitsComesBack();
-  aViewDisturbedNowAndThenStaysTwoFramesDeep();
-  aRecordingThatHoversAroundAFrameDoesNotFlipTheDepth();
-  aFixedDepthOfTwoNeverChanges();
+  oneLateRecordingDoesNotChangeTheFramesInFlight();
+  twoLateRecordingsOutOfFourPutTwoFramesInFlightAndASecondOfFitsComesBack();
+  aViewDisturbedNowAndThenKeepsTwoFramesInFlight();
+  aRecordingThatHoversAroundAFrameDoesNotFlipTheFramesInFlight();
+  twoFramesInFlightByPolicyNeverChange();
   aTextureViewTakesAFrameAtOnceWhileItHasNone();
   aTextureViewTakesTheNextFrameOnceItDrewThePrevious();
   anUrgentFrameReplacesTheOneATextureViewHasNotDrawn();
-  aFrameTheWindowDeclinesIsTriedOnTheNextFrameSignal();
+  aFrameWithoutAWindowTextureIsTriedOnTheNextAnimationFrame();
   withoutAWindowFramesAreRecordedAndWait();
   aWindowThatCannotShowAFrameIsLeftAloneUntilItCan();
-  anIdleViewAsksForNoFrameSignals();
-  cancelForgetsTheSignalAndTheFrameInTheWindow();
+  anIdleViewAsksForNoAnimationFrames();
+  cancelForgetsTheAnimationFrameAndTheFrameInTheWindow();
   aWindowOfAnotherKindHasDrawnNothingYet();
   if (failures == 0) {
     std::printf("FrameSchedulerTest: passed\n");

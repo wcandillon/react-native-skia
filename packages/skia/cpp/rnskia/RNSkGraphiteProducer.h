@@ -65,7 +65,7 @@ public:
   /**
    Takes a thread of the render pool for the life of the producer. `policy`
    is the pacing policy of the platform (see RNSkPacingPolicy.h); what the
-   window shows is known once the view has one (see setWindow).
+   window shows is known once the view has one (see setPresentMode).
    */
   explicit RNSkGraphiteProducer(Scheduler::Policy policy);
   ~RNSkGraphiteProducer();
@@ -135,17 +135,19 @@ public:
     return std::forward<Entry>(entry)(_scheduler);
   }
 
-  /** What the view's window shows (see Scheduler::Window). Present thread. */
-  void setWindow(Scheduler::Window window);
+  /**
+   What the view's window shows (see Scheduler::PresentMode). Present thread.
+   */
+  void setPresentMode(Scheduler::PresentMode presentMode);
 
   /** The view left its window (see Scheduler::cancel). Present thread. */
   void cancelFrames();
 
   /**
-   Whether a frame signal is asked for and has not come (see
-   Scheduler::wantsFrameSignal). Present thread.
+   Whether an animation frame is asked for and has not come (see
+   Scheduler::hasPendingAnimationFrame). Present thread.
    */
-  bool wantsFrameSignal();
+  bool hasPendingAnimationFrame();
 
   /**
    The view took these recordings off the target, for its window: the ready

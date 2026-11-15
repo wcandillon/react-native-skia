@@ -22,11 +22,12 @@ namespace RNSkia {
 /**
  * Runs tasks on the present thread once their delay has passed: a timerfd on
  * the thread's looper (see rnsurface::RenderThread), armed for the task due
- * first. What a view polls the GPU with while its window holds a frame (see
- * RNSkView::FrameHost::watchAcknowledgement): nothing announces the GPU
+ * first: the setTimeout() of the present thread. What a view polls the GPU
+ * with while its window has a present deferred (see
+ * RNSkView::FrameHost::pollSubmittedWorkDone): nothing announces the GPU
  * being done, and a wait for it would hold up every submit (see
  * DawnContext::isDone). One for the process, as the thread is, made on that
- * thread at its first post.
+ * thread at its first timeout.
  */
 class PresentThreadTimer {
 public:
@@ -38,11 +39,11 @@ public:
 
   /**
    Runs the task once `delay` has passed, after the tasks due before it and
-   never on the spot. A task posted cannot be taken back. Present thread.
+   never on the spot. A timeout set cannot be cleared. Present thread.
    */
-  void post(std::chrono::nanoseconds delay, std::function<void()> task) {
+  void setTimeout(std::chrono::nanoseconds delay, std::function<void()> task) {
     RNSURFACE_ASSERT_THREAD(presentThread().checker(),
-                            "PresentThreadTimer::post");
+                            "PresentThreadTimer::setTimeout");
     _tasks.emplace(Clock::now() + delay, std::move(task));
     arm();
   }

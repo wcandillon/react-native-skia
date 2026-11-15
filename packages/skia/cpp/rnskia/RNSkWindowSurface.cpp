@@ -164,7 +164,7 @@ void RNSkWindowSurface::releaseWindow() {
   // The surface goes before the window it draws into, and with it the frame
   // it held. The next window has presented nothing yet.
   _surface = nullptr;
-  _heldFrame = false;
+  _presentDeferred = false;
   _hasPresentedWork = false;
   _needsConfigure = false;
   {
@@ -195,9 +195,9 @@ bool RNSkWindowSurface::showsFrame() {
   return _showsFrame;
 }
 
-bool RNSkWindowSurface::isAcknowledged() {
+bool RNSkWindowSurface::isPreviousWorkDone() {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
-                          "RNSkWindowSurface::isAcknowledged");
+                          "RNSkWindowSurface::isPreviousWorkDone");
   if (!_hasPresentedWork) {
     return true;
   }
@@ -210,18 +210,19 @@ bool RNSkWindowSurface::isAcknowledged() {
   return true;
 }
 
-bool RNSkWindowSurface::hasHeldFrame() {
-  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::hasHeldFrame");
-  return _heldFrame;
+bool RNSkWindowSurface::hasDeferredPresent() {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::hasDeferredPresent");
+  return _presentDeferred;
 }
 
-bool RNSkWindowSurface::presentHeldFrame() {
+bool RNSkWindowSurface::presentDeferredFrame() {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
-                          "RNSkWindowSurface::presentHeldFrame");
-  if (!_heldFrame) {
+                          "RNSkWindowSurface::presentDeferredFrame");
+  if (!_presentDeferred) {
     return false;
   }
-  _heldFrame = false;
+  _presentDeferred = false;
   // The window the platform took back gets nothing (see abandon), and a
   // device lost since has nothing to present with: the frame is lost with
   // either, and the view shows its last one again on what comes next. The
@@ -398,8 +399,8 @@ void RNSkWindowSurface::configureIfNeeded() {
 
 void RNSkWindowSurface::configureSurface() {
   // The swapchain is made again: Dawn destroys the image the previous one
-  // had acquired, and the frame held in it with it.
-  _heldFrame = false;
+  // had acquired, and the frame whose present was deferred with it.
+  _presentDeferred = false;
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -502,7 +503,7 @@ void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   for (auto *window : windows()) {
     if (window->_generation == generation) {
       window->_surface = nullptr;
-      window->_heldFrame = false;
+      window->_presentDeferred = false;
       window->_hasPresentedWork = false;
       window->_generation = 0;
     }
@@ -556,7 +557,8 @@ bool RNSkWindowSurface::presentRecordings(
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  // Before the window acquires an image: a frame declined holds nothing.
+  // Before the window acquires an image: a frame it does not take holds
+  // nothing.
   if (!takesFrame()) {
     return false;
   }
@@ -595,7 +597,8 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  // Before the window acquires an image: a frame declined holds nothing.
+  // Before the window acquires an image: a frame it does not take holds
+  // nothing.
   if (!takesFrame()) {
     return false;
   }
@@ -643,12 +646,12 @@ bool RNSkWindowSurface::presentTexture() {
   // The GPU is still on the frame presented before: a present now would
   // wait for it, here, with every other canvas behind. The work is
   // submitted, so the GPU goes on to it without a pause; the present is
-  // the view's to make once the GPU is done (see presentHeldFrame). The
-  // same for a frame the view asked to hold (see holdNextPresent).
-  if (_acknowledgement ==
-          rnsurface::FrameScheduler::Acknowledgement::kHoldsPresent &&
-      (_holdNextPresent || !isAcknowledged())) {
-    _heldFrame = true;
+  // the view's to make once the GPU is done (see presentDeferredFrame). The
+  // same for a present the view asked to defer (see deferNextPresent).
+  if (_waitForPreviousWork ==
+          rnsurface::FrameScheduler::WaitForPreviousWork::kBeforePresent &&
+      (_deferNextPresent || !isPreviousWorkDone())) {
+    _presentDeferred = true;
     return true;
   }
   presentNow();
@@ -659,13 +662,14 @@ void RNSkWindowSurface::presentNow() {
   _surface.Present();
   _showsFrame = true;
   _presentCount++;
-  if (_acknowledgement == rnsurface::FrameScheduler::Acknowledgement::kNone) {
+  if (_waitForPreviousWork ==
+      rnsurface::FrameScheduler::WaitForPreviousWork::kNever) {
     return;
   }
   // Everything submitted so far, this frame's work included: what the fence
   // of its buffer waits for, and the next present for that fence.
   if (auto *context = DawnContext::tryGetInstance()) {
-    _presentedWork = context->submittedWork(&_presentedWorkGeneration);
+    _presentedWork = context->onSubmittedWorkDone(&_presentedWorkGeneration);
     _hasPresentedWork = true;
   }
 }

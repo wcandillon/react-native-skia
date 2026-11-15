@@ -12,7 +12,7 @@
 
 #include "JniPresentThread.h"
 #include "JniSkiaManager.h"
-#include "RNSkFrameSignal.h"
+#include "RNSkAnimationFrame.h"
 #include "RNSkLog.h"
 #include "RNSkPresentThread.h"
 #include "RNSkPresentThreadTimer.h"
@@ -32,8 +32,8 @@ namespace jni = facebook::jni;
  * thread (see RNSkWindowSurface); this object is destroyed there as well
  * (see SkiaView.dropInstance), so no call below runs under a present. The
  * view's frame scheduler (see rnsurface::FrameScheduler) gets its inputs
- * from here: the frame signals from the AChoreographer of the thread (see
- * FrameSignals), the polls for the GPU from a timer of the thread (see
+ * from here: the animation frames from the AChoreographer of the thread (see
+ * AnimationFrames), the polls for the GPU from a timer of the thread (see
  * PresentThreadTimer), and the TextureView's draws from the Java view.
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
@@ -161,9 +161,9 @@ protected:
   void frameConsumed() { _view->onFrameConsumed(); }
 
   // Present thread: the view left its window, or the window lost its
-  // surface (see SkiaView.cancelFrames). A frame signal already asked for
-  // still fires, as AChoreographer has no cancel: it is dropped, or serves
-  // a request made since (see FrameSignals::onSignal).
+  // surface (see SkiaView.cancelFrames). An animation frame already asked
+  // for still fires, as AChoreographer has no cancel: it is dropped, or
+  // serves a request made since (see AnimationFrames::onFrame).
   void cancelScheduledFrames() { _view->cancelFrames(); }
 
 private:
@@ -195,21 +195,21 @@ private:
     // What the view's frame scheduler asks of the platform, on the present
     // thread (see RNSkView::FrameHost). Weak: the view may outlive this
     // object in the registry for a moment, and the timer's tasks the view.
-    _frameSignals = std::make_shared<FrameSignals>(_view);
-    std::weak_ptr<FrameSignals> weakSignals = _frameSignals;
+    _animationFrames = std::make_shared<AnimationFrames>(_view);
+    std::weak_ptr<AnimationFrames> weakFrames = _animationFrames;
     std::weak_ptr<RNSkView> weakView = _view;
     RNSkView::FrameHost host;
-    host.requestFrameSignal = [weakSignals]() {
-      if (auto signals = weakSignals.lock()) {
-        signals->request();
+    host.requestAnimationFrame = [weakFrames]() {
+      if (auto frames = weakFrames.lock()) {
+        frames->request();
       }
     };
     // Each poll asks a fence and nothing else (see
-    // RNSkWindowSurface::isAcknowledged).
-    host.watchAcknowledgement = [weakView](std::chrono::nanoseconds delay) {
-      PresentThreadTimer::getInstance().post(delay, [weakView]() {
+    // RNSkWindowSurface::isPreviousWorkDone).
+    host.pollSubmittedWorkDone = [weakView](std::chrono::nanoseconds delay) {
+      PresentThreadTimer::getInstance().setTimeout(delay, [weakView]() {
         if (auto view = weakView.lock()) {
-          view->onAcknowledgementPoll();
+          view->onSubmittedWorkDonePoll();
         }
       });
     };
@@ -250,60 +250,61 @@ private:
   };
 
   /**
-   The frame signals of the view, on the present thread: the next frame of
+   The animation frames of the view, on the present thread: the next frame of
    the display, from the thread's AChoreographer (its looper is the
    thread's, see rnsurface::RenderThread), with what that frame's timeline
-   says of it (see FrameSignalSource).
+   says of it (see AnimationFrameSource).
    */
-  class FrameSignals : public std::enable_shared_from_this<FrameSignals> {
+  class AnimationFrames : public std::enable_shared_from_this<AnimationFrames> {
   public:
-    explicit FrameSignals(std::weak_ptr<RNSkView> view)
+    explicit AnimationFrames(std::weak_ptr<RNSkView> view)
         : _view(std::move(view)) {}
 
-    // A signal has no cancel, so one is outstanding at most: a request made
-    // while the signal of a cancelled one is still to fire takes that
-    // signal rather than a second, which would signal twice per frame from
-    // then on. The token outlives this object, so a signal that fires after
-    // it finds nothing.
+    // A callback has no cancel, so one is outstanding at most: a request
+    // made while the callback of a cancelled one is still to fire takes
+    // that callback rather than a second, which would call back twice per
+    // frame from then on. The token outlives this object, so a callback
+    // that fires after it finds nothing.
     void request() {
       if (_pending) {
         return;
       }
       _pending = true;
-      auto *token = new std::weak_ptr<FrameSignals>(weak_from_this());
-      if (FrameSignalSource::post(onSignal, token)) {
+      auto *token = new std::weak_ptr<AnimationFrames>(weak_from_this());
+      if (AnimationFrameSource::post(onFrame, token)) {
         return;
       }
       // No connection to the display's events. The frame goes without a
-      // signal of the display, as a task behind those queued, rather than
-      // never: the scheduler holds its frames until the signal it asked for.
+      // frame of the display, as a task behind those queued, rather than
+      // never: the scheduler keeps its frames until the animation frame it
+      // asked for.
       if (!_loggedNoChoreographer) {
         _loggedNoChoreographer = true;
         RNSkLogger::logToConsole(
             "No AChoreographer on the present thread: presenting unpaced");
       }
       presentThread().post(
-          [token]() { onSignal(FrameSignalSource::unpaced(), token); });
+          [token]() { onFrame(AnimationFrameSource::unpaced(), token); });
     }
 
   private:
-    static void onSignal(const FrameSignalSource::FrameSignal &signal,
-                         void *data) {
-      auto *token = static_cast<std::weak_ptr<FrameSignals> *>(data);
-      if (auto signals = token->lock()) {
-        signals->_pending = false;
-        auto view = signals->_view.lock();
+    static void onFrame(const AnimationFrameSource::AnimationFrame &frame,
+                        void *data) {
+      auto *token = static_cast<std::weak_ptr<AnimationFrames> *>(data);
+      if (auto frames = token->lock()) {
+        frames->_pending = false;
+        auto view = frames->_view.lock();
         // Not asked for any more after a cancel: the scheduler hears of the
-        // signals it asked for only.
-        if (view != nullptr && view->wantsFrameSignal()) {
-          view->onFrameSignal(signal);
+        // animation frames it asked for only.
+        if (view != nullptr && view->hasPendingAnimationFrame()) {
+          view->onAnimationFrame(frame);
         }
       }
       delete token;
     }
 
     std::weak_ptr<RNSkView> _view;
-    // A signal was asked of the choreographer and has not fired. Present
+    // A callback was asked of the choreographer and has not fired. Present
     // thread, as the rest.
     bool _pending = false;
     bool _loggedNoChoreographer = false;
@@ -320,11 +321,11 @@ private:
     // RNSkWindowSurface::attach); not detach(), which would take down an
     // abandon the main thread sets while this runs.
     // A TextureView draws the latest frame presented to it; a SurfaceView's
-    // frames show in turn (see RNSkView::setWindow), and the scheduler paces
-    // each its own way.
-    _view->setWindow(
-        isSurface ? rnsurface::FrameScheduler::Window::kShowsEachFrame
-                  : rnsurface::FrameScheduler::Window::kShowsLatestFrame);
+    // frames show in turn (see RNSkView::setPresentMode), and the scheduler
+    // paces each its own way.
+    _view->setPresentMode(
+        isSurface ? rnsurface::FrameScheduler::PresentMode::kFifo
+                  : rnsurface::FrameScheduler::PresentMode::kMailbox);
     JNIEnv *env = jni::Environment::current();
     jobject jSurface = surface;
     // The Surface created over a TextureView's SurfaceTexture; it lives as
@@ -386,7 +387,7 @@ private:
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;
   std::shared_ptr<RNSkView> _view;
-  std::shared_ptr<FrameSignals> _frameSignals;
+  std::shared_ptr<AnimationFrames> _animationFrames;
 };
 
 } // namespace RNSkia
