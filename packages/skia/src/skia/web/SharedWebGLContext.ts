@@ -90,6 +90,8 @@ export class SharedWebGLContext {
   // first.
   private readonly screens = new Map<string, JsiSkSurface>();
   private readonly restoreListeners = new Set<() => void>();
+  // A failing surface fails on every frame: say so once.
+  private warnedAboutSurface = false;
 
   constructor(
     private readonly CanvasKit: CanvasKit,
@@ -193,6 +195,9 @@ export class SharedWebGLContext {
    * A surface of the given size on the canvas's drawing buffer, in its
    * bottom-left corner. The buffer holds one frame at a time: draw, flush,
    * then present() it before the next draw.
+   *
+   * Null when there is nothing to draw on: the context is lost, or it can't
+   * make a surface of that size (larger than the GPU allows, say).
    */
   acquireScreen(width: number, height: number): JsiSkSurface | null {
     const grContext = this.getGrContext();
@@ -219,7 +224,17 @@ export class SharedWebGLContext {
       this.CanvasKit.ColorSpace.SRGB
     );
     if (!surface) {
-      throw new Error("Could not create surface");
+      // Not thrown: a view draws from a microtask or a ResizeObserver
+      // callback, where an error reaches neither the app's code nor a React
+      // error boundary. The view keeps its frame, like it does while the
+      // context is lost, and tries again on its next draw.
+      if (!this.warnedAboutSurface) {
+        this.warnedAboutSurface = true;
+        console.warn(
+          `[react-native-skia] Could not create a ${width}x${height} surface on the WebGL context: the canvas stays blank.`
+        );
+      }
+      return null;
     }
     if (screens.size === MAX_SCREENS) {
       const oldest = screens.keys().next().value!;

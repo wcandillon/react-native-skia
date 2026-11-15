@@ -31,7 +31,7 @@ Dawn carries an equivalent.
 ---
 
 diff --git a/include/dawn/native/MetalBackend.h b/include/dawn/native/MetalBackend.h
-index 61fb64fcae..e3a84885b2 100644
+index 61fb64fca..e3a84885b 100644
 --- a/include/dawn/native/MetalBackend.h
 +++ b/include/dawn/native/MetalBackend.h
 @@ -46,6 +46,17 @@ namespace dawn::native::metal {
@@ -53,7 +53,7 @@ index 61fb64fcae..e3a84885b2 100644
  // Return the MTLDevice corresponding to the WGPUDevice.
  DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
 diff --git a/src/dawn/native/ExecutionQueue.cpp b/src/dawn/native/ExecutionQueue.cpp
-index 7dd279f01c..84ff0dff7c 100644
+index 8aca9b6a6..e8f229e5f 100644
 --- a/src/dawn/native/ExecutionQueue.cpp
 +++ b/src/dawn/native/ExecutionQueue.cpp
 @@ -340,7 +340,7 @@ MaybeError ExecutionQueueBase::EnsureCommandsFlushed(ExecutionSerial serial) {
@@ -77,7 +77,7 @@ index 7dd279f01c..84ff0dff7c 100644
      mState.Use<NotifyType::None>([](auto state) { state->mAssumeCompleted = true; });
  
 diff --git a/src/dawn/native/ExecutionQueue.h b/src/dawn/native/ExecutionQueue.h
-index 59f17850a8..bfe42bd473 100644
+index 59f17850a..bfe42bd47 100644
 --- a/src/dawn/native/ExecutionQueue.h
 +++ b/src/dawn/native/ExecutionQueue.h
 @@ -120,6 +120,11 @@ class ExecutionQueueBase : public ApiObjectBase {
@@ -93,7 +93,7 @@ index 59f17850a8..bfe42bd473 100644
      // and waiting on a serial that doesn't have a corresponding fence enqueued. Fake serials to
      // make all commands look completed.
 diff --git a/src/dawn/native/Toggles.cpp b/src/dawn/native/Toggles.cpp
-index 26584c560a..18f92a69ea 100644
+index 9d0dfc90a..334e1388c 100644
 --- a/src/dawn/native/Toggles.cpp
 +++ b/src/dawn/native/Toggles.cpp
 @@ -408,6 +408,17 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
@@ -115,7 +115,7 @@ index 26584c560a..18f92a69ea 100644
       {"use_blit_for_buffer_to_depth_texture_copy",
        "Use a blit instead of a copy command to copy buffer data to the depth aspect of a "
 diff --git a/src/dawn/native/Toggles.h b/src/dawn/native/Toggles.h
-index 1f99a705a6..577d3535fd 100644
+index c8bb00d95..fc3257b1b 100644
 --- a/src/dawn/native/Toggles.h
 +++ b/src/dawn/native/Toggles.h
 @@ -110,6 +110,7 @@ enum class Toggle {
@@ -127,10 +127,10 @@ index 1f99a705a6..577d3535fd 100644
      UseBlitForBufferToStencilTextureCopy,
      UseBlitForStencilTextureWrite,
 diff --git a/src/dawn/native/metal/DeviceMTL.mm b/src/dawn/native/metal/DeviceMTL.mm
-index 1eaa6c0c37..55782beb46 100644
+index f1197fc7b..eaf177c91 100644
 --- a/src/dawn/native/metal/DeviceMTL.mm
 +++ b/src/dawn/native/metal/DeviceMTL.mm
-@@ -56,6 +56,23 @@
+@@ -57,6 +57,23 @@
  #include "src/dawn/platform/tracing/TraceEvent.h"
  #include "src/utils/platform.h"
  
@@ -154,7 +154,7 @@ index 1eaa6c0c37..55782beb46 100644
  namespace dawn::native::metal {
  
  struct KalmanInfo {
-@@ -118,6 +135,95 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
+@@ -119,6 +136,95 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
      }
  }
  
@@ -250,7 +250,7 @@ index 1eaa6c0c37..55782beb46 100644
  }  // namespace
  
  // static
-@@ -187,7 +293,15 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
+@@ -188,7 +294,15 @@ void UpdateTimestampPeriod(id<MTLDevice> device,
  
      mCounterSampleBufferAllocator = std::make_unique<CounterSampleBufferAllocator>(this);
  
@@ -278,7 +278,7 @@ index 1eaa6c0c37..55782beb46 100644
      mMtlDevice = nullptr;
      mMockBlitMtlBuffer = nullptr;
 diff --git a/src/dawn/native/metal/MetalBackend.mm b/src/dawn/native/metal/MetalBackend.mm
-index 567994b94b..8570743f8c 100644
+index 567994b94..8570743f8 100644
 --- a/src/dawn/native/metal/MetalBackend.mm
 +++ b/src/dawn/native/metal/MetalBackend.mm
 @@ -42,6 +42,17 @@ void WaitForCommandsToBeScheduled(WGPUDevice device) {
@@ -300,7 +300,7 @@ index 567994b94b..8570743f8c 100644
      Device* backendDevice = ToBackend(FromAPI(device));
      return backendDevice->GetMTLDevice();
 diff --git a/src/dawn/native/metal/QueueMTL.h b/src/dawn/native/metal/QueueMTL.h
-index a4cc455471..1fca1f4cfb 100644
+index a4cc45547..1fca1f4cf 100644
 --- a/src/dawn/native/metal/QueueMTL.h
 +++ b/src/dawn/native/metal/QueueMTL.h
 @@ -30,6 +30,8 @@
@@ -340,7 +340,7 @@ index a4cc455471..1fca1f4cfb 100644
      // MTLSharedEvent is not available until macOS 10.14+ so use just `id`.
      NSPRef<id> mMtlSharedEvent;
 diff --git a/src/dawn/native/metal/QueueMTL.mm b/src/dawn/native/metal/QueueMTL.mm
-index 9002271a2e..c81a352654 100644
+index 7f990a591..671632dcf 100644
 --- a/src/dawn/native/metal/QueueMTL.mm
 +++ b/src/dawn/native/metal/QueueMTL.mm
 @@ -174,6 +174,34 @@ void Complete(EventCompletionType completionType) override {
@@ -418,7 +418,7 @@ index 9002271a2e..c81a352654 100644
  
          return {};
 diff --git a/src/dawn/native/metal/SwapChainMTL.mm b/src/dawn/native/metal/SwapChainMTL.mm
-index b9a9d07b3a..f512d708d9 100644
+index b9a9d07b3..f512d708d 100644
 --- a/src/dawn/native/metal/SwapChainMTL.mm
 +++ b/src/dawn/native/metal/SwapChainMTL.mm
 @@ -95,9 +95,17 @@
@@ -443,7 +443,7 @@ index b9a9d07b3a..f512d708d9 100644
      mTexture->APIDestroy();
      mTexture = nullptr;
 diff --git a/src/dawn/tests/white_box/MetalBackendTests.cpp b/src/dawn/tests/white_box/MetalBackendTests.cpp
-index f2986a5392..3e95e74871 100644
+index ec9b7ae2c..7c1886a9f 100644
 --- a/src/dawn/tests/white_box/MetalBackendTests.cpp
 +++ b/src/dawn/tests/white_box/MetalBackendTests.cpp
 @@ -25,6 +25,12 @@
@@ -459,8 +459,8 @@ index f2986a5392..3e95e74871 100644
  #include "dawn/native/DawnNative.h"
  #include "dawn/native/MetalBackend.h"
  #include "src/dawn/tests/DawnTest.h"
-@@ -33,7 +39,7 @@ namespace dawn::native {
- namespace {
+@@ -35,7 +41,7 @@ namespace {
+ using ::testing::HasSubstr;
  
  class MetalBackendTests : public DawnTest {
 -  private:
@@ -468,7 +468,7 @@ index f2986a5392..3e95e74871 100644
      void SetUp() override {
          DawnTest::SetUp();
          DAWN_TEST_UNSUPPORTED_IF(UsesWire());
-@@ -61,6 +67,152 @@ TEST_P(MetalBackendTests, WaitForCommandsToBeScheduledOnDestroyedDevice) {
+@@ -63,6 +69,152 @@ TEST_P(MetalBackendTests, WaitForCommandsToBeScheduledOnDestroyedDevice) {
      metal::WaitForCommandsToBeScheduled(device.Get());
  }
  
@@ -621,7 +621,7 @@ index f2986a5392..3e95e74871 100644
  #if defined(DAWN_ENABLE_ERROR_INJECTION)
  
  // Test that a command buffer execution failure causes the device to be lost cleanly and
-@@ -217,6 +369,7 @@ TEST_P(MetalBackendTests, MapAsyncOnFailedCommandBuffer) {
+@@ -219,6 +371,7 @@ TEST_P(MetalBackendTests, MapAsyncOnFailedCommandBuffer) {
  #endif  // defined(DAWN_ENABLE_ERROR_INJECTION)
  
  DAWN_INSTANTIATE_TEST(MetalBackendTests, MetalBackend());

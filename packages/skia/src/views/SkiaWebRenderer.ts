@@ -43,6 +43,15 @@ export interface Renderer {
   dispose(): void;
 }
 
+// The renderer in charge of each element. A disposed renderer only frees the
+// element's bitmap if no other renderer took the element over in between.
+const owners = new WeakMap<HTMLCanvasElement, Renderer>();
+
+// Whether the element takes part in rendering: it is in the document and no
+// ancestor (nor itself) has display: none. An element that isn't has no box.
+const isRendered = (canvas: HTMLCanvasElement) =>
+  canvas.isConnected && canvas.getClientRects().length > 0;
+
 export class WebGLRenderer implements Renderer {
   private readonly shared: SharedWebGLContext;
   private readonly ctx: CanvasRenderingContext2D;
@@ -71,6 +80,7 @@ export class WebGLRenderer implements Renderer {
       throw new Error("Could not create a 2D context");
     }
     this.ctx = ctx;
+    owners.set(canvas, this);
     // A GPU reset lost the frame on screen: paint it again.
     this.unsubscribe = shared.onRestored(requestRedraw);
     this.onResize();
@@ -139,14 +149,30 @@ export class WebGLRenderer implements Renderer {
 
   dispose(): void {
     this.unsubscribe();
+    this.width = 0;
+    this.height = 0;
+    const { canvas } = this;
     // Free the element's bitmap (4 bytes per pixel): a canvas that stays in
     // the document without a renderer, hidden in an Activity say, would
     // otherwise keep a full-size one. The next renderer's onResize() sizes
     // it again.
-    this.width = 0;
-    this.height = 0;
-    this.canvas.width = 0;
-    this.canvas.height = 0;
+    //
+    // Only once it is known not to be on screen, though. dispose() runs from
+    // a layout effect cleanup, which React also runs when it hides an
+    // Activity, right before it sets display: none on the subtree, and an app
+    // can keep that subtree displayed (as a backdrop under the screen that
+    // covers it): clearing the bitmap there would blank a canvas the user
+    // still sees. So the check waits for the commit to be over, and leaves
+    // the frame alone if the element is still rendered or if another
+    // renderer has taken it over (StrictMode's effect re-run).
+    queueMicrotask(() => {
+      if (owners.get(canvas) !== this || isRendered(canvas)) {
+        return;
+      }
+      owners.delete(canvas);
+      canvas.width = 0;
+      canvas.height = 0;
+    });
   }
 }
 

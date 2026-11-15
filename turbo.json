@@ -100,6 +100,9 @@
     "lint": {
       "cache": false
     },
+    "lint:ci": {
+      "cache": false
+    },
     "tsc": {
       "cache": false
     },

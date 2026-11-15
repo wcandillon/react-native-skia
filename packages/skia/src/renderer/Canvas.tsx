@@ -16,6 +16,7 @@ import type {
 
 import { SkiaViewApi } from "../views/api";
 import { androidNativeProps, useBackingViewWarning } from "../views/android";
+import { useAppleFormatWarning } from "../views/apple";
 import type { AndroidCanvasProps, CanvasColorSpace } from "../views/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
 import { measureLayout } from "../views/measureLayout";
@@ -67,7 +68,9 @@ export interface CanvasProps extends ViewProps {
    * identical to the default 8-bit surface, only with more precision (this is
    * about bit depth, not HDR). On Android it needs a `SurfaceView` (see
    * `android.backingView`), which it makes opaque, as the 10-bit format only
-   * has 2 bits of alpha; it is read once, when the canvas mounts.
+   * has 2 bits of alpha. Read once, when the canvas mounts: a change is
+   * ignored, with a warning in development; remount the canvas (with a `key`)
+   * to change it.
    */
   highBitDepth?: boolean;
   /**
@@ -75,9 +78,21 @@ export interface CanvasProps extends ViewProps {
    * devices with a wide color gamut display, sRGB everywhere else. Use
    * `"srgb"` to match offscreen rendering (`drawAsImage`,
    * `Skia.Surface.MakeOffscreen`, snapshots). Android and the web always
-   * render in sRGB.
+   * render in sRGB. Read once, when the canvas mounts, like `highBitDepth`.
    */
   colorSpace?: CanvasColorSpace;
+  /**
+   * Draws text with device independent (distance field) fonts: a glyph is
+   * rasterized once and reused under any rotation or scale, instead of
+   * being rasterized again for every new transform. Turn it on for text that
+   * rotates or scales on every frame, where it is many times faster (6,000
+   * rotating text blobs: 4 to 30 fps on an iPhone 14 Pro). It costs more
+   * GPU time per glyph and draws slightly softer glyphs, which text that only
+   * moves pays for nothing, so it is off by default. Glyphs smaller than
+   * about 18 pixels are drawn as usual. Can be changed at any time. Native
+   * only, ignored on web.
+   */
+  deviceIndependentFonts?: boolean;
   /**
    * Android-only rendering options: the native view behind the canvas and its
    * options, see {@link AndroidCanvasProps}. The view is created when the
@@ -95,14 +110,24 @@ export interface CanvasProps extends ViewProps {
  */
 const useCanvasRoot = ({
   children,
+  deviceIndependentFonts,
   ref,
-}: Pick<CanvasProps, "children" | "ref">) => {
+}: Pick<CanvasProps, "children" | "deviceIndependentFonts" | "ref">) => {
   const viewRef = useRef<NativeView>(null);
   // Native ID
   const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
 
   // Root
   const root = useMemo(() => new SkiaSGRoot(Skia, nativeId), [nativeId]);
+
+  // Before the content, so that the first frame is recorded with it.
+  useLayoutEffect(() => {
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "deviceIndependentFonts",
+      deviceIndependentFonts
+    );
+  }, [nativeId, deviceIndependentFonts]);
 
   // Render effects
   useLayoutEffect(() => {
@@ -171,13 +196,19 @@ const useCanvasRoot = ({
 export const Canvas = ({
   children,
   highBitDepth = false,
+  deviceIndependentFonts = false,
   colorSpace,
   android,
   ref,
   ...viewProps
 }: CanvasProps) => {
-  const { nativeId, viewRef } = useCanvasRoot({ children, ref });
+  const { nativeId, viewRef } = useCanvasRoot({
+    children,
+    deviceIndependentFonts,
+    ref,
+  });
   useBackingViewWarning({ highBitDepth, android });
+  useAppleFormatWarning({ highBitDepth, colorSpace });
   return (
     <SkiaViewNativeComponent
       ref={viewRef}

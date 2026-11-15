@@ -7,7 +7,6 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
-#include "RNMetalLayerColorSpace.h"
 #include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
 
@@ -68,7 +67,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
-  // A layout attaches the same window again, which keeps what it shows.
+  // The window held already, attached again (Apple's attachSurface, as the
+  // bit depth or the color space changes), keeps what it shows. A layout
+  // does not attach: it resizes the attached window (see resize).
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
   // Not detach(): an abandon that lands while this runs (the platform taking
   // the window back as it attaches) must be kept for the detach posted
@@ -129,6 +130,9 @@ void RNSkWindowSurface::resize(int width, int height) {
     // present (see takePendingSize).
     _targetInfo.width = width;
     _targetInfo.height = height;
+    // The platform laid the view out at this size first: with that layout's
+    // density (see setLayoutSize).
+    _targetInfo.pixelDensity = _layoutPixelDensity;
     _pendingWidth = width;
     _pendingHeight = height;
     _hasPendingSize = true;
@@ -192,6 +196,32 @@ void RNSkWindowSurface::setLayoutSize(int width, int height) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   _layoutWidth = width;
   _layoutHeight = height;
+}
+
+void RNSkWindowSurface::setLayoutSize(int width, int height,
+                                      float pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _layoutWidth = width;
+  _layoutHeight = height;
+  _layoutPixelDensity = pixelDensity;
+  // A window that already has this size takes the density now: no resize
+  // will come for it (see updateTargetInfo).
+  if (_hasTargetInfo && _targetInfo.width == width &&
+      _targetInfo.height == height) {
+    _targetInfo.pixelDensity = pixelDensity;
+  }
+}
+
+bool RNSkWindowSurface::getPixelDensity(float *pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  // The one that goes with the window's size, until it has one.
+  float density =
+      _hasTargetInfo ? _targetInfo.pixelDensity : _layoutPixelDensity;
+  if (density <= 0) {
+    return false;
+  }
+  *pixelDensity = density;
+  return true;
 }
 
 bool RNSkWindowSurface::getLayoutSize(int *width, int *height) {
@@ -268,6 +298,10 @@ void RNSkWindowSurface::updateTargetInfo() {
     _targetInfo.width = _pendingWidth;
     _targetInfo.height = _pendingHeight;
   }
+  // The platform lays the view out before its window follows the new size:
+  // the density of that layout goes with the size, rather than the one of
+  // the layout the window had until now.
+  _targetInfo.pixelDensity = _layoutPixelDensity;
   _hasTargetInfo = true;
   // What the surface granted, kept once the window is detached: it is what
   // the window comes back with.
@@ -327,13 +361,11 @@ void RNSkWindowSurface::configureSurface() {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
+  // The colorspace of a CAMetalLayer is not set here: the platform view tags
+  // the layer on the main thread as it makes it (see
+  // apple/MetalLayerColorSpace.h), and makes it non-opaque for the alpha mode
+  // above, so that nothing here changes the layer on the present thread.
   _surface.Configure(&config);
-#ifdef __APPLE__
-  // The layer is tagged with the gamut the window renders in; float formats
-  // need the (gamma-encoded) extended variant so the values display
-  // identically to the 8-bit path.
-  applyCAMetalLayerColorSpace(_nativeHandle, _format, _useP3ColorSpace);
-#endif
 }
 
 wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {

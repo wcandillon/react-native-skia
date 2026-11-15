@@ -19,8 +19,9 @@
 #include <cmath>
 #include <memory>
 
+#include "MetalLayerColorSpace.h"
 #import "RNSkManager.h"
-#import "RNSkPresentThread.h"
+#include "RNSkPresentThread.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
@@ -106,8 +107,11 @@ usesP3ColorSpace(const std::string &colorSpace,
   // the duration of the call.
   std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
+  // The highBitDepth and colorSpace props (see usesP3ColorSpace) as they are
+  // when the native view is created: the format and the color space of the
+  // canvas are chosen then and kept, as the backing view is on Android (see
+  // setHighBitDepth:).
   bool _highBitDepth;
-  // The colorSpace prop, see usesP3ColorSpace.
   std::string _colorSpace;
   // Whether the window can show a frame (see appIsBackgrounded). Written on
   // the main thread, read on the present thread, by the surface, which holds
@@ -237,6 +241,22 @@ usesP3ColorSpace(const std::string &colorSpace,
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
     _layer = [CAMetalLayer layer];
 #pragma clang diagnostic pop
+    // The surface is configured with a premultiplied alpha mode, for which
+    // Dawn sets the layer non-opaque on every Configure, on the present
+    // thread. A CAMetalLayer is opaque by default, so the first of those
+    // calls would change the layer there, in an implicit CATransaction that
+    // the thread's run loop then commits: a commit of the layer tree off the
+    // main thread (#4474). Set here, Dawn's call changes nothing (see the
+    // asserts in attachWindowWithWidth:height:).
+    _layer.opaque = NO;
+    // The layer is tagged with its colorspace as it is made, on the main
+    // thread, and committed with it: no frame is shown under another tag, and
+    // the present thread configures the surface without touching a
+    // CATransaction (#4474). The bit depth and the color space are those of
+    // the native view, which do not change (see setHighBitDepth:).
+    RNSkia::applyCAMetalLayerColorSpace(
+        _layer, _highBitDepth,
+        usesP3ColorSpace(_colorSpace, manager->getPlatformContext()));
     [self.layer addSublayer:_layer];
     // AppKit lays out a view put in a superview only when asked: the layout
     // attaches the window's surface to the layer (see layoutSubviews).
@@ -277,10 +297,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   // Presents, redraws and frame requests go to the present thread, where
   // the view is the one the tasks posted before see.
   _view->setPresentThread([](std::function<void()> task) {
-    auto shared = std::make_shared<std::function<void()>>(std::move(task));
-    [RNSkPresentThread post:^{
-      (*shared)();
-    }];
+    RNSkia::presentThread().post(std::move(task));
   });
   // The entries of the view and its window that belong to the present
   // thread are bound to it there (see RNSkView::bindPresentThread), ahead
@@ -288,10 +305,10 @@ usesP3ColorSpace(const std::string &colorSpace,
   {
     auto surface = _surface;
     auto view = _view;
-    [RNSkPresentThread post:^{
+    RNSkia::presentThread().post([=]() {
       surface->bindPresentingThread();
       view->bindPresentThread();
-    }];
+    });
   }
   [self enterPresentThread];
   // A submitted recording goes to the scheduler, on the present thread,
@@ -323,13 +340,13 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto view = _view;
   auto presenting = _presenting;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
     }
-  }];
+  });
 }
 
 // Main thread, as the view leaves its superview or is recycled: the present
@@ -356,7 +373,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   void *retainedSelf = (__bridge_retained void *)self;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     @autoreleasepool {
       __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
       *view->_presenting = false;
@@ -380,7 +397,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     }
     dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
                      [](void *retained) { CFRelease(retained); });
-  }];
+  });
   _windowAttached = false;
 }
 
@@ -455,9 +472,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   _canPresent->store(true);
   if (_view != nullptr) {
     auto view = _view;
-    [RNSkPresentThread post:^{
-      view->onCanPresent();
-    }];
+    RNSkia::presentThread().post([=]() { view->onCanPresent(); });
   }
 }
 
@@ -564,8 +579,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 // No autorelease pool of its own: the link is a run loop source, so the
-// thread's run loop returns after each tick and drains its pool then (see
-// presentRunLoop).
+// present thread's loop returns after each tick and drains its pool then
+// (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
   _presentedSinceTick = false;
   _tickTarget = link.targetTimestamp;
@@ -598,7 +613,7 @@ usesP3ColorSpace(const std::string &colorSpace,
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                static_cast<int64_t>(delay * NSEC_PER_SEC)),
                  dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-                   [RNSkPresentThread post:^{
+                   RNSkia::presentThread().post([=]() {
                      if (!*presenting) {
                        return;
                      }
@@ -613,7 +628,7 @@ usesP3ColorSpace(const std::string &colorSpace,
                      strongSelf->_presentAgainScheduled = false;
                      strongSelf->_lastTick = CACurrentMediaTime();
                      strongSelf->_scheduler->onFrame();
-                   }];
+                   });
                  });
 }
 #endif
@@ -673,9 +688,8 @@ usesP3ColorSpace(const std::string &colorSpace,
 }
 
 // Configures the layer as the Dawn surface of the view, at the layer's size:
-// as the view comes back into a superview with a new layer, and again when
-// the bit depth or the color space changes so that the layer's pixel format
-// follows (see attachWindowWithWidth:height:).
+// as the view comes back into a superview with a new layer (see
+// attachWindowWithWidth:height:).
 - (void)attachSurface {
   int w = 0;
   int h = 0;
@@ -709,12 +723,23 @@ usesP3ColorSpace(const std::string &colorSpace,
   const bool highBitDepth = _highBitDepth;
   const bool useP3ColorSpace =
       usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
-  [RNSkPresentThread post:^{
+  // The layer was tagged with the colorspace of this bit depth and color
+  // space when it was made (see willMoveToSuperview:), for the format the
+  // attach asks for, which a Metal surface grants (see
+  // RNSkWindowSurface::attach).
+  RNSkia::presentThread().post([=]() {
     int width = 0;
     int height = 0;
     if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
       return;
     }
+    // Configuring the surface, at the first present after this, must not
+    // change the layer, which would open a CATransaction on this thread
+    // (#4474). Dawn sets the layer's opacity from the alpha mode: the view
+    // made the layer non-opaque for the premultiplied mode of
+    // RNSkWindowSurface::configureSurface, and the two must stay in step.
+    NSCAssert(!layer.opaque, @"The CAMetalLayer must be made non-opaque on "
+                             @"the main thread before the attach");
     // The layer is owned by the view: nothing to release with the window.
     surface->attach((__bridge void *)layer, width, height, highBitDepth,
                     useP3ColorSpace, nullptr);
@@ -728,7 +753,7 @@ usesP3ColorSpace(const std::string &colorSpace,
     if (strongSelf != nil) {
       strongSelf->_hasWindow = surface->isAttached();
     }
-  }];
+  });
 }
 
 // Takes the window away on the present thread, after the present in flight:
@@ -742,13 +767,13 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
-  [RNSkPresentThread post:^{
+  RNSkia::presentThread().post([=]() {
     surface->detach((__bridge void *)layer);
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_hasWindow = surface->isAttached();
     }
-  }];
+  });
 }
 
 #pragma mark - Props
@@ -780,37 +805,24 @@ usesP3ColorSpace(const std::string &colorSpace,
   }
 }
 
+// The bit depth and the color space are read when the native view is created
+// and kept until it goes (see releaseNativeView), as the backing view and its
+// format are on Android: a change on a mounted canvas is ignored, with a
+// warning in development from JS (see views/apple.ts). The layer is
+// then tagged once, as it is made, and its pixel format never changes under a
+// frame it shows.
 - (void)setHighBitDepth:(bool)highBitDepth {
-  if (_highBitDepth == highBitDepth) {
+  if (_surface != nullptr) {
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface == nullptr) {
-    return;
-  }
-  // The layer is re-attached with the new format; until then (or without a
-  // size), frames are recorded for it.
-  _surface->setHighBitDepth(highBitDepth);
-  if (_windowAttached) {
-    [self attachSurface];
-  }
 }
 
 - (void)setColorSpace:(const std::string &)colorSpace {
-  if (_colorSpace == colorSpace) {
+  if (_surface != nullptr) {
     return;
   }
   _colorSpace = colorSpace;
-  if (_surface == nullptr) {
-    return;
-  }
-  // Like the bit depth: the layer is re-attached in the new color space;
-  // until then, frames are recorded for it.
-  _surface->setUseP3ColorSpace(
-      usesP3ColorSpace(_colorSpace, _view->getPlatformContext()));
-  if (_windowAttached) {
-    [self attachSurface];
-  }
 }
 
 @end

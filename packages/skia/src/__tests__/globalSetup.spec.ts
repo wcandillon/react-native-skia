@@ -25,28 +25,32 @@ const sayHello = (socket: WebSocket) =>
 const closed = (socket: WebSocket) =>
   new Promise<void>((resolve) => socket.once("close", () => resolve()));
 
-const harnessClient = () => {
-  const { client } = global.testConnection;
-  if (client === null) {
+const harnessChannel = () => {
+  const { channel } = global.testConnection;
+  if (channel === null) {
     throw new Error("no app said hello");
   }
-  return client;
+  return channel;
 };
 
-const receiverOf = (message: string, sockets: Record<string, WebSocket>) => {
+// Which of the sockets receives a call of the method.
+const receiverOf = (method: string, sockets: Record<string, WebSocket>) => {
   const received = Promise.race(
     Object.entries(sockets).map(
       ([name, socket]) =>
         new Promise<string>((resolve) =>
           socket.once("message", (data) => {
-            if (data.toString() === message) {
+            if (JSON.parse(data.toString()).method === method) {
               resolve(name);
             }
           })
         )
     )
   );
-  harnessClient().send(message);
+  // Never answered: the run's teardown closes the socket, which fails it.
+  harnessChannel()
+    .call(method)
+    .catch(() => {});
   return received;
 };
 

@@ -24,6 +24,7 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImageInfo.h"
+#include "include/core/SkSurfaceProps.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/TextureInfo.h"
@@ -161,14 +162,27 @@ public:
     _highBitDepth = highBitDepth;
   }
 
+  /**
+   Whether the next recordings use device independent fonts (see
+   recordingSurfacePropsLocked). Any thread; applies from the next recording
+   on. Returns whether the option changed.
+   */
+  bool setDeviceIndependentFonts(bool deviceIndependentFonts) {
+    std::lock_guard<std::mutex> lock(_stateMutex);
+    return std::exchange(_deviceIndependentFonts, deviceIndependentFonts) !=
+           deviceIndependentFonts;
+  }
+
   /** Current width of the target, in points. */
   float getWidth() {
-    return resolveTargetInfo().width / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.width / info.pixelDensity;
   }
 
   /** Current height of the target, in points. */
   float getHeight() {
-    return resolveTargetInfo().height / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.height / info.pixelDensity;
   }
 
   /**
@@ -363,6 +377,29 @@ public:
 
 private:
   /**
+   The surface props a recording is made with, under the state lock. With
+   the defaults Graphite rasterizes a glyph for the exact transform it is
+   drawn with, so text that rotates or scales every frame is masked again,
+   and its blobs rebuilt (findOrCreateBlob), on every frame. With device
+   independent fonts (the deviceIndependentFonts prop), glyphs in the SDF
+   size range are rasterized once as distance fields and reused under any
+   rotation or scale; the smallest sizes keep using masks, and the largest
+   paths, as with the defaults. It is opt-in: distance fields cost more GPU
+   time per glyph than masks, which text that does not rotate or scale pays
+   for nothing (1.3 to 1.9 times the GPU time on 4,000 to 12,000 translating
+   blobs on an iPhone 14 Pro). The pixel geometry stays unknown either way:
+   the target may be translucent or composited, and the recording is
+   replayed onto whatever texture the view has at that point, so LCD text is
+   never an option here.
+   */
+  SkSurfaceProps recordingSurfacePropsLocked() const {
+    return SkSurfaceProps(_deviceIndependentFonts
+                              ? SkSurfaceProps::kUseDeviceIndependentFonts_Flag
+                              : 0,
+                          kUnknown_SkPixelGeometry);
+  }
+
+  /**
    Opens a recording on `recorder`, made for `generation`; `owner` keeps the
    recorder alive when it is the target's own. Returns nullptr while the view
    has no size. Called with the state lock held.
@@ -381,14 +418,15 @@ private:
     auto imageInfo = SkImageInfo::Make(
         target.width, target.height, target.colorType, kPremul_SkAlphaType,
         DawnUtils::viewColorSpace(target.useP3ColorSpace));
-    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo);
+    auto surfaceProps = recordingSurfacePropsLocked();
+    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo,
+                                                &surfaceProps);
     if (canvas == nullptr) {
       throw std::runtime_error(
           "SkiaGraphiteView: could not create a deferred canvas.");
     }
     // The canvas loads whatever the target holds: the producer clears.
-    auto pd = _context->getPixelDensity();
-    canvas->scale(pd, pd);
+    canvas->scale(target.pixelDensity, target.pixelDensity);
     _recording = true;
     _openRecorder = recorder;
     _openGeneration = generation;
@@ -423,8 +461,21 @@ private:
     }
     RNSkGraphiteTargetInfo info;
     if (surface && surface->getTargetInfo(&info)) {
+      // The density of the layout the window has the size of (see
+      // RNSkWindowSurface::updateTargetInfo), else the platform's.
+      if (info.pixelDensity <= 0) {
+        info.pixelDensity = _context->getPixelDensity();
+      }
       return info;
     }
+    // The density the platform laid the view out with, which follows
+    // display density changes along with its size (see
+    // RNSkWindowSurface::setLayoutSize), else the platform's.
+    float pixelDensity = 0;
+    if (!surface || !surface->getPixelDensity(&pixelDensity)) {
+      pixelDensity = _context->getPixelDensity();
+    }
+    info.pixelDensity = pixelDensity;
 #if defined(__ANDROID__)
     // The 10-bit buffer format only has 2 bits of alpha: translucent views
     // stay 8-bit.
@@ -445,10 +496,8 @@ private:
       // Not laid out yet (JS gets its onLayout before the platform lays the
       // view out): the size JS measured, in points. The layout is on the
       // pixel grid, so the product is an integer up to rounding errors.
-      double pd = _context->getPixelDensity();
-      info.width = static_cast<int>(std::lround(width * pd));
-      info.height = static_cast<int>(std::lround(height * pd));
-    } else {
+      info.width = static_cast<int>(std::lround(width * pixelDensity));
+      info.height = static_cast<int>(std::lround(height * pixelDensity));
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
@@ -484,6 +533,7 @@ private:
   float _layoutHeight = 0;
   bool _opaque = false;
   bool _highBitDepth = false;
+  bool _deviceIndependentFonts = false;
 
   // Hand-off to the main thread.
   std::mutex _queueMutex;

@@ -30,6 +30,7 @@ const screen = Dimensions.get("screen");
 export const W = Math.min(screen.width, screen.height);
 export const H = Math.max(screen.width, screen.height);
 const origin = vec(W / 2, H / 2);
+const PD = PixelRatio.get();
 
 const PALETTE = [
   "#FF3B30",
@@ -180,6 +181,12 @@ export const BenchScene = ({
     { rotate: t.value },
     { scale: 0.03 },
   ]);
+  // Whole pixels: Skia only reuses the glyph runs of the previous frame under
+  // a whole pixel translation.
+  const slide = useDerivedValue(() => [
+    { translateX: Math.round(40 * Math.sin(t.value) * PD) / PD },
+    { translateY: Math.round(40 * Math.cos(t.value) * PD) / PD },
+  ]);
   const uniforms = useDerivedValue(() => ({ uTime: t.value, uSize: [W, H] }));
   switch (scene) {
     case "shapes":
@@ -268,6 +275,23 @@ export const BenchScene = ({
       const textFont = getFont();
       return (
         <Group transform={transform} origin={origin}>
+          {TEXTS.map((item, i) => (
+            <Text
+              key={i}
+              x={item.x}
+              y={item.y}
+              text={item.label}
+              font={textFont}
+              color={item.color}
+            />
+          ))}
+        </Group>
+      );
+    }
+    case "textSlide": {
+      const textFont = getFont();
+      return (
+        <Group transform={slide}>
           {TEXTS.map((item, i) => (
             <Text
               key={i}

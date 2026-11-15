@@ -1,9 +1,12 @@
 name: Deploy Documentation
 
 on:
+  # Run by hand for documentation-only changes.
   workflow_dispatch:
     branches:
       - main
+  # Called by the release workflow after a release from main.
+  workflow_call:
 
 jobs:
   build_and_deploy_docs:

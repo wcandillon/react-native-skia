@@ -71,10 +71,6 @@ void RNSkManager::unregisterSkiaView(size_t nativeId) {
   _viewApi->unregisterSkiaView(nativeId);
 }
 
-void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
-  _viewApi->setSkiaView(nativeId, std::move(view));
-}
-
 void RNSkManager::installBindings() {
   // The runtime the bindings go on is the React Native runtime, reached
   // through the CallInvoker: promises made on it settle that way (see
@@ -118,6 +114,8 @@ ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
   } else if (auto recorder =
                  RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
     _value = recorder->getObject();
+  } else if (value.isBool()) {
+    _value.emplace<bool>(value.getBool());
   }
 }
 

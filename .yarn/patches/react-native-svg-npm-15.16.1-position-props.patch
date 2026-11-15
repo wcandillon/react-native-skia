@@ -158,3 +158,52 @@ index 35763ed10a7499bbee1884f7e9af6295cfacccf3..f1cc15664c159efdc1dc48138d96772e
    children?: ReactNode;
    xlinkHref?: string;
    href?: string;
+diff --git a/scripts/rnsvg_utils.rb b/scripts/rnsvg_utils.rb
+index 54ec032..bd0af68 100644
+--- a/scripts/rnsvg_utils.rb
++++ b/scripts/rnsvg_utils.rb
+@@ -12,8 +12,21 @@ def rnsvg_find_config()
+     :react_native_version => nil,
+     :react_native_minor_version => nil,
+     :react_native_node_modules_dir => nil,
++    # The version of react-native-macos, when installed: a macOS app builds
++    # against it, and its native API is that of the React Native version it
++    # forks (it tracks upstream with a delay), not the react-native package's.
++    :react_native_macos_minor_version => nil,
+   }
+ 
++  react_native_macos_package_json_path = `cd "#{Pod::Config.instance.installation_root.to_s}" && node --print "require.resolve('react-native-macos/package.json')" 2>/dev/null`.strip
++  if !react_native_macos_package_json_path.empty? && File.exist?(react_native_macos_package_json_path)
++    react_native_macos_json = JSON.parse(File.read(react_native_macos_package_json_path))
++    result[:react_native_macos_minor_version] = react_native_macos_json['version'].split('.')[1].to_i
++    if result[:react_native_macos_minor_version] == 0 # nightly
++      result[:react_native_macos_minor_version] = 1000
++    end
++  end
++
+   react_native_node_modules_dir = File.join(File.dirname(`cd "#{Pod::Config.instance.installation_root.to_s}" && node --print "require.resolve('react-native/package.json')"`), '..')
+   react_native_json = rnsvg_try_to_parse_react_native_package_json(react_native_node_modules_dir)
+ 
+diff --git a/RNSVG.podspec b/RNSVG.podspec
+index cee4c61..4e0af2b 100644
+--- a/RNSVG.podspec
++++ b/RNSVG.podspec
+@@ -27,9 +27,17 @@ Pod::Spec.new do |s|
+   s.tvos.resource_bundles  = {'RNSVGFilters' => ['apple/**/*.appletvos.metallib']}
+   s.visionos.resource_bundles  = {'RNSVGFilters' => ['apple/**/*.xros.metallib']}
+ 
+-  s.xcconfig = {
++  # REACT_NATIVE_MINOR_VERSION selects the React Native API the native code
++  # calls: on macOS that is react-native-macos's, when it is installed.
++  react_native_cflags = {
+     "OTHER_CFLAGS" => "$(inherited) -DREACT_NATIVE_MINOR_VERSION=#{svgConfig[:react_native_minor_version]}",
+   }
++  s.ios.xcconfig = react_native_cflags
++  s.tvos.xcconfig = react_native_cflags
++  s.visionos.xcconfig = react_native_cflags if s.respond_to?(:visionos)
++  s.osx.xcconfig = {
++    "OTHER_CFLAGS" => "$(inherited) -DREACT_NATIVE_MINOR_VERSION=#{svgConfig[:react_native_macos_minor_version] || svgConfig[:react_native_minor_version]}",
++  }
+   if fabric_enabled
+     install_modules_dependencies(s)
+ 

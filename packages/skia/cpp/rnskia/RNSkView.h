@@ -134,9 +134,23 @@ public:
 
   size_t getNativeId() { return _nativeId; }
 
-  /** Declarative content: the recorder of <Canvas>, or a picture. */
+  /**
+   Declarative content: the recorder of <Canvas>, or a picture; and the
+   deviceIndependentFonts option, set on the target (the view's recordings
+   and those JS makes for it) before its content, so that a canvas mounting
+   with it records its first frame with it. Called after setNativeId.
+   */
   void setJsiProperties(
       std::unordered_map<std::string, RNJsi::ViewProperty> &props) {
+    auto option = props.find("deviceIndependentFonts");
+    if (option != props.end() && option->second.isBool()) {
+      auto target = getTarget();
+      // Static content is not recorded again by itself.
+      if (target &&
+          target->setDeviceIndependentFonts(option->second.getBool())) {
+        _producer->requestFrame();
+      }
+    }
     for (auto &prop : props) {
       if (prop.first == "recorder") {
         _producer->setRecorder(
@@ -252,10 +266,12 @@ public:
    */
   sk_sp<SkImage> makeImageSnapshot(SkRect *bounds) {
     if (_producer->hasContent()) {
+      const float pixelDensity = getPixelDensity();
       RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
                                    getScaledHeight());
+      surface.setPixelDensity(pixelDensity);
       if (auto *canvas = surface.getCanvas()) {
-        _producer->renderInto(canvas, _platformContext->getPixelDensity());
+        _producer->renderInto(canvas, pixelDensity);
       }
       return surface.makeSnapshot(bounds);
     }
@@ -264,6 +280,7 @@ public:
         frame != nullptr && frame->getTarget().useP3ColorSpace;
     RNSkOffscreenSurface surface(_platformContext, getScaledWidth(),
                                  getScaledHeight(), useP3ColorSpace);
+    surface.setPixelDensity(getPixelDensity());
     if (frame != nullptr) {
       renderFrame(surface, frame);
     }
@@ -272,6 +289,19 @@ public:
 
   /** Width of the surface, in pixels. */
   int getScaledWidth() { return _surface->getWidth(); }
+
+  /**
+   Pixels per point of the view: the density of its platform layout when the
+   platform gives one (see RNSkWindowSurface::setLayoutSize), else the
+   platform's.
+   */
+  float getPixelDensity() {
+    float pixelDensity;
+    if (_surface->getPixelDensity(&pixelDensity)) {
+      return pixelDensity;
+    }
+    return _platformContext->getPixelDensity();
+  }
 
   /** Height of the surface, in pixels. */
   int getScaledHeight() { return _surface->getHeight(); }
@@ -402,7 +432,7 @@ public:
   }
 
   /**
-   Main or present thread. The window can show frames again (the app came
+   Present thread. The window can show frames again (the app came
    back to the foreground, see RNSkWindowSurface::setCanPresent): the redraw
    owed since one found it could not present is posted (see
    RNSkRedrawRequest), else the recordings queued meanwhile are handed to the
