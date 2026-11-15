@@ -307,7 +307,9 @@ private:
       // that the next recording overlaps it.
       run(scheduler.onReadyFrameTaken(now));
     }
+    // A submit lasts what the scene says as it starts.
     _submitting = true;
+    _submitTook = submitTime;
     _presentBusyUntil = now + submitTime;
     post(_presentBusyUntil, Event::kSubmitEnded);
   }
@@ -322,12 +324,12 @@ private:
       held = true;
       holds++;
       _heldWorkDoneAt = workDoneAt;
-      run(scheduler.onFrameTaken({Take::kHeld, submitTime}, now,
+      run(scheduler.onFrameTaken({Take::kHeld, _submitTook}, now,
                                  windowState()));
       return;
     }
     present(workDoneAt);
-    run(scheduler.onFrameTaken({Take::kPresented, submitTime}, now,
+    run(scheduler.onFrameTaken({Take::kPresented, _submitTook}, now,
                                windowState()));
   }
 
@@ -340,6 +342,7 @@ private:
   std::multimap<Nanos, Event> _events;
   Nanos _presentBusyUntil = 0;
   bool _submitting = false;
+  Nanos _submitTook = 0;
   bool _holdPresent = false;
   Nanos _gpuFreeAt = 0;
   Nanos _acknowledgedAt = 0;
@@ -441,6 +444,62 @@ void aSubmitThatWouldMissTheDeadlineWaitsForTheSignal() {
                 "signal");
 }
 
+void oneLongSubmitSaysNothingOfTheNext() {
+  Sim sim(eachFrame(Acknowledgement::kNone));
+  // The first frame compiles its pipelines: its submit lasts twenty frames
+  // of the display. It is taken on the signal at 1000 and presented at
+  // 21850, 50 before the deadline of the slot it lands in.
+  sim.submitTime = 20 * kFrame + 850;
+  sim.queueClientFrameAt(100);
+  sim.queueClientFrameAt(110);
+  sim.runUntil(2 * kFrame);
+  sim.submitTime = 50;
+  sim.runUntil(22 * kFrame - 1);
+  expectEqual(static_cast<long long>(sim.presents.size()), 1,
+              "long first submit: the next frame is not taken into the slot "
+              "the first landed in on the strength of that submit");
+  sim.runUntil(23 * kFrame);
+  expectEqual(static_cast<long long>(sim.presents.size()), 2,
+              "long first submit: it goes on the next frame signal");
+  expectEqual(sim.mostPresentsInASlot(), 1,
+              "long first submit: one frame per slot");
+  // A frame ready before the deadline of a free slot goes at once all the
+  // same: the long submit is not what the next one is expected to take.
+  sim.changeContentAt(23 * kFrame + 100);
+  sim.runUntil(24 * kFrame - 1);
+  expectBetween(sim.presents.back(), 23 * kFrame + 200, 23 * kFrame + 300,
+                "long first submit: a frame still goes between two signals");
+  expectEqual(sim.mostPresentsInASlot(), 1,
+              "long first submit: one frame per slot afterwards");
+}
+
+void aSubmitNeverCountsForMoreThanAFrame() {
+  FrameScheduler scheduler(eachFrame(Acknowledgement::kNone));
+  FrameScheduler::WindowState window;
+  // Two redraws before any frame signal, each thirty frames long: the frame
+  // of the display is not known yet.
+  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 30 * kFrame, window);
+  expectEqual(scheduler.submitEstimate(), 0,
+              "submit estimate: one submit alone is not an estimate");
+  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 60 * kFrame, window);
+  expectEqual(scheduler.submitEstimate(), 30 * kFrame,
+              "submit estimate: two long submits are");
+  scheduler.onFrameSignal({61 * kFrame, kFrame, 61 * kFrame + 900}, 61 * kFrame,
+                          window);
+  expectEqual(scheduler.submitEstimate(), kFrame,
+              "submit estimate: a frame at most once the frame is known");
+  // Short submits from now on, but for a long one: it leaves no trace.
+  for (Nanos frame = 62; frame < 82; frame++) {
+    scheduler.onFrameTaken({Take::kPresented, 50}, frame * kFrame, window);
+  }
+  expectBetween(scheduler.submitEstimate(), 50, 60,
+                "submit estimate: follows the submits");
+  scheduler.onFrameTaken({Take::kPresented, 30 * kFrame}, 112 * kFrame, window);
+  scheduler.onFrameTaken({Take::kPresented, 50}, 113 * kFrame, window);
+  expectBetween(scheduler.submitEstimate(), 50, 60,
+                "submit estimate: one long submit does not move it");
+}
+
 void aSlowSubmitNeverStarvesTheWindow() {
   Sim sim(eachFrame(Acknowledgement::kNone));
   // A submit longer than a frame: no frame could ever make a deadline.
@@ -539,6 +598,44 @@ void anUrgentFrameGoesAtOnceButNotTwiceInASlot() {
   expectEqual(static_cast<long long>(sim.presents.size()), 3,
               "urgent: the second goes on the next frame signal");
   expectEqual(sim.mostPresentsInASlot(), 1, "urgent: one frame per slot");
+}
+
+void anUrgentFrameDoesNotJoinAFramePresentedLate() {
+  for (Acknowledgement acknowledgement :
+       {Acknowledgement::kNone, Acknowledgement::kHoldsPresent}) {
+    Sim sim(eachFrame(acknowledgement));
+    // A CADisplayLink's deadline: the slots end 750 after each signal.
+    sim.deadlineAfterSignal = 750;
+    sim.animate(0, 5 * kFrame, 100);
+    sim.runUntil(5 * kFrame + 900);
+    // A frame taken on the signal at 6000, whose submit runs past the
+    // deadline at 6750: it is presented at 6800, in the next slot.
+    sim.submitTime = 800;
+    sim.queueClientFrameAt(5 * kFrame + 950);
+    sim.runUntil(6 * kFrame + 500);
+    sim.submitTime = 50;
+    const auto presentsSoFar = static_cast<long long>(sim.presents.size());
+    // A frame for the window as resized, right behind it: that slot has its
+    // frame, though the window took it in the slot before.
+    sim.queueClientFrameAt(6 * kFrame + 810, /* urgent= */ true);
+    sim.runUntil(7 * kFrame + 750);
+    expectEqual(static_cast<long long>(sim.presents.size()), presentsSoFar + 1,
+                "urgent, late frame: it does not join the frame presented "
+                "late");
+    sim.runUntil(9 * kFrame);
+    expectEqual(static_cast<long long>(sim.presents.size()), presentsSoFar + 2,
+                "urgent, late frame: it goes into the next slot");
+    if (acknowledgement == Acknowledgement::kHoldsPresent) {
+      expectEqual(sim.holds, 1,
+                  "urgent, late frame: its work goes to the GPU at once where "
+                  "a present can be held");
+      expectBetween(sim.presents.back(), 7 * kFrame + 750, 7 * kFrame + 760,
+                    "urgent, late frame: and its present as the next slot "
+                    "starts");
+    }
+    expectEqual(sim.mostPresentsInASlot(), 1,
+                "urgent, late frame: one frame per slot");
+  }
 }
 
 // No present without an acknowledgement --------------------------------------
@@ -990,12 +1087,15 @@ int main() {
   aSlotGetsOneFrame();
   aMissedDeadlineSkipsTheFrame();
   aSubmitThatWouldMissTheDeadlineWaitsForTheSignal();
+  oneLongSubmitSaysNothingOfTheNext();
+  aSubmitNeverCountsForMoreThanAFrame();
   aSlowSubmitNeverStarvesTheWindow();
   aLongSubmitTakesAFrameOnEachSignalWhereverTheDeadlineIs();
   clientsFramesGoOneAFrame();
   aDeadlinePastTheNextSignalStillGivesEachSlotOneFrame();
   aBurstOfFramesGoesOneASlotWhereverTheDeadlineIs();
   anUrgentFrameGoesAtOnceButNotTwiceInASlot();
+  anUrgentFrameDoesNotJoinAFramePresentedLate();
   aFrameIsHeldUntilTheGpuIsDoneWithTheOneBefore();
   anAcknowledgedFrameIsNotHeld();
   noSlotGetsTwoFramesWhateverTheGpuDoes();

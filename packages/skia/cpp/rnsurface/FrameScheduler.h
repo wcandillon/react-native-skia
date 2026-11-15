@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 namespace rnsurface {
@@ -336,6 +337,7 @@ public:
     _deadline = signal.deadline;
     _interval = signal.interval;
     _signalTime = signal.time;
+    boundSubmitTimes();
     // A view that did something since the last signal asks for one more, so
     // that the slots stay known while its frames keep coming.
     const bool wasActive = _active;
@@ -529,28 +531,28 @@ private:
     // Dawn.
     const bool landsInSlot = now + _submitEstimate < slot.end;
     const bool slotHasPresent = this->slotHasPresent(now);
-    if (on == On::kUrgentFrame) {
-      _stats.takenUrgent++;
-      return Verdict::kTake;
-    }
-    if (on == On::kFrameSignal) {
+    if (on != On::kEvent) {
       // A frame goes on each frame signal, whatever its submit takes, so
-      // that the GPU is never left waiting for one. When a frame presented
+      // that the GPU is never left waiting for one, and a frame for a
+      // resized window goes ahead of the signal. When a frame presented
       // late (held for the GPU, or after a long submit) is in this slot
       // already, this one must not join it there: where a present can be
       // held, it is, until the next slot; elsewhere the frame waits for the
       // next signal, unless its submit takes it into the next slot anyway.
+      Verdict verdict = Verdict::kTake;
       if (slotHasPresent) {
         if (_policy.acknowledgement == Acknowledgement::kHoldsPresent) {
-          _stats.takenOnSignal++;
-          return Verdict::kTakeAndHold;
-        }
-        if (landsInSlot) {
+          verdict = Verdict::kTakeAndHold;
+        } else if (landsInSlot) {
           return Verdict::kWaitsForFrameSignal;
         }
       }
-      _stats.takenOnSignal++;
-      return Verdict::kTake;
+      if (on == On::kUrgentFrame) {
+        _stats.takenUrgent++;
+      } else {
+        _stats.takenOnSignal++;
+      }
+      return verdict;
     }
     if (!slot.known || slotHasPresent || !landsInSlot) {
       // Between two signals a frame only goes into a slot known to be open,
@@ -622,14 +624,54 @@ private:
     }
   }
 
+  /**
+   Estimates what the next submit takes from the last ones: the median of
+   the last three, averaged over the recent ones (a quarter of each new
+   median). One long submit, a first frame that compiles its pipelines, says
+   nothing of the next, and is never the median. Averaged in as it is, it
+   would pass the next frame for one whose submit takes it out of a slot
+   that has a frame already (see verdict), and that slot would get two;
+   and frames ready for a free slot would wait for a signal until it was
+   averaged out. Until two submits are measured there is no estimate: a
+   frame is taken to land in the slot it starts in. No submit counts for
+   more than a frame of the display either: that long, it already lands in
+   no slot it starts in.
+   */
   void noteSubmitTime(Nanos duration) {
     if (duration <= 0) {
       return;
     }
-    // A recent estimate: a quarter of each new measure.
+    if (_interval > 0) {
+      duration = std::min(duration, _interval);
+    }
+    _submits[2] = _submits[1];
+    _submits[1] = _submits[0];
+    _submits[0] = duration;
+    const Nanos median =
+        std::max(std::min(_submits[0], _submits[1]),
+                 std::min(std::max(_submits[0], _submits[1]), _submits[2]));
+    if (median == 0) {
+      return;
+    }
+    // A recent estimate: a quarter of each new median.
     _submitEstimate = _submitEstimate == 0
-                          ? duration
-                          : _submitEstimate + (duration - _submitEstimate) / 4;
+                          ? median
+                          : _submitEstimate + (median - _submitEstimate) / 4;
+  }
+
+  /**
+   Brings the submits measured before the frame of the display was known,
+   or on a display that was slower then, down to that frame (see
+   noteSubmitTime).
+   */
+  void boundSubmitTimes() {
+    if (_interval <= 0) {
+      return;
+    }
+    _submitEstimate = std::min(_submitEstimate, _interval);
+    for (Nanos &submit : _submits) {
+      submit = std::min(submit, _interval);
+    }
   }
 
   void startRecordingIfDue(Nanos now, Actions *actions) {
@@ -733,7 +775,10 @@ private:
   bool _declined = false;
   // The view recorded, submitted or presented since the last frame signal.
   bool _active = false;
+  // What a submit takes, and the last three measured, the latest first (see
+  // noteSubmitTime).
   Nanos _submitEstimate = 0;
+  Nanos _submits[3] = {0, 0, 0};
   // The frame that waits was counted as late for a deadline already.
   bool _missedDeadline = false;
   Stats _stats;
