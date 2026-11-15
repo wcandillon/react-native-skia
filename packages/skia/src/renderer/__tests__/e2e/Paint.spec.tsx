@@ -267,6 +267,25 @@ describe("Paint", () => {
     );
     await checkImage(result, docPath("paint/stroke.png"));
   });
+  it("should draw the node's own paint under its <Paint> children", async () => {
+    const { vec } = importSkia();
+    const strokeWidth = 10;
+    const { width, height } = surface;
+    const c = vec(width / 2, height / 2);
+    const r = (width - strokeWidth) / 2;
+    // The red fill is the node's own paint: it is drawn first, and the
+    // <Paint> children cover it, so the result is the picture above.
+    const result = await surface.draw(
+      <>
+        <Circle c={c} r={r} color="red">
+          <Paint color="lightblue" />
+          <Paint color="#adbce6" style="stroke" strokeWidth={strokeWidth} />
+          <Paint color="#ade6d8" style="stroke" strokeWidth={strokeWidth / 2} />
+        </Circle>
+      </>
+    );
+    await checkImage(result, docPath("paint/stroke.png"));
+  });
   it("colors don't influence opacity (1)", async () => {
     const { vec } = importSkia();
     const strokeWidth = 10;

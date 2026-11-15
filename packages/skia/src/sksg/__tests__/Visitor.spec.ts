@@ -1,3 +1,4 @@
+import { importSkia } from "../../renderer/__tests__/setup";
 import { NodeType } from "../../dom/types";
 import type { Node } from "../Node";
 import type { Command } from "../Recorder/Core";
@@ -19,7 +20,8 @@ const flatten = (commands: Command[]): Command[] =>
 
 describe("visit", () => {
   it("records a <Blend> of shaders as the input of an image filter", () => {
-    const recorder = new Recorder();
+    const { Skia } = importSkia();
+    const recorder = new Recorder(Skia);
     visit(recorder, [
       node(NodeType.Rect, { x: 0, y: 0, width: 10, height: 10 }, [
         node(

@@ -265,8 +265,7 @@ export const BackgroundGpu = () => {
     frames.value += 1;
   });
   const cx = useDerivedValue(
-    () => width / 2 + Math.sin(frames.value / 30) * (width / 2 - 40),
-    [width]
+    () => width / 2 + Math.sin(frames.value / 30) * (width / 2 - 40)
   );
 
   useEffect(() => {

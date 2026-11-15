@@ -21,6 +21,7 @@
 #include "JsiSkRRect.h"
 #include "JsiSkRSXform.h"
 #include "JsiSkSVG.h"
+#include "JsiSkShapeBlob.h"
 #include "JsiSkTextBlob.h"
 #include "JsiSkVertices.h"
 
@@ -310,6 +311,12 @@ public:
     getCanvas()->drawTextBlob(blob, x, y, *paint);
   }
 
+  // One drawVertices call for every shape of the blob (see RNSkShapeBlob.h).
+  void drawShapes(std::shared_ptr<RNSkShapeBlob> blob,
+                  JsiOptional<std::shared_ptr<SkPaint>> paint) {
+    blob->draw(getCanvas(), paint.has_value() ? paint.value().get() : nullptr);
+  }
+
   void drawGlyphs(std::vector<int> glyphIds, std::vector<SkPoint> positions,
                   double x, double y, std::shared_ptr<SkFont> font,
                   std::shared_ptr<SkPaint> paint) {
@@ -561,6 +568,7 @@ public:
     installMethod(runtime, prototype, "drawText", &JsiSkCanvas::drawText);
     installMethod(runtime, prototype, "drawTextBlob",
                   &JsiSkCanvas::drawTextBlob);
+    installMethod(runtime, prototype, "drawShapes", &JsiSkCanvas::drawShapes);
     installMethod(runtime, prototype, "drawGlyphs", &JsiSkCanvas::drawGlyphs);
     installMethod(runtime, prototype, "drawSvg", &JsiSkCanvas::drawSvg);
     installMethod(runtime, prototype, "clipPath", &JsiSkCanvas::clipPath);

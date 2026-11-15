@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import React, { useCallback, useRef, useState } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import {
@@ -41,7 +42,7 @@ half4 main(float2 xy) {
 // the view into a texture of the shared device; Skia wraps that texture into
 // an image without copying it.
 const snapshotView = async (
-  view: React.RefObject<View | null>,
+  view: React.RefObject<ComponentRef<typeof View> | null>,
   width: number,
   height: number
 ) => {
@@ -65,17 +66,14 @@ const snapshotView = async (
 
 export const ViewSnapshot = () => {
   const { width } = useWindowDimensions();
-  const viewRef = useRef<View>(null);
+  const viewRef = useRef<ComponentRef<typeof View>>(null);
   const layout = useRef({ width: 0, height: 0 });
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     layout.current = event.nativeEvent.layout;
   }, []);
 
   const progress = useLoop({ duration: 1500 });
-  const uniforms = useDerivedValue(
-    () => ({ r: mix(progress.value, 1, 100) }),
-    [progress]
-  );
+  const uniforms = useDerivedValue(() => ({ r: mix(progress.value, 1, 100) }));
 
   const image = useSharedValue<SkImage | null>(null);
   const texture = useRef<GPUTexture | null>(null);

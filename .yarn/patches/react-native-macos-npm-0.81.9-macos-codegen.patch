@@ -1,0 +1,63 @@
+diff --git a/scripts/codegen/generate-artifacts-executor/index.js b/scripts/codegen/generate-artifacts-executor/index.js
+index ec7ad6028727f0932c50b9b3be05317398d9fc2d..ba5777efd2acb3f23597a916857b1dc6937dfdf0 100644
+--- a/scripts/codegen/generate-artifacts-executor/index.js
++++ b/scripts/codegen/generate-artifacts-executor/index.js
+@@ -27,7 +27,10 @@ const {
+   generateRCTThirdPartyComponents,
+ } = require('./generateRCTThirdPartyComponents');
+ const {generateReactCodegenPodspec} = require('./generateReactCodegenPodspec');
+-const {generateSchemaInfos} = require('./generateSchemaInfos');
++const {
++  extractSupportedApplePlatforms,
++  generateSchemaInfos,
++} = require('./generateSchemaInfos');
+ const {
+   generateUnstableModulesRequiringMainQueueSetupProvider,
+ } = require('./generateUnstableModulesRequiringMainQueueSetupProvider');
+@@ -119,9 +122,26 @@ function execute(
+         reactNativeConfig,
+         platform,
+       );
+-      const libraries = codegenEnabledLibraries.filter(
+-        ({name}) => !disabledLibraries.includes(name),
+-      );
++      const libraries = codegenEnabledLibraries.filter(({name, libraryPath}) => {
++        if (disabledLibraries.includes(name)) {
++          return false;
++        }
++        if (platform !== 'ios') {
++          return true;
++        }
++        // Only macOS apps use react-native-macos here: skip the libraries
++        // whose podspec declares Apple platforms but not macOS. Their pods
++        // aren't installed, and their specs may need a newer codegen.
++        const applePlatforms = extractSupportedApplePlatforms(
++          name,
++          libraryPath,
++        );
++        return (
++          applePlatforms == null ||
++          applePlatforms.macos ||
++          !Object.values(applePlatforms).some(Boolean)
++        );
++      });
+ 
+       const outputPath = computeOutputPath(
+         projectRoot,
+diff --git a/scripts/codegen/generate-artifacts-executor/utils.js b/scripts/codegen/generate-artifacts-executor/utils.js
+index 7aefca2f12f8358a22c2ed5f64a585dec778c431..973e3f40b20578a30ce374cc83e9fd94906f2772 100644
+--- a/scripts/codegen/generate-artifacts-executor/utils.js
++++ b/scripts/codegen/generate-artifacts-executor/utils.js
+@@ -241,6 +241,12 @@ function findExternalLibraries(
+   );
+   // Handle third-party libraries
+   return Object.keys(dependencies).flatMap(dependency => {
++    // The core specs come from react-native-macos itself. An app that also
++    // depends on a newer react-native (for iOS and Android) would otherwise
++    // have its specs parsed by this older codegen, which can't read them.
++    if (dependency === 'react-native' && REACT_NATIVE !== 'react-native') {
++      return [];
++    }
+     let configFilePath = '';
+     try {
+       configFilePath = require.resolve(path.join(dependency, 'package.json'), {

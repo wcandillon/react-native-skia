@@ -2,6 +2,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 
 import type {
   JsiRecorder,
+  ShapeBlobOptions,
   SkContourMeasureIter,
   SkGpuLostInfo,
   Skia,
@@ -38,6 +39,7 @@ import { JsiSkSVGFactory } from "./JsiSkSVGFactory";
 import { JsiSkTextBlobFactory } from "./JsiSkTextBlobFactory";
 import { JsiSkFont } from "./JsiSkFont";
 import { MakeVertices } from "./JsiSkVerticesFactory";
+import { JsiSkShapeBlob } from "./JsiSkShapeBlob";
 import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkTypeface } from "./JsiSkTypeface";
 import { JsiSkTypefaceFontProviderFactory } from "./JsiSkTypefaceFontProviderFactory";
@@ -125,6 +127,8 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   AnimatedImage: new JsiSkAnimatedImageFactory(CanvasKit),
   SVG: new JsiSkSVGFactory(CanvasKit),
   TextBlob: new JsiSkTextBlobFactory(CanvasKit),
+  ShapeBlob: (options?: ShapeBlobOptions) =>
+    new JsiSkShapeBlob(CanvasKit, options),
   XYWHRect: (x: number, y: number, width: number, height: number) => {
     return new JsiSkRect(CanvasKit, CanvasKit.XYWHRect(x, y, width, height));
   },

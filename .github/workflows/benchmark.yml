@@ -1,0 +1,262 @@
+name: Benchmark
+# The performance regression benchmark (apps/example/benchmarks), started by
+# hand, on the Android phone plugged into the self-hosted Mac. The Mac has no
+# iPhone, so the job is Android only.
+#
+# With a baseline, the job measures the baseline first and the candidate
+# second, on the same phone in the same run, and compares the two: the
+# benchmark's own --compare flags a present FPS drop of more than 10% or a
+# render CPU per frame growing by more than 10%, and the job fails. The
+# baseline has to carry the benchmark itself (apps/example/benchmarks); one
+# that does not is skipped with a warning and the candidate runs on its own.
+#
+# The phone must be authorized for adb on the Mac, have no secure lock screen
+# (the runner wakes it and dismisses the keyguard) and stay plugged in. With
+# more than one device attached, give its serial.
+#
+# Only workflow_dispatch may start this workflow, so only maintainers run code
+# on the self-hosted machine through it.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: >
+          Candidate: a branch, tag, SHA or refs/pull/<n>/head, empty for the
+          dispatched branch
+        type: string
+        default: ""
+      baseline:
+        description: Baseline to compare with (a branch, tag or SHA), empty for none
+        type: string
+        default: main
+      scenes:
+        description: Scenes, comma-separated (shapes,shapeBlob,images,shader,pattern,paths,text), empty for all
+        type: string
+        default: ""
+      reps:
+        description: Repetitions of each scene (the report gives the median)
+        type: string
+        default: "2"
+      gap:
+        description: Seconds with no canvas between scenes, so heat does not carry over
+        type: string
+        default: "20"
+      backing:
+        description: Android view behind the canvas
+        type: choice
+        options:
+          - surface
+          - texture
+        default: surface
+      refresh_rate:
+        description: Panel rate to lock during the run (Hz), empty to leave it alone
+        type: string
+        default: "120"
+      serial:
+        description: adb serial of the phone, empty when it is the only device
+        type: string
+        default: ""
+
+# One phone: one run at a time.
+concurrency:
+  group: benchmark-android
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 240
+    env:
+      ANDROID_SERIAL: ${{ inputs.serial }}
+      # Only the phone's ABI: the other three would double the C++ build.
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+      JAVA_OPTS: "-XX:MaxHeapSize=6g"
+      # The interpreter of present-frames-android.py, with the perfetto
+      # package, kept on the machine between runs.
+      BENCH_VENV: ${{ github.workspace }}/../benchmark-venv
+    steps:
+      - name: Install JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install NDK
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        id: setup-ndk
+        with:
+          ndk-version: r27d
+          local-cache: true
+
+      - name: Set ANDROID_NDK
+        run: echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK tools
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
+
+      - name: Python for the frame trace
+        run: |
+          if [ ! -x "$BENCH_VENV/bin/python" ]; then
+            python3 -m venv "$BENCH_VENV"
+          fi
+          "$BENCH_VENV/bin/pip" install --quiet --upgrade perfetto
+          echo "BENCH_PYTHON=$BENCH_VENV/bin/python" >> $GITHUB_ENV
+          # The results of each pass, kept out of the workspace, which the
+          # second checkout cleans.
+          mkdir -p "$RUNNER_TEMP/benchmark-results"
+          echo "BENCH_OUT=$RUNNER_TEMP/benchmark-results" >> $GITHUB_ENV
+
+      # The compiler cache, when the machine has one: the job builds the C++
+      # twice with a baseline, and both builds share most of it.
+      - name: Use ccache
+        run: |
+          if command -v ccache > /dev/null; then
+            echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+            echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+            echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
+          else
+            echo "No ccache on this machine: full C++ builds."
+          fi
+
+      # The settings README.md asks for, put back in the last step.
+      - name: Prepare the phone
+        env:
+          REFRESH_RATE: ${{ inputs.refresh_rate }}
+        run: |
+          adb start-server
+          count=$(adb devices | awk 'NR > 1 && $2 == "device"' | wc -l | tr -d ' ')
+          if [ -z "$ANDROID_SERIAL" ] && [ "$count" != 1 ]; then
+            adb devices -l
+            echo "::error::Expected one authorized Android device, found $count. Plug the phone in, authorize the Mac, or give its serial."
+            exit 1
+          fi
+          adb wait-for-device
+          echo "Phone: $(adb shell getprop ro.product.model | tr -d '\r') (Android SDK $(adb shell getprop ro.build.version.sdk | tr -d '\r'))"
+          if [ -n "$REFRESH_RATE" ]; then
+            adb shell settings put system peak_refresh_rate "$REFRESH_RATE"
+            adb shell settings put system min_refresh_rate "$REFRESH_RATE"
+          fi
+          adb shell svc power stayon usb
+          scale=$(adb shell settings get global animator_duration_scale | tr -d '\r')
+          if [ "$scale" != "null" ] && [ "$scale" != "1" ] && [ "$scale" != "1.0" ]; then
+            echo "::warning::animator_duration_scale is $scale; the scenes' rotation assumes 1."
+          fi
+
+      # ---- baseline -----------------------------------------------------------
+
+      - name: Checkout baseline
+        if: inputs.baseline != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+          ref: ${{ inputs.baseline }}
+
+      - name: Check the baseline has the benchmark
+        id: baseline
+        if: inputs.baseline != ''
+        run: |
+          if [ -f apps/example/benchmarks/run.mjs ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::${{ inputs.baseline }} has no apps/example/benchmarks: no baseline, the candidate runs on its own."
+          fi
+
+      - name: Setup baseline
+        if: steps.baseline.outputs.run == 'true'
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Benchmark baseline
+        if: steps.baseline.outputs.run == 'true'
+        working-directory: apps/example
+        env:
+          SCENES: ${{ inputs.scenes }}
+          REPS: ${{ inputs.reps }}
+          GAP: ${{ inputs.gap }}
+          BACKING: ${{ inputs.backing }}
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          node benchmarks/run.mjs --platform android \
+            ${SCENES:+--scenes "$SCENES"} --reps "$REPS" --gap "$GAP" \
+            --backing "$BACKING" --label baseline
+          cp "$(ls -t benchmarks/results/*.json | head -1)" "$BENCH_OUT/baseline.json"
+          cp "$(ls -t benchmarks/results/*.md | head -1)" "$BENCH_OUT/baseline.md"
+
+      # ---- candidate ----------------------------------------------------------
+
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+          ref: ${{ inputs.ref }}
+
+      - name: Setup candidate
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Exits with status 1 when --compare finds a regression, which fails
+      # the job once the report is uploaded.
+      - name: Benchmark candidate
+        working-directory: apps/example
+        env:
+          SCENES: ${{ inputs.scenes }}
+          REPS: ${{ inputs.reps }}
+          GAP: ${{ inputs.gap }}
+          BACKING: ${{ inputs.backing }}
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          compare=()
+          if [ -f "$BENCH_OUT/baseline.json" ]; then
+            compare=(--compare "$BENCH_OUT/baseline.json")
+          fi
+          status=0
+          node benchmarks/run.mjs --platform android \
+            ${SCENES:+--scenes "$SCENES"} --reps "$REPS" --gap "$GAP" \
+            --backing "$BACKING" --label candidate "${compare[@]}" || status=$?
+          if ls benchmarks/results/*.json > /dev/null 2>&1; then
+            cp "$(ls -t benchmarks/results/*.json | head -1)" "$BENCH_OUT/candidate.json"
+            cp "$(ls -t benchmarks/results/*.md | head -1)" "$BENCH_OUT/candidate.md"
+          fi
+          exit $status
+
+      - name: Report
+        if: always()
+        run: |
+          for pass in candidate baseline; do
+            if [ -f "$BENCH_OUT/$pass.md" ]; then
+              cat "$BENCH_OUT/$pass.md" >> $GITHUB_STEP_SUMMARY
+              echo >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        with:
+          name: benchmark-android
+          path: ${{ env.BENCH_OUT }}
+          if-no-files-found: ignore
+
+      - name: Restore the phone
+        if: always()
+        run: |
+          if [ -n "${{ inputs.refresh_rate }}" ]; then
+            adb shell settings put system peak_refresh_rate 0 || true
+            adb shell settings put system min_refresh_rate 0 || true
+          fi
+          adb shell svc power stayon false || true
+          adb shell am force-stop com.reactnativeskia.example || true

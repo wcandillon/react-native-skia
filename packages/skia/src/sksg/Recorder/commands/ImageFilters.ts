@@ -222,7 +222,7 @@ export const setBlurMaskFilter = (
     blur,
     respectCTM
   );
-  ctx.paint.setMaskFilter(mf);
+  ctx.writablePaint().setMaskFilter(mf);
 };
 
 export const isPushImageFilter = (

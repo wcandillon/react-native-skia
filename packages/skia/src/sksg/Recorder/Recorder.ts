@@ -32,14 +32,19 @@ import type {
 import type { AnimatedProps } from "../../renderer";
 import { isSharedValue, isSharedValueSelector } from "../utils";
 import { isColorFilter, isImageFilter, isPathEffect, isShader } from "../Node";
-import type { SkPaint, SkPicture, BaseRecorder } from "../../skia/types";
+import type { Skia, SkPaint, SkPicture, BaseRecorder } from "../../skia/types";
 
 import { CommandType } from "./Core";
 import type { Command } from "./Core";
+import { convertProps } from "./Convertor";
+import type { Disposable } from "./Convertor";
 
 export interface Recording {
   commands: Command[];
   paintPool: SkPaint[];
+  // The Skia objects the recorder made from static props (see Convertor.ts):
+  // the commands reference them for as long as the recording lives.
+  disposables: Disposable[];
   // Last picture produced from this recording. The view keeps its own
   // reference to the picture it displays, so the renderer owns this one and
   // disposes it when the next frame replaces it or the recording is disposed.
@@ -50,6 +55,8 @@ export const disposeRecording = (recording: Recording) => {
   "worklet";
   recording.paintPool.forEach((paint) => paint.dispose());
   recording.paintPool.length = 0;
+  recording.disposables.forEach((disposable) => disposable.dispose());
+  recording.disposables.length = 0;
   if (recording.lastPicture) {
     recording.lastPicture.dispose();
     recording.lastPicture = null;
@@ -64,8 +71,9 @@ export class Recorder implements BaseRecorder {
   commands: Command[] = [];
   cursors: Command[][] = [];
   animationValues: Set<SharedValue<unknown>> = new Set();
+  private disposables: Disposable[] = [];
 
-  constructor() {
+  constructor(private readonly Skia: Skia) {
     this.cursors.push(this.commands);
   }
 
@@ -73,6 +81,7 @@ export class Recorder implements BaseRecorder {
     return {
       commands: this.commands,
       paintPool: [],
+      disposables: this.disposables,
       animationValues: this.animationValues,
     };
   }
@@ -102,12 +111,20 @@ export class Recorder implements BaseRecorder {
 
   private add(command: Command) {
     if (command.props) {
-      const { animatedProps } = this.processProps(
-        command.props as Record<string, unknown>
-      );
+      const props = command.props as Record<string, unknown>;
+      const { animatedProps } = this.processProps(props);
       if (animatedProps) {
         command.animatedProps = animatedProps;
       }
+      // Static props are converted here, once; the player converts the
+      // animated ones on every frame.
+      command.props = convertProps(
+        this.Skia,
+        command.type,
+        props,
+        animatedProps,
+        this.disposables
+      );
     }
     this.cursors[this.cursors.length - 1].push(command);
   }

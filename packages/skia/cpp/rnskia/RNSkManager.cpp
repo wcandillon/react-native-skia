@@ -29,11 +29,10 @@ RNSkManager::RNSkManager(
       _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
   // A lost GPU device is replaced by a new one (see DawnContext), on which
   // the windows hold nothing yet: every view records its content again for
-  // it. The redraw waits for the view's present thread (the main thread on
-  // Apple platforms), and for the window to be able to show a frame (the app
-  // may be in the background, where the device was lost); it then configures
-  // the window on the new device. The listener only reaches the registry,
-  // which outlives this manager.
+  // it. The redraw waits for the view's present thread, and for the window
+  // to be able to show a frame (the app may be in the background, where the
+  // device was lost); it then configures the window on the new device. The
+  // listener only reaches the registry, which outlives this manager.
   _lossListener =
       DawnContext::addLossListener([](const DawnContext::LossInfo &) {
         for (const auto &view : ViewRegistry::getInstance().getViews()) {
@@ -89,10 +88,6 @@ void RNSkManager::unregisterSkiaView(size_t nativeId) {
   _viewApi->unregisterSkiaView(nativeId);
 }
 
-void RNSkManager::setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
-  _viewApi->setSkiaView(nativeId, std::move(view));
-}
-
 void RNSkManager::installBindings() {
   // The runtime the bindings go on is the React Native runtime, reached
   // through the CallInvoker: promises made on it settle that way (see
@@ -136,6 +131,8 @@ ViewProperty::ViewProperty(jsi::Runtime &runtime, const jsi::Value &value) {
   } else if (auto recorder =
                  RNSkia::tryGetJsiObject<RNSkia::JsiRecorder>(runtime, value)) {
     _value = recorder->getObject();
+  } else if (value.isBool()) {
+    _value.emplace<bool>(value.getBool());
   }
 }
 

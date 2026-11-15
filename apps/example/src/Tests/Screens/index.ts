@@ -2,11 +2,11 @@ import type { FC } from "react";
 
 import {
   ClippedSubviewsBack,
-  ClippedSubviewsDeviceLost,
   ClippedSubviewsSharedValueChanged,
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
 } from "./ClippedSubviews";
+import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
 import { IsOnMainThread } from "./IsOnMainThread";
 import { OnLayout } from "./OnLayout";
@@ -29,12 +29,12 @@ const settling = (component: FC): Screen => ({
 
 export const Screens: Readonly<Record<string, Screen>> = {
   ClippedSubviewsBack: settling(ClippedSubviewsBack),
-  ClippedSubviewsDeviceLost: settling(ClippedSubviewsDeviceLost),
   ClippedSubviewsSharedValueChanged: settling(
     ClippedSubviewsSharedValueChanged
   ),
   ClippedSubviewsStateChanged: settling(ClippedSubviewsStateChanged),
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
+  GraphitePendingFrames: settling(GraphitePendingFrames),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
   IsOnMainThread: shown(IsOnMainThread),

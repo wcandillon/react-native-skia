@@ -18,6 +18,7 @@ import type { InputMatrix, SkMatrix } from "./Matrix";
 import type { SkImageFilter } from "./ImageFilter";
 import type { SkVertices } from "./Vertices";
 import type { SkTextBlob } from "./TextBlob";
+import type { SkShapeBlob } from "./ShapeBlob";
 import type { SkPicture } from "./Picture";
 import type { SkRSXform } from "./RSXform";
 
@@ -357,6 +358,19 @@ export interface SkCanvas {
    * @param paint
    */
   drawTextBlob(blob: SkTextBlob, x: number, y: number, paint: SkPaint): void;
+
+  /**
+   * Draws every shape of the blob with one `drawVertices` call, under the
+   * current matrix and clip. The sprites are rasterized at the device scale of
+   * this canvas (unless the blob has a fixed `rasterScale`) and rasterized
+   * again only when that scale leaves 0.75 to 1.5 times the scale of the
+   * current atlas; a rotation never does.
+   * @param blob
+   * @param paint - optional: its alpha, blend mode, color filter and image
+   * filter apply to the shapes; its color, shader, style, path effect and mask
+   * filter are ignored.
+   */
+  drawShapes(blob: SkShapeBlob, paint?: SkPaint | null): void;
 
   /**
    * Draws a run of glyphs, at corresponding positions, in a given font.

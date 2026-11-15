@@ -74,22 +74,28 @@ export type Command<T extends CommandType = CommandType> = {
   [key: string]: unknown;
 };
 
+/**
+ * The command with the current values of its animated props. A command with
+ * none is returned as is: its props were converted when it was recorded
+ * (Convertor.ts) and the player only reads them.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const materializeCommand = (command: any) => {
   "worklet";
+  if (!command.animatedProps) {
+    return command;
+  }
   const newProps = { ...command.props };
-  if (command.animatedProps) {
-    for (const key in command.animatedProps) {
-      const entry = command.animatedProps[key];
-      if (isSharedValueSelector(entry)) {
-        const group = entry.__sv.value;
-        newProps[key] =
-          group && typeof group === "object"
-            ? (group as Record<string, unknown>)[entry.__key]
-            : undefined;
-      } else {
-        newProps[key] = entry.value;
-      }
+  for (const key in command.animatedProps) {
+    const entry = command.animatedProps[key];
+    if (isSharedValueSelector(entry)) {
+      const group = entry.__sv.value;
+      newProps[key] =
+        group && typeof group === "object"
+          ? (group as Record<string, unknown>)[entry.__key]
+          : undefined;
+    } else {
+      newProps[key] = entry.value;
     }
   }
   return { ...command, props: newProps };

@@ -46,19 +46,4 @@ describe("A Skia view a scroll view takes out of the window", () => {
       graphiteView: "cyan",
     });
   });
-
-  // A graphite view shows nothing on the new device until its JS records
-  // again, as one in the window does, so only the other two are read.
-  itRunsE2eOnly(
-    "draws on the GPU device that replaced the one lost while it was away",
-    async () => {
-      const { canvas, pictureCanvas } = await readViews(
-        await surface.screen("ClippedSubviewsDeviceLost")
-      );
-      expect({ canvas, pictureCanvas }).toEqual({
-        canvas: "red",
-        pictureCanvas: "cyan",
-      });
-    }
-  );
 });

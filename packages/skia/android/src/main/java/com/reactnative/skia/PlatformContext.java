@@ -1,5 +1,7 @@
 package com.reactnative.skia;
 
+import android.content.ComponentCallbacks;
+import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.MessageQueue;
@@ -13,6 +15,7 @@ import com.facebook.react.common.LifecycleState;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -36,23 +39,43 @@ public class PlatformContext implements LifecycleEventListener {
     // calls no Java there.
     private static ParcelFileDescriptor sMainThreadWakeup;
 
+    // The display density can change while the app runs (display size
+    // setting, foldables): the native side follows it.
+    private final ComponentCallbacks mComponentCallbacks = new ComponentCallbacks() {
+        @Override
+        public void onConfigurationChanged(Configuration newConfig) {
+            updatePixelDensity();
+        }
+
+        @Override
+        public void onLowMemory() {
+        }
+    };
+
     public PlatformContext(ReactContext reactContext) {
         listenForMainThreadTasks();
         mContext = reactContext;
+        // Before the GPU is first asked for: where Dawn keeps what it
+        // compiled, for the next launch to find (see DawnContext).
+        setCacheDirectoryNative(new File(reactContext.getCacheDir(), "rnskia").getAbsolutePath());
         mHybridData = initHybrid(reactContext.getResources().getDisplayMetrics().density);
         // Skia.gpu.foreground follows the host activity: resumed, or not.
         setForegroundNative(reactContext.getLifecycleState() == LifecycleState.RESUMED);
         reactContext.addLifecycleEventListener(this);
+        reactContext.getApplicationContext().registerComponentCallbacks(mComponentCallbacks);
     }
 
     /** Stops following the host activity; the manager is going away. */
     public void destroy() {
         mContext.removeLifecycleEventListener(this);
+        mContext.getApplicationContext().unregisterComponentCallbacks(mComponentCallbacks);
     }
 
     @Override
     public void onHostResume() {
         setForegroundNative(true);
+        // The density may have changed while the app was in the background.
+        updatePixelDensity();
     }
 
     @Override
@@ -62,6 +85,10 @@ public class PlatformContext implements LifecycleEventListener {
 
     @Override
     public void onHostDestroy() {
+    }
+
+    private void updatePixelDensity() {
+        setPixelDensityNative(mContext.getResources().getDisplayMetrics().density);
     }
 
     private static synchronized void listenForMainThreadTasks() {
@@ -155,10 +182,16 @@ public class PlatformContext implements LifecycleEventListener {
     // Private c++ native methods
     private native HybridData initHybrid(float pixelDensity);
 
+    // The display density changed (JniPlatformContext::setPixelDensity).
+    private native void setPixelDensityNative(float pixelDensity);
+
     private static native int duplicateMainThreadWakeup();
 
     private static native void runMainThreadTasks();
 
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
+
+    // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
+    private static native void setCacheDirectoryNative(String directory);
 }

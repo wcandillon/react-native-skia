@@ -12,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "jsx": "react-native",
     "strict": true,
     "noUnusedLocals": true /* Report errors on unused locals. */,

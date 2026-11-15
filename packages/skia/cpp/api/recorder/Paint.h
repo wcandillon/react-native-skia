@@ -62,9 +62,9 @@ public:
   }
 
   void play(DrawingCtx *ctx) override {
-    auto clip = props.clip;
-    auto invertClip = props.invertClip;
-    auto layer = props.layer;
+    const auto &clip = props.clip;
+    const auto &invertClip = props.invertClip;
+    const auto &layer = props.layer;
     auto hasTransform = props.matrix.has_value() || props.transform.has_value();
     auto hasClip = clip.has_value();
     auto op = invertClip.has_value() && invertClip.value()
@@ -77,7 +77,7 @@ public:
         if (std::holds_alternative<bool>(layer.value())) {
           ctx->canvas->saveLayer(nullptr, nullptr);
         } else {
-          auto paint = std::get<SkPaint>(layer.value());
+          const auto &paint = std::get<SkPaint>(layer.value());
           ctx->canvas->saveLayer(nullptr, &paint);
         }
       } else {
@@ -86,12 +86,12 @@ public:
       ctx->canvas->concat(m3);
     }
     if (clip.has_value()) {
-      auto c = clip.value();
+      const auto &c = clip.value();
       if (std::holds_alternative<SkPath>(c)) {
-        auto path = std::get<SkPath>(c);
+        const auto &path = std::get<SkPath>(c);
         ctx->canvas->clipPath(path, op);
       } else if (std::holds_alternative<std::string>(c)) {
-        auto pathString = std::get<std::string>(c);
+        const auto &pathString = std::get<std::string>(c);
         SkPath result;
         if (SkParsePath::FromSVGString(pathString.c_str(), &result)) {
           ctx->canvas->clipPath(result, op);
@@ -99,10 +99,10 @@ public:
           throw std::runtime_error("Could not parse path from string.");
         }
       } else if (std::holds_alternative<SkRect>(c)) {
-        auto rect = std::get<SkRect>(c);
+        const auto &rect = std::get<SkRect>(c);
         ctx->canvas->clipRect(rect, op);
       } else if (std::holds_alternative<SkRRect>(c)) {
-        auto rrect = std::get<SkRRect>(c);
+        const auto &rrect = std::get<SkRRect>(c);
         ctx->canvas->clipRRect(rrect, op);
       }
     }

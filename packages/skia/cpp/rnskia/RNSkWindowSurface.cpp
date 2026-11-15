@@ -7,7 +7,7 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
-#include "RNMetalLayerColorSpace.h"
+#include "RNSkGpuActivity.h"
 #include "utils/RNSkLog.h"
 
 #ifdef __APPLE__
@@ -33,8 +33,7 @@ namespace {
 // let go of at once before the device is destroyed (see
 // RNSkWindowSurface::retireReplacedDevice). The mutex guards the list, and
 // is held for the whole sweep over it, so that no window goes away under
-// the sweep; it is never taken with a window's mutex held (see the class
-// comment on locks).
+// the sweep (see the class comment on locks).
 std::mutex &windowsMutex() {
   static std::mutex mutex;
   return mutex;
@@ -53,24 +52,29 @@ RNSkWindowSurface::RNSkWindowSurface() {
 }
 
 RNSkWindowSurface::~RNSkWindowSurface() {
-  // Out of the list before letting go of the surface: the destructor may run
-  // on any thread, and the list is swept by the presenting threads (see
-  // releaseSurfacesOn).
+  // Out of the list before letting go of the surface: the destructor runs
+  // wherever the last owner lets go of the window, and the list is swept on
+  // the presenting thread (see releaseSurfacesOn).
   {
     std::lock_guard<std::mutex> lock(windowsMutex());
     auto &list = windows();
     list.erase(std::remove(list.begin(), list.end(), this), list.end());
   }
-  detach();
+  detachNow();
 }
 
 void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
                                bool highBitDepth, bool useP3ColorSpace,
                                Releaser releaser) {
-  std::lock_guard<std::mutex> lock(_mutex);
-  // A layout attaches the same window again, which keeps what it shows.
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
+  // The window held already, attached again (Apple's attachSurface, as the
+  // bit depth or the color space changes), keeps what it shows. A layout
+  // does not attach: it resizes the attached window (see resize).
   const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
-  detachLocked();
+  // Not detach(): an abandon that lands while this runs (the platform taking
+  // the window back as it attaches) must be kept for the detach posted
+  // behind, not taken down here.
+  releaseWindow();
   _showsFrame = showsFrame;
   _nativeHandle = nativeHandle;
   _releaser = std::move(releaser);
@@ -80,15 +84,15 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   // and the view stays blank.
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
-    detachLocked();
+    releaseWindow();
     return;
   }
   _device = context->getWGPUDevice();
-  _generation.store(DawnContext::generation(), std::memory_order_release);
+  _generation = DawnContext::generation();
   _surface = context->MakeWGPUSurface(nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
-    detachLocked();
+    releaseWindow();
     return;
   }
   _width = width;
@@ -122,11 +126,13 @@ void RNSkWindowSurface::resize(int width, int height) {
     if (!_hasTargetInfo) {
       return;
     }
-    // What frames are recorded for from now. The window follows on the
-    // presenting thread, by its next present (see takePendingSizeLocked):
-    // the main thread does not wait for a present in flight.
+    // What frames are recorded for from now. The window follows by its next
+    // present (see takePendingSize).
     _targetInfo.width = width;
     _targetInfo.height = height;
+    // The platform laid the view out at this size first: with that layout's
+    // density (see setLayoutSize).
+    _targetInfo.pixelDensity = _layoutPixelDensity;
     _pendingWidth = width;
     _pendingHeight = height;
     _hasPendingSize = true;
@@ -135,11 +141,26 @@ void RNSkWindowSurface::resize(int width, int height) {
 }
 
 void RNSkWindowSurface::detach() {
-  std::lock_guard<std::mutex> lock(_mutex);
-  detachLocked();
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
+  detachNow();
 }
 
-void RNSkWindowSurface::detachLocked() {
+void RNSkWindowSurface::detach(void *nativeHandle) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
+  if (nativeHandle != nullptr && nativeHandle == _nativeHandle) {
+    detachNow();
+  }
+}
+
+void RNSkWindowSurface::detachNow() {
+  releaseWindow();
+  // The window the platform took back is let go of now (see abandon). Only
+  // here, not in attach(): an abandon is always followed by this detach,
+  // and an attach for another window comes behind it.
+  _abandoned.store(false, std::memory_order_release);
+}
+
+void RNSkWindowSurface::releaseWindow() {
   // The surface goes before the window it draws into.
   _surface = nullptr;
   _needsConfigure = false;
@@ -147,7 +168,7 @@ void RNSkWindowSurface::detachLocked() {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
   }
-  _generation.store(0, std::memory_order_release);
+  _generation = 0;
   updateTargetInfo();
   if (_releaser && _nativeHandle != nullptr) {
     _releaser(_nativeHandle);
@@ -157,13 +178,17 @@ void RNSkWindowSurface::detachLocked() {
   _showsFrame = false;
 }
 
+void RNSkWindowSurface::abandon() {
+  _abandoned.store(true, std::memory_order_release);
+}
+
 bool RNSkWindowSurface::isAttached() {
-  std::lock_guard<std::mutex> lock(_mutex);
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::isAttached");
   return _nativeHandle != nullptr;
 }
 
 bool RNSkWindowSurface::showsFrame() {
-  std::lock_guard<std::mutex> lock(_mutex);
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showsFrame");
   return _showsFrame;
 }
 
@@ -171,6 +196,32 @@ void RNSkWindowSurface::setLayoutSize(int width, int height) {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   _layoutWidth = width;
   _layoutHeight = height;
+}
+
+void RNSkWindowSurface::setLayoutSize(int width, int height,
+                                      float pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  _layoutWidth = width;
+  _layoutHeight = height;
+  _layoutPixelDensity = pixelDensity;
+  // A window that already has this size takes the density now: no resize
+  // will come for it (see updateTargetInfo).
+  if (_hasTargetInfo && _targetInfo.width == width &&
+      _targetInfo.height == height) {
+    _targetInfo.pixelDensity = pixelDensity;
+  }
+}
+
+bool RNSkWindowSurface::getPixelDensity(float *pixelDensity) {
+  std::lock_guard<std::mutex> lock(_targetInfoMutex);
+  // The one that goes with the window's size, until it has one.
+  float density =
+      _hasTargetInfo ? _targetInfo.pixelDensity : _layoutPixelDensity;
+  if (density <= 0) {
+    return false;
+  }
+  *pixelDensity = density;
+  return true;
 }
 
 bool RNSkWindowSurface::getLayoutSize(int *width, int *height) {
@@ -235,18 +286,22 @@ bool RNSkWindowSurface::getTargetInfo(RNSkGraphiteTargetInfo *info) {
 void RNSkWindowSurface::updateTargetInfo() {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   // Kept while the surface is away for a device replacement (see
-  // ensureDeviceLocked): the frames recorded meanwhile are for this window.
+  // ensureDevice): the frames recorded meanwhile are for this window.
   if (_nativeHandle == nullptr) {
     _hasTargetInfo = false;
     return;
   }
-  _targetInfo = describeLocked();
-  // A size resize() noted and the presenting thread has not taken yet is
-  // what frames are recorded for.
+  _targetInfo = describe();
+  // A size resize() noted and no present has taken yet is what frames are
+  // recorded for.
   if (_hasPendingSize) {
     _targetInfo.width = _pendingWidth;
     _targetInfo.height = _pendingHeight;
   }
+  // The platform lays the view out before its window follows the new size:
+  // the density of that layout goes with the size, rather than the one of
+  // the layout the window had until now.
+  _targetInfo.pixelDensity = _layoutPixelDensity;
   _hasTargetInfo = true;
   // What the surface granted, kept once the window is detached: it is what
   // the window comes back with.
@@ -256,7 +311,7 @@ void RNSkWindowSurface::updateTargetInfo() {
   _hasKnownUseP3ColorSpace = true;
 }
 
-RNSkGraphiteTargetInfo RNSkWindowSurface::describeLocked() const {
+RNSkGraphiteTargetInfo RNSkWindowSurface::describe() const {
   RNSkGraphiteTargetInfo info;
   info.width = _width;
   info.height = _height;
@@ -273,7 +328,7 @@ skgpu::graphite::TextureInfo RNSkWindowSurface::getTextureInfo() const {
                                        wgpu::TextureAspect::All));
 }
 
-void RNSkWindowSurface::takePendingSizeLocked() {
+void RNSkWindowSurface::takePendingSize() {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   if (!_hasPendingSize) {
     return;
@@ -287,7 +342,7 @@ void RNSkWindowSurface::takePendingSizeLocked() {
   _needsConfigure = true;
 }
 
-void RNSkWindowSurface::configureIfNeededLocked() {
+void RNSkWindowSurface::configureIfNeeded() {
   if (!_needsConfigure) {
     return;
   }
@@ -306,13 +361,11 @@ void RNSkWindowSurface::configureSurface() {
 #ifdef __APPLE__
   config.alphaMode = wgpu::CompositeAlphaMode::Premultiplied;
 #endif
+  // The colorspace of a CAMetalLayer is not set here: the platform view tags
+  // the layer on the main thread as it makes it (see
+  // apple/MetalLayerColorSpace.h), and makes it non-opaque for the alpha mode
+  // above, so that nothing here changes the layer on the present thread.
   _surface.Configure(&config);
-#ifdef __APPLE__
-  // The layer is tagged with the gamut the window renders in; float formats
-  // need the (gamma-encoded) extended variant so the values display
-  // identically to the 8-bit path.
-  applyCAMetalLayerColorSpace(_nativeHandle, _format, _useP3ColorSpace);
-#endif
 }
 
 wgpu::TextureUsage RNSkWindowSurface::supportedSurfaceUsage() {
@@ -347,21 +400,16 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 }
 
 RNSkWindowState RNSkWindowSurface::readState(RNSkGraphiteTargetInfo *info) {
-  std::lock_guard<std::mutex> lock(_mutex);
-  return readStateLocked(info);
-}
-
-RNSkWindowState
-RNSkWindowSurface::readStateLocked(RNSkGraphiteTargetInfo *info) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::readState");
   // Whether a window is attached is its handle, not its description, which
-  // detachLocked takes once more before it lets go of the window.
+  // detach() takes once more before it lets go of the window.
   if (_nativeHandle == nullptr) {
     return RNSkWindowState::kNone;
   }
   // A lost device (see DawnContext::isDeviceLost) takes no frame until it
   // is replaced: the view keeps its last one and the queue waits. A window
-  // whose surface is away for the replacement (see ensureDeviceLocked) is
-  // ready: presenting is what brings the surface back.
+  // whose surface is away for the replacement (see ensureDevice) is ready:
+  // presenting is what brings the surface back.
   if (DawnContext::isDeviceLost()) {
     return RNSkWindowState::kNoDevice;
   }
@@ -375,18 +423,18 @@ RNSkWindowSurface::readStateLocked(RNSkGraphiteTargetInfo *info) {
   return RNSkWindowState::kReady;
 }
 
-bool RNSkWindowSurface::isTargetLocked(const RNSkGraphiteTargetInfo &target) {
-  if (describeLocked() == target) {
+bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
+  if (describe() == target) {
     return true;
   }
   // A frame for the size resize() noted: the window moves on to it now. A
   // frame for the size the window still has goes onto it as it is (above).
-  takePendingSizeLocked();
-  return describeLocked() == target;
+  takePendingSize();
+  return describe() == target;
 }
 
 void RNSkWindowSurface::retireReplacedDevice() {
-  const auto generation = _generation.load(std::memory_order_acquire);
+  const auto generation = _generation;
   if (generation == 0 || generation == DawnContext::generation()) {
     return;
   }
@@ -395,8 +443,7 @@ void RNSkWindowSurface::retireReplacedDevice() {
     return;
   }
   // Once the sweep is through, no window holds a surface on that device:
-  // a window attached meanwhile is configured on the device in use. Two
-  // threads retiring the same device both sweep before either destroys it.
+  // a window attached meanwhile is configured on the device in use.
   releaseSurfacesOn(generation);
   context->destroyRetiredDevice(generation);
 }
@@ -404,28 +451,27 @@ void RNSkWindowSurface::retireReplacedDevice() {
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
-    std::lock_guard<std::mutex> lock(window->_mutex);
-    if (window->_generation.load(std::memory_order_acquire) == generation) {
+    if (window->_generation == generation) {
       window->_surface = nullptr;
-      window->_generation.store(0, std::memory_order_release);
+      window->_generation = 0;
     }
   }
 }
 
-bool RNSkWindowSurface::ensureDeviceLocked() {
+bool RNSkWindowSurface::ensureDevice() {
   const auto generation = DawnContext::generation();
   if (_surface) {
     // A surface on a device replaced since the sweep (see
     // retireReplacedDevice) is let go of on the next frame, not configured
     // on a device that is gone.
-    return _generation.load(std::memory_order_acquire) == generation;
+    return _generation == generation;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
   _device = context->getWGPUDevice();
-  _generation.store(generation, std::memory_order_release);
+  _generation = generation;
   _surface = context->MakeWGPUSurface(_nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -451,14 +497,15 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
 bool RNSkWindowSurface::presentRecordings(
     const RNSkGraphiteTargetInfo &target,
     const std::vector<skgpu::graphite::Recording *> &recordings) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread,
+                          "RNSkWindowSurface::presentRecordings");
+  RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
-  std::lock_guard<std::mutex> lock(_mutex);
   // The device check first: it may configure the window again.
-  if (readStateLocked(nullptr) != RNSkWindowState::kReady ||
-      !ensureDeviceLocked() || !isTargetLocked(target)) {
+  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  configureIfNeededLocked();
+  configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
@@ -482,23 +529,18 @@ bool RNSkWindowSurface::presentRecordings(
   // A recording Graphite rejects is logged there and dropped: it would be
   // rejected again on every frame, and the frames behind it would never come.
   DawnContext::getInstance().insertRecordings(recordings, surface.get());
-#ifdef __APPLE__
-  dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
-#endif
-  _surface.Present();
-  _showsFrame = true;
-  return true;
+  return presentTexture();
 }
 
 bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
                                      const sk_sp<SkImage> &image) {
+  RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::presentImage");
+  RNSkGpuActivity::Scope activity;
   retireReplacedDevice();
-  std::lock_guard<std::mutex> lock(_mutex);
-  if (readStateLocked(nullptr) != RNSkWindowState::kReady ||
-      !ensureDeviceLocked() || !isTargetLocked(target)) {
+  if (!canPresent() || !ensureDevice() || !isTarget(target)) {
     return false;
   }
-  configureIfNeededLocked();
+  configureIfNeeded();
   wgpu::SurfaceTexture surfaceTexture;
   _surface.GetCurrentTexture(&surfaceTexture);
   auto texture = surfaceTexture.texture;
@@ -519,9 +561,26 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   }
   drawOnto(surface->getCanvas(), image, surface->width(), surface->height());
   DawnContext::getInstance().submitRecording(recorder);
+  return presentTexture();
+}
+
+bool RNSkWindowSurface::canPresent() {
+  return readState(nullptr) == RNSkWindowState::kReady &&
+         !_abandoned.load(std::memory_order_acquire);
+}
+
+bool RNSkWindowSurface::presentTexture() {
 #ifdef __APPLE__
   dawn::native::metal::WaitForCommandsToBeScheduled(_device.Get());
 #endif
+  // The platform is taking the window back (see abandon, set before the
+  // detach that clears it is posted, so always ahead of this check): the
+  // frame is lost with it, and the device is kept. The recordings were
+  // replayed all the same; the caller keeps them and replays them again onto
+  // the next window (see presentRecordings).
+  if (_abandoned.load(std::memory_order_acquire)) {
+    return false;
+  }
   _surface.Present();
   _showsFrame = true;
   return true;

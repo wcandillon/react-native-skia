@@ -1,4 +1,5 @@
 import fs from "fs";
+import { execSync } from "child_process";
 import path from "path";
 
 import { $, fileOps } from "./utils";
@@ -554,5 +555,50 @@ export const copyHeaders = () => {
     );
     process.exit(1);
   }
+  applyPatchesToHeaders();
   console.log("✅ Skia headers copied to ./cpp/skia");
+};
+
+// build-skia applies scripts/skia-*.patch to the Skia checkout before it
+// compiles, so the prebuilt binaries are built from patched headers. The
+// copies above come from the unpatched submodule: apply the hunks of the
+// patches that touch a copied file, or the wrapper compiles against
+// declarations the binaries do not define (e.g. the SkSurfaceProps argument
+// of Recorder::makeDeferredCanvas, an undefined symbol at link time).
+const applyPatchesToHeaders = () => {
+  const copiedRoot = path.join(PackageRoot, "cpp/skia");
+  const patches = fs
+    .readdirSync(__dirname)
+    .filter((f) => f.startsWith("skia-") && f.endsWith(".patch"))
+    .sort();
+  for (const name of patches) {
+    const sections = fs
+      .readFileSync(path.join(__dirname, name), "utf-8")
+      .split(/^(?=diff --git )/m)
+      .filter((section) => {
+        const target = section.match(/^diff --git a\/\S+ b\/(\S+)/)?.[1];
+        return target && fs.existsSync(path.join(copiedRoot, target));
+      });
+    if (sections.length === 0) {
+      continue;
+    }
+    const filtered = path.join(copiedRoot, `.${name}`);
+    fs.writeFileSync(filtered, sections.join(""));
+    try {
+      // Inside this repository, git apply silently skips paths outside the
+      // current directory and the ignored cpp/skia. Stopping repository
+      // discovery at cpp/skia makes it patch the files there like `patch -p1`.
+      execSync(`git apply ${filtered}`, {
+        cwd: copiedRoot,
+        env: {
+          ...process.env,
+          GIT_CEILING_DIRECTORIES: path.dirname(copiedRoot),
+        },
+        stdio: "inherit",
+      });
+    } finally {
+      fs.rmSync(filtered);
+    }
+    console.log(`   🩹 ${name} applied to the copied headers`);
+  }
 };

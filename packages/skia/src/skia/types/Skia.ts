@@ -21,6 +21,7 @@ import type { SkVertices, VertexMode } from "./Vertices/Vertices";
 import type { DataFactory } from "./Data";
 import type { SVGFactory } from "./SVG";
 import type { TextBlobFactory } from "./TextBlob";
+import type { ShapeBlobOptions, SkShapeBlob } from "./ShapeBlob";
 import type { SurfaceFactory } from "./Surface";
 import type { SkRSXform } from "./RSXform";
 import type { SkPath } from "./Path/Path";
@@ -167,6 +168,12 @@ export interface Skia {
   AnimatedImage: AnimatedImageFactory;
   SVG: SVGFactory;
   TextBlob: TextBlobFactory;
+  /**
+   * Creates an empty shape blob: a mutable batch of filled rectangles, rounded
+   * rectangles and circles drawn with `canvas.drawShapes(blob)` in one draw
+   * call. See {@link SkShapeBlob}.
+   */
+  ShapeBlob(options?: ShapeBlobOptions): SkShapeBlob;
   Surface: SurfaceFactory;
   ParagraphBuilder: ParagraphBuilderFactory;
   Skottie: SkottieFactory;

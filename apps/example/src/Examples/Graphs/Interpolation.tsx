@@ -64,14 +64,12 @@ const TransitioningPath = ({
 
   // The animated path is derived from the current and next paths based
   // on the value of the progress.
-  const animatedPath = useDerivedValue(
-    () =>
-      interpolatePaths(
-        progress.value,
-        [0, 1],
-        [currentPathRef.value, nextPathRef.value]
-      ),
-    [progress, path]
+  const animatedPath = useDerivedValue(() =>
+    interpolatePaths(
+      progress.value,
+      [0, 1],
+      [currentPathRef.value, nextPathRef.value]
+    )
   );
 
   useEffect(() => {

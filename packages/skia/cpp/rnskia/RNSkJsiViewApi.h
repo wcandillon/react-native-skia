@@ -323,7 +323,7 @@ public:
     std::shared_ptr<RNSkView> view =
         ViewRegistry::getInstance().getView(nativeId);
     if (view != nullptr) {
-      auto pixelDensity = _platformContext->getPixelDensity();
+      auto pixelDensity = view->getPixelDensity();
       auto sizeObj = jsi::Object(runtime);
       sizeObj.setProperty(runtime, "width",
                           view->getScaledWidth() / pixelDensity);
@@ -341,16 +341,19 @@ public:
 
   /**
    Returns the recording side of a view: (nativeId, width, height, opaque,
-   highBitDepth), the size in points as laid out and the props the surface
-   format follows from. The view may not exist yet; the context binds to it
-   by id when it does, and the registry owns the target in between, so a
-   frame submitted before then is kept whether or not JS keeps the context.
+   highBitDepth, deviceIndependentFonts), the size in points as laid out, the
+   props the surface format follows from and the font option of the
+   recordings (set again through setJsiProperty when it changes). The view may
+   not exist yet; the context binds to it by id when it does, and the registry
+   owns the target in between, so a frame submitted before then is kept whether
+   or not JS keeps the context.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
         !arguments[2].isNumber()) {
       throw jsi::JSError(runtime, "makeGraphiteContext: expected (nativeId, "
-                                  "width, height, opaque, highBitDepth)");
+                                  "width, height, opaque, highBitDepth, "
+                                  "deviceIndependentFonts)");
     }
     auto nativeId = static_cast<size_t>(arguments[0].asNumber());
     auto width = static_cast<float>(arguments[1].asNumber());
@@ -361,6 +364,8 @@ public:
     auto target = RNSkGraphiteTargetRegistry::getInstance().getOrCreate(
         nativeId, _platformContext);
     target->setLayout(width, height, opaque, highBitDepth);
+    target->setDeviceIndependentFonts(count > 5 && arguments[5].isBool() &&
+                                      arguments[5].getBool());
     return makeJsiObject(runtime, std::make_shared<JsiSkGraphiteContext>(
                                       _platformContext, std::move(target)));
   }
@@ -410,11 +415,6 @@ public:
         _platformContext(platformContext) {}
 
   /**
-   Call to remove all draw view infos
-   */
-  void unregisterAll() { ViewRegistry::getInstance().clear(); }
-
-  /**
    * Registers a skia view
    * @param nativeId Id of view to register
    * @param view View to register
@@ -441,29 +441,6 @@ public:
   void unregisterSkiaView(size_t nativeId) {
     ViewRegistry::getInstance().removeViewInfo(nativeId);
     RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
-  }
-
-  /**
-   Sets a skia draw view for the given id. This function can be used
-   to mark that an underlying SkiaView is not available (it could be
-   removed due to ex. a transition). The view can be set to a nullptr
-   or a valid view, effectively toggling the view's availability.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
-    ViewRegistry::getInstance().withViewInfo(
-        nativeId,
-        [&](std::shared_ptr<RNSkViewInfo> info) {
-          if (view != nullptr) {
-            info->view = view;
-            info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
-            info->props.clear();
-          } else {
-            info->view = view; // Set to nullptr
-          }
-          return nullptr;
-        },
-        /* revive= */ view != nullptr);
   }
 
 private:
