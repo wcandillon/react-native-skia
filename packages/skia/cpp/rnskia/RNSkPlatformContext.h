@@ -123,9 +123,11 @@ public:
   }
 
   /**
-   * @return Current scale factor for pixels
+   * @return Current scale factor for pixels. A view records its frames with
+   * the density of its own layout when the platform gives one (see
+   * RNSkWindowSurface::setLayoutSize); this one is for everything else.
    */
-  float getPixelDensity() { return _pixelDensity; }
+  virtual float getPixelDensity() { return _pixelDensity; }
 
   /**
    * Whether views render in Display P3 rather than sRGB: true on Apple

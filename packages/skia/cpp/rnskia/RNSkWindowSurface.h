@@ -32,31 +32,29 @@ namespace RNSkia {
  * (attach, resize, detach); everything else lives here.
  *
  * Threading: the window belongs to the thread the view presents on (see
- * RNSkView::setPresentThread): the present thread of the platform, one for
- * every canvas of a process (PresentThread.java, RNSkPresentThread in
- * SkiaView.mm), where the platform view posts the attach and the detach
- * from the main thread. Everything that touches the Dawn surface runs
- * there, one call after the other, and nothing waits for it; the entries
- * check it once the platform view has bound the thread (see
- * bindPresentingThread and rnsurface::ThreadChecker: an entry from
- * another thread aborts in debug builds and is logged once in release
- * builds). A resize is the exception: it notes a size and posts a redraw,
- * from any thread. Nothing waits for a
- * present: a present holds the window for as long as Graphite takes to replay
- * the frame, which includes compiling the pipelines it needs, seconds on a
- * slow GPU, and a main thread made to wait for that is an ANR (#4394). A
- * resize notes the size, which the present that follows takes (see
- * takePendingSize) and configures the swapchain for (see configureIfNeeded):
- * a Vulkan swapchain is made again for every size (about 5 ms on a Pixel 8),
- * and until a frame for the new size arrives the window still takes frames
- * made for its previous one, which the platform stretches to the view.
- * A present is made for the target the view read before (see getTargetInfo);
- * the window checks that it still is that target, and declines a present
- * made for a window resized since (see presentRecordings). The description
- * of the target texture is kept in a copy of its own, under a mutex, so that
- * whoever records for the view (the JS thread, a worklet runtime, the render
- * thread pool) can read it from any thread, also before the window exists
- * (see getLayoutSize).
+ * RNSkView::setPresentThread): the present thread of the process, one for
+ * every canvas (see RNSkPresentThread.h, a rnsurface::RenderThread), where
+ * the platform view posts the attach and the detach from the main thread.
+ * Everything that touches the Dawn surface runs there, one call after the
+ * other, and nothing waits for it; the entries check it once the platform view
+ * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
+ * an entry from another thread aborts in debug builds and is logged once in
+ * release builds). A resize is the exception: it notes a size and posts a
+ * redraw, from any thread. Nothing waits for a present: a present holds the
+ * window for as long as Graphite takes to replay the frame, which includes
+ * compiling the pipelines it needs, seconds on a slow GPU, and a main thread
+ * made to wait for that is an ANR (#4394). A resize notes the size, which the
+ * present that follows takes (see takePendingSize) and configures the swapchain
+ * for (see configureIfNeeded): a Vulkan swapchain is made again for every size
+ * (about 5 ms on a Pixel 8), and until a frame for the new size arrives the
+ * window still takes frames made for its previous one, which the platform
+ * stretches to the view. A present is made for the target the view read before
+ * (see getTargetInfo); the window checks that it still is that target, and
+ * declines a present made for a window resized since (see presentRecordings).
+ * The description of the target texture is kept in a copy of its own, under a
+ * mutex, so that whoever records for the view (the JS thread, a worklet
+ * runtime, the render thread pool) can read it from any thread, also before the
+ * window exists (see getLayoutSize).
  *
  * The windows of a process all present on the same thread, so the sweep over
  * them (see releaseSurfacesOn) runs with no window in use; the list itself
@@ -166,6 +164,20 @@ public:
   void setLayoutSize(int width, int height);
 
   /**
+   The same, along with the pixel density that layout was made with (on
+   Android the view's own, which follows display density changes along with
+   its layout, see SkiaView.onLayout). Any thread.
+   */
+  void setLayoutSize(int width, int height, float pixelDensity);
+
+  /**
+   The pixel density of the platform layout (see setLayoutSize): the one of
+   the layout the window has the size of, else the latest. False until the
+   platform gave one. Any thread.
+   */
+  bool getPixelDensity(float *pixelDensity);
+
+  /**
    The size in pixels the surface will have, known from the platform layout
    before the surface itself exists (on Android the surface only appears a
    frame after the view is laid out). Safe to call from any thread; returns
@@ -179,7 +191,8 @@ public:
   /**
    The bit depth the platform view will attach the window with, known before
    it does: on Android the one of the backing view, chosen when the canvas
-   mounts (see SkiaView.updateView); on Apple platforms the prop. Any thread.
+   mounts (see SkiaView.updateView); on Apple platforms the prop as the
+   native view is created. Any thread.
    */
   void setHighBitDepth(bool highBitDepth);
 
@@ -380,6 +393,7 @@ private:
   bool _hasTargetInfo = false;
   int _layoutWidth = 0;
   int _layoutHeight = 0;
+  float _layoutPixelDensity = 0;
   // The size resize() noted, for the next present to take (see
   // takePendingSize).
   int _pendingWidth = 0;

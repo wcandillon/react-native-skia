@@ -33,25 +33,22 @@ export const Symbol = ({ i, j, font, pointer, clock }: SymbolProps) => {
   const text = DIGITS[Math.round(Math.random() * 9)];
   const [symbolWidth] = font.getGlyphWidths(font.getGlyphIDs(text));
   const origin = vec(x + SIZE.width / 2, y + SIZE.height / 2);
-  const transform = useDerivedValue(
-    () => [
-      {
-        scale: interpolate(dist(pointer.value, origin), [0, R], [1.25, 0.25], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        }),
-      },
-    ],
-    [pointer]
-  );
+  const transform = useDerivedValue(() => [
+    {
+      scale: interpolate(dist(pointer.value, origin), [0, R], [1.25, 0.25], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      }),
+    },
+  ]);
   const dx = useDerivedValue(() => {
     const d = A * noise(x, clock.value * F);
     return origin.x - symbolWidth / 2 + d;
-  }, [clock]);
+  });
   const dy = useDerivedValue(() => {
     const d = A * noise(y, clock.value * F);
     return origin.y + font.getSize() / 2 + d;
-  }, [clock]);
+  });
   return (
     <Group transform={transform} origin={origin}>
       <Text text={text} x={dx} y={dy} font={font} color={FG} />

@@ -53,19 +53,17 @@ export const Demo = () => {
     [defaultVertices]
   );
 
-  const vertices = useDerivedValue(
-    () =>
-      defaultVertices.map((vertex, i) => {
-        if (isEdge(vertex, win)) {
-          return vertex;
-        }
-        const noise2d = noises[i];
-        return {
-          x: vertex.x + AX * noise2d(clock.value / F, 0),
-          y: vertex.y + AY * noise2d(0, clock.value / F),
-        };
-      }),
-    [clock]
+  const vertices = useDerivedValue(() =>
+    defaultVertices.map((vertex, i) => {
+      if (isEdge(vertex, win)) {
+        return vertex;
+      }
+      const noise2d = noises[i];
+      return {
+        x: vertex.x + AX * noise2d(clock.value / F, 0),
+        y: vertex.y + AY * noise2d(0, clock.value / F),
+      };
+    })
   );
 
   return (

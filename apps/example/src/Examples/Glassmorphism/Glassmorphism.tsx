@@ -26,18 +26,13 @@ export const Glassmorphism = () => {
   );
 
   const progress = useLoop({ duration: 2000 });
-  const start = useDerivedValue(
-    () => sub(c, vec(0, mix(progress.value, r, r / 2))),
-    [progress]
+  const start = useDerivedValue(() =>
+    sub(c, vec(0, mix(progress.value, r, r / 2)))
   );
-  const end = useDerivedValue(
-    () => add(c, vec(0, mix(progress.value, r, r / 2))),
-    []
+  const end = useDerivedValue(() =>
+    add(c, vec(0, mix(progress.value, r, r / 2)))
   );
-  const radius = useDerivedValue(
-    () => mix(progress.value, r, r / 2),
-    [progress]
-  );
+  const radius = useDerivedValue(() => mix(progress.value, r, r / 2));
 
   return (
     <Canvas style={{ flex: 1 }}>
