@@ -46,7 +46,7 @@ const declareShader = (
   const shader = ctx.track(
     source.makeShaderWithChildren(
       processUniforms(source, uniforms),
-      ctx.shaders.splice(0, children),
+      ctx.shaders.splice(Math.max(0, ctx.shaders.length - children), children),
       m3
     )
   );
