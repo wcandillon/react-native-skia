@@ -229,7 +229,7 @@ public:
         lastPresented = _lastPresented;
       }
       if ((frameComing && _surface->showsFrame()) || lastPresented == nullptr ||
-          !lastPresented->isCurrent()) {
+          lastPresented->isOrdered() || !lastPresented->isCurrent()) {
         return;
       }
       recordings.push_back(std::move(lastPresented));
@@ -464,8 +464,9 @@ private:
   }
 
   /**
-   The frame on screen, or the one about to be, if any; none when it was
-   made for a GPU device lost since (it cannot be replayed). Any thread.
+   The replayable frame on screen, or the one about to be, if any. A
+   snapshot draws current declarative content directly (see
+   makeImageSnapshot). Any thread.
    */
   std::shared_ptr<RNSkGraphiteRecording> getLastFrame() {
     std::shared_ptr<RNSkGraphiteTarget> target;
@@ -476,11 +477,12 @@ private:
       recording = _lastPresented;
     }
     if (target) {
-      if (auto latest = target->peekLatest()) {
+      if (auto latest = target->peekLatest(); latest && !latest->isOrdered()) {
         recording = latest;
       }
     }
-    if (recording != nullptr && !recording->isCurrent()) {
+    if (recording != nullptr &&
+        (recording->isOrdered() || !recording->isCurrent())) {
       return nullptr;
     }
     return recording;
@@ -612,8 +614,9 @@ private:
   present(RNSkSurface &surface, const RNSkGraphiteTargetInfo &targetInfo,
           const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings,
           bool remember) {
-    // Recordings of the target's size and color space are replayed straight
-    // onto it, as one batch; any other goes through a texture of its own.
+    using RecordingPresent = RNSkSurface::RecordingPresent;
+    // Compatible unordered recordings are replayed as one batch. An ordered
+    // recording is checked individually before any dependent frame is tried.
     std::vector<skgpu::graphite::Recording *> batch;
     std::shared_ptr<RNSkGraphiteRecording> batchLast;
     std::shared_ptr<RNSkGraphiteRecording> last;
@@ -621,7 +624,8 @@ private:
     // Presents the batch; the recordings before upTo are then done.
     auto flush = [&](size_t upTo) {
       if (!batch.empty()) {
-        if (!surface.presentRecordings(targetInfo, batch)) {
+        if (surface.presentRecordings(targetInfo, batch) ==
+            RecordingPresent::kDeclined) {
           return false;
         }
         batch.clear();
@@ -633,6 +637,33 @@ private:
     bool taken = true;
     for (size_t i = 0; i < recordings.size(); i++) {
       const auto &recording = recordings[i];
+      if (recording->isOrdered()) {
+        if (!flush(i)) {
+          taken = false;
+          break;
+        }
+        if (recording->isInvalidated() || !recording->isCurrent() ||
+            !recording->isCompatibleWith(targetInfo)) {
+          recording->invalidateIfOrdered();
+          _producer->requestFrame();
+          done = i + 1;
+          continue;
+        }
+        const auto result = surface.presentRecordings(
+            targetInfo, {recording->get()}, recording->generation());
+        if (result == RecordingPresent::kDeclined) {
+          taken = false;
+          break;
+        }
+        if (result == RecordingPresent::kPresented) {
+          last = recording;
+        } else {
+          recording->invalidateIfOrdered();
+          _producer->requestFrame();
+        }
+        done = i + 1;
+        continue;
+      }
       // A recording made for a GPU device lost since (one queued when the
       // device was lost) can never be replayed: consumed, not shown. The
       // producer records again for the device in use (see redraw).
@@ -681,7 +712,8 @@ private:
         if (_producer->hasContent() && _windowTakesLatestFrame &&
             &surface == _surface.get() &&
             surface.presentRecordings(recording->getTarget(),
-                                      {recording->get()})) {
+                                      {recording->get()}) ==
+                RecordingPresent::kPresented) {
           last = recording;
           done = i + 1;
           continue;
@@ -748,7 +780,9 @@ private:
                                surface.getHeight());
       return TexturePresent::kConsumed;
     }
-    auto image = intermediate.presentRecordings(info, {recording->get()})
+    const auto replayed = intermediate.presentRecordings(
+        info, {recording->get()}, /* orderedGeneration= */ 0);
+    auto image = replayed == RNSkSurface::RecordingPresent::kPresented
                      ? intermediate.makeImage()
                      : nullptr;
     if (image == nullptr) {

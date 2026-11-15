@@ -368,17 +368,15 @@ public:
   // (makeRecorder), tracked by the target (RNSkGraphiteRecorder).
 
   /**
-   A recorder of its own for a target JS records into across calls
-   (SkiaViewApi.makeGraphiteContext, see RNSkGraphiteTarget::beginRecording):
-   unlike getRecorder() it is not tied to the calling thread. Made for the
-   device in use (see generation()), to be replaced once that device is
-   lost; its recordings go through insertRecordings(), with the generation
-   the target remembers. Creating a recorder is a Context operation, hence
-   the lock.
+   A target-owned recorder for JS recording across calls or for a view's
+   animated content. Returns the device generation under the same lock as
+   recorder creation so the target can replace it when that device is lost.
    */
-  std::unique_ptr<skgpu::graphite::Recorder> makeRecorder() {
+  std::unique_ptr<skgpu::graphite::Recorder>
+  makeRecorder(uint64_t &generation, bool requireOrderedRecordings = false) {
     std::lock_guard<std::mutex> lock(_mutex);
-    return makeRecorderLocked();
+    generation = _current.load(std::memory_order_acquire)->id;
+    return makeRecorderLocked(/* forUploads= */ false, requireOrderedRecordings);
   }
 
   /**
@@ -499,24 +497,30 @@ public:
    canvas target) and submits them as one batch. A recording Graphite
    rejects is logged and skipped; the others are still submitted. The
    recordings and the surface must be the device's in use (see isCurrent);
-   nothing runs while it is lost.
+   nothing runs while it is lost. An ordered frame supplies its generation
+   so a device replacement between target selection and insertion rejects it.
+   Returns whether Graphite accepted and submitted at least one recording.
    */
-  void
+  bool
   insertRecordings(const std::vector<skgpu::graphite::Recording *> &recordings,
-                   SkSurface *targetSurface) {
+                   SkSurface *targetSurface, uint64_t generation = 0) {
     RNSkGpuActivity::Scope activity;
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
-    if (current->lost.load(std::memory_order_acquire)) {
-      return;
+    if ((generation != 0 && generation != current->id) ||
+        current->lost.load(std::memory_order_acquire)) {
+      return false;
     }
+    bool inserted = false;
     for (auto *recording : recordings) {
       skgpu::graphite::InsertRecordingInfo info;
       info.fRecording = recording;
       info.fTargetSurface = targetSurface;
       auto status = current->context->insertRecording(info);
       // InsertStatus converts to true on success.
-      if (!static_cast<bool>(status)) {
+      if (static_cast<bool>(status)) {
+        inserted = true;
+      } else {
         RNSkLogger::logToConsole(
             "Graphite rejected a recording (InsertStatus %d): %s",
             static_cast<int>(
@@ -524,7 +528,8 @@ public:
             status.message().c_str());
       }
     }
-    current->context->submit();
+    const bool submitted = current->context->submit();
+    return inserted && submitted;
   }
 
   // GPU objects --------------------------------------------------------------
@@ -1050,7 +1055,8 @@ private:
    a thread (see upload()). Called with the context lock held.
    */
   std::unique_ptr<skgpu::graphite::Recorder>
-  makeRecorderLocked(bool forUploads = false) {
+  makeRecorderLocked(bool forUploads = false,
+                     bool requireOrderedRecordings = false) {
     auto *current = _current.load(std::memory_order_acquire);
     if (forUploads) {
       // Skia's default image provider, and no budget: the textures it makes
@@ -1063,6 +1069,7 @@ private:
       return current->context->makeRecorder(options);
     }
     skgpu::graphite::RecorderOptions options;
+    options.fRequireOrderedRecordings = requireOrderedRecordings;
     // The provider uploads through upload() (see ImageProvider), and serves
     // the recorder textures of the device in use only. The context is never
     // destroyed, so the capture is safe.
