@@ -44,34 +44,62 @@ export class JsiSkParagraphStyle {
         : ps.textHeightBehavior;
 
     ps.strutStyle = ps.strutStyle ?? {};
-    ps.strutStyle.fontFamilies =
-      value.strutStyle?.fontFamilies ?? ps.strutStyle.fontFamilies;
-    ps.strutStyle.fontSize =
-      value.strutStyle?.fontSize ?? ps.strutStyle.fontSize;
-    ps.strutStyle.heightMultiplier =
-      value.strutStyle?.heightMultiplier ?? ps.strutStyle.heightMultiplier;
+    ps.textStyle = ps.textStyle ?? {};
+    ps.textStyle.color = value.textStyle?.color ?? ps.textStyle.color;
+    ps.textStyle.backgroundColor =
+      value.textStyle?.backgroundColor ?? ps.textStyle.backgroundColor;
+    ps.textStyle.foregroundColor =
+      value.textStyle?.foregroundColor ?? ps.textStyle.foregroundColor;
+    ps.textStyle.decoration =
+      value.textStyle?.decoration ?? ps.textStyle.decoration;
+    ps.textStyle.decorationColor =
+      value.textStyle?.decorationColor ?? ps.textStyle.decorationColor;
+    ps.textStyle.decorationStyle =
+      value.textStyle?.decorationStyle !== undefined
+        ? { value: value.textStyle.decorationStyle }
+        : ps.textStyle.decorationStyle;
+    ps.textStyle.letterSpacing =
+      value.textStyle?.letterSpacing ?? ps.textStyle.letterSpacing;
+    ps.textStyle.decorationThickness =
+      value.textStyle?.decorationThickness ?? ps.textStyle.decorationThickness;
+    ps.textStyle.fontFamilies = ps.textStyle.fontFamilies =
+      value.textStyle?.fontFamilies ?? ps.textStyle.fontFamilies;
+    ps.textStyle.fontSize = value.textStyle?.fontSize ?? ps.textStyle.fontSize;
+    ps.textStyle.heightMultiplier =
+      value.textStyle?.heightMultiplier ?? ps.textStyle.heightMultiplier;
     ps.strutStyle.leading = value.strutStyle?.leading ?? ps.strutStyle.leading;
     ps.strutStyle.forceStrutHeight =
       value.strutStyle?.forceStrutHeight ?? ps.strutStyle.forceStrutHeight;
 
-    ps.strutStyle.fontStyle = ps.strutStyle.fontStyle ?? {};
+    ps.textStyle.fontStyle = ps.textStyle.fontStyle ?? {};
 
-    ps.strutStyle.fontStyle.slant =
-      value.strutStyle?.fontStyle?.slant !== undefined
-        ? { value: value.strutStyle.fontStyle.slant }
-        : ps.strutStyle.fontStyle.slant;
-    ps.strutStyle.fontStyle.width =
-      value.strutStyle?.fontStyle?.width !== undefined
-        ? { value: value.strutStyle.fontStyle.width }
-        : ps.strutStyle.fontStyle.width;
-    ps.strutStyle.fontStyle.weight =
-      value.strutStyle?.fontStyle?.weight !== undefined
-        ? { value: value.strutStyle.fontStyle.weight }
-        : ps.strutStyle.fontStyle.weight;
-    ps.strutStyle.halfLeading =
-      value.strutStyle?.halfLeading ?? ps.strutStyle.halfLeading;
+    ps.textStyle.fontStyle.slant =
+      value.textStyle?.fontStyle?.slant !== undefined
+        ? { value: value.textStyle.fontStyle.slant }
+        : ps.textStyle.fontStyle.slant;
+    ps.textStyle.fontStyle.width =
+      value.textStyle?.fontStyle?.width !== undefined
+        ? { value: value.textStyle.fontStyle.width }
+        : ps.textStyle.fontStyle.width;
+    ps.textStyle.fontStyle.weight =
+      value.textStyle?.fontStyle?.weight !== undefined
+        ? { value: value.textStyle.fontStyle.weight }
+        : ps.textStyle.fontStyle.weight;
+    ps.textStyle.halfLeading =
+      value.textStyle?.halfLeading ?? ps.textStyle.halfLeading;
     ps.strutStyle.strutEnabled =
       value.strutStyle?.strutEnabled ?? ps.strutStyle.strutEnabled;
+    ps.textStyle.shadows =
+      value.textStyle?.shadows?.map(shadow => {
+        return {
+          color: shadow.color,
+          offset: shadow.offset ? [shadow.offset.x, shadow.offset.y] : [0, 0],
+          blurRadius: shadow.blurRadius
+        };
+      }) ?? ps.textStyle.shadows;
+    ps.textStyle.textBaseline = value.textStyle?.textBaseline
+      ? { value: value.textStyle.textBaseline }
+      : ps.textStyle.textBaseline;
 
     return ps;
   }
