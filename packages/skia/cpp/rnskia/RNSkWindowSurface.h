@@ -212,9 +212,9 @@ public:
 
   /**
    Presents the held frame, whatever the GPU is on: the view calls it once
-   isAcknowledged(). Returns whether a frame went to the window: none was
-   held, or the platform took the window back meanwhile (see abandon).
-   Presenting thread.
+   isAcknowledged(). Returns whether a frame went to the window: none did
+   when none was held, the platform took the window back meanwhile (see
+   abandon), or the GPU device was lost, replaced or not. Presenting thread.
    */
   bool presentHeldFrame();
 

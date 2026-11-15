@@ -224,9 +224,13 @@ bool RNSkWindowSurface::presentHeldFrame() {
   _heldFrame = false;
   // The window the platform took back gets nothing (see abandon), and a
   // device lost since has nothing to present with: the frame is lost with
-  // either, and the view shows its last one again on what comes next.
+  // either, and the view shows its last one again on what comes next. The
+  // same once that device is replaced: the surface stays on the lost one,
+  // where the frame is, until a present sweeps it (see
+  // retireReplacedDevice), and presenting it would show nothing and count
+  // as a frame shown.
   if (!_surface || _abandoned.load(std::memory_order_acquire) ||
-      DawnContext::isDeviceLost()) {
+      DawnContext::isDeviceLost() || _generation != DawnContext::generation()) {
     return false;
   }
   RNSkGpuActivity::Scope activity;
