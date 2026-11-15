@@ -344,6 +344,20 @@ public:
     _queue.insert(_queue.begin(), recordings.begin(), recordings.end());
   }
 
+  /**
+   Present thread. Queues recordings presented before once more, ahead of
+   anything waiting: the last frame, which a redraw could not get onto the
+   window (no drawable). They were done when first presented, so they are
+   submitted again as far as pacing goes: pending until presented, and done
+   then, as every recording taken off the queue is (see onRecordingsDone).
+   */
+  void requeuePresented(
+      const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
+    std::lock_guard<std::mutex> lock(_queueMutex);
+    _submitted.fetch_add(recordings.size(), std::memory_order_relaxed);
+    _queue.insert(_queue.begin(), recordings.begin(), recordings.end());
+  }
+
   /** The most recently submitted recording still waiting, if any. */
   std::shared_ptr<RNSkGraphiteRecording> peekLatest() {
     std::lock_guard<std::mutex> lock(_queueMutex);

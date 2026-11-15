@@ -209,7 +209,9 @@ public:
    nothing, or a stretched frame, until it has run. The frame scheduler
    hears of it as of a frame it asked for, and paces what the redraw left: a
    frame the window could not take (no drawable), which is queued again, or
-   one whose present the window holds.
+   one whose present the window holds. A window that holds a frame already
+   takes none (unless it was resized, see RNSkWindowSurface::hasHeldFrame):
+   the last frame shown again is the one it holds, and the redraw is done.
    */
   void redraw() {
     RNSURFACE_ASSERT_THREAD(_presentThread, "RNSkView::redraw");
@@ -709,7 +711,7 @@ private:
     const auto presentsBefore = _surface->presentCount();
     const auto startedAt = rnsurface::frameClockNow();
     const auto presented =
-        presentOrKeep(target, targetInfo, std::move(recordings));
+        presentOrKeep(target, targetInfo, std::move(recordings), fromQueue);
     Scheduler::Taken taken;
     taken.duration = rnsurface::frameClockNow() - startedAt;
     if (fromQueue && presented.done > 0) {
@@ -807,7 +809,8 @@ private:
 
   /** What presentOrKeep() did. */
   struct Presented {
-    // Every recording is done: shown, or skipped (see present).
+    // Every recording is done: shown, skipped (see present), or the last
+    // frame the window holds already.
     bool allDone;
     // A frame went to the window.
     bool shown;
@@ -825,11 +828,19 @@ private:
    RNSkWindowSurface::presentRecordings). A window that changed is read
    again and the rest presented onto it as it is now, once, rather than a
    frame later: what was recorded for the previous size shows stretched to
-   it, or is dropped for a frame behind it (see present).
+   it, or is dropped for a frame behind it (see present). The last frame,
+   shown again by a redraw rather than taken off the queue (not
+   `fromQueue`), is the frame a window that holds one holds (it is the last
+   the window took, and it takes no other meanwhile): the present of the
+   held frame shows it, and queued once more it would be presented twice.
+   One the window could not take for another reason is queued as a frame
+   submitted again, as it counts as done once presented like every
+   recording taken off the queue (see RNSkGraphiteTarget::requeuePresented).
    */
-  Presented presentOrKeep(
-      RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
-      std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings) {
+  Presented
+  presentOrKeep(RNSkGraphiteTarget &target, RNSkGraphiteTargetInfo targetInfo,
+                std::vector<std::shared_ptr<RNSkGraphiteRecording>> recordings,
+                bool fromQueue) {
     bool shown = false;
     size_t done = 0;
     for (int attempt = 0;; attempt++) {
@@ -847,10 +858,17 @@ private:
         targetInfo = now;
         continue;
       }
+      if (!fromQueue && _surface->hasHeldFrame()) {
+        return {true, shown, done};
+      }
       // Back in the queue, and the producer's ready recording back in its
       // slot if it is among them.
       _producer->onFramesReturned(recordings);
-      target.requeue(std::move(recordings));
+      if (fromQueue) {
+        target.requeue(recordings);
+      } else {
+        target.requeuePresented(recordings);
+      }
       return {false, shown, done};
     }
   }
