@@ -306,7 +306,7 @@ export const SpeedTest = () => {
         .pushStyle(textStyle)
         .addText(value.toString())
         .build();
-    }, [customFontMgr]);
+    });
 
     return <Paragraph x={x} y={y} width={40} paragraph={paragraph} />;
   };

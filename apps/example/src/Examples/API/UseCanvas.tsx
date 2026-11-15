@@ -50,7 +50,7 @@ const Ring = ({ index, progress, size }: RingProps) => {
     );
     const scale = mix(progress.value, 0.3, 1);
     return [{ translateX: x }, { translateY: y }, { scale }];
-  }, [progress, R]);
+  });
 
   return (
     <Circle
@@ -71,10 +71,9 @@ const BreatheDemo = ({ size }: SizeProps) => {
 
   const progress = useLoop({ duration: 3000 });
 
-  const transform = useDerivedValue(
-    () => [{ rotate: mix(progress.value, -Math.PI, 0) }],
-    [progress]
-  );
+  const transform = useDerivedValue(() => [
+    { rotate: mix(progress.value, -Math.PI, 0) },
+  ]);
 
   return (
     <>

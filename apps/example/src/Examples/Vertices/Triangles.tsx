@@ -21,7 +21,7 @@ export const Triangles = ({ vertices, triangles }: TrianglesProps) => {
         return `M${f(v1)} L${f(v2)} L${f(v3)} Z`;
       })
       .join("");
-  }, [vertices]);
+  });
 
   return <Path path={path} strokeWidth={1} color="white" style="stroke" />;
 };

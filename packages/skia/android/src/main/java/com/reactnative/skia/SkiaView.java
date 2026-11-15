@@ -318,9 +318,14 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
         super.onLayout(changed, left, top, right, bottom);
         // The backing view gets this exact size, and so does its surface: tell
         // the native side now, so that a frame recorded before the surface
-        // exists (the first one usually is) already has the right size.
+        // exists (the first one usually is) already has the right size. The
+        // density goes along: after a display density change, React Native
+        // lays the view out again, and its frames follow the density from
+        // that layout on, never drawing at one density into a size made for
+        // another.
         if (hasNativeView()) {
-            setLayoutSize(right - left, bottom - top);
+            setLayoutSize(right - left, bottom - top,
+                    getResources().getDisplayMetrics().density);
         }
         if (mView != null) {
             mView.layout(0, 0, right - left, bottom - top);
@@ -508,7 +513,7 @@ public class SkiaView extends ReactViewGroup implements SkiaViewAPI {
 
     private native void surfaceAbandoned();
 
-    private native void setLayoutSize(int width, int height);
+    private native void setLayoutSize(int width, int height, float pixelDensity);
 
     private native void setSurfaceHighBitDepth(boolean highBitDepth);
 

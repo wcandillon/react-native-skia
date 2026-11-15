@@ -37,9 +37,8 @@ export const Paragraphs2 = () => {
     progress.value = withRepeat(withTiming(0, { duration: 3000 }), -1, true);
   }, [progress]);
 
-  const loopedWidth = useDerivedValue(
-    () => mix(progress.value, width * 0.2, width * 0.8),
-    [progress]
+  const loopedWidth = useDerivedValue(() =>
+    mix(progress.value, width * 0.2, width * 0.8)
   );
 
   const customFontMgr = useFonts(fonts);

@@ -44,7 +44,7 @@ yarn android
 
 Run linting with auto-fix:
 ```bash
-yarn lint --fix
+yarn lint
 ```
 
 Run TypeScript type checking:
