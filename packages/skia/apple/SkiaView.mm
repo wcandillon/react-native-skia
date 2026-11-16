@@ -30,9 +30,8 @@
 
 using namespace facebook::react;
 
-// React Native 0.82 added invalidate to RCTComponentViewProtocol; before that
-// (the peer range starts at 0.79, react-native-macos is at 0.81) nothing
-// declares or implements it. See -[SkiaView invalidate].
+// React Native 0.82 added invalidate to RCTComponentViewProtocol. Declare it
+// for older supported versions. See -[SkiaView invalidate].
 @interface RCTViewComponentView (SkiaInvalidate)
 - (void)invalidate;
 @end
@@ -439,9 +438,8 @@ usesP3ColorSpace(const std::string &colorSpace,
   [self releaseNativeView];
 }
 
-// Only called from React Native 0.82 on, which implements it on every view:
-// on an earlier version nothing gets here. Drop the category above once the
-// peer range starts at 0.82 and react-native-macos has caught up.
+// React Native 0.82+ calls this when an unmounted view is not recycled.
+// Drop the category above when older versions leave the peer range.
 - (void)invalidate {
   [super invalidate];
   [self releaseNativeView];

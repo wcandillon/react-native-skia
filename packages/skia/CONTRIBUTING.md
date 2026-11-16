@@ -96,7 +96,7 @@ cd apps/example/ios && pod install && cd -
 
 Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
-Then build both platforms:
+Then build the example for your platform:
 
 - iOS:
   ```sh
@@ -109,6 +109,12 @@ Then build both platforms:
   ```sh
   cd apps/example/android && ./gradlew :app:assembleDebug
   ```
+- macOS:
+  ```sh
+  yarn workspace example-macos pod:install:macos
+  yarn workspace example-macos build:macos
+  ```
+  Run these commands from the repository root. The [macOS runner](../../apps/example-macos/README.md) shares the mobile gallery, with a JavaScript stack for desktop navigation. Its React Native 0.83, Reanimated and Worklets dependencies are isolated from the newer mobile app. It uses the same Skia and Dawn binary resolution described above and targets macOS 14; Skia's own minimum remains macOS 11. Run it with `yarn workspace example-macos macos`.
 
 `yarn ios` / `yarn android` work too. Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compilation.
 

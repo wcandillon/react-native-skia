@@ -6,8 +6,8 @@ name: CI
 # so a merge does not pay for the full suite twice. The Android build runs on
 # push because a pull request can only restore caches saved by its own
 # earlier runs or by its base branch (see build-test-android). The SwiftPM
-# build runs on push, and on the pull requests whose diff can affect it (see
-# spm-changes).
+# and macOS builds run on push, and on the pull requests whose diff can
+# affect them (see changes).
 on:
   push:
     branches:
@@ -49,6 +49,13 @@ jobs:
 
       - name: Typecheck files
         run: yarn tsc
+
+      # Bundles the shared example sources with the macOS workspace's Metro
+      # and Babel config, so a resolution or Babel break shows up on every
+      # pull request without a Mac. build-test-macos only builds the native
+      # app, which never bundles the JavaScript.
+      - name: Bundle the macOS example
+        run: yarn workspace example-macos bundle:macos
 
   test:
     runs-on: ubuntu-latest
@@ -669,16 +676,16 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
           fi
 
-  # Builds the example for macOS on pushes to main (and manual runs) only, on
-  # a hosted Mac so it never holds the self-hosted one. Pull requests and the
-  # merge queue skip it, which still satisfies the required check:
-  # build-test-ios already compiles the same Apple and C++ sources, and the
-  # apple-sdks workflow checks the platform-specific Apple code against the
-  # iOS, macOS and tvOS SDKs on every pull request that touches it. What only
-  # this job catches (a macOS link error, react-native-macos drift) shows up
-  # on main instead.
+  # Builds the macOS example (apps/example-macos) on a hosted Mac so it never
+  # holds the self-hosted one. It runs on pushes to main, on manual runs, and
+  # on the pull requests whose diff can affect it (see changes). Other pull
+  # requests and the merge queue skip it, which still satisfies the required
+  # check: build-test-ios already compiles the same Apple and C++ sources, and
+  # the apple-sdks workflow checks the platform-specific Apple code against
+  # the iOS, macOS and tvOS SDKs on every pull request that touches it.
   build-test-macos:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: changes
+    if: needs.changes.outputs.macos == 'true' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -695,21 +702,27 @@ jobs:
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
 
-  # Decides whether build-test-ios-spm runs. That job only proves that
+  # Decides whether build-test-ios-spm (output spm) and build-test-macos
+  # (output macos) run on a pull request. The SwiftPM job only proves that
   # packages/skia/Package.swift resolves and compiles, so a pull request pays
   # for it only when its diff touches what can change the outcome: the
   # manifest and the autolinking config, the Apple and C++ sources it
   # compiles, the scripts that copy the headers from the Skia submodule and
   # the submodule itself, the dependencies that pin the prebuilt binaries,
-  # the example that links it, or CI itself. Pushes to main/next, the merge
-  # queue and manual runs build unconditionally: a change this list misses
-  # still shows up on main, and those runs save the node_modules cache the
-  # pull request runs restore (see .github/actions/setup).
-  spm-changes:
+  # the example that links it, or CI itself. The macOS job follows the same
+  # idea for apps/example-macos, whose dependencies only change for macOS.
+  # JavaScript changes in apps/example/src do not affect the native build;
+  # the lint job bundles them for macOS instead. Pushes to main/next, the
+  # merge queue and manual runs set both outputs unconditionally: a change
+  # these lists miss still shows up on main, and those runs save the
+  # node_modules cache the pull request runs restore (see
+  # .github/actions/setup).
+  changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      run: ${{ steps.diff.outputs.run }}
+      spm: ${{ steps.diff.outputs.spm }}
+      macos: ${{ steps.diff.outputs.macos }}
     steps:
       - name: Checkout
         if: github.event_name == 'pull_request'
@@ -725,24 +738,37 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "spm=true" >> "$GITHUB_OUTPUT"
+            echo "macos=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git fetch --depth=1 origin "$BASE"
           changed=$(git diff --name-only "$BASE" HEAD)
-          run=false
+          spm=false
+          macos=false
           while IFS= read -r file; do
             case "$file" in
               packages/skia/Package.swift|packages/skia/package.json|packages/skia/react-native.config.js|\
               packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
               spm-example/*|package.json|yarn.lock|.gitmodules|externals/*|\
               .github/workflows/ci.yml|.github/actions/setup/*)
-                echo "$file"
-                run=true
+                echo "spm: $file"
+                spm=true
+                ;;
+            esac
+            case "$file" in
+              apps/example-macos/*|\
+              packages/skia/*.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
+              package.json|yarn.lock|.yarn/patches/*|turbo.json|.gitmodules|externals/*|\
+              .github/workflows/ci.yml|.github/actions/setup/*)
+                echo "macos: $file"
+                macos=true
                 ;;
             esac
           done <<< "$changed"
-          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "spm=$spm" >> "$GITHUB_OUTPUT"
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
 
   # The SwiftPM example builds on a GitHub-hosted Mac. It needs no Metro,
   # simulator or CocoaPods, so nothing ties it to the self-hosted machine, and
@@ -752,8 +778,8 @@ jobs:
   # waited for it, and a hung xcodebuild there held the one machine that runs
   # the iOS and macOS checks.
   build-test-ios-spm:
-    needs: spm-changes
-    if: needs.spm-changes.outputs.run == 'true'
+    needs: changes
+    if: needs.changes.outputs.spm == 'true'
     runs-on: macos-latest
     # Cold run: yarn install with the Skia and Dawn binaries, the React Native
     # artifacts, then one xcodebuild.
