@@ -6351,6 +6351,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native/assets-registry@npm:0.88.1":
+  version: 0.88.1
+  resolution: "@react-native/assets-registry@npm:0.88.1"
+  peerDependencies:
+    react-native: "*"
+  checksum: bf1ddf28b06f1a27bbdc86d0692180a8d48f1e2b86475415877c407e6946bffad4ba8c2564e59d83ae95ecc4cea533470fcbcffb7b28caf2d69523b3a4fa905a
+  languageName: node
+  linkType: hard
+
 "@react-native/babel-plugin-codegen@npm:0.83.10":
   version: 0.83.10
   resolution: "@react-native/babel-plugin-codegen@npm:0.83.10"
@@ -14201,6 +14210,7 @@ __metadata:
     "@react-native-community/cli": 20.2.0
     "@react-native-community/cli-platform-android": 20.2.0
     "@react-native-community/cli-platform-ios": 20.2.0
+    "@react-native/assets-registry": 0.88.1
     "@react-native/babel-preset": 0.88.1
     "@react-native/eslint-config": 0.88.1
     "@react-native/jest-preset": 0.88.1
