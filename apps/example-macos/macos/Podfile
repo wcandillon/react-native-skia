@@ -8,8 +8,8 @@ workspace 'example.xcworkspace'
 
 platform :osx, '14.0'
 
-# react-native-webgpu is filtered out of this target below, so it can't provide
-# Dawn here: have react-native-skia vendor its own libwebgpu_dawn instead.
+# react-native-webgpu is disabled in react-native.config.js, so it cannot
+# provide Dawn here. Have Skia vendor its own libwebgpu_dawn instead.
 ENV['RNSKIA_VENDOR_DAWN'] = '1'
 
 # Some pods (e.g. RNSVG's RNSVGFilters subspec) still declare a 10.14
@@ -28,17 +28,4 @@ end
 
 use_test_app!(:hermes_enabled => true,
               :new_arch_enabled => true,
-              :post_install => raise_pod_deployment_targets) do
-  # react-native-webgpu doesn't support macOS yet. Its podspec still declares
-  # `:osx` support, so plain autolinking (which only looks at the podspec, not
-  # react-native.config.js platform overrides) would otherwise pull it in here.
-  # AutolinkingUtils is defined by this point (use_react_native! ran above),
-  # and use_native_modules! (which reads it) hasn't run yet.
-  AutolinkingUtils.singleton_class.prepend(Module.new do
-    def is_platform_supported?(current_target_definition, spec)
-      return false if spec.name == 'react-native-webgpu'
-
-      super
-    end
-  end)
-end
+              :post_install => raise_pod_deployment_targets)

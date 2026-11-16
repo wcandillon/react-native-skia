@@ -1,14 +1,14 @@
 import type { LinkingOptions } from "@react-navigation/native";
 import { NavigationContainer, useNavigation } from "@react-navigation/native";
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { StatusBar } from "react-native";
+import { Platform, StatusBar } from "react-native";
 import type { HeaderBackButtonProps } from "@react-navigation/elements";
 import { HeaderBackButton } from "@react-navigation/elements";
 import { FiberProvider } from "its-fine";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { enableScreens } from "react-native-screens";
 
+import { createStackNavigator } from "./components/Navigation";
 import {
   ReanimatedExample,
   API,
@@ -133,10 +133,11 @@ const HeaderLeft = (props: HeaderBackButtonProps) => {
   );
 };
 
-enableScreens(true);
+// The desktop stack renders React Native views without native Screens support.
+enableScreens(Platform.OS !== "macos");
 
 const App = () => {
-  const Stack = createNativeStackNavigator<StackParamList>();
+  const Stack = createStackNavigator<StackParamList>();
   const assets = useAssets();
   if (assets === null) {
     return null;

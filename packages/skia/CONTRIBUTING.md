@@ -31,6 +31,15 @@ The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia
 
 The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
+### macOS example
+
+The [macOS runner](../../apps/example-macos/README.md) shares the mobile example's
+gallery, with a JavaScript stack for desktop navigation. Its React Native 0.83,
+Reanimated and Worklets dependencies are isolated from the newer mobile app.
+After copying the headers, run `yarn workspace example-macos pod:install:macos`
+and `yarn workspace example-macos build:macos`. It uses the prebuilt Skia and Dawn
+packages and targets macOS 14; Skia's own minimum remains macOS 11.
+
 ### Building
 
 If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
