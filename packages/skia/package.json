@@ -33,6 +33,7 @@
     "cpp/**/*.{h,cpp}",
     "apple/**",
     "react-native-skia.podspec",
+    "binaries.json",
     "Package.swift",
     "include/**",
     "react-native.config.js",
@@ -144,7 +145,6 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.1",
-    "react-native-skia-graphite-android": "158.0.0",
     "react-native-skia-graphite-apple-ios": "158.0.0",
     "react-native-skia-graphite-apple-macos": "158.0.0",
     "react-native-skia-graphite-apple-tvos": "158.0.0",

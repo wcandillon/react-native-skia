@@ -1,9 +1,10 @@
 name: Build and publish binaries
 # Builds Skia Graphite and the Dawn it pins, packages them into the
 # react-native-skia-graphite-* and react-native-webgpu-dawn npm packages, and
-# publishes them, all in one run. There is no intermediate GitHub release: a
-# dry run (the default) uploads the generated packages as a workflow artifact
-# instead of publishing them.
+# publishes them, all in one run. The same files are archived as the assets of
+# the GitHub release binaries-<version>, which the native build systems
+# download from. A dry run (the default) uploads the generated packages and
+# release assets as workflow artifacts instead of publishing them.
 #
 # Every package of a run carries the same version, derived from the Skia
 # branch the submodule commit is on (see scripts/package-binaries.ts): m154 is
@@ -20,7 +21,7 @@ on:
         required: false
         default: ''
       dry_run:
-        description: 'Dry run: build and package, upload the packages as a workflow artifact, skip npm publish'
+        description: 'Dry run: build and package, upload the packages and the release assets as workflow artifacts, skip the npm publish and the GitHub release'
         required: false
         type: boolean
         default: true
@@ -418,6 +419,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # The archives the release job publishes, made by package-binaries from
+      # the packages above. Already compressed.
+      - name: Upload the release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        with:
+          name: release-assets
+          path: packages/skia/build/release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
       # npm refuses a dry run of a version already on the registry too, so a
       # package already published at this version is skipped here as well:
       # a dry run is how a published version is rebuilt for inspection.
@@ -475,8 +487,71 @@ jobs:
             echo "| Dry run | ${{ inputs.dry_run }} |"
             echo ""
             if [ "${{ inputs.dry_run }}" = "true" ]; then
-              echo "> Dry run: nothing was published. The packages are in the \`npm-packages\` artifact of this run."
+              echo "> Dry run: nothing was published. The packages are in the \`npm-packages\` artifact of this run, the release assets in \`release-assets\`."
             else
               echo "Published react-native-skia-graphite-android, react-native-skia-graphite-apple-ios, react-native-skia-graphite-apple-tvos, react-native-skia-graphite-apple-macos and react-native-webgpu-dawn at ${{ needs.prepare.outputs.npm_version }}."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The same binaries as the assets of the GitHub release binaries-<version>,
+  # where the native build systems download them from. A job of its own: it
+  # is the only one that can write to the repository, and it runs no code
+  # from the checkout, only the GitHub CLI on the archives the package job
+  # made.
+  release:
+    needs: [prepare, package]
+    if: ${{ !inputs.dry_run && github.repository == 'wcandillon/react-native-skia' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: binaries-${{ needs.prepare.outputs.npm_version }}
+      NPM_VERSION: ${{ needs.prepare.outputs.npm_version }}
+      SKIA_VERSION: ${{ needs.prepare.outputs.skia_version }}
+    steps:
+      - name: Download the release assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: release
+
+      # checksums.json is what the packages pin: it must describe every
+      # asset, and nothing else is uploaded.
+      - name: Verify the checksums
+        working-directory: release
+        run: |
+          set -eo pipefail
+          test "$(jq -r .tag checksums.json)" = "$TAG"
+          sha256sum -c <(jq -r '.assets | to_entries[] | "\(.value.sha256)  \(.key)"' checksums.json)
+          listed=$(jq -r '.assets | keys[]' checksums.json | sort)
+          present=$(find . -maxdepth 1 -type f ! -name checksums.json | sed 's|^\./||' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::checksums.json does not list exactly the files of the release"
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi
+
+      # gh uploads the assets to a draft and publishes it once they are all
+      # there. A published release is left alone, like a version already on
+      # npm (an immutable release could not be changed anyway); a draft is
+      # what an interrupted run left behind.
+      - name: Create the release
+        run: |
+          set -eo pipefail
+          state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
+          if [ "$state" = "false" ]; then
+            echo "::notice::$TAG is already published, skipped"
+            exit 0
+          fi
+          if [ "$state" = "true" ]; then
+            gh release delete "$TAG" --yes
+          fi
+          gh release create "$TAG" release/* \
+            --target "$GITHUB_SHA" \
+            --title "Binaries $NPM_VERSION" \
+            --notes "Prebuilt Skia Graphite ($SKIA_VERSION) and Dawn binaries, downloaded at build time by react-native-skia and react-native-webgpu. The same files as the react-native-skia-graphite-* and react-native-webgpu-dawn npm packages at $NPM_VERSION. checksums.json holds the sha256 of every asset." \
+            --prerelease \
+            --latest=false
+          echo "Released the binaries as [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)." >> "$GITHUB_STEP_SUMMARY"

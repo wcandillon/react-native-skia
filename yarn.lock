@@ -25945,13 +25945,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-android@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-skia-graphite-android@npm:158.0.0"
-  checksum: b8306f52ce35761df064f4f0103f977802fc48cfe43d3b354ece441a34c7d4841ce3626186d9ffb53e6f1d62ba4d10845d71d87b9aa4c923228d4c410390d3c0
-  languageName: node
-  linkType: hard
-
 "react-native-skia-graphite-apple-ios@npm:158.0.0":
   version: 158.0.0
   resolution: "react-native-skia-graphite-apple-ios@npm:158.0.0"
@@ -26022,7 +26015,6 @@ __metadata:
     react-native: 0.88.1
     react-native-builder-bob: 0.18.2
     react-native-reanimated: 4.7.1
-    react-native-skia-graphite-android: 158.0.0
     react-native-skia-graphite-apple-ios: 158.0.0
     react-native-skia-graphite-apple-macos: 158.0.0
     react-native-skia-graphite-apple-tvos: 158.0.0
