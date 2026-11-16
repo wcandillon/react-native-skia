@@ -179,7 +179,7 @@ jobs:
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        uses: anthropics/claude-code-action@4d75e5f390ee76b2e09c1980ecc99ff3a2e088c8 # v1.0.275
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The workflow's own token instead of the Claude GitHub App, which is
@@ -439,7 +439,7 @@ jobs:
           adb exec-out screencap -p > "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        uses: anthropics/claude-code-action@4d75e5f390ee76b2e09c1980ecc99ff3a2e088c8 # v1.0.275
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
