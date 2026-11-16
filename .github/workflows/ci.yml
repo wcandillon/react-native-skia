@@ -1,11 +1,9 @@
 name: CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
-# build-library), the Android build (with its emulator run on main only), the
-# SwiftPM build, and (on main only) the macOS build. The native builds and
-# the emulator/simulator runs happen on pull requests and in the merge queue,
-# so a merge does not pay for the full suite twice. The Android build runs on
-# push because a pull request can only restore caches saved by its own
-# earlier runs or by its base branch (see build-test-android). The SwiftPM
+# build-library), the Android build (with its emulator and device runs on main
+# only), the SwiftPM build, and (on main only) the macOS build. The native
+# builds and the emulator/simulator runs happen on pull requests and in the
+# merge queue, so a merge does not pay for the full suite twice. The SwiftPM
 # and macOS builds run on push, and on the pull requests whose diff can
 # affect them (see changes).
 on:
@@ -136,246 +134,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # On pull requests and in the merge queue this builds the example app and
-  # runs the e2e suite on the emulator. On push it saves the Gradle cache and
-  # the ccache on the base branch, where every pull request can restore them,
-  # and on main it also runs the emulator suite, so main itself has Android
-  # e2e coverage; on next it stops after the build. Without that producer
-  # each pull request started cold (0 ccache hits, 28 minutes of C++) and saved
-  # its own 1.8 GB Gradle cache, which kept the repository above its 10 GB
-  # cache limit and evicted every entry within hours.
-  build-test-android:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
-        with:
-          submodules: recursive
-
-      - name: Setup
-        uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
-        with:
-          tool-cache: false
-          android: false
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          # Keep the swap file: the Graphite C++ build peaks close to the
-          # runner's 16 GB and the swap is the only headroom left.
-          swap-storage: false
-
-      - name: Install JDK
-        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Install NDK
-        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
-        id: setup-ndk
-        with:
-          ndk-version: r27d
-
-      - name: Set ANDROID_NDK
-        run: echo "ANDROID_NDK=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-        with:
-          packages: platform-tools
-
-      - name: Install Android SDK tools
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
-
-      - name: Finalize Android SDK
-        run: |
-          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
-
-      - name: Install Android SDK
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > $GITHUB_WORKSPACE/apps/example/android/local.properties
-
-      - name: Cache Gradle
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.gradle/wrapper
-            ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('./apps/example/android/gradle/wrapper/gradle-wrapper.properties', 'yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      # Compiler cache for the C++ builds (this library, React Native and the
-      # other native modules). CMake reads the launcher from the environment,
-      # which Gradle passes on to it, so build.gradle needs no change; turbo
-      # runs tasks in strict env mode, so turbo.json lists the launcher, the
-      # CCACHE_* settings and the architecture property, or none of them would
-      # reach the build (they did not until then: every ABI was built and the
-      # compiler check fell back to mtime, which the NDK reinstall defeats). Most
-      # pull requests touch little C++, and a hit turns the compile into a
-      # copy. The key is unique per run: the cache is a rolling one, always
-      # saved, and restored from the most recent run on this ref or on the
-      # base branch (the push runs keep the base branch's entry fresh). The
-      # compiler check is on the binary's content rather than its mtime
-      # because the NDK is reinstalled on every run.
-      - name: Install ccache
-        run: sudo apt-get install -y ccache
-
-      - name: Restore ccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ccache
-          key: ${{ runner.os }}-ccache-android-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-android-
-
-      - name: Build example for Android
-        env:
-          JAVA_OPTS: "-XX:MaxHeapSize=6g"
-          # Only the emulator ABI is tested below, so skip the other three.
-          ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
-          CMAKE_C_COMPILER_LAUNCHER: ccache
-          CMAKE_CXX_COMPILER_LAUNCHER: ccache
-          CCACHE_MAXSIZE: 2G
-          CCACHE_COMPILERCHECK: content
-        run: |
-          ccache --zero-stats
-          yarn turbo run build:android --concurrency 1
-          ccache --show-stats
-
-      - name: Save ccache
-        if: always()
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ccache
-          key: ${{ runner.os }}-ccache-android-${{ github.sha }}
-
-      # Everything below is the emulator run, skipped on pushes other than to
-      # main (see the job comment).
-      - name: Unit test the Android library
-        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        working-directory: apps/example/android
-        env:
-          ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
-        run: ./gradlew :react-native-skia:testDebugUnitTest
-
-      - name: Upload Android APK artifact
-        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        with:
-          name: android-example-apk
-          path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Enable KVM group perms
-        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      # CI=true is inlined into the bundle and opens the app on the Tests
-      # screen. The background bundle request warms Metro's transform cache
-      # while the emulator boots, so the app's own first request is served in
-      # seconds instead of minutes.
-      - name: Start Package Manager
-        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        working-directory: apps/example/
-        run: |
-          E2E=true yarn start &
-          (sleep 10 && curl -sf --retry 12 --retry-connrefused --retry-delay 5 -o /dev/null "http://localhost:8081/index.bundle?platform=android&dev=true&minify=false") &
-
-      # The runner has no GPU: the guest sees SwiftShader's Vulkan 1.3 device
-      # through gfxstream and Graphite renders through Dawn on it. The image
-      # has to be API 34 or newer: on API 30 the guest Vulkan driver fails to
-      # map its host-visible memory (goldfish-address-space errno 1) and the
-      # app crashes on the first mapped buffer (react-native-webgpu#505).
-      #
-      # The whole e2e suite, as the iOS job does. `yarn e2e` sets E2E=true,
-      # which is what makes the tests run on the emulator: without it the
-      # harness uses CanvasKit in Node and never talks to the app. Paragraphs
-      # stays excluded, as it was before the Graphite switch. ClippedSubviews
-      # is excluded on the emulator only, where it is flaky; it still runs on
-      # iOS and on a physical Android device.
-      - name: Run Android Emulator Tests
-        if: (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: Nexus 5X
-          force-avd-creation: true
-          emulator-options: -no-snapshot-save -no-window -gpu swangle_indirect -noaudio -no-boot-anim
-          disable-animations: true
-          # The action runs each script line in its own shell, hence the
-          # detached logcat capture. The app reaches Metro and the test server
-          # at localhost (useClient), which inside the emulator is the guest:
-          # Metro is reversed here, the test server port by the jest
-          # globalSetup, the same as for a phone.
-          script: |
-            adb reverse tcp:8081 tcp:8081
-            nohup adb logcat > logcat.txt 2>&1 &
-            # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
-            ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
-            adb wait-for-device shell monkey -p com.reactnativeskia.example 1
-            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns "Paragraphs|ClippedSubviews"
-
-      # The *.test.png images of failed checks: a failed comparison's, and
-      # the image of a check without a reference.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        with:
-          path: packages/skia/src/__tests__/snapshots/**/*.test.png
-          name: tests-snapshots-screenshots
-          if-no-files-found: ignore
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        with:
-          path: logcat.txt
-          name: android-logcat
-          if-no-files-found: ignore
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
-        if: failure() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
-        with:
-          path: apps/docs/static/
-          name: tests-docs-screenshots
-
-  # Builds the example app for arm64 and runs the e2e suite on the Pixel 8
-  # plugged into the self-hosted Mac. The emulator in build-test-android
-  # renders through SwiftShader; this runs Graphite on a real Mali GPU and
-  # Vulkan driver, which is where the device-specific bugs live. Pushes run
-  # it on main only, as for the emulator.
+  # Builds the example APK once, for both tested ABIs (x86_64 for the
+  # emulator, arm64-v8a for the phone), and hands it to the two e2e jobs as
+  # an artifact. Rerunning a flaky e2e job ("Re-run failed jobs") downloads
+  # this run's APK instead of building it again.
   #
-  # It runs on its own runner listener (label `android-device`), so it does
-  # not queue behind build-test-ios on the Mac, and only one job at a time
-  # ever drives the phone. Its ports are in build-test-ios's table.
+  # It runs on the self-hosted Mac: its ~/.gradle and ccache directory live
+  # on disk between runs, so the build takes 2 to 5 minutes, where the hosted
+  # ubuntu runner took 4 to 9 minutes for one ABI after restoring a 1.8 GB
+  # Gradle cache and the ccache from GitHub's cache. It uses the phone's
+  # listener (label `android-device`), so it does not queue behind
+  # build-test-ios, and build-test-android-device then runs on the same
+  # listener right after it.
   #
-  # The phone must have no secure lock screen (Settings > Security > Screen
-  # lock > None) and USB debugging authorized for the runner user's adb key.
-  # If more than one device is attached, set ANDROID_SERIAL in the
-  # listener's .env file.
-  build-test-android-device:
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+  # It runs on every push too (main and next), so the base branches keep a
+  # build check; the e2e jobs run on main pushes only.
+  build-android:
     runs-on: [self-hosted, macOS, android-device]
     timeout-minutes: 60
     env:
-      METRO_PORT: 8086
-      E2E_PORT: 4247
-      APP_ID: com.reactnativeskia.example
-      # Only the phone's ABI.
-      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a,x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
@@ -416,11 +194,199 @@ jobs:
             exit 1
           fi
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           echo "sdk.dir=$ANDROID_HOME" > apps/example/android/local.properties
           if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           fi
+
+      # ccache is used when it is installed (brew install ccache). turbo runs
+      # tasks in strict env mode: turbo.json lists the launcher, the CCACHE_*
+      # settings and the architecture property, or they would not reach the
+      # build.
+      - name: Build example for Android
+        run: |
+          if command -v ccache > /dev/null; then
+            export CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            export CCACHE_DIR="$HOME/.cache/ccache-skia-android" CCACHE_MAXSIZE=15G CCACHE_COMPILERCHECK=content
+            ccache --zero-stats
+          fi
+          yarn turbo run build:android --concurrency 1
+          if command -v ccache > /dev/null; then ccache --show-stats; fi
+
+      - name: Unit test the Android library
+        working-directory: apps/example/android
+        run: ./gradlew :react-native-skia:testDebugUnitTest
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        with:
+          name: android-example-apk
+          path: apps/example/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          # An APK is already a zip.
+          compression-level: 0
+          overwrite: true
+
+  # Runs the e2e suite on the emulator with build-android's APK.
+  build-test-android:
+    needs: build-android
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Android APK artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-example-apk
+          path: ${{ runner.temp }}/apk
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # CI=true is inlined into the bundle and opens the app on the Tests
+      # screen. The background bundle request warms Metro's transform cache
+      # while the emulator boots, so the app's own first request is served in
+      # seconds instead of minutes.
+      - name: Start Package Manager
+        working-directory: apps/example/
+        run: |
+          E2E=true yarn start &
+          (sleep 10 && curl -sf --retry 12 --retry-connrefused --retry-delay 5 -o /dev/null "http://localhost:8081/index.bundle?platform=android&dev=true&minify=false") &
+
+      # The runner has no GPU: the guest sees SwiftShader's Vulkan 1.3 device
+      # through gfxstream and Graphite renders through Dawn on it. The image
+      # has to be API 34 or newer: on API 30 the guest Vulkan driver fails to
+      # map its host-visible memory (goldfish-address-space errno 1) and the
+      # app crashes on the first mapped buffer (react-native-webgpu#505).
+      #
+      # The whole e2e suite, as the iOS job does. `yarn e2e` sets E2E=true,
+      # which is what makes the tests run on the emulator: without it the
+      # harness uses CanvasKit in Node and never talks to the app. Paragraphs
+      # stays excluded, as it was before the Graphite switch. ClippedSubviews
+      # is excluded on the emulator only, where it is flaky; it still runs on
+      # iOS and on a physical Android device.
+      - name: Run Android Emulator Tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          APK: ${{ runner.temp }}/apk/app-debug.apk
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: Nexus 5X
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swangle_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          # The action runs each script line in its own shell, hence the
+          # detached logcat capture. The app reaches Metro and the test server
+          # at localhost (useClient), which inside the emulator is the guest:
+          # Metro is reversed here, the test server port by the jest
+          # globalSetup, the same as for a phone.
+          script: |
+            adb reverse tcp:8081 tcp:8081
+            nohup adb logcat > logcat.txt 2>&1 &
+            # Right after "Emulator booted" adb can still answer "device offline" for a moment, so wait and retry the install.
+            ok=0; for i in 1 2 3 4 5; do adb wait-for-device install -r "$APK" && ok=1 && break; echo "adb install failed (attempt $i)"; sleep 5; done; [ "$ok" = 1 ]
+            adb wait-for-device shell monkey -p com.reactnativeskia.example 1
+            cd packages/skia && CI=true yarn e2e --testPathIgnorePatterns "Paragraphs|ClippedSubviews"
+
+      # The *.test.png images of failed checks: a failed comparison's, and
+      # the image of a check without a reference.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          path: packages/skia/src/__tests__/snapshots/**/*.test.png
+          name: tests-snapshots-screenshots
+          if-no-files-found: ignore
+          overwrite: true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: always()
+        with:
+          path: logcat.txt
+          name: android-logcat
+          if-no-files-found: ignore
+          overwrite: true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
+        if: failure()
+        with:
+          path: apps/docs/static/
+          name: tests-docs-screenshots
+          overwrite: true
+
+  # Runs the e2e suite on the Pixel 8 plugged into the self-hosted Mac, with
+  # build-android's APK. The emulator in build-test-android renders through
+  # SwiftShader; this runs Graphite on a real Mali GPU and Vulkan driver,
+  # which is where the device-specific bugs live. Pushes run it on main only,
+  # as for the emulator.
+  #
+  # It runs on its own runner listener (label `android-device`), so it does
+  # not queue behind build-test-ios on the Mac, and only one job at a time
+  # ever drives the phone. Its ports are in build-test-ios's table.
+  #
+  # The phone must have no secure lock screen (Settings > Security > Screen
+  # lock > None) and USB debugging authorized for the runner user's adb key.
+  # If more than one device is attached, set ANDROID_SERIAL in the
+  # listener's .env file.
+  build-test-android-device:
+    needs: build-android
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, android-device]
+    timeout-minutes: 45
+    env:
+      METRO_PORT: 8086
+      E2E_PORT: 4247
+      APP_ID: com.reactnativeskia.example
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Android APK artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-example-apk
+          path: ${{ runner.temp }}/apk
+
+      # The SDK is installed once on the machine (see build-android).
+      - name: Set up Android SDK
+        run: |
+          if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+            for candidate in "$HOME/Library/Android/sdk" "$HOME/android-sdk" \
+              /opt/homebrew/share/android-commandlinetools; do
+              if [ -d "$candidate" ]; then ANDROID_HOME=$candidate; break; fi
+            done
+          fi
+          if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
+            echo "::error::No Android SDK with platform-tools found on the runner"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
       # Fail in seconds, with a readable message, when the phone is missing,
       # unauthorized or one of several devices.
@@ -438,19 +404,6 @@ jobs:
           fi
           echo "ANDROID_SERIAL=$ANDROID_SERIAL" >> "$GITHUB_ENV"
           echo "Using $(adb -s "$ANDROID_SERIAL" shell getprop ro.product.model) ($ANDROID_SERIAL), Android $(adb -s "$ANDROID_SERIAL" shell getprop ro.build.version.release)"
-
-      # The machine is persistent: ~/.gradle and the ccache directory survive
-      # between runs on disk, so neither goes through GitHub's cache. ccache
-      # is used when it is installed (brew install ccache).
-      - name: Build example for Android
-        run: |
-          if command -v ccache > /dev/null; then
-            export CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache
-            export CCACHE_DIR="$HOME/.cache/ccache-skia-android" CCACHE_MAXSIZE=10G CCACHE_COMPILERCHECK=content
-            ccache --zero-stats
-          fi
-          yarn turbo run build:android --concurrency 1
-          if command -v ccache > /dev/null; then ccache --show-stats; fi
 
       - name: Ensure Metro and test server ports are free
         run: |
@@ -485,7 +438,7 @@ jobs:
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
           adb uninstall "$APP_ID" || true
-          adb install -r apps/example/android/app/build/outputs/apk/debug/app-debug.apk
+          adb install -r "$RUNNER_TEMP/apk/app-debug.apk"
           adb reverse tcp:8081 tcp:$METRO_PORT
           adb logcat -c
           nohup adb logcat -v time > "$RUNNER_TEMP/logcat.txt" 2>&1 &
@@ -527,6 +480,7 @@ jobs:
           name: android-device-snapshots
           path: packages/skia/src/__tests__/snapshots/**/*.test.png
           if-no-files-found: ignore
+          overwrite: true
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v6.0.0
         if: always()
@@ -537,6 +491,7 @@ jobs:
             ${{ runner.temp }}/metro.log
             ${{ runner.temp }}/screen.png
           if-no-files-found: ignore
+          overwrite: true
 
   # ios-simulator is a label only the ghrunner listener carries. The Mac runs
   # a second listener for the phone (android-device) that also matches
