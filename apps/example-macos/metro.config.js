@@ -5,6 +5,18 @@ const { dependencies } = require("./package.json");
 
 const config = makeMetroConfig({
   projectRoot: __dirname,
+  server: {
+    enhanceMiddleware: (middleware) => (req, res, next) => {
+      // Metro normalizes ../ out of URL paths; keep shared asset paths in its query.
+      if (req.url?.startsWith("/assets/") && req.url.includes("@@/")) {
+        req.url = req.url
+          .replace("/assets/", "/assets?unstable_path=")
+          .replaceAll("@@/", "../");
+      }
+
+      return middleware(req, res, next);
+    },
+  },
   transformer: {
     // Ignore sibling apps' Babel configs when compiling their shared sources.
     enableBabelRCLookup: false,
