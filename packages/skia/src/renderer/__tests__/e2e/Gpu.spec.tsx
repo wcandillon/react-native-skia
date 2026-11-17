@@ -4,6 +4,7 @@ import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
 import { Fill, Image as SkiaImage } from "../../components";
 import {
+  DEVICE_TAKES_MILLISECONDS,
   images,
   nameColor,
   readAllPixels,
@@ -68,16 +69,12 @@ const withoutHarnessCanvas = async (run: () => Promise<void>) => {
   }
 };
 
-// A device lost within 5 s of being made counts as a replacement that did not
-// take, whose own replacement waits (kShortLived in RNDawnContext.h).
-const deviceTakesMilliseconds = 5000;
-
 // Loses the device, once it has lived long enough to be replaced at once,
 // after mapping a buffer on it, and reads the buffer once Skia.gpu.lost
 // resolves: Dawn unmaps the buffers of a device it destroys, and a loss alone
 // leaves them mapped.
 const loseDeviceWithMappedBuffer = async () => {
-  await wait(deviceTakesMilliseconds);
+  await wait(DEVICE_TAKES_MILLISECONDS);
   return surface.eval(
     (Skia, ctx) => {
       // No async/await: the code runs through Hermes' eval on the device.
