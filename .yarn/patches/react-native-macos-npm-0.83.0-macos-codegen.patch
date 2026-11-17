@@ -52,9 +52,9 @@ index 7aefca2f12f8358a22c2ed5f64a585dec778c431..973e3f40b20578a30ce374cc83e9fd94
    );
    // Handle third-party libraries
    return Object.keys(dependencies).flatMap(dependency => {
-+    // The core specs come from react-native-macos itself. An app that also
-+    // depends on a newer react-native (for iOS and Android) would otherwise
-+    // have its specs parsed by this older codegen, which can't read them.
++    // Core specs come from react-native-macos. Skip the react-native peer
++    // dependency so fresh discovery does not collect FBReactNativeSpec twice
++    // or merge mobile-only core metadata into the macOS providers.
 +    if (dependency === 'react-native' && REACT_NATIVE !== 'react-native') {
 +      return [];
 +    }

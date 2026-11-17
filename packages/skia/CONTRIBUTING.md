@@ -21,13 +21,16 @@ To develop react-native-skia, you can build the skia libraries on your computer.
 
 ### Using pre-built binaries
 
-The Skia prebuilt binaries are installed as npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*`). They ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3. Dawn, the WebGPU implementation Graphite renders with, comes from the `react-native-webgpu-dawn` package, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. The native build systems (Gradle, CocoaPods) automatically resolve these packages; there is no `postinstall` step.
+The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, along with Dawn, the WebGPU implementation Graphite renders with, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. There is no `postinstall` step:
+
+- On Android, Gradle downloads them at build time from the GitHub release `binaries-<version>` of this repository, one archive per ABI being built. `packages/skia/binaries.json` pins the version and the sha256 of every archive. They are resolved as Gradle dependencies, so they are cached in the Gradle user home and later builds work offline; the `prepareSkiaBinaries` task verifies them and extracts them into `android/build/binaries`. To download from a mirror, or from a directory with `file:///...`, set the `reactNativeSkiaBinariesUrl` Gradle property or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable to a location holding `binaries-<version>/<asset>`.
+- On Apple platforms they are installed as npm dependencies (`react-native-skia-graphite-apple-*`, and `react-native-webgpu-dawn` for Dawn), which CocoaPods and SwiftPM resolve.
 
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
 - Copy the headers: `cd packages/skia && yarn copy-skia-headers`
 
-`yarn copy-skia-headers` copies the Skia and Graphite headers from the submodule and the Dawn headers from the `react-native-webgpu-dawn` package. The binaries themselves are not copied: Gradle reads them in place from `node_modules`, and the podspec copies them in at `pod install` time.
+`yarn copy-skia-headers` copies the Skia and Graphite headers from the submodule and the Dawn headers from the `react-native-webgpu-dawn` package. The binaries themselves are not copied: Gradle downloads them when it builds, and the podspec copies them in from `node_modules` at `pod install` time.
 
 The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
@@ -88,7 +91,7 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the npm packages: `build.gradle` uses `packages/skia/libs/android` when it exists, and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked. Then run `pod install` in the example app:
+Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked. Then run `pod install` in the example app:
 
 ```sh
 cd apps/example/ios && pod install && cd -
@@ -96,7 +99,7 @@ cd apps/example/ios && pod install && cd -
 
 Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
-Then build both platforms:
+Then build the example for your platform:
 
 - iOS:
   ```sh
@@ -109,6 +112,12 @@ Then build both platforms:
   ```sh
   cd apps/example/android && ./gradlew :app:assembleDebug
   ```
+- macOS:
+  ```sh
+  yarn workspace example-macos pod:install:macos
+  yarn workspace example-macos build:macos
+  ```
+  Run these commands from the repository root. The [macOS runner](../../apps/example-macos/README.md) shares the mobile gallery, with a JavaScript stack for desktop navigation. Its React Native 0.83, Reanimated and Worklets dependencies are isolated from the newer mobile app. It uses the same Skia and Dawn binary resolution described above and targets macOS 14; Skia's own minimum remains macOS 11. Run it with `yarn workspace example-macos macos`.
 
 `yarn ios` / `yarn android` work too. Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compilation.
 
@@ -118,7 +127,7 @@ With the submodule bump merged (the workflow detects the Skia branch from the ch
 
 - `skia_branch`: build a Skia branch other than the submodule commit.
 - `respin`: a letter for another build of the same Skia branch; it becomes the minor of the npm version (see below).
-- `dry_run`: on by default. Build and package, upload the packages as the `npm-packages` artifact of the run, and skip the npm publish. Run it first; the real run is the same workflow with `dry_run` unchecked.
+- `dry_run`: on by default. Build and package, upload the packages as the `npm-packages` artifact of the run and the release assets as `release-assets`, and skip the npm publish and the GitHub release. Run it first; the real run is the same workflow with `dry_run` unchecked.
 
 One run builds everything and publishes it: Skia for iOS (device, simulator and Mac Catalyst), tvOS (device and simulator), macOS and the four Android ABIs, the monolithic Dawn (`libwebgpu_dawn`) for the same platforms from the Dawn commit Skia pins in its DEPS, with the patches in `scripts/dawn-patches` applied, and then the five npm packages generated by `scripts/package-binaries.ts` from the build artifacts:
 
@@ -134,11 +143,31 @@ They all carry the same version, derived from the Skia branch the submodule comm
 
 Publishing uses npm trusted publishing (OIDC): the workflow file must be registered as the trusted publisher of each package on npmjs.com (repository `wcandillon/react-native-skia`, workflow `build-binaries.yml`, no environment), and the first version of a new package has to be published by hand from the `npm-packages` artifact of a dry run.
 
-The same packages can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`.
+The same run archives those files as the assets of the GitHub release `binaries-<version>` (a pre-release, so it never becomes the repository's latest release). They are made from the package directories, so a release holds the very bytes of the npm packages at that version:
+
+| Asset | Contents |
+|:--|:--|
+| `skia-graphite-android-<abi>.zip` | `<abi>/*.a`, one archive per ABI |
+| `dawn-android-<abi>.zip` | `<abi>/libwebgpu_dawn.so`, one archive per ABI |
+| `dawn-headers.zip` | `include/dawn`, `include/webgpu` and the Dawn license |
+| `dawn-LICENSE.txt` | the Dawn license |
+| `skia-graphite-apple-<platform>-<name>.xcframework.zip` | one Skia xcframework, for `ios`, `tvos` and `macos` |
+| `dawn-apple-libwebgpu_dawn.xcframework.zip` | the Dawn xcframework |
+| `checksums.json` | the version, the Skia branch, the Dawn commit, and the sha256 and size of every asset |
+
+The archives of one platform are meant to be extracted into the same directory, so no two of them carry the same path. A release that is already published is left alone, like a version already on npm.
+
+The same packages and release assets can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`. `yarn package-binaries --from-packages=<dir>` makes the release assets alone, from package directories that exist already (one subdirectory per package name): this is how a version published to npm before the releases existed gets its release, from the extracted npm tarballs.
 
 #### 5. Point the library at the new binaries
 
-Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-*` and `react-native-webgpu-dawn`) to the version you just published, delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. react-native-webgpu depends on the same `react-native-webgpu-dawn` version; the podspec and Gradle refuse an app whose two packages resolve different ones.
+Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn`) to the version you just published, and replace `packages/skia/binaries.json`, which is what Gradle downloads the Android binaries from, with the `checksums.json` of the new release:
+
+```sh
+curl -fL https://github.com/wcandillon/react-native-skia/releases/download/binaries-<version>/checksums.json -o packages/skia/binaries.json
+```
+
+Both must name the same version. Then delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. react-native-webgpu depends on the same `react-native-webgpu-dawn` version; the podspec and Gradle refuse an app whose two packages resolve different ones.
 
 Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md`, and to the reference copy in react-native-webgpu's documentation (`apps/docs/content/docs/integrations/react-native-skia.mdx` there), so users can pair the two libraries.
 

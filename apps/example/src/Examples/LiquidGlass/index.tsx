@@ -1,5 +1,6 @@
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import { createStackNavigator } from "../../components/Navigation";
 
 import type { Routes } from "./Routes";
 import { List } from "./List";
@@ -9,7 +10,7 @@ import { DisplacementMap2 } from "./DisplacementMap2";
 import { Shader1 } from "./Shader1";
 import { Shader2 } from "./Shader2";
 
-const Stack = createNativeStackNavigator<Routes>();
+const Stack = createStackNavigator<Routes>();
 export const LiquidGlass = () => {
   return (
     <Stack.Navigator>

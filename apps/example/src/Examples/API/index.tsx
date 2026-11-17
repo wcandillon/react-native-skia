@@ -1,6 +1,6 @@
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import { createStackNavigator } from "../../components/Navigation";
 import { ImageLoading } from "../ImageLoading/ImageLoading";
 
 import type { Routes } from "./Routes";
@@ -48,7 +48,7 @@ import { WebGLLifecycle } from "./WebGLLifecycle";
 import { WebMemory } from "./WebMemory";
 import { WebOffscreen } from "./WebOffscreen";
 
-const Stack = createNativeStackNavigator<Routes>();
+const Stack = createStackNavigator<Routes>();
 
 export const API = () => {
   return (

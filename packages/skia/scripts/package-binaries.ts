@@ -14,9 +14,27 @@
  * build workflow builds every target in its own job and uploads each output
  * directory as an artifact; `--artifacts` stages those back into libs/ first.
  *
+ * The same files are then archived as the assets of the GitHub release
+ * `binaries-<version>`, which the native build systems download from instead
+ * of node_modules:
+ *
+ *   skia-graphite-android-<abi>.zip                        <abi>/*.a
+ *   dawn-android-<abi>.zip                                 <abi>/libwebgpu_dawn.so
+ *   dawn-headers.zip                                       include/{dawn,webgpu}, LICENSE
+ *   dawn-LICENSE.txt
+ *   skia-graphite-apple-<platform>-<name>.xcframework.zip  <name>.xcframework
+ *   dawn-apple-libwebgpu_dawn.xcframework.zip              libwebgpu_dawn.xcframework
+ *   checksums.json                                         sha256 and size of each
+ *
+ * The archives are made from the package directories, so a release holds the
+ * very bytes of the npm packages at that version. `--from-packages` makes them
+ * from package directories that exist already (the extracted tarballs of a
+ * published version) and generates nothing else.
+ *
  * Usage:
- *   yarn package-binaries --skia-version=m154_8037_58b [--artifacts=<dir>] [--output=<dir>]
+ *   yarn package-binaries --skia-version=m154_8037_58b [--artifacts=<dir>] [--output=<dir>] [--release-output=<dir>]
  *   yarn package-binaries --skia-version=m154_8037_58b --print-version
+ *   yarn package-binaries --from-packages=<dir> [--release-output=<dir>]
  *
  * Options:
  *   --skia-version  The Skia branch the binaries were built from, without its
@@ -31,10 +49,15 @@
  *                   subdirectory per artifact (skia-apple-ios, skia-android-arm64,
  *                   dawn-ios-arm64, dawn-headers, ...), to stage into libs/.
  *   --output        Where the packages are written (default: build/binaries).
+ *   --release-output Where the release assets are written (default:
+ *                   build/release).
+ *   --from-packages Directory holding the five packages, one subdirectory per
+ *                   package name: only the release assets are made, from them.
  *   --print-version Print the derived npm version and exit.
  */
 
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { exit } from "process";
@@ -52,6 +75,7 @@ import { fileOps } from "./utils";
 
 const LibsRoot = path.join(PackageRoot, "libs");
 const DefaultOutput = path.join(PackageRoot, "build", "binaries");
+const DefaultReleaseOutput = path.join(PackageRoot, "build", "release");
 
 const REPOSITORY_URL =
   "git+https://github.com/wcandillon/react-native-skia.git";
@@ -85,6 +109,10 @@ const APPLE_SKIA_FRAMEWORKS = [
   "libsksg",
 ];
 
+const ANDROID_PACKAGE = "react-native-skia-graphite-android";
+const APPLE_PLATFORMS = ["ios", "tvos", "macos"] as const;
+const applePackage = (platform: (typeof APPLE_PLATFORMS)[number]) =>
+  `react-native-skia-graphite-apple-${platform}`;
 const DAWN_PACKAGE = "react-native-webgpu-dawn";
 
 // Metadata for SwiftPM resolution; the binaries carry their own deployment
@@ -203,7 +231,7 @@ const copyXcframeworks = (
 
 const packageSpecs = (skiaVersion: string): PackageSpec[] => [
   {
-    name: "react-native-skia-graphite-android",
+    name: ANDROID_PACKAGE,
     description:
       "Skia Graphite prebuilt binaries for Android (all architectures)",
     populate: (pkgDir) => {
@@ -222,7 +250,7 @@ const packageSpecs = (skiaVersion: string): PackageSpec[] => [
     },
   },
   {
-    name: "react-native-skia-graphite-apple-ios",
+    name: applePackage("ios"),
     description:
       "Skia Graphite prebuilt binaries for iOS (device + simulator + Mac Catalyst)",
     populate: (pkgDir) =>
@@ -234,7 +262,7 @@ const packageSpecs = (skiaVersion: string): PackageSpec[] => [
     spmPlatforms: [SPM_IOS],
   },
   {
-    name: "react-native-skia-graphite-apple-tvos",
+    name: applePackage("tvos"),
     description:
       "Skia Graphite prebuilt binaries for tvOS (device + simulator)",
     populate: (pkgDir) =>
@@ -246,7 +274,7 @@ const packageSpecs = (skiaVersion: string): PackageSpec[] => [
     spmPlatforms: [SPM_TVOS],
   },
   {
-    name: "react-native-skia-graphite-apple-macos",
+    name: applePackage("macos"),
     description: "Skia Graphite prebuilt binaries for macOS (arm64 + x64)",
     populate: (pkgDir) =>
       copyXcframeworks(
@@ -525,8 +553,204 @@ const summarize = (pkgDir: string) => {
   console.log(`   ${path.basename(pkgDir)}: ${size.trim()}, ${files} files`);
 };
 
+// --- Release assets ---
+
+/** The tag of the GitHub release that holds the binaries of a version. */
+const releaseTag = (version: string) => `binaries-${version}`;
+
+// `entries` (files or directories) are archived under the paths they have
+// relative to `cwd`.
+interface ArchivePart {
+  cwd: string;
+  entries: string[];
+}
+
+// An archive made of `parts`, or a copy of `file`.
+interface ReleaseAsset {
+  name: string;
+  parts?: ArchivePart[];
+  file?: string;
+}
+
+// One xcframework per archive, at its root: what a SwiftPM binary target takes.
+const xcframeworkAsset = (
+  prefix: string,
+  dir: string,
+  name: string
+): ReleaseAsset => {
+  requireFile(path.join(dir, `${name}.xcframework`, "Info.plist"));
+  return {
+    name: `${prefix}-${name}.xcframework.zip`,
+    parts: [{ cwd: dir, entries: [`${name}.xcframework`] }],
+  };
+};
+
+const releaseAssets = (packagesDir: string): ReleaseAsset[] => {
+  const androidLibs = path.join(packagesDir, ANDROID_PACKAGE, "libs");
+  const dawnDir = path.join(packagesDir, DAWN_PACKAGE);
+  const assets: ReleaseAsset[] = [];
+
+  // One archive per ABI, so that a build only downloads the ABIs it compiles.
+  // Each holds its <abi>/ directory and nothing else: extracted into the same
+  // directory, they give the layout android/CMakeLists.txt reads, and no two
+  // archives carry the same path (Gradle fails a copy on a duplicate entry).
+  for (const abi of ANDROID_ABIS) {
+    assets.push({
+      name: `skia-graphite-android-${abi}.zip`,
+      parts: [
+        {
+          cwd: androidLibs,
+          entries: ANDROID_SKIA_LIBS.map((lib) => path.join(abi, lib)),
+        },
+      ],
+    });
+    assets.push({
+      name: `dawn-android-${abi}.zip`,
+      parts: [
+        {
+          cwd: path.join(dawnDir, "libs", "android"),
+          entries: [path.join(abi, `${DawnLib}.so`)],
+        },
+      ],
+    });
+  }
+
+  // Dawn is BSD-3-Clause: its license is an asset of the release, and is in
+  // the one Dawn archive every build of react-native-webgpu extracts.
+  requireFile(path.join(dawnDir, "include", "webgpu", "webgpu.h"));
+  requireFile(path.join(dawnDir, "include", "dawn", "native", "DawnNative.h"));
+  assets.push({
+    name: "dawn-headers.zip",
+    parts: [{ cwd: dawnDir, entries: ["include", "LICENSE"] }],
+  });
+  assets.push({
+    name: "dawn-LICENSE.txt",
+    file: requireFile(path.join(dawnDir, "LICENSE")),
+  });
+
+  for (const platform of APPLE_PLATFORMS) {
+    const libs = path.join(packagesDir, applePackage(platform), "libs");
+    for (const framework of APPLE_SKIA_FRAMEWORKS) {
+      assets.push(
+        xcframeworkAsset(`skia-graphite-apple-${platform}`, libs, framework)
+      );
+    }
+  }
+  assets.push(
+    xcframeworkAsset("dawn-apple", path.join(dawnDir, "libs", "apple"), DawnLib)
+  );
+  return assets;
+};
+
+// Adds to the archive when it exists already.
+const zip = (archive: string, { cwd, entries }: ArchivePart) => {
+  entries.forEach((entry) => requireFile(path.join(cwd, entry)));
+  execFileSync(
+    "zip",
+    // -X: no uid/gid nor extended timestamps; -y: a symlink stays a symlink.
+    ["-q", "-r", "-X", "-y", archive, ...entries, "-x", "*.DS_Store"],
+    { cwd, stdio: "inherit" }
+  );
+};
+
+const sha256 = (file: string) => {
+  const hash = crypto.createHash("sha256");
+  const fd = fs.openSync(file, "r");
+  try {
+    const buffer = Buffer.alloc(1 << 20);
+    for (;;) {
+      const read = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (read === 0) {
+        break;
+      }
+      hash.update(buffer.subarray(0, read));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest("hex");
+};
+
+/**
+ * Archives the package directories under `packagesDir` into the assets of the
+ * GitHub release of their version, with a checksums.json that the packages
+ * downloading them pin.
+ */
+const generateReleaseAssets = (packagesDir: string, releaseDir: string) => {
+  const names = [
+    ANDROID_PACKAGE,
+    ...APPLE_PLATFORMS.map(applePackage),
+    DAWN_PACKAGE,
+  ];
+  const packages = names.map((name) =>
+    JSON.parse(
+      fs.readFileSync(
+        requireFile(path.join(packagesDir, name, "package.json")),
+        "utf8"
+      )
+    )
+  );
+  const versions = [...new Set(packages.map((pkg) => pkg.version as string))];
+  if (versions.length !== 1) {
+    throw new Error(
+      `The packages in ${packagesDir} are not at the same version: ${names
+        .map((name, i) => `${name}@${packages[i].version}`)
+        .join(", ")}`
+    );
+  }
+  const [version] = versions;
+  const [android] = packages;
+  // The Dawn package repeats the Skia version under `dawn`.
+  const { skia: _, ...dawn } = packages[packages.length - 1].dawn ?? {};
+
+  console.log("");
+  console.log(`🏷️  ${releaseTag(version)} → ${releaseDir}`);
+  fileOps.rm(releaseDir);
+  fileOps.mkdir(releaseDir);
+
+  const checksums: Record<string, { sha256: string; size: number }> = {};
+  let total = 0;
+  for (const asset of releaseAssets(packagesDir)) {
+    const archive = path.join(releaseDir, asset.name);
+    if (asset.file) {
+      fs.copyFileSync(asset.file, archive);
+    }
+    asset.parts?.forEach((part) => zip(archive, part));
+    const { size } = fs.statSync(archive);
+    checksums[asset.name] = { sha256: sha256(archive), size };
+    total += size;
+    console.log(`   ${asset.name}: ${(size / 1e6).toFixed(1)} MB`);
+  }
+  const manifest = {
+    version,
+    tag: releaseTag(version),
+    skia: android.skia?.version,
+    dawn,
+    assets: checksums,
+  };
+  fs.writeFileSync(
+    path.join(releaseDir, "checksums.json"),
+    JSON.stringify(manifest, null, 2) + "\n"
+  );
+  console.log(
+    `✅ ${Object.keys(checksums).length} assets, ${(total / 1e6).toFixed(
+      1
+    )} MB, and checksums.json`
+  );
+};
+
 const main = () => {
   const args = parseArgs();
+  const releaseOutput =
+    typeof args["release-output"] === "string"
+      ? path.resolve(args["release-output"])
+      : DefaultReleaseOutput;
+
+  if (typeof args["from-packages"] === "string") {
+    generateReleaseAssets(path.resolve(args["from-packages"]), releaseOutput);
+    return;
+  }
+
   const skiaVersion = args["skia-version"];
   if (typeof skiaVersion !== "string") {
     throw new Error("--skia-version is required");
@@ -567,6 +791,8 @@ const main = () => {
   console.log("");
   console.log("✅ Packages:");
   packageDirs.forEach(summarize);
+
+  generateReleaseAssets(outputDir, releaseOutput);
 };
 
 try {

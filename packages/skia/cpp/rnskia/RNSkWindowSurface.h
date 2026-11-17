@@ -9,6 +9,7 @@
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
 #include "RNSkWindowState.h"
+#include "rnsurface/FrameScheduler.h"
 #include "rnsurface/ThreadChecker.h"
 
 #include "webgpu/webgpu_cpp.h"
@@ -51,6 +52,11 @@ namespace RNSkia {
  * stretches to the view. A present is made for the target the view read before
  * (see getTargetInfo); the window checks that it still is that target, and
  * declines a present made for a window resized since (see presentRecordings).
+ * Where a present waits for the GPU to finish the frame presented before
+ * (Android, see setWaitForPreviousWork), a frame that comes meanwhile has its
+ * work submitted and its present deferred, for the view to make once the GPU
+ * is done (see presentDeferredFrame): nothing blocks the thread every canvas
+ * presents on.
  * The description of the target texture is kept in a copy of its own, under a
  * mutex, so that whoever records for the view (the JS thread, a worklet
  * runtime, the render thread pool) can read it from any thread, also before the
@@ -152,6 +158,74 @@ public:
    ensureDevice). Presenting thread.
    */
   bool isAttached();
+
+  /**
+   Installed by the platform view, before the window attaches: where a
+   frame waits while the GPU is still on the frame presented before (see
+   rnsurface::FrameScheduler::WaitForPreviousWork). On Android a present
+   waits for that frame, on the thread that presents and inside Dawn's
+   device lock: libgui's queueBuffer waits on the fence of the buffer queued
+   last, for every Vulkan swapchain. Waiting before the present, the window
+   submits the frame's work and defers its present for
+   presentDeferredFrame(); waiting before the submit, the view leaves the
+   frame queued (see isPreviousWorkDone), and a frame it presents all the
+   same waits as before. Never waiting, a present goes at once: a Metal
+   present does not wait for the GPU.
+   */
+  void setWaitForPreviousWork(
+      rnsurface::FrameScheduler::WaitForPreviousWork waitForPreviousWork) {
+    _waitForPreviousWork = waitForPreviousWork;
+  }
+
+  rnsurface::FrameScheduler::WaitForPreviousWork
+  getWaitForPreviousWork() const {
+    return _waitForPreviousWork;
+  }
+
+  /**
+   Whether the GPU is done with the frame presented last: with everything
+   submitted up to its present, other windows' work included, which is when
+   the fence of its buffer signals and what WebGPU's
+   queue.onSubmittedWorkDone() resolves for. Asked without waiting (see
+   DawnContext::isDone). True when no frame was presented onto this window,
+   and where a present does not wait for the GPU. Presenting thread.
+   */
+  bool isPreviousWorkDone();
+
+  /**
+   Whether the window has a present deferred: the frame's work is submitted,
+   its present waits for the GPU to be done with the frame before it. The
+   window takes no other frame meanwhile. Such a frame goes away unpresented
+   with the swapchain it was replayed into (a resize, a detach, a device
+   replaced): Dawn destroys the image it acquired, and the frame that follows is
+   made for the window as it is then. Presenting thread.
+   */
+  bool hasDeferredPresent();
+
+  /**
+   Defers the present of the next frame the window takes, whatever the GPU
+   is on, where a present can be deferred (see setWaitForPreviousWork): the view
+   asks for it when the frame's work should go to the GPU now and its
+   present later (see rnsurface::FrameScheduler::Actions::deferPresent).
+   Presenting thread.
+   */
+  void deferNextPresent(bool defer) { _deferNextPresent = defer; }
+
+  /**
+   How many frames went to the window so far: what tells a frame presented
+   from one whose present is deferred, or dropped with its swapchain, across a
+   call that may do either. Presenting thread.
+   */
+  uint64_t presentCount() const { return _presentCount; }
+
+  /**
+   Makes the deferred present, whatever the GPU is on: the view calls it once
+   isPreviousWorkDone(). Returns whether a frame went to the window: none did
+   when no present was deferred, the platform took the window back meanwhile
+   (see abandon), or the GPU device was lost, replaced or not. Presenting
+   thread.
+   */
+  bool presentDeferredFrame();
 
   /**
    Whether the window shows a frame the view presented: a window attached in
@@ -338,10 +412,17 @@ private:
   // Whether a frame can go onto the window now: it is ready (see readState)
   // and the platform has not taken it back (see abandon).
   bool canPresent();
-  // Presents the swapchain texture the frame was replayed onto, unless the
-  // platform took the window back meanwhile (see abandon). Returns whether
-  // it did.
+  // Presents the swapchain texture the frame was replayed onto, or defers
+  // its present while the GPU is on the frame before it (see
+  // setWaitForPreviousWork), unless the platform took the window back meanwhile
+  // (see abandon). Returns whether the window took the frame.
   bool presentTexture();
+  // Presents the swapchain texture, and remembers the work submitted up to
+  // here as what the next present waits for.
+  void presentNow();
+  // Whether the window takes a frame: it has no present deferred, or the
+  // swapchain that frame was replayed into is about to be configured again.
+  bool takesFrame() const { return !_presentDeferred || _needsConfigure; }
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
@@ -383,6 +464,17 @@ private:
   // The platform took the window back before detach() ran (see abandon).
   // Taken down by detach() alone, never by attach() (see releaseWindow).
   std::atomic<bool> _abandoned{false};
+  // Where a frame waits while the GPU is on the frame before it, whether a
+  // present is deferred, and the work submitted up to the last present,
+  // until the GPU is done with it (see isPreviousWorkDone).
+  rnsurface::FrameScheduler::WaitForPreviousWork _waitForPreviousWork =
+      rnsurface::FrameScheduler::WaitForPreviousWork::kNever;
+  bool _presentDeferred = false;
+  bool _deferNextPresent = false;
+  uint64_t _presentCount = 0;
+  bool _hasPresentedWork = false;
+  wgpu::Future _presentedWork{};
+  uint64_t _presentedWorkGeneration = 0;
   SkColorType _colorType = kUnknown_SkColorType;
   bool _useP3ColorSpace = false;
 
