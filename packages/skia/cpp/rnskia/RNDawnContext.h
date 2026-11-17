@@ -804,8 +804,8 @@ private:
    destroyed: Dawn reports its loss from any of its threads, at any time,
    and the recorders, surfaces and images made on it keep pointing at it.
    The Dawn device itself is destroyed when it is replaced (see recover),
-   once the calls that may be compiling on it have ended (see uses); the
-   handle stays valid.
+   once the calls into it from outside the context lock have ended (see
+   uses); the handle stays valid.
    */
   struct Generation {
     uint64_t id = 0;
@@ -824,8 +824,8 @@ private:
     std::string lostMessage;
     // Why the last attempt to replace the device failed, if it did.
     std::string recoveryFailure;
-    // The calls that may be compiling on the device, which its destruction
-    // waits out.
+    // The calls into the device from outside the context lock, which its
+    // destruction waits out.
     RNSkDeviceUses uses{lost};
   };
 
@@ -1038,10 +1038,10 @@ private:
    never ticks again), the VkSurfaceKHR of each window's old swapchain among
    them, which keeps the window connected until then
    (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). Before it posts the task,
-   it waits for the snaps and warmup compiles in flight on the lost device
-   (see Generation::uses), the warmup's running at a lower priority than the
-   present thread, which then destroys the device once the snaps begun since
-   have ended. The Generation, its device handle and its Graphite context
+   it waits for the uses in flight on the lost device (see Generation::uses),
+   the warmup's compiles running at a lower priority than the present
+   thread, which then destroys the device once the uses begun since have
+   ended. The Generation, its device handle and its Graphite context
    stay: what still points at them keeps failing validation, as destroyed
    rather than lost. A present in flight holds the thread for as long as
    Graphite takes to replay its frame, the pipelines it compiles included,
@@ -1171,8 +1171,9 @@ private:
    Uploads a CPU image (decoded first when encoded) on the upload recorder of
    this thread and submits the upload (see MakeTextureImage), with the
    generation of the device it ran on (see ImageProvider::Upload): no texture
-   when the upload failed or did not run. Throws when no recorder can be
-   made.
+   when the upload failed or did not run. It is recorded as a use of the
+   device in use (see Generation::uses): Graphite writes the pixels into a
+   buffer it keeps mapped on it. Throws when no recorder can be made.
    */
   ImageProvider::Upload upload(const sk_sp<SkImage> &image, bool mipmapped) {
     // A recorder of its own: snapping the recorder of this thread would also
@@ -1180,11 +1181,18 @@ private:
     // only uploads, so it keeps Skia's default image provider rather than
     // the image cache, which uploads through here.
     auto &slot = uploadSlot();
-    auto *recorder = currentRecorder(slot, /* forUploads= */ true);
+    auto *current = _current.load(std::memory_order_acquire);
     ImageProvider::Upload result;
-    result.generation = slot.generation;
-    auto texture =
-        SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
+    result.generation = current->id;
+    skgpu::graphite::Recorder *recorder = nullptr;
+    sk_sp<SkImage> texture;
+    // The device stays the one in use while the use is held, as a lost
+    // device's replacement waits for its uses, and the use ends before the
+    // submit, whose snap takes its own.
+    current->uses.runUnlessLost([&]() {
+      recorder = currentRecorder(slot, /* forUploads= */ true);
+      texture = SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
+    });
     if (texture == nullptr || !submitRecording(recorder)) {
       // Not run: the texture would hold nothing.
       return result;

@@ -7,12 +7,12 @@
 namespace RNSkia {
 
 /**
- * The calls into one GPU device from outside the context lock that may be
- * compiling on it as it is destroyed, which the destruction waits out: each
- * snap begun while it was the device in use, and each compile of the
- * pipeline warmup made before it was lost. Dawn builds pipelines outside its
- * device lock, once it has checked the device alive, and leaves keeping
- * Device::Destroy() apart from them to its caller (crbug.com/475530346).
+ * The calls into one GPU device from outside the context lock that its
+ * destruction waits out: one that compiles a pipeline on it, which Dawn does
+ * outside its device lock once it has checked the device alive, leaving
+ * keeping Device::Destroy() apart from it to its caller
+ * (crbug.com/475530346), and one that writes or reads a buffer Graphite keeps
+ * mapped on it, which Destroy() unmaps.
  */
 class RNSkDeviceUses {
 public:
