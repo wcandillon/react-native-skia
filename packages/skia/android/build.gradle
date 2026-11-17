@@ -44,9 +44,8 @@ static def findNodeModules(baseDir) {
 
 def nodeModules = findNodeModules(projectDir)
 
-// Resolve a node package directory using Node's own module resolution, so we
-// pick up the prebuilt Skia binaries straight from node_modules (no postinstall
-// copy step needed). Mirrors `require.resolve(pkg/package.json)`.
+// Resolve a node package directory using Node's own module resolution.
+// Mirrors `require.resolve(pkg/package.json)`.
 static def resolveNodePackage(packageName, baseDir) {
   def script = "process.stdout.write(require('path').dirname(require.resolve('${packageName}/package.json')))"
   def proc = ["node", "-e", script].execute(null, baseDir)
@@ -60,41 +59,51 @@ static def resolveNodePackage(packageName, baseDir) {
   return proc.text.trim()
 }
 
-// The Graphite binaries live in the react-native-skia-graphite-android npm
-// package. Binaries built locally with `yarn build-skia` land in libs/android
-// and take precedence when present.
-def localSkiaLibs = file("${projectDir}/../libs/android")
-def skiaLibsPath = localSkiaLibs.exists()
-    ? "${projectDir}/../libs/android"
-    : "${resolveNodePackage('react-native-skia-graphite-android', projectDir)}/libs"
+// The Skia Graphite archives and Dawn, the WebGPU implementation Graphite
+// renders with, are assets of the GitHub release binaries-<version> of this
+// repository, one archive per ABI. binaries.json pins that version and the
+// sha256 of every asset. Gradle downloads the archives of the ABIs being built
+// as dependencies (see the repository and prepareSkiaBinaries below), so they
+// sit in the Gradle user home cache like any other dependency, and
+// prepareSkiaBinaries extracts them into build/binaries/<abi>.
+def binaries = new groovy.json.JsonSlurper().parse(file("${projectDir}/../binaries.json"))
+def downloadedLibs = file("${buildDir}/binaries")
 
-// Dawn, the WebGPU implementation Graphite renders with, ships in the
-// react-native-webgpu-dawn npm package: the one react-native-webgpu depends on
-// too, built from the Dawn commit this Skia release pins. A Dawn built locally
-// with `yarn build-dawn` (libs/dawn/android) takes precedence over the package.
-def dawnPkgDir = resolveNodePackage('react-native-webgpu-dawn', projectDir)
-def dawnPkg = new groovy.json.JsonSlurper().parse(file("${dawnPkgDir}/package.json"))
+// Where the releases are downloaded from: <url>/binaries-<version>/<asset>.
+// A mirror, or a directory (file:///...) for builds without network access,
+// is set with the reactNativeSkiaBinariesUrl Gradle property or the
+// REACT_NATIVE_SKIA_BINARIES_URL environment variable.
+def binariesUrl = (project.findProperty('reactNativeSkiaBinariesUrl')
+    ?: System.getenv('REACT_NATIVE_SKIA_BINARIES_URL')
+    ?: 'https://github.com/wcandillon/react-native-skia/releases/download').toString()
+
+// Binaries built locally with `yarn build-skia` (libs/android) and
+// `yarn build-dawn` (libs/dawn/android) take precedence when present.
+def localSkiaLibs = file("${projectDir}/../libs/android")
 def localDawnLibs = file("${projectDir}/../libs/dawn/android")
-def dawnLibsPath = localDawnLibs.exists()
-    ? localDawnLibs.absolutePath
-    : "${dawnPkgDir}/libs/android"
+def skiaLibsPath = (localSkiaLibs.exists() ? localSkiaLibs : downloadedLibs).absolutePath
+def dawnLibsPath = (localDawnLibs.exists() ? localDawnLibs : downloadedLibs).absolutePath
 
 // Fail early rather than with a ninja "missing and no known rule" error. Only
-// the ABIs being built are needed, so a local Dawn built for one ABI works.
-def missingDawn = reactNativeArchitectures().findAll {
-    !file("${dawnLibsPath}/${it}/libwebgpu_dawn.so").exists()
+// the ABIs being built are needed, so a local build for one ABI works.
+// Downloaded archives are checked by prepareSkiaBinaries instead.
+def missingLocalLibs = reactNativeArchitectures().collectMany { abi ->
+    [[localSkiaLibs, 'libskia.a'], [localDawnLibs, 'libwebgpu_dawn.so']]
+        .findAll { dir, lib -> dir.exists() && !new File(dir, "${abi}/${lib}").exists() }
+        .collect { dir, lib -> "${dir}/${abi}/${lib}" }
 }
-if (!missingDawn.isEmpty()) {
+if (!missingLocalLibs.isEmpty()) {
     throw new GradleException(
-        "react-native-skia: libwebgpu_dawn.so not found in ${dawnLibsPath} " +
-        "for ${missingDawn.join(', ')}. Reinstall dependencies (yarn install / npm install).")
+        "react-native-skia: the locally built binaries are incomplete, missing " +
+        "${missingLocalLibs.join(', ')}. Build them (yarn build-skia / yarn build-dawn) " +
+        "or remove the directory to use the released binaries.")
 }
 
 // Both packages must link the exact same Dawn. react-native-webgpu depends on
-// react-native-webgpu-dawn too: the version it resolves must be the one this
-// package resolves. Older releases vendor their own Dawn and record the Dawn
-// commit it was built from (`dawnCommit`), which must then be the commit this
-// Graphite build's Dawn package was built from.
+// react-native-webgpu-dawn: the version it resolves must be the version of
+// the binaries this package links. Older releases vendor their own Dawn and
+// record the Dawn commit it was built from (`dawnCommit`), which must then be
+// the commit this Graphite build's Dawn was built from.
 def webgpuDir = null
 try {
     webgpuDir = resolveNodePackage('react-native-webgpu', projectDir)
@@ -107,17 +116,18 @@ try {
 def dawnShippedByWebgpu = false
 if (webgpuDir != null) {
     def webgpuJson = new groovy.json.JsonSlurper().parse(file("${webgpuDir}/package.json"))
-    def dawnCommit = dawnPkg.dawn?.commit?.toString()
+    def dawnCommit = binaries.dawn?.commit?.toString()
     if (webgpuJson.dependencies?.get('react-native-webgpu-dawn') != null) {
         def webgpuDawnDir = resolveNodePackage('react-native-webgpu-dawn', file(webgpuDir))
         def webgpuDawnVersion = new groovy.json.JsonSlurper().parse(file("${webgpuDawnDir}/package.json")).version
-        if (webgpuDawnVersion != dawnPkg.version) {
+        if (webgpuDawnVersion != binaries.version) {
             throw new GradleException(
                 "react-native-skia: Dawn version mismatch. This Graphite build links " +
-                "react-native-webgpu-dawn ${dawnPkg.version} but react-native-webgpu resolves " +
-                "${webgpuDawnVersion}. Align the two packages so the app contains exactly one Dawn.")
+                "the Dawn of binaries ${binaries.version} but react-native-webgpu resolves " +
+                "react-native-webgpu-dawn ${webgpuDawnVersion}. Align the two packages so the " +
+                "app contains exactly one Dawn.")
         }
-        logger.warn("react-native-skia: Dawn versions match (react-native-webgpu-dawn ${dawnPkg.version})")
+        logger.warn("react-native-skia: Dawn versions match (${binaries.version})")
     } else if (webgpuJson.dawnCommit == null) {
         throw new GradleException(
             "react-native-skia: the installed react-native-webgpu (${webgpuJson.version}) " +
@@ -126,7 +136,7 @@ if (webgpuDir != null) {
     } else if (webgpuJson.dawnCommit.toString() != dawnCommit) {
         throw new GradleException(
             "react-native-skia: Dawn version mismatch. This Graphite build links Dawn " +
-            "${dawnCommit?.take(10)} (react-native-webgpu-dawn ${dawnPkg.version}) but " +
+            "${dawnCommit?.take(10)} (binaries ${binaries.version}) but " +
             "react-native-webgpu ${webgpuJson.version} vendors Dawn ${webgpuJson.dawnCommit.toString().take(10)}. " +
             "Align the two packages so the app contains exactly one Dawn.")
     } else {
@@ -267,12 +277,110 @@ repositories {
         }
     }
     google()
+    // The assets of the binaries-<version> releases, as a repository: Gradle
+    // then caches them in its user home and resolves them offline. Only this
+    // group is looked up here, and it is looked up nowhere else.
+    exclusiveContent {
+        forRepository {
+            ivy {
+                name = "ReactNativeSkiaBinaries"
+                url = uri(binariesUrl)
+                patternLayout {
+                    artifact "binaries-[revision]/[module](-[classifier]).[ext]"
+                }
+                metadataSources { artifact() }
+            }
+        }
+        filter { includeGroup "react-native-skia-binaries" }
+    }
 }
+
+configurations {
+    skiaBinaries {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+
+// The archives to download: nothing for a library built locally.
+def binaryModules = []
+if (!localSkiaLibs.exists()) {
+    binaryModules << 'skia-graphite-android'
+}
+if (!localDawnLibs.exists()) {
+    binaryModules << 'dawn-android'
+}
+def binaryChecksums = [:]
 
 dependencies {
     //noinspection GradleDynamicVersion
     implementation 'com.facebook.react:react-native:+'  // From node_modules
     testImplementation 'junit:junit:4.13.2'
+
+    binaryModules.each { module ->
+        reactNativeArchitectures().each { abi ->
+            def asset = binaries.assets["${module}-${abi}.zip"]
+            if (asset == null) {
+                throw new GradleException(
+                    "react-native-skia: binaries ${binaries.version} have no ${module} archive for ${abi}.")
+            }
+            binaryChecksums[asset.sha256.toString()] = "${module}-${abi}.zip".toString()
+            skiaBinaries "react-native-skia-binaries:${module}:${binaries.version}:${abi}@zip"
+        }
+    }
+}
+
+// Extracts the downloaded archives into build/binaries/<abi>, where CMake
+// links them from, once each matches the sha256 binaries.json pins for it.
+def prepareSkiaBinaries = tasks.register('prepareSkiaBinaries') {
+    def archives = configurations.skiaBinaries
+    def checksums = binaryChecksums
+    def destination = downloadedLibs
+    def version = binaries.version
+    inputs.files(archives)
+    inputs.property('checksums', checksums)
+    outputs.dir(destination)
+    doLast {
+        destination.deleteDir()
+        destination.mkdirs()
+        def root = destination.canonicalPath + File.separator
+        def pending = new HashMap(checksums)
+        archives.files.each { File archive ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            archive.eachByte(1 << 20) { buffer, read -> digest.update(buffer, 0, read) }
+            def sha256 = digest.digest().encodeHex().toString()
+            if (pending.remove(sha256) == null) {
+                throw new GradleException(
+                    "react-native-skia: ${archive} (sha256 ${sha256}) is not one of the " +
+                    "archives of binaries ${version}: its checksum is not in binaries.json. " +
+                    "Build with --refresh-dependencies to download it again.")
+            }
+            new java.util.zip.ZipFile(archive).withCloseable { zip ->
+                Collections.list(zip.entries()).each { entry ->
+                    def target = new File(destination, entry.name)
+                    if (!target.canonicalPath.startsWith(root)) {
+                        throw new GradleException(
+                            "react-native-skia: ${archive.name} has an entry outside of the archive: ${entry.name}")
+                    }
+                    if (entry.directory) {
+                        target.mkdirs()
+                    } else {
+                        target.parentFile.mkdirs()
+                        zip.getInputStream(entry).withCloseable { input ->
+                            target.withOutputStream { output -> output << input }
+                        }
+                    }
+                }
+            }
+        }
+        if (!pending.isEmpty()) {
+            throw new GradleException(
+                "react-native-skia: archives missing from binaries ${version}: ${pending.values().join(', ')}")
+        }
+    }
+}
+if (!binaryModules.isEmpty()) {
+    preBuild.dependsOn(prepareSkiaBinaries)
 }
 
 // Package all the cpp code in a flattened directory structure

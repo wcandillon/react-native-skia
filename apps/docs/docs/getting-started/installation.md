@@ -23,7 +23,10 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with) and are resolved automatically by the native build systems (CocoaPods on iOS/macOS/tvOS, Gradle on Android). No `postinstall` script is required.
+The Skia prebuilt binaries are resolved automatically by the native build systems, and no `postinstall` script is required:
+
+- On Android, Gradle downloads them from the [GitHub releases](https://github.com/wcandillon/react-native-skia/releases) of this repository the first time it builds, only for the architectures being built, and caches them like any other Gradle dependency. Each archive is verified against a checksum shipped in the package. To download them from a mirror or a local directory instead, set the `reactNativeSkiaBinariesUrl` Gradle property (or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable) to a URL or a `file:///` directory that holds the release assets under `binaries-<version>/`.
+- On iOS, macOS and tvOS, they are delivered as regular npm dependencies (`react-native-skia-graphite-apple-*`, and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with), which CocoaPods resolves. The long-term plan is to move the Apple platforms to Swift Package Manager, and to download these binaries from the same GitHub releases instead of npm.
 
 ## Requirements
 
