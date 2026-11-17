@@ -817,6 +817,9 @@ private:
     // Whether a device to replace this lost one was made, and is being put in
     // its place (see recover). Guarded by _mutex.
     bool replacementMade = false;
+    // Whether its replacement was scheduled since it was lost (see
+    // claimRecoveryLocked). Guarded by _lostMutex.
+    bool recoveryClaimed = false;
     // Set once, by the loss callback (any thread, see onDeviceLost); the
     // strings are guarded by _lostMutex.
     std::atomic<bool> lost{false};
@@ -901,7 +904,7 @@ private:
    Dawn's loss callback for `generation`, on whichever thread Dawn detects
    the loss: possibly inside a context call of this very thread, which holds
    the context lock, so nothing here takes it. Records the loss and, for the
-   device in use, schedules its replacement.
+   device in use, schedules its replacement (see claimRecoveryLocked).
    */
   void onDeviceLost(Generation *generation, wgpu::DeviceLostReason reason,
                     const std::string &message) noexcept {
@@ -914,11 +917,9 @@ private:
       generation->lostMessage =
           "React Native Skia lost its GPU device. Reason: " + message;
       generation->lost.store(true, std::memory_order_release);
-    }
-    if (generation != _current.load(std::memory_order_acquire)) {
-      // A device already replaced (or one still being made, which recover()
-      // checks once it is in place): nothing more to do.
-      return;
+      if (!claimRecoveryLocked(generation)) {
+        return;
+      }
     }
     RNSkLogger::logToConsole("%s", generation->lostMessage.c_str());
     // A device lost right after it was made did not take: GPU work is
@@ -926,6 +927,23 @@ private:
     const bool shortLived =
         std::chrono::steady_clock::now() - generation->created < kShortLived;
     scheduleRecovery(generation, shortLived);
+  }
+
+  /**
+   Whether the replacement of `generation` is the caller's to schedule: the
+   device in use, lost, and not claimed yet. A device lost while it is put in
+   place is claimed by onDeviceLost or by recover(), whichever reads the
+   other's write here: exactly one of them. A device already replaced, or
+   one still being made, is not. Called with _lostMutex held.
+   */
+  bool claimRecoveryLocked(Generation *generation) {
+    if (generation != _current.load(std::memory_order_acquire) ||
+        !generation->lost.load(std::memory_order_relaxed) ||
+        generation->recoveryClaimed) {
+      return false;
+    }
+    generation->recoveryClaimed = true;
+    return true;
   }
 
   /**
@@ -1020,9 +1038,14 @@ private:
     // The textures cached for the lost device are good for nothing on the
     // new one (see ImageProvider).
     ImageProvider::invalidateAll();
-    if (next->lost.load(std::memory_order_acquire)) {
-      // Lost while it was being put in place (its callback found it not in
-      // use yet): GPU work is refused where the app is.
+    bool lostMeanwhile = false;
+    {
+      // Lost while it was being put in place: GPU work is refused where the
+      // app is.
+      std::lock_guard<std::mutex> lostLock(_lostMutex);
+      lostMeanwhile = claimRecoveryLocked(next);
+    }
+    if (lostMeanwhile) {
       scheduleRecovery(next, /* failedAttempt= */ true);
     }
     notifyLossListeners(info);
