@@ -37,12 +37,13 @@ namespace RNSkia {
  * every canvas (see RNSkPresentThread.h, a rnsurface::RenderThread), where
  * the platform view posts the attach and the detach from the main thread.
  * Everything that touches the Dawn surface runs there, one call after the
- * other, and nothing waits for it; the entries check it once the platform view
- * has bound the thread (see bindPresentingThread and rnsurface::ThreadChecker:
- * an entry from another thread aborts in debug builds and is logged once in
- * release builds). A resize is the exception: it notes a size and posts a
- * redraw, from any thread. Nothing waits for a present: a present holds the
- * window for as long as Graphite takes to replay the frame, which includes
+ * other, and no main thread waits for it; the entries check it once the
+ * platform view has bound the thread (see bindPresentingThread and
+ * rnsurface::ThreadChecker: an entry from another thread aborts in debug
+ * builds and is logged once in release builds). A resize is the exception:
+ * it notes a size and posts a redraw, from any thread. No main thread waits
+ * for a present: a present holds the window for as long as Graphite takes to
+ * replay the frame, which includes
  * compiling the pipelines it needs, seconds on a slow GPU, and a main thread
  * made to wait for that is an ANR (#4394). A resize notes the size, which the
  * present that follows takes (see takePendingSize) and configures the swapchain

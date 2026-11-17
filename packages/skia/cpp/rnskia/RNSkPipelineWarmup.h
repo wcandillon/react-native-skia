@@ -508,8 +508,8 @@ private:
 
     // The drop shadows Skia draws on its own. Not the blurs (the mask
     // filter of a shadow, the image filter of <Blur>): their precompile
-    // expands to dozens of pipelines, which held the device lock for 12 s
-    // on a Pixel 8 against 70 to 400 ms for any step above, and a blur is
+    // expands to dozens of pipelines, which took 12 s on a Pixel 8
+    // against 70 to 400 ms for any step above, and a blur is
     // compiled inline for the sigma it is drawn with anyway.
     {
       PaintOptions shadows;
