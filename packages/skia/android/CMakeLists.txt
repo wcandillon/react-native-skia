@@ -3,27 +3,13 @@ cmake_minimum_required(VERSION 3.4.1)
 
 set (CMAKE_CXX_STANDARD 20)
 
-# SKIA_LIBS_PATH is passed from Gradle (pointing at the prebuilt Skia binaries,
-# read straight from the react-native-skia-graphite-android npm package, or libs/android for local builds)
+# SKIA_LIBS_PATH is passed from Gradle: the directory its prepareSkiaBinaries
+# task extracts the released archives into, or libs/android for a local build.
+# The binaries are not required to be there yet: Android Studio configures this
+# project when it syncs, before any task has run. Gradle is what guarantees
+# them, and verifies them, before the library is built.
 # Append the ABI to get the full path
 set (SKIA_LIBS_PATH "${SKIA_LIBS_PATH}/${ANDROID_ABI}")
-
-# Check if Skia prebuilt binaries are installed
-if(NOT EXISTS "${SKIA_LIBS_PATH}/libskia.a")
-    message("")
-    message("┌─────────────────────────────────────────────────────────────────────────────┐")
-    message("│                                                                             │")
-    message("│  ERROR: Skia prebuilt binaries not found!                                   │")
-    message("│                                                                             │")
-    message("│  Could not find libskia.a at: ${SKIA_LIBS_PATH}                             │")
-    message("│                                                                             │")
-    message("│  Make sure dependencies are installed:                                       │")
-    message("│    yarn install   (or npm install)                                          │")
-    message("│                                                                             │")
-    message("└─────────────────────────────────────────────────────────────────────────────┘")
-    message("")
-    message(FATAL_ERROR "Skia prebuilt binaries not found. Run `yarn install` to fix this.")
-endif()
 
 # Import libskia
 add_library(skia STATIC IMPORTED)
@@ -139,17 +125,14 @@ set_property(TARGET skunicode_icu PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/
 add_library(jsonreader STATIC IMPORTED)
 set_property(TARGET jsonreader PROPERTY IMPORTED_LOCATION "${SKIA_LIBS_PATH}/libjsonreader.a")
 
-# Dawn is a shared library from the react-native-webgpu-dawn package (or a
-# local build under libs/dawn), the same one react-native-webgpu links, so an
+# Dawn is a shared library from the same release as the Skia archives (or a
+# local build under libs/dawn), the same Dawn react-native-webgpu links, so an
 # app that installs both packages loads exactly one Dawn copy. DAWN_LIBS_PATH is
-# passed from Gradle.
+# passed from Gradle, which guarantees the library like the Skia archives.
 if(NOT DAWN_LIBS_PATH)
     message(FATAL_ERROR "react-native-skia: DAWN_LIBS_PATH is not set")
 endif()
 set (DAWN_LIB "${DAWN_LIBS_PATH}/${ANDROID_ABI}/libwebgpu_dawn.so")
-if(NOT EXISTS "${DAWN_LIB}")
-    message(FATAL_ERROR "react-native-skia: ${DAWN_LIB} not found. Reinstall dependencies (yarn install / npm install).")
-endif()
 add_library(webgpu_dawn SHARED IMPORTED)
 set_property(TARGET webgpu_dawn PROPERTY IMPORTED_LOCATION "${DAWN_LIB}")
 
