@@ -18,7 +18,7 @@ FILES=(apple/MetalLayerColorSpace.mm)
 TARGETS=(
   iphoneos:arm64-apple-ios15.1
   iphonesimulator:arm64-apple-ios15.1-simulator
-  macosx:arm64-apple-macos11.0
+  macosx:arm64-apple-macos14.0
   appletvos:arm64-apple-tvos15.1
   appletvsimulator:arm64-apple-tvos15.1-simulator
 )

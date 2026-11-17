@@ -19,6 +19,8 @@ We happily accept contributions made with coding agents. Our ask is simple: if y
 
 To develop react-native-skia, you can build the skia libraries on your computer. Alternatively, you can use the pre-built binaries.
 
+The minimum Apple deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0. Keep the podspec, Skia and Dawn build configurations, and Apple SDK checks aligned when changing them.
+
 ### Using pre-built binaries
 
 The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, along with Dawn, the WebGPU implementation Graphite renders with, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. There is no `postinstall` step:
@@ -91,35 +93,79 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked. Then run `pod install` in the example app:
-
-```sh
-cd apps/example/ios && pod install && cd -
-```
+Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked.
 
 Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
-Then build the example for your platform:
+From the repository root, install the native dependencies and build the example for your platform:
 
 - iOS:
+
+  Install CocoaPods dependencies:
+
+  ```sh
+  yarn workspace example pod:install:ios
+  ```
+
+  Then build and run:
+
+  ```sh
+  yarn workspace example ios
+  ```
+
+  Or build with:
+
   ```sh
   cd apps/example/ios
   xcodebuild -workspace example.xcworkspace -scheme example -sdk iphonesimulator \
     -configuration Debug -destination 'generic/platform=iOS Simulator' \
     build CODE_SIGNING_ALLOWED=NO
+  cd -
   ```
-- Android:
-  ```sh
-  cd apps/example/android && ./gradlew :app:assembleDebug
-  ```
+
 - macOS:
+
+  Install CocoaPods dependencies:
+
   ```sh
   yarn workspace example-macos pod:install:macos
-  yarn workspace example-macos build:macos
   ```
-  Run these commands from the repository root. The [macOS runner](../../apps/example-macos/README.md) shares the mobile gallery, with a JavaScript stack for desktop navigation. Its React Native 0.83, Reanimated and Worklets dependencies are isolated from the newer mobile app. It uses the same Skia and Dawn binary resolution described above and targets macOS 14; Skia's own minimum remains macOS 11. Run it with `yarn workspace example-macos macos`.
 
-`yarn ios` / `yarn android` work too. Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compilation.
+  Then build and run:
+
+  ```sh
+  yarn workspace example-macos macos
+  ```
+
+  Or build with:
+
+  ```sh
+  cd apps/example-macos/macos
+  xcodebuild -workspace example.xcworkspace -scheme ReactTestApp -sdk macosx \
+    -configuration Debug -destination 'platform=macOS' \
+    build CODE_SIGNING_ALLOWED=NO
+  cd -
+  ```
+
+  > The [macOS runner](../../apps/example-macos/README.md) shares the mobile gallery, with a JavaScript stack for desktop navigation. Its dependencies are isolated from the mobile app.
+
+- Android:
+
+  Build and run:
+
+  ```sh
+  yarn workspace example android
+  ```
+
+  Or build with:
+
+  ```sh
+  cd apps/example/android
+  ./gradlew :app:assembleDebug
+  cd -
+  ```
+
+Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compilation.
 
 #### 4. Publish the binary npm packages (GitHub Actions)
 
@@ -206,7 +252,8 @@ Skia's own sources no longer gate on them, but React's headers do
 (`RCT_REMOVE_LEGACY_ARCH` hides the legacy bridge API), so `Package.swift`
 defines both itself.
 
-The library requires iOS 15.1 (see the podspec), but the platform floor of
+The native library requires iOS 15.1, tvOS 15.1, and macOS 14.0 (see the podspec).
+The SwiftPM integration currently targets iOS, and the platform floor of
 `Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`
 aggregate is hardcoded to iOS 15.0, and SwiftPM refuses to link a product whose
 floor is above the depending target's.
