@@ -79,6 +79,10 @@
     }
   ],
   "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/wcandillon"
+  },
   "licenseFilename": "LICENSE.md",
   "readmeFilename": "README.md",
   "peerDependencies": {
