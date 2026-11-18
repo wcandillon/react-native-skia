@@ -3268,7 +3268,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 19a679c33c2a30339ded09015f3b150d17741dd9
   React-mutationobservernativemodule: fd162222cbf7aa9f00ceaddcfcf3af472dd84db0
   react-native-safe-area-context: 735c8ebacdececeb034ce0524f80ef1a484f67fe
-  react-native-skia: aba48b42792a9bc0c86e1e7ad632a8f2056ca81a
+  react-native-skia: 62b265ef82f32f6fa9ce5a6c6b036fda1e44b260
   React-NativeModulesApple: 5ead5f7c62cdc951f5090c3f736f4da36c1807b5
   React-networking: d61cd2aed6bd3ef10baef7b327219f7c12a6969b
   React-oscompat: 7551cbe14bc1ff01314e9cf119a985abe3e70344
@@ -3308,7 +3308,7 @@ SPEC CHECKSUMS:
   ReactTestApp-Resources: 71a3155bca10819738469de1f161410f43528209
   RNGestureHandler: be8f3d7c718c76ea8e52f0fd85ba180d8aaa7d5a
   RNReanimated: 9197a9e61aecb12fd4a8bebb74910f7d594358b4
-  RNSVG: bf2ab53089f94925457563af66e4038686ff9990
+  RNSVG: b467c637c3c9657f56ec5bf111963bf489eb8bd4
   RNWorklets: aca4bb2334998d2bdd7a4423dadba0a7ec092c55
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: a3e0ee0baa46166b3a7451a6b01c45cd1918de9e

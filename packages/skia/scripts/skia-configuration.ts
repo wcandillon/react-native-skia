@@ -120,7 +120,7 @@ export type Platform<PlatformTarget extends Target = Target> = {
 // Each target has separate GN args; ios_min_target also carries tvOS/macOS minima.
 const iosMinTarget = "15.1";
 const tvosMinTarget = "15.1";
-const macosMinTarget = "11.0";
+const macosMinTarget = "14.0";
 
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [

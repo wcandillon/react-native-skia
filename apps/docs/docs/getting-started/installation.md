@@ -35,18 +35,24 @@ The Skia prebuilt binaries are resolved automatically by the native build system
 | React Native | `0.79`, with the New Architecture |
 | React | `19` |
 | iOS | `15.1` |
+| tvOS | `15.1` |
+| macOS | `14.0` |
 | Android | API level 26 (`minSdkVersion = 26`) |
 | Reanimated (optional) | `react-native-reanimated@>=4.0.0` with `react-native-worklets@>=0.7.0` |
 
 React Native Skia runs on iOS, Android, macOS, Mac Catalyst, tvOS, and [the Web](/docs/getting-started/web).
 
-Android TV is not supported by v3. It remain supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation/).
+Android TV is not supported by v3. It remains supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation/).
 For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
 On React Native below `0.83` (React `19.0` or `19.1`), your package manager warns that `react-reconciler` asks for React `19.2`: this is expected, as React Native Skia ships React 19.2's reconciler, which also renders on React 19.0 and 19.1.
 
 ## iOS
 
 Run `pod install` on the `ios/` directory.
+
+## macOS
+
+Run `pod install` in the `macos/` directory.
 
 ## Android
 
