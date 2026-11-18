@@ -292,7 +292,22 @@ export const installCanvasKit = () => {
   return mock;
 };
 
-export const fakePicture = { ref: { __picture: true }, dispose: jest.fn() };
+export const fakePicture = {
+  ref: { __picture: true, isDeleted: () => false },
+  dispose: jest.fn(),
+};
+
+// A picture as JsiSkPicture wraps it: disposing it deletes the CanvasKit
+// object.
+export const makeDisposablePicture = () => {
+  let deleted = false;
+  return {
+    ref: { isDeleted: () => deleted },
+    dispose: () => {
+      deleted = true;
+    },
+  };
+};
 
 export const display = { pixelDensity: 1 };
 export const mediaQueryListeners: Array<() => void> = [];
