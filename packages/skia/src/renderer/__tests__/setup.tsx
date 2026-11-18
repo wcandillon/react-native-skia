@@ -116,8 +116,17 @@ export const wait = (ms: number) =>
 export const DEVICE_TAKES_MILLISECONDS = 5000;
 
 // A snapshot's colour pipeline can move a channel by a few units, so colours
-// are read as names rather than exact bytes.
-const classifyColor = (red: number, green: number, blue: number) => {
+// are read as names rather than exact bytes. Where no view drew, the snapshot
+// is transparent, whatever its colour channels read.
+const classifyColor = (
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number
+) => {
+  if (alpha === 0) {
+    return "transparent";
+  }
   if (red < 60 && green > 200 && blue > 200) {
     return "cyan";
   }
@@ -130,6 +139,12 @@ const classifyColor = (red: number, green: number, blue: number) => {
   if (red < 60 && green > 200 && blue < 60) {
     return "green";
   }
+  if (red > 200 && green > 200 && blue > 200) {
+    return "white";
+  }
+  if (red < 60 && green < 60 && blue < 60) {
+    return "black";
+  }
   return null;
 };
 
@@ -137,30 +152,65 @@ export const nameColor = (pixel: ArrayLike<number> | null) => {
   if (pixel === null) {
     return "unreadable";
   }
-  const [red, green, blue] = [pixel[0], pixel[1], pixel[2]];
-  return classifyColor(red, green, blue) ?? `rgb(${red}, ${green}, ${blue})`;
+  const [red, green, blue, alpha] = [pixel[0], pixel[1], pixel[2], pixel[3]];
+  return (
+    classifyColor(red, green, blue, alpha) ?? `rgb(${red}, ${green}, ${blue})`
+  );
 };
 
-// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
-export const readAllPixels = async (image: SkImage) => {
-  const pixels = await image.readPixels(0, 0, {
-    width: image.width(),
-    height: image.height(),
+// A region of a snapshot as unpremultiplied RGBA bytes, null when the snapshot
+// has none to read.
+const readRegionOrNull = (
+  image: SkImage,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) =>
+  image.readPixels(x, y, {
+    width,
+    height,
     colorType: ColorType.RGBA_8888,
     alphaType: AlphaType.Unpremul,
   });
+
+const readRegion = async (
+  image: SkImage,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) => {
+  const pixels = await readRegionOrNull(image, x, y, width, height);
   if (pixels === null) {
     throw new Error("The snapshot has no readable pixels");
   }
   return pixels;
 };
 
+// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
+export const readAllPixels = (image: SkImage) =>
+  readRegion(image, 0, 0, image.width(), image.height());
+
 // The pixels of a screen snapshot in each colour it names.
 export const countColors = async (image: SkImage) => {
   const pixels = await readAllPixels(image);
-  const counts = { cyan: 0, red: 0, blue: 0, green: 0 };
+  const counts = {
+    cyan: 0,
+    red: 0,
+    blue: 0,
+    green: 0,
+    white: 0,
+    black: 0,
+    transparent: 0,
+  };
   for (let i = 0; i < pixels.length; i += 4) {
-    const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
+    const color = classifyColor(
+      pixels[i],
+      pixels[i + 1],
+      pixels[i + 2],
+      pixels[i + 3]
+    );
     if (color !== null) {
       counts[color]++;
     }
@@ -168,19 +218,99 @@ export const countColors = async (image: SkImage) => {
   return counts;
 };
 
+// The one-pixel region at fractions of a snapshot's width and of its height.
+const pixelAt = (image: SkImage, x: number, y: number) =>
+  [
+    Math.round(image.width() * x),
+    Math.round(image.height() * y),
+    1,
+    1,
+  ] as const;
+
+// The colour of the screen at fractions of its width and of its height.
+export const readScreenColorAt = async (image: SkImage, x: number, y: number) =>
+  nameColor(await readRegionOrNull(image, ...pixelAt(image, x, y)));
+
+// Whether the screen shows nothing at fractions of its width and of its
+// height: a view that has drawn nothing there yet leaves it transparent.
+export const isTransparentAt = async (image: SkImage, x: number, y: number) =>
+  (await readScreenColorAt(image, x, y)) === "transparent";
+
 // The colour of the screen at a fraction of its width and of its height.
-export const readScreenColor = async (image: SkImage, fraction: number) =>
-  nameColor(
-    await image.readPixels(
-      Math.round(image.width() * fraction),
-      Math.round(image.height() * fraction),
-      {
-        width: 1,
-        height: 1,
-        colorType: ColorType.RGBA_8888,
-        alphaType: AlphaType.Unpremul,
-      }
-    )
+export const readScreenColor = (image: SkImage, fraction: number) =>
+  readScreenColorAt(image, fraction, fraction);
+
+// The top and bottom halves of a screen whose views split it in two.
+export const readScreenHalves = async (image: SkImage) => ({
+  top: await readScreenColor(image, 1 / 4),
+  bottom: await readScreenColor(image, 3 / 4),
+});
+
+// The colours at the left and right of the top and bottom halves of a screen
+// whose views split it in two.
+export const readScreenQuarters = async (image: SkImage) => ({
+  topLeft: await readScreenColorAt(image, 1 / 4, 1 / 4),
+  topRight: await readScreenColorAt(image, 3 / 4, 1 / 4),
+  bottomLeft: await readScreenColorAt(image, 1 / 4, 3 / 4),
+  bottomRight: await readScreenColorAt(image, 3 / 4, 3 / 4),
+});
+
+// The luminance of the middle of a screen, the central half of its width and
+// of its height: its mean and its standard deviation, from 0 to 255.
+export const readMiddleLuminance = async (image: SkImage) => {
+  const width = Math.round(image.width() / 2);
+  const height = Math.round(image.height() / 2);
+  const pixels = await readRegion(
+    image,
+    Math.round(image.width() / 4),
+    Math.round(image.height() / 4),
+    width,
+    height
+  );
+  let sum = 0;
+  let sumOfSquares = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const luminance =
+      0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+    sum += luminance;
+    sumOfSquares += luminance * luminance;
+  }
+  const count = width * height;
+  const mean = sum / count;
+  return {
+    mean,
+    deviation: Math.sqrt(Math.max(0, sumOfSquares / count - mean * mean)),
+  };
+};
+
+// Loses the GPU device Skia renders with, through the device test app's hook
+// (see the Gpu spec), and resolves once Skia has replaced it, with every
+// further loss Skia reports until the replacement has taken: a view that
+// takes a surface on it over a window the lost one still holds loses it too,
+// as it first presents there.
+export const loseGpuDevice = () =>
+  surface.eval(
+    // No async/await: the code runs through Hermes' eval on the device.
+    (Skia, ctx) => {
+      ctx.forceGpuDeviceLoss();
+      return Skia.gpu.lost.then(() => {
+        const further: string[] = [];
+        const watch = () => {
+          Skia.gpu.lost.then((info) => {
+            further.push(info.message);
+            watch();
+          });
+        };
+        watch();
+        return new Promise<string[]>((resolve) =>
+          setTimeout(() => resolve(further), ctx.watchMilliseconds)
+        );
+      });
+    },
+    { watchMilliseconds: DEVICE_TAKES_MILLISECONDS } as {
+      readonly forceGpuDeviceLoss: () => void;
+      readonly watchMilliseconds: number;
+    }
   );
 
 export const resolveFile = (uri: string) =>

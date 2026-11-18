@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -214,9 +215,16 @@ public:
     return foregroundFlag().load(std::memory_order_acquire);
   }
 
-  /** Sets isForeground(); the platform calls it from its main thread. */
+  /**
+   Sets isForeground(); the platform calls it from its main thread. Back in
+   the foreground, a lost device is replaced now (see requestRecovery), also
+   in an app that shows no canvas.
+   */
   static void setForeground(bool foreground) noexcept {
     foregroundFlag().store(foreground, std::memory_order_release);
+    if (foreground) {
+      requestRecovery();
+    }
   }
 
   /**
@@ -236,11 +244,11 @@ public:
   /**
    Replaces a lost device now rather than when the backoff allows (see
    scheduleRecovery): the app came back to the foreground, where GPU work
-   is allowed again. Nothing happens unless the device in use is lost. Any
-   thread.
+   is allowed again. Nothing happens unless the device in use is lost, and
+   the GPU is never probed for it. Any thread.
    */
   static void requestRecovery() noexcept {
-    auto *instance = tryGetInstance();
+    auto *instance = probedInstance();
     if (instance == nullptr) {
       return;
     }
@@ -293,11 +301,22 @@ public:
    */
   void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
                   std::function<void(ReadResult)> callback) {
+    readPixels(image, srcRect,
+               image->imageInfo().makeDimensions(srcRect.size()),
+               std::move(callback));
+  }
+
+  /**
+   Same as readPixels(), into `info`, which may be smaller than `srcRect`.
+   The callback runs under the context's lock, where the rows stay valid.
+   */
+  void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
+                  const SkImageInfo &info,
+                  std::function<void(ReadResult)> callback) {
     struct Request {
       std::function<void(ReadResult)> callback;
       std::shared_ptr<std::atomic<bool>> delivered;
     };
-    auto info = image->imageInfo().makeDimensions(srcRect.size());
     Readback readback;
     {
       std::unique_lock<std::mutex> lock(_mutex);
@@ -316,7 +335,8 @@ public:
       auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
-          SkImage::RescaleMode::kNearest,
+          // Graphite ignores the mode when `info` has the size of `srcRect`.
+          SkImage::RescaleMode::kRepeatedLinear,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
             request->callback(std::move(result));
@@ -662,37 +682,16 @@ public:
     if (!texture) {
       return nullptr;
     }
-
-    // Map the WebGPU format to a Skia color type; fall back to the preferred
-    // color type for formats Skia does not sample.
-    SkColorType colorType =
-        DawnUtils::colorTypeForTextureFormat(format).value_or(
-            DawnUtils::PreferedColorType);
-
-    skgpu::graphite::BackendTexture backendTexture =
-        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-
-    // Wrap the texture - we use a release proc that adds a reference to the
-    // texture to prevent it from being destroyed while the SkImage is alive
-    struct TextureRef {
-      wgpu::Texture texture;
-    };
-    auto textureRef = new TextureRef{texture};
-
-    return SkImages::WrapTexture(
-        getRecorder(), backendTexture, colorType, kPremul_SkAlphaType, nullptr,
-        [](void *context) {
-          auto ref = static_cast<TextureRef *>(context);
-          delete ref;
-        },
-        textureRef);
+    return wrapTextureImage(getRecorder(), std::move(texture), format, nullptr);
   }
 
   // Create an SkSurface that draws straight into a WebGPU texture (zero-copy).
   // The texture must have RenderAttachment usage; give it TextureBinding too
   // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
   // The surface retains the texture for its lifetime.
-  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+  sk_sp<SkSurface>
+  MakeSurfaceFromTexture(wgpu::Texture texture,
+                         sk_sp<SkColorSpace> colorSpace = nullptr) {
     if (!texture) {
       return nullptr;
     }
@@ -700,25 +699,81 @@ public:
       throw std::runtime_error(
           "MakeSurfaceFromTexture: the texture needs RenderAttachment usage");
     }
+    return wrapTextureSurface(getRecorder(), std::move(texture),
+                              std::move(colorSpace));
+  }
 
-    skgpu::graphite::BackendTexture backendTexture =
-        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+  struct SharedTextureFences {
+    std::vector<wgpu::SharedFence> fences;
+    std::vector<uint64_t> signaledValues;
+    uint64_t generation = 0;
+  };
 
-    struct TextureRef {
-      wgpu::Texture texture;
-    };
-    auto textureRef = new TextureRef{texture};
+  using SharedTextureImport =
+      std::function<wgpu::SharedTextureMemory(const wgpu::Device &)>;
 
-    // The color type is derived from the texture format.
-    return SkSurfaces::WrapBackendTexture(
-        getRecorder(), backendTexture,
-        nullptr, // colorspace
-        nullptr, // surfaceProps
-        [](void *context) {
-          auto ref = static_cast<TextureRef *>(context);
-          delete ref;
-        },
-        textureRef);
+  /**
+   Draws onto the whole memory `importTarget` imports, `draw` given the
+   memory `importSource` imports as an image, into the device of the calling
+   thread's recorder: the memory holds the drawing once the fences signal.
+   Throws when no recorder can be made.
+   */
+  std::optional<SharedTextureFences> drawIntoSharedTexture(
+      const SharedTextureImport &importTarget, sk_sp<SkColorSpace> colorSpace,
+      const std::function<void(SkCanvas *, const sk_sp<SkImage> &)> &draw,
+      const SharedTextureImport &importSource = nullptr) {
+    auto &slot = threadSlot();
+    auto *recorder = currentRecorder(slot);
+    auto *current = _current.load(std::memory_order_acquire);
+    if (current->id != slot.generation) {
+      return std::nullopt;
+    }
+    const auto &device = current->backendContext.fDevice;
+    auto target =
+        SharedTextureAccess::begin(importTarget(device),
+                                   wgpu::TextureUsage::RenderAttachment |
+                                       wgpu::TextureUsage::TextureBinding,
+                                   /* initialized= */ false);
+    if (!target.has_value()) {
+      return std::nullopt;
+    }
+    auto source =
+        importSource != nullptr
+            ? SharedTextureAccess::begin(importSource(device),
+                                         wgpu::TextureUsage::TextureBinding,
+                                         /* initialized= */ true)
+            : std::optional<SharedTextureAccess>();
+    if (importSource != nullptr && !source.has_value()) {
+      return std::nullopt;
+    }
+    auto surface =
+        wrapTextureSurface(recorder, target->texture(), std::move(colorSpace));
+    auto sourceImage =
+        source.has_value()
+            ? wrapTextureImage(recorder, source->texture(),
+                               source->texture().GetFormat(), nullptr)
+            : nullptr;
+    if (surface == nullptr || (source.has_value() && sourceImage == nullptr)) {
+      return std::nullopt;
+    }
+    draw(surface->getCanvas(), sourceImage);
+    if (!submitRecording(recorder)) {
+      return std::nullopt;
+    }
+    auto fences = target->end();
+    if (!fences.has_value()) {
+      return std::nullopt;
+    }
+    fences->generation = slot.generation;
+    return fences;
+  }
+
+  uint32_t getMaxTextureDimension2D() {
+    wgpu::Limits limits{};
+    if (getWGPUDevice().GetLimits(&limits) != wgpu::Status::Success) {
+      return 0;
+    }
+    return limits.maxTextureDimension2D;
   }
 
   // Create a WebGPU texture from an SkImage
@@ -794,6 +849,113 @@ public:
   }
 
 private:
+  // From BeginAccess to EndAccess, which runs however the access ends.
+  class SharedTextureAccess {
+  public:
+    static std::optional<SharedTextureAccess>
+    begin(wgpu::SharedTextureMemory memory, wgpu::TextureUsage usage,
+          bool initialized) {
+      wgpu::SharedTextureMemoryProperties properties{};
+      if (memory == nullptr ||
+          memory.GetProperties(&properties) != wgpu::Status::Success ||
+          (properties.usage & usage) != usage) {
+        return std::nullopt;
+      }
+      wgpu::TextureDescriptor descriptor{};
+      descriptor.format = properties.format;
+      descriptor.usage = usage;
+      descriptor.size = properties.size;
+      auto texture = memory.CreateTexture(&descriptor);
+      wgpu::SharedTextureMemoryBeginAccessDescriptor access{};
+      access.initialized = initialized;
+#ifdef __ANDROID__
+      // Pixels to keep are acquired from GENERAL, as Dawn's Android layer does:
+      // from UNDEFINED, Vulkan may discard them.
+      constexpr int32_t kGeneral = 1; // VK_IMAGE_LAYOUT_GENERAL
+      wgpu::SharedTextureMemoryVkImageLayoutBeginState layout{};
+      layout.oldLayout = initialized ? kGeneral : 0;
+      layout.newLayout = initialized ? kGeneral : 0;
+      access.nextInChain = &layout;
+#endif
+      if (texture == nullptr ||
+          memory.BeginAccess(texture, &access) != wgpu::Status::Success) {
+        return std::nullopt;
+      }
+      return SharedTextureAccess(std::move(memory), std::move(texture));
+    }
+
+    SharedTextureAccess(SharedTextureAccess &&other) noexcept
+        : _memory(std::move(other._memory)),
+          _texture(std::move(other._texture)) {}
+    SharedTextureAccess &operator=(SharedTextureAccess &&) = delete;
+    SharedTextureAccess(const SharedTextureAccess &) = delete;
+    SharedTextureAccess &operator=(const SharedTextureAccess &) = delete;
+
+    ~SharedTextureAccess() { (void)end(); }
+
+    const wgpu::Texture &texture() const { return _texture; }
+
+    std::optional<SharedTextureFences> end() {
+      if (_texture == nullptr) {
+        return std::nullopt;
+      }
+      auto texture = std::move(_texture);
+      wgpu::SharedTextureMemoryEndAccessState state{};
+#ifdef __ANDROID__
+      wgpu::SharedTextureMemoryVkImageLayoutEndState layout{};
+      state.nextInChain = &layout;
+#endif
+      if (_memory.EndAccess(texture, &state) != wgpu::Status::Success) {
+        return std::nullopt;
+      }
+      SharedTextureFences fences;
+      for (size_t i = 0; i < state.fenceCount; i++) {
+        fences.fences.push_back(state.fences[i]);
+        fences.signaledValues.push_back(
+            i < state.signaledValueCount ? state.signaledValues[i] : 0);
+      }
+      return fences;
+    }
+
+  private:
+    SharedTextureAccess(wgpu::SharedTextureMemory memory, wgpu::Texture texture)
+        : _memory(std::move(memory)), _texture(std::move(texture)) {}
+
+    wgpu::SharedTextureMemory _memory;
+    wgpu::Texture _texture;
+  };
+
+  // A format Skia does not sample takes the preferred color type.
+  static sk_sp<SkImage> wrapTextureImage(skgpu::graphite::Recorder *recorder,
+                                         wgpu::Texture texture,
+                                         wgpu::TextureFormat format,
+                                         sk_sp<SkColorSpace> colorSpace) {
+    const SkColorType colorType =
+        DawnUtils::colorTypeForTextureFormat(format).value_or(
+            DawnUtils::PreferedColorType);
+    auto backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkImages::WrapTexture(recorder, backendTexture, colorType,
+                                 kPremul_SkAlphaType, std::move(colorSpace),
+                                 &releaseTexture,
+                                 new wgpu::Texture(std::move(texture)));
+  }
+
+  static sk_sp<SkSurface>
+  wrapTextureSurface(skgpu::graphite::Recorder *recorder, wgpu::Texture texture,
+                     sk_sp<SkColorSpace> colorSpace) {
+    auto backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkSurfaces::WrapBackendTexture(
+        recorder, backendTexture, std::move(colorSpace),
+        /* props= */ nullptr, &releaseTexture,
+        new wgpu::Texture(std::move(texture)));
+  }
+
+  static void releaseTexture(void *texture) {
+    delete static_cast<wgpu::Texture *>(texture);
+  }
+
   struct Probe {
     DawnContext *instance = nullptr;
     GpuInfo info;
@@ -893,9 +1055,22 @@ private:
         probe->info.error = e.what();
         RNSkLogger::logToConsole(probe->info.error);
       }
+      probed().store(probe, std::memory_order_release);
       return probe;
     }();
     return *result;
+  }
+
+  static std::atomic<const Probe *> &probed() noexcept {
+    static std::atomic<const Probe *> result{nullptr};
+    return result;
+  }
+
+  // The context, nullptr before the GPU is probed and without a GPU. The
+  // platform's main thread calls into it at launch, where a probe is too slow.
+  static DawnContext *probedInstance() noexcept {
+    const auto *result = probed().load(std::memory_order_acquire);
+    return result == nullptr ? nullptr : result->instance;
   }
 
   // Loss and recovery --------------------------------------------------------

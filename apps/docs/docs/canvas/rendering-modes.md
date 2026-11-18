@@ -93,3 +93,5 @@ Here is a small list of use-cases and which mode would be best for that scenario
 | Fixed number of sprites/tiles | Retained | With the [Atlas API](/docs/shapes/atlas), single draw call |
 | Game with dynamic entities | Immediate | Entities created/destroyed |
 | Procedural/generative art | Immediate | Dynamic drawing commands |
+
+A drawing that never changes and is shown many times, such as an icon or a thumbnail, needs no canvas per copy: draw it into an image once and show it with an [Image View](/docs/canvas/image-view).

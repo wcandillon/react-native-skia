@@ -31,4 +31,5 @@ export * from "./WebGPU";
 export * from "./HighBitDepth";
 export * from "./Graphite";
 export * from "./AndroidViews";
+export * from "./ImageViews";
 export * from "./BackgroundGpu";
