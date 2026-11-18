@@ -16,6 +16,7 @@ import type {
   SkPicture,
   SkRect,
 } from "../skia/types";
+import type { JsiSkPicture } from "../skia/web/JsiSkPicture";
 import { JsiSkPictureRecorder } from "../skia/web/JsiSkPictureRecorder";
 import { Platform } from "../Platform";
 import type {
@@ -184,19 +185,33 @@ export const SkiaView = (props: SkiaViewProps) => {
     previous.forEach((recording) => recording.release());
   }, []);
 
+  // The picture, unless it was disposed. It belongs to the <Canvas>, which
+  // disposes it when its effects are cleaned up: StrictMode's development
+  // re-run and a hidden Activity do so without unmounting this view, which
+  // repaints when its layout effect runs again. The canvas sets a new picture
+  // once it renders again.
+  const livePicture = useCallback(() => {
+    const picture = pictureRef.current;
+    if (picture && (picture as JsiSkPicture).ref.isDeleted()) {
+      pictureRef.current = null;
+    }
+    return pictureRef.current;
+  }, []);
+
   // Paints what the view holds: pending recordings first, else the picture,
   // else the frame on screen again (the surface was recreated).
   const paint = useCallback(
     (renderer: Renderer) => {
+      const picture = livePicture();
       if (queueRef.current.length > 0) {
         present(renderer);
-      } else if (pictureRef.current) {
-        renderer.draw([pictureRef.current]);
+      } else if (picture) {
+        renderer.draw([picture]);
       } else if (shownRef.current.length > 0) {
         renderer.draw(shownRef.current.map((recording) => recording.picture));
       }
     },
-    [present]
+    [livePicture, present]
   );
   const rendererRef = useSkiaWebRenderer(canvasRef, {
     paint,
@@ -265,11 +280,12 @@ export const SkiaView = (props: SkiaViewProps) => {
       if (!renderer) {
         return null;
       }
+      const picture = livePicture();
       let frame: WebFrame;
       if (queueRef.current.length > 0) {
         frame = queueRef.current.map((recording) => recording.picture);
-      } else if (pictureRef.current) {
-        frame = [pictureRef.current];
+      } else if (picture) {
+        frame = [picture];
       } else {
         frame = shownRef.current.map((recording) => recording.picture);
       }
@@ -278,7 +294,7 @@ export const SkiaView = (props: SkiaViewProps) => {
       }
       return renderer.makeImageSnapshot(frame, rect);
     },
-    [rendererRef]
+    [livePicture, rendererRef]
   );
 
   const measure = useCallback(

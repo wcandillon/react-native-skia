@@ -2,7 +2,13 @@
  * @jest-environment jsdom
  */
 /* global HTMLCanvasElement */
-import React, { act, Activity, StrictMode } from "react";
+import React, {
+  act,
+  Activity,
+  StrictMode,
+  useEffect,
+  useLayoutEffect,
+} from "react";
 import { createRoot } from "react-dom/client";
 
 import type { SkPicture } from "../../skia/types";
@@ -20,6 +26,7 @@ import {
   offscreenCanvases,
   sharedContext,
   fakePicture,
+  makeDisposablePicture,
   display,
   mediaQueryListeners,
   deliverResize,
@@ -503,6 +510,108 @@ describe("SkiaView.web", () => {
 
     await view.unmount();
     expect(canvas.width).toBe(0);
+  });
+
+  // #4354: <Canvas> owns the picture it sets and disposes it when its effects
+  // are cleaned up. StrictMode's development re-run and an Activity that gets
+  // hidden clean them up without unmounting the view, which paints what it
+  // holds when its layout effect runs again. CanvasKit throws on a deleted
+  // picture.
+  const recordDeletedDraws = (rawCanvas: {
+    drawPicture: jest.Mock;
+  }): unknown[] => {
+    const deletedDraws: unknown[] = [];
+    rawCanvas.drawPicture.mockImplementation(
+      (ref: { isDeleted: () => boolean }) => {
+        if (ref.isDeleted()) {
+          deletedDraws.push(ref);
+          throw new Error(
+            "Cannot pass deleted object as a pointer of type sk_sp<Picture>"
+          );
+        }
+      }
+    );
+    return deletedDraws;
+  };
+
+  it("does not paint a picture disposed while StrictMode re-runs the effects", async () => {
+    const { rawCanvas } = installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+    const deletedDraws = recordDeletedDraws(rawCanvas);
+    const api = global.SkiaViewApi as ISkiaViewApiWeb;
+
+    // Sets a picture from a layout effect and disposes it in an effect
+    // cleanup, as <Canvas> does through its container.
+    const pictures: ReturnType<typeof makeDisposablePicture>[] = [];
+    const Owner = () => {
+      useLayoutEffect(() => {
+        const picture = makeDisposablePicture();
+        pictures.push(picture);
+        api.setJsiProperty(18, "picture", picture);
+      }, []);
+      useEffect(
+        () => () => {
+          pictures.forEach((picture) => picture.dispose());
+        },
+        []
+      );
+      return <SkiaView nativeID="18" style={{ width: 360, height: 520 }} />;
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <Owner />
+        </StrictMode>
+      );
+    });
+    expect(deletedDraws).toHaveLength(0);
+
+    // The next picture is painted.
+    const next = makeDisposablePicture();
+    await act(async () => {
+      api.setJsiProperty(18, "picture", next);
+    });
+    expect(rawCanvas.drawPicture).toHaveBeenLastCalledWith(next.ref);
+    expect(deletedDraws).toHaveLength(0);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("does not paint or snapshot a picture disposed while its Activity was hidden", async () => {
+    const { rawCanvas } = installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+    const deletedDraws = recordDeletedDraws(rawCanvas);
+    const api = global.SkiaViewApi as ISkiaViewApiWeb;
+
+    const view = mountInActivity("19", false);
+    await view.render("visible");
+    const picture = makeDisposablePicture();
+    await act(async () => {
+      api.setJsiProperty(19, "picture", picture);
+    });
+    expect(rawCanvas.drawPicture).toHaveBeenCalledWith(picture.ref);
+
+    await view.render("hidden");
+    picture.dispose();
+    await view.render("visible");
+    expect(deletedDraws).toHaveLength(0);
+    expect(api.makeImageSnapshot(19)).toBeNull();
+
+    const next = makeDisposablePicture();
+    await act(async () => {
+      api.setJsiProperty(19, "picture", next);
+    });
+    expect(rawCanvas.drawPicture).toHaveBeenLastCalledWith(next.ref);
+    expect(deletedDraws).toHaveLength(0);
+
+    await view.unmount();
   });
 
   // The first draw of a view runs from a microtask and the following ones
