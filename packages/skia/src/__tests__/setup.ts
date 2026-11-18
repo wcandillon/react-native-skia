@@ -13,6 +13,7 @@ export const WEB = process.env.WEB === "true";
 export const itFailsE2e = E2E ? it.failing : it;
 export const itSkipsCanvasKit = WEB || !E2E ? it.skip : it;
 export const itRunsE2eOnly = E2E && !WEB ? it : it.skip;
+export const itFailsE2eOnly = E2E && !WEB ? it.failing : it.skip;
 export const itRunsNodeOnly = E2E ? it.skip : it;
 export const itRunsCIAndNodeOnly = CI || !E2E ? it : it.skip;
 
