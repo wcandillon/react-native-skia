@@ -137,12 +137,15 @@ usesP3ColorSpace(const std::string &colorSpace,
   // set and cleared there, by tasks posted in order with those that present
   // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
-  // Present thread. The link follows the view's display on macOS.
+  // Present thread. Created as the view enters a superview on macOS, where
+  // the link is bound to the view and follows its display, and on the first
+  // animation frame elsewhere, so that a canvas that never animates has none.
   CADisplayLink *_displayLink;
 
   // The screen maximum used for the last frame-rate request. Present thread.
   // This belongs to the current link: a recycled view's new link must ask
-  // again. Comparing rates also handles moving the window between displays.
+  // again. Comparing rates also picks up a new display rate (see
+  // updateMaximumFramesPerSecond).
   float _requestedFramesPerSecond;
   // The display's rate, read on the main thread as the view enters a window
   // or changes screens, 0 until then.
@@ -313,32 +316,26 @@ usesP3ColorSpace(const std::string &colorSpace,
   auto view = _view;
   auto presenting = _presenting;
 
-  // Create the paused link on the main thread, then install it on the
-  // present thread before that thread accepts frame requests. AppKit's
-  // view-bound link follows the view between displays.
 #if TARGET_OS_OSX
+  // AppKit binds the link to the view, which follows it between displays,
+  // and makes it on the main thread only: it is made paused here and joins
+  // the present thread's run loop in the same task that lets frame requests
+  // through. The link holds the view as its target until the leave task
+  // invalidates it, so the task finds the view.
   CADisplayLink *displayLink = [self displayLinkWithTarget:self
                                                   selector:@selector(onFrame:)];
-#else
-  CADisplayLink *displayLink =
-      [CADisplayLink displayLinkWithTarget:self selector:@selector(onFrame:)];
-#endif // TARGET_OS_OSX
   displayLink.paused = YES;
-  RNSkia::presentThread().post([weakSelf, displayLink]() {
-    SkiaView *strongSelf = weakSelf;
-    if (strongSelf != nil) {
-      strongSelf->_displayLink = displayLink;
-      [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
-                        forMode:NSRunLoopCommonModes];
-    }
-  });
-
-  // Install the link before a frame request can see the view as presenting.
+#endif // TARGET_OS_OSX
   RNSkia::presentThread().post([=]() {
     *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
+#if TARGET_OS_OSX
+      strongSelf->_displayLink = displayLink;
+      [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                        forMode:NSRunLoopCommonModes];
+#endif // TARGET_OS_OSX
     }
   });
 }
@@ -349,9 +346,10 @@ usesP3ColorSpace(const std::string &colorSpace,
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
-// goes in the same task: an animation frame asked for between two would make a
-// new one that outlives the leave (see requestAnimationFrame). The view goes on
-// the main thread, where UIKit expects it to, as this task owns the last
+// goes in the same task: on iOS, an animation frame asked for between two
+// would make a new one that outlives the leave (see requestAnimationFrame);
+// on macOS, the link made at the enter holds the view until then. The view goes
+// on the main thread, where UIKit expects it to, as this task owns the last
 // reference to it once Fabric let go of it (see invalidate). A strong capture
 // cannot promise that: the block would let go on the present thread, racing the
 // main thread for the last release. So the reference is taken here, by hand,
@@ -388,9 +386,9 @@ usesP3ColorSpace(const std::string &colorSpace,
   _windowAttached = false;
 }
 
-// Main thread: the display link held the view until the leave task
-// invalidated it, and that task handed the view back here (see
-// leavePresentThread).
+// Main thread: the leave task handed the view back here, after invalidating
+// the display link, which holds the view while the view is in a superview on
+// macOS, and while it animates elsewhere (see leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
@@ -462,10 +460,19 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 // The view's frame scheduler asks for the next frame of the display (see
 // RNSkView::FrameHost): the display link, which ticks on the present thread,
-// unpaused here and paused again once the scheduler asks for no more (see
-// onFrame:), so an idle view does not keep the display at its full rate.
-// Present thread.
+// made on the first request outside macOS (see enterPresentThread), unpaused
+// here and paused again once the scheduler asks for no more (see onFrame:),
+// so an idle view does not keep the display at its full rate. Only asked for
+// between the enter and the leave tasks (see _presenting). Present thread.
 - (void)requestAnimationFrame {
+#if !TARGET_OS_OSX
+  if (_displayLink == nil) {
+    _displayLink = [CADisplayLink displayLinkWithTarget:self
+                                               selector:@selector(onFrame:)];
+    [_displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                       forMode:NSRunLoopCommonModes];
+  }
+#endif // !TARGET_OS_OSX
   [self requestFullFrameRate];
   _displayLink.paused = NO;
 }
