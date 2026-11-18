@@ -5,7 +5,7 @@ sidebar_label: Migrating to v3
 slug: /getting-started/migration
 ---
 
-React Native Skia v3 renders with Skia Graphite on iOS, macOS, and Android.
+React Native Skia v3 renders with Skia Graphite on iOS, Android, macOS, Mac Catalyst, tvOS.
 Graphite is Skia's new GPU backend. In React Native Skia it runs on [Dawn](https://dawn.googlesource.com/dawn), Google's WebGPU implementation, which uses Metal on Apple platforms and Vulkan on Android.
 
 :::info[Staying on v2]
@@ -96,7 +96,7 @@ See [the Vulkan section of the installation guide](/docs/getting-started/install
 
 ### iOS, tvOS, and macOS
 
-The minimum deployment target is iOS 15.1.
+The minimum deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0.
 Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-tvos`, `react-native-skia-graphite-apple-macos`), alongside `react-native-webgpu-dawn`.
 
 ### Expo

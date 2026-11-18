@@ -19,10 +19,10 @@
     "web": "IS_WEB_BUILD=true react-native start"
   },
   "dependencies": {
-    "@react-navigation/bottom-tabs": "^7.2.1",
-    "@react-navigation/elements": "^2.2.6",
-    "@react-navigation/native": "^7.0.15",
-    "@react-navigation/native-stack": "^7.2.1",
+    "@react-navigation/bottom-tabs": "^7.22.0",
+    "@react-navigation/elements": "^2.9.46",
+    "@react-navigation/native": "^7.5.2",
+    "@react-navigation/native-stack": "^7.21.1",
     "@testing-library/react-native": "^13.1.0",
     "@webgpu/types": "^0.1.69",
     "babel-plugin-transform-inline-environment-variables": "^0.4.4",
@@ -58,7 +58,7 @@
     "@react-native/jest-preset": "0.88.1",
     "@react-native/metro-config": "0.88.1",
     "@react-native/typescript-config": "0.88.1",
-    "@react-navigation/stack": "7.6.0",
+    "@react-navigation/stack": "7.12.2",
     "@rnx-kit/metro-config": "^2.0.0",
     "@types/jest": "^29.5.13",
     "@types/react": "^19.0.0",
