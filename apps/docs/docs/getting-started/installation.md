@@ -5,8 +5,11 @@ sidebar_label: Installation
 slug: /getting-started/installation
 ---
 
-React Native Skia brings the [Skia Graphics Library](https://skia.org/) to React Native.
-Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox, Firefox OS, and many other products.
+React Native Skia brings [Skia](https://skia.org/), the rendering engine behind Google Chrome, to React Native.
+
+It renders with Graphite, Skia's new GPU backend built on WebGPU ([Dawn](https://dawn.googlesource.com/dawn)).
+Graphite plugs directly into [React Native WebGPU](/docs/webgpu), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, without any copy.
+The result is a unified GPU runtime for React Native.
 
 :::info[React Native Skia v3]
 
