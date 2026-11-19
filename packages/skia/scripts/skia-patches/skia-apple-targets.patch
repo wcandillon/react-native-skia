@@ -1,30 +1,33 @@
-[apple] Configure Apple architectures, deployment targets, and Mac Catalyst
+[apple] Select SDKs, architectures, and deployment targets
 
 Build arm64 without arm64e, which Apple simulators do not support.
-Use tvOS device/simulator deployment flags instead of the iOS equivalents.
+Use tvOS deployment flags and visionOS target triples instead of iOS flags.
+visionOS uses Skia's iOS toolchain with the XROS SDK.
 
-Overriding flags in build scripts is not enough: Skia still sets macOS target
-flags, and Dawn has its own CMake build. Mixing macOS and Catalyst objects
-makes xcodebuild -create-xcframework fail:
+Mac Catalyst uses the iOS ABI and the macOS SDK's iOSSupport headers and
+frameworks. Overriding flags in build scripts is not enough: Skia still sets
+macOS target flags, and Dawn has its own CMake build. Mixing macOS and
+Catalyst objects makes xcodebuild -create-xcframework fail:
   error: binaries with multiple platforms are not supported 'lib~.a'
 
-Catalyst also needs the macOS SDK's iOSSupport headers and frameworks.
 Flags alone cannot fix Dawn's iOS-only Metal feature-set checks, which fail:
   error: '...' is unavailable: not available on macCatalyst
-The source guards for those checks are in metal-platforms.patch.
+The source guards for those checks are in Dawn's metal-platforms.patch.
 
-Declare the Catalyst environment in GN and set its compiler/assembler/linker
-targets. Use ios_min_target for Mac Catalyst and macos_min_target for native
-macOS and build-time host generators. GN also builds host tools during
-cross-compilation; they must not inherit the mobile deployment target or
-Catalyst/simulator environment.
+Declare Apple target environments in GN and set compiler/assembler/linker
+targets. Use ios_min_target for mobile SDKs and Mac Catalyst, and
+macos_min_target for native macOS and build-time host generators. GN also
+builds host tools during cross-compilation, so they must not inherit the
+mobile deployment target or Catalyst/simulator environment.
 
 ---
-# Declare the Catalyst environment and an independent macOS host deployment floor.
+# Declare Apple environments and separate macOS/mobile deployment targets.
 diff --git a/gn/BUILDCONFIG.gn b/gn/BUILDCONFIG.gn
 --- a/gn/BUILDCONFIG.gn
 +++ b/gn/BUILDCONFIG.gn
-@@ -34,6 +34,9 @@
+@@ -32,8 +32,11 @@
+   clang_win_version = ""
+
    ios_min_target = ""
 +  # macOS host generators need their own floor, separate from mobile targets.
 +  macos_min_target = "14.0"
@@ -34,7 +37,11 @@ diff --git a/gn/BUILDCONFIG.gn b/gn/BUILDCONFIG.gn
 
    # Enable -H, which prints the include tree during compilation.
    # For use by external tools for analyzing include files.
-@@ -68,6 +71,7 @@
+@@ -65,9 +68,11 @@
+
+ is_android = current_os == "android"
+ is_ios = current_os == "ios" || current_os == "tvos"
++is_visionos = is_ios && target_environment == "visionos"
  is_tvos = current_os == "tvos"
  is_linux = current_os == "linux"
  is_mac = current_os == "mac"
@@ -42,11 +49,25 @@ diff --git a/gn/BUILDCONFIG.gn b/gn/BUILDCONFIG.gn
  is_wasm = current_os == "wasm"
  is_win = current_os == "win"
 
-# Set supported architectures and tvOS/Catalyst deployment flags.
+# Select native SDKs, supported architectures, and deployment flags.
 diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
 --- a/gn/skia/BUILD.gn
 +++ b/gn/skia/BUILD.gn
-@@ -193,8 +193,6 @@
+@@ -22,7 +22,12 @@
+ }
+
+ if (is_ios && xcode_sysroot == "") {
+-  if (is_tvos) {
++  if (is_visionos) {
++    sdk = "xros"
++    if (ios_use_simulator) {
++      sdk = "xrsimulator"
++    }
++  } else if (is_tvos) {
+     sdk = "appletvos"
+     if (ios_use_simulator) {
+       sdk = "appletvsimulator"
+@@ -193,8 +198,6 @@
        _arch_flags = [
          "-arch",
          "arm64",
@@ -55,12 +76,24 @@ diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
        ]
      } else if (current_cpu == "x86") {
        _arch_flags = [
-@@ -232,7 +230,17 @@
+@@ -232,7 +235,29 @@
                 ] + _arch_flags
      libs += [ "objc" ]
      if (ios_min_target != "") {
 -      if (ios_use_simulator) {
-+      if (is_tvos) {
++      if (is_visionos) {
++        _visionos_arch = current_cpu
++        if (current_cpu == "x64") {
++          _visionos_arch = "x86_64"
++        }
++        _visionos_target = "${_visionos_arch}-apple-xros${ios_min_target}"
++        if (ios_use_simulator) {
++          _visionos_target += "-simulator"
++        }
++        cflags += [ "-target", _visionos_target ]
++        asmflags += [ "-target", _visionos_target ]
++        ldflags += [ "-target", _visionos_target ]
++      } else if (is_tvos) {
 +        if (ios_use_simulator) {
 +          cflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
 +          asmflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
@@ -74,7 +107,7 @@ diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
          cflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
          asmflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
          ldflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
-@@ -264,44 +272,57 @@
+@@ -264,44 +289,57 @@
          "-isysroot",
          xcode_sysroot,
        ]

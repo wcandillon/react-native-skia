@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 
+import type { AppleArchitecture, AppleSDK } from "./apple-configuration";
+import { appleConfigurations, appleSDKs } from "./apple-configuration";
 import { applyPatches } from "./patches";
 import { $, fileOps } from "./utils";
 
@@ -17,6 +19,9 @@ export const SkiaPatches = path.join(__dirname, "skia-patches");
 export const applySkiaPatches = () => applyPatches(SkiaSrc, SkiaPatches);
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
+
+/** Minimum Android API used by both Skia's GN and Dawn's CMake builds. */
+export const androidPlatform = 26;
 
 const NoParagraphArgs = [
   ["skia_use_harfbuzz", false],
@@ -89,14 +94,9 @@ export const commonArgs = [
   ["skia_use_partition_alloc", false],
 ];
 
-export type PlatformName =
-  "apple-ios" | "apple-tvos" | "apple-macos" | "android";
-
-export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
-
-export const isApplePlatform = (
-  name: PlatformName
-): name is ApplePlatformName => name.startsWith("apple-");
+// Build groups identify Android or one Apple SDK, independently of library format.
+// GN keeps its own CPU/platform spellings.
+export type PlatformName = "android" | AppleSDK;
 
 type Arg = (string | boolean | number)[];
 export type Target = {
@@ -118,18 +118,12 @@ export type Platform<PlatformTarget extends Target = Target> = {
   options?: Arg[];
 };
 
-// Deployment targets of the binaries.
-// Mobile targets use ios_min_target; macOS and host tools use macos_min_target.
-const iosMinTarget = "15.1";
-const tvosMinTarget = "15.1";
-const macosMinTarget = "14.0";
-
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [
   // Cross builds also compile macOS host tools, such as libgrapheme generators.
   // Their current_os is "mac" even when the destination is iOS/tvOS/Catalyst.
   // Keep the host deployment target independent of that destination's minimum.
-  ["macos_min_target", `"${macosMinTarget}"`],
+  ["macos_min_target", `"${appleConfigurations.macos.minimumTarget}"`],
   ["skia_use_metal", true],
   ["skia_use_gl", false],
   ["cc", '"clang"'],
@@ -138,7 +132,7 @@ const appleCommonArgs: Arg[] = [
 ];
 
 // Common Apple output names shared across all Apple platforms
-const appleOutputNames = [
+export const appleOutputNames = [
   "libskia.a",
   "libskshaper.a",
   "libsvg.a",
@@ -147,11 +141,57 @@ const appleOutputNames = [
   ...ParagraphApple,
 ];
 
+/** Configure Skia's GN toolchain for one SDK and its supported architectures. */
+const apple = (sdk: AppleSDK): Platform => {
+  const configuration = appleConfigurations[sdk];
+  const isCatalyst = configuration.variant === "maccatalyst";
+  const isVisionOS = configuration.platform === "visionos";
+  let platform = "ios";
+  if (isCatalyst || configuration.platform === "macos") {
+    platform = "mac";
+  } else if (configuration.platform === "tvos") {
+    platform = "tvos";
+  }
+  const targets = Object.fromEntries(
+    configuration.architectures.map((architecture: AppleArchitecture) => {
+      const args: Arg[] = [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]];
+      // ios_min_target carries this SDK's floor, including tvOS/visionOS/Catalyst.
+      // macos_min_target remains separate for macOS host generators in the same run.
+      if (configuration.platform !== "macos") {
+        args.unshift(["ios_min_target", `"${configuration.minimumTarget}"`]);
+      }
+      if (configuration.variant === "simulator") {
+        args.push(["ios_use_simulator", true]);
+      }
+      // These platforms need an environment selector in addition to target_os.
+      if (isCatalyst) {
+        args.push(["target_environment", '"catalyst"']);
+      } else if (isVisionOS) {
+        args.push(["target_environment", '"visionos"']);
+      }
+      return [
+        architecture,
+        {
+          cpu: architecture === "x86_64" ? "x64" : architecture,
+          platform,
+          args,
+        },
+      ];
+    })
+  );
+  return {
+    targets,
+    args: appleCommonArgs,
+    outputRoot: `libs/apple/${sdk}`,
+    outputNames: appleOutputNames,
+  };
+};
+
 export const configurations: { android: Platform<AndroidTarget> } & Record<
-  ApplePlatformName,
+  AppleSDK,
   Platform
 > = {
-  "android": {
+  android: {
     targets: {
       arm: {
         platform: "android",
@@ -175,7 +215,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       },
     },
     args: [
-      ["ndk_api", 26],
+      ["ndk_api", androidPlatform],
       ["ndk", `"${NdkDir}"`],
       ["skia_use_system_freetype2", false],
       ["skia_use_gl", false],
@@ -203,106 +243,38 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       ...ParagraphOutputsAndroid,
     ],
   },
-  "apple-ios": {
-    targets: {
-      "arm64-iphoneos": {
-        cpu: "arm64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${iosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "arm64-iphonesimulator": {
-        cpu: "arm64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${iosMinTarget}"`],
-          ["ios_use_simulator", true],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "x64-iphonesimulator": {
-        cpu: "x64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${iosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "arm64-maccatalyst": {
-        cpu: "arm64",
-        platform: "mac",
-        args: [
-          ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${iosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "x64-maccatalyst": {
-        cpu: "x64",
-        platform: "mac",
-        args: [
-          ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${iosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-    },
-    args: appleCommonArgs,
-    outputRoot: "libs/ios",
-    outputNames: appleOutputNames,
-  },
-  "apple-tvos": {
-    targets: {
-      "arm64-tvos": {
-        cpu: "arm64",
-        platform: "tvos",
-        args: [
-          ["ios_min_target", `"${tvosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "arm64-tvsimulator": {
-        cpu: "arm64",
-        platform: "tvos",
-        args: [
-          ["ios_min_target", `"${tvosMinTarget}"`],
-          ["ios_use_simulator", true],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "x64-tvsimulator": {
-        cpu: "x64",
-        platform: "tvos",
-        args: [
-          ["ios_min_target", `"${tvosMinTarget}"`],
-          ["ios_use_simulator", true],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-    },
-    args: appleCommonArgs,
-    outputRoot: "libs/tvos",
-    outputNames: appleOutputNames,
-  },
-  "apple-macos": {
-    targets: {
-      "arm64-macosx": {
-        cpu: "arm64",
-        platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
-      },
-      "x64-macosx": {
-        cpu: "x64",
-        platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
-      },
-    },
-    args: appleCommonArgs,
-    outputRoot: "libs/macos",
-    outputNames: appleOutputNames,
-  },
+  ...(Object.fromEntries(appleSDKs.map((sdk) => [sdk, apple(sdk)])) as Record<
+    AppleSDK,
+    Platform
+  >),
+};
+
+/** Per-architecture build selectors for SDK groups and Android CPU targets. */
+export const skiaTargets = Object.fromEntries(
+  Object.entries(configurations).flatMap(([platform, configuration]) =>
+    Object.keys(configuration.targets).map((architecture) => [
+      `${platform}-${architecture}`,
+      { platform: platform as PlatformName, architecture },
+    ])
+  )
+) as Record<string, { platform: PlatformName; architecture: string }>;
+
+/** GN intermediates are separate from the SDK libraries uploaded by CI. */
+export const skiaBuildDir = (platform: PlatformName, architecture: string) =>
+  platform === "android"
+    ? path.join(OutFolder, "android", architecture)
+    : path.join(OutFolder, "apple", `${platform}-${architecture}`);
+
+export const skiaTargetOutputDir = (name: string) => {
+  const { platform, architecture } = skiaTargets[name];
+  return platform === "android"
+    ? path.join(
+        PackageRoot,
+        "libs",
+        "android",
+        configurations.android.targets[architecture].output
+      )
+    : path.join(PackageRoot, "libs", "apple", name);
 };
 
 const copyModule = (module: string) => {
@@ -312,33 +284,27 @@ const copyModule = (module: string) => {
   fileOps.cp(srcDir, destDir);
 };
 
-// Dawn headers: from the Dawn built locally with `yarn build-dawn` when there is
-// one (it is what the native builds then link), otherwise from the
-// react-native-webgpu-dawn package, the same way Gradle and the podspec pick the
-// library.
-const resolveDawnInclude = () => {
-  const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
-  if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
-    console.log(
-      "   📦 Copying Dawn headers from the local build (libs/dawn)..."
-    );
-    return localDawnInclude;
-  }
-  let dawnPackage: string;
-  try {
-    dawnPackage = path.dirname(
-      require.resolve("react-native-webgpu-dawn/package.json")
-    );
-  } catch (e) {
+// Both locally built and manually downloaded headers use this input directory.
+const DawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
+
+/** Check Dawn's public entry header before starting work. */
+export const validateDawnHeaders = () => {
+  if (!fs.existsSync(path.join(DawnInclude, "webgpu", "webgpu.h"))) {
+    const { tag } = JSON.parse(
+      fs.readFileSync(path.join(PackageRoot, "binaries.json"), "utf8")
+    ) as { tag: string };
     throw new Error(
-      "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
+      `No Dawn headers found in ${DawnInclude}.\n` +
+        "Before building Skia or copying headers, run yarn build-dawn <target> from packages/skia,\n" +
+        `or download https://github.com/wcandillon/react-native-skia/releases/download/${tag}/dawn-headers.zip\n` +
+        "and place the archive's include/ contents in packages/skia/libs/dawn/include."
     );
   }
-  console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
-  return path.join(dawnPackage, "include");
 };
 
+/** Copy prepared local inputs; validate them before removing existing output. */
 export const copyHeaders = () => {
+  validateDawnHeaders();
   console.log("⚙️ Copying Skia headers...");
   process.chdir(PackageRoot);
 
@@ -348,7 +314,6 @@ export const copyHeaders = () => {
       "No Skia headers found in externals/skia: check out the submodules with `git submodule update --init --recursive`"
     );
   }
-  const dawnInclude = resolveDawnInclude();
 
   console.log("   Cleaning up existing directories...");
   fileOps.rm("./cpp/skia");
@@ -375,8 +340,8 @@ export const copyHeaders = () => {
 
   {
     fileOps.mkdir("./cpp/dawn/include");
-    fileOps.cp(path.join(dawnInclude, "dawn"), "./cpp/dawn/include/dawn");
-    fileOps.cp(path.join(dawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
+    fileOps.cp(path.join(DawnInclude, "dawn"), "./cpp/dawn/include/dawn");
+    fileOps.cp(path.join(DawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
 
     // Dawn ships the generated webgpu.h and webgpu_cpp.h under dawn/ and
     // forwarding shims under webgpu/. Xcode's header maps resolve by basename,
