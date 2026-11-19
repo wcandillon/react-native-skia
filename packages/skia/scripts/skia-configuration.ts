@@ -1,7 +1,7 @@
 import fs from "fs";
-import { execSync } from "child_process";
 import path from "path";
 
+import { applyPatches } from "./patches";
 import { $, fileOps } from "./utils";
 
 const DEBUG = false;
@@ -11,6 +11,10 @@ export const SkiaSrc = path.join(__dirname, "../../../externals/skia");
 export const ProjectRoot = path.join(__dirname, "../../..");
 export const PackageRoot = path.join(__dirname, "..");
 export const OutFolder = path.join(SkiaSrc, DEBUG ? "debug" : "out");
+export const SkiaPatches = path.join(__dirname, "skia-patches");
+
+/** Applies the Skia patches, skipping those already in the pinned checkout. */
+export const applySkiaPatches = () => applyPatches(SkiaSrc, SkiaPatches);
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
 
@@ -83,8 +87,6 @@ export const commonArgs = [
   // prebuilt libskia.a (the allocator lives in its own target we don't ship).
   // Skia's noop raw_ptr shims are used instead.
   ["skia_use_partition_alloc", false],
-  // C++20 is required for Graphite builds (Dawn uses C++20 concepts)
-  // Passed via extra_cflags_cc per-target instead of skia_use_cpp20 (not available in all Skia versions)
 ];
 
 export type PlatformName =
@@ -117,13 +119,17 @@ export type Platform<PlatformTarget extends Target = Target> = {
 };
 
 // Deployment targets of the binaries.
-// Each target has separate GN args; ios_min_target also carries tvOS/macOS minima.
+// Mobile targets use ios_min_target; macOS and host tools use macos_min_target.
 const iosMinTarget = "15.1";
 const tvosMinTarget = "15.1";
 const macosMinTarget = "14.0";
 
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [
+  // Cross builds also compile macOS host tools, such as libgrapheme generators.
+  // Their current_os is "mac" even when the destination is iOS/tvOS/Catalyst.
+  // Keep the host deployment target independent of that destination's minimum.
+  ["macos_min_target", `"${macosMinTarget}"`],
   ["skia_use_metal", true],
   ["skia_use_gl", false],
   ["cc", '"clang"'],
@@ -285,18 +291,12 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       "arm64-macosx": {
         cpu: "arm64",
         platform: "mac",
-        args: [
-          ["ios_min_target", `"${macosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
+        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
       },
       "x64-macosx": {
         cpu: "x64",
         platform: "mac",
-        args: [
-          ["ios_min_target", `"${macosMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
+        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
       },
     },
     args: appleCommonArgs,
@@ -555,50 +555,10 @@ export const copyHeaders = () => {
     );
     process.exit(1);
   }
-  applyPatchesToHeaders();
+  // Use the build's patch set on pristine or already patched header copies.
+  // Source/build sections whose files were not copied are left out.
+  applyPatches(path.join(PackageRoot, "cpp/skia"), SkiaPatches, {
+    copiedFilesOnly: true,
+  });
   console.log("✅ Skia headers copied to ./cpp/skia");
-};
-
-// build-skia applies scripts/skia-*.patch to the Skia checkout before it
-// compiles, so the prebuilt binaries are built from patched headers. The
-// copies above come from the unpatched submodule: apply the hunks of the
-// patches that touch a copied file, or the wrapper compiles against
-// declarations the binaries do not define (e.g. the SkSurfaceProps argument
-// of Recorder::makeDeferredCanvas, an undefined symbol at link time).
-const applyPatchesToHeaders = () => {
-  const copiedRoot = path.join(PackageRoot, "cpp/skia");
-  const patches = fs
-    .readdirSync(__dirname)
-    .filter((f) => f.startsWith("skia-") && f.endsWith(".patch"))
-    .sort();
-  for (const name of patches) {
-    const sections = fs
-      .readFileSync(path.join(__dirname, name), "utf-8")
-      .split(/^(?=diff --git )/m)
-      .filter((section) => {
-        const target = section.match(/^diff --git a\/\S+ b\/(\S+)/)?.[1];
-        return target && fs.existsSync(path.join(copiedRoot, target));
-      });
-    if (sections.length === 0) {
-      continue;
-    }
-    const filtered = path.join(copiedRoot, `.${name}`);
-    fs.writeFileSync(filtered, sections.join(""));
-    try {
-      // Inside this repository, git apply silently skips paths outside the
-      // current directory and the ignored cpp/skia. Stopping repository
-      // discovery at cpp/skia makes it patch the files there like `patch -p1`.
-      execSync(`git apply ${filtered}`, {
-        cwd: copiedRoot,
-        env: {
-          ...process.env,
-          GIT_CEILING_DIRECTORIES: path.dirname(copiedRoot),
-        },
-        stdio: "inherit",
-      });
-    } finally {
-      fs.rmSync(filtered);
-    }
-    console.log(`   🩹 ${name} applied to the copied headers`);
-  }
 };

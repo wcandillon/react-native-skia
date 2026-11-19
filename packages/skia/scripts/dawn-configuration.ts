@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 
 import { OutFolder, PackageRoot, SkiaSrc } from "./skia-configuration";
+import { applyPatches } from "./patches";
 import { fileOps } from "./utils";
 
 // Dawn is built from the checkout Skia pins in its DEPS, so the prebuilt Dawn
@@ -219,38 +220,7 @@ export const syncDawnDeps = () =>
  * checkout already contains is skipped; one that no longer applies fails the
  * build so it gets dropped or refreshed with the Dawn bump that broke it.
  */
-export const applyDawnPatches = () => {
-  const gitApply = (args: string[]) => {
-    try {
-      execSync(`git ${["apply", ...args].join(" ")}`, {
-        cwd: DawnSrc,
-        stdio: "pipe",
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  const patches = fs
-    .readdirSync(DawnPatches)
-    .filter((f) => f.endsWith(".patch"))
-    .sort();
-  for (const name of patches) {
-    const patch = path.join(DawnPatches, name);
-    if (gitApply(["--check", patch])) {
-      gitApply([patch]);
-      console.log(`🩹 Applied ${name}`);
-    } else if (gitApply(["--reverse", "--check", patch])) {
-      console.log(
-        `✅ ${name} is already in the Dawn checkout (applied earlier, or the pinned Dawn carries it and the patch can be dropped)`
-      );
-    } else {
-      throw new Error(
-        `${name} does not apply to ${DawnSrc}: the patched code changed upstream. Check whether the pinned Dawn already carries an equivalent change and drop or refresh the patch.`
-      );
-    }
-  }
-};
+export const applyDawnPatches = () => applyPatches(DawnSrc, DawnPatches);
 
 /**
  * The -D arguments Skia's own Dawn build passes to CMake: the location of
