@@ -25,7 +25,7 @@ export const DawnAppleXcframework = path.join(
 // skia-configuration.ts.
 const iosMinTarget = "15.1";
 const tvosMinTarget = "15.1";
-const macosMinTarget = "11.0";
+const macosMinTarget = "14.0";
 const androidPlatform = "android-26";
 
 export type DawnOS = "android" | "apple";

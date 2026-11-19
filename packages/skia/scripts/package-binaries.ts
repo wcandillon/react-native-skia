@@ -120,7 +120,7 @@ const DAWN_PACKAGE = "react-native-webgpu-dawn";
 // accepts any lower floor.
 const SPM_IOS = ".iOS(.v13)";
 const SPM_TVOS = ".tvOS(.v13)";
-const SPM_MACOS = ".macOS(.v10_15)";
+const SPM_MACOS = ".macOS(.v12)";
 
 const parseArgs = () => {
   const args: Record<string, string | boolean> = {};

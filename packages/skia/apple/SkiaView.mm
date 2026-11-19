@@ -14,7 +14,6 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <memory>
@@ -138,24 +137,19 @@ usesP3ColorSpace(const std::string &colorSpace,
   // set and cleared there, by tasks posted in order with those that present
   // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
-#if !TARGET_OS_OSX
-  // Present thread.
+  // Present thread. Created as the view enters a superview on macOS, where
+  // the link is bound to the view and follows its display, and on the first
+  // animation frame elsewhere, so that a canvas that never animates has none.
   CADisplayLink *_displayLink;
-  // Whether the display link asked for the display's full rate yet (see
-  // requestFullFrameRate). Present thread.
-  bool _fullFrameRateRequested;
+
+  // The screen maximum used for the last frame-rate request. Present thread.
+  // This belongs to the current link: a recycled view's new link must ask
+  // again. Comparing rates also picks up a new display rate (see
+  // updateMaximumFramesPerSecond).
+  float _requestedFramesPerSecond;
   // The display's rate, read on the main thread as the view enters a window
-  // (UIKit), 0 until then.
+  // or changes screens, 0 until then.
   std::atomic<float> _maximumFramesPerSecond;
-#else
-  // Whether a tick is scheduled, when the last one ran (see
-  // presentAgainLater), and which ticks are still wanted: the leave moves
-  // the count on, and a tick scheduled before it does nothing. Present
-  // thread.
-  bool _presentAgainScheduled;
-  CFTimeInterval _lastTick;
-  uint64_t _tickGeneration;
-#endif
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -168,14 +162,8 @@ usesP3ColorSpace(const std::string &colorSpace,
     _windowAttached = false;
     _attachedWidth = 0;
     _attachedHeight = 0;
-#if TARGET_OS_OSX
-    _presentAgainScheduled = false;
-    _lastTick = 0;
-    _tickGeneration = 0;
-#else
-    _fullFrameRateRequested = false;
+    _requestedFramesPerSecond = 0;
     _maximumFramesPerSecond = 0;
-#endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
@@ -197,7 +185,7 @@ usesP3ColorSpace(const std::string &colorSpace,
                selector:@selector(appWillEnterForeground:)
                    name:NSApplicationDidUnhideNotification
                  object:nil];
-#endif
+#endif // !TARGET_OS_OSX
   }
   return self;
 }
@@ -327,11 +315,27 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto view = _view;
   auto presenting = _presenting;
+
+#if TARGET_OS_OSX
+  // AppKit binds the link to the view, which follows it between displays,
+  // and makes it on the main thread only: it is made paused here and joins
+  // the present thread's run loop in the same task that lets frame requests
+  // through. The link holds the view as its target until the leave task
+  // invalidates it, so the task finds the view.
+  CADisplayLink *displayLink = [self displayLinkWithTarget:self
+                                                  selector:@selector(onFrame:)];
+  displayLink.paused = YES;
+#endif // TARGET_OS_OSX
   RNSkia::presentThread().post([=]() {
     *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
+#if TARGET_OS_OSX
+      strongSelf->_displayLink = displayLink;
+      [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                        forMode:NSRunLoopCommonModes];
+#endif // TARGET_OS_OSX
     }
   });
 }
@@ -342,9 +346,10 @@ usesP3ColorSpace(const std::string &colorSpace,
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
-// goes in the same task: an animation frame asked for between two would make a
-// new one that outlives the leave (see requestAnimationFrame). The view goes on
-// the main thread, where UIKit expects it to, as this task owns the last
+// goes in the same task: on iOS, an animation frame asked for between two
+// would make a new one that outlives the leave (see requestAnimationFrame);
+// on macOS, the link made at the enter holds the view until then. The view goes
+// on the main thread, where UIKit expects it to, as this task owns the last
 // reference to it once Fabric let go of it (see invalidate). A strong capture
 // cannot promise that: the block would let go on the present thread, racing the
 // main thread for the last release. So the reference is taken here, by hand,
@@ -368,17 +373,10 @@ usesP3ColorSpace(const std::string &colorSpace,
       if (view->_presentView != nullptr) {
         view->_presentView->cancelFrames();
       }
-#if !TARGET_OS_OSX
       [view->_displayLink invalidate];
       view->_displayLink = nil;
-      // The request belonged to that link: the next one must ask again.
-      view->_fullFrameRateRequested = false;
-#else
-      // A tick scheduled is let go of (see presentAgainLater): the scheduler
-      // forgot it, and the next request schedules one of its own.
-      view->_presentAgainScheduled = false;
-      view->_tickGeneration++;
-#endif
+      // The next link must request the screen's rate again.
+      view->_requestedFramesPerSecond = 0;
       view->_presentView = nullptr;
       surface->detach((__bridge void *)layer);
     }
@@ -388,9 +386,9 @@ usesP3ColorSpace(const std::string &colorSpace,
   _windowAttached = false;
 }
 
-// Main thread: the display link held the view until the leave task
-// invalidated it, and that task handed the view back here (see
-// leavePresentThread).
+// Main thread: the leave task handed the view back here, after invalidating
+// the display link, which holds the view while the view is in a superview on
+// macOS, and while it animates elsewhere (see leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
@@ -462,10 +460,10 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 // The view's frame scheduler asks for the next frame of the display (see
 // RNSkView::FrameHost): the display link, which ticks on the present thread,
-// started and unpaused here and paused again once the scheduler asks for no
-// more (see onFrame:), so that an idle view does not keep the display at its
-// full rate. macOS has no CADisplayLink on the minimum deployment target, so
-// a tick stands in for it there (see presentAgainLater). Present thread.
+// made on the first request outside macOS (see enterPresentThread), unpaused
+// here and paused again once the scheduler asks for no more (see onFrame:),
+// so an idle view does not keep the display at its full rate. Only asked for
+// between the enter and the leave tasks (see _presenting). Present thread.
 - (void)requestAnimationFrame {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
@@ -474,49 +472,70 @@ usesP3ColorSpace(const std::string &colorSpace,
     [_displayLink addToRunLoop:[NSRunLoop currentRunLoop]
                        forMode:NSRunLoopCommonModes];
   }
+#endif // !TARGET_OS_OSX
   [self requestFullFrameRate];
   _displayLink.paused = NO;
-#else
-  [self presentAgainLater];
-#endif
 }
 
-#if !TARGET_OS_OSX
-// The display's rate, for the display link (see requestFullFrameRate): UIKit
-// is only read on the main thread.
+#pragma mark - Display refresh rate
+
+// AppKit and UIKit use different window-move hooks. Both update the same
+// main-thread screen information consumed by requestFullFrameRate.
+#if TARGET_OS_OSX
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  [center removeObserver:self
+                    name:NSWindowDidChangeScreenNotification
+                  object:nil];
+  if (self.window != nil) {
+    [center addObserver:self
+               selector:@selector(windowDidChangeScreen:)
+                   name:NSWindowDidChangeScreenNotification
+                 object:self.window];
+  }
+  [self updateMaximumFramesPerSecond];
+}
+
+// The view-bound link follows screen moves; its explicit rate must follow too.
+- (void)windowDidChangeScreen:(NSNotification *)notification {
+  [self updateMaximumFramesPerSecond];
+}
+#else
 - (void)didMoveToWindow {
   [super didMoveToWindow];
+  [self updateMaximumFramesPerSecond];
+}
+#endif // TARGET_OS_OSX
+
+// Read AppKit/UIKit only on the main thread, including when a window detaches.
+- (void)updateMaximumFramesPerSecond {
 #if !TARGET_OS_VISION
-  UIScreen *screen = self.window.screen;
-  if (screen != nil) {
-    _maximumFramesPerSecond = (float)screen.maximumFramesPerSecond;
-  }
-#endif
+  auto screen = self.window.screen;
+  _maximumFramesPerSecond =
+      screen != nil ? (float)screen.maximumFramesPerSecond : 0;
+#endif // !TARGET_OS_VISION
 }
 
-// A display link fires at 60 Hz until it asks for more, also while the
-// display already runs at 120 Hz for another link (Reanimated asks for 120):
-// a 120 Hz producer would then be presented every other frame. Ask for the
-// display's full rate once the view knows its screen. On iPhone this needs
-// CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
-// caps every link at 60 Hz. The link is paused while nothing is queued, so an
-// idle view does not keep the display at its full rate. Present thread.
+// Request the screen's full rate, and update the request when that rate
+// changes. UIKit needs an explicit request to avoid 60 Hz callbacks on a
+// ProMotion screen. On iPhone, rates above 60 Hz also need
+// CADisableMinimumFrameDurationOnPhone. Present thread; the default range
+// restores normal behavior on 60 Hz screens.
 - (void)requestFullFrameRate {
 #if !TARGET_OS_VISION
-  if (_fullFrameRateRequested) {
-    return;
-  }
   const float maxFps = _maximumFramesPerSecond.load();
-  if (maxFps <= 0) {
+  if (maxFps <= 0 || maxFps == _requestedFramesPerSecond) {
     return;
   }
-  _fullFrameRateRequested = true;
-  if (maxFps > 60) {
-    _displayLink.preferredFrameRateRange =
-        CAFrameRateRangeMake(60, maxFps, maxFps);
-  }
-#endif
+  _requestedFramesPerSecond = maxFps;
+  _displayLink.preferredFrameRateRange =
+      maxFps > 60 ? CAFrameRateRangeMake(60, maxFps, maxFps)
+                  : CAFrameRateRangeDefault;
+#endif // !TARGET_OS_VISION
 }
+
+#pragma mark - Display callbacks
 
 // No autorelease pool of its own: the link is a run loop source, so the
 // present thread's loop returns after each tick and drains its pool then
@@ -533,51 +552,6 @@ usesP3ColorSpace(const std::string &colorSpace,
     link.paused = YES;
   }
 }
-#else
-// A tick stands in for the vsync macOS has no display link for on the
-// minimum deployment target. The first tick after an idle stretch runs as
-// soon as the present thread gets to it, as presenting did before the
-// scheduler: nothing waits for a cadence that has not started. The ticks
-// after it come at 60 Hz from the previous one, for the frames left over
-// (the window could not take one) and the frames that keep coming. Present
-// thread.
-- (void)presentAgainLater {
-  if (_presentAgainScheduled) {
-    return;
-  }
-  _presentAgainScheduled = true;
-  const CFTimeInterval interval = 1.0 / 60;
-  const CFTimeInterval delay =
-      std::max(0.0, _lastTick + interval - CACurrentMediaTime());
-  const uint64_t generation = _tickGeneration;
-  __weak SkiaView *weakSelf = self;
-  auto presenting = _presenting;
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW,
-                    static_cast<int64_t>(delay * NSEC_PER_SEC)),
-      dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-        RNSkia::presentThread().post([=]() {
-          if (!*presenting) {
-            return;
-          }
-          SkiaView *strongSelf = weakSelf;
-          if (strongSelf == nil || strongSelf->_tickGeneration != generation) {
-            // Left meanwhile (see leavePresentThread): the scheduler
-            // forgot what it asked for, and asks again for what
-            // comes next.
-            return;
-          }
-          strongSelf->_presentAgainScheduled = false;
-          const CFTimeInterval now = CACurrentMediaTime();
-          strongSelf->_lastTick = now;
-          auto view = strongSelf->_presentView;
-          if (view != nullptr && view->hasPendingAnimationFrame()) {
-            view->onAnimationFrame(animationFrame(now, now + interval));
-          }
-        });
-      });
-}
-#endif
 
 #pragma mark - Render
 
