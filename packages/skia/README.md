@@ -4,17 +4,14 @@
 [![npm version](https://img.shields.io/npm/v/react-native-skia.svg?style=flat)](https://www.npmjs.com/package/react-native-skia)
 
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/skia.png?alt=media&token=875765bb-4898-4ffc-a8db-b6b777657373">
-    <img alt="React Native Skia Logo" src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/skia.png?alt=media&token=875765bb-4898-4ffc-a8db-b6b777657373" width="450">
-  </picture>
+  <img alt="React Native Skia Logo" src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/skia.png?alt=media&token=875765bb-4898-4ffc-a8db-b6b777657373" width="450">
 </div>
 
-React Native Skia bring Skia, the rendering engine behind Google Chrome to React Native to React Native.
+React Native Skia brings Skia, the rendering engine behind Google Chrome, to React Native.
 
-We use Graphite, Skia’s new GPU backend built on WebGPU (Dawn). It plugs directly into [React Native WebGPU](https://wcandillon.dev/article/hello-graphite-webgpu), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, at zero cost. The result is a unified GPU runtime for React Native.  See [Documentation](https://wcandillon.github.io/react-native-skia/).
+We use Graphite, Skia’s new GPU backend built on WebGPU (Dawn). It plugs directly into [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, without any copy. The result is a unified GPU runtime for React Native. See [Documentation](https://wcandillon.github.io/react-native-skia/).
 
-React Native Skia has been downloaded more than 60 millions times on NPM. And today, it powers the user-experiences of some of the top apps on the App Store and Google Play, including several that have won awards from Apple, Google, and Expo.
+React Native Skia has been downloaded more than 60 million times on npm. And today, it powers the user experiences of some of the top apps on the App Store and Google Play, including several that have won awards from Apple, Google, and Expo.
 
 ## Platinum Sponsors
 
