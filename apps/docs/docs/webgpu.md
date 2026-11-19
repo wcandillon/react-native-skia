@@ -5,6 +5,12 @@ sidebar_label: WebGPU
 slug: /webgpu
 ---
 
+:::tip
+
+For an overview of what this unified GPU runtime makes possible, with demos (three.js, camera and video feeds, Lottie templates, native views in a canvas), read [Hello, Graphite: WebGPU](https://wcandillon.dev/article/hello-graphite-webgpu).
+
+:::
+
 React Native Skia renders with Graphite, which runs on [Dawn](https://dawn.googlesource.com/dawn), Google's WebGPU implementation.
 React Native Skia does not expose a WebGPU API itself. To use WebGPU in your app, install [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/) alongside it.
 
