@@ -1,3 +1,13 @@
+[graphite] Preserve surface properties on deferred canvases
+
+Let Recorder::makeDeferredCanvas use the view's surface properties, including
+device independent fonts. Keep the copied header's declaration in sync with
+the implementation compiled into the binaries.
+
+Upstream: https://skia-review.googlesource.com/c/skia/+/1421716
+Drop this patch when the pinned Skia includes this change.
+
+---
 diff --git a/include/gpu/graphite/Recorder.h b/include/gpu/graphite/Recorder.h
 index 95219fa8b7..023ddc619c 100644
 --- a/include/gpu/graphite/Recorder.h
