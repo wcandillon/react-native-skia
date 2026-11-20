@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 import { OutFolder, PackageRoot, SkiaSrc } from "./skia-configuration";
-import { applyPatches } from "./patches";
+import { applyPatches, listPatches } from "./patches";
 import { fileOps } from "./utils";
 
 // Dawn is built from the checkout Skia pins in its DEPS, so the prebuilt Dawn
@@ -359,10 +359,7 @@ export const collectDawnHeaders = (buildDir: string) => {
       {
         commit: git("rev-parse HEAD"),
         repository: git("remote get-url origin"),
-        patches: fs
-          .readdirSync(DawnPatches)
-          .filter((f) => f.endsWith(".patch"))
-          .sort(),
+        patches: listPatches(DawnPatches),
       },
       null,
       2

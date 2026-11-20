@@ -316,6 +316,12 @@ const buildXCFramework = (
   process.chdir(SkiaSrc);
   $("PATH=../depot_tools/:$PATH python3 tools/git-sync-deps");
   console.log("gclient sync done");
+  // Start the Skia tree from its pinned commit so leftovers from an earlier
+  // build (old patches, string edits, local tweaks) can't make a current
+  // patch look stale. This only resets Skia's tracked files: the Dawn
+  // checkout under third_party/externals is a separate repository, so its
+  // patches are still applied idempotently by applyDawnPatches().
+  $("git reset --hard HEAD");
   // Skia's GN build and the standalone Dawn build share the Dawn checkout.
   applySkiaPatches();
   applyDawnPatches();
