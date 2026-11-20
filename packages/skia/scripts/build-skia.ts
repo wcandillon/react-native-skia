@@ -1,6 +1,5 @@
 import { execSync } from "child_process";
 import { exit } from "process";
-import fs from "fs";
 import path from "path";
 
 import type {
@@ -9,6 +8,7 @@ import type {
   PlatformName,
 } from "./skia-configuration";
 import {
+  applySkiaPatches,
   commonArgs,
   configurations,
   copyHeaders,
@@ -316,221 +316,16 @@ const buildXCFramework = (
   process.chdir(SkiaSrc);
   $("PATH=../depot_tools/:$PATH python3 tools/git-sync-deps");
   console.log("gclient sync done");
-  {
-    console.log("Applying Graphite patches...");
-    $(`git reset --hard HEAD`);
+  // Start the Skia tree from its pinned commit so leftovers from an earlier
+  // build (old patches, string edits, local tweaks) can't make a current
+  // patch look stale. This only resets Skia's tracked files: the Dawn
+  // checkout under third_party/externals is a separate repository, so its
+  // patches are still applied idempotently by applyDawnPatches().
+  $("git reset --hard HEAD");
+  // Skia's GN build and the standalone Dawn build share the Dawn checkout.
+  applySkiaPatches();
+  applyDawnPatches();
 
-    // PartitionAlloc is a Chromium dependency Dawn's GN rules can pull in;
-    // the Skia tree does not have it and skia_use_partition_alloc is off.
-    {
-      const filePath = `${SkiaSrc}/build_overrides/dawn.gni`;
-      const marker = "# PartitionAlloc is an optional dependency:";
-      if (fs.existsSync(filePath)) {
-        const content = fs.readFileSync(filePath, "utf-8");
-        const index = content.indexOf(marker);
-        if (index !== -1) {
-          fs.writeFileSync(filePath, content.slice(0, index));
-        }
-      }
-    }
-
-    // Remove arm64e arch flags (not available on simulator)
-    {
-      const filePath = `${SkiaSrc}/gn/skia/BUILD.gn`;
-      const search = [
-        `        "-arch",`,
-        `        "arm64e",`,
-        `      ]`,
-        `    } else if (current_cpu == "x86") {`,
-      ].join("\n");
-      const replace = [
-        `      ]`,
-        `    } else if (current_cpu == "x86") {`,
-      ].join("\n");
-      const content = fs.readFileSync(filePath, "utf-8");
-      if (!content.includes(search)) {
-        throw new Error(`Patch target not found in ${filePath}`);
-      }
-      fs.writeFileSync(filePath, content.replace(search, replace));
-    }
-    // Skia selects the tvOS SDK but still adds iOS deployment flags.
-    {
-      const filePath = `${SkiaSrc}/gn/skia/BUILD.gn`;
-      const search = `    if (ios_min_target != "") {
-      if (ios_use_simulator) {`;
-      const replace = `    if (ios_min_target != "") {
-      if (is_tvos) {
-        if (ios_use_simulator) {
-          cflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
-          asmflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
-          ldflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
-        } else {
-          cflags += [ "-mappletvos-version-min=$ios_min_target" ]
-          asmflags += [ "-mappletvos-version-min=$ios_min_target" ]
-          ldflags += [ "-mappletvos-version-min=$ios_min_target" ]
-        }
-      } else if (ios_use_simulator) {`;
-      const content = fs.readFileSync(filePath, "utf-8");
-      if (!content.includes(search)) {
-        throw new Error(`Patch target not found in ${filePath}`);
-      }
-      fs.writeFileSync(filePath, content.replace(search, replace));
-    }
-    // C++20 is required for Dawn (uses concepts/requires)
-    {
-      const filePath = `${SkiaSrc}/gn/skia/BUILD.gn`;
-      const content = fs.readFileSync(filePath, "utf-8");
-      fs.writeFileSync(
-        filePath,
-        content.replace(
-          `cflags_cc += [ "-std=c++17" ]`,
-          `cflags_cc += [ "-std=c++20" ]`
-        )
-      );
-    }
-    // Fix Dawn ShaderModuleMTL.mm uint32 typo (should be uint32_t)
-    {
-      const filePath = `${SkiaSrc}/third_party/externals/dawn/src/dawn/native/metal/ShaderModuleMTL.mm`;
-      const content = fs.readFileSync(filePath, "utf-8");
-      fs.writeFileSync(
-        filePath,
-        content.replace(
-          /uint32\(bindingInfo\.binding\)/g,
-          "uint32_t(bindingInfo.binding)"
-        )
-      );
-    }
-    // Add iOS/tvOS support to Dawn cmake_utils.py
-    {
-      const filePath = `${SkiaSrc}/third_party/dawn/cmake_utils.py`;
-      let content = fs.readFileSync(filePath, "utf-8");
-      // Add --ios_use_simulator argument
-      content = content.replace(
-        `parser.add_argument(
-      "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")`,
-        `parser.add_argument(
-      "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")
-  parser.add_argument(
-      "--ios_use_simulator", action=argparse.BooleanOptionalAction, help="Build for Apple simulator.")`
-      );
-      // Add iOS/tvOS OS/CPU mapping
-      content = content.replace(
-        `if os == "mac":
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "Darwin", target_cpu_map[cpu]
-
-  if os == "win":`,
-        `if os == "mac":
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "Darwin", target_cpu_map[cpu]
-
-  if os in ("ios", "tvos"):
-    target_cpu_map = {
-      "arm64": "arm64",
-      "x64": "x86_64",
-    }
-    return "tvOS" if os == "tvos" else "iOS", target_cpu_map[cpu]
-
-  if os == "win":`
-      );
-      fs.writeFileSync(filePath, content);
-    }
-    // Add iOS/tvOS support to Dawn build_dawn.py
-    {
-      const filePath = `${SkiaSrc}/third_party/dawn/build_dawn.py`;
-      let content = fs.readFileSync(filePath, "utf-8");
-      content = content.replace(
-        `if target_os == "Darwin" or target_os == "iOS":
-    configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={target_cpu}")
-
-  env = os.environ.copy()`,
-        `if target_os in ("Darwin", "iOS", "tvOS"):
-    configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={target_cpu}")
-
-  if target_os in ("iOS", "tvOS"):
-    configure_cmd.append("-DTINT_BUILD_CMD_TOOLS=OFF")
-    # iphoneos/iphonesimulator, appletvos/appletvsimulator
-    sdk = "iphone" if target_os == "iOS" else "appletv"
-    sdk += "simulator" if args.ios_use_simulator else "os"
-    configure_cmd.append(f"-DCMAKE_OSX_SYSROOT={sdk}")
-
-  env = os.environ.copy()`
-      );
-      fs.writeFileSync(filePath, content);
-    }
-    // Fix Dawn BUILD.gn for iOS (Cocoa.framework is macOS only)
-    {
-      const filePath = `${SkiaSrc}/third_party/dawn/BUILD.gn`;
-      let content = fs.readFileSync(filePath, "utf-8");
-      content = content.replace(
-        `"Metal.framework",
-      "QuartzCore.framework",
-      "Cocoa.framework",
-    ]
-  }
-}`,
-        `"Metal.framework",
-      "QuartzCore.framework",
-    ]
-    if (is_mac && !is_catalyst) {
-      frameworks += [ "Cocoa.framework" ]
-    }
-  }
-}`
-      );
-      // Add ios_use_simulator argument passing
-      content = content.replace(
-        `if (is_android) {
-    args += [
-      "--android_ndk_path=" + ndk,
-      "--android_platform=android-" + ndk_api,
-    ]
-  }
-
-  if (dawn_enable_d3d11) {`,
-        `if (is_android) {
-    args += [
-      "--android_ndk_path=" + ndk,
-      "--android_platform=android-" + ndk_api,
-    ]
-  }
-  if (is_ios && ios_use_simulator) {
-    args += [ "--ios_use_simulator" ]
-  }
-
-  if (dawn_enable_d3d11) {`
-      );
-      fs.writeFileSync(filePath, content);
-    }
-    // Catalyst uses the macOS SDK with an iOS ABI and deployment target.
-    const catalystPatch = path.join(__dirname, "skia-catalyst.patch");
-    $(`git apply ${catalystPatch}`);
-    // A pipeline that failed to build crashed insertRecording instead of
-    // failing it (https://skia-review.googlesource.com/c/skia/+/1421717).
-    const nullPipelinePatch = path.join(
-      __dirname,
-      "skia-graphite-null-pipeline.patch"
-    );
-    $(`git apply ${nullPipelinePatch}`);
-    // Recorder::makeDeferredCanvas takes the surface props the canvas a view
-    // records into draws with, e.g. device independent fonts
-    // (https://skia-review.googlesource.com/c/skia/+/1421716).
-    const deferredCanvasPropsPatch = path.join(
-      __dirname,
-      "skia-graphite-deferred-canvas-props.patch"
-    );
-    $(`git apply ${deferredCanvasPropsPatch}`);
-    // The GN build compiles the same Dawn checkout as build-dawn.ts.
-    // Without this, Mac Catalyst compilation will be failed.
-    applyDawnPatches();
-    console.log("Patches applied successfully");
-  }
   // Keep the separately built Dawn library and headers in libs/dawn.
   for (const { platform } of buildTargets) {
     $(`rm -rf ${PackageRoot}/${configurations[platform].outputRoot}`);

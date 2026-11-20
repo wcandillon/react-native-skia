@@ -1,4 +1,7 @@
-[apple] Build Mac Catalyst with the iOS ABI and macOS SDK
+[apple] Configure Apple architectures, deployment targets, and Mac Catalyst
+
+Build arm64 without arm64e, which Apple simulators do not support.
+Use tvOS device/simulator deployment flags instead of the iOS equivalents.
 
 Overriding flags in build scripts is not enough: Skia still sets macOS target
 flags, and Dawn has its own CMake build. Mixing macOS and Catalyst objects
@@ -8,36 +11,70 @@ makes xcodebuild -create-xcframework fail:
 Catalyst also needs the macOS SDK's iOSSupport headers and frameworks.
 Flags alone cannot fix Dawn's iOS-only Metal feature-set checks, which fail:
   error: '...' is unavailable: not available on macCatalyst
-The source guards for those checks are in metal-maccatalyst.patch.
+The source guards for those checks are in metal-platforms.patch.
 
 Declare the Catalyst environment in GN and set its compiler/assembler/linker
-targets. Use ios_min_target for both Catalyst and macOS deployment targets;
-each target has its own GN build arguments.
-
-Drop this patch when the pinned Skia includes equivalent Catalyst support.
+targets. Use ios_min_target for Mac Catalyst and macos_min_target for native
+macOS and build-time host generators. GN also builds host tools during
+cross-compilation; they must not inherit the mobile deployment target or
+Catalyst/simulator environment.
 
 ---
+# Declare the Catalyst environment and an independent macOS host deployment floor.
+diff --git a/gn/BUILDCONFIG.gn b/gn/BUILDCONFIG.gn
 --- a/gn/BUILDCONFIG.gn
 +++ b/gn/BUILDCONFIG.gn
-@@ -34,6 +34,7 @@
+@@ -34,6 +34,9 @@
    ios_min_target = ""
++  # macOS host generators need their own floor, separate from mobile targets.
++  macos_min_target = "14.0"
    ios_use_simulator =
        target_os == "ios" && (target_cpu == "x86" || target_cpu == "x64")
 +  target_environment = ""
 
    # Enable -H, which prints the include tree during compilation.
    # For use by external tools for analyzing include files.
-@@ -68,6 +69,7 @@
+@@ -68,6 +71,7 @@
  is_tvos = current_os == "tvos"
  is_linux = current_os == "linux"
  is_mac = current_os == "mac"
-+is_catalyst = target_environment == "catalyst"
++is_catalyst = is_mac && target_environment == "catalyst"
  is_wasm = current_os == "wasm"
  is_win = current_os == "win"
 
+# Set supported architectures and tvOS/Catalyst deployment flags.
+diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
 --- a/gn/skia/BUILD.gn
 +++ b/gn/skia/BUILD.gn
-@@ -264,44 +264,55 @@
+@@ -193,8 +193,6 @@
+       _arch_flags = [
+         "-arch",
+         "arm64",
+-        "-arch",
+-        "arm64e",
+       ]
+     } else if (current_cpu == "x86") {
+       _arch_flags = [
+@@ -232,7 +230,17 @@
+                ] + _arch_flags
+     libs += [ "objc" ]
+     if (ios_min_target != "") {
+-      if (ios_use_simulator) {
++      if (is_tvos) {
++        if (ios_use_simulator) {
++          cflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
++          asmflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
++          ldflags += [ "-mappletvsimulator-version-min=$ios_min_target" ]
++        } else {
++          cflags += [ "-mappletvos-version-min=$ios_min_target" ]
++          asmflags += [ "-mappletvos-version-min=$ios_min_target" ]
++          ldflags += [ "-mappletvos-version-min=$ios_min_target" ]
++        }
++      } else if (ios_use_simulator) {
+         cflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+         asmflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+         ldflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+@@ -264,44 +272,57 @@
          "-isysroot",
          xcode_sysroot,
        ]
@@ -79,9 +116,9 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
 -        "-target",
 -        "arm64-apple-macos11",
 -      ]
-+    assert(ios_min_target != "",
-+           "ios_min_target is required for macOS and Mac Catalyst")
 +    if (is_catalyst) {
++      assert(ios_min_target != "",
++             "ios_min_target is required for Mac Catalyst")
 +      if (current_cpu == "arm64") {
 +        _mac_target = "arm64-apple-ios${ios_min_target}-macabi"
 +      } else {
@@ -101,10 +138,12 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
 -        "x86_64-apple-macos11",
 -      ]
 -    }
++      assert(macos_min_target != "",
++             "macos_min_target is required for macOS")
 +      if (current_cpu == "arm64") {
-+        _mac_target = "arm64-apple-macos${ios_min_target}"
++        _mac_target = "arm64-apple-macos${macos_min_target}"
 +      } else {
-+        _mac_target = "x86_64-apple-macos${ios_min_target}"
++        _mac_target = "x86_64-apple-macos${macos_min_target}"
 +      }
 +    }
 +    asmflags += [
@@ -122,3 +161,19 @@ Drop this patch when the pinned Skia includes equivalent Catalyst support.
    }
 
    if (is_canvaskit) {
+# Clear destination-specific environment flags for macOS host tools.
+diff --git a/gn/toolchain/BUILD.gn b/gn/toolchain/BUILD.gn
+--- a/gn/toolchain/BUILD.gn
++++ b/gn/toolchain/BUILD.gn
+@@ -414,6 +414,11 @@
+     toolchain_args = {
+       current_cpu = invoker.cpu
+       current_os = invoker.os
++      if (invoker.os == "mac") {
++        # Host generators run on macOS, independently of the destination SDK.
++        target_environment = ""
++        ios_use_simulator = false
++      }
+     }
+   }
+ }
