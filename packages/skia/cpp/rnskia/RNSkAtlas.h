@@ -82,7 +82,7 @@ inline void writeAtlasTriangles(SkSpan<const SkRSXform> xform,
 // effect or mask filter, and its shader is replaced by the atlas sampled with
 // `sampling`. When `colors` is not empty, `mode` blends each sprite's color
 // with the atlas. Nothing is drawn when the spans are empty or their sizes do
-// not match.
+// not match. Under a perspective matrix, SkCanvas::drawAtlas draws instead.
 inline void drawAtlasAsVertices(SkCanvas *canvas, const SkImage *atlas,
                                 SkSpan<const SkRSXform> xform,
                                 SkSpan<const SkRect> tex,
@@ -92,6 +92,16 @@ inline void drawAtlasAsVertices(SkCanvas *canvas, const SkImage *atlas,
   if (canvas == nullptr || atlas == nullptr || xform.empty() ||
       tex.size() != xform.size() ||
       (!colors.empty() && colors.size() != xform.size())) {
+    return;
+  }
+  // Graphite's vertices render step writes the draw's depth without scaling
+  // it by w (src/gpu/graphite/render/VerticesRenderStep.cpp), so under a
+  // perspective matrix the depth test drops parts of the triangles and the
+  // sprites come out cut or missing. Its drawAtlas draws each sprite with a
+  // render step that handles perspective, so a projected atlas uses it.
+  if (canvas->getTotalMatrix().hasPerspective()) {
+    canvas->drawAtlas(atlas, xform, tex, colors, mode, sampling, nullptr,
+                      paint);
     return;
   }
   const bool hasColors = !colors.empty();
