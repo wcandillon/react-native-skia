@@ -1446,7 +1446,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-webgpu (0.20.0):
+  - react-native-webgpu (0.22.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2537,8 +2537,8 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 0207d6133274a7cbfc3d0dae326e3055c8cfcf9e
   React-mutationobservernativemodule: b97a67c29f724d18a92379e7390f24350acb433a
   react-native-safe-area-context: b1c9f15a36e597e9cef4c5526e209ef2645bc2e0
-  react-native-skia: bf1185de616420b621627518154096089037289a
-  react-native-webgpu: 2e5f8b1e611657ed77906c75b48fcdbb34bc9f8e
+  react-native-skia: e9071ed75d1eaca8ba4c4c05aab5a8a81d544d19
+  react-native-webgpu: f23a0dc4561481cb038c978a4b5f53c8dd58596a
   React-NativeModulesApple: 8cfb2f308f48c48068c96b932e7f0e4297c23342
   React-networking: 3325cf73ecbdaacab0da91260b094baf36061a56
   React-oscompat: a776760fdfa152e12114f8c30d833963daac27e1
@@ -2587,6 +2587,6 @@ SPEC CHECKSUMS:
   SocketRocket: 37aec555668fb852ec12e3c0de59a86ca58f0871
   Yoga: d1c536142c5ff8ec8cd856ab2a7c227a1d875c8e
 
-PODFILE CHECKSUM: e08296f4a213e67a2925ec40737845822ce5603d
+PODFILE CHECKSUM: 9c43619d7bc85d2012f157867058836795fe61ff
 
 COCOAPODS: 1.16.2
