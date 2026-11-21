@@ -108,6 +108,61 @@ describe("Offscreen Drawings", () => {
     expect(image).not.toBeNull();
     await checkImage(image!, docPath("offscreen/circle.png"));
   });
+  itRunsE2eOnly(
+    "Should still draw what it holds after the delay its thread trims at",
+    async () => {
+      const size = 32;
+      // No async/await: the code runs through Hermes' eval on the device.
+      const raw = await surface.eval(
+        (Skia, ctx) => {
+          const source = Skia.Surface.MakeOffscreen(ctx.size, ctx.size)!;
+          source.getCanvas().clear(Skia.Color("cyan"));
+          source.flush();
+          const shared = source.asImage();
+          const snapshot = source.makeImageSnapshot();
+          // A surface let go of has its thread trim its recorders two seconds
+          // later (RNSkThreadPool::kIdleDelay), everything it can since the
+          // thread is idle by then: past that delay, what the thread still
+          // holds draws as before.
+          Skia.Surface.MakeOffscreen(ctx.size, ctx.size)!.dispose();
+          return new Promise((resolve) => setTimeout(resolve, 3000)).then(
+            () => {
+              const target = Skia.Surface.MakeOffscreen(
+                ctx.size * 3,
+                ctx.size
+              )!;
+              const canvas = target.getCanvas();
+              canvas.drawImage(shared, 0, 0);
+              canvas.drawImage(snapshot, ctx.size, 0);
+              target.flush();
+              source.getCanvas().clear(Skia.Color("red"));
+              source.flush();
+              canvas.drawImage(source.makeImageSnapshot(), ctx.size * 2, 0);
+              target.flush();
+              return target.makeImageSnapshot().encodeToBase64();
+            }
+          );
+        },
+        { size }
+      );
+      const { Skia } = importSkia();
+      const image = Skia.Image.MakeFromEncoded(Skia.Data.fromBase64(raw))!;
+      const colorOfSquare = async (square: number) =>
+        nameColor(
+          await image.readPixels(square * size + size / 2, size / 2, {
+            width: 1,
+            height: 1,
+            colorType: ColorType.RGBA_8888,
+            alphaType: AlphaType.Unpremul,
+          })
+        );
+      expect(await Promise.all([0, 1, 2].map(colorOfSquare))).toEqual([
+        "cyan",
+        "cyan",
+        "red",
+      ]);
+    }
+  );
 });
 
 describe("isOnMainThread", () => {

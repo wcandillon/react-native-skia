@@ -1,5 +1,8 @@
 #pragma once
 
+#include <utility>
+
+#include "api/JsiSkDispatcher.h"
 #include "rnsurface/RenderThread.h"
 
 namespace RNSkia {
@@ -10,6 +13,9 @@ namespace RNSkia {
  * platform views post the window lifecycle and the presents to it, the
  * frame scheduler and the vsync live on it. One per library instance: a
  * compile stall of a Skia present must not delay react-native-webgpu's.
+ * Its dispatcher runs its queue from the thread's loop (see
+ * Dispatcher::bindCurrentThread), so that the thread trims what it records
+ * once idle (see RNSkThreadTrims).
  */
 #if defined(__ANDROID__)
 /**
@@ -28,6 +34,11 @@ inline rnsurface::RenderThread &presentThread() {
 #if defined(__ANDROID__)
     made->post(attachPresentThread);
 #endif
+    made->post([made]() {
+      Dispatcher::bindCurrentThread([made](Dispatcher::Operation operation) {
+        made->post(std::move(operation));
+      });
+    });
     return made;
   }();
   return *thread;

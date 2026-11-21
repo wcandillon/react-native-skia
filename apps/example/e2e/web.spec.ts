@@ -36,6 +36,7 @@ const noCanvas: Screen[] = [
   "FirstFrameEmpty",
   "ParagraphPath",
   "GlyphBounds",
+  "SurfaceRelease",
 ];
 
 // Expected uncaught errors, e.g. from examples that demo error handling.

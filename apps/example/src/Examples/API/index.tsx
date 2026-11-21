@@ -37,6 +37,7 @@ import { StressTest2 } from "./StressTest2";
 import { StressTest3 } from "./StressTest3";
 import { StressTest4 } from "./StressTest4";
 import { PictureViewCrashTest } from "./PictureViewCrashTest";
+import { SurfaceRelease } from "./SurfaceRelease";
 import { FirstFrame, FirstFrameEmpty } from "./FirstFrame";
 import { ZIndexExample } from "./ZIndex";
 import { PictureBug } from "./PictureBug";
@@ -297,6 +298,13 @@ export const API = () => {
         component={PictureViewCrashTest}
         options={{
           title: "💥 PictureView Race Condition",
+        }}
+      />
+      <Stack.Screen
+        name="SurfaceRelease"
+        component={SurfaceRelease}
+        options={{
+          title: "🗑️ Surface Release",
         }}
       />
       <Stack.Screen

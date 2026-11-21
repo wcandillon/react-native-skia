@@ -143,6 +143,10 @@ export const examples = [
     title: "💥 PictureView Race Condition",
   },
   {
+    screen: "SurfaceRelease",
+    title: "🗑️ Surface Release",
+  },
+  {
     screen: "FirstFrame",
     title: "🎬 First Frame",
   },
