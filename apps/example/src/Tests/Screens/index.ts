@@ -6,8 +6,30 @@ import {
   ClippedSubviewsStateChanged,
   ClippedSubviewsTwice,
 } from "./ClippedSubviews";
+import { Empty } from "./Empty";
+import { GpuReplacement } from "./GpuReplacement";
 import { GraphitePendingFrames } from "./GraphitePendingFrames";
 import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
+import {
+  CanvasAboveImageView,
+  ImageView,
+  ImageViewDuringLoss,
+  ImageViewInset,
+  ImageViewRounded,
+  ImageViewRoundedBorder,
+  ImageViewRoundedShadow,
+} from "./ImageView";
+import {
+  ImageViewMinified,
+  ImageViewMinifiedDuringLoss,
+  ImageViewMinifiedGpu,
+  ImageViewMinifiedOdd,
+} from "./ImageViewMinified";
+import {
+  ImageViewOversized,
+  ImageViewOversizedWhole,
+} from "./ImageViewOversized";
+import { ImageViewWide } from "./ImageViewWide";
 import { IsOnMainThread } from "./IsOnMainThread";
 import { OnLayout } from "./OnLayout";
 import { ResizeGrow, ResizeShrink } from "./Resize";
@@ -28,15 +50,31 @@ const settling = (component: FC): Screen => ({
 });
 
 export const Screens: Readonly<Record<string, Screen>> = {
+  CanvasAboveImageView: shown(CanvasAboveImageView),
   ClippedSubviewsBack: settling(ClippedSubviewsBack),
   ClippedSubviewsSharedValueChanged: settling(
     ClippedSubviewsSharedValueChanged
   ),
   ClippedSubviewsStateChanged: settling(ClippedSubviewsStateChanged),
   ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
+  Empty: shown(Empty),
+  GpuReplacement: shown(GpuReplacement),
   GraphitePendingFrames: settling(GraphitePendingFrames),
   GraphiteView: shown(GraphiteView),
   GraphiteViewTransform: shown(GraphiteViewTransform),
+  ImageView: shown(ImageView),
+  ImageViewDuringLoss: shown(ImageViewDuringLoss),
+  ImageViewMinified: shown(ImageViewMinified),
+  ImageViewMinifiedDuringLoss: shown(ImageViewMinifiedDuringLoss),
+  ImageViewMinifiedGpu: shown(ImageViewMinifiedGpu),
+  ImageViewMinifiedOdd: shown(ImageViewMinifiedOdd),
+  ImageViewOversized: shown(ImageViewOversized),
+  ImageViewOversizedWhole: shown(ImageViewOversizedWhole),
+  ImageViewInset: shown(ImageViewInset),
+  ImageViewRounded: shown(ImageViewRounded),
+  ImageViewRoundedBorder: shown(ImageViewRoundedBorder),
+  ImageViewRoundedShadow: shown(ImageViewRoundedShadow),
+  ImageViewWide: shown(ImageViewWide),
   IsOnMainThread: shown(IsOnMainThread),
   OnLayout: shown(OnLayout),
   ResizeGrow: shown(ResizeGrow),

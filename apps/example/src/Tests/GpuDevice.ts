@@ -18,10 +18,21 @@ export const getSharedDevice = () => {
   return sharedDevice;
 };
 
+// Told as a loss is forced, before Skia replaces the device: a screen shows
+// something new during the loss.
+const lossForcedListeners = new Set<() => void>();
+export const onGpuDeviceLossForced = (listener: () => void) => {
+  lossForcedListeners.add(listener);
+  return () => {
+    lossForcedListeners.delete(listener);
+  };
+};
+
 // Loses the GPU device on purpose: the device is shared with
 // react-native-webgpu, whose test hook asks Dawn to lose it.
 export const forceGpuDeviceLoss = () => {
   (
     getSharedDevice() as GPUDevice & { forceLossForTesting: () => void }
   ).forceLossForTesting();
+  lossForcedListeners.forEach((listener) => listener());
 };

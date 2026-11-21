@@ -6,9 +6,11 @@
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -24,8 +26,11 @@
 
 #include "RNDawnUtils.h"
 #include "RNImageProvider.h"
+#include "RNSkDeviceUses.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkPresentThread.h"
+#include "RNSkWindowSurface.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
@@ -210,9 +215,16 @@ public:
     return foregroundFlag().load(std::memory_order_acquire);
   }
 
-  /** Sets isForeground(); the platform calls it from its main thread. */
+  /**
+   Sets isForeground(); the platform calls it from its main thread. Back in
+   the foreground, a lost device is replaced now (see requestRecovery), also
+   in an app that shows no canvas.
+   */
   static void setForeground(bool foreground) noexcept {
     foregroundFlag().store(foreground, std::memory_order_release);
+    if (foreground) {
+      requestRecovery();
+    }
   }
 
   /**
@@ -232,11 +244,11 @@ public:
   /**
    Replaces a lost device now rather than when the backoff allows (see
    scheduleRecovery): the app came back to the foreground, where GPU work
-   is allowed again. Nothing happens unless the device in use is lost. Any
-   thread.
+   is allowed again. Nothing happens unless the device in use is lost, and
+   the GPU is never probed for it. Any thread.
    */
   static void requestRecovery() noexcept {
-    auto *instance = tryGetInstance();
+    auto *instance = probedInstance();
     if (instance == nullptr) {
       return;
     }
@@ -289,11 +301,22 @@ public:
    */
   void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
                   std::function<void(ReadResult)> callback) {
+    readPixels(image, srcRect,
+               image->imageInfo().makeDimensions(srcRect.size()),
+               std::move(callback));
+  }
+
+  /**
+   Same as readPixels(), into `info`, which may be smaller than `srcRect`.
+   The callback runs under the context's lock, where the rows stay valid.
+   */
+  void readPixels(const sk_sp<SkImage> &image, const SkIRect &srcRect,
+                  const SkImageInfo &info,
+                  std::function<void(ReadResult)> callback) {
     struct Request {
       std::function<void(ReadResult)> callback;
       std::shared_ptr<std::atomic<bool>> delivered;
     };
-    auto info = image->imageInfo().makeDimensions(srcRect.size());
     Readback readback;
     {
       std::unique_lock<std::mutex> lock(_mutex);
@@ -312,7 +335,8 @@ public:
       auto *request = new Request{std::move(callback), readback.delivered};
       current->context->asyncRescaleAndReadPixels(
           image.get(), info, srcRect, SkImage::RescaleGamma::kSrc,
-          SkImage::RescaleMode::kNearest,
+          // Graphite ignores the mode when `info` has the size of `srcRect`.
+          SkImage::RescaleMode::kRepeatedLinear,
           [](void *context, ReadResult result) {
             auto *request = static_cast<Request *>(context);
             request->callback(std::move(result));
@@ -468,7 +492,7 @@ public:
     // The snap compiles the pipelines the recording needs, inline: GPU work
     // the warmup stays behind (see RNSkGpuActivity), as is the run.
     RNSkGpuActivity::Scope activity;
-    auto recording = recorder->snap();
+    auto recording = snap(recorder);
     if (recording == nullptr) {
       return false;
     }
@@ -492,6 +516,19 @@ public:
     }
     current->context->submit(syncToCpu);
     return inserted;
+  }
+
+  /**
+   Snaps what the recorder recorded, holding the device in use meanwhile
+   (see Generation::uses): the pipelines the snap compiles are on that
+   device, or on one replaced since, which was lost first and on which Dawn
+   compiles nothing. Called on the recorder's thread, without the context
+   lock.
+   */
+  std::unique_ptr<skgpu::graphite::Recording>
+  snap(skgpu::graphite::Recorder *recorder) {
+    RNSkDeviceUses::Use use(_current.load(std::memory_order_acquire)->uses);
+    return recorder->snap();
   }
 
   /**
@@ -645,37 +682,16 @@ public:
     if (!texture) {
       return nullptr;
     }
-
-    // Map the WebGPU format to a Skia color type; fall back to the preferred
-    // color type for formats Skia does not sample.
-    SkColorType colorType =
-        DawnUtils::colorTypeForTextureFormat(format).value_or(
-            DawnUtils::PreferedColorType);
-
-    skgpu::graphite::BackendTexture backendTexture =
-        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
-
-    // Wrap the texture - we use a release proc that adds a reference to the
-    // texture to prevent it from being destroyed while the SkImage is alive
-    struct TextureRef {
-      wgpu::Texture texture;
-    };
-    auto textureRef = new TextureRef{texture};
-
-    return SkImages::WrapTexture(
-        getRecorder(), backendTexture, colorType, kPremul_SkAlphaType, nullptr,
-        [](void *context) {
-          auto ref = static_cast<TextureRef *>(context);
-          delete ref;
-        },
-        textureRef);
+    return wrapTextureImage(getRecorder(), std::move(texture), format, nullptr);
   }
 
   // Create an SkSurface that draws straight into a WebGPU texture (zero-copy).
   // The texture must have RenderAttachment usage; give it TextureBinding too
   // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
   // The surface retains the texture for its lifetime.
-  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+  sk_sp<SkSurface>
+  MakeSurfaceFromTexture(wgpu::Texture texture,
+                         sk_sp<SkColorSpace> colorSpace = nullptr) {
     if (!texture) {
       return nullptr;
     }
@@ -683,25 +699,81 @@ public:
       throw std::runtime_error(
           "MakeSurfaceFromTexture: the texture needs RenderAttachment usage");
     }
+    return wrapTextureSurface(getRecorder(), std::move(texture),
+                              std::move(colorSpace));
+  }
 
-    skgpu::graphite::BackendTexture backendTexture =
-        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+  struct SharedTextureFences {
+    std::vector<wgpu::SharedFence> fences;
+    std::vector<uint64_t> signaledValues;
+    uint64_t generation = 0;
+  };
 
-    struct TextureRef {
-      wgpu::Texture texture;
-    };
-    auto textureRef = new TextureRef{texture};
+  using SharedTextureImport =
+      std::function<wgpu::SharedTextureMemory(const wgpu::Device &)>;
 
-    // The color type is derived from the texture format.
-    return SkSurfaces::WrapBackendTexture(
-        getRecorder(), backendTexture,
-        nullptr, // colorspace
-        nullptr, // surfaceProps
-        [](void *context) {
-          auto ref = static_cast<TextureRef *>(context);
-          delete ref;
-        },
-        textureRef);
+  /**
+   Draws onto the whole memory `importTarget` imports, `draw` given the
+   memory `importSource` imports as an image, into the device of the calling
+   thread's recorder: the memory holds the drawing once the fences signal.
+   Throws when no recorder can be made.
+   */
+  std::optional<SharedTextureFences> drawIntoSharedTexture(
+      const SharedTextureImport &importTarget, sk_sp<SkColorSpace> colorSpace,
+      const std::function<void(SkCanvas *, const sk_sp<SkImage> &)> &draw,
+      const SharedTextureImport &importSource = nullptr) {
+    auto &slot = threadSlot();
+    auto *recorder = currentRecorder(slot);
+    auto *current = _current.load(std::memory_order_acquire);
+    if (current->id != slot.generation) {
+      return std::nullopt;
+    }
+    const auto &device = current->backendContext.fDevice;
+    auto target =
+        SharedTextureAccess::begin(importTarget(device),
+                                   wgpu::TextureUsage::RenderAttachment |
+                                       wgpu::TextureUsage::TextureBinding,
+                                   /* initialized= */ false);
+    if (!target.has_value()) {
+      return std::nullopt;
+    }
+    auto source =
+        importSource != nullptr
+            ? SharedTextureAccess::begin(importSource(device),
+                                         wgpu::TextureUsage::TextureBinding,
+                                         /* initialized= */ true)
+            : std::optional<SharedTextureAccess>();
+    if (importSource != nullptr && !source.has_value()) {
+      return std::nullopt;
+    }
+    auto surface =
+        wrapTextureSurface(recorder, target->texture(), std::move(colorSpace));
+    auto sourceImage =
+        source.has_value()
+            ? wrapTextureImage(recorder, source->texture(),
+                               source->texture().GetFormat(), nullptr)
+            : nullptr;
+    if (surface == nullptr || (source.has_value() && sourceImage == nullptr)) {
+      return std::nullopt;
+    }
+    draw(surface->getCanvas(), sourceImage);
+    if (!submitRecording(recorder)) {
+      return std::nullopt;
+    }
+    auto fences = target->end();
+    if (!fences.has_value()) {
+      return std::nullopt;
+    }
+    fences->generation = slot.generation;
+    return fences;
+  }
+
+  uint32_t getMaxTextureDimension2D() {
+    wgpu::Limits limits{};
+    if (getWGPUDevice().GetLimits(&limits) != wgpu::Status::Success) {
+      return 0;
+    }
+    return limits.maxTextureDimension2D;
   }
 
   // Create a WebGPU texture from an SkImage
@@ -776,32 +848,114 @@ public:
     return wgpu::Instance(instance->Get()).CreateSurface(&surfaceDescriptor);
   }
 
-  /**
-   Destroys the Dawn device of a replaced generation (see generation()), so
-   that Dawn runs the deletions it deferred on it: a lost device never ticks
-   again, and on Android the VkSurfaceKHR of a window's old swapchain keeps
-   the window connected until then, so that no swapchain can be made over it
-   on the new device (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR). The Generation, its
-   device handle and its Graphite context stay: what still points at them
-   keeps failing validation, as destroyed rather than lost. Every
-   wgpu::Surface configured on the device must be gone first: Dawn does not
-   destroy swapchains with their device, and detaching one afterwards
-   dereferences the device's deleted fenced deleter (see
-   RNSkWindowSurface::ensureDevice). Nothing happens for the device in use,
-   or for one destroyed already. Any thread.
-   */
-  void destroyRetiredDevice(uint64_t generation) {
-    std::lock_guard<std::mutex> lock(_mutex);
-    for (auto *retired : _retired) {
-      if (retired->id == generation && !retired->deviceDestroyed) {
-        retired->deviceDestroyed = true;
-        retired->backendContext.fDevice.Destroy();
-        return;
+private:
+  // From BeginAccess to EndAccess, which runs however the access ends.
+  class SharedTextureAccess {
+  public:
+    static std::optional<SharedTextureAccess>
+    begin(wgpu::SharedTextureMemory memory, wgpu::TextureUsage usage,
+          bool initialized) {
+      wgpu::SharedTextureMemoryProperties properties{};
+      if (memory == nullptr ||
+          memory.GetProperties(&properties) != wgpu::Status::Success ||
+          (properties.usage & usage) != usage) {
+        return std::nullopt;
       }
+      wgpu::TextureDescriptor descriptor{};
+      descriptor.format = properties.format;
+      descriptor.usage = usage;
+      descriptor.size = properties.size;
+      auto texture = memory.CreateTexture(&descriptor);
+      wgpu::SharedTextureMemoryBeginAccessDescriptor access{};
+      access.initialized = initialized;
+#ifdef __ANDROID__
+      // Pixels to keep are acquired from GENERAL, as Dawn's Android layer does:
+      // from UNDEFINED, Vulkan may discard them.
+      constexpr int32_t kGeneral = 1; // VK_IMAGE_LAYOUT_GENERAL
+      wgpu::SharedTextureMemoryVkImageLayoutBeginState layout{};
+      layout.oldLayout = initialized ? kGeneral : 0;
+      layout.newLayout = initialized ? kGeneral : 0;
+      access.nextInChain = &layout;
+#endif
+      if (texture == nullptr ||
+          memory.BeginAccess(texture, &access) != wgpu::Status::Success) {
+        return std::nullopt;
+      }
+      return SharedTextureAccess(std::move(memory), std::move(texture));
     }
+
+    SharedTextureAccess(SharedTextureAccess &&other) noexcept
+        : _memory(std::move(other._memory)),
+          _texture(std::move(other._texture)) {}
+    SharedTextureAccess &operator=(SharedTextureAccess &&) = delete;
+    SharedTextureAccess(const SharedTextureAccess &) = delete;
+    SharedTextureAccess &operator=(const SharedTextureAccess &) = delete;
+
+    ~SharedTextureAccess() { (void)end(); }
+
+    const wgpu::Texture &texture() const { return _texture; }
+
+    std::optional<SharedTextureFences> end() {
+      if (_texture == nullptr) {
+        return std::nullopt;
+      }
+      auto texture = std::move(_texture);
+      wgpu::SharedTextureMemoryEndAccessState state{};
+#ifdef __ANDROID__
+      wgpu::SharedTextureMemoryVkImageLayoutEndState layout{};
+      state.nextInChain = &layout;
+#endif
+      if (_memory.EndAccess(texture, &state) != wgpu::Status::Success) {
+        return std::nullopt;
+      }
+      SharedTextureFences fences;
+      for (size_t i = 0; i < state.fenceCount; i++) {
+        fences.fences.push_back(state.fences[i]);
+        fences.signaledValues.push_back(
+            i < state.signaledValueCount ? state.signaledValues[i] : 0);
+      }
+      return fences;
+    }
+
+  private:
+    SharedTextureAccess(wgpu::SharedTextureMemory memory, wgpu::Texture texture)
+        : _memory(std::move(memory)), _texture(std::move(texture)) {}
+
+    wgpu::SharedTextureMemory _memory;
+    wgpu::Texture _texture;
+  };
+
+  // A format Skia does not sample takes the preferred color type.
+  static sk_sp<SkImage> wrapTextureImage(skgpu::graphite::Recorder *recorder,
+                                         wgpu::Texture texture,
+                                         wgpu::TextureFormat format,
+                                         sk_sp<SkColorSpace> colorSpace) {
+    const SkColorType colorType =
+        DawnUtils::colorTypeForTextureFormat(format).value_or(
+            DawnUtils::PreferedColorType);
+    auto backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkImages::WrapTexture(recorder, backendTexture, colorType,
+                                 kPremul_SkAlphaType, std::move(colorSpace),
+                                 &releaseTexture,
+                                 new wgpu::Texture(std::move(texture)));
   }
 
-private:
+  static sk_sp<SkSurface>
+  wrapTextureSurface(skgpu::graphite::Recorder *recorder, wgpu::Texture texture,
+                     sk_sp<SkColorSpace> colorSpace) {
+    auto backendTexture =
+        skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkSurfaces::WrapBackendTexture(
+        recorder, backendTexture, std::move(colorSpace),
+        /* props= */ nullptr, &releaseTexture,
+        new wgpu::Texture(std::move(texture)));
+  }
+
+  static void releaseTexture(void *texture) {
+    delete static_cast<wgpu::Texture *>(texture);
+  }
+
   struct Probe {
     DawnContext *instance = nullptr;
     GpuInfo info;
@@ -811,8 +965,9 @@ private:
    A device and the Graphite context on it (see generation()). Never
    destroyed: Dawn reports its loss from any of its threads, at any time,
    and the recorders, surfaces and images made on it keep pointing at it.
-   The Dawn device itself is destroyed once replaced and let go of by the
-   windows (see destroyRetiredDevice); the handle stays valid.
+   The Dawn device itself is destroyed when it is replaced (see recover),
+   once the calls into it from outside the context lock have ended (see
+   uses); the handle stays valid.
    */
   struct Generation {
     uint64_t id = 0;
@@ -821,9 +976,12 @@ private:
     DawnUtils::DeviceLostListener listener;
     skgpu::graphite::DawnBackendContext backendContext;
     std::unique_ptr<skgpu::graphite::Context> context;
-    // Whether the device was destroyed (see destroyRetiredDevice). Guarded
-    // by _mutex.
-    bool deviceDestroyed = false;
+    // Whether a device to replace this lost one was made, and is being put in
+    // its place (see recover). Guarded by _mutex.
+    bool replacementMade = false;
+    // Whether its replacement was scheduled since it was lost (see
+    // claimRecoveryLocked). Guarded by _lostMutex.
+    bool recoveryClaimed = false;
     // Set once, by the loss callback (any thread, see onDeviceLost); the
     // strings are guarded by _lostMutex.
     std::atomic<bool> lost{false};
@@ -831,6 +989,9 @@ private:
     std::string lostMessage;
     // Why the last attempt to replace the device failed, if it did.
     std::string recoveryFailure;
+    // The calls into the device from outside the context lock, which its
+    // destruction waits out.
+    RNSkDeviceUses uses{lost};
   };
 
   /**
@@ -894,9 +1055,22 @@ private:
         probe->info.error = e.what();
         RNSkLogger::logToConsole(probe->info.error);
       }
+      probed().store(probe, std::memory_order_release);
       return probe;
     }();
     return *result;
+  }
+
+  static std::atomic<const Probe *> &probed() noexcept {
+    static std::atomic<const Probe *> result{nullptr};
+    return result;
+  }
+
+  // The context, nullptr before the GPU is probed and without a GPU. The
+  // platform's main thread calls into it at launch, where a probe is too slow.
+  static DawnContext *probedInstance() noexcept {
+    const auto *result = probed().load(std::memory_order_acquire);
+    return result == nullptr ? nullptr : result->instance;
   }
 
   // Loss and recovery --------------------------------------------------------
@@ -905,7 +1079,7 @@ private:
    Dawn's loss callback for `generation`, on whichever thread Dawn detects
    the loss: possibly inside a context call of this very thread, which holds
    the context lock, so nothing here takes it. Records the loss and, for the
-   device in use, schedules its replacement.
+   device in use, schedules its replacement (see claimRecoveryLocked).
    */
   void onDeviceLost(Generation *generation, wgpu::DeviceLostReason reason,
                     const std::string &message) noexcept {
@@ -918,11 +1092,9 @@ private:
       generation->lostMessage =
           "React Native Skia lost its GPU device. Reason: " + message;
       generation->lost.store(true, std::memory_order_release);
-    }
-    if (generation != _current.load(std::memory_order_acquire)) {
-      // A device already replaced (or one still being made, which recover()
-      // checks once it is in place): nothing more to do.
-      return;
+      if (!claimRecoveryLocked(generation)) {
+        return;
+      }
     }
     RNSkLogger::logToConsole("%s", generation->lostMessage.c_str());
     // A device lost right after it was made did not take: GPU work is
@@ -930,6 +1102,23 @@ private:
     const bool shortLived =
         std::chrono::steady_clock::now() - generation->created < kShortLived;
     scheduleRecovery(generation, shortLived);
+  }
+
+  /**
+   Whether the replacement of `generation` is the caller's to schedule: the
+   device in use, lost, and not claimed yet. A device lost while it is put in
+   place is claimed by onDeviceLost or by recover(), whichever reads the
+   other's write here: exactly one of them. A device already replaced, or
+   one still being made, is not. Called with _lostMutex held.
+   */
+  bool claimRecoveryLocked(Generation *generation) {
+    if (generation != _current.load(std::memory_order_acquire) ||
+        !generation->lost.load(std::memory_order_relaxed) ||
+        generation->recoveryClaimed) {
+      return false;
+    }
+    generation->recoveryClaimed = true;
+    return true;
   }
 
   /**
@@ -971,19 +1160,29 @@ private:
   }
 
   /**
-   Replaces `lost` with a new device and Graphite context, unless it was
-   replaced meanwhile, then tells the loss listeners. The new device is
-   validated (see DawnUtils::requestDevice): a resource of the lost device
-   that reaches it is refused with an error rather than handed to the
-   driver. A replacement that could not be made, or that was lost before it
-   was in place, is tried again (see scheduleRecovery).
+   Replaces `lost`, the device in use, with a new device and Graphite
+   context, unless another recovery did or does (see requestRecovery);
+   destroys the lost device once the new one is in place; and tells the
+   loss listeners. The new device is made here; putting it in place and
+   destroying the lost one run on the thread every window presents on (see
+   replaceOnPresentThread). The lost device is destroyed only after the
+   new one is in place: until then every thread records on its recorders,
+   and Graphite writes into the buffers it keeps mapped on it, which Dawn
+   frees with the device. And before the loss listeners run, so that what
+   it held reads as destroyed once Skia.gpu.lost resolves. The new device
+   is validated (see DawnUtils::requestDevice): a resource of the lost
+   device that reaches it is refused with an error rather than handed to
+   the driver. A replacement that could not be made, or that was lost
+   before it was in place, is tried again (see scheduleRecovery); the lost
+   device stays as it is until one is made.
    */
   void recover(Generation *lost) noexcept {
     LossInfo info;
     Generation *next = nullptr;
     {
       std::lock_guard<std::mutex> lock(_mutex);
-      if (_current.load(std::memory_order_acquire) != lost) {
+      if (_current.load(std::memory_order_acquire) != lost ||
+          lost->replacementMade) {
         return;
       }
       {
@@ -994,10 +1193,7 @@ private:
       }
       try {
         next = createGeneration(/* validate= */ true);
-        _retired.push_back(lost);
-        _current.store(next, std::memory_order_release);
-        RNSkLogger::logToConsole(
-            "React Native Skia replaced its lost GPU device.");
+        lost->replacementMade = true;
       } catch (const std::exception &e) {
         std::lock_guard<std::mutex> lostLock(_lostMutex);
         lost->recoveryFailure =
@@ -1007,19 +1203,69 @@ private:
                                  e.what());
       }
     }
-    if (next != nullptr) {
-      // The textures cached for the lost device are good for nothing on the
-      // new one (see ImageProvider).
-      ImageProvider::invalidateAll();
-    }
     if (next == nullptr) {
       scheduleRecovery(lost, /* failedAttempt= */ true);
-    } else if (next->lost.load(std::memory_order_acquire)) {
-      // Lost while it was being made (its callback found it not in use yet):
-      // GPU work is refused where the app is.
+      notifyLossListeners(info);
+      return;
+    }
+    replaceOnPresentThread(lost, next);
+    RNSkLogger::logToConsole("React Native Skia replaced its lost GPU device.");
+    // The textures cached for the lost device are good for nothing on the
+    // new one (see ImageProvider).
+    ImageProvider::invalidateAll();
+    bool lostMeanwhile = false;
+    {
+      // Lost while it was being put in place: GPU work is refused where the
+      // app is.
+      std::lock_guard<std::mutex> lostLock(_lostMutex);
+      lostMeanwhile = claimRecoveryLocked(next);
+    }
+    if (lostMeanwhile) {
       scheduleRecovery(next, /* failedAttempt= */ true);
     }
     notifyLossListeners(info);
+  }
+
+  /**
+   Has the thread every window presents on (see RNSkPresentThread.h) let go of
+   every window's surface on `lost`, put `next` in its place and destroy the
+   lost device, and waits for it. The tasks there run one after the other, so
+   no present or attach overlaps the task: a window has no lock of its own,
+   and none configures a swapchain on the new device before the lost one is
+   destroyed, which runs the deletions Dawn deferred on it (a lost device
+   never ticks again), the VkSurfaceKHR of each window's old swapchain among
+   them, which keeps the window connected until then
+   (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR on Android). Before it posts the task,
+   it waits for the uses in flight on the lost device (see Generation::uses),
+   the warmup's compiles running at a lower priority than the present
+   thread, which then destroys the device once the uses begun since have
+   ended. The Generation, its device handle and its Graphite context
+   stay: what still points at them keeps failing validation, as destroyed
+   rather than lost. A present in flight holds the thread for as long as
+   Graphite takes to replay its frame, the pipelines it compiles included,
+   and this thread waits as long. Called without a lock; it takes the lost
+   device's uses, then the task takes the windows' list, then the context
+   lock, then the lost device's uses and the context lock again (see the
+   class comment on locks in RNSkWindowSurface).
+   */
+  void replaceOnPresentThread(Generation *lost, Generation *next) {
+    lost->uses.waitForUsesInFlight();
+    auto done = std::make_shared<std::promise<void>>();
+    auto replaced = done->get_future();
+    presentThread().post([this, lost, next, done]() {
+      RNSkWindowSurface::releaseSurfacesOn(lost->id);
+      {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _retired.push_back(lost);
+        _current.store(next, std::memory_order_release);
+      }
+      lost->uses.destroyAfterUses([this, lost]() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        lost->backendContext.fDevice.Destroy();
+      });
+      done->set_value();
+    });
+    replaced.wait();
   }
 
   /**
@@ -1061,8 +1307,8 @@ private:
     // on the warmup thread only.
     RNSkPipelineWarmup::getInstance().start(
         generation->context->makePrecompileContext(),
-        precompileDisplayP3().load(std::memory_order_acquire),
-        &generation->lost, generation->backendContext.fDevice);
+        precompileDisplayP3().load(std::memory_order_acquire), generation->uses,
+        generation->backendContext.fDevice);
     return generation;
   }
 
@@ -1123,8 +1369,9 @@ private:
    Uploads a CPU image (decoded first when encoded) on the upload recorder of
    this thread and submits the upload (see MakeTextureImage), with the
    generation of the device it ran on (see ImageProvider::Upload): no texture
-   when the upload failed or did not run. Throws when no recorder can be
-   made.
+   when the upload failed or did not run. It is recorded as a use of the
+   device in use (see Generation::uses): Graphite writes the pixels into a
+   buffer it keeps mapped on it. Throws when no recorder can be made.
    */
   ImageProvider::Upload upload(const sk_sp<SkImage> &image, bool mipmapped) {
     // A recorder of its own: snapping the recorder of this thread would also
@@ -1132,11 +1379,18 @@ private:
     // only uploads, so it keeps Skia's default image provider rather than
     // the image cache, which uploads through here.
     auto &slot = uploadSlot();
-    auto *recorder = currentRecorder(slot, /* forUploads= */ true);
+    auto *current = _current.load(std::memory_order_acquire);
     ImageProvider::Upload result;
-    result.generation = slot.generation;
-    auto texture =
-        SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
+    result.generation = current->id;
+    skgpu::graphite::Recorder *recorder = nullptr;
+    sk_sp<SkImage> texture;
+    // The device stays the one in use while the use is held, as a lost
+    // device's replacement waits for its uses, and the use ends before the
+    // submit, whose snap takes its own.
+    current->uses.runUnlessLost([&]() {
+      recorder = currentRecorder(slot, /* forUploads= */ true);
+      texture = SkImages::TextureFromImage(recorder, image.get(), {mipmapped});
+    });
     if (texture == nullptr || !submitRecording(recorder)) {
       // Not run: the texture would hold nothing.
       return result;
