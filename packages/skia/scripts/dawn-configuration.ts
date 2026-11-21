@@ -2,8 +2,16 @@ import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { OutFolder, PackageRoot, SkiaSrc } from "./skia-configuration";
+import type { AppleArchitecture, AppleSDK } from "./apple-configuration";
+import { appleConfigurations, appleSDKs } from "./apple-configuration";
+import {
+  androidPlatform,
+  OutFolder,
+  PackageRoot,
+  SkiaSrc,
+} from "./skia-configuration";
 import { applyPatches, listPatches } from "./patches";
+import { validateAppleArchive } from "./apple-binaries-validation";
 import { fileOps } from "./utils";
 
 // Dawn is built from the checkout Skia pins in its DEPS, so the prebuilt Dawn
@@ -15,28 +23,25 @@ export const DawnOut = path.join(OutFolder, "dawn");
 export const DawnLibs = path.join(PackageRoot, "libs", "dawn");
 export const DawnLib = "libwebgpu_dawn";
 export const DawnPatches = path.join(__dirname, "dawn-patches");
-// Fixes missing from the pinned Dawn, including Tint and Catalyst Metal feature checks.
+// XCFramework destination used by npm packaging and native consumers.
 export const DawnAppleXcframework = path.join(
   DawnLibs,
   "apple",
   `${DawnLib}.xcframework`
 );
 
-// Deployment targets of the podspec (s.platforms) and ndk_api of
-// skia-configuration.ts.
-const iosMinTarget = "15.1";
-const tvosMinTarget = "15.1";
-const macosMinTarget = "14.0";
-const androidPlatform = "android-26";
-
+/** Library families select Android .so or Apple .a outputs, not individual SDKs. */
 export type DawnOS = "android" | "apple";
 
-export interface DawnTarget {
-  os: DawnOS;
+/** Apple target identity is explicit, independent of its CLI selector spelling. */
+export type DawnTarget = {
   // Directory under libs/dawn/<os>/ that receives the library.
   output: string;
   args: Record<string, string>;
-}
+} & (
+  | { os: "android" }
+  | { os: "apple"; sdk: AppleSDK; architecture: AppleArchitecture }
+);
 
 // Monolithic Dawn, as react-native-webgpu has always linked it: one shared
 // library on Android (both react-native-skia and react-native-webgpu load the
@@ -67,7 +72,7 @@ const android = (abi: string): DawnTarget => ({
     ...commonArgs,
     CMAKE_TOOLCHAIN_FILE: `${process.env.ANDROID_NDK}/build/cmake/android.toolchain.cmake`,
     ANDROID_ABI: abi,
-    ANDROID_PLATFORM: androidPlatform,
+    ANDROID_PLATFORM: `android-${androidPlatform}`,
     // Exceptions from the libraries that link Dawn reach JS through Hermes,
     // which only matches them against the app's libc++_shared.so.
     ANDROID_STL: "c++_shared",
@@ -80,21 +85,17 @@ const android = (abi: string): DawnTarget => ({
   },
 });
 
-const apple = (
-  platform: "iOS" | "tvOS" | "Darwin" | "Catalyst",
-  architectures: string,
-  sysroot: string,
-  minTarget: string,
-  output: string
-): DawnTarget => {
-  const isCatalyst = platform === "Catalyst";
+/** Configure one SDK/architecture; universal libraries are combined after building. */
+const apple = (sdk: AppleSDK, architecture: AppleArchitecture): DawnTarget => {
+  const configuration = appleConfigurations[sdk];
+  const isCatalyst = configuration.variant === "maccatalyst";
   const args: Record<string, string> = {
     ...commonArgs,
-    CMAKE_SYSTEM_NAME: isCatalyst ? "Darwin" : platform,
-    CMAKE_OSX_ARCHITECTURES: architectures,
-    CMAKE_OSX_SYSROOT: sysroot,
+    CMAKE_SYSTEM_NAME: configuration.systemName,
+    CMAKE_OSX_ARCHITECTURES: architecture,
+    CMAKE_OSX_SYSROOT: configuration.sysroot,
     // Catalyst's iOS deployment target is encoded in the macabi triple.
-    CMAKE_OSX_DEPLOYMENT_TARGET: isCatalyst ? "" : minTarget,
+    CMAKE_OSX_DEPLOYMENT_TARGET: isCatalyst ? "" : configuration.minimumTarget,
     DAWN_BUILD_MONOLITHIC_LIBRARY: "STATIC",
     DAWN_ENABLE_METAL: "ON",
     DAWN_ENABLE_VULKAN: "OFF",
@@ -108,13 +109,20 @@ const apple = (
     args.DAWN_TARGET_MACOS = "OFF";
     for (const lang of ["C", "CXX", "ASM"]) {
       // CMake resolves the SDK; Clang resolves these paths against its sysroot.
-      args[`CMAKE_${lang}_COMPILER_TARGET`] = `apple-ios${minTarget}-macabi`;
+      args[`CMAKE_${lang}_COMPILER_TARGET`] =
+        `${architecture}-apple-ios${configuration.minimumTarget}-macabi`;
       args[`CMAKE_${lang}_FLAGS`] =
         "-iwithsysroot /System/iOSSupport/usr/include " +
         "-iframeworkwithsysroot /System/iOSSupport/System/Library/Frameworks";
     }
   }
-  return { os: "apple", output, args };
+  return {
+    os: "apple",
+    sdk,
+    architecture,
+    output: `${sdk}-${architecture}`,
+    args,
+  };
 };
 
 export const dawnTargets: Record<string, DawnTarget> = {
@@ -122,55 +130,13 @@ export const dawnTargets: Record<string, DawnTarget> = {
   "android-arm64-v8a": android("arm64-v8a"),
   "android-x86": android("x86"),
   "android-x86_64": android("x86_64"),
-  "ios-arm64": apple("iOS", "arm64", "iphoneos", iosMinTarget, "ios-arm64"),
-  "ios-simulator-arm64": apple(
-    "iOS",
-    "arm64",
-    "iphonesimulator",
-    iosMinTarget,
-    "ios-simulator-arm64"
-  ),
-  "ios-simulator-x86_64": apple(
-    "iOS",
-    "x86_64",
-    "iphonesimulator",
-    iosMinTarget,
-    "ios-simulator-x86_64"
-  ),
-  "tvos-arm64": apple(
-    "tvOS",
-    "arm64",
-    "appletvos",
-    tvosMinTarget,
-    "tvos-arm64"
-  ),
-  "tvos-simulator-arm64": apple(
-    "tvOS",
-    "arm64",
-    "appletvsimulator",
-    tvosMinTarget,
-    "tvos-simulator-arm64"
-  ),
-  "tvos-simulator-x86_64": apple(
-    "tvOS",
-    "x86_64",
-    "appletvsimulator",
-    tvosMinTarget,
-    "tvos-simulator-x86_64"
-  ),
-  "maccatalyst-universal": apple(
-    "Catalyst",
-    "arm64;x86_64",
-    "macosx",
-    iosMinTarget,
-    "maccatalyst-universal"
-  ),
-  "macos-universal": apple(
-    "Darwin",
-    "arm64;x86_64",
-    "macosx",
-    macosMinTarget,
-    "macos-universal"
+  ...Object.fromEntries(
+    appleSDKs.flatMap((sdk) =>
+      appleConfigurations[sdk].architectures.map((architecture) => [
+        `${sdk}-${architecture}`,
+        apple(sdk, architecture),
+      ])
+    )
   ),
 };
 
@@ -188,21 +154,32 @@ export const dawnTargetOutputDir = (name: string) => {
 export const run = (
   command: string,
   args: string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; label?: string } = {}
 ): Promise<void> =>
   new Promise((resolve, reject) => {
     console.log(`$ ${[command, ...args].join(" ")}`);
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env ?? process.env,
-      stdio: "inherit",
+      stdio: options.label ? ["inherit", "pipe", "pipe"] : "inherit",
     });
+    if (options.label) {
+      // Label compiler output as well as headings when several SDKs are built.
+      child.stdout?.on("data", (data) =>
+        process.stdout.write(`${options.label} ${data}`)
+      );
+      child.stderr?.on("data", (data) =>
+        process.stderr.write(`${options.label} ${data}`)
+      );
+    }
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${command} exited with code ${code}`));
+        reject(
+          new Error(`${options.label ?? command} exited with code ${code}`)
+        );
       }
     });
   });
@@ -278,23 +255,26 @@ export const buildDawnTarget = async (name: string) => {
     ...Object.entries(target.args).map(([key, value]) => `-D${key}=${value}`),
     ...skiaThirdPartyLocations(),
   ];
+  // Match Skia's platform labels for both Apple SDKs and Android ABIs.
+  const label = target.os === "android" ? `🤖 ${target.output}` : `🍏 ${name}`;
   console.log(`🔨 Configuring Dawn for ${name}`);
-  await run("cmake", [
-    "-S",
-    DawnSrc,
-    "-B",
-    buildDir,
-    "-G",
-    "Ninja",
-    ...defines,
-  ]);
+  await run(
+    "cmake",
+    ["-S", DawnSrc, "-B", buildDir, "-G", "Ninja", ...defines],
+    { label }
+  );
   console.log(`🔨 Building Dawn for ${name}`);
-  await run("ninja", ["-C", buildDir, "webgpu_dawn"]);
+  await run("ninja", ["-C", buildDir, "webgpu_dawn"], { label });
 
   const libName = dawnLibraryName(target.os);
   const built = path.join(buildDir, "src", "dawn", "native", libName);
   if (!fs.existsSync(built)) {
     throw new Error(`${built} was not produced`);
+  }
+  if (target.os === "apple") {
+    // Each target is one SDK/architecture; inspect it before copying or lipo.
+    validateAppleArchive(built, target.sdk, [target.architecture]);
+    console.log(`${label} ✅ Mach-O verified`);
   }
   const outDir = dawnTargetOutputDir(name);
   fs.mkdirSync(outDir, { recursive: true });
@@ -366,82 +346,4 @@ export const collectDawnHeaders = (buildDir: string) => {
     ) + "\n"
   );
   console.log(`✅ ${include}`);
-};
-
-/**
- * Assembles libs/dawn/apple/libwebgpu_dawn.xcframework from the Apple slices
- * in libs/dawn/apple and the headers in libs/dawn/include, which every slice
- * embeds so SwiftPM consumers see them without any search path. A slice whose
- * targets were not built (e.g. `yarn build-dawn ios-simulator-arm64
- * xcframework` to test on a simulator) is left out, with a warning, and a
- * lipo'd simulator slice keeps the architectures that were built.
- */
-export const createDawnXcframework = () => {
-  const appleDir = path.join(DawnLibs, "apple");
-  const include = path.join(DawnLibs, "include");
-  if (!fs.existsSync(path.join(include, "webgpu", "webgpu.h"))) {
-    throw new Error(`Missing Dawn headers in ${include}`);
-  }
-  const built = (name: string) =>
-    fs.existsSync(path.join(appleDir, name, dawnLibraryName("apple")));
-  const lib = (name: string) =>
-    path.join(appleDir, name, dawnLibraryName("apple"));
-  const slices: { name: string; targets: string[] }[] = [
-    { name: "ios-arm64", targets: ["ios-arm64"] },
-    {
-      name: "ios-simulator",
-      targets: ["ios-simulator-arm64", "ios-simulator-x86_64"],
-    },
-    { name: "tvos-arm64", targets: ["tvos-arm64"] },
-    {
-      name: "tvos-simulator",
-      targets: ["tvos-simulator-arm64", "tvos-simulator-x86_64"],
-    },
-    { name: "maccatalyst-universal", targets: ["maccatalyst-universal"] },
-    { name: "macos-universal", targets: ["macos-universal"] },
-  ];
-
-  const libraries: string[] = [];
-  const lipoDirs: string[] = [];
-  const missing: string[] = [];
-  for (const { name, targets } of slices) {
-    const present = targets.filter(built);
-    missing.push(...targets.filter((target) => !built(target)));
-    if (present.length === 0) {
-      continue;
-    }
-    if (targets.length === 1) {
-      libraries.push(lib(name));
-      continue;
-    }
-    const dir = path.join(appleDir, name);
-    fs.mkdirSync(dir, { recursive: true });
-    const fat = path.join(dir, dawnLibraryName("apple"));
-    console.log(`📱 Creating the ${name} library (${present.join(", ")})`);
-    execSync(`lipo -create ${present.map(lib).join(" ")} -output ${fat}`);
-    libraries.push(fat);
-    lipoDirs.push(dir);
-  }
-  if (libraries.length === 0) {
-    throw new Error(
-      `No Dawn slice in ${appleDir}: build an Apple target first`
-    );
-  }
-  if (missing.length > 0) {
-    console.warn(
-      `⚠️ Leaving out the Dawn slices that were not built: ${missing.join(", ")}`
-    );
-  }
-
-  fileOps.rm(DawnAppleXcframework);
-  console.log(`🍏 Creating ${DawnAppleXcframework}`);
-  execSync(
-    [
-      "xcodebuild -create-xcframework",
-      ...libraries.map((library) => `-library ${library} -headers ${include}`),
-      `-output ${DawnAppleXcframework}`,
-    ].join(" ")
-  );
-  lipoDirs.forEach((dir) => fileOps.rm(dir));
-  console.log(`✅ ${DawnAppleXcframework}`);
 };

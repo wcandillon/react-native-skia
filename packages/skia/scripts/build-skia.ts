@@ -1,30 +1,41 @@
 import { execSync } from "child_process";
 import { exit } from "process";
+import fs from "fs";
 import path from "path";
 
-import type {
-  ApplePlatformName,
-  Platform,
-  PlatformName,
-} from "./skia-configuration";
+import type { Platform, PlatformName } from "./skia-configuration";
+import type { AppleArchitecture } from "./apple-configuration";
+import { combineAppleLibraries } from "./apple-build";
+import { validateAppleArchive } from "./apple-binaries-validation";
+import { selectBuildTargets } from "./apple-configuration";
+import { prepareDawnHeaders } from "./prepare-dawn-headers";
 import {
   applySkiaPatches,
   commonArgs,
   configurations,
   copyHeaders,
-  isApplePlatform,
-  OutFolder,
+  appleOutputNames,
+  skiaBuildDir,
+  skiaTargets,
+  skiaTargetOutputDir,
   PackageRoot,
   ProjectRoot,
   SkiaSrc,
 } from "./skia-configuration";
 import { applyDawnPatches } from "./dawn-configuration";
-import { $, mapKeys, runAsync } from "./utils";
+import { $, runAsync } from "./utils";
 
+/**
+ * Locate GN intermediates, separately from distributable libraries under libs/.
+ */
 const getOutDir = (platform: PlatformName, targetName: string) => {
-  return `${OutFolder}/${platform}/${targetName}`;
+  return skiaBuildDir(platform, targetName);
 };
 
+/**
+ * Generate one architecture's Ninja files with common, platform, and target GN args.
+ * Runs from the Skia source directory; an unknown target terminates the script.
+ */
 const configurePlatform = async (
   platformName: PlatformName,
   configuration: Platform,
@@ -85,6 +96,10 @@ const configurePlatform = async (
   }
 };
 
+/**
+ * Compile one configured target and verify its Apple archives before staging.
+ * Every Mach-O object must match the requested SDK and single architecture.
+ */
 export const buildPlatform = async (
   platform: PlatformName,
   targetName: string
@@ -98,14 +113,30 @@ export const buildPlatform = async (
     platform,
     targetName
   )}`;
-  await runAsync(
-    command,
-    `${platform === "android" ? "🤖" : "🍏"} ${targetName}`
-  );
+  // Apple CPU names overlap across SDKs; identify both in compiler output.
+  const label =
+    platform === "android"
+      ? `🤖 ${targetName}`
+      : `🍏 ${platform}-${targetName}`;
+  await runAsync(command, label);
+  if (platform !== "android") {
+    // Fail this target before staging or compiling the next architecture.
+    for (const library of configurations[platform].outputNames) {
+      validateAppleArchive(
+        path.join(getOutDir(platform, targetName), library),
+        platform,
+        [targetName as AppleArchitecture]
+      );
+    }
+    console.log(`${label} ✅ Mach-O verified`);
+  }
 };
 
-// A Skia archive that defines a typeinfo of the C++ runtime makes librnskia.so
-// export that copy and bind its catch clauses to it instead of libc++_shared's.
+/**
+ * Reject Android archives defining typeinfo owned by the shared C++ runtime.
+ * Such definitions make librnskia.so bind catch clauses to its own copies
+ * instead of libc++_shared's, breaking exception matching across libraries.
+ */
 const assertNoRuntimeTypeinfo = (libPath: string) => {
   const copies = execSync(
     `$ANDROID_NDK/toolchains/llvm/prebuilt/*/bin/llvm-nm --defined-only --just-symbol-name ${libPath}`,
@@ -121,6 +152,10 @@ const assertNoRuntimeTypeinfo = (libPath: string) => {
   }
 };
 
+/**
+ * Stage archives under libs/<os>/<platform>/, stripping Android debug symbols.
+ * Sources remain in the GN output directory. Copy/strip failures stop the script.
+ */
 export const copyLib = (
   os: PlatformName,
   cpu: string,
@@ -131,7 +166,7 @@ export const copyLib = (
   $(`mkdir -p ${dstPath}`);
 
   outputNames
-    .map((name) => `${OutFolder}/${os}/${cpu}/${name}`)
+    .map((name) => `${getOutDir(os, cpu)}/${name}`)
     .forEach((lib) => {
       const libPath = lib;
       console.log(`Copying ${libPath} to ${dstPath}`);
@@ -148,156 +183,45 @@ export const copyLib = (
 };
 
 /**
- * Builds an XCFramework for a specific Apple platform.
- * Each platform produces its own XCFramework:
- * - apple-ios: arm64-iphoneos + lipo'd iphonesimulator (arm64 + x64) + lipo'd maccatalyst (arm64 + x64)
- * - apple-tvos: arm64-tvos + lipo'd tvsimulator (arm64 + x64)
- * - apple-macos: lipo'd macosx (arm64 + x64)
- * A slice whose targets were not built (e.g. `yarn build-skia
- * apple-ios-arm64-iphoneos` to test on a device) is left out, and a lipo'd
- * slice keeps the architectures that were built.
+ * Build SDK groups (e.g. iphonesimulator) as lipo'd universal libraries, or one
+ * architecture (e.g. iphonesimulator-arm64). Single-architecture SDKs need no lipo.
+ * Sync dependencies and apply patches, then configure/build/validate/stage each
+ * selected target sequentially before combining Apple SDK outputs and copying headers.
+ *
+ * Usage (from packages/skia):
+ *   yarn build-skia                              # every target
+ *   yarn build-skia android                      # all Android ABIs
+ *   yarn build-skia android-arm64                # one Android architecture
+ *   yarn build-skia iphonesimulator              # lipo'd universal simulator libraries
+ *   yarn build-skia iphonesimulator-arm64        # one simulator architecture
+ *   yarn build-skia iphoneos iphonesimulator     # multiple SDK groups
+ *
+ * Apple static libraries are staged under libs/apple/<sdk>-<arch>/
+ * (e.g. libs/apple/iphonesimulator-arm64/), then assembled under libs/apple/<sdk>/
+ * (e.g. libs/apple/iphonesimulator/). Staging directories are removed on successful
+ * SDK assembly; GN intermediates remain. Android uses libs/android/<abi>/
+ * (e.g. libs/android/arm64-v8a/). package-binaries assembles npm XCFrameworks.
+ *
+ * See apple-configuration.ts for SDK groups/architectures and
+ * skia-configuration.ts (skiaTargets) for the full target list.
  */
-const xcframeworkSlices: Record<
-  ApplePlatformName,
-  { name: string; targets: string[] }[]
-> = {
-  "apple-ios": [
-    { name: "arm64-iphoneos", targets: ["arm64-iphoneos"] },
-    {
-      name: "iphonesimulator",
-      targets: ["x64-iphonesimulator", "arm64-iphonesimulator"],
-    },
-    {
-      name: "maccatalyst",
-      targets: ["x64-maccatalyst", "arm64-maccatalyst"],
-    },
-  ],
-  "apple-tvos": [
-    { name: "arm64-tvos", targets: ["arm64-tvos"] },
-    {
-      name: "tvsimulator",
-      targets: ["x64-tvsimulator", "arm64-tvsimulator"],
-    },
-  ],
-  "apple-macos": [{ name: "macosx", targets: ["x64-macosx", "arm64-macosx"] }],
-};
-
-const buildXCFramework = (
-  platformName: ApplePlatformName,
-  builtTargets: string[]
-) => {
-  const config = configurations[platformName];
-  const { outputNames } = config;
-
-  process.chdir(SkiaSrc);
-  const prefix = `${OutFolder}/${platformName}`;
-
-  // Get the short platform name (ios, tvos, macos)
-  const shortPlatform = platformName.replace("apple-", "");
-
-  // Create output directory
-  const outputDir = `${PackageRoot}/libs/${shortPlatform}`;
-  $(`mkdir -p ${outputDir}`);
-
-  outputNames.forEach((name) => {
-    console.log(`🍏 Building XCFramework for ${name} (${platformName})`);
-
-    let xcframeworkCmd = "xcodebuild -create-xcframework ";
-    for (const slice of xcframeworkSlices[platformName]) {
-      const inputs = slice.targets
-        .filter((target) => builtTargets.includes(target))
-        .map((target) => `${prefix}/${target}/${name}`);
-      if (inputs.length === 0) {
-        continue;
-      }
-      if (slice.targets.length === 1) {
-        xcframeworkCmd += `-library ${inputs[0]} `;
-      } else {
-        $(`mkdir -p ${prefix}/${slice.name}`);
-        $(`rm -rf ${prefix}/${slice.name}/${name}`);
-        $(
-          `lipo -create ${inputs.join(" ")} -output ${prefix}/${slice.name}/${name}`
-        );
-        xcframeworkCmd += `-library ${prefix}/${slice.name}/${name} `;
-      }
-    }
-
-    const [lib] = name.split(".");
-    const dstPath = `${outputDir}/${lib}.xcframework`;
-    xcframeworkCmd += `-output ${dstPath}`;
-
-    $(xcframeworkCmd);
-  });
-
-  console.log(`✅ XCFramework built for ${platformName}`);
-};
-
 (async () => {
-  // Parse command line arguments
-  const args = process.argv.slice(2);
-  const defaultTargets = Object.keys(configurations);
-  const targetSpecs = args.length > 0 ? args : defaultTargets;
+  const targetSpecs = process.argv.slice(2);
+  const selectedTargets = selectBuildTargets(
+    targetSpecs,
+    Object.keys(skiaTargets)
+  );
 
-  // Parse target specifications (platform or platform-target format)
-  const buildTargets: { platform: PlatformName; targets?: string[] }[] = [];
-  const validPlatforms = Object.keys(configurations);
+  // Resolve local or published headers before syncing or deleting build outputs.
+  await prepareDawnHeaders();
 
-  for (const spec of targetSpecs) {
-    // First check if the entire spec is a valid platform name (e.g., "android", "apple-ios")
-    if (validPlatforms.includes(spec)) {
-      buildTargets.push({ platform: spec as PlatformName });
-    } else if (spec.includes("-")) {
-      // Handle platform-target format (android-arm64,
-      // apple-ios-arm64-iphonesimulator): the platform is the longest
-      // platform name the spec starts with, the rest is the target.
-      const [platform] = validPlatforms
-        .filter((name) => spec.startsWith(`${name}-`))
-        .sort((a, b) => b.length - a.length);
-      if (!platform) {
-        console.error(`❌ Invalid platform or target: ${spec}`);
-        console.error(`Valid platforms are: ${validPlatforms.join(", ")}`);
-        exit(1);
-      }
-      const target = spec.slice(platform.length + 1);
-
-      const platformConfig = configurations[platform as PlatformName];
-      if (!(target in platformConfig.targets)) {
-        console.error(
-          `❌ Invalid target '${target}' for platform '${platform}'`
-        );
-        console.error(
-          `Valid targets for ${platform}: ${Object.keys(
-            platformConfig.targets
-          ).join(", ")}`
-        );
-        exit(1);
-      }
-
-      // Find existing platform entry or create new one
-      let existingPlatform = buildTargets.find(
-        (bt) => bt.platform === platform
-      );
-      if (!existingPlatform) {
-        existingPlatform = { platform: platform as PlatformName, targets: [] };
-        buildTargets.push(existingPlatform);
-      }
-      if (!existingPlatform.targets) {
-        existingPlatform.targets = [];
-      }
-      existingPlatform.targets.push(target);
-    } else {
-      // Invalid spec
-      console.error(`❌ Invalid platform: ${spec}`);
-      console.error(`Valid platforms are: ${validPlatforms.join(", ")}`);
-      exit(1);
-    }
-  }
-
-  console.log(`🎯 Building targets: ${targetSpecs.join(", ")}`);
+  console.log(`🎯 Building targets: ${selectedTargets.join(", ")}`);
   console.log("🪨 Skia Graphite");
 
   // Check Android environment variables if android is in target platforms
-  const hasAndroid = buildTargets.some((bt) => bt.platform === "android");
+  const hasAndroid = selectedTargets.some(
+    (name) => skiaTargets[name].platform === "android"
+  );
   if (hasAndroid) {
     ["ANDROID_NDK", "ANDROID_HOME"].forEach((name) => {
       // Test for existence of Android SDK
@@ -310,9 +234,8 @@ const buildXCFramework = (
     });
   }
 
-  // Run glient sync
+  // Sync dependencies before applying the pinned source patches.
   console.log("Running gclient sync...");
-  // Start by running sync
   process.chdir(SkiaSrc);
   $("PATH=../depot_tools/:$PATH python3 tools/git-sync-deps");
   console.log("gclient sync done");
@@ -326,47 +249,51 @@ const buildXCFramework = (
   applySkiaPatches();
   applyDawnPatches();
 
-  // Keep the separately built Dawn library and headers in libs/dawn.
-  for (const { platform } of buildTargets) {
-    $(`rm -rf ${PackageRoot}/${configurations[platform].outputRoot}`);
+  // Clear Android's ABI outputs before staging the selected architectures.
+  if (hasAndroid) {
+    $(`rm -rf ${PackageRoot}/${configurations.android.outputRoot}`);
   }
 
-  // Build specified platforms and targets
-  for (const buildTarget of buildTargets) {
-    const { platform, targets } = buildTarget;
+  for (const name of selectedTargets) {
+    const { platform, architecture } = skiaTargets[name];
     const configuration = configurations[platform];
-    console.log(`\n🔨 Building platform: ${platform}`);
-
-    const targetsToProcess =
-      targets || (mapKeys(configuration.targets) as string[]);
-
-    for (const target of targetsToProcess) {
-      await configurePlatform(platform, configuration, target);
-      await buildPlatform(platform, target);
-      process.chdir(ProjectRoot);
-      if (platform === "android") {
-        configuration.outputNames.forEach((name) =>
-          assertNoRuntimeTypeinfo(`${getOutDir(platform, target)}/${name}`)
-        );
-        copyLib(
-          platform,
-          target,
-          configurations.android.targets[target].output,
-          configuration.outputNames
+    await configurePlatform(platform, configuration, architecture);
+    await buildPlatform(platform, architecture);
+    process.chdir(ProjectRoot);
+    if (platform === "android") {
+      configuration.outputNames.forEach((library) =>
+        assertNoRuntimeTypeinfo(
+          `${getOutDir(platform, architecture)}/${library}`
+        )
+      );
+      copyLib(
+        platform,
+        architecture,
+        configurations.android.targets[architecture].output,
+        configuration.outputNames
+      );
+    } else {
+      // Stage each SDK/architecture separately before combining its libraries.
+      const destination = skiaTargetOutputDir(name);
+      fs.rmSync(destination, { recursive: true, force: true });
+      fs.mkdirSync(destination, { recursive: true });
+      for (const library of configuration.outputNames) {
+        fs.copyFileSync(
+          path.join(getOutDir(platform, architecture), library),
+          path.join(destination, library)
         );
       }
     }
   }
 
-  // Build XCFrameworks for each Apple platform that was built
-  for (const { platform, targets } of buildTargets) {
-    if (isApplePlatform(platform)) {
-      buildXCFramework(
-        platform as ApplePlatformName,
-        targets || mapKeys(configurations[platform].targets).map(String)
-      );
-    }
-  }
-
-  copyHeaders();
-})();
+  combineAppleLibraries(
+    path.join(PackageRoot, "libs", "apple"),
+    appleOutputNames,
+    undefined,
+    selectedTargets
+  );
+  await copyHeaders();
+})().catch((error) => {
+  console.error(`❌ ${error.message}`);
+  exit(1);
+});

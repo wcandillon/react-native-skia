@@ -32,24 +32,39 @@ The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphi
 - Install dependencies: `yarn`
 - Copy the headers: `cd packages/skia && yarn copy-skia-headers`
 
-`yarn copy-skia-headers` copies the Skia and Graphite headers from the submodule and the Dawn headers from the `react-native-webgpu-dawn` package. The binaries themselves are not copied: Gradle downloads them when it builds, and the podspec copies them in from `node_modules` at `pod install` time.
+`yarn copy-skia-headers` copies Skia and Graphite headers from the submodule and Dawn headers from `packages/skia/libs/dawn/include`. Local Dawn headers take precedence. Otherwise, it downloads and verifies `dawn-headers.zip` from the release pinned by `binaries.json`; downloaded headers refresh when that pin's checksum changes. `yarn build-skia` prepares these inputs before dependency sync or compilation.
+
+`yarn prepare-dawn-headers` also runs this preparation on its own. It uses the system user cache (`RNSKIA_CACHE_DIR` to override) and `REACT_NATIVE_SKIA_BINARIES_URL` for mirrors; it does not build Dawn. A source build with `yarn build-dawn <target>` supplies both source and generated headers, replacing downloaded ones. The Dawn checkout's forwarding headers alone are insufficient.
 
 The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
 ### Building
 
-If you have Android Studio installed, make sure `$ANDROID_NDK` is available.
-`ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/<version>` for instance.
-If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_.
-And then the _SDK Location_ section. It will show you the NDK path, or the option to Download it if you don't have it installed.
-
-
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
 - Go to the package folder: `cd packages/skia`
-- Build the Skia libraries: `yarn build-skia` (this can take a while). Locally built binaries in `libs/` take precedence over the npm packages; delete `libs/` to go back to the prebuilt ones.
-- Optionally build Dawn: `yarn build-dawn` builds the monolithic `libwebgpu_dawn` that ships as the `react-native-webgpu-dawn` package into `libs/dawn`, from the Dawn checkout Skia pins. A local build there takes precedence over the package for the headers and the native builds; delete `libs/dawn` to go back to it. Developing the library does not need it.
+- To test a different Dawn revision, build it first with `yarn build-dawn <target>`; one target supplies the shared local headers.
+- Build the Skia libraries: `yarn build-skia` (this can take a while). Header preparation errors fail before dependency sync or compilation.
 - Copy Skia headers: `yarn copy-skia-headers`
+
+#### Android
+
+Before building, set `$ANDROID_NDK` and `$ANDROID_HOME` to your NDK and Android SDK directories.
+`ANDROID_NDK="$HOME/Library/Android/sdk/ndk/<version>"` for instance.
+If the NDK is not installed, you can install it via Android Studio by going to the menu _File > Project Structure_.
+And then the _SDK Location_ section. It will show you the NDK path, or the option to Download it if you don't have it installed.
+
+Both builders accept `android` to build all ABIs. For one architecture, use a Skia target such as `yarn build-skia android-arm64` or a Dawn target such as `yarn build-dawn android-arm64-v8a`.
+
+Skia writes `.a` libraries to `libs/android/<abi>`. Dawn writes `libwebgpu_dawn.so` to `libs/dawn/android/<abi>`. Local Android libraries take precedence over downloaded binaries.
+
+#### Apple
+
+Both Apple builders accept SDK groups (`iphoneos`, `iphonesimulator`, `maccatalyst`, `appletvos`, `appletvsimulator`, `macos`, `xros`, `xrsimulator`) and individual targets such as `iphonesimulator-arm64` or `iphonesimulator-x86_64`. A group builds its configured architectures and produces lipo'd universal libraries when it has multiple architectures; a single target keeps only that architecture. Single-architecture SDKs copy their libraries directly.
+
+Skia stages per-architecture archives in `libs/apple/<sdk>-<arch>` and writes assembled libraries plus `metadata.json` to `libs/apple/<sdk>`, including for single-architecture builds. After successful SDK assembly, its consumed staging directories are removed. Dawn uses the same layout under `libs/dawn/apple`. GN/CMake build directories remain available for incremental builds. Neither builder assembles XCFrameworks. `package-binaries` still creates the existing Apple npm XCFrameworks for compatibility; the CocoaPods/SwiftPM consumers have not migrated to the raw SDK archives yet.
+
+After each Apple target compiles, both builders verify every Mach-O object's platform and architecture in its `.a` libraries before copying them or starting the next target. Each check expects only that target's architecture. The check reads archive headers and load commands directly, without extracting objects or running a tool per object.
 
 ### Upgrading Skia
 
@@ -79,8 +94,8 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
    ```sh
    cd packages/skia
    yarn clean-skia
-   yarn build-skia          # all platforms, or scope it: yarn build-skia apple-ios android
-                            # or a single target: yarn build-skia apple-ios-arm64-iphonesimulator
+   yarn build-skia          # all platforms, or scope it: yarn build-skia iphoneos android
+                            # or a single target: yarn build-skia iphonesimulator-arm64
    yarn copy-skia-headers   # build-skia also runs this at the end
    ```
    `build-skia` runs `tools/git-sync-deps` first, which fetches third-party deps from `*.googlesource.com`. This can fail with HTTP 429 ("Short term server-time rate limit exceeded"). Re-run it with backoff until it succeeds before retrying the build:
@@ -93,7 +108,7 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). The same goes for Dawn: a `yarn build-dawn` output in `libs/dawn` is used instead of the `react-native-webgpu-dawn` package, which is what a Skia bump that moves the Dawn commit needs; otherwise the package's Dawn is linked.
+Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). Apple SDK builds must first pass through `yarn package-binaries --skia-version=<version>` to assemble those compatibility XCFrameworks. For Dawn, the native integration similarly reads `libs/dawn/apple/libwebgpu_dawn.xcframework` after packaging; raw SDK output alone does not override the package's Dawn.
 
 Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
@@ -189,7 +204,7 @@ They all carry the same version, derived from the Skia branch the submodule comm
 
 Publishing uses npm trusted publishing (OIDC): the workflow file must be registered as the trusted publisher of each package on npmjs.com (repository `wcandillon/react-native-skia`, workflow `build-binaries.yml`, no environment), and the first version of a new package has to be published by hand from the `npm-packages` artifact of a dry run.
 
-The same run archives those files as the assets of the GitHub release `binaries-<version>` (a pre-release, so it never becomes the repository's latest release). They are made from the package directories, so a release holds the very bytes of the npm packages at that version:
+The same run archives those files as the assets of the GitHub release `binaries-<version>` (a pre-release, so it never becomes the repository's latest release). Android archives are made from the package directories. Apple archives come directly from the combined SDK outputs, without npm XCFramework containers:
 
 | Asset | Contents |
 |:--|:--|
@@ -197,13 +212,13 @@ The same run archives those files as the assets of the GitHub release `binaries-
 | `dawn-android-<abi>.zip` | `<abi>/libwebgpu_dawn.so`, one archive per ABI |
 | `dawn-headers.zip` | `include/dawn`, `include/webgpu` and the Dawn license |
 | `dawn-LICENSE.txt` | the Dawn license |
-| `skia-graphite-apple-<platform>-<name>.xcframework.zip` | one Skia xcframework, for `ios`, `tvos` and `macos` |
-| `dawn-apple-libwebgpu_dawn.xcframework.zip` | the Dawn xcframework |
+| `skia-graphite-apple-<sdk>.zip` | all Skia `.a` libraries for one SDK, plus `metadata.json` |
+| `dawn-apple-<sdk>.zip` | `libwebgpu_dawn.a` for one SDK, plus `metadata.json` |
 | `checksums.json` | the version, the Skia branch, the Dawn commit, and the sha256 and size of every asset |
 
-The archives of one platform are meant to be extracted into the same directory, so no two of them carry the same path. A release that is already published is left alone, like a version already on npm.
+Each Apple SDK archive is extracted into its own SDK directory; its metadata records the platform, variant, architectures, deployment target, and library names. Android archives retain their existing ABI subdirectories. A release that is already published is left alone, like a version already on npm.
 
-The same packages and release assets can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`. `yarn package-binaries --from-packages=<dir>` makes the release assets alone, from package directories that exist already (one subdirectory per package name): this is how a version published to npm before the releases existed gets its release, from the extracted npm tarballs.
+The same packages and release assets can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`. `yarn package-binaries --from-packages=<dir>` makes the release assets alone, from package directories that exist already (one subdirectory per package name): this historical mode preserves the previous per-XCFramework Apple asset layout, allowing an older npm release to be reproduced from extracted tarballs.
 
 #### 5. Point the library at the new binaries
 
