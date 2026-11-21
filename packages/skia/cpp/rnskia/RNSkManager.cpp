@@ -25,7 +25,8 @@ RNSkManager::RNSkManager(
     std::shared_ptr<RNSkPlatformContext> platformContext)
     : _jsRuntime(jsRuntime), _platformContext(platformContext),
       _jsCallInvoker(jsCallInvoker),
-      _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)) {
+      _viewApi(std::make_shared<RNSkJsiViewApi>(platformContext)),
+      _idFloor(ViewRegistry::getInstance().beginBundle()) {
   // A lost GPU device is replaced by a new one (see DawnContext), on which
   // the windows hold nothing yet: every view records its content again for
   // it. The redraw waits for the view's present thread, and for the window
@@ -44,17 +45,17 @@ RNSkManager::RNSkManager(
 
 RNSkManager::~RNSkManager() {
   DawnContext::removeLossListener(_lossListener);
-  // The runtime that made the Graphite contexts is going away, with the
-  // views of its bundle: nothing binds to or draws into a target kept past
-  // this point (the next bundle's views get ids of their own, see
-  // ViewRegistry::allocateId).
-  RNSkGraphiteTargetRegistry::getInstance().clear();
-  // Likewise for the view registry: Fabric tears the bundle's views down with
-  // no ordering against this destructor, and their late unregistrations are
-  // no-ops (the views only hold the manager weakly). Dropped here, the
-  // entries of views torn down after this point, and the tombstones of the
-  // ones torn down before it, do not stay for the life of the process.
-  ViewRegistry::getInstance().clear();
+  // The runtime is going away, with the views of its bundle: their entries
+  // and tombstones are dropped from the registries, which outlive this
+  // manager. Only theirs: when the reload came while this runtime's JS
+  // thread was busy, the next bundle's manager was made, and its views
+  // registered, before this destructor ran (#4376). They are told apart by
+  // id, as each bundle is handed its own range (see
+  // ViewRegistry::beginBundle). Nothing binds to or draws into a target of
+  // this bundle past this point.
+  auto range = ViewRegistry::getInstance().endBundle(_idFloor);
+  RNSkGraphiteTargetRegistry::getInstance().clearRange(range.first,
+                                                       range.second);
   // Free up any references
   _viewApi = nullptr;
   _jsRuntime = nullptr;
