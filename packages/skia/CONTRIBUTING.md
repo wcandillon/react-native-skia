@@ -32,7 +32,9 @@ The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphi
 - Install dependencies: `yarn`
 - Copy the headers: `cd packages/skia && yarn copy-skia-headers`
 
-`yarn copy-skia-headers` copies Skia and Graphite headers from the submodule and prepared Dawn headers from `packages/skia/libs/dawn/include`. Before running it or `yarn build-skia`, either run `yarn build-dawn <target>` from `packages/skia`, or download `dawn-headers.zip` from the release named by `binaries.json` and place the archive's `include/` contents in `packages/skia/libs/dawn/include`. Include both source and generated headers; the Dawn checkout's forwarding headers alone are insufficient. These commands validate the inputs and fail early; they do not download headers automatically.
+`yarn copy-skia-headers` copies Skia and Graphite headers from the submodule and Dawn headers from `packages/skia/libs/dawn/include`. Local Dawn headers take precedence. Otherwise, it downloads and verifies `dawn-headers.zip` from the release pinned by `binaries.json`; downloaded headers refresh when that pin's checksum changes. `yarn build-skia` prepares these inputs before dependency sync or compilation.
+
+`yarn prepare-dawn-headers` also runs this preparation on its own. It uses the system user cache (`RNSKIA_CACHE_DIR` to override) and `REACT_NATIVE_SKIA_BINARIES_URL` for mirrors; it does not build Dawn. A source build with `yarn build-dawn <target>` supplies both source and generated headers, replacing downloaded ones. The Dawn checkout's forwarding headers alone are insufficient.
 
 The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
@@ -41,8 +43,8 @@ The binary packages are built and published by the **Build and publish binaries*
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
 - Go to the package folder: `cd packages/skia`
-- Prepare Dawn headers first: build with `yarn build-dawn <target>` or manually unpack the pinned `dawn-headers.zip` as described above. One target supplies the shared headers; build fresh headers when changing the Dawn revision.
-- Build the Skia libraries: `yarn build-skia` (this can take a while). Missing headers fail before dependency sync or compilation.
+- To test a different Dawn revision, build it first with `yarn build-dawn <target>`; one target supplies the shared local headers.
+- Build the Skia libraries: `yarn build-skia` (this can take a while). Header preparation errors fail before dependency sync or compilation.
 - Copy Skia headers: `yarn copy-skia-headers`
 
 #### Android

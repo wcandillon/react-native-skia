@@ -4,6 +4,7 @@ import path from "path";
 import type { AppleArchitecture, AppleSDK } from "./apple-configuration";
 import { appleConfigurations, appleSDKs } from "./apple-configuration";
 import { applyPatches } from "./patches";
+import { prepareDawnHeaders } from "./prepare-dawn-headers";
 import { $, fileOps } from "./utils";
 
 const DEBUG = false;
@@ -284,27 +285,9 @@ const copyModule = (module: string) => {
   fileOps.cp(srcDir, destDir);
 };
 
-// Both locally built and manually downloaded headers use this input directory.
-const DawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
-
-/** Check Dawn's public entry header before starting work. */
-export const validateDawnHeaders = () => {
-  if (!fs.existsSync(path.join(DawnInclude, "webgpu", "webgpu.h"))) {
-    const { tag } = JSON.parse(
-      fs.readFileSync(path.join(PackageRoot, "binaries.json"), "utf8")
-    ) as { tag: string };
-    throw new Error(
-      `No Dawn headers found in ${DawnInclude}.\n` +
-        "Before building Skia or copying headers, run yarn build-dawn <target> from packages/skia,\n" +
-        `or download https://github.com/wcandillon/react-native-skia/releases/download/${tag}/dawn-headers.zip\n` +
-        "and place the archive's include/ contents in packages/skia/libs/dawn/include."
-    );
-  }
-};
-
-/** Copy prepared local inputs; validate them before removing existing output. */
-export const copyHeaders = () => {
-  validateDawnHeaders();
+/** Prepare Dawn inputs before removing or copying any existing headers. */
+export const copyHeaders = async () => {
+  const dawnInclude = await prepareDawnHeaders();
   console.log("⚙️ Copying Skia headers...");
   process.chdir(PackageRoot);
 
@@ -340,8 +323,8 @@ export const copyHeaders = () => {
 
   {
     fileOps.mkdir("./cpp/dawn/include");
-    fileOps.cp(path.join(DawnInclude, "dawn"), "./cpp/dawn/include/dawn");
-    fileOps.cp(path.join(DawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
+    fileOps.cp(path.join(dawnInclude, "dawn"), "./cpp/dawn/include/dawn");
+    fileOps.cp(path.join(dawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
 
     // Dawn ships the generated webgpu.h and webgpu_cpp.h under dawn/ and
     // forwarding shims under webgpu/. Xcode's header maps resolve by basename,

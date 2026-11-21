@@ -8,12 +8,12 @@ import type { AppleArchitecture } from "./apple-configuration";
 import { combineAppleLibraries } from "./apple-build";
 import { validateAppleArchive } from "./apple-binaries-validation";
 import { selectBuildTargets } from "./apple-configuration";
+import { prepareDawnHeaders } from "./prepare-dawn-headers";
 import {
   applySkiaPatches,
   commonArgs,
   configurations,
   copyHeaders,
-  validateDawnHeaders,
   appleOutputNames,
   skiaBuildDir,
   skiaTargets,
@@ -212,9 +212,8 @@ export const copyLib = (
     Object.keys(skiaTargets)
   );
 
-  // Check prepared Dawn headers before syncing, deleting outputs, or compiling.
-  // Build Dawn or unpack its pinned header archive into libs/dawn/include first.
-  validateDawnHeaders();
+  // Resolve local or published headers before syncing or deleting build outputs.
+  await prepareDawnHeaders();
 
   console.log(`🎯 Building targets: ${selectedTargets.join(", ")}`);
   console.log("🪨 Skia Graphite");
@@ -293,7 +292,7 @@ export const copyLib = (
     undefined,
     selectedTargets
   );
-  copyHeaders();
+  await copyHeaders();
 })().catch((error) => {
   console.error(`❌ ${error.message}`);
   exit(1);
