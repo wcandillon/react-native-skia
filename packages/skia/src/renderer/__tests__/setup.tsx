@@ -111,6 +111,10 @@ beforeAll(async () => {
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+// A device lost sooner after it is made counts as a replacement that did not
+// take, whose own replacement waits (kShortLived in RNDawnContext.h).
+export const DEVICE_TAKES_MILLISECONDS = 5000;
+
 // A snapshot's colour pipeline can move a channel by a few units, so colours
 // are read as names rather than exact bytes.
 const classifyColor = (red: number, green: number, blue: number) => {
