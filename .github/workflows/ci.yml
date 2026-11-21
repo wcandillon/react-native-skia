@@ -663,7 +663,7 @@ jobs:
   # for it only when its diff touches what can change the outcome: the
   # manifest and the autolinking config, the Apple and C++ sources it
   # compiles, the scripts that copy the headers from the Skia submodule and
-  # the submodule itself, the dependencies that pin the prebuilt binaries,
+  # the submodule itself, the binary release pin and package dependencies,
   # the example that links it, or CI itself. The macOS job follows the same
   # idea for apps/example-macos, whose dependencies only change for macOS.
   # JavaScript changes in apps/example/src do not affect the native build;
@@ -703,7 +703,7 @@ jobs:
           macos=false
           while IFS= read -r file; do
             case "$file" in
-              packages/skia/Package.swift|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/Package.swift|packages/skia/package.json|packages/skia/binaries.json|packages/skia/react-native.config.js|\
               packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
               spm-example/*|package.json|yarn.lock|.gitmodules|externals/*|\
               .github/workflows/ci.yml|.github/actions/setup/*)
@@ -713,7 +713,7 @@ jobs:
             esac
             case "$file" in
               apps/example-macos/*|\
-              packages/skia/*.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/*.podspec|packages/skia/package.json|packages/skia/binaries.json|packages/skia/react-native.config.js|\
               packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
               package.json|yarn.lock|.yarn/patches/*|turbo.json|.gitmodules|externals/*|\
               .github/workflows/ci.yml|.github/actions/setup/*)
@@ -736,8 +736,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.spm == 'true'
     runs-on: macos-latest
-    # Cold run: yarn install with the Skia and Dawn binaries, the React Native
-    # artifacts, then one xcodebuild.
+    # Cold run: install JS dependencies/headers, resolve React Native artifacts,
+    # then let the Xcode phase prepare this SDK's pinned Skia/Dawn binaries.
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -746,9 +746,8 @@ jobs:
           submodules: recursive
 
       # Installs the workspace and copies the Skia, Graphite and Dawn headers.
-      # packages/skia/Package.swift resolves the prebuilt binaries
-      # (react-native-skia-graphite-apple-ios, react-native-webgpu-dawn) from
-      # the workspace's node_modules, not from spm-example's.
+      # The SwiftPM plugin stages static binaries during the app build; they
+      # are not binary npm dependencies of react-native-skia.
       - name: Setup
         uses: ./.github/actions/setup
         with:

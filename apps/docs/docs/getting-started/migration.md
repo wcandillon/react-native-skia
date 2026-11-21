@@ -97,7 +97,7 @@ See [the Vulkan section of the installation guide](/docs/getting-started/install
 ### iOS, tvOS, and macOS
 
 The minimum deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0.
-Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-tvos`, `react-native-skia-graphite-apple-macos`), alongside `react-native-webgpu-dawn`.
+Run `pod install` again after upgrading to install the binary preparation phase. Apple binaries are fetched during the Xcode build from the release pinned in `react-native-skia/binaries.json`; headers remain in `react-native-skia`. Cached downloads are separated by release and checksum.
 
 ### Expo
 

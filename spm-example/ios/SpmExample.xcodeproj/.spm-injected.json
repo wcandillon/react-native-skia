@@ -19,6 +19,7 @@
     "B174F870C259554596A4373B",
     "C2FECF1430FDAAE3BF355839",
     "D6BD17EA9023C9F39246B71F",
+    "E60A0BA5B3DB2D9164D35100",
     "F3857EDDA38AFC0011322D6D"
   ],
   "createdArrayFields": [
@@ -177,7 +178,9 @@
     }
   ],
   "generatedSources": {},
-  "scriptPhases": {},
+  "scriptPhases": {
+    "react-native-skia.prepare-binaries": "E60A0BA5B3DB2D9164D35100"
+  },
   "artifactsVersionOverride": null,
   "configCommand": null,
   "scheme": {
