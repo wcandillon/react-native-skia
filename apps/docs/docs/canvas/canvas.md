@@ -127,6 +127,7 @@ The children of a `Canvas` are rendered by Skia's own React renderer, and its fr
 
 An animation frame costs no React render, no work on the JS thread, and no drawing on the UI thread.
 A canvas without animation values is drawn once, and the view keeps its frame.
+It still owns its swap chain, so a screen with many small static canvases, such as icons or thumbnails, pays for each of them: see [static content](/docs/webgpu#static-content) for a view that holds a single buffer instead.
 
 On the Web, the drawing is recorded into a picture on the JS thread and painted on a WebGL canvas.
 
