@@ -21,6 +21,7 @@ Textures created on that device can be used by both libraries without any copy:
 - **From Skia to WebGPU:** draw text, paths, or any Skia drawing straight into a texture that a WebGPU pipeline samples.
 - **Camera and video frames:** draw the frames that React Native WebGPU decodes or wraps in a Skia canvas.
 - **View snapshots:** draw a snapshot of any React Native view, taken by React Native WebGPU, in a Skia canvas.
+- **Static content:** show a Skia drawing that does not animate (an icon, a thumbnail, a chart) in a view that holds a single buffer, without a canvas.
 
 :::info
 
@@ -237,7 +238,7 @@ The interop surface is small:
 The two functions that take a texture read its `nativePointer`, an extension of `GPUTexture` provided by React Native WebGPU.
 `MakeGPUTextureFromImage()` returns such a pointer, which `adoptTexture()` turns into a `GPUTexture`: only React Native WebGPU can build the typed object, the same way `importDevice()` builds the `GPUDevice`.
 A raw `WGPUTexture` pointer (a `BigInt`) is accepted wherever a texture is, for libraries that export textures without React Native WebGPU.
-[Camera and video frames](#native-buffers) and [view snapshots](#view-snapshots) go through a texture as well.
+[Camera and video frames](#native-buffers), [view snapshots](#view-snapshots) and [static content](#static-content) go through a texture as well.
 
 ## From WebGPU to Skia
 
@@ -525,6 +526,105 @@ Pass the frame's orientation as `rotation` and `mirrored`, and release the frame
 - **Any runtime.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
 
 On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
+
+### Static content
+
+A `Canvas` is built to animate: it owns a swap chain, a few buffers of its size that it cycles through to present a new frame on every frame of the display.
+A drawing that never changes, or only now and then, needs none of that, and on a screen with many of them (icons, thumbnails, the charts of a list) the canvases add up.
+
+For this case, React Native WebGPU has [`NativeBufferView`](https://wcandillon.github.io/react-native-webgpu/api/native-buffer#nativebufferview): a view that shows a single [native buffer](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-buffers), with no swap chain and no GPU device of its own.
+Skia draws into the buffer once, through `Skia.Surface.MakeFromGPUTexture()`, and the view keeps showing it.
+It needs React Native WebGPU 0.23.0 or above.
+
+1. `createNativeBuffer()` allocates a buffer of the size of the view, in physical pixels.
+2. `importSharedTextureMemory()` imports the buffer on the shared device, and `createTexture()` returns its texture. The device owns the buffer between `beginAccess()` and `endAccess()`.
+3. Skia draws into the texture, as in [drawing into a texture](#drawing-into-a-texture).
+4. `present()` hands the buffer to the view along with what `endAccess()` returned, the fences of the drawing: the view shows the buffer once the GPU is done with it.
+
+```tsx
+import React, { useEffect, useRef } from "react";
+import type { SkPicture } from "react-native-skia";
+import { Skia } from "react-native-skia";
+import type { NativeBufferViewRef } from "react-native-webgpu";
+import {
+  createNativeBuffer,
+  importDevice,
+  NativeBufferView,
+  useNativeBufferSize,
+} from "react-native-webgpu";
+
+interface StaticPictureProps {
+  picture: SkPicture;
+  width: number;
+  height: number;
+}
+
+export const StaticPicture = ({ picture, width, height }: StaticPictureProps) => {
+  const ref = useRef<NativeBufferViewRef>(null);
+  // The size of the view in physical pixels
+  const { size, onPixelSizeChange } = useNativeBufferSize();
+
+  useEffect(() => {
+    if (!ref.current || !size || size.width === 0 || size.height === 0) {
+      return;
+    }
+    const device = importDevice(Skia.getNativeDevice());
+    // 1. A buffer of the size of the view
+    const buffer = createNativeBuffer(size.width, size.height);
+    // 2. Its texture on Skia's device
+    const memory = device.importSharedTextureMemory({ source: buffer });
+    const texture = memory.createTexture();
+    // false: a new buffer, nothing in it to keep
+    memory.beginAccess(texture, false);
+    // 3. Draw with Skia. The picture is in points, the buffer in pixels.
+    const surface = Skia.Surface.MakeFromGPUTexture(texture);
+    const canvas = surface.getCanvas();
+    canvas.clear(Skia.Color("transparent"));
+    canvas.scale(size.width / width, size.height / height);
+    canvas.drawPicture(picture);
+    surface.flush();
+    // 4. Shown once the GPU is done drawing
+    ref.current.present(buffer, memory.endAccess(texture));
+    // The view keeps its own reference on the buffer
+    surface.dispose();
+    texture.destroy();
+    memory.destroy();
+    buffer.release();
+  }, [picture, width, height, size]);
+
+  return (
+    <NativeBufferView
+      ref={ref}
+      onPixelSizeChange={onPixelSizeChange}
+      style={{ width, height }}
+    />
+  );
+};
+```
+
+`StaticPicture` is a regular React Native view, and what it shows is a picture: record one with `createPicture()`, or from React elements with `drawAsPicture()`.
+
+```tsx
+import { Skia, createPicture } from "react-native-skia";
+
+const picture = createPicture((canvas) => {
+  const paint = Skia.Paint();
+  paint.setColor(Skia.Color("cyan"));
+  canvas.drawCircle(24, 24, 24, paint);
+});
+
+<StaticPicture picture={picture} width={48} height={48} />;
+```
+
+The surface is a regular Skia surface, so anything Skia draws goes into the buffer the same way: a paragraph, or a photo through an image filter.
+A few things to know:
+
+- **A presented buffer is never drawn again.** The system reads it whenever it composites the screen. To update the drawing, draw into a new buffer and present that one, as the effect above does when the picture or the size changes.
+- **The view keeps the buffer.** It holds its own reference on the buffer and on the fences: dispose the surface, destroy the texture and the memory, and release the buffer right after `present()`.
+- **The size is in pixels.** `useNativeBufferSize()` reports the size of the view in physical pixels, and a new size only once a resize has settled. Meanwhile the view scales the buffer it has, according to its [`resizeMode`](https://wcandillon.github.io/react-native-webgpu/api/native-buffer#resize-modes).
+- **Android 8 and 9.** The view copies the pixels of each buffer through the CPU. From Android 10 on, it shows the buffer without a copy.
+
+The [200 icons example](https://github.com/wcandillon/react-native-webgpu/blob/main/apps/example/src/IconBenchmark/IconBenchmark.tsx) of React Native WebGPU draws each of its icons this way.
 
 ## View snapshots
 
