@@ -4,16 +4,24 @@
  * binaries were compiled against, shipped as the react-native-webgpu-dawn npm
  * package that react-native-skia and react-native-webgpu both link.
  *
- * Usage:
- *   yarn build-dawn                             every target, then the xcframework
- *   yarn build-dawn android-arm64-v8a ios-arm64 the given targets
- *   yarn build-dawn xcframework                 assemble libs/dawn/apple/libwebgpu_dawn.xcframework
- *                                               from the Apple slices already built
+ * Usage (from packages/skia):
+ *   yarn build-dawn                              # every target
+ *   yarn build-dawn android                      # all Android ABIs
+ *   yarn build-dawn android-arm64-v8a            # one Android ABI
+ *   yarn build-dawn iphonesimulator              # lipo'd universal simulator libraries
+ *   yarn build-dawn iphonesimulator-arm64        # one simulator architecture
+ *   yarn build-dawn iphoneos iphonesimulator     # multiple SDK groups
  *
- * Targets: android-armeabi-v7a, android-arm64-v8a, android-x86, android-x86_64
- * (ANDROID_NDK must be set), ios-arm64, ios-simulator-arm64,
- * ios-simulator-x86_64, tvos-arm64, tvos-simulator-arm64,
- * tvos-simulator-x86_64, maccatalyst-universal, macos-universal.
+ * Apple static libraries are staged under libs/dawn/apple/<sdk>-<arch>/
+ * (e.g. libs/dawn/apple/iphonesimulator-arm64/), then assembled under libs/dawn/apple/<sdk>/
+ * (e.g. libs/dawn/apple/iphonesimulator/). SDK groups with multiple architectures
+ * produce lipo'd universal libraries; single-architecture builds copy the archive.
+ * Staging directories are removed on successful SDK assembly; CMake intermediates remain.
+ * Android uses libs/dawn/android/<abi>/ (e.g. libs/dawn/android/arm64-v8a/).
+ * package-binaries assembles XCFrameworks for npm distribution.
+ *
+ * See apple-configuration.ts for SDK groups/architectures and
+ * dawn-configuration.ts (dawnTargets) for the full target list.
  *
  * Every run first syncs Dawn and its dependencies to the commits in Skia's
  * DEPS and applies scripts/dawn-patches. The headers are collected into
@@ -21,35 +29,22 @@
  */
 
 import { exit } from "process";
+import path from "path";
 
+import { combineAppleLibraries } from "./apple-build";
+import { selectBuildTargets } from "./apple-configuration";
 import {
   applyDawnPatches,
   buildDawnTarget,
   collectDawnHeaders,
-  createDawnXcframework,
+  DawnLibs,
+  dawnLibraryName,
   dawnTargetNames,
-  dawnTargets,
   syncDawnDeps,
 } from "./dawn-configuration";
 
-const XCFRAMEWORK = "xcframework";
-
 (async () => {
-  const args = process.argv.slice(2);
-  const invalid = args.filter((a) => a !== XCFRAMEWORK && !dawnTargets[a]);
-  if (invalid.length > 0) {
-    console.error(`❌ Unknown target(s): ${invalid.join(", ")}`);
-    console.error(
-      `Valid targets: ${[...dawnTargetNames, XCFRAMEWORK].join(", ")}`
-    );
-    exit(1);
-  }
-
-  const buildAll = args.length === 0;
-  const targets = buildAll
-    ? dawnTargetNames
-    : args.filter((a) => a !== XCFRAMEWORK);
-  const assemble = buildAll || args.includes(XCFRAMEWORK);
+  const targets = selectBuildTargets(process.argv.slice(2), dawnTargetNames);
 
   if (targets.length > 0) {
     console.log(`🎯 Building Dawn for: ${targets.join(", ")}`);
@@ -65,9 +60,13 @@ const XCFRAMEWORK = "xcframework";
     }
   }
 
-  if (assemble) {
-    createDawnXcframework();
-  }
+  // Limit combination to this run's targets, excluding stale architecture outputs.
+  combineAppleLibraries(
+    path.join(DawnLibs, "apple"),
+    [dawnLibraryName("apple")],
+    undefined,
+    targets
+  );
 })().catch((error) => {
   console.error(`❌ ${error.message}`);
   exit(1);
