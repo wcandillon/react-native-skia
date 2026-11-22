@@ -191,7 +191,7 @@ Pod::Spec.new do |s|
     'OTHER_LDFLAGS' => '$(inherited) -Wl,-u,_rnskia_getWGPUInstance'
   }
 
-  s.frameworks = ['MetalKit', 'AVFoundation', 'AVKit', 'CoreMedia']
+  s.frameworks = ['MetalKit', 'AVFoundation', 'AVKit', 'CoreMedia', 'CoreVideo', 'IOSurface']
 
   # Platform-specific vendored frameworks (copied into libs/)
   s.ios.vendored_frameworks = ios_frameworks

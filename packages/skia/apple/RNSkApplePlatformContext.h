@@ -68,6 +68,9 @@ public:
 
   sk_sp<SkFontMgr> createFontMgr() override;
 
+  std::unique_ptr<RNSkVideoEncoder>
+  makeVideoEncoder(const RNSkVideoEncoderOptions &options) override;
+
   std::vector<std::string> getSystemFontFamilies() override;
 
   std::string resolveFontFamily(const std::string &familyName) override;

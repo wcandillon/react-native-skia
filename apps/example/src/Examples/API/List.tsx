@@ -19,6 +19,10 @@ export const examples = [
     title: "🍭 Skottie",
   },
   {
+    screen: "SkottieExport",
+    title: "🎬 Skottie Video Export",
+  },
+  {
     screen: "AnimatedImages",
     title: "🌅 Animated Images",
   },

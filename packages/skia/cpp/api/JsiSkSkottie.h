@@ -1,11 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <jsi/jsi.h>
 
@@ -127,9 +130,41 @@ private:
 
 class ManagedAnimation {
 public:
+  /** A change made to the animation from JS, to make again on a copy. */
+  using Edit = std::function<bool(ManagedAnimation &)>;
+
+  /**
+   What makes another instance of the animation: its JSON, its assets and
+   the changes made to it from JS since (properties and slots set, in the
+   order they were first set). Taken on the JS thread, cheaply (the JSON is
+   shared, not copied); the instance is made from it on any thread (see
+   JsiSkottieExport).
+   */
+  struct Source {
+    std::shared_ptr<const std::string> json;
+    SkottieAssetProvider::AssetMap assets;
+    sk_sp<SkFontMgr> fontMgr;
+    std::vector<Edit> edits;
+  };
+
+  explicit ManagedAnimation(const Source &source)
+      : ManagedAnimation(source.json, source.assets, source.fontMgr) {
+    for (const auto &edit : source.edits) {
+      edit(*this);
+    }
+  }
+
   ManagedAnimation(std::string json, SkottieAssetProvider::AssetMap assets,
-                   sk_sp<SkFontMgr> fontMgr) {
-    _approximateBytesUsed = json.size();
+                   sk_sp<SkFontMgr> fontMgr)
+      : ManagedAnimation(std::make_shared<const std::string>(std::move(json)),
+                         std::move(assets), std::move(fontMgr)) {}
+
+private:
+  ManagedAnimation(std::shared_ptr<const std::string> json,
+                   SkottieAssetProvider::AssetMap assets,
+                   sk_sp<SkFontMgr> fontMgr)
+      : _json(std::move(json)), _assets(assets), _fontMgr(fontMgr) {
+    _approximateBytesUsed = _json->size();
     for (const auto &asset : assets) {
       if (asset.second) {
         _approximateBytesUsed += asset.second->size();
@@ -144,12 +179,13 @@ public:
     auto builder = std::make_shared<skottie::Animation::Builder>();
     builder->setResourceProvider(_resourceProvider);
     builder->setPropertyObserver(_propManager->getPropertyObserver());
-    _animation = builder->make(json.c_str(), json.size());
+    _animation = builder->make(_json->c_str(), _json->size());
     _slotManager = builder->getSlotManager();
     // Image assets are loaded while the animation is built.
     _approximateBytesUsed += _resourceProvider->decodedImageBytes();
   }
 
+public:
   ~ManagedAnimation() {
     _animation = nullptr;
     _slotManager = nullptr;
@@ -161,6 +197,36 @@ public:
       delete raw_ptr; // Direct delete - bypasses ref counting entirely
     }
   }
+
+  Source source() const {
+    Source result{_json, _assets, _fontMgr, {}};
+    result.edits.reserve(_edits.size());
+    for (const auto &[key, edit] : _edits) {
+      result.edits.push_back(edit);
+    }
+    return result;
+  }
+
+  /**
+   Remembers a change made from JS under `key` (the kind of change and what
+   it changed), replacing the one made there before, so that source()
+   makes it again on a copy.
+   */
+  void recordEdit(std::string key, Edit edit) {
+    auto it = std::find_if(_edits.begin(), _edits.end(),
+                           [&](const auto &e) { return e.first == key; });
+    if (it != _edits.end()) {
+      it->second = std::move(edit);
+    } else {
+      _edits.emplace_back(std::move(key), std::move(edit));
+    }
+  }
+
+private:
+  const std::shared_ptr<const std::string> _json;
+  const SkottieAssetProvider::AssetMap _assets;
+  const sk_sp<SkFontMgr> _fontMgr;
+  std::vector<std::pair<std::string, Edit>> _edits;
 
 public:
   sk_sp<skottie::Animation> _animation = nullptr;
@@ -187,6 +253,20 @@ public:
   // #endregion
 
   // #region Methods
+  /**
+   Makes a change on the animation and, when it applies, remembers it so
+   that an export of the animation, which renders a copy of its own, shows
+   it too (see ManagedAnimation::source).
+   */
+  bool applyEdit(std::string key, ManagedAnimation::Edit edit) {
+    auto &animation = *getObject();
+    if (!edit(animation)) {
+      return false;
+    }
+    animation.recordEdit(std::move(key), std::move(edit));
+    return true;
+  }
+
   void seekFrame(double frame,
                  std::optional<std::shared_ptr<SkRect>> rectParam) {
     sksg::InvalidationController ic;
@@ -218,14 +298,21 @@ public:
     if (!key.has_value() || !color.has_value()) {
       return false;
     }
-    return getObject()->_propManager->setColor(*key, *color);
+    return applyEdit("color:" + *key, [k = *key, value = SkColor(*color)](
+                                          ManagedAnimation &animation) {
+      return animation._propManager->setColor(k, value);
+    });
   }
 
   bool setOpacity(JsiOptional<std::string> key, JsiOptional<double> opacity) {
     if (!key.has_value() || !opacity.has_value()) {
       return false;
     }
-    return getObject()->_propManager->setOpacity(*key, *opacity);
+    return applyEdit("opacity:" + *key,
+                     [k = *key, value = static_cast<float>(*opacity)](
+                         ManagedAnimation &animation) {
+                       return animation._propManager->setOpacity(k, value);
+                     });
   }
 
   bool setText(JsiOptional<std::string> key, JsiOptional<std::string> text,
@@ -233,11 +320,15 @@ public:
     if (!key.has_value() || !text.has_value() || !size.has_value()) {
       return false;
     }
-    // preserve all other text fields
-    auto t = getObject()->_propManager->getText(*key);
-    t.fText = SkString(*text);
-    t.fTextSize = *size;
-    return getObject()->_propManager->setText(*key, t);
+    return applyEdit("text:" + *key, [k = *key, value = *text,
+                                      textSize = static_cast<float>(*size)](
+                                         ManagedAnimation &animation) {
+      // preserve all other text fields
+      auto t = animation._propManager->getText(k);
+      t.fText = SkString(value);
+      t.fTextSize = textSize;
+      return animation._propManager->setText(k, t);
+    });
   }
 
   JSI_HOST_FUNCTION(getTextProps) {
@@ -275,7 +366,10 @@ public:
     transform.fRotation = *rotation;
     transform.fSkew = *skew;
     transform.fSkewAxis = *skewAxis;
-    return getObject()->_propManager->setTransform(*key, transform);
+    return applyEdit("transform:" + *key, [k = *key, transform](
+                                              ManagedAnimation &animation) {
+      return animation._propManager->setTransform(k, transform);
+    });
   }
 
   JSI_HOST_FUNCTION(getSlotInfo) {
@@ -334,7 +428,11 @@ public:
     if (!slotID.has_value() || !color.has_value()) {
       return false;
     }
-    return getObject()->_slotManager->setColorSlot(SkString(*slotID), *color);
+    return applyEdit(
+        "colorSlot:" + *slotID,
+        [id = *slotID, value = SkColor(*color)](ManagedAnimation &animation) {
+          return animation._slotManager->setColorSlot(SkString(id), value);
+        });
   }
 
   bool setScalarSlot(JsiOptional<std::string> slotID,
@@ -342,7 +440,12 @@ public:
     if (!slotID.has_value() || !scalar.has_value()) {
       return false;
     }
-    return getObject()->_slotManager->setScalarSlot(SkString(*slotID), *scalar);
+    return applyEdit(
+        "scalarSlot:" + *slotID,
+        [id = *slotID,
+         value = static_cast<float>(*scalar)](ManagedAnimation &animation) {
+          return animation._slotManager->setScalarSlot(SkString(id), value);
+        });
   }
 
   bool setVec2Slot(JsiOptional<std::string> slotID,
@@ -350,8 +453,12 @@ public:
     if (!slotID.has_value() || !point.has_value()) {
       return false;
     }
-    SkV2 vec2{point->x(), point->y()};
-    return getObject()->_slotManager->setVec2Slot(SkString(*slotID), vec2);
+    return applyEdit("vec2Slot:" + *slotID,
+                     [id = *slotID, vec2 = SkV2{point->x(), point->y()}](
+                         ManagedAnimation &animation) {
+                       return animation._slotManager->setVec2Slot(SkString(id),
+                                                                  vec2);
+                     });
   }
 
   // The text value argument is intentionally not declared: the raw binding
@@ -366,9 +473,12 @@ public:
     if (!slotID.has_value() || !assetName.has_value()) {
       return false;
     }
-    return getObject()->_slotManager->setImageSlot(
-        SkString(*slotID), getObject()->_resourceProvider->loadImageAsset(
-                               nullptr, assetName->data(), nullptr));
+    return applyEdit("imageSlot:" + *slotID, [id = *slotID, name = *assetName](
+                                                 ManagedAnimation &animation) {
+      return animation._slotManager->setImageSlot(
+          SkString(id), animation._resourceProvider->loadImageAsset(
+                            nullptr, name.c_str(), nullptr));
+    });
   }
 
   JSI_HOST_FUNCTION(getColorSlot) {

@@ -8,6 +8,7 @@ export const apiScreenPaths: Record<keyof Routes, string> = {
   Shapes: "shapes",
   Images: "images",
   Skottie: "skottie",
+  SkottieExport: "skottie-export",
   AnimatedImages: "animated-images",
   ImageLoading: "image-loading",
   Paragraphs: "paragraphs",

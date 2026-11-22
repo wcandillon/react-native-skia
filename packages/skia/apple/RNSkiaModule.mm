@@ -3,6 +3,7 @@
 #import <ReactCommon/RCTTurboModule.h>
 
 #include "RNDawnContext.h"
+#include "RNSkVideoEncoder.h"
 #import "RNSkApplePlatformContext.h"
 
 static __weak RNSkiaModule *sharedInstance = nil;
@@ -63,6 +64,8 @@ RCT_EXPORT_MODULE()
     }
 #endif // TARGET_OS_OSX || TARGET_OS_MACCATALYST
     if (caches != nil) {
+      // Where Skia.Skottie.exportVideo writes a relative path.
+      RNSkia::RNSkVideoExportDirectory::set(caches.UTF8String);
       RNSkia::DawnContext::setCacheDirectory(
           [[caches stringByAppendingPathComponent:@"rnskia"] UTF8String]);
     }

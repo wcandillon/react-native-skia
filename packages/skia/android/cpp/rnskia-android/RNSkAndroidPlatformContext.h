@@ -6,6 +6,7 @@
 #include <string>
 
 #include "RNDawnContext.h"
+#include "RNSkAndroidVideoEncoder.h"
 
 #include "JniPlatformContext.h"
 #include "RNSkPlatformContext.h"
@@ -50,6 +51,11 @@ public:
                                         bool useP3ColorSpace = false) override {
     return DawnContext::getInstance().MakeOffscreen(width, height,
                                                     useP3ColorSpace);
+  }
+
+  std::unique_ptr<RNSkVideoEncoder>
+  makeVideoEncoder(const RNSkVideoEncoderOptions &options) override {
+    return MakeAndroidVideoEncoder(options);
   }
 
   sk_sp<SkFontMgr> createFontMgr() override {

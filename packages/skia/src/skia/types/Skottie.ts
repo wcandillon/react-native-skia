@@ -261,6 +261,78 @@ export interface SkSkottieAnimation extends SkJSIInstance<"SkottieAnimation"> {
   ): boolean;
 }
 
+/**
+ * Options of {@link SkottieFactory.exportVideo}.
+ */
+export interface SkottieVideoExportOptions {
+  /**
+   * The .mp4 file to write: an absolute path, a `file://` URL, or a path
+   * relative to the app's cache directory. Its directory must exist; a file
+   * already there is replaced. The result has the absolute path.
+   */
+  path: string;
+  /** The width of the video, in pixels: even, at most 8192. */
+  width: number;
+  /** The height of the video, in pixels: even, at most 8192. */
+  height: number;
+  /** Frames per second; the animation's frame rate by default. */
+  fps?: number;
+  /** The average bitrate, in bits per second; 12 Mbps by default. */
+  bitrate?: number;
+  /**
+   * A sound (AAC, MP3 or any format the platform reads), muxed from the
+   * start of the video and cut to its length: a file path (or `file://`
+   * URL), or the bytes of the file, as `Skia.Data.fromURI` or `useData`
+   * load them. AAC is copied as it is, anything else is encoded to AAC.
+   */
+  audio?: { path: string } | { data: SkData };
+  /** Aborts the export: the promise rejects with an `AbortError`. */
+  signal?: AbortSignal;
+  /** Called on the JS thread as frames are written. */
+  onProgress?: (frames: number, totalFrames: number) => void;
+}
+
+/**
+ * The video {@link SkottieFactory.exportVideo} wrote.
+ */
+export interface SkottieVideoExportResult {
+  path: string;
+  width: number;
+  height: number;
+  fps: number;
+  /** The number of frames written. */
+  frames: number;
+  /** The length of the video, in seconds. */
+  duration: number;
+}
+
+/**
+ * Why {@link SkottieFactory.exportVideo} failed: the `code` of the error
+ * its promise rejects with.
+ */
+export type SkottieVideoExportErrorCode =
+  | "unsupported"
+  | "invalid-argument"
+  | "write-failed"
+  | "audio-failed"
+  | "encoder-failed"
+  | "gpu-lost"
+  | "cancelled";
+
 export interface SkottieFactory {
   Make(json: string, assets?: Record<string, SkData>): SkSkottieAnimation;
+  /**
+   * Renders every frame of the animation offscreen, on the GPU, into the
+   * platform's hardware H.264 encoder and writes an .mp4 file. iOS and
+   * Android only.
+   *
+   * The export renders a copy of the animation of its own, with the
+   * properties and slots set on it so far: the animation on screen is not
+   * touched, and can keep playing. Rejects with an `Error` whose `code` is
+   * a {@link SkottieVideoExportErrorCode}; the partial file is deleted.
+   */
+  exportVideo(
+    animation: SkSkottieAnimation,
+    options: SkottieVideoExportOptions
+  ): Promise<SkottieVideoExportResult>;
 }

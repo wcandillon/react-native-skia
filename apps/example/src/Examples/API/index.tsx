@@ -32,6 +32,7 @@ import { Paragraphs2 } from "./Paragraphs2";
 import { ParagraphPath } from "./ParagraphPath";
 import { GlyphBounds } from "./GlyphBounds";
 import { Skottie } from "./Skottie";
+import { SkottieExport } from "./SkottieExport";
 import { StressTest } from "./StressTest";
 import { StressTest2 } from "./StressTest2";
 import { StressTest3 } from "./StressTest3";
@@ -80,6 +81,13 @@ export const API = () => {
         component={Skottie}
         options={{
           title: "🍭 Skottie",
+        }}
+      />
+      <Stack.Screen
+        name="SkottieExport"
+        component={SkottieExport}
+        options={{
+          title: "🎬 Skottie Video Export",
         }}
       />
       <Stack.Screen

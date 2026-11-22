@@ -23,6 +23,8 @@
 
 #include <ReactCommon/CallInvoker.h>
 
+#include "RNSkVideoEncoder.h"
+
 namespace RNSkia {
 
 namespace react = facebook::react;
@@ -96,6 +98,18 @@ public:
    * Return the Platform specific font manager
    */
   virtual sk_sp<SkFontMgr> createFontMgr() = 0;
+
+  /**
+   * An H.264 encoder writing the frames Skia draws to an .mp4 file (see
+   * RNSkVideoEncoder), for Skia.Skottie.exportVideo. Called on the export's
+   * thread. Throws RNSkVideoExportError; a platform without an encoder
+   * rejects every export as unsupported.
+   */
+  virtual std::unique_ptr<RNSkVideoEncoder>
+  makeVideoEncoder(const RNSkVideoEncoderOptions & /* options */) {
+    throw RNSkVideoExportError(
+        "unsupported", "Video export is not supported on this platform.");
+  }
 
   /**
    * Return platform-specific system font family names that aren't

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "RNDawnContext.h"
+#include "RNSkAppleVideoEncoder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -191,6 +192,11 @@ void RNSkApplePlatformContext::runOnMainThread(std::function<void()> func) {
   dispatch_async(dispatch_get_main_queue(), ^{
     func();
   });
+}
+
+std::unique_ptr<RNSkVideoEncoder> RNSkApplePlatformContext::makeVideoEncoder(
+    const RNSkVideoEncoderOptions &options) {
+  return MakeAppleVideoEncoder(options);
 }
 
 } // namespace RNSkia

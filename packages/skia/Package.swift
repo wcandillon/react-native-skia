@@ -129,6 +129,8 @@ let package = Package(
         .linkedFramework("AVFoundation"),
         .linkedFramework("AVKit"),
         .linkedFramework("CoreMedia"),
+        .linkedFramework("CoreVideo"),
+        .linkedFramework("IOSurface"),
       ]
     )
   ],

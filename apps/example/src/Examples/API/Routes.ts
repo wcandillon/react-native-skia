@@ -29,6 +29,7 @@ export type Routes = {
   ParagraphPath: undefined;
   GlyphBounds: undefined;
   Skottie: undefined;
+  SkottieExport: undefined;
   StressTest: undefined;
   StressTest2: undefined;
   StressTest3: undefined;

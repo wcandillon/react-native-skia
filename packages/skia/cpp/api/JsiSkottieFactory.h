@@ -7,6 +7,7 @@
 
 #include "JsiSkNativeObjects.h"
 #include "JsiSkSkottie.h"
+#include "JsiSkottieExport.h"
 
 namespace RNSkia {
 
@@ -56,10 +57,17 @@ public:
                                                 std::move(managedAnimation)));
   }
 
+  JSI_HOST_FUNCTION(exportVideo) {
+    return JsiSkottieExport::exportVideo(runtime, getContext(), arguments,
+                                         count);
+  }
+
   size_t getMemoryPressure() override { return 4096; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "Make", &JsiSkottieFactory::Make);
+    installHostMethod(runtime, prototype, "exportVideo",
+                      &JsiSkottieFactory::exportVideo);
   }
 
   explicit JsiSkottieFactory(std::shared_ptr<RNSkPlatformContext> context)

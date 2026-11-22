@@ -21,6 +21,7 @@
 #include "JniPresentThread.h"
 #include "RNDawnContext.h"
 #include "RNSkPresentThread.h"
+#include "RNSkVideoEncoder.h"
 
 namespace RNSkia {
 
@@ -100,7 +101,14 @@ void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
 void JniPlatformContext::setCacheDirectoryNative(
     jni::alias_ref<jclass>, jni::alias_ref<jni::JString> directory) {
   if (directory) {
-    DawnContext::setCacheDirectory(directory->toStdString());
+    auto path = directory->toStdString();
+    // Where Skia.Skottie.exportVideo writes a relative path: the app's cache
+    // directory, which Dawn's is in.
+    auto slash = path.find_last_of('/');
+    if (slash != std::string::npos && slash > 0) {
+      RNSkVideoExportDirectory::set(path.substr(0, slash));
+    }
+    DawnContext::setCacheDirectory(path);
   }
 }
 

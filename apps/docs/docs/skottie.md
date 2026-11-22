@@ -322,3 +322,60 @@ const transformProps = animation.getTransformProps();
 //   }
 // }
 ```
+
+## Exporting to Video
+
+`Skia.Skottie.exportVideo` renders every frame of an animation to an H.264 `.mp4` file, on the device.
+The frames are drawn offscreen on the GPU, straight into the platform's hardware encoder: an IOSurface-backed pixel buffer of `AVAssetWriter` on iOS, the input surface of `MediaCodec` on Android.
+They are rendered as fast as the encoder takes them, not in real time, on a thread of the export's own: neither the JS thread nor the UI thread waits for it.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+const animation = Skia.Skottie.Make("{}")!;
+const sound = Skia.Data.fromBytes(new Uint8Array());
+// ---cut---
+const controller = new AbortController();
+const result = await Skia.Skottie.exportVideo(animation, {
+  // An absolute path, a file:// URL, or a path in the app's cache directory.
+  path: "share-card.mp4",
+  width: 1080,
+  height: 1920,
+  fps: 30, // the animation's frame rate by default
+  bitrate: 12_000_000, // 12 Mbps by default
+  // A file path, or the bytes of the file (useData, Skia.Data.fromURI).
+  audio: { data: sound },
+  signal: controller.signal,
+  onProgress: (frames, totalFrames) => console.log(frames / totalFrames),
+});
+console.log(result.path, result.frames, result.duration);
+```
+
+| Option       | Type                                    | Description                                                                                                                               |
+| :----------- | :-------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| path         | `string`                                | The `.mp4` to write: absolute, a `file://` URL, or relative to the app's cache directory. The directory must exist; a file there is replaced. |
+| width        | `number`                                | Width of the video in pixels: even, at most 8192.                                                                                         |
+| height       | `number`                                | Height of the video in pixels: even, at most 8192.                                                                                        |
+| fps          | `number`                                | Frames per second. Defaults to the animation's.                                                                                           |
+| bitrate      | `number`                                | Average bitrate in bits per second. Defaults to 12 Mbps.                                                                                  |
+| audio        | `{ path: string } \| { data: SkData }`  | A sound muxed from the start and cut to the video's length. AAC is copied as it is; MP3 and other formats are encoded to AAC.               |
+| signal       | `AbortSignal`                           | Cancels the export.                                                                                                                       |
+| onProgress   | `(frames, totalFrames) => void`         | Called on the JS thread as frames are written.                                                                                            |
+
+The animation is scaled to fit the video, centered, over black: a video has no alpha.
+The export renders a copy of the animation of its own, made from its JSON and assets, with the properties and slots set on it so far (`setColor`, `setText`, `setColorSlot`, …): the animation on screen is never sought, and can keep playing during the export.
+
+The promise rejects with an `Error` whose `code` says why, and the partial file is deleted:
+
+| Code               | Meaning                                                                                     |
+| :----------------- | :------------------------------------------------------------------------------------------ |
+| `unsupported`      | The device cannot encode these options (an odd or too large size, no H.264 encoder, no GPU). |
+| `invalid-argument` | An option is missing or of the wrong type.                                                  |
+| `write-failed`     | The file could not be written (the directory does not exist, the disk is full).            |
+| `audio-failed`     | The sound could not be read or muxed.                                                       |
+| `encoder-failed`   | The encoder failed while encoding.                                                          |
+| `gpu-lost`         | The GPU device was lost during the export.                                                  |
+| `cancelled`        | The export was cancelled through its `signal`; the error's `name` is `AbortError`.          |
+
+Video export is available on iOS and Android; on Web, it rejects with `unsupported`.
+On iOS, keep the app in the foreground until the export finishes: iOS holds the GPU work of an app in the background, and may stop its hardware encoder.
