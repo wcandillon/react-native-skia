@@ -24914,7 +24914,6 @@ __metadata:
     jest-diff: 29.7.0
     jest-environment-jsdom: 30.0.0
     merge-dirs: 0.2.1
-    playwright: 1.64.1
     pngjs: 6.0.0
     prettier: 2.8.7
     react: 19.3.0
