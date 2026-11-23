@@ -24882,6 +24882,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"react-native-skia-wasm@workspace:packages/skia-wasm":
+  version: 0.0.0-use.local
+  resolution: "react-native-skia-wasm@workspace:packages/skia-wasm"
+  dependencies:
+    eslint: 9.36.0
+    eslint-config-react-native-wcandillon: 5.0.1
+    extract-zip: ^2.0.1
+    playwright: 1.64.1
+    tsx: ^4.21.0
+    typescript: ^5.2.2
+  languageName: unknown
+  linkType: soft
+
 "react-native-skia@workspace:*, react-native-skia@workspace:packages/skia":
   version: 0.0.0-use.local
   resolution: "react-native-skia@workspace:packages/skia"

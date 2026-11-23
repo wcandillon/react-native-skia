@@ -86,7 +86,10 @@ export const selectBuildTargets = (specs: string[], targets: string[]) => {
   const selected = new Set<string>();
   for (const spec of specs) {
     // Only catalogued groups expand; partial names must not select other SDKs.
-    const isGroup = spec === "android" || appleSDKs.includes(spec as AppleSDK);
+    const isGroup =
+      spec === "android" ||
+      spec === "wasm" ||
+      appleSDKs.includes(spec as AppleSDK);
     let matches: string[] = [];
     if (targets.includes(spec)) {
       matches = [spec];
@@ -97,7 +100,7 @@ export const selectBuildTargets = (specs: string[], targets: string[]) => {
       throw new Error(
         `Unknown target '${spec}'. Valid targets: ${targets.join(
           ", "
-        )}; groups: android, ${appleSDKs.join(", ")}`
+        )}; groups: android, wasm, ${appleSDKs.join(", ")}`
       );
     }
     matches.forEach((target) => selected.add(target));
