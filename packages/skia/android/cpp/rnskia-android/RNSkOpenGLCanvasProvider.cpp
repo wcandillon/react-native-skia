@@ -118,6 +118,15 @@ void RNSkOpenGLCanvasProvider::updateTexImage() {
                                "can safely be ignored");
       env->ExceptionClear();
     }
+
+    // updateTexImage() can change the GL_TEXTURE_EXTERNAL_OES binding of the
+    // current context behind Ganesh's texture-binding cache. Without this
+    // reset, re-drawing an already imported external image (e.g.
+    // MakeImageFromNativeBuffer) hits the stale cache, skips glBindTexture and
+    // samples the wrong texture.
+    if (auto *context = OpenGLContext::getInstance().getDirectContext()) {
+      context->resetContext(kTextureBinding_GrGLBackendState);
+    }
   }
 }
 #endif
