@@ -62,7 +62,7 @@ Skia writes `.a` libraries to `libs/android/<abi>`. Dawn writes `libwebgpu_dawn.
 
 `yarn build-skia wasm` builds Skia Graphite for the browser's WebGPU with the Emscripten release Skia pins (installed in the Skia checkout on first use). There is no Dawn build: the browser implements WebGPU, and the WebGPU headers and JavaScript glue are generated from the pinned Dawn checkout.
 
-Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), the WebGPU package (`emdawnwebgpu/`) and `metadata.json`, which records the Emscripten version, flags and defines a consumer has to match. These archives are not a module: `packages/skia-wasm` links them, and its `yarn smoke` checks that they draw in a browser. `yarn package-skia-wasm` zips them for upload.
+Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), the WebGPU package (`emdawnwebgpu/`) and `metadata.json`, which records the Emscripten version, flags and defines a consumer has to match. These archives are not a module: the [skia-wasm](https://github.com/wcandillon/skia-wasm) repository links them into one. `yarn wasm-smoke` checks them here: it links every archive into a test module and draws with each in headless Chromium (`scripts/wasm-smoke`). `yarn package-skia-wasm` zips them for upload.
 
 #### Apple
 

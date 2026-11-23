@@ -1,7 +1,7 @@
 // Runs the smoke module on the page's GPUDevice, reads the texture it drew
 // into back, and checks every tile. The result is left in window.smoke for
-// smoke.spec.ts, and shown on the page for a person.
-import createSmokeModule from "../dist/smoke.js";
+// smoke.playwright.ts, and shown on the page for a person.
+import createSmokeModule from "./smoke.js";
 
 const TILE = 128;
 const COLUMNS = 3;
@@ -52,9 +52,7 @@ const run = async () => {
   }
 
   step("loading the font");
-  const font = new Uint8Array(
-    await (await fetch("../dist/font.ttf")).arrayBuffer()
-  );
+  const font = new Uint8Array(await (await fetch("./font.ttf")).arrayBuffer());
   const fontPtr = smoke._malloc(font.length);
   smoke.HEAPU8.set(font, fontPtr);
   const hasFont = smoke._smoke_set_font(fontPtr, font.length);
@@ -85,11 +83,10 @@ const run = async () => {
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const encoder = device.createCommandEncoder();
-  encoder.copyTextureToBuffer(
-    { texture },
-    { buffer, bytesPerRow },
-    [WIDTH, HEIGHT]
-  );
+  encoder.copyTextureToBuffer({ texture }, { buffer, bytesPerRow }, [
+    WIDTH,
+    HEIGHT,
+  ]);
   device.queue.submit([encoder.finish()]);
   await buffer.mapAsync(GPUMapMode.READ);
   const pixels = new Uint8Array(buffer.getMappedRange()).slice();

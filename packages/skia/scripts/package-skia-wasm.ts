@@ -3,8 +3,9 @@
  * skia-graphite-wasm.zip and prints its checksum.
  *
  * The archive is not part of the binaries release yet: it is uploaded by hand
- * and pinned, with the printed entry, in packages/skia-wasm/binaries.json,
- * which is where that package downloads it from when there is no local build.
+ * and pinned, with the printed entry, in binaries.json of the skia-wasm
+ * repository (https://github.com/wcandillon/skia-wasm), which downloads it
+ * from there.
  *
  * Usage:
  *   yarn package-skia-wasm [--output=<dir>]     (default: build/wasm)
@@ -54,7 +55,9 @@ const { size } = fs.statSync(archive);
 
 console.log(`✅ ${archive} (${(size / (1 << 20)).toFixed(1)} MB)`);
 console.log("");
-console.log("Once uploaded, pin it in packages/skia-wasm/binaries.json:");
+console.log(
+  "Once uploaded, pin it in binaries.json of the skia-wasm repository:"
+);
 console.log(
   JSON.stringify(
     { [AssetName]: { url: "<where it was uploaded>", sha256, size } },

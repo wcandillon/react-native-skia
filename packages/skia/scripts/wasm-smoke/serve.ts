@@ -1,19 +1,18 @@
 /**
- * Serves this package over http://localhost, which browsers treat as a secure
- * context: WebGPU is not exposed to pages opened from file://.
+ * Serves the built smoke test over http://localhost, which browsers treat as
+ * a secure context: WebGPU is not exposed to pages opened from file://.
  */
 import fs from "fs";
 import http from "http";
 import path from "path";
 
-import { PackageRoot } from "./skia";
+import { SmokeDir } from "./build";
 
-const Port = Number(process.env.PORT ?? 8790);
+const port = Number(process.env.PORT ?? 8792);
 
 const types: Record<string, string> = {
   ".html": "text/html",
   ".js": "text/javascript",
-  ".json": "application/json",
   ".ttf": "font/ttf",
   ".wasm": "application/wasm",
 };
@@ -21,13 +20,13 @@ const types: Record<string, string> = {
 http
   .createServer((request, response) => {
     const { pathname } = new URL(request.url ?? "/", "http://localhost");
-    const file = path.join(PackageRoot, path.normalize(pathname));
+    const file = path.join(SmokeDir, path.normalize(pathname));
     // normalize() resolves ".." segments; anything still outside is refused.
-    if (!file.startsWith(PackageRoot + path.sep) || !fs.existsSync(file)) {
-      response.writeHead(404).end();
-      return;
-    }
-    if (fs.statSync(file).isDirectory()) {
+    if (
+      !file.startsWith(SmokeDir + path.sep) ||
+      !fs.existsSync(file) ||
+      fs.statSync(file).isDirectory()
+    ) {
       response.writeHead(404).end();
       return;
     }
@@ -37,6 +36,6 @@ http
     });
     fs.createReadStream(file).pipe(response);
   })
-  .listen(Port, "localhost", () => {
-    console.log(`http://localhost:${Port}/smoke/index.html`);
+  .listen(port, "localhost", () => {
+    console.log(`http://localhost:${port}/index.html`);
   });

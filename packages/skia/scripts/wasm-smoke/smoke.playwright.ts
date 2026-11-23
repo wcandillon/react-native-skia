@@ -19,7 +19,7 @@ test("every Skia archive draws through Graphite on WebGPU", async ({
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
-  await page.goto("/smoke/index.html");
+  await page.goto("/index.html");
   const handle = await page.waitForFunction(
     () => (window as unknown as { smoke?: SmokeResult }).smoke
   );
