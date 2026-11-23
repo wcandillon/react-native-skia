@@ -13,6 +13,10 @@
 
 #include "webgpu/webgpu_cpp.h"
 
+#ifdef __ANDROID__
+#include <sys/system_properties.h>
+#endif
+
 #include "dawn/native/DawnNative.h"
 
 #include "include/core/SkColorSpace.h"
@@ -169,6 +173,25 @@ inline bool isSwiftShader(const wgpu::Adapter &adapter) {
           info.deviceID == kDeviceIDSwiftShader) ||
          toString(info.device).find("SwiftShader") != std::string::npos;
 }
+
+#ifdef __ANDROID__
+// Whether the app runs in the Android emulator: ro.boot.qemu is "1" there
+// (ro.kernel.qemu on older images), whatever renders its Vulkan
+// (SwiftShader, or the host GPU through gfxstream). Read once.
+inline bool isAndroidEmulator() {
+  static const bool emulator = [] {
+    for (const char *name : {"ro.boot.qemu", "ro.kernel.qemu"}) {
+      char value[PROP_VALUE_MAX] = {};
+      if (__system_property_get(name, value) > 0 &&
+          std::string_view(value) == "1") {
+        return true;
+      }
+    }
+    return false;
+  }();
+  return emulator;
+}
+#endif
 
 // Dawn's own Imagination test (gpu_info::IsImgTec): the PCI vendor ID of
 // Imagination Technologies, whose PowerVR GPUs ship in the Pixel 10 and 11.
@@ -378,14 +401,16 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 #endif
 #ifdef __ANDROID__
   // Dawn checks an imported AHardwareBuffer's allocation size against the
-  // VkImage it binds to, and the Android emulator's SwiftShader driver reports
-  // that size as 0 for every buffer. The first import (react-native-webgpu's
-  // view snapshots draw into an imported AHardwareBuffer on Android 13+) then
-  // fails as an internal error, which Dawn turns into a device loss: nothing
-  // renders for the rest of the process. Dawn itself skips the check on the
-  // Samsung, Qualcomm and Huawei drivers that misreport the size; do the same
-  // for SwiftShader. Real devices keep the check.
-  if (isSwiftShader(adapter)) {
+  // VkImage it binds to, and the Android emulator's drivers report that size
+  // as 0 for every buffer: SwiftShader, and the host GPU when the emulator
+  // renders with it (gfxstream, the default on a machine with a GPU, #4508).
+  // The first import (react-native-webgpu's view snapshots draw into an
+  // imported AHardwareBuffer on Android 13+) then fails as an internal error,
+  // which Dawn turns into a device loss: nothing renders for the rest of the
+  // process. Dawn itself skips the check on the Samsung, Qualcomm and Huawei
+  // drivers that misreport the size; do the same on the emulator. Real
+  // devices keep the check.
+  if (isSwiftShader(adapter) || isAndroidEmulator()) {
     toggles.push_back("ignore_imported_ahardwarebuffer_vulkan_image_size");
   }
 #endif
