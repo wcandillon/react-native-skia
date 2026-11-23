@@ -29,6 +29,29 @@ describe("Text", () => {
     );
     expect(result).toEqual(surface.OS === "ios" ? [0, 0] : [892, 896]);
   });
+  it("Should set embolden and embedded bitmaps on a font", async () => {
+    const result = await surface.eval((Skia) => {
+      const font = Skia.Font();
+      const initial = font.isEmbolden();
+      font.setEmbolden(true);
+      const emboldened = font.isEmbolden();
+      font.setEmbolden(false);
+      font.setEmbeddedBitmaps(true);
+      font.setEmbeddedBitmaps(false);
+      return {
+        initial,
+        emboldened,
+        restored: font.isEmbolden(),
+        setEmbeddedBitmaps: typeof font.setEmbeddedBitmaps,
+      };
+    });
+    expect(result).toEqual({
+      initial: false,
+      emboldened: true,
+      restored: false,
+      setEmbeddedBitmaps: "function",
+    });
+  });
   it("Should calculate chinese text width correctly", async () => {
     const font = fonts.NotoSansSCRegular;
     const result = await surface.eval(
