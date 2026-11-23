@@ -183,7 +183,7 @@ public:
     installMethod(runtime, prototype, "getSkewX", &JsiSkFont::getSkewX);
     installMethod(runtime, prototype, "getTypeface", &JsiSkFont::getTypeface);
     installMethod(runtime, prototype, "setEdging", &JsiSkFont::setEdging);
-    installMethod(runtime, prototype, "embeddedBitmaps",
+    installMethod(runtime, prototype, "setEmbeddedBitmaps",
                   &JsiSkFont::setEmbeddedBitmaps);
     installMethod(runtime, prototype, "setHinting", &JsiSkFont::setHinting);
     installMethod(runtime, prototype, "setLinearMetrics",
@@ -192,6 +192,7 @@ public:
     installMethod(runtime, prototype, "setSkewX", &JsiSkFont::setSkewX);
     installMethod(runtime, prototype, "setSize", &JsiSkFont::setSize);
     installMethod(runtime, prototype, "setEmbolden", &JsiSkFont::setEmbolden);
+    installMethod(runtime, prototype, "isEmbolden", &JsiSkFont::isEmbolden);
     installMethod(runtime, prototype, "setSubpixel", &JsiSkFont::setSubpixel);
     installMethod(runtime, prototype, "setTypeface", &JsiSkFont::setTypeface);
     installMethod(runtime, prototype, "getGlyphWidths",
