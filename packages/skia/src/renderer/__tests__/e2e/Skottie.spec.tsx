@@ -301,6 +301,56 @@ describe("Skottie", () => {
       ],
     });
   });
+  it("sets opacity and transform props", async () => {
+    const result = await surface.eval(
+      (Skia, ctx) => {
+        const assets = {
+          "NotoSerif": Skia.Data.fromBase64(ctx.NotoSerif),
+          "img_0.png": Skia.Data.fromBase64(ctx.img_0),
+        };
+        const animation = Skia.Skottie.Make(ctx.basicSlotsJSON, assets);
+        const opacitySet = animation.setOpacity("Black Solid 1", 25);
+        const transformSet = animation.setTransform(
+          "Transform",
+          { x: 1, y: 2 },
+          { x: 50, y: 60 },
+          { x: 80, y: 90 },
+          45,
+          10,
+          20
+        );
+        return {
+          opacitySet,
+          transformSet,
+          opacity: animation
+            .getOpacityProps()
+            .find(({ key }) => key === "Black Solid 1"),
+          transform: animation
+            .getTransformProps()
+            .find(({ key }) => key === "Transform"),
+        };
+      },
+      {
+        basicSlotsJSON: JSON.stringify(basicSlotsJSON),
+        NotoSerif: toBase64(dataAssets.NotoSansSCRegular),
+        img_0: toBase64(dataAssets.img_0),
+      }
+    );
+    expect(result.opacitySet).toBe(true);
+    expect(result.transformSet).toBe(true);
+    expect(result.opacity).toEqual({ key: "Black Solid 1", value: 25 });
+    expect(result.transform).toEqual({
+      key: "Transform",
+      value: {
+        anchor: { x: 1, y: 2 },
+        position: { x: 50, y: 60 },
+        scale: { x: 80, y: 90 },
+        rotation: 45,
+        skew: 10,
+        skewAxis: 20,
+      },
+    });
+  });
   it("load skottie with assets", async () => {
     const raw = await surface.eval(
       (Skia, ctx) => {
