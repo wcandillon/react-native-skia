@@ -2,10 +2,10 @@
  * Archives the output of `yarn build-skia wasm` (libs/wasm) as
  * skia-graphite-wasm.zip and prints its checksum.
  *
- * The archive is not part of the binaries release yet: it is uploaded by hand
- * and pinned, with the printed entry, in binaries.json of the skia-wasm
- * repository (https://github.com/wcandillon/skia-wasm), which downloads it
- * from there.
+ * The archive is not part of the binaries release: the build-skia-wasm.yml
+ * workflow publishes it as the GitHub release skia-wasm-<version>. The skia-wasm
+ * repository (https://github.com/wcandillon/skia-wasm) pins it, with the
+ * printed entry, in its binaries.json and downloads it from there.
  *
  * Usage:
  *   yarn package-skia-wasm [--output=<dir>]     (default: build/wasm)
