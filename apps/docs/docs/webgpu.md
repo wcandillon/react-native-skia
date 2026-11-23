@@ -519,6 +519,67 @@ A camera library that exposes its frames as native buffers works the same way.
 [`createVideoFrameFromNativeBuffer(pointer)`](https://wcandillon.github.io/react-native-webgpu/api/video-player#other-sources) from React Native WebGPU wraps the `CVPixelBufferRef` or `AHardwareBuffer*` the library hands out (for instance VisionCamera's `frame.getNativeBuffer().pointer`) into a `NativeVideoFrame`, which `copyExternalImageToTexture()` then renders into a texture.
 Pass the frame's orientation as `rotation` and `mirrored`, and release the frame once the copy is issued.
 
+### Writing a video
+
+[`createVideoWriter()`](https://wcandillon.github.io/react-native-webgpu/api/video-writer) from React Native WebGPU encodes frames into an H.264 `.mp4` file, with an optional sound track, on the platform's hardware encoder.
+It hands out native buffers to draw each frame into: Skia draws into one through `Skia.Surface.MakeFromGPUTexture()`, and the writer encodes it once the GPU is done with it, without reading the pixels back.
+Anything Skia draws can be exported this way, a [Skottie animation](/docs/skottie#exporting-to-a-video) or a video with subtitles drawn over its frames, for instance:
+
+```tsx
+import type { SkSkottieAnimation } from "react-native-skia";
+import { Skia } from "react-native-skia";
+import { createVideoWriter, importDevice } from "react-native-webgpu";
+
+export const exportSkottie = async (
+  animation: SkSkottieAnimation,
+  path: string,
+  audio?: string
+) => {
+  const device = importDevice(Skia.getNativeDevice());
+  const fps = animation.fps();
+  const frames = Math.round(animation.duration() * fps);
+  const { width, height } = animation.size();
+  // H.264 takes even sizes only
+  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+  const writer = createVideoWriter(path, {
+    width: even(width),
+    height: even(height),
+    frameRate: fps,
+    audio,
+    device,
+  });
+  try {
+    for (let i = 0; i < frames; i++) {
+      // Resolves once the encoder can take another frame
+      const buffer = await writer.dequeueBuffer();
+      const memory = device.importSharedTextureMemory({ source: buffer });
+      const texture = memory.createTexture();
+      memory.beginAccess(texture, false);
+      const surface = Skia.Surface.MakeFromGPUTexture(texture)!;
+      const canvas = surface.getCanvas();
+      canvas.clear(Skia.Color("white"));
+      animation.seekFrame(i);
+      animation.render(canvas);
+      surface.flush();
+      // Encoded once the drawing is done on the GPU
+      writer.append(buffer, memory.endAccess(texture), i / fps);
+      surface.dispose();
+      texture.destroy();
+      memory.destroy();
+    }
+    await writer.finish();
+  } catch (e) {
+    // Resolves once the partial file is deleted
+    await writer.cancel();
+    throw e;
+  }
+  return writer.path;
+};
+```
+
+The properties set on the animation (colors, text, slots) are the ones the frames are drawn with.
+A relative `path` is written in the app's cache directory; `writer.path` is where the file is.
+
 ### Lifetime
 
 - **Release frames early.** The texture holds the pixels once the copy is issued: release the frame right after, so the video player or the camera gets its buffer back.

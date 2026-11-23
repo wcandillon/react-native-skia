@@ -322,3 +322,8 @@ const transformProps = animation.getTransformProps();
 //   }
 // }
 ```
+
+## Exporting to a video
+
+An animation can be encoded into an `.mp4` file, frame by frame on the GPU, with React Native WebGPU's `createVideoWriter()`.
+See [Writing a video](/docs/webgpu#writing-a-video) for the code.
