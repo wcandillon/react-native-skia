@@ -19,6 +19,12 @@ export const SkiaPatches = path.join(__dirname, "skia-patches");
 /** Applies the Skia patches, skipping those already in the pinned checkout. */
 export const applySkiaPatches = () => applyPatches(SkiaSrc, SkiaPatches);
 
+// The wasm build output, which is also the layout of the release asset:
+// lib/ (archives), skia/ (headers), emdawnwebgpu/ and metadata.json.
+export const WasmLibs = path.join(PackageRoot, "libs", "wasm");
+// Stands in for Dawn on wasm: see skia-patches/wasm-emdawnwebgpu-dependency.patch.
+export const EmdawnwebgpuDir = path.join(WasmLibs, "emdawnwebgpu");
+
 const NdkDir = process.env.ANDROID_NDK ?? "";
 
 /** Minimum Android API used by both Skia's GN and Dawn's CMake builds. */
@@ -95,9 +101,9 @@ export const commonArgs = [
   ["skia_use_partition_alloc", false],
 ];
 
-// Build groups identify Android or one Apple SDK, independently of library format.
-// GN keeps its own CPU/platform spellings.
-export type PlatformName = "android" | AppleSDK;
+// Build groups identify Android, wasm or one Apple SDK, independently of library
+// format. GN keeps its own CPU/platform spellings.
+export type PlatformName = "android" | "wasm" | AppleSDK;
 
 type Arg = (string | boolean | number)[];
 export type Target = {
@@ -185,10 +191,23 @@ const apple = (sdk: AppleSDK): Platform => {
   };
 };
 
-export const configurations: { android: Platform<AndroidTarget> } & Record<
-  AppleSDK,
-  Platform
-> = {
+// The module libraries a wasm consumer links, in addition to libskia.a. GN
+// names them lib<name>.wasm.a; they are staged without the infix.
+export const wasmOutputNames = [
+  "libskia.a",
+  "libskshaper.a",
+  "libsvg.a",
+  "libskottie.a",
+  "libsksg.a",
+  "libskresources.a",
+  "libjsonreader.a",
+  ...ParagraphApple,
+];
+
+export const configurations: {
+  android: Platform<AndroidTarget>;
+  wasm: Platform;
+} & Record<AppleSDK, Platform> = {
   android: {
     targets: {
       arm: {
@@ -241,6 +260,35 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       ...ParagraphOutputsAndroid,
     ],
   },
+  // Graphite on the browser's WebGPU. Built with Emscripten from the emsdk
+  // Skia pins; see wasm-configuration.ts for the toolchain and for what a
+  // consumer of these archives has to match.
+  wasm: {
+    targets: {
+      wasm32: {
+        platform: "wasm",
+        cpu: "wasm",
+      },
+    },
+    args: [
+      // Graphite only. The WebGL (Ganesh) backend would be a separate build.
+      ["skia_enable_ganesh", false],
+      ["skia_use_webgl", false],
+      // The browser implements WebGPU: Dawn is neither built nor linked.
+      ["skia_emdawnwebgpu_dir", `"${EmdawnwebgpuDir}"`],
+      // A module with threads needs a shared memory, which browsers only give
+      // to cross-origin isolated pages.
+      ["skia_wasm_enable_pthreads", false],
+      // No system fonts on the web: FreeType with fonts supplied as data.
+      ["skia_use_freetype", true],
+      ["skia_use_system_freetype2", false],
+      ["skia_enable_fontmgr_custom_directory", false],
+      // Same text stack as the Apple targets: no ICU data to ship.
+      ...ParagraphArgsApple,
+    ],
+    outputRoot: "libs/wasm",
+    outputNames: wasmOutputNames,
+  },
   ...(Object.fromEntries(appleSDKs.map((sdk) => [sdk, apple(sdk)])) as Record<
     AppleSDK,
     Platform
@@ -259,12 +307,15 @@ export const skiaTargets = Object.fromEntries(
 
 /** GN intermediates are separate from the SDK libraries uploaded by CI. */
 export const skiaBuildDir = (platform: PlatformName, architecture: string) =>
-  platform === "android"
-    ? path.join(OutFolder, "android", architecture)
+  platform === "android" || platform === "wasm"
+    ? path.join(OutFolder, platform, architecture)
     : path.join(OutFolder, "apple", `${platform}-${architecture}`);
 
 export const skiaTargetOutputDir = (name: string) => {
   const { platform, architecture } = skiaTargets[name];
+  if (platform === "wasm") {
+    return path.join(WasmLibs, "lib");
+  }
   return platform === "android"
     ? path.join(
         PackageRoot,

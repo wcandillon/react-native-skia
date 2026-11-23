@@ -21,9 +21,16 @@ import {
   PackageRoot,
   ProjectRoot,
   SkiaSrc,
+  WasmLibs,
 } from "./skia-configuration";
 import { applyDawnPatches } from "./dawn-configuration";
-import { $, runAsync } from "./utils";
+import {
+  activateEmsdk,
+  buildEmdawnwebgpuPackage,
+  wasmArchiveSource,
+  writeWasmMetadata,
+} from "./wasm-configuration";
+import { $, fileOps, runAsync } from "./utils";
 
 /**
  * Locate GN intermediates, separately from distributable libraries under libs/.
@@ -109,17 +116,27 @@ export const buildPlatform = async (
   // We need to include the path to our custom python2 -> python3 mapping script
   // to make sure we can run all scripts that uses #!/usr/bin/env python as shebang
   // https://groups.google.com/g/skia-discuss/c/BYyB-TwA8ow
+  // wasm builds its archives by name: the default target would also compile
+  // the Dawn and Tint that the emdawnwebgpu package replaces.
+  const ninjaTargets =
+    platform === "wasm"
+      ? configurations.wasm.outputNames
+          .map((library) => ` ${path.basename(wasmArchiveSource(library))}`)
+          .join("")
+      : "";
   const command = `PATH=${process.cwd()}/../bin:$PATH ninja -C ${getOutDir(
     platform,
     targetName
-  )}`;
+  )}${ninjaTargets}`;
   // Apple CPU names overlap across SDKs; identify both in compiler output.
-  const label =
-    platform === "android"
-      ? `🤖 ${targetName}`
-      : `🍏 ${platform}-${targetName}`;
+  let label = `🍏 ${platform}-${targetName}`;
+  if (platform === "android") {
+    label = `🤖 ${targetName}`;
+  } else if (platform === "wasm") {
+    label = `🕸️ ${targetName}`;
+  }
   await runAsync(command, label);
-  if (platform !== "android") {
+  if (platform !== "android" && platform !== "wasm") {
     // Fail this target before staging or compiling the next architecture.
     for (const library of configurations[platform].outputNames) {
       validateAppleArchive(
@@ -195,12 +212,15 @@ export const copyLib = (
  *   yarn build-skia iphonesimulator              # lipo'd universal simulator libraries
  *   yarn build-skia iphonesimulator-arm64        # one simulator architecture
  *   yarn build-skia iphoneos iphonesimulator     # multiple SDK groups
+ *   yarn build-skia wasm                         # Graphite on WebGPU, for the web
  *
  * Apple static libraries are staged under libs/apple/<sdk>-<arch>/
  * (e.g. libs/apple/iphonesimulator-arm64/), then assembled under libs/apple/<sdk>/
  * (e.g. libs/apple/iphonesimulator/). Staging directories are removed on successful
  * SDK assembly; GN intermediates remain. Android uses libs/android/<abi>/
  * (e.g. libs/android/arm64-v8a/). package-binaries assembles npm XCFrameworks.
+ * wasm uses libs/wasm/ with its own headers and emdawnwebgpu package next to
+ * the archives; see wasm-configuration.ts.
  *
  * See apple-configuration.ts for SDK groups/architectures and
  * skia-configuration.ts (skiaTargets) for the full target list.
@@ -254,6 +274,17 @@ export const copyLib = (
     $(`rm -rf ${PackageRoot}/${configurations.android.outputRoot}`);
   }
 
+  // GN compiles Graphite against the emdawnwebgpu headers, so the package
+  // comes first; it needs Emscripten for the struct layouts.
+  const hasWasm = selectedTargets.some(
+    (name) => skiaTargets[name].platform === "wasm"
+  );
+  if (hasWasm) {
+    fileOps.rm(WasmLibs);
+    activateEmsdk();
+    buildEmdawnwebgpuPackage();
+  }
+
   for (const name of selectedTargets) {
     const { platform, architecture } = skiaTargets[name];
     const configuration = configurations[platform];
@@ -272,6 +303,15 @@ export const copyLib = (
         configurations.android.targets[architecture].output,
         configuration.outputNames
       );
+    } else if (platform === "wasm") {
+      const destination = skiaTargetOutputDir(name);
+      fs.mkdirSync(destination, { recursive: true });
+      for (const library of configuration.outputNames) {
+        fs.copyFileSync(
+          wasmArchiveSource(library),
+          path.join(destination, library)
+        );
+      }
     } else {
       // Stage each SDK/architecture separately before combining its libraries.
       const destination = skiaTargetOutputDir(name);
@@ -293,6 +333,20 @@ export const copyLib = (
     selectedTargets
   );
   await copyHeaders();
+  if (hasWasm) {
+    // The asset carries its headers: a consumer of the published archives has
+    // no Skia checkout to copy them from.
+    fileOps.cp(
+      path.join(PackageRoot, "cpp", "skia"),
+      path.join(WasmLibs, "skia")
+    );
+    fs.copyFileSync(
+      path.join(SkiaSrc, "LICENSE"),
+      path.join(WasmLibs, "LICENSE")
+    );
+    writeWasmMetadata();
+    console.log(`✅ wasm libraries in ${WasmLibs}`);
+  }
 })().catch((error) => {
   console.error(`❌ ${error.message}`);
   exit(1);
