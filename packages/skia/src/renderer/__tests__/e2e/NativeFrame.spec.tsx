@@ -1,5 +1,6 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
+import type { SkImage, SkSurface } from "../../../skia/types";
 import { setupSkia } from "../../../skia/__tests__/setup";
 import { surface } from "../setup";
 
@@ -192,42 +193,64 @@ describe("Native frames", () => {
               reason: `the import failed: ${(e as Error).message ?? e}`,
             };
           }
-          const texture = memory.createTexture();
-          memory.beginAccess(texture, false);
-          const target = Skia.Surface.MakeFromGPUTexture(texture);
-          const dst = Skia.Surface.MakeOffscreen(size, size);
-          if (!target || !dst) {
-            return {
-              kind: "fail",
-              reason: "could not create the surfaces",
-            };
-          }
-          target.getCanvas().drawColor(Skia.Color("red"));
-          target.flush();
-          // Read back through Skia: the buffer's texture as an image.
-          const image = Skia.Image.MakeFromGPUTexture(texture);
-          dst.getCanvas().drawImage(image, 0, 0);
-          dst.flush();
-          return dst
-            .getCanvas()
-            .readPixels(0, 0, {
-              width: size,
-              height: size,
-              colorType: ctx.colorType,
-              alphaType: ctx.alphaType,
-            })
-            .then((pixels): EvalResult => {
-              image.dispose();
-              target.dispose();
-              memory.endAccess(texture);
-              texture.destroy();
-              memory.destroy();
-              buffer.release();
-              if (!pixels) {
-                return { kind: "fail", reason: "readPixels returned null" };
+          // Everything created below, released on every path once the
+          // read back settles (or as soon as a step throws).
+          let texture: TestGPUTexture | null = null;
+          let accessing = false;
+          let target: SkSurface | null = null;
+          let dst: SkSurface | null = null;
+          let image: SkImage | null = null;
+          const cleanup = () => {
+            image?.dispose();
+            target?.dispose();
+            dst?.dispose();
+            if (texture) {
+              if (accessing) {
+                memory.endAccess(texture);
               }
-              return { kind: "ok", pixels: Array.from(pixels.slice(0, 4)) };
-            });
+              texture.destroy();
+            }
+            memory.destroy();
+            buffer.release();
+          };
+          const run = (): EvalResult | Promise<EvalResult> => {
+            texture = memory.createTexture();
+            memory.beginAccess(texture, false);
+            accessing = true;
+            target = Skia.Surface.MakeFromGPUTexture(texture);
+            dst = Skia.Surface.MakeOffscreen(size, size);
+            if (!target || !dst) {
+              return { kind: "fail", reason: "could not create the surfaces" };
+            }
+            target.getCanvas().drawColor(Skia.Color("red"));
+            target.flush();
+            // Read back through Skia: the buffer's texture as an image.
+            image = Skia.Image.MakeFromGPUTexture(texture);
+            dst.getCanvas().drawImage(image, 0, 0);
+            dst.flush();
+            return dst
+              .getCanvas()
+              .readPixels(0, 0, {
+                width: size,
+                height: size,
+                colorType: ctx.colorType,
+                alphaType: ctx.alphaType,
+              })
+              .then((pixels): EvalResult => {
+                if (!pixels) {
+                  return { kind: "fail", reason: "readPixels returned null" };
+                }
+                return { kind: "ok", pixels: Array.from(pixels.slice(0, 4)) };
+              });
+          };
+          let pending: EvalResult | Promise<EvalResult>;
+          try {
+            pending = run();
+          } catch (e) {
+            cleanup();
+            throw e;
+          }
+          return Promise.resolve(pending).finally(cleanup);
         },
         { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
       );
