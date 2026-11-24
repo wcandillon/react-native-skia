@@ -69,4 +69,39 @@ describe("Surfaces", () => {
     expect(result.draw).toContain("surface was disposed");
     expect(result.getCanvas).toContain("disposed object");
   });
+
+  ["GPU", "raster"].forEach((kind) => {
+    it(`makeImageSnapshot() throws out of bounds and keeps outputImage (${kind})`, async () => {
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          const sf = ctx.gpu
+            ? Skia.Surface.MakeOffscreen(16, 16)!
+            : Skia.Surface.MakeRaster(16, 16)!;
+          sf.getCanvas().drawColor(Skia.Color("cyan"));
+          sf.flush();
+          const output = Skia.Image.MakeNull();
+          sf.makeImageSnapshot(undefined, output);
+          const message = (fn: () => void) => {
+            try {
+              fn();
+              return null;
+            } catch (e) {
+              return (e as Error).message;
+            }
+          };
+          const outside = Skia.XYWHRect(100, 100, 5, 5);
+          return {
+            withoutOutput: message(() => sf.makeImageSnapshot(outside)),
+            withOutput: message(() => sf.makeImageSnapshot(outside, output)),
+            outputSize: [output.width(), output.height()],
+          };
+        },
+        { gpu: kind === "GPU" }
+      );
+      const error = "could not create a snapshot of the surface";
+      expect(result.withoutOutput).toContain(error);
+      expect(result.withOutput).toContain(error);
+      expect(result.outputSize).toEqual([16, 16]);
+    });
+  });
 });

@@ -457,11 +457,15 @@ public:
    generation()) is dropped: nothing can run it, and the device in use would
    refuse its resources. Called on the recorder's thread. Returns whether
    the recording runs: false when there was nothing to run, when it was
-   dropped, or when Graphite rejected it (which is logged).
+   dropped, or when Graphite rejected it. A rejection is logged, unless the
+   caller asks for the failures: `error` then receives what lost the draws
+   (the snap, the insertion or the submission), and stays empty otherwise, as
+   when the recording was dropped with its device.
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
-      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo,
+      std::string *error = nullptr) {
     if (recorder == nullptr) {
       return false;
     }
@@ -469,13 +473,16 @@ public:
     // the warmup stays behind (see RNSkGpuActivity), as is the run.
     RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
-    if (recording == nullptr) {
-      return false;
-    }
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (generationOf(recorder) != current->id ||
         current->lost.load(std::memory_order_acquire)) {
+      return false;
+    }
+    if (recording == nullptr) {
+      if (error != nullptr) {
+        *error = "Graphite could not snap the recording";
+      }
       return false;
     }
     skgpu::graphite::InsertRecordingInfo info;
@@ -483,15 +490,42 @@ public:
     auto status = current->context->insertRecording(info);
     // InsertStatus converts to true on success.
     const bool inserted = static_cast<bool>(status);
+    const bool submitted = current->context->submit(syncToCpu);
     if (!inserted) {
-      RNSkLogger::logToConsole(
-          "Graphite rejected a recording (InsertStatus %d): %s",
-          static_cast<int>(
-              static_cast<skgpu::graphite::InsertStatus::V>(status)),
-          status.message().c_str());
+      const int code = static_cast<int>(
+          static_cast<skgpu::graphite::InsertStatus::V>(status));
+      if (error == nullptr) {
+        RNSkLogger::logToConsole(
+            "Graphite rejected a recording (InsertStatus %d): %s", code,
+            status.message().c_str());
+      } else {
+        *error = "Graphite rejected the recording (InsertStatus " +
+                 std::to_string(code) + "): " + status.message();
+      }
+    } else if (!submitted && error != nullptr) {
+      *error = "Graphite could not submit the recording";
     }
-    current->context->submit(syncToCpu);
+    // The device was lost meanwhile: its work is dropped, as above.
+    if (error != nullptr && current->lost.load(std::memory_order_acquire)) {
+      error->clear();
+    }
     return inserted;
+  }
+
+  /**
+   submitRecording() for the recordings JS asks for (Surface.flush()): throws
+   when Graphite cannot snap, insert or submit the recording, so that JS does
+   not read back or encode a texture without the draws. A recording made for
+   a lost device is still dropped silently (Skia.gpu.lost tells JS).
+   */
+  void submitRecordingOrThrow(
+      skgpu::graphite::Recorder *recorder,
+      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    std::string error;
+    submitRecording(recorder, syncToCpu, &error);
+    if (!error.empty()) {
+      throw std::runtime_error(error);
+    }
   }
 
   /**
