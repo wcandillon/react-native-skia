@@ -92,6 +92,8 @@ export const commonArgs = [
   ["skia_enable_pdf", false],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
+  // Graphite only: Ganesh is not used on any platform.
+  ["skia_enable_ganesh", false],
   ["skia_enable_graphite", true],
   ["skia_use_dawn", true],
   // m152 turns PartitionAlloc on by default for clang builds, which leaves
@@ -271,8 +273,7 @@ export const configurations: {
       },
     },
     args: [
-      // Graphite only. The WebGL (Ganesh) backend would be a separate build.
-      ["skia_enable_ganesh", false],
+      // No WebGL: it is a Ganesh backend.
       ["skia_use_webgl", false],
       // The browser implements WebGPU: Dawn is neither built nor linked.
       ["skia_emdawnwebgpu_dir", `"${EmdawnwebgpuDir}"`],

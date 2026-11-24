@@ -152,11 +152,12 @@ Install React Native WebGPU next to React Native Skia, and follow its [installat
 yarn add react-native-webgpu
 ```
 
-Pick the versions of the two packages from one row of this table; the [React Native WebGPU documentation](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia) keeps the reference copy of it.
+Pick the versions of the two packages from one row of this table:
 
 | react-native-skia | react-native-webgpu |
 | --- | --- |
-| 3.10.0 and later | 0.21.3 and later |
+| 3.12.0 and later | 0.24.0 and later |
+| 3.10.0 to 3.11.x | 0.21.3 to 0.23.0 |
 | 3.9.0 to 3.9.2 | 0.20.0 to 0.21.2 |
 | 3.7.0 to 3.8.1 | 0.17.0 to 0.19.2 |
 | 3.4.0 to 3.6.3 | 0.13.1 to 0.16.1, or 0.12.1 |
@@ -164,8 +165,9 @@ Pick the versions of the two packages from one row of this table; the [React Nat
 | 3.0.6 to 3.0.8 | 0.12.1, or 0.13.0 and later with react-native-skia 3.0.8 |
 | 3.0.0 to 3.0.5 | 0.10.0 to 0.11.2 |
 
-From react-native-skia 3.1.0 and react-native-webgpu 0.13.0, both packages depend on the same `react-native-webgpu-dawn` package, which ships the Dawn build they link, so that only one copy of Dawn exists in the app.
-The native build verifies that the two resolve the same version of it and fails with a `Dawn version mismatch` error otherwise: upgrade `react-native-skia` and `react-native-webgpu` together.
+From react-native-skia 3.12.0 and react-native-webgpu 0.24.0, both packages link the Dawn build of the same `binaries-<version>` GitHub release, which each pins in its `binaries.json`, so that only one copy of Dawn exists in the app.
+React Native Skia 3.1.0 to 3.11.x and React Native WebGPU 0.13.0 to 0.23.0 shared it through the `react-native-webgpu-dawn` npm package.
+The native build verifies that the two use the same version of it and fails with a `Dawn version mismatch` error otherwise: upgrade `react-native-skia` and `react-native-webgpu` together.
 The mixed rows work because the older release vendors the same Dawn commit (react-native-skia 3.1.0 accepts a react-native-webgpu 0.12.1 whose `dawnCommit` matches, and react-native-skia 3.0.8 defers to react-native-webgpu's Dawn).
 On Android, react-native-skia 3.0.6 and 3.0.7 cannot pair with react-native-webgpu 0.13.0 and later: they still package their own `libwebgpu_dawn.so` next to the one from the package and the build fails merging the two.
 
@@ -428,7 +430,7 @@ There is one path on both platforms, whatever the format of the frame. It needs 
 
 ### Playing a video
 
-[`createVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
+[`createTestVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
 `copyLatestFrame()` returns the most recently decoded frame, or `null` when no new frame was decoded since the last call.
 Copy each new frame into a texture, wrap the texture into an image, and publish the image through a shared value:
 
@@ -437,7 +439,7 @@ import React, { useEffect } from "react";
 import { useSharedValue } from "react-native-reanimated";
 import type { SkImage } from "react-native-skia";
 import { Canvas, Image, Skia, useCanvasSize } from "react-native-skia";
-import { createVideoPlayer, importDevice } from "react-native-webgpu";
+import { createTestVideoPlayer, importDevice } from "react-native-webgpu";
 
 export const Video = ({ url }: { url: string }) => {
   const { size, onLayout } = useCanvasSize();
@@ -445,7 +447,7 @@ export const Video = ({ url }: { url: string }) => {
 
   useEffect(() => {
     const device = importDevice(Skia.getNativeDevice());
-    const player = createVideoPlayer(url);
+    const player = createTestVideoPlayer(url);
     let texture: GPUTexture | null = null;
     let raf = 0;
     const render = () => {
@@ -861,7 +863,7 @@ Sharing a texture means sharing its lifetime. A few rules apply:
 ## Examples
 
 The [example app](https://github.com/wcandillon/react-native-skia/tree/main/apps/example/src/Examples/WebGPU) contains the complete examples.
-The React Native WebGPU documentation also has a page on [React Native Skia](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia), which covers version compatibility between the two packages.
+The React Native WebGPU documentation also has a page on [React Native Skia](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia).
 
 
 | Example | Description |

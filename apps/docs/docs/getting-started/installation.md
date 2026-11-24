@@ -26,10 +26,21 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are resolved automatically by the native build systems, and no `postinstall` script is required:
+## Prebuilt binaries
 
-- On Android, Gradle downloads them from the [GitHub releases](https://github.com/wcandillon/react-native-skia/releases) of this repository the first time it builds, only for the architectures being built, and caches them like any other Gradle dependency. Each archive is verified against a checksum shipped in the package. To download them from a mirror or a local directory instead, set the `reactNativeSkiaBinariesUrl` Gradle property (or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable) to a URL or a `file:///` directory that holds the release assets under `binaries-<version>/`.
-- On iOS, macOS and tvOS, they are delivered as regular npm dependencies (`react-native-skia-graphite-apple-*`, and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with), which CocoaPods resolves. The long-term plan is to move the Apple platforms to Swift Package Manager, and to download these binaries from the same GitHub releases instead of npm.
+Skia and Dawn binaries are downloaded automatically from this repository's [GitHub releases](https://github.com/wcandillon/react-native-skia/releases) during native builds. The installed `react-native-skia` package includes the headers and a `binaries.json` file that pins the binary release and checksums. No binary npm dependencies, manual downloads, or `postinstall` script are needed.
+
+- **Android:** Gradle downloads separate Skia and Dawn archives for each ABI being built, then verifies and extracts the libraries for CMake. Downloads use Gradle's dependency cache.
+- **Apple:** An Xcode build phase downloads archives for the selected SDK, such as `iphoneos`, `iphonesimulator`, or `maccatalyst`, and prepares the libraries for linking. Each archive includes all architectures published for that SDK, with lipo'd universal libraries where applicable. Other SDKs are not downloaded. Downloads are cached under `~/Library/Caches/react-native-skia`, similar to React Native and Hermes' shared macOS cache.
+
+  - **CocoaPods:** `pod install` adds the preparation phase automatically; binaries are downloaded when Xcode builds.
+  - **SwiftPM (optional):** Installs the same preparation phase. Requires React Native 0.87.1 or newer.
+
+The first build needs access to GitHub unless the required archives are cached or local binaries are provided. Later builds reuse cached downloads. Checksums are verified before use; failed downloads or checksum mismatches stop the build with an error.
+
+### Mirrors and offline builds
+
+Set `REACT_NATIVE_SKIA_BINARIES_URL` to download from a mirror or a local `file:///` directory on either platform. Android also accepts the `reactNativeSkiaBinariesUrl` Gradle property. The location must contain `binaries-<version>/<asset>` matching the installed `binaries.json`; checksum verification still applies.
 
 ## Requirements
 

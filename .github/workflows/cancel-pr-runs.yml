@@ -1,4 +1,4 @@
-name: Cancel PR workflows
+name: Cancel PR runs
 
 # When a pull request is closed or merged, cancel every workflow run that is
 # still queued or running for its head branch, so runners are freed instead of

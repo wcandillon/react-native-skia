@@ -97,7 +97,7 @@ See [the Vulkan section of the installation guide](/docs/getting-started/install
 ### iOS, tvOS, and macOS
 
 The minimum deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0.
-Run `pod install` again after upgrading: the Skia binaries come from new npm packages (`react-native-skia-graphite-apple-ios`, `react-native-skia-graphite-apple-tvos`, `react-native-skia-graphite-apple-macos`), alongside `react-native-webgpu-dawn`.
+Run `pod install` again after upgrading to install the binary preparation phase. Apple binaries are fetched during the Xcode build from the release pinned in `react-native-skia/binaries.json`; headers remain in `react-native-skia`. Cached downloads are separated by release and checksum.
 
 ### Expo
 
@@ -153,7 +153,7 @@ The following APIs were removed in favor of it:
 
 | Removed | Replacement |
 |:--|:--|
-| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createVideoPlayer()`, whose frames are copied into a texture that Skia draws. See [native buffers](/docs/webgpu#native-buffers). |
+| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createTestVideoPlayer()`, whose frames are copied into a texture that Skia draws. See [native buffers](/docs/webgpu#native-buffers). |
 | `Skia.NativeBuffer.MakeFromImage()` | Export the image as a WebGPU texture with `Skia.Image.MakeGPUTextureFromImage()`. See [exporting an image](/docs/webgpu#exporting-an-image). |
 | `Skia.NativeBuffer.MakeTestBuffer()` | React Native WebGPU's `createTestVideoFrame()`. |
 | `Skia.NativeBuffer.Release()` | `NativeVideoFrame.release()`: React Native WebGPU owns the buffers it hands out. |

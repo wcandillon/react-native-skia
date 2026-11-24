@@ -1,11 +1,11 @@
-name: CI
+name: Run CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
 # build-library), the Android build (with its emulator and device runs on main
-# only), the SwiftPM build, and (on main only) the macOS build. The native
-# builds and the emulator/simulator runs happen on pull requests and in the
-# merge queue, so a merge does not pay for the full suite twice. The SwiftPM
-# and macOS builds run on push, and on the pull requests whose diff can
-# affect them (see changes).
+# only), the SwiftPM build, the Apple SDK check, and (on main only) the macOS
+# build. The native builds and the emulator/simulator runs happen on pull
+# requests and in the merge queue, so a merge does not pay for the full suite
+# twice. The SwiftPM and macOS builds and the Apple SDK check run on push, and
+# on the pull requests whose diff can affect them (see changes).
 on:
   push:
     branches:
@@ -50,7 +50,7 @@ jobs:
 
       # Bundles the shared example sources with the macOS workspace's Metro
       # and Babel config, so a resolution or Babel break shows up on every
-      # pull request without a Mac. build-test-macos only builds the native
+      # pull request without a Mac. build-macos only builds the native
       # app, which never bundles the JavaScript.
       - name: Bundle the macOS example
         run: yarn workspace example-macos bundle:macos
@@ -144,7 +144,7 @@ jobs:
   # ubuntu runner took 4 to 9 minutes for one ABI after restoring a 1.8 GB
   # Gradle cache and the ccache from GitHub's cache. It uses the phone's
   # listener (label `android-device`), so it does not queue behind
-  # build-test-ios, and build-test-android-device then runs on the same
+  # e2e-ios, and e2e-android-device then runs on the same
   # listener right after it.
   #
   # It runs on every push too (main and next), so the base branches keep a
@@ -228,7 +228,7 @@ jobs:
           overwrite: true
 
   # Runs the e2e suite on the emulator with build-android's APK.
-  build-test-android:
+  e2e-android-emulator:
     needs: build-android
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -333,20 +333,20 @@ jobs:
           overwrite: true
 
   # Runs the e2e suite on the Pixel 8 plugged into the self-hosted Mac, with
-  # build-android's APK. The emulator in build-test-android renders through
+  # build-android's APK. The emulator in e2e-android-emulator renders through
   # SwiftShader; this runs Graphite on a real Mali GPU and Vulkan driver,
   # which is where the device-specific bugs live. Pushes run it on main only,
   # as for the emulator.
   #
   # It runs on its own runner listener (label `android-device`), so it does
-  # not queue behind build-test-ios on the Mac, and only one job at a time
-  # ever drives the phone. Its ports are in build-test-ios's table.
+  # not queue behind e2e-ios on the Mac, and only one job at a time
+  # ever drives the phone. Its ports are in e2e-ios's table.
   #
   # The phone must have no secure lock screen (Settings > Security > Screen
   # lock > None) and USB debugging authorized for the runner user's adb key.
   # If more than one device is attached, set ANDROID_SERIAL in the
   # listener's .env file.
-  build-test-android-device:
+  e2e-android-device:
     needs: build-android
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: [self-hosted, macOS, android-device]
@@ -497,7 +497,7 @@ jobs:
   # a second listener for the phone (android-device) that also matches
   # [self-hosted, macOS]: without the extra label two of these jobs ran at
   # once, on the same ports and the same simulator, and failed each other.
-  build-test-ios:
+  e2e-ios:
     runs-on: [self-hosted, macOS, ios-simulator]
     timeout-minutes: 90
     env:
@@ -509,7 +509,7 @@ jobs:
       #   8082   4243         skia-ci     (this job)
       #   8083   4244         webgpu-ci   (react-native-webgpu)
       #   8084   4245         skia-agent  (agent.yml)
-      #   8086   4247         Pixel 8     (build-test-android-device)
+      #   8086   4247         Pixel 8     (e2e-android-device)
       # The app finds Metro through the RCT_jsLocation launch argument; E2E_PORT
       # is inlined into the JS bundle (useClient) and read by the jest
       # globalSetup, so the app and the test server agree on the port.
@@ -635,10 +635,10 @@ jobs:
   # holds the self-hosted one. It runs on pushes to main, on manual runs, and
   # on the pull requests whose diff can affect it (see changes). Other pull
   # requests and the merge queue skip it, which still satisfies the required
-  # check: build-test-ios already compiles the same Apple and C++ sources, and
-  # the apple-sdks workflow checks the platform-specific Apple code against
+  # check: e2e-ios already compiles the same Apple and C++ sources, and
+  # the Check Apple SDKs workflow checks the platform-specific Apple code against
   # the iOS, macOS and tvOS SDKs on every pull request that touches it.
-  build-test-macos:
+  build-macos:
     needs: changes
     if: needs.changes.outputs.macos == 'true' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     runs-on: macos-latest
@@ -657,19 +657,21 @@ jobs:
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
 
-  # Decides whether build-test-ios-spm (output spm) and build-test-macos
-  # (output macos) run on a pull request. The SwiftPM job only proves that
-  # packages/skia/Package.swift resolves and compiles, so a pull request pays
-  # for it only when its diff touches what can change the outcome: the
-  # manifest and the autolinking config, the Apple and C++ sources it
-  # compiles, the scripts that copy the headers from the Skia submodule and
-  # the submodule itself, the dependencies that pin the prebuilt binaries,
-  # the example that links it, or CI itself. The macOS job follows the same
-  # idea for apps/example-macos, whose dependencies only change for macOS.
-  # JavaScript changes in apps/example/src do not affect the native build;
-  # the lint job bundles them for macOS instead. Pushes to main/next, the
-  # merge queue and manual runs set both outputs unconditionally: a change
-  # these lists miss still shows up on main, and those runs save the
+  # Decides whether build-ios-spm (output spm), build-macos (output macos) and
+  # check-apple-sdks (output apple) run on a pull request. The SwiftPM job
+  # only proves that packages/skia/Package.swift resolves and compiles, so a
+  # pull request pays for it only when its diff touches what can change the
+  # outcome: the manifest and the autolinking config, the Apple and C++
+  # sources it compiles, the scripts that copy the headers from the Skia
+  # submodule and the submodule itself, the binary release pin and package
+  # dependencies, the example that links it, or CI itself. The macOS job
+  # follows the same idea for apps/example-macos, whose dependencies only
+  # change for macOS. JavaScript changes in apps/example/src do not affect
+  # the native build; the lint job bundles them for macOS instead. The Apple
+  # SDK check compiles sources under packages/skia/apple on their own, so it
+  # follows that directory, its script and CI itself. Pushes to main/next,
+  # the merge queue and manual runs set every output unconditionally: a
+  # change these lists miss still shows up on main, and those runs save the
   # node_modules cache the pull request runs restore (see
   # .github/actions/setup).
   changes:
@@ -678,6 +680,7 @@ jobs:
     outputs:
       spm: ${{ steps.diff.outputs.spm }}
       macos: ${{ steps.diff.outputs.macos }}
+      apple: ${{ steps.diff.outputs.apple }}
     steps:
       - name: Checkout
         if: github.event_name == 'pull_request'
@@ -695,15 +698,17 @@ jobs:
           if [ "$EVENT" != "pull_request" ]; then
             echo "spm=true" >> "$GITHUB_OUTPUT"
             echo "macos=true" >> "$GITHUB_OUTPUT"
+            echo "apple=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git fetch --depth=1 origin "$BASE"
           changed=$(git diff --name-only "$BASE" HEAD)
           spm=false
           macos=false
+          apple=false
           while IFS= read -r file; do
             case "$file" in
-              packages/skia/Package.swift|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/Package.swift|packages/skia/package.json|packages/skia/binaries.json|packages/skia/react-native.config.js|\
               packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
               spm-example/*|package.json|yarn.lock|.gitmodules|externals/*|\
               .github/workflows/ci.yml|.github/actions/setup/*)
@@ -713,7 +718,7 @@ jobs:
             esac
             case "$file" in
               apps/example-macos/*|\
-              packages/skia/*.podspec|packages/skia/package.json|packages/skia/react-native.config.js|\
+              packages/skia/*.podspec|packages/skia/package.json|packages/skia/binaries.json|packages/skia/react-native.config.js|\
               packages/skia/apple/*|packages/skia/cpp/*|packages/skia/scripts/*|\
               package.json|yarn.lock|.yarn/patches/*|turbo.json|.gitmodules|externals/*|\
               .github/workflows/ci.yml|.github/actions/setup/*)
@@ -721,23 +726,46 @@ jobs:
                 macos=true
                 ;;
             esac
+            case "$file" in
+              packages/skia/apple/*|packages/skia/scripts/check-apple-sdks.sh|\
+              .github/workflows/ci.yml)
+                echo "apple: $file"
+                apple=true
+                ;;
+            esac
           done <<< "$changed"
           echo "spm=$spm" >> "$GITHUB_OUTPUT"
           echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          echo "apple=$apple" >> "$GITHUB_OUTPUT"
+
+  # Syntax-checks the Apple sources against every Apple SDK. It runs from this
+  # workflow, behind changes, so that it can be a required check: a job that
+  # `if` skips reports as passing, while a workflow that a paths filter skips
+  # never reports at all and would leave the pull request waiting forever.
+  check-apple-sdks:
+    needs: changes
+    if: needs.changes.outputs.apple == 'true'
+    # Syntax-check only: no yarn install, no pods, no submodule, no simulator.
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - name: Compile Apple sources for iOS, macOS and tvOS
+        run: packages/skia/scripts/check-apple-sdks.sh
 
   # The SwiftPM example builds on a GitHub-hosted Mac. It needs no Metro,
   # simulator or CocoaPods, so nothing ties it to the self-hosted machine, and
   # a fresh runner is the strictest check that Package.swift finds the
   # prebuilt Skia and Dawn packages next to the library with nothing cached.
-  # It used to run on the self-hosted Mac ahead of build-test-ios, which then
+  # It used to run on the self-hosted Mac ahead of e2e-ios, which then
   # waited for it, and a hung xcodebuild there held the one machine that runs
   # the iOS and macOS checks.
-  build-test-ios-spm:
+  build-ios-spm:
     needs: changes
     if: needs.changes.outputs.spm == 'true'
     runs-on: macos-latest
-    # Cold run: yarn install with the Skia and Dawn binaries, the React Native
-    # artifacts, then one xcodebuild.
+    # Cold run: install JS dependencies/headers, resolve React Native artifacts,
+    # then let the Xcode phase prepare this SDK's pinned Skia/Dawn binaries.
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -746,9 +774,8 @@ jobs:
           submodules: recursive
 
       # Installs the workspace and copies the Skia, Graphite and Dawn headers.
-      # packages/skia/Package.swift resolves the prebuilt binaries
-      # (react-native-skia-graphite-apple-ios, react-native-webgpu-dawn) from
-      # the workspace's node_modules, not from spm-example's.
+      # The SwiftPM plugin stages static binaries during the app build; they
+      # are not binary npm dependencies of react-native-skia.
       - name: Setup
         uses: ./.github/actions/setup
         with:
