@@ -196,11 +196,25 @@ Read the snapshot back with `makeRasterImage()` before drawing it in a canvas. T
 
 :::
 
-## Releasing GPU memory
+## GPU memory of offscreen surfaces
 
-Disposing a surface does not hand its texture back to the system: Skia keeps it for the next surface of the same size made on that thread.
-What goes unused is freed a few seconds later, the next time the thread draws.
-When a thread is done drawing offscreen for a while, at the end of a video export for instance, `Skia.freeGpuResources()` frees what it caches right away.
+Each thread that draws offscreen (the JS thread, a worklet runtime) has a GPU cache of its own.
+When a surface is disposed, its texture is not handed back to the system: it goes to that cache, for the next surface of the same size made on the thread.
+The cache also holds scratch textures and the glyph and path atlases.
+
+You don't need to manage this cache while drawing.
+Each time a thread draws, Skia frees what its cache has not used for a few seconds, so memory follows what the thread actually uses.
+
+What stays is what the cache held at the thread's last draw: it is freed the next time the thread draws, or never if the thread no longer draws offscreen.
+`Skia.purgeThreadGpuCache()` frees it right away:
+
+- It frees the textures of disposed surfaces, scratch textures, and the atlas pages (rebuilt on the next text or path draw).
+- Surfaces, images, and pictures still alive are not affected.
+- Textures the GPU is still working with are freed later: flush the last surface with `flush(true)` first to free everything.
+- It only frees the cache of the thread it is called on: call it on the thread, or worklet runtime, that drew.
+- It is a no-op on the Web.
+
+Call it once a thread is done drawing offscreen for a while, at the end of a video export for instance, not after every frame: the next frames would allocate their textures again.
 
 ```tsx twoslash
 import { Skia } from "react-native-skia";
@@ -211,14 +225,12 @@ const exportFrames = (count: number) => {
     const canvas = surface.getCanvas();
     canvas.drawColor(Skia.Color("black"));
     // ... draw and encode the frame
+    // The last flush waits for the GPU, so that everything can be freed.
     surface.flush(i === count - 1);
   }
   surface.dispose();
-  // The last flush waited for the GPU: everything can go.
-  Skia.freeGpuResources();
+  Skia.purgeThreadGpuCache();
 };
 ```
-
-It only frees what the calling thread caches: call it on the thread, or worklet runtime, that drew.
 
 Textures can also be shared with WebGPU: see [WebGPU](/docs/webgpu).

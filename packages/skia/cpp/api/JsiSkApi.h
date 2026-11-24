@@ -168,7 +168,7 @@ public:
   JSI_HOST_FUNCTION(Color) {
     return JsiSkColor::createCtor()(runtime, thisValue, arguments, count);
   }
-  JSI_HOST_FUNCTION(freeGpuResources) {
+  JSI_HOST_FUNCTION(purgeThreadGpuCache) {
     // Everything the recorders of the calling thread cache without using it:
     // scratch textures, the textures of released surfaces, atlas pages.
     // What GPU work still in flight uses stays until a later trim. Never
@@ -275,8 +275,8 @@ public:
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installHostMethod(runtime, prototype, "freeGpuResources",
-                      &JsiSkApi::freeGpuResources);
+    installHostMethod(runtime, prototype, "purgeThreadGpuCache",
+                      &JsiSkApi::purgeThreadGpuCache);
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
     installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);

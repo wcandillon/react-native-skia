@@ -141,7 +141,7 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
     return throwNotImplementedOnRNWeb<JsiRecorder>();
   },
   // CanvasKit manages the memory of its WebGL contexts itself.
-  freeGpuResources: () => {},
+  purgeThreadGpuCache: () => {},
   getNativeDevice: () => {
     return throwNotImplementedOnRNWeb<bigint>();
   },
