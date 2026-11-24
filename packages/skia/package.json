@@ -16,6 +16,9 @@
   "types": "lib/typescript/index.d.ts",
   "files": [
     "scripts/setup-canvaskit.js",
+    "scripts/apple-binaries-utils.sh",
+    "scripts/prepare-apple-binaries.sh",
+    "scripts/spm-plugin.js",
     "src/**",
     "lib/**",
     "!**/__tests__/**",
@@ -151,10 +154,6 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.1",
-    "react-native-skia-graphite-apple-ios": "158.0.0",
-    "react-native-skia-graphite-apple-macos": "158.0.0",
-    "react-native-skia-graphite-apple-tvos": "158.0.0",
-    "react-native-webgpu-dawn": "158.0.0",
     "react-reconciler": "0.33.0"
   },
   "eslintIgnore": [
@@ -192,5 +191,9 @@
         }
       ]
     ]
+  },
+  "swiftpmConfig": {
+    "name": "ReactNativeSkia",
+    "autolinkingPlugin": "./scripts/spm-plugin.js"
   }
 }
