@@ -20,6 +20,7 @@
 
 #include "JniPresentThread.h"
 #include "RNDawnContext.h"
+#include "RNSkGpuPurge.h"
 #include "RNSkPresentThread.h"
 
 namespace RNSkia {
@@ -100,7 +101,7 @@ void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
 }
 
 void JniPlatformContext::purgeGpuResourcesNative(jni::alias_ref<jclass>) {
-  DawnContext::purgeGpuResources();
+  RNSkGpuPurge::request();
 }
 
 void JniPlatformContext::setCacheDirectoryNative(

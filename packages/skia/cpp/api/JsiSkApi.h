@@ -14,6 +14,7 @@
 #include "rnskia/RNSkRuntimeScheduler.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkGpuPurge.h"
 
 #include "JsiSkAnimatedImage.h"
 #include "JsiSkAnimatedImageFactory.h"
@@ -171,7 +172,7 @@ public:
   JSI_HOST_FUNCTION(purgeGpuResources) {
     // The recorders of this thread, which only it may touch, then Dawn.
     DawnContext::trimThreadRecorders(std::chrono::milliseconds(0), true);
-    DawnContext::purgeGpuResources();
+    RNSkGpuPurge::request();
     return jsi::Value::undefined();
   }
   JSI_HOST_FUNCTION(getNativeDevice) {

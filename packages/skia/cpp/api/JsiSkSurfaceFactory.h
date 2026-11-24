@@ -12,6 +12,7 @@
 #include "JsiSkSurface.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -55,11 +56,10 @@ public:
       }
     }
     // A recorder of its own: the surface may be drawn into on another thread
-    // than this one (see DawnContext::SurfaceRecorder).
-    auto &dawn = DawnContext::getInstance();
-    auto recorder = dawn.makeSurfaceRecorder(width, height);
-    auto surface =
-        dawn.MakeOffscreen(width, height, useP3ColorSpace, recorder.get());
+    // than this one (see RNSkSurfaceRecorder).
+    auto recorder = RNSkSurfaceRecorder::Make(width, height);
+    auto surface = DawnContext::getInstance().MakeOffscreen(
+        width, height, useP3ColorSpace, recorder->get());
     return makeJsiObject(
         runtime, std::make_shared<JsiSkSurface>(
                      getContext(), std::move(surface), std::move(recorder)));
@@ -79,11 +79,11 @@ public:
     // the surface exists.
     wgpu::Texture texture =
         gpuTextureFromValue(runtime, arguments[0], "MakeFromGPUTexture");
-    auto &dawn = DawnContext::getInstance();
     auto recorder =
-        dawn.makeSurfaceRecorder(static_cast<int>(texture.GetWidth()),
-                                 static_cast<int>(texture.GetHeight()));
-    auto surface = dawn.MakeSurfaceFromTexture(texture, *recorder);
+        RNSkSurfaceRecorder::Make(static_cast<int>(texture.GetWidth()),
+                                  static_cast<int>(texture.GetHeight()));
+    auto surface = DawnContext::getInstance().MakeSurfaceFromTexture(
+        texture, recorder->get());
     if (surface == nullptr) {
       throw std::runtime_error(
           "MakeFromGPUTexture: failed to wrap the texture");

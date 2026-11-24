@@ -28,6 +28,7 @@
 
 #include "rnskia/RNDawnContext.h"
 #include "rnskia/RNSkAtlas.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #include <jsi/jsi.h>
 
@@ -54,11 +55,11 @@ namespace jsi = facebook::jsi;
  * surface deregisters itself from its recorder.
  */
 struct SurfaceAndRecorder {
-  SurfaceAndRecorder(std::shared_ptr<DawnContext::SurfaceRecorder> recorder,
+  SurfaceAndRecorder(std::shared_ptr<RNSkSurfaceRecorder> recorder,
                      sk_sp<SkSurface> surface)
       : recorder(std::move(recorder)), surface(std::move(surface)) {}
   // Destroyed last.
-  std::shared_ptr<DawnContext::SurfaceRecorder> recorder;
+  std::shared_ptr<RNSkSurfaceRecorder> recorder;
   sk_sp<SkSurface> surface;
 };
 
@@ -527,7 +528,7 @@ public:
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
       if (_recorder) {
-        DawnContext::getInstance().submitSurface(*_recorder);
+        _recorder->flush();
       }
       return JsiSkImage::readPixelsAsync(
           runtime, getContext(), std::move(snapshot), *info, srcX, srcY);
@@ -625,7 +626,7 @@ public:
                                "disposed or whose recording has finished.");
     }
     if (_recorder) {
-      _recorder->markPending();
+      _recorder->markDirty();
     }
     return _canvas;
   }
@@ -635,7 +636,7 @@ public:
   // fall back to a surface snapshot on Graphite, which has no synchronous
   // canvas readback.
   void setSurface(sk_sp<SkSurface> surface,
-                  std::shared_ptr<DawnContext::SurfaceRecorder> recorder) {
+                  std::shared_ptr<RNSkSurfaceRecorder> recorder) {
     _surface = std::move(surface);
     _recorder = std::move(recorder);
   }
@@ -653,6 +654,6 @@ public:
 private:
   SkCanvas *_canvas = nullptr;
   sk_sp<SkSurface> _surface;
-  std::shared_ptr<DawnContext::SurfaceRecorder> _recorder;
+  std::shared_ptr<RNSkSurfaceRecorder> _recorder;
 };
 } // namespace RNSkia

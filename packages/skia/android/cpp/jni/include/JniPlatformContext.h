@@ -33,7 +33,7 @@ public:
   // and outlives it.
   static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
 
-  // The system is low on memory (see DawnContext::purgeGpuResources).
+  // The system is low on memory (see RNSkGpuPurge).
   static void purgeGpuResourcesNative(jni::alias_ref<jclass>);
 
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,

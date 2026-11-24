@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "RNDawnContext.h"
+#include "RNSkGpuPurge.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -187,7 +188,7 @@ void RNSkApplePlatformContext::observeApplicationState() {
                         object:nil
                          queue:nil
                     usingBlock:^(NSNotification *) {
-                      DawnContext::purgeGpuResources();
+                      RNSkGpuPurge::request();
                     }];
   });
 #endif // !TARGET_OS_OSX

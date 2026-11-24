@@ -182,7 +182,7 @@ public class PlatformContext implements LifecycleEventListener {
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
 
-    // Frees the GPU memory nothing uses (DawnContext::purgeGpuResources).
+    // Frees the GPU memory nothing uses (RNSkGpuPurge).
     private static native void purgeGpuResourcesNative();
 
     // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).

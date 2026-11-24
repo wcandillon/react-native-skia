@@ -14,6 +14,7 @@
 #include "JsiSkImage.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -34,7 +35,7 @@ public:
 
   JsiSkSurface(std::shared_ptr<RNSkPlatformContext> context,
                sk_sp<SkSurface> surface,
-               std::shared_ptr<DawnContext::SurfaceRecorder> recorder = nullptr)
+               std::shared_ptr<RNSkSurfaceRecorder> recorder = nullptr)
       : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
             std::move(context), std::move(surface)),
         _recorder(std::move(recorder)) {}
@@ -79,9 +80,8 @@ public:
     // only Graphite-backed surfaces need to snap and submit a recording. One
     // made on a GPU device lost since submits nothing (see DawnContext).
     if (_recorder) {
-      DawnContext::getInstance().submitSurface(
-          *_recorder, sync ? skgpu::graphite::SyncToCpu::kYes
-                           : skgpu::graphite::SyncToCpu::kNo);
+      _recorder->flush(sync ? skgpu::graphite::SyncToCpu::kYes
+                            : skgpu::graphite::SyncToCpu::kNo);
     }
   }
 
@@ -115,7 +115,7 @@ public:
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.
     if (_recorder) {
-      DawnContext::getInstance().submitSurface(*_recorder);
+      _recorder->flush();
     }
     if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
@@ -201,7 +201,7 @@ protected:
     // What was drawn and not flushed still reaches the texture, which may
     // outlive the surface (Surface.MakeFromGPUTexture, asImage()).
     if (_recorder) {
-      DawnContext::getInstance().submitPendingSurface(*_recorder);
+      _recorder->flushIfDirty();
     }
     // dispose(): the canvas lets go of its reference too, so that the texture
     // is freed now rather than once the canvas is collected (#4275). Drawing
@@ -215,7 +215,7 @@ protected:
 private:
   void releaseSurface() {
     // Destroying a Graphite surface deregisters it from its recorder, which is
-    // the surface's alone (see DawnContext::SurfaceRecorder): whichever thread
+    // the surface's alone (see RNSkSurfaceRecorder): whichever thread
     // lets go of both last destroys them, the GC's included. Nothing else can
     // be using them then.
     auto released =
@@ -224,7 +224,7 @@ private:
   }
 
   // The recorder of the surface, for it alone; nullptr for a raster surface.
-  std::shared_ptr<DawnContext::SurfaceRecorder> _recorder;
+  std::shared_ptr<RNSkSurfaceRecorder> _recorder;
   std::shared_ptr<JsiSkCanvas> _canvas;
 };
 
