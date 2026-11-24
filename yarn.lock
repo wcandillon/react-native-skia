@@ -25008,10 +25008,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webgpu-dawn@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-webgpu-dawn@npm:158.0.0"
-  checksum: 91affe20aa3a65cb2f33861c501cf56bb2d59b148fa159f4dc8bbdf232e995db42ae499ea86f131cb107106b55eaa747ec42f36565db7e43a823a9d4f64ec9dd
+"react-native-webgpu-dawn@npm:158.1.0":
+  version: 158.1.0
+  resolution: "react-native-webgpu-dawn@npm:158.1.0"
+  checksum: 203bf79aa638d74e88c7dfc1a4a01d940ed9ec00a91138a5b673a9ea6a386e1d95af0b9721acae1a348ca644a1f48e381fb0a84428c2a7fd2ca2dc2bfcdaa7f5
   languageName: node
   linkType: hard
 
