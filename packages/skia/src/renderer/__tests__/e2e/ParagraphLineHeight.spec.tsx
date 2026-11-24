@@ -19,7 +19,7 @@ describe("Paragraph line height via heightMultiplier (#2561)", () => {
   it("sets the line height to exactly heightMultiplier × fontSize", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const typeface = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -72,10 +72,10 @@ describe("Paragraph line height via heightMultiplier (#2561)", () => {
   it("emulates CSS lineHeight with heightMultiplier = lineHeight / fontSize", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const noto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -133,10 +133,10 @@ describe("Paragraph line height via heightMultiplier (#2561)", () => {
   it("normalizes line heights across mixed fonts and font sizes", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const noto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.NotoSansSC))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -185,7 +185,7 @@ describe("Paragraph line height via heightMultiplier (#2561)", () => {
   it("treats undefined style values the same as absent keys (web parity)", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const typeface = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -228,7 +228,7 @@ describe("Paragraph line height via heightMultiplier (#2561)", () => {
   it("halfLeading changes where the extra space goes, not the line height", async () => {
     const result = await surface.eval(
       (Skia, ctx) => {
-        const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const typeface = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();

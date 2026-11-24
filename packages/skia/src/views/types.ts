@@ -1,13 +1,7 @@
 import type { ViewProps } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import type {
-  SkGraphiteContext,
-  SkImage,
-  SkPicture,
-  SkRect,
-  SkSize,
-} from "../skia/types";
+import type { SkGraphiteContext, SkImage, SkRect, SkSize } from "../skia/types";
 
 /** The Android view a canvas draws into, see {@link AndroidCanvasProps}. */
 export type AndroidBackingView =
@@ -87,6 +81,13 @@ export type AndroidCanvasProps =
 
 export interface ISkiaViewApi {
   web?: boolean;
+  /**
+   * The id a view about to mount registers under. Ids are unique for the
+   * life of the process, not of the JS runtime: the native registries
+   * outlive a reload, and the views of the bundle being replaced leave them
+   * while the new bundle is already mounting.
+   */
+  allocateNativeId: () => number;
   setJsiProperty: <T>(nativeId: number, name: string, value: T) => void;
   requestRedraw: (nativeId: number) => void;
   /**
@@ -110,14 +111,17 @@ export interface ISkiaViewApi {
   size: (nativeId: number) => SkSize;
   /**
    * The recording side of a view: its native id, the layout size in points,
-   * and the props its surface format follows from.
+   * the props its surface format follows from, and whether its recordings
+   * use device independent fonts (set again with `setJsiProperty` when the
+   * prop changes).
    */
   makeGraphiteContext: (
     nativeId: number,
     width: number,
     height: number,
     opaque: boolean,
-    highBitDepth: boolean
+    highBitDepth: boolean,
+    deviceIndependentFonts?: boolean
   ) => SkGraphiteContext;
   /**
    * Retires what `makeGraphiteContext` made for a view id, once the view
@@ -130,16 +134,44 @@ export interface ISkiaViewApi {
   destroyGraphiteContext: (nativeId: number) => void;
 }
 
+/**
+ * The color space a canvas renders in, see {@link SkiaBaseViewProps.colorSpace}.
+ */
+export type CanvasColorSpace = "srgb" | "display-p3";
+
 /** The props every Skia view takes, whichever way it is drawn. */
 export interface SkiaBaseViewProps extends ViewProps {
   /**
    * Renders into a surface with more than 8 bits per channel (16-bit float on
    * iOS, 10-bit on Android) to avoid banding in subtle gradients. On Android
    * it needs a `SurfaceView` (see `android.backingView`), which it makes
-   * opaque, as the 10-bit format only has 2 bits of alpha; it is read once,
-   * when the canvas mounts.
+   * opaque, as the 10-bit format only has 2 bits of alpha. Read once, when
+   * the canvas mounts: a change is ignored, with a warning in development;
+   * remount the canvas (with a `key`) to change it.
    */
   highBitDepth?: boolean;
+
+  /**
+   * The color space the canvas renders in. By default, Display P3 on Apple
+   * devices with a wide color gamut display, sRGB everywhere else. Use
+   * `"srgb"` to match offscreen rendering (`drawAsImage`,
+   * `Skia.Surface.MakeOffscreen`, snapshots). Android and the web always
+   * render in sRGB. Read once, when the canvas mounts, like `highBitDepth`.
+   */
+  colorSpace?: CanvasColorSpace;
+
+  /**
+   * Draws text with device independent (distance field) fonts: a glyph is
+   * rasterized once and reused under any rotation or scale, instead of
+   * being rasterized again for every new transform. Turn it on for text that
+   * rotates or scales on every frame, where it is many times faster (6,000
+   * rotating text blobs: 4 to 30 fps on an iPhone 14 Pro). It costs more
+   * GPU time per glyph and draws slightly softer glyphs, which text that only
+   * moves pays for nothing, so it is off by default. Glyphs smaller than
+   * about 18 pixels are drawn as usual. Can be changed at any time. Native
+   * only, ignored on web.
+   */
+  deviceIndependentFonts?: boolean;
 
   /**
    * Android-only rendering options: the native view behind the canvas and its
@@ -149,10 +181,6 @@ export interface SkiaBaseViewProps extends ViewProps {
 
   /** @deprecated Does nothing: on web, every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
-}
-
-export interface SkiaPictureViewNativeProps extends SkiaBaseViewProps {
-  picture?: SkPicture;
 }
 
 export type SkiaGraphiteViewNativeProps = SkiaBaseViewProps;

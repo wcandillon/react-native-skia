@@ -27,7 +27,7 @@ describe("Box", () => {
         </Box>
       </>
     );
-    processResult(surface, docPath("box/shadows.png"));
+    await processResult(surface, docPath("box/shadows.png"));
   });
   it("should draw a box with red stroke", async () => {
     const size = width / 2;
@@ -41,6 +41,6 @@ describe("Box", () => {
         />
       </>
     );
-    processResult(surface, docPath("box/box-stroke.png"));
+    await processResult(surface, docPath("box/box-stroke.png"));
   });
 });

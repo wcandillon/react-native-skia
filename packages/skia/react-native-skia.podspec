@@ -64,7 +64,7 @@ apple_skia_packages = {
 }
 install_apple_skia_libs.call(__dir__, apple_skia_packages)
 
-preprocessor_defs = '$(inherited) SK_GRAPHITE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1'
+preprocessor_defs = '$(inherited) SK_GRAPHITE=1 SK_RELEASE=1 SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API=1 SK_DISABLE_LEGACY_SHAPER_FACTORY=1'
 
 # Define framework names
 framework_names = ['libskia', 'libsvg', 'libskshaper', 'libskparagraph',
@@ -173,7 +173,7 @@ Pod::Spec.new do |s|
     "Christian Falch" => "christian.falch@gmail.com",
     "William Candillon" => "wcandillon@gmail.com"
   }
-  s.platforms    = { :ios => "15.1", :tvos => "15.1", :osx => "11" }
+  s.platforms    = { :ios => "15.1", :tvos => "15.1", :osx => "14.0" }
   s.source       = { :git => "https://github.com/wcandillon/react-native-skia.git", :tag => "#{s.version}" }
 
   s.requires_arc = true
@@ -182,6 +182,13 @@ Pod::Spec.new do |s|
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'DEFINES_MODULE' => 'YES',
     "HEADER_SEARCH_PATHS" => '"$(PODS_TARGET_SRCROOT)/cpp"/** "$(PODS_TARGET_SRCROOT)/cpp" "$(PODS_TARGET_SRCROOT)/cpp/skia" "$(PODS_TARGET_SRCROOT)/cpp/dawn/include"'
+  }
+
+  # Nothing references rnskia_getWGPUInstance, so the linker never loads its
+  # object file from the static library. Without it, react-native-webgpu's
+  # dlsym lookup fails and it creates a second Dawn instance.
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => '$(inherited) -Wl,-u,_rnskia_getWGPUInstance'
   }
 
   s.frameworks = ['MetalKit', 'AVFoundation', 'AVKit', 'CoreMedia']

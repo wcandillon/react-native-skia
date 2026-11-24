@@ -21,6 +21,14 @@ export interface SkGraphiteContext extends SkJSIInstance<"GraphiteContext"> {
   /** Height of the view in points. */
   readonly height: number;
   /**
+   * Recordings submitted and not yet presented (or dropped). Readable from any
+   * runtime. Recordings are never dropped for being late, so a view recording
+   * on every display frame should skip a frame while this is at its budget
+   * (2, as the declarative Canvas uses): otherwise a GPU-bound view builds a
+   * queue, and latency and memory grow with it.
+   */
+  readonly pendingFrames: number;
+  /**
    * Starts a frame. The canvas draws in points and starts with whatever the
    * view currently shows: clear it first. It is only valid until
    * finishRecording().

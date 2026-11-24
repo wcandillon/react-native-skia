@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <cstdarg>
+#include <cstdio>
 #include <jsi/jsi.h>
 #include <string>
 
@@ -44,7 +46,7 @@ public:
     va_list args;
     va_start(args, fmt);
 
-    static char buffer[512];
+    char buffer[512];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
 #if defined(ANDROID) || defined(__ANDROID__)
     __android_log_write(ANDROID_LOG_INFO, "RNSkia", buffer);
@@ -67,6 +69,13 @@ public:
     auto console = RNSkLogger::getJavascriptConsole(runtime).asObject(runtime);
     auto warn = console.getPropertyAsFunction(runtime, "warn");
     warn.call(runtime, jsi::String::createFromUtf8(runtime, message));
+  }
+
+  static void errorToJavascriptConsole(jsi::Runtime &runtime,
+                                       const std::string &message) {
+    auto console = RNSkLogger::getJavascriptConsole(runtime).asObject(runtime);
+    auto error = console.getPropertyAsFunction(runtime, "error");
+    error.call(runtime, jsi::String::createFromUtf8(runtime, message));
   }
 
 private:

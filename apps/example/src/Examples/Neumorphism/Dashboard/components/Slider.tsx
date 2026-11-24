@@ -21,11 +21,10 @@ interface SliderProps {
 }
 
 export const Slider = ({ x, y, progress }: SliderProps) => {
-  const width = useDerivedValue(() => progress.value * 192, [progress]);
-  const transform = useDerivedValue(
-    () => [{ translateX: progress.value * 192 }],
-    [progress]
-  );
+  const width = useDerivedValue(() => progress.value * 192);
+  const transform = useDerivedValue(() => [
+    { translateX: progress.value * 192 },
+  ]);
   return (
     <Group transform={[{ translate: [x, y] }]}>
       <Box box={rrect(rect(0, 3.5, 192, 8), 25, 25)} color="#1B1B1D">

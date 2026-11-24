@@ -57,7 +57,7 @@ const parseProp = (value: any, assets: Assets): any => {
     } else if (value.__typename__ === "Path") {
       return Skia.Path.MakeFromCmds(value.cmds);
     } else if (value.__typename__ === "RawImage") {
-      return Skia.Image.MakeImageFromEncoded(Skia.Data.fromBase64(value.data));
+      return Skia.Image.MakeFromEncoded(Skia.Data.fromBase64(value.data));
     } else if (value.__typename__ === "Image") {
       const asset = assets[value.name];
       if (!asset) {
@@ -91,7 +91,7 @@ const parseProp = (value: any, assets: Assets): any => {
       const assets: any = {};
       if (value.assets) {
         Object.keys(value.assets).forEach((key) => {
-          assets[key] = Skia.Data.fromBytes(new Uint8Array(value.assets[key]));
+          assets[key] = Skia.Data.fromBase64(value.assets[key]);
         });
       }
       return Skia.Skottie.Make(value.source, assets);

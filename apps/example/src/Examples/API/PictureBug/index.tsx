@@ -36,7 +36,7 @@ const BUTTON_RIGHT_SIDES = [
 const lineBottom = require("./line-bottom.png") as string;
 const lineTop = require("./line-top.png") as string;
 
-const imgFactory = Skia.Image.MakeImageFromEncoded.bind(Skia.Image);
+const imgFactory = Skia.Image.MakeFromEncoded.bind(Skia.Image);
 
 class SkiaImageCache {
   isCaching: boolean = false;
@@ -52,7 +52,7 @@ class SkiaImageCache {
     const uri =
       typeof source === "string"
         ? source
-        : Image.resolveAssetSource(source).uri;
+        : Image.resolveAssetSource(source)!.uri;
     const data = await Skia.Data.fromURI(uri);
     const image = imgFactory(data);
 
@@ -263,20 +263,6 @@ const ButtonBackground = memo(function ButtonBackground({
   if (!picture || !cachedImages) {
     return null;
   }
-  // this works
-  // return (
-  //   <SkiaPictureView
-  //     picture={picture}
-  //     pointerEvents="none"
-  //     style={[
-  //       styles.canvas,
-  //       {
-  //         height: PixelRatio.roundToNearestPixel(height),
-  //         width: PixelRatio.roundToNearestPixel(width),
-  //       },
-  //     ]}
-  //   />
-  // );
   // Here sometimes using canvas the canvas will stay pink (no image loaded)
   return (
     <Canvas

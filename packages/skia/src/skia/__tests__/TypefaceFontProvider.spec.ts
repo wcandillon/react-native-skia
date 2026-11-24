@@ -3,7 +3,7 @@ import { FontSlant, FontStyle, FontWeight } from "../types";
 import type { SkTypeface } from "../types";
 
 const typeface = (file: string) =>
-  global.SkiaApi.Typeface.MakeFreeTypeFaceFromData(
+  global.SkiaApi.Typeface.MakeFromData(
     global.SkiaApi.Data.fromBytes(resolveFile(`skia/__tests__/assets/${file}`))
   )!;
 

@@ -30,7 +30,7 @@ private:
 public:
   PushShaderCmd(jsi::Runtime &runtime, const jsi::Object &object,
                 Variables &variables, int children)
-      : Command(CommandType::PushShader, "skShader"), children(children) {
+      : Command(CommandType::PushShader), children(children) {
     convertProperty(runtime, object, "transform", props.transform, variables);
     convertProperty(runtime, object, "origin", props.origin, variables);
     convertProperty(runtime, object, "matrix", props.matrix, variables);
@@ -38,9 +38,8 @@ public:
     convertProperty(runtime, object, "uniforms", props.uniforms, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
-    auto source = props.source;
-    auto uniforms = props.uniforms;
+  void play(DrawingCtx *ctx) override {
+    const auto &source = props.source;
     auto m3 = processTransform(props.matrix, props.transform, props.origin);
     auto uniformsData = processUniforms(source, props.uniforms);
 
@@ -73,7 +72,7 @@ private:
 public:
   PushImageShaderCmd(jsi::Runtime &runtime, const jsi::Object &object,
                      Variables &variables)
-      : Command(CommandType::PushShader, "skImageShader") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "tx", props.tx, variables);
     convertProperty(runtime, object, "ty", props.ty, variables);
     convertProperty(runtime, object, "rect", props.rect, variables);
@@ -92,22 +91,22 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
-    auto x = props.x;
-    auto y = props.y;
-    auto width = props.width;
-    auto height = props.height;
-    auto rect = props.rect;
-    if (props.image.has_value()) {
-      auto img = props.image.value();
+  void play(DrawingCtx *ctx) override {
+    const auto &image = props.image;
+    if (image.has_value()) {
+      const auto &img = image.value();
       SkMatrix m33;
+      const auto &rect = props.rect;
+      const auto &width = props.width;
+      const auto &height = props.height;
       auto hasRect =
           rect.has_value() || (width.has_value() && height.has_value());
       if (hasRect) {
         auto src = SkRect::MakeXYWH(0, 0, img->width(), img->height());
         auto dst = rect.has_value()
                        ? rect.value()
-                       : SkRect::MakeXYWH(x, y, width.value(), height.value());
+                       : SkRect::MakeXYWH(props.x, props.y, width.value(),
+                                          height.value());
         auto rects = RNSkiaImage::fitRects(props.fit, src, dst);
         auto m = RNSkiaImage::rect2rect(rects.src, rects.dst);
         m33.preConcat(m);
@@ -143,11 +142,11 @@ private:
 public:
   ColorShaderCmd(jsi::Runtime &runtime, const jsi::Object &object,
                  Variables &variables)
-      : Command(CommandType::PushShader, "skColorShader") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "color", props.color, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto shader = SkShaders::Color(props.color);
     ctx->shaders.push_back(shader);
   }
@@ -169,7 +168,7 @@ private:
 public:
   TurbulenceCmd(jsi::Runtime &runtime, const jsi::Object &object,
                 Variables &variables)
-      : Command(CommandType::PushShader, "skTurbulence") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "freqX", props.freqX, variables);
     convertProperty(runtime, object, "freqY", props.freqY, variables);
     convertProperty(runtime, object, "octaves", props.octaves, variables);
@@ -178,7 +177,7 @@ public:
     convertProperty(runtime, object, "tileHeight", props.tileHeight, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto size = SkISize::Make(props.tileWidth, props.tileHeight);
     auto shader = SkShaders::MakeTurbulence(props.freqX, props.freqY,
                                             props.octaves, props.seed, &size);
@@ -202,7 +201,7 @@ private:
 public:
   FractalNoiseCmd(jsi::Runtime &runtime, const jsi::Object &object,
                   Variables &variables)
-      : Command(CommandType::PushShader, "skFractalNoise") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "freqX", props.freqX, variables);
     convertProperty(runtime, object, "freqY", props.freqY, variables);
     convertProperty(runtime, object, "octaves", props.octaves, variables);
@@ -211,7 +210,7 @@ public:
     convertProperty(runtime, object, "tileHeight", props.tileHeight, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto size = SkISize::Make(props.tileWidth, props.tileHeight);
     auto shader = SkShaders::MakeFractalNoise(props.freqX, props.freqY,
                                               props.octaves, props.seed, &size);
@@ -231,7 +230,7 @@ private:
 public:
   LinearGradientCmd(jsi::Runtime &runtime, const jsi::Object &object,
                     Variables &variables)
-      : Command(CommandType::PushShader, "skLinearGradient") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "start", props.start, variables);
     convertProperty(runtime, object, "end", props.end, variables);
     convertProperty(runtime, object, "colors", props.colors, variables);
@@ -244,7 +243,7 @@ public:
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -288,7 +287,7 @@ private:
 public:
   RadialGradientCmd(jsi::Runtime &runtime, const jsi::Object &object,
                     Variables &variables)
-      : Command(CommandType::PushShader, "skRadialGradient") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "c", props.center, variables);
     convertProperty(runtime, object, "r", props.radius, variables);
     convertProperty(runtime, object, "colors", props.colors, variables);
@@ -301,7 +300,7 @@ public:
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -346,7 +345,7 @@ private:
 public:
   SweepGradientCmd(jsi::Runtime &runtime, const jsi::Object &object,
                    Variables &variables)
-      : Command(CommandType::PushShader, "skSweepGradient") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "c", props.center, variables);
     convertProperty(runtime, object, "start", props.start, variables);
     convertProperty(runtime, object, "end", props.end, variables);
@@ -360,7 +359,7 @@ public:
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
         props.positions.value().size() != props.colors.size()) {
@@ -407,7 +406,7 @@ private:
 public:
   TwoPointConicalGradientCmd(jsi::Runtime &runtime, const jsi::Object &object,
                              Variables &variables)
-      : Command(CommandType::PushShader, "skTwoPointConicalGradient") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "start", props.start, variables);
     convertProperty(runtime, object, "startR", props.startRadius, variables);
     convertProperty(runtime, object, "end", props.end, variables);
@@ -422,7 +421,7 @@ public:
     convertProperty(runtime, object, "matrix", props.matrix, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
 
     // Validate positions array matches colors array in size
     if (props.positions.has_value() &&
@@ -466,11 +465,11 @@ private:
 public:
   BlendShaderCmd(jsi::Runtime &runtime, const jsi::Object &object,
                  Variables &variables)
-      : Command(CommandType::PushShader, "skBlendShader") {
+      : Command(CommandType::PushShader) {
     convertProperty(runtime, object, "mode", props.mode, variables);
   }
 
-  void pushShader(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Get all existing shaders from the context
     std::vector<sk_sp<SkShader>> shaders = ctx->popAllShaders();
 

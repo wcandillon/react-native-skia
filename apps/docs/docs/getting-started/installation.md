@@ -5,8 +5,11 @@ sidebar_label: Installation
 slug: /getting-started/installation
 ---
 
-React Native Skia brings the [Skia Graphics Library](https://skia.org/) to React Native.
-Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox, Firefox OS, and many other products.
+React Native Skia brings [Skia](https://skia.org/), the rendering engine behind Google Chrome, to React Native.
+
+It renders with Graphite, Skia's new GPU backend built on WebGPU ([Dawn](https://dawn.googlesource.com/dawn)).
+Graphite plugs directly into [React Native WebGPU](/docs/webgpu), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, without any copy.
+The result is a unified GPU runtime for React Native.
 
 :::info[React Native Skia v3]
 
@@ -23,7 +26,10 @@ yarn add react-native-skia
 npm install react-native-skia
 ```
 
-The Skia prebuilt binaries are delivered as regular npm dependencies (`react-native-skia-graphite-android`, `react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with) and are resolved automatically by the native build systems (CocoaPods on iOS/macOS/tvOS, Gradle on Android). No `postinstall` script is required, so there is nothing to allow or configure: `trustedDependencies` (Bun) or `enableScripts` (Yarn Berry) settings are not needed.
+The Skia prebuilt binaries are resolved automatically by the native build systems, and no `postinstall` script is required:
+
+- On Android, Gradle downloads them from the [GitHub releases](https://github.com/wcandillon/react-native-skia/releases) of this repository the first time it builds, only for the architectures being built, and caches them like any other Gradle dependency. Each archive is verified against a checksum shipped in the package. To download them from a mirror or a local directory instead, set the `reactNativeSkiaBinariesUrl` Gradle property (or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable) to a URL or a `file:///` directory that holds the release assets under `binaries-<version>/`.
+- On iOS, macOS and tvOS, they are delivered as regular npm dependencies (`react-native-skia-graphite-apple-*`, and `react-native-webgpu-dawn` for the WebGPU implementation Skia renders with), which CocoaPods resolves. The long-term plan is to move the Apple platforms to Swift Package Manager, and to download these binaries from the same GitHub releases instead of npm.
 
 ## Requirements
 
@@ -32,17 +38,24 @@ The Skia prebuilt binaries are delivered as regular npm dependencies (`react-nat
 | React Native | `0.79`, with the New Architecture |
 | React | `19` |
 | iOS | `15.1` |
+| tvOS | `15.1` |
+| macOS | `14.0` |
 | Android | API level 26 (`minSdkVersion = 26`) |
 | Reanimated (optional) | `react-native-reanimated@>=4.0.0` with `react-native-worklets@>=0.7.0` |
 
 React Native Skia runs on iOS, Android, macOS, Mac Catalyst, tvOS, and [the Web](/docs/getting-started/web).
 
-Android TV is not supported by v3. It remain supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation/).
+Android TV is not supported by v3. It remains supported by [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation/).
 For `react-native@<=0.78` and `react@<=18`, you need to use `@shopify/react-native-skia` version `1.12.4` or below.
+On React Native below `0.83` (React `19.0` or `19.1`), your package manager warns that `react-reconciler` asks for React `19.2`: this is expected, as React Native Skia ships React 19.2's reconciler, which also renders on React 19.0 and 19.1.
 
 ## iOS
 
 Run `pod install` on the `ios/` directory.
+
+## macOS
+
+Run `pod install` in the `macos/` directory.
 
 ## Android
 
@@ -63,7 +76,7 @@ Skia renders with Vulkan 1.1, which every 64-bit device shipped with Android 10 
 The library's manifest declares it as a required feature, so the Play Store does not serve your app to devices without it.
 This does not affect the emulator (use an API 29 or later image with hardware graphics acceleration).
 
-On a device without Vulkan the app still runs: `Skia.gpu.isAvailable` is false, `Skia.gpu.error` says why, and canvases stay blank.
+On a device without Vulkan the app still runs: `Skia.gpu.isAvailable` is false, `Skia.gpu.error` says why, and canvases stay blank (see [the GPU device](/docs/webgpu#the-gpu-device)).
 An app that has to render on such devices uses [v2](https://wcandillon.github.io/react-native-skia/v2/docs/getting-started/installation/), which renders with OpenGL ES.
 To ship to those devices anyway, remove the declaration from your app's manifest and check the flag before rendering with Skia:
 

@@ -38,7 +38,7 @@ import { Circle, drawOffscreen, getSkiaExports, Group, makeOffscreenSurface } fr
         color="yellow"
       />
     </Group>);
-  console.log(image.encodeToBase64());
+  console.log(await image.encodeToBase64());
 })();
 ```
 

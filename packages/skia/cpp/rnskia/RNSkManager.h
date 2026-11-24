@@ -47,13 +47,6 @@ public:
   void unregisterSkiaView(size_t nativeId);
 
   /**
-   Sets the view pointed to by nativeId to the provided value.
-   Used when we want to remove a view without unregistering it
-   - this happens typically on iOS.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view);
-
-  /**
    * @return The platform context
    */
   std::shared_ptr<RNSkPlatformContext> getPlatformContext() {
@@ -72,6 +65,9 @@ private:
   std::shared_ptr<RNSkPlatformContext> _platformContext;
   std::shared_ptr<facebook::react::CallInvoker> _jsCallInvoker;
   std::shared_ptr<RNSkJsiViewApi> _viewApi;
+  // Asks every view for a frame once a lost GPU device is replaced (see
+  // DawnContext::addLossListener).
+  size_t _lossListener = 0;
 };
 
 } // namespace RNSkia

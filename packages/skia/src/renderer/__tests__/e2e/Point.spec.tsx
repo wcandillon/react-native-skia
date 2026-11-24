@@ -17,7 +17,7 @@ describe("Points", () => {
         />
       </>
     );
-    checkImage(img, "snapshots/points/points.png");
+    await checkImage(img, "snapshots/points/points.png");
   });
   it("should draw points with fill", async () => {
     const { vec } = importSkia();
@@ -30,6 +30,6 @@ describe("Points", () => {
         />
       </>
     );
-    checkImage(img, "snapshots/points/points2.png");
+    await checkImage(img, "snapshots/points/points2.png");
   });
 });

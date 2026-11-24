@@ -1,0 +1,19 @@
+name: apple-sdks
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "packages/skia/apple/**"
+      - "packages/skia/scripts/check-apple-sdks.sh"
+      - ".github/workflows/apple-sdks.yml"
+jobs:
+  apple-sdks:
+    # Syntax-check only: no yarn install, no pods, no submodule, no simulator.
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - name: Compile Apple sources for iOS, macOS and tvOS
+        run: packages/skia/scripts/check-apple-sdks.sh

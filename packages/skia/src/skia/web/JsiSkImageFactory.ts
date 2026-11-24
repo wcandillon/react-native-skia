@@ -32,13 +32,13 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, null as unknown as Image);
   }
 
-  MakeImageFromNativeBuffer(
+  MakeFromNativeBuffer(
     buffer: CanvasImageSource,
     surface?: JsiSkSurface,
     image?: JsiSkImage
   ) {
     if (!isCanvasImageSource(buffer)) {
-      throw new Error("MakeImageFromNativeBuffer expects a CanvasImageSource");
+      throw new Error("MakeFromNativeBuffer expects a CanvasImageSource");
     }
     if (!surface) {
       let img: Image;
@@ -66,7 +66,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     }
   }
 
-  MakeImageFromEncoded(encoded: SkData) {
+  MakeFromEncoded(encoded: SkData) {
     const image = this.CanvasKit.MakeImageFromEncoded(
       JsiSkData.fromValue(encoded)
     );
@@ -76,7 +76,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeRasterImage(info: ImageInfo, data: SkData, bytesPerRow: number) {
+  MakeRaster(info: ImageInfo, data: SkData, bytesPerRow: number) {
     // see toSkImageInfo() from canvaskit
     const image = this.CanvasKit.MakeImage(
       {
@@ -95,7 +95,7 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
     return new JsiSkImage(this.CanvasKit, image);
   }
 
-  MakeImageFromGPUTexture(_texture: GPUTextureHandle): SkImage {
+  MakeFromGPUTexture(_texture: GPUTextureHandle): SkImage {
     return throwNotImplementedOnRNWeb<SkImage>();
   }
 

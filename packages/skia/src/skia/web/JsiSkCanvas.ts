@@ -28,6 +28,7 @@ import {
   type InputRRect,
   type SkSVG,
   type SkTextBlob,
+  type SkShapeBlob,
   type SkVertices,
   type SkRSXform,
   type CubicResampler,
@@ -44,6 +45,7 @@ import { JsiSkVertices } from "./JsiSkVertices";
 import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkFont } from "./JsiSkFont";
 import { JsiSkTextBlob } from "./JsiSkTextBlob";
+import { JsiSkShapeBlob } from "./JsiSkShapeBlob";
 import { JsiSkPicture } from "./JsiSkPicture";
 import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkImageFilter } from "./JsiSkImageFilter";
@@ -325,6 +327,13 @@ export class JsiSkCanvas
     );
   }
 
+  drawShapes(blob: SkShapeBlob, paint?: SkPaint | null) {
+    JsiSkShapeBlob.fromValue(blob).draw(
+      this.ref,
+      paint ? JsiSkPaint.fromValue<Paint>(paint) : null
+    );
+  }
+
   drawGlyphs(
     glyphs: number[],
     positions: SkPoint[],
@@ -488,6 +497,10 @@ export class JsiSkCanvas
       alphaType: getEnum(this.CanvasKit, "AlphaType", imageInfo.alphaType),
       colorType: getEnum(this.CanvasKit, "ColorType", imageInfo.colorType),
     };
-    return this.ref.readPixels(srcX, srcY, pxInfo);
+    // CanvasKit reads synchronously; a promise like on native, where the GPU
+    // is asynchronous.
+    return new Promise<Float32Array | Uint8Array | null>((resolve) =>
+      resolve(this.ref.readPixels(srcX, srcY, pxInfo))
+    );
   }
 }

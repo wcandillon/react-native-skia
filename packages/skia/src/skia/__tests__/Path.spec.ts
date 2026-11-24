@@ -9,14 +9,14 @@ import { setupSkia } from "./setup";
 const roundtrip = (Skia: Skia, path: SkPath) =>
   Skia.Path.MakeFromCmds(path.toCmds())!;
 
-const readPixel = (image: SkImage, x: number, y: number) =>
+const readPixel = async (image: SkImage, x: number, y: number) =>
   Array.from(
-    image.readPixels(x, y, {
+    (await image.readPixels(x, y, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,
       alphaType: AlphaType.Unpremul,
-    })!
+    }))!
   );
 
 // Helper to create a path with moveTo and lineTo
@@ -31,7 +31,7 @@ const makePath = (
 };
 
 describe("Path", () => {
-  it("React logo", () => {
+  it("React logo", async () => {
     const { surface, canvas, Skia } = setupSkia();
     const svg1 =
       "M150.817 113.884C150.817 126.485 140.602 136.701 128 136.701C115.398 136.701 105.183 126.485 105.183 113.884C105.183 101.282 115.398 91.0663 128 91.0663C140.602 91.0663 150.817 101.282 150.817 113.884Z";
@@ -54,7 +54,7 @@ describe("Path", () => {
     canvas.drawPath(p2WithFill, paint);
     const cmds1 = p1.toCmds();
     expect(cmds1).toEqual(Skia.Path.MakeFromCmds(cmds1)?.toCmds());
-    processResult(surface, "snapshots/path/logo.png");
+    await processResult(surface, "snapshots/path/logo.png");
   });
 
   it("Should test that path are interpolatable as specificed in fiddle", () => {
@@ -292,7 +292,7 @@ describe("Path", () => {
     expect(path.toSVGString()).toEqual("M205 5L795 5L595 295L5 295L205 5Z");
   });
 
-  it("should draw different interpolation states", () => {
+  it("should draw different interpolation states", async () => {
     const { Skia, surface, canvas } = setupSkia();
     const paint = Skia.Paint();
     paint.setAntiAlias(true);
@@ -307,7 +307,7 @@ describe("Path", () => {
       canvas.drawPath(interp, paint);
       canvas.translate(30, 0);
     }
-    processResult(surface, "snapshots/path/interpolate.png");
+    await processResult(surface, "snapshots/path/interpolate.png");
   });
 
   it("should support overshooting values in path interpolation", () => {
@@ -415,7 +415,7 @@ describe("Path", () => {
   });
   // The non-zero winding rule reads the contour direction, so isCCW is what
   // turns an inner contour into a hole rather than more of the same fill.
-  it("should add a circle in the direction given by isCCW", () => {
+  it("should add a circle in the direction given by isCCW", async () => {
     const { surface, canvas, Skia } = setupSkia(64, 64);
     const donut = (isCCW: boolean) =>
       Skia.PathBuilder.Make()
@@ -428,14 +428,14 @@ describe("Path", () => {
 
     canvas.drawPath(donut(true), paint);
     surface.flush();
-    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+    expect(await readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
       0, 0, 0, 0,
     ]);
 
     canvas.clear(Float32Array.of(0, 0, 0, 0));
     canvas.drawPath(donut(false), paint);
     surface.flush();
-    expect(readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
+    expect(await readPixel(surface.makeImageSnapshot(), 32, 32)).toEqual([
       255, 0, 0, 255,
     ]);
   });

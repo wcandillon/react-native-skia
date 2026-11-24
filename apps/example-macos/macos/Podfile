@@ -1,0 +1,31 @@
+ws_dir = Pathname.new(__dir__)
+ws_dir = ws_dir.parent until
+  File.exist?("#{ws_dir}/node_modules/react-native-test-app/macos/test_app.rb") ||
+  ws_dir.expand_path.to_s == '/'
+require "#{ws_dir}/node_modules/react-native-test-app/macos/test_app.rb"
+
+workspace 'example.xcworkspace'
+
+platform :osx, '14.0'
+
+# react-native-webgpu is disabled in react-native.config.js, so it cannot
+# provide Dawn here. Have Skia vendor its own libwebgpu_dawn instead.
+ENV['RNSKIA_VENDOR_DAWN'] = '1'
+
+# Some pods (e.g. RNSVG's RNSVGFilters subspec) still declare a 10.14
+# deployment target, which Xcode 27 rejects (it supports 12.0 and up). Raise
+# any pod below the app's own target to it.
+raise_pod_deployment_targets = ->(installer) do
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      current = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+      next if current.nil? || Gem::Version.new(current) >= Gem::Version.new('14.0')
+
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+    end
+  end
+end
+
+use_test_app!(:hermes_enabled => true,
+              :new_arch_enabled => true,
+              :post_install => raise_pod_deployment_targets)

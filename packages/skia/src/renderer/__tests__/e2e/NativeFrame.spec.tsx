@@ -5,7 +5,7 @@ import { surface } from "../setup";
 
 // Camera and video frames reach Skia through react-native-webgpu: the frame is
 // rendered into a texture of the shared device with copyExternalImageToTexture,
-// and MakeImageFromGPUTexture wraps that texture. The example app installs
+// and MakeFromGPUTexture wraps that texture. The example app installs
 // react-native-webgpu, whose RNWebGPU global is available to code evaluated on
 // the device. Pointers never cross the eval boundary (BigInt is not JSON
 // serializable): everything runs on-device and only plain data comes back.
@@ -48,16 +48,16 @@ type EvalResult =
   | { kind: "ok"; pixels: number[] };
 
 describe("Native frames", () => {
-  it("MakeImageFromNativeBuffer is a Web API", () => {
+  it("MakeFromNativeBuffer is a Web API", () => {
     const { Skia } = setupSkia();
     expect(() =>
-      Skia.Image.MakeImageFromNativeBuffer(1 as unknown as CanvasImageSource)
+      Skia.Image.MakeFromNativeBuffer(1 as unknown as CanvasImageSource)
     ).toThrow(Error);
   });
 
   itRunsE2eOnly("draws a frame copied into a texture", async () => {
     const result = await surface.eval(
-      (Skia, ctx): EvalResult => {
+      (Skia, ctx): EvalResult | Promise<EvalResult> => {
         const size = 64;
         const device = RNWebGPU.importDevice(Skia.getNativeDevice());
         // A BGRA (Apple) / RGBA (Android) surface filled on the CPU with a
@@ -87,7 +87,7 @@ describe("Native frames", () => {
           };
         }
         frame.release();
-        const image = Skia.Image.MakeImageFromGPUTexture(texture);
+        const image = Skia.Image.MakeFromGPUTexture(texture);
         if (image.width() !== size || image.height() !== size) {
           return {
             kind: "fail",
@@ -98,27 +98,36 @@ describe("Native frames", () => {
         // result back through the canvas.
         const dst = Skia.Surface.MakeOffscreen(size, size);
         if (!dst) {
-          return { kind: "fail", reason: "could not create the surface" };
+          return Promise.resolve({
+            kind: "fail",
+            reason: "could not create the surface",
+          });
         }
         dst.getCanvas().drawImage(image, 0, 0);
         dst.flush();
-        const pixels = dst.getCanvas().readPixels(0, 0, {
-          width: size,
-          height: size,
-          colorType: ctx.colorType,
-          alphaType: ctx.alphaType,
-        });
-        image.dispose();
-        texture.destroy();
-        if (!pixels) {
-          return { kind: "fail", reason: "readPixels returned null" };
-        }
-        const px = (x: number, y: number) =>
-          Array.from(pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4));
-        return {
-          kind: "ok",
-          pixels: [...px(0, 0), ...px(63, 0), ...px(0, 63), ...px(63, 63)],
-        };
+        return dst
+          .getCanvas()
+          .readPixels(0, 0, {
+            width: size,
+            height: size,
+            colorType: ctx.colorType,
+            alphaType: ctx.alphaType,
+          })
+          .then((pixels) => {
+            image.dispose();
+            texture.destroy();
+            if (!pixels) {
+              return { kind: "fail", reason: "readPixels returned null" };
+            }
+            const px = (x: number, y: number) =>
+              Array.from(
+                pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4)
+              );
+            return {
+              kind: "ok",
+              pixels: [...px(0, 0), ...px(63, 0), ...px(0, 63), ...px(63, 63)],
+            };
+          });
       },
       { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
     );
@@ -145,7 +154,7 @@ describe("Native frames", () => {
   itRunsE2eOnly("rejects native buffers on native platforms", async () => {
     const result = await surface.eval((Skia) => {
       try {
-        Skia.Image.MakeImageFromNativeBuffer(
+        Skia.Image.MakeFromNativeBuffer(
           BigInt(1) as unknown as CanvasImageSource
         );
         return "did not throw";

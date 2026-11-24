@@ -9,8 +9,8 @@ import {
   resolveOpaque,
   useBackingViewWarning,
 } from "./android";
+import { useAppleFormatWarning } from "./apple";
 import type { SkiaGraphiteViewNativeProps } from "./types";
-import { SkiaViewNativeId } from "./SkiaViewNativeId";
 import { measureLayout } from "./measureLayout";
 
 export interface SkiaGraphiteViewRef {
@@ -32,14 +32,17 @@ export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
  */
 export const SkiaGraphiteView = ({
   highBitDepth = false,
+  deviceIndependentFonts = false,
+  colorSpace,
   android,
   ref,
   ...viewProps
 }: SkiaGraphiteViewProps) => {
-  const nativeId = useMemo(() => SkiaViewNativeId.current++, []);
+  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
   useBackingViewWarning({ highBitDepth, android });
+  useAppleFormatWarning({ highBitDepth, colorSpace });
   // What the surface format follows from on Android, see makeGraphiteContext.
   const opaque = resolveOpaque({ highBitDepth, android });
   // Retires the native target made for this id on unmount, in case no native
@@ -55,6 +58,14 @@ export const SkiaGraphiteView = ({
     },
     [nativeId]
   );
+  // A context made already keeps the target: the option is set on it.
+  useEffect(() => {
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "deviceIndependentFonts",
+      deviceIndependentFonts
+    );
+  }, [nativeId, deviceIndependentFonts]);
   useImperativeHandle(
     ref,
     () => ({
@@ -73,11 +84,12 @@ export const SkiaGraphiteView = ({
           size.width,
           size.height,
           opaque,
-          highBitDepth
+          highBitDepth,
+          deviceIndependentFonts
         );
       },
     }),
-    [nativeId, opaque, highBitDepth]
+    [nativeId, opaque, highBitDepth, deviceIndependentFonts]
   );
   return (
     <SkiaViewNativeComponent
@@ -85,6 +97,7 @@ export const SkiaGraphiteView = ({
       collapsable={false}
       nativeID={`${nativeId}`}
       highBitDepth={highBitDepth}
+      colorSpace={colorSpace ?? ""}
       {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />

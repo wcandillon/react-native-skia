@@ -46,13 +46,13 @@ describe("Text Paths", () => {
         </Group>
       </>
     );
-    checkImage(image, `snapshots/text/text-path-bug-${surface.OS}.png`);
+    await checkImage(image, `snapshots/text/text-path-bug-${surface.OS}.png`);
   });
 
   it("Should draw Arabic text along a path", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const font = Skia.Font(amiri, 24);
@@ -110,7 +110,7 @@ describe("Text Paths", () => {
         width: surface.width,
       }
     );
-    checkImage(img, `snapshots/text/text-path-arabic-${surface.OS}.png`);
+    await checkImage(img, `snapshots/text/text-path-arabic-${surface.OS}.png`);
   });
 
   it("Should draw Arabic text along a path with TextPath component", async () => {
@@ -132,7 +132,7 @@ describe("Text Paths", () => {
         />
       </>
     );
-    checkImage(
+    await checkImage(
       image,
       `snapshots/text/text-path-arabic-component-${surface.OS}.png`
     );

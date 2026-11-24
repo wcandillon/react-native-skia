@@ -12,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "jsx": "react-native",
     "strict": true,
     "noUnusedLocals": true /* Report errors on unused locals. */,
@@ -35,6 +35,7 @@
     "babel.config.js",
     "metro.config.js",
     "jest.config.js",
-    "lib"
+    "lib",
+    "libs"
   ]
 }

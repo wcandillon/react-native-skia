@@ -44,6 +44,16 @@ public:
    */
   static bool mainScreenSupportsP3();
 
+  /**
+   Keeps DawnContext::isForeground up to date from the application's
+   notifications: false from UIApplicationWillResignActive until
+   UIApplicationDidBecomeActive, as Apple asks Metal apps to stop submitting
+   work when deactivated. Called once, on the main thread (RNSkiaModule's
+   init), where alone the application state may be read; nothing on macOS,
+   where a hidden app may use the GPU.
+   */
+  static void observeApplicationState();
+
   bool prefersP3ColorSpace() override { return _prefersP3ColorSpace; }
 
   void runOnMainThread(std::function<void()>) override;

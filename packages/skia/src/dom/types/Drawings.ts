@@ -92,7 +92,7 @@ export interface PatchProps extends DrawingNodeProps {
 }
 
 export interface VerticesProps extends DrawingNodeProps {
-  colors?: string[];
+  colors?: Color[];
   /**
    * The vertex positions, as a list of points or as a Float32Array of
    * interleaved x, y pairs. The Float32Array is copied in one go, which is

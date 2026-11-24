@@ -65,7 +65,7 @@ public:
   }
 
   // Pointer-based texture interop with react-native-webgpu, the surface
-  // counterpart of JsiSkImageFactory::MakeImageFromGPUTexture: Skia draws
+  // counterpart of JsiSkImageFactory::MakeFromGPUTexture: Skia draws
   // directly into a texture created on the shared device, so WebGPU can
   // sample what Skia drew without any copy.
   JSI_HOST_FUNCTION(MakeFromGPUTexture) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 
 #include "JsiSkCanvas.h"
 #include "JsiSkConverters.h"
@@ -31,8 +32,14 @@ public:
                                            SkPictureRecorder>(
             context, std::make_shared<SkPictureRecorder>()) {}
 
+  // The recorder owns the recording canvas: detach a wrapper JS still holds
+  // before the recorder goes with the canvas.
+  ~JsiSkPictureRecorder() override { detachCanvas(); }
+
   std::shared_ptr<JsiSkCanvas>
   beginRecording(JsiOptional<std::shared_ptr<SkRect>> rect) {
+    // A new recording replaces the previous one.
+    detachCanvas();
     SkCanvas *canvas;
     if (rect.has_value()) {
       SkRTreeFactory factory;
@@ -42,11 +49,15 @@ public:
       SkRect bounds = SkRect::Make(size);
       canvas = getObject()->beginRecording(bounds, nullptr);
     }
-    return std::make_shared<JsiSkCanvas>(getContext(), canvas);
+    auto jsiCanvas = std::make_shared<JsiSkCanvas>(getContext(), canvas);
+    _canvas = jsiCanvas;
+    return jsiCanvas;
   }
 
   std::shared_ptr<JsiSkPicture> finishRecordingAsPicture() {
     auto picture = getObject()->finishRecordingAsPicture();
+    // The recording is over: drawing on its canvas throws from here on.
+    detachCanvas();
     return std::make_shared<JsiSkPicture>(getContext(), std::move(picture));
   }
 
@@ -68,5 +79,21 @@ public:
                            std::make_shared<JsiSkPictureRecorder>(context));
     };
   }
+
+protected:
+  void releaseResources() override {
+    detachCanvas();
+    setObject(nullptr);
+  }
+
+private:
+  void detachCanvas() {
+    if (auto canvas = _canvas.lock()) {
+      canvas->detach();
+    }
+    _canvas.reset();
+  }
+
+  std::weak_ptr<JsiSkCanvas> _canvas;
 };
 } // namespace RNSkia

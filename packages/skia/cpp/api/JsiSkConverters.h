@@ -73,6 +73,8 @@ class JsiSkTextBlob;
 class JsiSkRuntimeEffect;
 class JsiSkRuntimeShaderBuilder;
 class JsiSkVertices;
+class JsiSkShapeBlob;
+class RNSkShapeBlob;
 class JsiSkFontMgr;
 class JsiSkSVG;
 class JsiSkPaint;
@@ -135,6 +137,9 @@ template <> struct JsiSkWrapperFor<SkRuntimeEffectBuilder> {
 };
 template <> struct JsiSkWrapperFor<SkVertices> {
   using type = JsiSkVertices;
+};
+template <> struct JsiSkWrapperFor<RNSkShapeBlob> {
+  using type = JsiSkShapeBlob;
 };
 template <> struct JsiSkWrapperFor<SkFontMgr> {
   using type = JsiSkFontMgr;

@@ -77,7 +77,7 @@ const shapeOf = (node: Node): SceneShape => ({
   children: node.children.map(shapeOf),
 });
 
-const readPixels = (root: SkiaSGRoot) => {
+const readPixels = async (root: SkiaSGRoot) => {
   const { Skia } = importSkia();
   const surface = Skia.Surface.MakeRaster(SIZE, SIZE);
   if (surface === null) {
@@ -85,12 +85,17 @@ const readPixels = (root: SkiaSGRoot) => {
   }
   root.drawOnCanvas(surface.getCanvas());
   surface.flush();
-  return Array.from(surface.makeImageSnapshot().readPixels() as Uint8Array);
+  return Array.from(
+    (await surface.makeImageSnapshot().readPixels()) as Uint8Array
+  );
 };
 
-const readPixel = (root: SkiaSGRoot, { x, y }: { x: number; y: number }) => {
+const readPixel = async (
+  root: SkiaSGRoot,
+  { x, y }: { x: number; y: number }
+) => {
   const offset = (y * SIZE + x) * 4;
-  return readPixels(root).slice(offset, offset + 4);
+  return (await readPixels(root)).slice(offset, offset + 4);
 };
 
 const renderAlone = async (element: ReactNode) => {
@@ -139,15 +144,15 @@ describe("Suspense", () => {
       const { Skia } = importSkia();
       const root = new SkiaSGRoot(Skia);
       await commit(root, scene(fulfilled("cyan")));
-      expect(readPixel(root, LEFT)).toEqual(CYAN);
+      expect(await readPixel(root, LEFT)).toEqual(CYAN);
 
       const next = pending();
       await commit(root, scene(next.promise));
       expect(reportedErrors).toEqual([]);
       const fallbackAlone = await renderAlone(place(boundary.fallback));
       expect(shapeOf(root.sg)).toEqual(shapeOf(fallbackAlone.sg));
-      expect(readPixels(root)).toEqual(readPixels(fallbackAlone));
-      expect(readPixel(root, LEFT)).toEqual(MAGENTA);
+      expect(await readPixels(root)).toEqual(await readPixels(fallbackAlone));
+      expect(await readPixel(root, LEFT)).toEqual(MAGENTA);
 
       next.resolve("yellow");
       await next.promise;
@@ -156,8 +161,8 @@ describe("Suspense", () => {
       const contentAlone = await renderAlone(
         place(boundary.content(fulfilled("yellow")))
       );
-      expect(readPixels(root)).toEqual(readPixels(contentAlone));
-      expect(readPixel(root, LEFT)).toEqual(YELLOW);
+      expect(await readPixels(root)).toEqual(await readPixels(contentAlone));
+      expect(await readPixel(root, LEFT)).toEqual(YELLOW);
 
       await root.unmount();
       await fallbackAlone.unmount();

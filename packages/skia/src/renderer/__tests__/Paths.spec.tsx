@@ -18,7 +18,7 @@ describe("Path Examples", () => {
     };
     const path = Skia.PathBuilder.Make().addArc(arcRect, 45, 270).build();
     const surface = await drawOnNode(<Path path={path} color="lightblue" />);
-    processResult(surface, "snapshots/paths/arc.png");
+    await processResult(surface, "snapshots/paths/arc.png");
   });
 
   it("Should draw an oval", async () => {
@@ -31,7 +31,7 @@ describe("Path Examples", () => {
     };
     const path = Skia.Path.Oval(rct);
     const surface = await drawOnNode(<Path path={path} color="lightblue" />);
-    processResult(surface, "snapshots/paths/oval.png");
+    await processResult(surface, "snapshots/paths/oval.png");
   });
 
   it("Should draw an rounded rectangle", async () => {
@@ -47,7 +47,7 @@ describe("Path Examples", () => {
       ry: size / 4,
     });
     const surface = await drawOnNode(<Path path={path} color="lightblue" />);
-    processResult(surface, "snapshots/paths/rrect.png");
+    await processResult(surface, "snapshots/paths/rrect.png");
   });
 
   it("Should draw a polygon", async () => {
@@ -66,6 +66,6 @@ describe("Path Examples", () => {
     const surface = await drawOnNode(
       <Path path={path} strokeWidth={4} style="stroke" color="lightblue" />
     );
-    processResult(surface, "snapshots/paths/poly.png");
+    await processResult(surface, "snapshots/paths/poly.png");
   });
 });

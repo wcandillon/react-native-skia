@@ -11,9 +11,9 @@ const SkiaLogo = require("./assets/skia_logo.png");
 //     : "skia_logo_jpeg";
 const SkiaLogoJpeg = require("./assets/skia_logo_jpeg.jpg");
 
-// NotoColorEmoji.ttf is only available on iOS
+// CoreText cannot load this NotoColorEmoji font; use Roboto on Apple platforms.
 const NotoColorEmojiSrc =
-  Platform.OS === "ios"
+  Platform.OS === "ios" || Platform.OS === "macos"
     ? require("./assets/Roboto-Medium.ttf")
     : require("./assets/NotoColorEmoji.ttf");
 

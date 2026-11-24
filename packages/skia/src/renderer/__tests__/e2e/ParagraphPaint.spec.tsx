@@ -22,7 +22,7 @@ describe("Paragraphs", () => {
   it("Should use shader for the foreground and background", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -77,12 +77,12 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    checkImage(img, docPath(`paragraph/background-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/background-${surface.OS}.png`));
   });
   it("Should use shader for the foreground", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -128,12 +128,12 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    checkImage(img, docPath(`paragraph/foreground-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/foreground-${surface.OS}.png`));
   });
   it("Should use shader for the background", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -179,7 +179,10 @@ describe("Paragraphs", () => {
         }`,
       }
     );
-    checkImage(img, docPath(`paragraph/background-only-${surface.OS}.png`));
+    await checkImage(
+      img,
+      docPath(`paragraph/background-only-${surface.OS}.png`)
+    );
   });
 
   it("should apply an image filter to the paragraph", async () => {
@@ -188,7 +191,7 @@ describe("Paragraphs", () => {
     const paragraph = new ParagraphAsset(
       Sk,
       (Skia, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -218,7 +221,7 @@ describe("Paragraphs", () => {
         </Group>
       </>
     );
-    checkImage(image, docPath(`blurred-paragraph-${surface.OS}.png`));
+    await checkImage(image, docPath(`blurred-paragraph-${surface.OS}.png`));
   });
 
   it("should apply an opacity filter to the paragraph", async () => {
@@ -227,7 +230,7 @@ describe("Paragraphs", () => {
     const paragraph = new ParagraphAsset(
       Sk,
       (Skia, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -257,6 +260,6 @@ describe("Paragraphs", () => {
         </Group>
       </>
     );
-    checkImage(image, docPath(`opacity-paragraph-${surface.OS}.png`));
+    await checkImage(image, docPath(`opacity-paragraph-${surface.OS}.png`));
   });
 });

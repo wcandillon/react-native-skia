@@ -18,6 +18,7 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/gpu/graphite/dawn/DawnBackendContext.h"
+#include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
 namespace DawnUtils {
@@ -169,6 +170,15 @@ inline bool isSwiftShader(const wgpu::Adapter &adapter) {
          toString(info.device).find("SwiftShader") != std::string::npos;
 }
 
+// Dawn's own Imagination test (gpu_info::IsImgTec): the PCI vendor ID of
+// Imagination Technologies, whose PowerVR GPUs ship in the Pixel 10 and 11.
+inline bool isImagination(const wgpu::Adapter &adapter) {
+  wgpu::AdapterInfo info;
+  adapter.GetInfo(&info);
+  constexpr uint32_t kVendorIDImagination = 0x1010;
+  return info.vendorID == kVendorIDImagination;
+}
+
 // The backend Skia renders with: Metal on Apple, Vulkan on Android.
 #ifdef __APPLE__
 constexpr auto kPlatformBackendType = wgpu::BackendType::Metal;
@@ -257,24 +267,45 @@ getMatchedAdapter(dawn::native::Instance *instance) {
 
 // Where requestDevice() reports what becomes of the device. A loss after
 // creation (a driver reset, the GPU out of memory, a device-level error)
-// goes to onLost with Dawn's message, on whichever thread Dawn detects it.
-// A creation failure leaves Dawn's message in creationFailure, for the
-// caller of requestDevice(): that callback runs inside CreateDevice, on the
-// calling thread. The listener must outlive the device.
+// goes to onLost with Dawn's reason and message, on whichever thread Dawn
+// detects it: possibly inside a call on the device itself, on the calling
+// thread. A creation failure leaves Dawn's message in creationFailure, for
+// the caller of requestDevice(): that callback runs inside CreateDevice, on
+// the calling thread. The listener must outlive the device.
 struct DeviceLostListener {
-  std::function<void(const std::string &message)> onLost;
+  std::function<void(wgpu::DeviceLostReason reason, const std::string &message)>
+      onLost;
   std::string creationFailure;
 };
+
+// The name WebGPU gives a loss reason (GPUDeviceLostReason, lower case).
+inline const char *deviceLostReasonName(wgpu::DeviceLostReason reason) {
+  switch (reason) {
+  case wgpu::DeviceLostReason::Destroyed:
+    return "destroyed";
+  case wgpu::DeviceLostReason::FailedCreation:
+    return "failed-creation";
+  case wgpu::DeviceLostReason::CallbackCancelled:
+    return "callback-cancelled";
+  default:
+    return "unknown";
+  }
+}
 
 // Create a Dawn device from the given adapter with the requested features.
 // Features not supported by the adapter are silently skipped. The device's
 // loss is reported to `listener` (see DeviceLostListener), or only logged
 // without one (a secondary device). Neither takes the process down: a lost
 // device fails its later operations, which the callers handle.
+//
+// A release build skips Dawn's validation on the device, unless `validate`
+// asks for it: the device that replaces a lost one is validated, so that a
+// texture or buffer made on the lost device and used again is refused with
+// an error rather than reaching the driver (see DawnContext).
 inline wgpu::Device
 requestDevice(dawn::native::Adapter &nativeAdapter,
               const std::vector<wgpu::FeatureName> &requestedFeatures,
-              DeviceLostListener *listener) {
+              DeviceLostListener *listener, bool validate = false) {
   wgpu::Adapter adapter = nativeAdapter.Get();
 
   // Filter to only features the adapter supports.
@@ -301,10 +332,7 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
     features.push_back(feature);
   }
 
-  static constexpr const char *kToggles[] = {
-#if !defined(SK_DEBUG)
-      "skip_validation",
-#endif
+  std::vector<const char *> toggles = {
       "disable_lazy_clear_for_mapped_at_creation_buffer",
       "allow_unsafe_apis",
 #if !defined(__ANDROID__)
@@ -317,8 +345,37 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // accesses; Chrome ships WebGPU with it on.
       "disable_robustness",
 #endif
+#if defined(__ANDROID__)
+      // One VkPipelineCache per device, as Chrome configures Dawn on every
+      // Vulkan device. Without it Dawn creates a VkPipelineCache for each
+      // pipeline it compiles, serializes it (for a blob cache this device
+      // does not have) and destroys it, on each of its worker threads at
+      // once: that destructor is where the Imagination PowerVR driver
+      // (MediaTek mt6855) segfaults while Graphite compiles its pipelines
+      // (#4340). With one cache the only vkDestroyPipelineCache runs at
+      // device teardown, and pipelines that share binaries compile faster.
+      // The blob cache keeps it across launches, from PerformIdleTasks (see
+      // RNSkPipelineWarmup::storePipelineCache).
+      "vulkan_monolithic_pipeline_cache",
+#endif
+#ifdef __APPLE__
+      // iOS refuses GPU work from an app in the background, and Dawn loses
+      // the device over a refused command buffer (#4290). With this toggle
+      // Dawn holds the commits while the app is in the background, from the
+      // application's own notifications, and commits them when it comes back:
+      // nothing is lost, nothing is refused. Dawn applies it on iOS and tvOS
+      // only, and a Dawn without it (react-native-webgpu-dawn before the
+      // patch) drops the name. See scripts/dawn-patches.
+      "metal_suspend_submissions_in_background",
+#endif
   };
-  std::vector<const char *> toggles(std::begin(kToggles), std::end(kToggles));
+#if defined(NDEBUG)
+  if (!validate) {
+    toggles.push_back("skip_validation");
+  }
+#else
+  (void)validate;
+#endif
 #ifdef __ANDROID__
   // Dawn checks an imported AHardwareBuffer's allocation size against the
   // VkImage it binds to, and the Android emulator's SwiftShader driver reports
@@ -354,6 +411,14 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
   desc.requiredFeatureCount = features.size();
   desc.requiredFeatures = features.data();
   desc.nextInChain = &togglesDesc;
+  // Dawn's blob cache, on disk once the platform gave it a directory (see
+  // DawnContext::setCacheDirectory): the shaders Dawn translated, and on
+  // Vulkan its pipeline cache, found again by the next process. The same
+  // cache as React Native WebGPU's, chained in front of the toggles and
+  // alive for the RequestDevice call below, like them.
+  WGPUDawnCacheDeviceDescriptor blobCache =
+      WGPU_DAWN_CACHE_DEVICE_DESCRIPTOR_INIT;
+  rnwgpu::DawnBlobCache::chain(desc, blobCache);
 
   // Destroyed is the context tearing the device down on purpose, and
   // CallbackCancelled the instance going away: neither is a loss.
@@ -372,7 +437,7 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
           return;
         default:
           if (listener != nullptr && listener->onLost) {
-            listener->onLost(toString(message));
+            listener->onLost(reason, toString(message));
           } else {
             RNSkia::RNSkLogger::logToConsole("Device lost: " +
                                              toString(message));
@@ -390,10 +455,10 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 }
 
 // `listener` is told of the primary device's loss (see DeviceLostListener)
-// and must outlive the device.
+// and must outlive the device. `validate` is passed on to requestDevice().
 inline skgpu::graphite::DawnBackendContext
 createDawnBackendContext(dawn::native::Instance *instance,
-                         DeviceLostListener *listener) {
+                         DeviceLostListener *listener, bool validate = false) {
 
   auto matchedAdapter = getMatchedAdapter(instance);
   wgpu::Adapter adapter = matchedAdapter.Get();
@@ -466,8 +531,37 @@ createDawnBackendContext(dawn::native::Instance *instance,
       wgpu::FeatureName::OpaqueYCbCrAndroidForExternalTexture,
 #endif
   };
+#ifdef __ANDROID__
+  // Not on Imagination: with transient attachments, a frame whose recording
+  // holds an MSAA pass presents nothing on the PowerVR driver (Pixel 11,
+  // driver 25.3@6908880), whether the pass resolves into the window or into
+  // a layer, while the same pass on an offscreen surface works and no error
+  // is reported (#4371). It surfaced when #4177 stopped requesting
+  // MSAARenderToSingleSampled on Android. Without the feature, and because
+  // Dawn's Vulkan backend never advertises DawnPartialLoadResolveTexture,
+  // Graphite takes its emulated load/store resolve (DawnCaps
+  // fEmulateLoadStoreResolve): the MSAA texture gets real memory and
+  // TextureBinding usage, the resolve is a draw, 4x MSAA stays on.
+  //
+  // Stopgap. Revisit it when:
+  // - Dawn stops advertising TransientAttachments on ImgTec itself
+  //   (PhysicalDeviceVk.cpp, IsImgTec), which makes this redundant;
+  // - MSAARenderToSingleSampled is requested on Android again
+  //   (https://issues.chromium.org/issues/571594984), which makes it moot;
+  // - a Skia bump changes the fEmulateLoadStoreResolve condition in
+  //   DawnCaps, or Dawn's Vulkan backend starts advertising
+  //   DawnPartialLoadResolveTexture: PowerVR would then move to a plain
+  //   MSAA texture with a native resolve, untested there.
+  // Verify any change with the Issue 4371 diagnostics screen on a Pixel
+  // 10 or 11 with this block disabled; a driver fix shows up there, not in
+  // any log.
+  if (isImagination(adapter)) {
+    std::erase(features, wgpu::FeatureName::TransientAttachments);
+  }
+#endif
 
-  wgpu::Device device = requestDevice(matchedAdapter, features, listener);
+  wgpu::Device device =
+      requestDevice(matchedAdapter, features, listener, validate);
   if (!device) {
     std::string error =
         "React Native Skia could not create a GPU device on the " +

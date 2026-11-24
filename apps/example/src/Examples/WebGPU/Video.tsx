@@ -190,7 +190,7 @@ export const Video = () => {
         frame.release();
         // A new image is what makes the canvas redraw
         const previous = image.value;
-        image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+        image.value = Skia.Image.MakeFromGPUTexture(texture);
         previous?.dispose();
       }
       frameId = requestAnimationFrame(render);

@@ -48,5 +48,5 @@ export interface ColorFilterFactory {
    * Makes a color filter that multiplies the luma of its input into the alpha channel,
    * and sets the red, green, and blue channels to zero.
    */
-  MakeLumaColorFilter(): SkColorFilter;
+  MakeLuma(): SkColorFilter;
 }

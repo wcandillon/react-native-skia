@@ -126,7 +126,9 @@ CustomPropertyManager::~CustomPropertyManager() {
 
 std::string CustomPropertyManager::acceptKey(const char *name,
                                              const char *suffix) const {
-  if (!SkStrStartsWith(name, fPrefix.c_str())) {
+  // Unnamed Lottie nodes (no "nm") arrive as nullptr; skip them like a
+  // prefix mismatch instead of passing null to SkStrStartsWith/std::string.
+  if (name == nullptr || !SkStrStartsWith(name, fPrefix.c_str())) {
     return std::string();
   }
 

@@ -27,7 +27,7 @@ export const ImageLoading = () => {
   });
   const loadImage = async () => {
     const data = await Skia.Data.fromURI("https://picsum.photos/200/300");
-    const image = Skia.Image.MakeImageFromEncoded(data);
+    const image = Skia.Image.MakeFromEncoded(data);
 
     setSkimage(image);
   };
@@ -79,7 +79,7 @@ export const ImageLoading = () => {
     let snapshot = offscreen.makeImageSnapshot();
 
     console.log("Step 3");
-    let imageBase64 = snapshot.encodeToBase64(ImageFormat.JPEG, 100);
+    let imageBase64 = await snapshot.encodeToBase64(ImageFormat.JPEG, 100);
     console.log("image encoded to base64", imageBase64.length);
     return imageBase64;
   };

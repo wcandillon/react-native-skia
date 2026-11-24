@@ -39,17 +39,17 @@ describe("Paragraphs", () => {
   it("Should build the first example from the documentation", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoMedium = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoMedium = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoMedium))
         )!;
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
         provider.registerFont(robotoMedium, "Roboto");
         provider.registerFont(robotoRegular, "Roboto");
         if (ctx.OS === "node") {
-          const noto = Skia.Typeface.MakeFreeTypeFaceFromData(
+          const noto = Skia.Typeface.MakeFromData(
             Skia.Data.fromBytes(new Uint8Array(ctx.Noto))
           )!;
           provider.registerFont(noto, "Noto");
@@ -83,7 +83,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(img, docPath(`paragraph/hello-world-${surface.OS}.png`), {
+    await checkImage(img, docPath(`paragraph/hello-world-${surface.OS}.png`), {
       // In CI, the emoji font is different
       maxPixelDiff: 15000,
     });
@@ -91,13 +91,13 @@ describe("Paragraphs", () => {
   it("Should build the example from the documentation with text styles", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoBold = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoBold = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoBold))
         )!;
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const robotoItalic = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoItalic = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoItalic))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -133,7 +133,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(img, docPath(`paragraph/font-style-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/font-style-${surface.OS}.png`));
   });
   itRunsE2eOnly("should render simple paragraph", async () => {
     const img = await surface.drawOffscreen(
@@ -147,12 +147,15 @@ describe("Paragraphs", () => {
       },
       { width: surface.width }
     );
-    checkImage(img, `snapshots/paragraph/simple-paragraph-${surface.OS}.png`);
+    await checkImage(
+      img,
+      `snapshots/paragraph/simple-paragraph-${surface.OS}.png`
+    );
   });
   it("should render simple paragraph with custom font", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const tf = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const tf = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Pacifico))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -170,7 +173,7 @@ describe("Paragraphs", () => {
       },
       { Pacifico, width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/simple-paragraph-with-provider-${surface.OS}.png`
     );
@@ -188,7 +191,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-linebreaks-${surface.OS}.png`
     );
@@ -203,7 +206,7 @@ describe("Paragraphs", () => {
       para.layout(50); // Layout width set to 50 as in the original test
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-auto-linebreaks-${surface.OS}.png`
     );
@@ -223,7 +226,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Right }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-right-${surface.OS}.png`
     );
@@ -243,7 +246,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Center }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-center-${surface.OS}.png`
     );
@@ -267,7 +270,7 @@ describe("Paragraphs", () => {
       },
       { textAlign: TextAlign.Justify, width: surface.width }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-justify-${surface.OS}.png`
     );
@@ -291,7 +294,7 @@ describe("Paragraphs", () => {
       },
       { width: surface.width, textAlign: TextAlign.Justify }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-justify-${surface.OS}.png`
     );
@@ -313,7 +316,7 @@ describe("Paragraphs", () => {
       },
       { textDirection: TextDirection.RTL }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-align-rtl-${surface.OS}.png`
     );
@@ -322,7 +325,7 @@ describe("Paragraphs", () => {
   it("should apply letterSpacing and wordSpacing to RTL Arabic text", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -394,7 +397,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-rtl-arabic-spacing-bug-${surface.OS}.png`
     );
@@ -404,10 +407,10 @@ describe("Paragraphs", () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
         const wordSpacing = 40;
-        const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const roboto = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
-        const amiri = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const amiri = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.Amiri))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -463,7 +466,7 @@ describe("Paragraphs", () => {
         width: surface.width,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-word-spacing-ltr-rtl-${surface.OS}.png`
     );
@@ -488,7 +491,7 @@ describe("Paragraphs", () => {
         },
         { width: 50 }
       );
-      checkImage(
+      await checkImage(
         img,
         `snapshots/paragraph/paragraph-ellipse-${surface.OS}.png`
       );
@@ -504,7 +507,7 @@ describe("Paragraphs", () => {
       para.layout(50);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-in-paragraph-style-${surface.OS}.png`
     );
@@ -526,7 +529,7 @@ describe("Paragraphs", () => {
       para.layout(150);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-colors-${surface.OS}.png`
     );
@@ -567,7 +570,7 @@ describe("Paragraphs", () => {
         overline: TextDecoration.Overline,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-decoration-${surface.OS}.png`
     );
@@ -602,7 +605,7 @@ describe("Paragraphs", () => {
         boldItalic: FontStyle.BoldItalic,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-style-${surface.OS}.png`
     );
@@ -643,7 +646,7 @@ describe("Paragraphs", () => {
         boldItalic: FontStyle.BoldItalic,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-style-${surface.OS}-box.png`
     );
@@ -652,7 +655,7 @@ describe("Paragraphs", () => {
   it("should draw the bounding box (2)", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -678,7 +681,7 @@ describe("Paragraphs", () => {
         RobotoRegular,
       }
     );
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-bounding-box-${surface.OS}.png`
     );
@@ -686,7 +689,7 @@ describe("Paragraphs", () => {
   it("should draw the bounding box (3)", async () => {
     const img = await surface.drawOffscreen(
       (Skia, canvas, ctx) => {
-        const robotoRegular = Skia.Typeface.MakeFreeTypeFaceFromData(
+        const robotoRegular = Skia.Typeface.MakeFromData(
           Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
         )!;
         const provider = Skia.TypefaceFontProvider.Make();
@@ -717,7 +720,7 @@ describe("Paragraphs", () => {
         canvasHeight: surface.height,
       }
     );
-    checkImage(img, docPath(`paragraph/boundingbox-${surface.OS}.png`));
+    await checkImage(img, docPath(`paragraph/boundingbox-${surface.OS}.png`));
   });
 
   itRunsE2eOnly("should return the paragraph height", async () => {
@@ -761,7 +764,7 @@ describe("Paragraphs", () => {
       para.layout(150);
       para.paint(canvas, 0, 0);
     });
-    checkImage(
+    await checkImage(
       img,
       `snapshots/paragraph/paragraph-text-style-font-shadow-${surface.OS}.png`
     );

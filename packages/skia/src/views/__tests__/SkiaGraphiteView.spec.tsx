@@ -19,37 +19,49 @@ jest.mock("../../specs/SkiaViewNativeComponent", () => ({
     return null;
   },
 }));
-jest.mock("../api", () => ({
-  SkiaViewApi: {
-    makeGraphiteContext: jest.fn(),
-    destroyGraphiteContext: jest.fn(),
-  },
-}));
+jest.mock("../api", () => {
+  let nextNativeId = 1000;
+  return {
+    SkiaViewApi: {
+      allocateNativeId: () => nextNativeId++,
+      makeGraphiteContext: jest.fn(),
+      destroyGraphiteContext: jest.fn(),
+      setJsiProperty: jest.fn(),
+    },
+  };
+});
 
 const { SkiaViewApi } = jest.requireMock<{
   SkiaViewApi: {
     makeGraphiteContext: jest.Mock;
     destroyGraphiteContext: jest.Mock;
+    setJsiProperty: jest.Mock;
   };
 }>("../api");
 
-const mountView = ({ strict = false } = {}) => {
+const mountView = ({ strict = false, deviceIndependentFonts = false } = {}) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const ref = React.createRef<SkiaGraphiteViewRef>();
-  const element = <SkiaGraphiteView ref={ref} />;
-  act(() => {
-    root.render(
-      strict ? <React.StrictMode>{element}</React.StrictMode> : element
+  const render = (fonts: boolean) => {
+    const element = (
+      <SkiaGraphiteView ref={ref} deviceIndependentFonts={fonts} />
     );
-  });
+    act(() => {
+      root.render(
+        strict ? <React.StrictMode>{element}</React.StrictMode> : element
+      );
+    });
+  };
+  render(deviceIndependentFonts);
   const view = ref.current;
   if (view === null) {
     throw new Error("SkiaGraphiteView did not attach its ref");
   }
   return {
     view,
+    render,
     unmount: async () => {
       await act(async () => root.unmount());
       container.remove();
@@ -64,6 +76,7 @@ beforeAll(() => {
 beforeEach(() => {
   SkiaViewApi.makeGraphiteContext.mockReset();
   SkiaViewApi.destroyGraphiteContext.mockReset();
+  SkiaViewApi.setJsiProperty.mockReset();
 });
 
 // A host laid out at 200 × 100 points and drawn at half that size: measured
@@ -94,6 +107,7 @@ describe("SkiaGraphiteView on native", () => {
       view.getNativeId(),
       200,
       100,
+      false,
       false,
       false
     );
@@ -128,6 +142,7 @@ describe("SkiaGraphiteView on native", () => {
       200,
       100,
       false,
+      false,
       false
     );
     expect(SkiaViewApi.destroyGraphiteContext.mock.calls).toEqual([[nativeId]]);
@@ -136,5 +151,36 @@ describe("SkiaGraphiteView on native", () => {
       [nativeId],
       [nativeId],
     ]);
+  });
+
+  // Off by default; the context is made with it, and a change reaches the
+  // target the context already holds through the view's properties.
+  it("passes deviceIndependentFonts to the context and its changes to the view", async () => {
+    mockHost = createScaledHost();
+    const { view, render, unmount } = mountView({
+      deviceIndependentFonts: true,
+    });
+    const nativeId = view.getNativeId();
+    view.getContext();
+    expect(SkiaViewApi.makeGraphiteContext).toHaveBeenCalledWith(
+      nativeId,
+      200,
+      100,
+      false,
+      false,
+      true
+    );
+    expect(SkiaViewApi.setJsiProperty).toHaveBeenLastCalledWith(
+      nativeId,
+      "deviceIndependentFonts",
+      true
+    );
+    render(false);
+    expect(SkiaViewApi.setJsiProperty).toHaveBeenLastCalledWith(
+      nativeId,
+      "deviceIndependentFonts",
+      false
+    );
+    await unmount();
   });
 });

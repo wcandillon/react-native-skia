@@ -10,18 +10,21 @@ export const exhaustiveCheck = (a: never): never => {
 
 // Shallow eq on props (without children)
 export const shallowEq = <P extends object>(p1: P, p2: P): boolean => {
-  const keys1 = mapKeys(p1);
-  const keys2 = mapKeys(p2);
-  if (keys1.length !== keys2.length) {
-    return false;
-  }
-  for (const key of keys1) {
+  let count1 = 0;
+  for (const key in p1) {
     if (key === "children") {
       continue;
     }
-    if (p1[key] !== p2[key]) {
+    if (!(key in p2) || p1[key] !== p2[key]) {
       return false;
     }
+    count1++;
   }
-  return true;
+  let count2 = 0;
+  for (const key in p2) {
+    if (key !== "children") {
+      count2++;
+    }
+  }
+  return count1 === count2;
 };

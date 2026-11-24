@@ -33,7 +33,7 @@ vec4 main(vec2 xy) {
         <Shader source={source} uniforms={{ c1, c2, c3, c4 }} />
       </Fill>
     );
-    checkImage(img, "snapshots/sdf/circle.png");
+    await checkImage(img, "snapshots/sdf/circle.png");
   });
   it("should use the sdf of a line", async () => {
     const { Skia } = importSkia();
@@ -69,7 +69,7 @@ vec4 main(vec2 xy) {
         <Shader source={source} uniforms={{ c1, c2 }} />
       </Fill>
     );
-    checkImage(img, "snapshots/sdf/line.png");
+    await checkImage(img, "snapshots/sdf/line.png");
   });
   it("should use the sdf of a rectangle", async () => {
     const { Skia } = importSkia();
@@ -100,7 +100,7 @@ vec4 main(vec2 xy) {
         <Shader source={source} uniforms={{ c1, c2 }} />
       </Fill>
     );
-    checkImage(img, "snapshots/sdf/rectangle.png");
+    await checkImage(img, "snapshots/sdf/rectangle.png");
   });
   it("should use the sdf of a heart", async () => {
     const { Skia } = importSkia();
@@ -143,6 +143,6 @@ vec4 main(vec2 xy) {
         />
       </Fill>
     );
-    checkImage(img, "snapshots/sdf/heart.png", { maxPixelDiff: 500 });
+    await checkImage(img, "snapshots/sdf/heart.png", { maxPixelDiff: 500 });
   });
 });

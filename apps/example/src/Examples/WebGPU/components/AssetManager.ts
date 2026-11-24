@@ -26,7 +26,7 @@ export interface GLTF {
 // Metro serves bundled assets over HTTP in dev, so three's loaders can fetch
 // them (and the relative .bin/.jpg files a .gltf references) like on the web.
 export const resolveAsset = (mod: ReturnType<typeof require>) => {
-  return Image.resolveAssetSource(mod).uri;
+  return Image.resolveAssetSource(mod)!.uri;
 };
 
 export const debugManager = new THREE.LoadingManager();

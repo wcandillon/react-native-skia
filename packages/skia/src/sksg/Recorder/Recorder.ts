@@ -32,14 +32,19 @@ import type {
 import type { AnimatedProps } from "../../renderer";
 import { isSharedValue, isSharedValueSelector } from "../utils";
 import { isColorFilter, isImageFilter, isPathEffect, isShader } from "../Node";
-import type { SkPaint, SkPicture, BaseRecorder } from "../../skia/types";
+import type { Skia, SkPaint, SkPicture, BaseRecorder } from "../../skia/types";
 
 import { CommandType } from "./Core";
 import type { Command } from "./Core";
+import { convertProps } from "./Convertor";
+import type { Disposable } from "./Convertor";
 
 export interface Recording {
   commands: Command[];
   paintPool: SkPaint[];
+  // The Skia objects the recorder made from static props (see Convertor.ts):
+  // the commands reference them for as long as the recording lives.
+  disposables: Disposable[];
   // Last picture produced from this recording. The view keeps its own
   // reference to the picture it displays, so the renderer owns this one and
   // disposes it when the next frame replaces it or the recording is disposed.
@@ -50,6 +55,8 @@ export const disposeRecording = (recording: Recording) => {
   "worklet";
   recording.paintPool.forEach((paint) => paint.dispose());
   recording.paintPool.length = 0;
+  recording.disposables.forEach((disposable) => disposable.dispose());
+  recording.disposables.length = 0;
   if (recording.lastPicture) {
     recording.lastPicture.dispose();
     recording.lastPicture = null;
@@ -64,8 +71,9 @@ export class Recorder implements BaseRecorder {
   commands: Command[] = [];
   cursors: Command[][] = [];
   animationValues: Set<SharedValue<unknown>> = new Set();
+  private disposables: Disposable[] = [];
 
-  constructor() {
+  constructor(private readonly Skia: Skia) {
     this.cursors.push(this.commands);
   }
 
@@ -73,6 +81,7 @@ export class Recorder implements BaseRecorder {
     return {
       commands: this.commands,
       paintPool: [],
+      disposables: this.disposables,
       animationValues: this.animationValues,
     };
   }
@@ -102,12 +111,20 @@ export class Recorder implements BaseRecorder {
 
   private add(command: Command) {
     if (command.props) {
-      const { animatedProps } = this.processProps(
-        command.props as Record<string, unknown>
-      );
+      const props = command.props as Record<string, unknown>;
+      const { animatedProps } = this.processProps(props);
       if (animatedProps) {
         command.animatedProps = animatedProps;
       }
+      // Static props are converted here, once; the player converts the
+      // animated ones on every frame.
+      command.props = convertProps(
+        this.Skia,
+        command.type,
+        props,
+        animatedProps,
+        this.disposables
+      );
     }
     this.cursors[this.cursors.length - 1].push(command);
   }
@@ -144,7 +161,7 @@ export class Recorder implements BaseRecorder {
 
   pushPathEffect(pathEffectType: NodeType, props: AnimatedProps<unknown>) {
     if (!isPathEffect(pathEffectType)) {
-      throw new Error("Invalid color filter type: " + pathEffectType);
+      throw new Error("Invalid path effect type: " + pathEffectType);
     }
     this.add({
       type: CommandType.PushPathEffect,
@@ -155,7 +172,7 @@ export class Recorder implements BaseRecorder {
 
   pushImageFilter(imageFilterType: NodeType, props: AnimatedProps<unknown>) {
     if (!isImageFilter(imageFilterType)) {
-      throw new Error("Invalid color filter type: " + imageFilterType);
+      throw new Error("Invalid image filter type: " + imageFilterType);
     }
     this.add({
       type: CommandType.PushImageFilter,
@@ -181,7 +198,7 @@ export class Recorder implements BaseRecorder {
     children: number
   ) {
     if (!isShader(shaderType) && !(shaderType === NodeType.Blend)) {
-      throw new Error("Invalid color filter type: " + shaderType);
+      throw new Error("Invalid shader type: " + shaderType);
     }
     this.add({ type: CommandType.PushShader, shaderType, props, children });
   }
@@ -224,22 +241,21 @@ export class Recorder implements BaseRecorder {
 
   drawBox(
     boxProps: AnimatedProps<BoxProps>,
-    shadows: {
-      props: BoxShadowProps;
-      animatedProps?: Record<string, unknown>;
-    }[]
+    shadowProps: AnimatedProps<BoxShadowProps>[]
   ) {
-    shadows.forEach((shadow) => {
-      if (shadow.props) {
-        if (shadow.props) {
-          const { animatedProps } = this.processProps(
-            shadow.props as unknown as Record<string, unknown>
-          );
-          if (animatedProps) {
-            shadow.animatedProps = animatedProps;
-          }
-        }
+    const shadows = shadowProps.map((props) => {
+      // The shape the player materializes (see commands/Box.ts).
+      const shadow: {
+        props: AnimatedProps<BoxShadowProps>;
+        animatedProps?: Record<string, unknown>;
+      } = { props };
+      const { animatedProps } = this.processProps(
+        props as unknown as Record<string, unknown>
+      );
+      if (animatedProps) {
+        shadow.animatedProps = animatedProps;
       }
+      return shadow;
     });
     this.add({ type: CommandType.DrawBox, props: boxProps, shadows });
   }

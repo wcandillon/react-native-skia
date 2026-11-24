@@ -10,7 +10,8 @@
 #include "Convertor.h"
 #include "DrawingCtx.h"
 #include "ImageFit.h"
-#include "rnskia/RNSkPlatformContext.h"
+
+#include "rnskia/RNSkAtlas.h"
 
 #include "include/core/SkContourMeasure.h"
 #include "include/core/SkPathBuilder.h"
@@ -38,8 +39,8 @@ public:
     convertProperty(runtime, object, "r", props.r, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto paint = ctx->getPaint();
+  void play(DrawingCtx *ctx) override {
+    const auto &paint = ctx->getPaint();
     if (props.c.has_value()) {
       ctx->canvas->drawCircle(props.c.value(), props.r, paint);
     } else {
@@ -73,8 +74,8 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [x, y, width, height, rect] = props;
+  void play(DrawingCtx *ctx) override {
+    const auto &[x, y, width, height, rect] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRect(rect.value(), ctx->getPaint());
     } else {
@@ -106,7 +107,7 @@ public:
     convertProperty(runtime, object, "fillType", props.fillType, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Saturate start and end values (clamp between 0 and 1)
     float start = std::clamp(props.start, 0.0f, 1.0f);
     float end = std::clamp(props.end, 0.0f, 1.0f);
@@ -119,88 +120,78 @@ public:
     bool willMutatePath =
         hasStartOffset || hasEndOffset || hasStrokeOptions || hasFillType;
 
-    std::shared_ptr<const SkPath> pathToUse;
+    if (!willMutatePath) {
+      // Draw the recorded path directly
+      ctx->canvas->drawPath(props.path, ctx->getPaint());
+      return;
+    }
 
-    if (willMutatePath) {
-      // Create a filtered path for modifications
-      SkPath filteredPath(props.path);
+    // Create a filtered path for modifications
+    SkPath filteredPath(props.path);
 
-      // Handle path trimming
-      if (hasStartOffset || hasEndOffset) {
-        auto pe =
-            SkTrimPathEffect::Make(start, end, SkTrimPathEffect::Mode::kNormal);
-        if (pe != nullptr) {
-          SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
-          SkPathBuilder filteredBuilder;
-          if (!pe->filterPath(&filteredBuilder, filteredPath, &rec)) {
-            throw std::runtime_error(
-                "Failed trimming path with parameters start: " +
-                std::to_string(start) + ", end: " + std::to_string(end));
-          }
-          filteredPath = filteredBuilder.detach();
-        } else {
+    // Handle path trimming
+    if (hasStartOffset || hasEndOffset) {
+      auto pe =
+          SkTrimPathEffect::Make(start, end, SkTrimPathEffect::Mode::kNormal);
+      if (pe != nullptr) {
+        SkStrokeRec rec(SkStrokeRec::InitStyle::kHairline_InitStyle);
+        SkPathBuilder filteredBuilder;
+        if (!pe->filterPath(&filteredBuilder, filteredPath, &rec)) {
           throw std::runtime_error(
               "Failed trimming path with parameters start: " +
               std::to_string(start) + ", end: " + std::to_string(end));
         }
-      }
-
-      // Set fill type
-      auto p = std::make_shared<SkPath>(filteredPath);
-      if (props.fillType.has_value()) {
-        p->setFillType(props.fillType.value());
-      }
-      // Handle stroke options
-      if (hasStrokeOptions) {
-        const auto &stroke = props.stroke.value();
-        SkPaint strokePaint;
-        // A default SkPaint is fill-style, and FillPathWithPaint only
-        // outlines a paint that strokes.
-        strokePaint.setStyle(SkPaint::kStroke_Style);
-
-        if (stroke.cap.has_value()) {
-          strokePaint.setStrokeCap(stroke.cap.value());
-        }
-
-        if (stroke.join.has_value()) {
-          strokePaint.setStrokeJoin(stroke.join.value());
-        }
-
-        if (stroke.width.has_value()) {
-          strokePaint.setStrokeWidth(stroke.width.value());
-        }
-
-        if (stroke.miter_limit.has_value()) {
-          strokePaint.setStrokeMiter(stroke.miter_limit.value());
-        }
-
-        float precision = stroke.precision.value_or(1.0f);
-
-        SkPathBuilder resultBuilder;
-        auto ctm = SkMatrix::Scale(precision, precision);
-        if (skpathutils::FillPathWithPaint(*p, strokePaint, &resultBuilder,
-                                           nullptr, ctm)) {
-          pathToUse = std::make_shared<const SkPath>(resultBuilder.snapshot());
-        } else {
-          // The JS player keeps the unstroked path when Path.Stroke returns
-          // null (e.g. a hairline width of 0).
-          pathToUse = std::const_pointer_cast<const SkPath>(p);
-        }
+        filteredPath = filteredBuilder.detach();
       } else {
-        pathToUse = std::const_pointer_cast<const SkPath>(p);
+        throw std::runtime_error(
+            "Failed trimming path with parameters start: " +
+            std::to_string(start) + ", end: " + std::to_string(end));
       }
-    } else {
-      // Use the original path directly
-      pathToUse = std::make_shared<const SkPath>(props.path);
     }
 
-    if (!pathToUse) {
-      throw std::runtime_error(
-          "Path node could not resolve path props correctly.");
+    // Set fill type
+    if (hasFillType) {
+      filteredPath.setFillType(props.fillType.value());
+    }
+
+    // Handle stroke options
+    if (hasStrokeOptions) {
+      const auto &stroke = props.stroke.value();
+      SkPaint strokePaint;
+      // A default SkPaint is fill-style, and FillPathWithPaint only
+      // outlines a paint that strokes.
+      strokePaint.setStyle(SkPaint::kStroke_Style);
+
+      if (stroke.cap.has_value()) {
+        strokePaint.setStrokeCap(stroke.cap.value());
+      }
+
+      if (stroke.join.has_value()) {
+        strokePaint.setStrokeJoin(stroke.join.value());
+      }
+
+      if (stroke.width.has_value()) {
+        strokePaint.setStrokeWidth(stroke.width.value());
+      }
+
+      if (stroke.miter_limit.has_value()) {
+        strokePaint.setStrokeMiter(stroke.miter_limit.value());
+      }
+
+      float precision = stroke.precision.value_or(1.0f);
+
+      SkPathBuilder resultBuilder;
+      auto ctm = SkMatrix::Scale(precision, precision);
+      if (skpathutils::FillPathWithPaint(filteredPath, strokePaint,
+                                         &resultBuilder, nullptr, ctm)) {
+        filteredPath = resultBuilder.detach();
+      }
+      // Otherwise keep the unstroked path, like the JS player does when
+      // Path.Stroke returns null (e.g. a hairline width of 0).
     }
 
     // Draw the final path
-    ctx->canvas->drawPath(*pathToUse, ctx->getPaint());
+    ctx->canvas->drawPath(filteredPath, ctx->getPaint());
   }
 };
 
@@ -220,7 +211,7 @@ public:
     convertProperty(runtime, object, "p2", props.p2, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawLine(props.p1.x(), props.p1.y(), props.p2.x(),
                           props.p2.y(), ctx->getPaint());
   }
@@ -247,15 +238,17 @@ public:
                     variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [font, text, path, initialOffset] = props;
+  void play(DrawingCtx *ctx) override {
+    const auto &[font, text, path, initialOffset] = props;
+    // Number of bytes of text that end up on the path
+    size_t textLength = text.length();
     if (font.has_value()) {
       // Get glyphs
       auto numGlyphIds =
           font->countText(text.c_str(), text.length(), SkTextEncoding::kUTF8);
 
       std::vector<SkGlyphID> glyphIds;
-      glyphIds.reserve(numGlyphIds);
+      glyphIds.resize(numGlyphIds);
       auto ids = font->textToGlyphs(
           text.c_str(), text.length(), SkTextEncoding::kUTF8,
           SkSpan(static_cast<SkGlyphID *>(glyphIds.data()), numGlyphIds));
@@ -293,7 +286,7 @@ public:
           if (cont == nullptr) {
             // We have come to the end of the path - terminate the string
             // right here.
-            text = text.substr(0, i);
+            textLength = i;
             break;
           }
           dist = width / 2;
@@ -319,7 +312,7 @@ public:
       }
       auto x = SkSpan(rsx.data(), rsx.size());
       auto blob =
-          SkTextBlob::MakeFromRSXform(text.c_str(), text.length(), x, *font);
+          SkTextBlob::MakeFromRSXform(text.c_str(), textLength, x, *font);
       ctx->canvas->drawTextBlob(blob, 0, 0, ctx->getPaint());
     }
   }
@@ -345,15 +338,32 @@ public:
     convertProperty(runtime, object, "y", props.y, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [font, text, x, y] = props;
-    auto paint = ctx->getPaint();
-    if (font.has_value()) {
-      ctx->canvas->drawSimpleText(text.c_str(), text.length(),
-                                  SkTextEncoding::kUTF8, x, y, font.value(),
-                                  paint);
+  void play(DrawingCtx *ctx) override {
+    const auto &[font, text, x, y] = props;
+    if (!font.has_value()) {
+      return;
+    }
+    // The same blob for as long as the text and the font stay the same, so
+    // that Graphite finds the glyph runs it made for it on the previous frame
+    // (it caches them by blob, under any whole pixel translation) and their
+    // glyphs in its atlas: drawSimpleText() shapes the text and looks up
+    // every glyph again on each frame. Played under the recorder's lock.
+    if (_blob == nullptr || _blobText != text || _blobFont != font.value()) {
+      _blob = SkTextBlob::MakeFromText(text.c_str(), text.length(),
+                                       font.value(), SkTextEncoding::kUTF8);
+      _blobText = text;
+      _blobFont = font.value();
+    }
+    // No blob for a text without glyphs.
+    if (_blob != nullptr) {
+      ctx->canvas->drawTextBlob(_blob, x, y, ctx->getPaint());
     }
   }
+
+private:
+  sk_sp<SkTextBlob> _blob;
+  std::string _blobText;
+  SkFont _blobFont;
 };
 
 struct BoxShadowCmdProps {
@@ -417,10 +427,10 @@ public:
     }
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
 
     // Get current paint properties
-    auto paint = ctx->getPaint();
+    const auto &paint = ctx->getPaint();
     float opacity = paint.getAlphaf();
 
     // Convert box to RRect if needed
@@ -493,11 +503,10 @@ struct ImageCmdProps {
 class ImageCmd : public Command {
 public:
   ImageCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  ImageCmd(std::shared_ptr<RNSkPlatformContext> context, jsi::Runtime &runtime,
-           const jsi::Object &object, Variables &variables)
-      : Command(CommandType::DrawImage), _context(context) {
+  ImageCmd(jsi::Runtime &runtime, const jsi::Object &object,
+           Variables &variables)
+      : Command(CommandType::DrawImage) {
     convertProperty(runtime, object, "rect", props.rect, variables);
     convertProperty(runtime, object, "image", props.image, variables);
     convertProperty(runtime, object, "sampling", props.sampling, variables);
@@ -510,10 +519,10 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [x, y, width, height, rect, fit, image, sampling] = props;
+  void play(DrawingCtx *ctx) override {
+    const auto &[x, y, width, height, rect, fit, image, sampling] = props;
     if (image.has_value()) {
-      auto img = image.value();
+      const auto &img = image.value();
       auto hasRect =
           rect.has_value() || (width.has_value() && height.has_value());
       if (hasRect) {
@@ -550,7 +559,7 @@ public:
     convertProperty(runtime, object, "mode", props.mode, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     auto points = SkSpan(props.points.data(), props.points.size());
     ctx->canvas->drawPoints(props.mode, points, ctx->getPaint());
   }
@@ -580,8 +589,8 @@ public:
     convertProperty(runtime, object, "r", props.r, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [rect, x, y, width, height, r] = props;
+  void play(DrawingCtx *ctx) override {
+    const auto &[rect, x, y, width, height, r] = props;
     if (rect.has_value()) {
       ctx->canvas->drawRRect(rect.value(), ctx->getPaint());
     } else {
@@ -618,8 +627,8 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
-    auto [rect, x, y, width, height] = props;
+  void play(DrawingCtx *ctx) override {
+    const auto &[rect, x, y, width, height] = props;
     if (rect.has_value()) {
       ctx->canvas->drawOval(rect.value(), ctx->getPaint());
     } else {
@@ -652,7 +661,7 @@ public:
     convertProperty(runtime, object, "blendMode", props.blendMode, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Validate colors array has exactly 4 colors if provided
     if (props.colors.has_value() && props.colors.value().size() != 4) {
       throw std::invalid_argument(
@@ -702,7 +711,7 @@ public:
     convertProperty(runtime, object, "indices", props.indices, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     // Create vertices using MakeCopy
     auto vertices = SkVertices::MakeCopy(
         props.mode, static_cast<int>(props.vertices.size()),
@@ -742,7 +751,7 @@ public:
     convertProperty(runtime, object, "inner", props.inner, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawDRRect(props.outer, props.inner, ctx->getPaint());
   }
 };
@@ -765,7 +774,7 @@ public:
     convertProperty(runtime, object, "y", props.y, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     ctx->canvas->drawTextBlob(props.blob, props.x, props.y, ctx->getPaint());
   }
 };
@@ -790,7 +799,7 @@ public:
     convertProperty(runtime, object, "glyphs", props.glyphs, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.font.has_value()) {
       auto glyphs =
           SkSpan(props.glyphs.glyphIds.data(), props.glyphs.glyphIds.size());
@@ -810,16 +819,16 @@ struct PictureCmdProps {
 class PictureCmd : public Command {
 public:
   PictureCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  PictureCmd(std::shared_ptr<RNSkPlatformContext> context,
-             jsi::Runtime &runtime, const jsi::Object &object,
+  PictureCmd(jsi::Runtime &runtime, const jsi::Object &object,
              Variables &variables)
-      : Command(CommandType::DrawPicture), _context(context) {
+      : Command(CommandType::DrawPicture) {
     convertProperty(runtime, object, "picture", props.picture, variables);
   }
 
-  void draw(DrawingCtx *ctx) { ctx->canvas->drawPicture(props.picture); }
+  void play(DrawingCtx *ctx) override {
+    ctx->canvas->drawPicture(props.picture);
+  }
 };
 
 struct ImageSVGCmdProps {
@@ -847,7 +856,7 @@ public:
     convertProperty(runtime, object, "rect", props.rect, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.svg != nullptr) {
       ctx->canvas->save();
 
@@ -899,7 +908,7 @@ public:
     convertProperty(runtime, object, "width", props.width, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.paragraph) {
       auto paragraph = props.paragraph->getObject();
       paragraph->layout(props.width);
@@ -924,7 +933,7 @@ public:
     convertProperty(runtime, object, "frame", props.frame, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     props.animation->seekFrame(props.frame);
     props.animation->render(ctx->canvas);
   }
@@ -942,11 +951,10 @@ struct AtlasCmdProps {
 class AtlasCmd : public Command {
 public:
   AtlasCmdProps props;
-  std::shared_ptr<RNSkPlatformContext> _context;
 
-  AtlasCmd(std::shared_ptr<RNSkPlatformContext> context, jsi::Runtime &runtime,
-           const jsi::Object &object, Variables &variables)
-      : Command(CommandType::DrawAtlas), _context(context) {
+  AtlasCmd(jsi::Runtime &runtime, const jsi::Object &object,
+           Variables &variables)
+      : Command(CommandType::DrawAtlas) {
     convertProperty(runtime, object, "image", props.image, variables);
     convertProperty(runtime, object, "sprites", props.sprites, variables);
     convertProperty(runtime, object, "transforms", props.transforms, variables);
@@ -956,7 +964,7 @@ public:
     convertProperty(runtime, object, "sampling", props.sampling, variables);
   }
 
-  void draw(DrawingCtx *ctx) {
+  void play(DrawingCtx *ctx) override {
     if (props.image) {
       // Validate transforms and sprites have the same size
       if (props.transforms.size() != props.sprites.size()) {
@@ -980,8 +988,8 @@ public:
       auto transforms =
           SkSpan(props.transforms.data(), props.transforms.size());
       auto sprites = SkSpan(props.sprites.data(), props.sprites.size());
-      ctx->canvas->drawAtlas(props.image.get(), transforms, sprites, colors,
-                             blendMode, sampling, nullptr, &(ctx->getPaint()));
+      drawAtlasAsVertices(ctx->canvas, props.image.get(), transforms, sprites,
+                          colors, blendMode, sampling, &(ctx->getPaint()));
     }
   }
 };

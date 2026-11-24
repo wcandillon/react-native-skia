@@ -5,6 +5,12 @@ sidebar_label: WebGPU
 slug: /webgpu
 ---
 
+:::tip
+
+For an overview of what this unified GPU runtime makes possible, with demos (three.js, camera and video feeds, Lottie templates, native views in a canvas), read [Hello, Graphite: WebGPU](https://wcandillon.dev/article/hello-graphite-webgpu).
+
+:::
+
 React Native Skia renders with Graphite, which runs on [Dawn](https://dawn.googlesource.com/dawn), Google's WebGPU implementation.
 React Native Skia does not expose a WebGPU API itself. To use WebGPU in your app, install [React Native WebGPU](https://wcandillon.github.io/react-native-webgpu/) alongside it.
 
@@ -15,45 +21,156 @@ Textures created on that device can be used by both libraries without any copy:
 - **From Skia to WebGPU:** draw text, paths, or any Skia drawing straight into a texture that a WebGPU pipeline samples.
 - **Camera and video frames:** draw the frames that React Native WebGPU decodes or wraps in a Skia canvas.
 - **View snapshots:** draw a snapshot of any React Native view, taken by React Native WebGPU, in a Skia canvas.
+- **Static content:** show a Skia drawing that does not animate (an icon, a thumbnail, a chart) in a view that holds a single buffer, without a canvas.
 
 :::info
 
-The APIs on this page are only available on native platforms. On the Web, Skia runs on WebGL through CanvasKit.
+The interop APIs on this page are only available on native platforms. On the Web, Skia runs on WebGL through CanvasKit.
 
 :::
 
-## Installation
+## The GPU device
+
+`Skia.gpu` describes the GPU device Skia renders with: Vulkan on Android, Metal on iOS, WebGL on the web.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+const { isAvailable, backend, device, description, error } = Skia.gpu;
+```
+
+| Property | Description |
+|:--|:--|
+| `isAvailable` | Whether Skia can render on this device, right now |
+| `backend` | `"Vulkan"`, `"Metal"` or `"WebGL"`; empty when unavailable |
+| `vendor`, `architecture`, `device`, `description` | The adapter, in the terms of WebGPU's `GPUAdapterInfo` (native only) |
+| `error` | Why the GPU is unavailable; `null` when it is |
+| `lost` | The promise of the loss of the device, see [device loss](#device-loss) |
+| `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [background and foreground](#background-and-foreground) |
+
+### Availability
+
+On a device without a GPU Skia can render with (on Android, one without Vulkan 1.1, see [the Vulkan section of the installation guide](/docs/getting-started/installation#vulkan)), the app still runs.
+`Skia.gpu.isAvailable` is false and `Skia.gpu.error` says why: every canvas stays blank, CPU work (paths, decoding, raster images) still runs, and the APIs that need the GPU (offscreen surfaces, snapshots, texture images) throw an error with the same message.
+
+### Background and foreground
+
+iOS refuses GPU work from an app in the background, and refused work used to lose the device.
+React Native Skia now holds the GPU work submitted while the app is in the background and runs it when the app comes back: nothing is lost and nothing is refused.
+The same applies to the device `Skia.getNativeDevice()` shares with React Native WebGPU.
+Canvases present nothing meanwhile and catch up on return.
+
+Holding is not free: every frame drawn in the background keeps what it uses in memory until the return.
+A frame callback or a video player that keeps drawing while the app is in the background should stop instead.
+`Skia.gpu.foreground` is false from the moment the app starts to resign active (a lock, a swipe home, an incoming call) until it is active again.
+It can be read synchronously on every runtime, a worklet included, and it flips before any `AppState` event reaches JS.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+import { useFrameCallback } from "react-native-reanimated";
+
+const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+
+useFrameCallback(() => {
+  "worklet";
+  if (!Skia.gpu.foreground) {
+    // Nothing to show: skip the frame rather than queue it.
+    return;
+  }
+  surface.getCanvas().drawColor(Skia.Color("cyan"));
+  surface.flush();
+});
+```
+
+Held work does not finish until the app comes back, so `surface.flush(true)`, which waits for the GPU, blocks its thread until then. Check `Skia.gpu.foreground` before calling it.
+
+On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.
+
+### Device loss
+
+The device can be lost while the app runs: a driver reset, or the GPU out of memory.
+React Native Skia then replaces it with a new device, and canvases render again on their own.
+Everything made on the lost device is gone for good, though safe to use (it draws nothing): offscreen surfaces and the images taken from them, texture images, snapshots of views, and the device `Skia.getNativeDevice()` returned.
+
+`Skia.gpu.lost` is the promise of the loss of the device in use, like WebGPU's `GPUDevice.lost`.
+It resolves once React Native Skia has replaced the device; `Skia.gpu` then describes the new device, with a `lost` promise of its own for the next loss.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+Skia.gpu.lost.then(({ reason, message }) => {
+  console.log(`GPU device lost (${reason}): ${message}`);
+  // Skia.gpu now describes the new device: make your GPU objects again.
+});
+```
+
+`Skia.gpu.isAvailable` is false between the loss and the replacement, and stays false, with `Skia.gpu.error` saying why, if no replacement could be made.
+
+In React, `useGpu()` returns `Skia.gpu` as state and renders the component again once a lost device has been replaced: make your GPU objects with its value as a dependency and they are made again too.
+
+```tsx twoslash
+import { useMemo } from "react";
+import { Canvas, Image, Skia, useGpu } from "react-native-skia";
+
+const Demo = () => {
+  const gpu = useGpu();
+  // Made again on the new device after a loss.
+  const image = useMemo(() => {
+    const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+    surface.getCanvas().drawColor(Skia.Color("cyan"));
+    surface.flush();
+    return surface.makeImageSnapshot();
+  }, [gpu]);
+  return (
+    <Canvas style={{ flex: 1 }}>
+      <Image image={image} x={0} y={0} width={256} height={256} />
+    </Canvas>
+  );
+};
+```
+
+Code sharing the device with React Native WebGPU imports it again the same way, see [sharing the device](#sharing-the-device).
+
+### Pipeline compilation
+
+The GPU compiles a pipeline for each kind of drawing the first time a canvas calls for it: a solid rounded rectangle, an image, a gradient-filled path, a line of text.
+A compile takes from a few milliseconds to a few hundred on a fresh install, and the frame that needs the pipeline waits for it, so a screen that introduces several at once comes up late the first time it appears.
+React Native Skia compiles these pipelines ahead of the frames, on a thread of its own, while the frames leave the GPU alone.
+On a launch without a record, it compiles a built-in set: solid colors, images and gradients on every shape, text, and drop shadows.
+From then on, it records the pipelines the app actually uses in its cache directory (`rnskia/pipelines.bin`) and compiles those at the next launch, so the screens the app showed come up without a compile on the frame.
+A pipeline the record does not cover is compiled when first needed, as before, and recorded.
+A pipeline whose paint uses a runtime effect, one of Skia's own (a blur, a morphology, the luma color filter) or one of yours, is compiled when first needed too, but not recorded: Graphite can only compile it on the context that drew it.
+The compiled shaders themselves, and on Android the driver's pipeline cache, are kept in the same directory by Dawn's blob cache: the one React Native WebGPU keeps for the devices it creates (see its [pipeline cache](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-api#pipeline-cache)), here for Skia's device, so a later launch mostly reads them back.
+Both are caches: clearing the app's cache directory costs the next launch a built-in set and the compiles, and a React Native Skia update that changes what Graphite or Dawn read starts them over.
+The log reports what each launch compiled ahead of the frames.
+
+## Sharing the device
+
+Install React Native WebGPU next to React Native Skia, and follow its [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) for the rest of the setup:
 
 ```sh
 yarn add react-native-webgpu
 ```
 
-Follow the [installation instructions](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/installation) of React Native WebGPU for the rest of the setup.
-
-Both packages depend on the same `react-native-webgpu-dawn` package, which ships the Dawn build they link, so that only one copy of Dawn exists in the app.
-The native build verifies that the two resolve the same version of it and fails with a `Dawn version mismatch` error otherwise.
-If you see that error, upgrade `react-native-skia` and `react-native-webgpu` together.
-
-## Compatibility
-
-Pick one row and install versions from it; the [React Native WebGPU documentation](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia) keeps the reference copy of this table.
+Pick the versions of the two packages from one row of this table; the [React Native WebGPU documentation](https://wcandillon.github.io/react-native-webgpu/docs/integrations/react-native-skia) keeps the reference copy of it.
 
 | react-native-skia | react-native-webgpu |
 | --- | --- |
-| 3.7.0 and later | 0.17.0 and later |
+| 3.10.0 and later | 0.21.3 and later |
+| 3.9.0 to 3.9.2 | 0.20.0 to 0.21.2 |
+| 3.7.0 to 3.8.1 | 0.17.0 to 0.19.2 |
 | 3.4.0 to 3.6.3 | 0.13.1 to 0.16.1, or 0.12.1 |
 | 3.1.0 to 3.3.0 | 0.13.0, or 0.12.1 |
 | 3.0.6 to 3.0.8 | 0.12.1, or 0.13.0 and later with react-native-skia 3.0.8 |
 | 3.0.0 to 3.0.5 | 0.10.0 to 0.11.2 |
 
-From react-native-skia 3.1.0 and react-native-webgpu 0.13.0 both libraries depend on `react-native-webgpu-dawn`, and the native build checks that they resolve the same version of it.
-The mixed rows work because the older release vendors the same Dawn commit: react-native-skia 3.1.0 accepts a react-native-webgpu 0.12.1 whose `dawnCommit` matches, and react-native-skia 3.0.8 defers to react-native-webgpu's Dawn.
+From react-native-skia 3.1.0 and react-native-webgpu 0.13.0, both packages depend on the same `react-native-webgpu-dawn` package, which ships the Dawn build they link, so that only one copy of Dawn exists in the app.
+The native build verifies that the two resolve the same version of it and fails with a `Dawn version mismatch` error otherwise: upgrade `react-native-skia` and `react-native-webgpu` together.
+The mixed rows work because the older release vendors the same Dawn commit (react-native-skia 3.1.0 accepts a react-native-webgpu 0.12.1 whose `dawnCommit` matches, and react-native-skia 3.0.8 defers to react-native-webgpu's Dawn).
 On Android, react-native-skia 3.0.6 and 3.0.7 cannot pair with react-native-webgpu 0.13.0 and later: they still package their own `libwebgpu_dawn.so` next to the one from the package and the build fails merging the two.
 
-## Sharing the device
-
-`Skia.getNativeDevice()` returns a pointer to the device Skia renders with.
-`importDevice()` from React Native WebGPU wraps it into a `GPUDevice`:
+Once installed, the device Skia renders with is yours to use from WebGPU.
+`Skia.getNativeDevice()` returns a pointer to it, and `importDevice()` from React Native WebGPU wraps it into a `GPUDevice`:
 
 ```tsx
 import { Skia } from "react-native-skia";
@@ -65,9 +182,30 @@ const device = importDevice(Skia.getNativeDevice());
 Everything you create with this device (textures, buffers, pipelines) lives on the same device as Skia's own resources, which is what makes sharing textures possible.
 A few things to know about it:
 
-- The device is owned by Skia and is valid for the lifetime of the process.
-- Skia treats the loss of its device as fatal: there is no point in requesting a replacement when it is lost.
+- The device is owned by Skia, which keeps it alive for as long as it renders with it.
+- The device can be lost: a driver reset, or the GPU out of memory. Skia then replaces it with a new device (see [device loss](#device-loss)). The imported `GPUDevice` does not learn of the loss (its `lost` promise never settles) and everything created on it is gone: import the new device and create your resources again, with `useGpu()` in React or `Skia.gpu.lost` elsewhere.
 - `navigator.gpu.requestAdapter()` and `requestDevice()` still work as usual. Use a device of your own when you want your GPU work isolated from Skia's command queue, but keep in mind that a texture created on another device cannot be shared with Skia.
+
+```tsx
+import { useMemo } from "react";
+import { Skia, useGpu } from "react-native-skia";
+import { importDevice } from "react-native-webgpu";
+
+// A texture on Skia's device. Once a lost device has been replaced, the new
+// one is imported and the texture created again on it.
+const useSharedTexture = () => {
+  const gpu = useGpu();
+  return useMemo(() => {
+    const device = importDevice(Skia.getNativeDevice());
+    return device.createTexture({
+      size: [256, 256],
+      format: "rgba8unorm",
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+  }, [gpu]);
+};
+```
 
 The shared device works like any other device, for instance to configure a WebGPU canvas:
 
@@ -93,18 +231,18 @@ The interop surface is small:
 | API | Direction | Description |
 |:--|:--|:--|
 | `Skia.getNativeDevice()` | | Pointer to Skia's device, for `importDevice()` |
-| `Skia.Image.MakeImageFromGPUTexture(texture)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
+| `Skia.Image.MakeFromGPUTexture(texture)` | WebGPU to Skia | Wraps a `GPUTexture` into an `SkImage`, without copy |
 | `Skia.Surface.MakeFromGPUTexture(texture)` | Skia to WebGPU | Creates an `SkSurface` that draws into a `GPUTexture`, without copy |
 | `Skia.Image.MakeGPUTextureFromImage(image)` | Skia to WebGPU | Draws an `SkImage` into a new texture, for `adoptTexture()` |
 
 The two functions that take a texture read its `nativePointer`, an extension of `GPUTexture` provided by React Native WebGPU.
 `MakeGPUTextureFromImage()` returns such a pointer, which `adoptTexture()` turns into a `GPUTexture`: only React Native WebGPU can build the typed object, the same way `importDevice()` builds the `GPUDevice`.
 A raw `WGPUTexture` pointer (a `BigInt`) is accepted wherever a texture is, for libraries that export textures without React Native WebGPU.
-[Camera and video frames](#native-buffers) and [view snapshots](#view-snapshots) go through a texture as well.
+[Camera and video frames](#native-buffers), [view snapshots](#view-snapshots) and [static content](#static-content) go through a texture as well.
 
 ## From WebGPU to Skia
 
-`Skia.Image.MakeImageFromGPUTexture()` wraps a WebGPU texture into an `SkImage`.
+`Skia.Image.MakeFromGPUTexture()` wraps a WebGPU texture into an `SkImage`.
 The image references the texture, so wrapping it is free.
 The texture must be created on the shared device with the `TEXTURE_BINDING` usage.
 
@@ -181,7 +319,7 @@ export const TriangleInSkia = () => {
     device.queue.submit([encoder.finish()]);
 
     // 4. Wrap the texture into an SkImage, without any copy
-    image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+    image.value = Skia.Image.MakeFromGPUTexture(texture);
 
     return () => {
       // Drop the image before the texture it samples
@@ -216,7 +354,7 @@ The new object is what makes the canvas redraw:
 const render = () => {
   // ...encode and submit the WebGPU commands for this frame
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+  image.value = Skia.Image.MakeFromGPUTexture(texture);
   previous?.dispose();
   frame = requestAnimationFrame(render);
 };
@@ -285,7 +423,7 @@ const toTexture = (image: SkImage): GPUTexture =>
 
 Camera and video frames live in native buffers: an `IOSurface` (usually wrapped in a `CVPixelBuffer`) on Apple platforms, an `AHardwareBuffer` on Android.
 Skia does not import them. React Native WebGPU owns these buffers: it decodes videos into them, wraps the buffers that other libraries produce, ties their lifetime to a [`NativeVideoFrame`](https://wcandillon.github.io/react-native-webgpu/api/video-player#nativevideoframe) object, and renders a frame into a texture of the shared device with [`queue.copyExternalImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/gpu-device-extensions#copyexternalimagetotexture-with-a-native-frame), converting YUV to RGB and applying the rotation of the video or the camera on the GPU.
-`Skia.Image.MakeImageFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
+`Skia.Image.MakeFromGPUTexture()` then wraps that texture, like any [WebGPU texture](#from-webgpu-to-skia).
 There is one path on both platforms, whatever the format of the frame. It needs React Native WebGPU 0.11.1 or above.
 
 ### Playing a video
@@ -340,7 +478,7 @@ export const Video = ({ url }: { url: string }) => {
         frame.release();
         // A new image is what makes the canvas redraw
         const previous = image.value;
-        image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+        image.value = Skia.Image.MakeFromGPUTexture(texture);
         previous?.dispose();
       }
       raf = requestAnimationFrame(render);
@@ -387,11 +525,110 @@ Pass the frame's orientation as `rotation` and `mirrored`, and release the frame
 - **Reuse the texture.** Create a new one only when the frame size changes, and dispose the images that sample it before destroying it.
 - **Any runtime.** Like every GPU-backed image, the result can be created on one runtime and drawn by any canvas or worklet runtime.
 
-On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeImageFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
+On the Web, where Skia runs on CanvasKit, `Skia.Image.MakeFromNativeBuffer()` creates an image from a `CanvasImageSource` instead: a `<video>` element, an `ImageBitmap`, or a canvas.
+
+### Static content
+
+A `Canvas` is built to animate: it owns a swap chain, a few buffers of its size that it cycles through to present a new frame on every frame of the display.
+A drawing that never changes, or only now and then, needs none of that, and on a screen with many of them (icons, thumbnails, the charts of a list) the canvases add up.
+
+For this case, React Native WebGPU has [`NativeBufferView`](https://wcandillon.github.io/react-native-webgpu/api/native-buffer#nativebufferview): a view that shows a single [native buffer](https://wcandillon.github.io/react-native-webgpu/docs/getting-started/native-buffers), with no swap chain and no GPU device of its own.
+Skia draws into the buffer once, through `Skia.Surface.MakeFromGPUTexture()`, and the view keeps showing it.
+It needs React Native WebGPU 0.23.0 or above.
+
+1. `createNativeBuffer()` allocates a buffer of the size of the view, in physical pixels.
+2. `importSharedTextureMemory()` imports the buffer on the shared device, and `createTexture()` returns its texture. The device owns the buffer between `beginAccess()` and `endAccess()`.
+3. Skia draws into the texture, as in [drawing into a texture](#drawing-into-a-texture).
+4. `present()` hands the buffer to the view along with what `endAccess()` returned, the fences of the drawing: the view shows the buffer once the GPU is done with it.
+
+```tsx
+import React, { useEffect, useRef } from "react";
+import type { SkPicture } from "react-native-skia";
+import { Skia } from "react-native-skia";
+import type { NativeBufferViewRef } from "react-native-webgpu";
+import {
+  createNativeBuffer,
+  importDevice,
+  NativeBufferView,
+  useNativeBufferSize,
+} from "react-native-webgpu";
+
+interface StaticPictureProps {
+  picture: SkPicture;
+  width: number;
+  height: number;
+}
+
+export const StaticPicture = ({ picture, width, height }: StaticPictureProps) => {
+  const ref = useRef<NativeBufferViewRef>(null);
+  // The size of the view in physical pixels
+  const { size, onPixelSizeChange } = useNativeBufferSize();
+
+  useEffect(() => {
+    if (!ref.current || !size || size.width === 0 || size.height === 0) {
+      return;
+    }
+    const device = importDevice(Skia.getNativeDevice());
+    // 1. A buffer of the size of the view
+    const buffer = createNativeBuffer(size.width, size.height);
+    // 2. Its texture on Skia's device
+    const memory = device.importSharedTextureMemory({ source: buffer });
+    const texture = memory.createTexture();
+    // false: a new buffer, nothing in it to keep
+    memory.beginAccess(texture, false);
+    // 3. Draw with Skia. The picture is in points, the buffer in pixels.
+    const surface = Skia.Surface.MakeFromGPUTexture(texture);
+    const canvas = surface.getCanvas();
+    canvas.clear(Skia.Color("transparent"));
+    canvas.scale(size.width / width, size.height / height);
+    canvas.drawPicture(picture);
+    surface.flush();
+    // 4. Shown once the GPU is done drawing
+    ref.current.present(buffer, memory.endAccess(texture));
+    // The view keeps its own reference on the buffer
+    surface.dispose();
+    texture.destroy();
+    memory.destroy();
+    buffer.release();
+  }, [picture, width, height, size]);
+
+  return (
+    <NativeBufferView
+      ref={ref}
+      onPixelSizeChange={onPixelSizeChange}
+      style={{ width, height }}
+    />
+  );
+};
+```
+
+`StaticPicture` is a regular React Native view, and what it shows is a picture: record one with `createPicture()`, or from React elements with `drawAsPicture()`.
+
+```tsx
+import { Skia, createPicture } from "react-native-skia";
+
+const picture = createPicture((canvas) => {
+  const paint = Skia.Paint();
+  paint.setColor(Skia.Color("cyan"));
+  canvas.drawCircle(24, 24, 24, paint);
+});
+
+<StaticPicture picture={picture} width={48} height={48} />;
+```
+
+The surface is a regular Skia surface, so anything Skia draws goes into the buffer the same way: a paragraph, or a photo through an image filter.
+A few things to know:
+
+- **A presented buffer is never drawn again.** The system reads it whenever it composites the screen. To update the drawing, draw into a new buffer and present that one, as the effect above does when the picture or the size changes.
+- **The view keeps the buffer.** It holds its own reference on the buffer and on the fences: dispose the surface, destroy the texture and the memory, and release the buffer right after `present()`.
+- **The size is in pixels.** `useNativeBufferSize()` reports the size of the view in physical pixels, and a new size only once a resize has settled. Meanwhile the view scales the buffer it has, according to its [`resizeMode`](https://wcandillon.github.io/react-native-webgpu/api/native-buffer#resize-modes).
+- **Android 8 and 9.** The view copies the pixels of each buffer through the CPU. From Android 10 on, it shows the buffer without a copy.
+
+The [200 icons example](https://github.com/wcandillon/react-native-webgpu/blob/main/apps/example/src/IconBenchmark/IconBenchmark.tsx) of React Native WebGPU draws each of its icons this way.
 
 ## View snapshots
 
-A snapshot of a React Native view follows the same path as a video frame: React Native WebGPU rasterizes the view into a texture of the shared device with [`queue.drawElementImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture), and `Skia.Image.MakeImageFromGPUTexture()` wraps that texture into an image.
+A snapshot of a React Native view follows the same path as a video frame: React Native WebGPU rasterizes the view into a texture of the shared device with [`queue.drawElementImageToTexture()`](https://wcandillon.github.io/react-native-webgpu/api/draw-element-image-to-texture), and `Skia.Image.MakeFromGPUTexture()` wraps that texture into an image.
 Skia has no view snapshot API of its own: `makeImageFromView()` from v2 was removed in favor of this path. It needs React Native WebGPU 0.14.0 or above.
 
 The view is rendered by the platform, so the snapshot includes everything the screen shows: text, images, SVGs, transforms, elevation shadows, and Skia canvases.
@@ -442,7 +679,7 @@ export const Snapshot = () => {
     // Wrap the texture, without any copy. A new image is what makes the
     // canvas redraw; the previous one is dropped before its texture.
     const previous = image.value;
-    image.value = Skia.Image.MakeImageFromGPUTexture(next);
+    image.value = Skia.Image.MakeFromGPUTexture(next);
     previous?.dispose();
     texture.current?.destroy();
     texture.current = next;
@@ -474,7 +711,7 @@ The texture must be created with `COPY_DST`; `RENDER_ATTACHMENT` lets React Nati
 On Android, a `SurfaceView` is composed outside the view hierarchy and comes out blank in a snapshot.
 A Skia `Canvas` is backed by a `TextureView` unless its `android.backingView` asks for a `SurfaceView`: keep the default for a canvas that must appear in snapshots (the same applies to a React Native WebGPU `Canvas`).
 
-On the Web, rasterize the DOM node into a canvas (for instance with [html2canvas](https://html2canvas.hertzen.com/)) and pass the canvas to `Skia.Image.MakeImageFromNativeBuffer()`.
+On the Web, rasterize the DOM node into a canvas (for instance with [html2canvas](https://html2canvas.hertzen.com/)) and pass the canvas to `Skia.Image.MakeFromNativeBuffer()`.
 
 ## Three.js
 
@@ -589,7 +826,7 @@ await renderer.init();
 renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   const previous = image.value;
-  image.value = Skia.Image.MakeImageFromGPUTexture(target.texture);
+  image.value = Skia.Image.MakeFromGPUTexture(target.texture);
   previous?.dispose();
 });
 ```
@@ -619,7 +856,7 @@ Sharing a texture means sharing its lifetime. A few rules apply:
 - **Dispose Skia objects before destroying the texture.** An `SkImage` or `SkSurface` wrapping a texture holds its own reference to it, so the texture stays valid even if the JavaScript `GPUTexture` is garbage collected. Calling `texture.destroy()` releases the GPU resource regardless of references: dispose the image or surface first.
 - **Flush before sampling.** After drawing into a texture with Skia, call `surface.flush()` before the WebGPU commands that sample it.
 - **Adopt exported textures exactly once.** The pointer returned by `MakeGPUTextureFromImage()` carries one reference, which `adoptTexture()` takes over.
-- **Keep native buffers alive.** An `SkImage` created with `MakeImageFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
+- **Keep native buffers alive.** An `SkImage` created with `MakeFromNativeBuffer()` samples the buffer in place: release the buffer only after the image is disposed.
 
 ## Examples
 

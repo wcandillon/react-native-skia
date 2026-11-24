@@ -22,7 +22,7 @@ describe("Test blend modes", () => {
         </Image>
       </Mask>
     );
-    processResult(surface, "snapshots/demos/product.png");
+    await processResult(surface, "snapshots/demos/product.png");
   });
   it("Should nicely blend the product color to the image using a runtime effect", async () => {
     const { Skia } = importSkia();
@@ -39,7 +39,7 @@ describe("Test blend modes", () => {
         </Shader>
       </Rect>
     );
-    processResult(surface, "snapshots/demos/product2.png");
+    await processResult(surface, "snapshots/demos/product2.png");
   });
 });
 

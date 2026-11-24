@@ -32,10 +32,7 @@ const colors = ["#2FB8FF", "#9EECD9"];
 
 export const ProgressBar = ({ progress }: ProgressBarProps) => {
   const font = useFont(require("./SF-Mono-Semibold.otf"), 32);
-  const text = useDerivedValue(
-    () => `${Math.round(progress.value * 100)}°C`,
-    [progress]
-  );
+  const text = useDerivedValue(() => `${Math.round(progress.value * 100)}°C`);
   if (font === null) {
     return null;
   }

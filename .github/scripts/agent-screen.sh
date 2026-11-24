@@ -42,7 +42,10 @@ case "$AGENT_PLATFORM" in
         | grep -q "UIKitApplication:$BUNDLE_ID\["
     }
     launch() {
-      xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID" > /dev/null
+      # Metro's port as a user default: the prebuilt React Native core
+      # ignores the RCT_METRO_PORT build setting.
+      xcrun simctl launch "$IOS_SIMULATOR_UDID" "$BUNDLE_ID" \
+        -RCT_jsLocation "localhost:$METRO_PORT" > /dev/null
       sleep 15
     }
     # A cold launch through openurl drops the URL (the test app's scene

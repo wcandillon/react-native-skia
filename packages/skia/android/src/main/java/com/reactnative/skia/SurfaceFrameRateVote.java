@@ -22,7 +22,9 @@ import androidx.annotation.Nullable;
  * switch to seamlessly, as the window does for its own views, and takes the
  * vote back once the animation stops, whether the canvas stops drawing or
  * drops back to a few redraws a second: a layer with a vote counts as active
- * for SurfaceFlinger even when it no longer draws. Main thread.
+ * for SurfaceFlinger even when it no longer draws. The surface comes and goes
+ * on the main thread, frames are presented on the present thread, and the
+ * idle check runs on the main looper: the methods are synchronized.
  */
 final class SurfaceFrameRateVote {
     private static final String TAG = "SurfaceFrameRateVote";
@@ -61,7 +63,7 @@ final class SurfaceFrameRateVote {
     }
 
     /** The surface was created: it is voted on until detach(). */
-    void attach(Surface surface) {
+    synchronized void attach(Surface surface) {
         detach();
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return;
@@ -70,7 +72,7 @@ final class SurfaceFrameRateVote {
     }
 
     /** A frame was presented on the surface. */
-    void onFramePresented() {
+    synchronized void onFramePresented() {
         if (mSurface == null) {
             return;
         }
@@ -89,7 +91,7 @@ final class SurfaceFrameRateVote {
     }
 
     /** The surface is going away (it is still valid here) or the view left its window. */
-    void detach() {
+    synchronized void detach() {
         if (mSurface == null) {
             return;
         }
@@ -138,7 +140,7 @@ final class SurfaceFrameRateVote {
         mHandler.postDelayed(mIdleCheck, (delayNanos + 999_999) / 1_000_000);
     }
 
-    private void checkIdle() {
+    private synchronized void checkIdle() {
         mIdleCheckPending = false;
         if (!mVoting) {
             return;

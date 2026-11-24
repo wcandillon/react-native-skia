@@ -1,13 +1,13 @@
 #pragma once
 
+#include <fbjni/NativeRunnable.h>
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <queue>
 #include <string>
 
 #include "RNSkPlatformContext.h"
@@ -28,28 +28,50 @@ public:
 
   static void registerNatives();
 
+  // Whether the app is in the foreground (see DawnContext::isForeground),
+  // from the host activity's lifecycle. Static: it does not need the context,
+  // and outlives it.
+  static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
+
+  static void setCacheDirectoryNative(jni::alias_ref<jclass>,
+                                      jni::alias_ref<jni::JString> directory);
+
+  // PresentThread.post: runs the Java task on the present thread, which is
+  // the native side's and attached to the JVM for good by its first task
+  // (see attachPresentThread). Registered on PresentThread, not on the
+  // context's class.
+  static void postNative(jni::alias_ref<jclass>,
+                         jni::alias_ref<jni::JRunnable::javaobject> task);
+
+  // PresentThread.postAndWait (see rnsurface::RenderThread::postAndWait).
+  static jboolean
+  postAndWaitNative(jni::alias_ref<jclass>,
+                    jni::alias_ref<jni::JRunnable::javaobject> task,
+                    jlong timeoutMs);
+
   void performStreamOperation(
       const std::string &sourceUri,
       const std::function<void(std::unique_ptr<SkStreamAsset>)> &op);
 
   void raiseError(const std::exception &err);
 
-  void notifyTaskReadyExternal();
-
   void runTaskOnMainThread(std::function<void()> task);
 
-  void notifyTaskReadyNative();
+  static int duplicateMainThreadWakeup(jni::alias_ref<jclass>);
 
-  float getPixelDensity() { return _pixelDensity; }
+  static void runMainThreadTasks(jni::alias_ref<jclass>);
+
+  float getPixelDensity() { return _pixelDensity.load(); }
+
+  // The display density changed (a configuration change, see
+  // PlatformContext.java). Read by RNSkAndroidPlatformContext.
+  void setPixelDensity(float pixelDensity);
 
 private:
   friend HybridBase;
   jni::global_ref<JniPlatformContext::javaobject> javaPart_;
 
-  float _pixelDensity;
-  std::mutex _mainThreadTasksMutex;
-  std::queue<std::function<void()>> _mainThreadTasks;
-  bool _mainThreadDispatchScheduled = false;
+  std::atomic<float> _pixelDensity;
 
   explicit JniPlatformContext(
       jni::alias_ref<JniPlatformContext::jhybridobject> jThis,

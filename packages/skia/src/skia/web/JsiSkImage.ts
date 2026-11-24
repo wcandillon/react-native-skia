@@ -105,37 +105,54 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     );
   }
 
+  // CanvasKit encodes and reads back synchronously; the results are
+  // promises like on native, where the GPU is asynchronous. Run inside the
+  // promise so that a failure rejects it rather than throwing.
   encodeToBytes(fmt?: ImageFormat, quality?: number) {
-    let result: Uint8Array | null;
+    return new Promise<Uint8Array>((resolve) => {
+      const bytes = this.encode(fmt, quality);
+      if (!bytes) {
+        throw new Error("encodeToBytes failed");
+      }
+      resolve(bytes);
+    });
+  }
+
+  encodeToBase64(fmt?: ImageFormat, quality?: number) {
+    return new Promise<string>((resolve) => {
+      const bytes = this.encode(fmt, quality);
+      if (!bytes) {
+        throw new Error("encodeToBase64 failed");
+      }
+      resolve(toBase64String(bytes));
+    });
+  }
+
+  private encode(fmt?: ImageFormat, quality?: number): Uint8Array | null {
     if (fmt !== undefined && quality !== undefined) {
       // CanvasKit's encodeToBytes() applies `quality || 100`, which would
       // turn a valid quality of 0 into 100. The encoders clamp any quality
       // below 1 up to 1 anyway, so pass 1 to get the same output as 0.
-      result = this.ref.encodeToBytes(
+      return this.ref.encodeToBytes(
         getEnum(this.CanvasKit, "ImageFormat", fmt),
         Math.max(quality, 1)
       );
-    } else if (fmt !== undefined) {
-      result = this.ref.encodeToBytes(
+    }
+    if (fmt !== undefined) {
+      return this.ref.encodeToBytes(
         getEnum(this.CanvasKit, "ImageFormat", fmt)
       );
-    } else {
-      result = this.ref.encodeToBytes();
     }
-    if (!result) {
-      throw new Error("encodeToBytes failed");
-    }
-    return result;
+    return this.ref.encodeToBytes();
   }
 
-  encodeToBase64(fmt?: ImageFormat, quality?: number) {
-    const bytes = this.encodeToBytes(fmt, quality);
-    return toBase64String(bytes);
-  }
-
-  // TODO: this is leaking on Web
-  // Add signature with allocated buffer
   readPixels(srcX?: number, srcY?: number, imageInfo?: ImageInfo) {
+    return new Promise<Float32Array | Uint8Array | null>((resolve) =>
+      resolve(this.readPixelsSync(srcX, srcY, imageInfo))
+    );
+  }
+
+  private readPixelsSync(srcX?: number, srcY?: number, imageInfo?: ImageInfo) {
     const info = this.getImageInfo();
     const pxInfo: CKImageInfo = {
       colorSpace: this.CanvasKit.ColorSpace.SRGB,
@@ -166,10 +183,10 @@ export class JsiSkImage extends HostObject<Image, "Image"> implements SkImage {
     // image so that it can be drawn by any canvas (a WebGL texture belongs to
     // the context that created it). Run inside the promise so that a failure
     // rejects it rather than throwing.
-    return new Promise((resolve) => resolve(this.makeRasterImageSync()));
+    return new Promise((resolve) => resolve(this.copyToRaster()));
   }
 
-  makeRasterImageSync(): SkImage {
+  private copyToRaster(): SkImage {
     // The pixels are always copied: CanvasKit does not tell whether an image
     // is texture-backed, and a copy is drawable by any canvas.
     const partialInfo = this.ref.getImageInfo();

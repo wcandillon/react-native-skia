@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "lint": "turbo run lint",
+    "lint:ci": "turbo run lint:ci",
     "tsc": "turbo run tsc",
     "test": "turbo run test",
     "test:web": "playwright test --config apps/example/playwright.config.ts",
@@ -34,12 +35,13 @@
   "packageManager": "yarn@3.6.4",
   "resolutions": {
     "@webgpu/types": "^0.1.69",
-    "react-native-reanimated@4.6.0": "patch:react-native-reanimated@npm%3A4.6.0#./.yarn/patches/react-native-reanimated-npm-4.6.0-f4226872a0.patch"
+    "react-native-macos@0.83.0": "patch:react-native-macos@npm%3A0.83.0#./.yarn/patches/react-native-macos-npm-0.83.0-macos-codegen.patch",
+    "react-native-svg@15.16.1": "patch:react-native-svg@npm%3A15.16.1#./.yarn/patches/react-native-svg-npm-15.16.1-position-props.patch",
+    "react-native-webgpu-dawn": "158.0.0"
   },
   "devDependencies": {
     "eas-cli": "18.4.0",
-    "playwright": "1.59.0",
-    "react-native-test-app": "^4.2.0",
+    "playwright": "1.64.1",
     "turbo": "^2.9.14"
   }
 }

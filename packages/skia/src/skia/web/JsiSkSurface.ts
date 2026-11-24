@@ -22,6 +22,8 @@ export class JsiSkSurface
     super(CanvasKit, ref, "Surface");
   }
 
+  private canvas?: JsiSkCanvas;
+
   private assertAlive() {
     if (this.lease && !this.lease.isAlive()) {
       throw new Error(
@@ -50,7 +52,12 @@ export class JsiSkSurface
 
   getCanvas(): SkCanvas {
     this.assertAlive();
-    return new JsiSkCanvas(this.CanvasKit, this.ref.getCanvas());
+    // One wrapper per surface, as on native: every call hands back the same
+    // canvas.
+    if (!this.canvas) {
+      this.canvas = new JsiSkCanvas(this.CanvasKit, this.ref.getCanvas());
+    }
+    return this.canvas;
   }
 
   asImage(): SkImage {
