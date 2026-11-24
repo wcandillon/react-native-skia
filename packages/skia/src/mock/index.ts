@@ -24,7 +24,6 @@ export const Mock = (CanvasKit: CanvasKit) => {
     ...require("../dom/nodes"),
     Canvas: require("react-native").View,
     getPreferredHighBitDepthCanvasFormat: () => "rgba16float",
-    SkiaPictureView: require("react-native").View,
     SkiaGraphiteView: require("react-native").View,
     JsiSkImage: JsiSkImage,
     drawAsPicture: Noop,
@@ -32,13 +31,11 @@ export const Mock = (CanvasKit: CanvasKit) => {
     drawAsImageFromPicture: Noop,
     useCanvasRef: NoopValue,
     useCanvasSize: () => ({
-      ref: {
-        current: 0,
-      },
       size: {
         width: 0,
         height: 0,
       },
+      onLayout: Noop,
     }),
     // Skia Animations
     useValue: NoopValue,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -39,6 +40,15 @@ public:
 
   ViewRegistry(const ViewRegistry &) = delete;
   ViewRegistry &operator=(const ViewRegistry &) = delete;
+
+  // The id of a view about to mount. Ids are handed out here, once for the
+  // life of the process, rather than counted by each JS runtime from the
+  // same start: this registry outlives a reload, and the views of the bundle
+  // being replaced leave it (as tombstones, see removeViewInfo) while the
+  // new bundle is already mounting. A view counted from the same start as
+  // its predecessor would hand its first picture to the predecessor's
+  // tombstone and show nothing until its next one (#4312).
+  size_t allocateId() { return _nextId.fetch_add(1); }
 
   void removeViewInfo(size_t id) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -95,6 +105,20 @@ public:
     return it != _registry.end() ? it->second->view : nullptr;
   }
 
+  // The views registered right now, for a call on each of them outside of
+  // the registry lock. Any thread.
+  std::vector<std::shared_ptr<RNSkView>> getViews() {
+    std::vector<std::shared_ptr<RNSkView>> views;
+    std::shared_lock<std::shared_mutex> lock(_mutex);
+    views.reserve(_registry.size());
+    for (const auto &entry : _registry) {
+      if (entry.second->view != nullptr) {
+        views.push_back(entry.second->view);
+      }
+    }
+    return views;
+  }
+
   void clear() {
     std::unique_lock<std::shared_mutex> lock(_mutex);
     _registry.clear();
@@ -106,11 +130,21 @@ private:
   mutable std::shared_mutex _mutex;
   std::unordered_map<size_t, std::shared_ptr<RNSkViewInfo>> _registry;
   std::unordered_set<size_t> _unregistered;
+  std::atomic<size_t> _nextId{1000};
 };
 
 class RNSkJsiViewApi : public JsiSkNativeObject<RNSkJsiViewApi> {
 public:
   static constexpr const char *CLASS_NAME = "ViewApi";
+
+  /**
+   Returns the id for a view about to mount, unique for the life of the
+   process (see ViewRegistry::allocateId).
+   */
+  JSI_HOST_FUNCTION(allocateNativeId) {
+    return jsi::Value(
+        static_cast<double>(ViewRegistry::getInstance().allocateId()));
+  }
 
   /**
    Sets a custom property on a view given a view id. The property name/value
@@ -212,12 +246,13 @@ public:
           if (view != nullptr) {
             return;
           }
-          // The view has not registered yet (or is detached, which on iOS
-          // destroys it): the recording waits in the registry and is drawn,
-          // with whatever values it holds by then, once a view registers.
+          // The view has not registered yet: the recording waits in the
+          // registry and is drawn, with whatever values it holds by then,
+          // once the view registers.
           // Keep it current, under the registry lock so that a registration
-          // cannot slip in between; the first frame would otherwise show
-          // the values from recording time until the next change.
+          // cannot slip in between; the recording would otherwise wait,
+          // unready (it reads no value while recording), until the next
+          // change, and the view would show nothing until then.
           auto it = info->props.find("recorder");
           if (it != info->props.end() && it->second.isRecorder()) {
             RNSkGraphiteProducer::applyUpdatesTo(it->second.getRecorder(),
@@ -288,7 +323,7 @@ public:
     std::shared_ptr<RNSkView> view =
         ViewRegistry::getInstance().getView(nativeId);
     if (view != nullptr) {
-      auto pixelDensity = _platformContext->getPixelDensity();
+      auto pixelDensity = view->getPixelDensity();
       auto sizeObj = jsi::Object(runtime);
       sizeObj.setProperty(runtime, "width",
                           view->getScaledWidth() / pixelDensity);
@@ -306,15 +341,19 @@ public:
 
   /**
    Returns the recording side of a view: (nativeId, width, height, opaque,
-   highBitDepth), the size in points as laid out and the props the surface
-   format follows from. The view may not exist yet; the context binds to it
-   by id when it does.
+   highBitDepth, deviceIndependentFonts), the size in points as laid out, the
+   props the surface format follows from and the font option of the
+   recordings (set again through setJsiProperty when it changes). The view may
+   not exist yet; the context binds to it by id when it does, and the registry
+   owns the target in between, so a frame submitted before then is kept whether
+   or not JS keeps the context.
    */
   JSI_HOST_FUNCTION(makeGraphiteContext) {
     if (count < 3 || !arguments[0].isNumber() || !arguments[1].isNumber() ||
         !arguments[2].isNumber()) {
       throw jsi::JSError(runtime, "makeGraphiteContext: expected (nativeId, "
-                                  "width, height, opaque, highBitDepth)");
+                                  "width, height, opaque, highBitDepth, "
+                                  "deviceIndependentFonts)");
     }
     auto nativeId = static_cast<size_t>(arguments[0].asNumber());
     auto width = static_cast<float>(arguments[1].asNumber());
@@ -325,11 +364,32 @@ public:
     auto target = RNSkGraphiteTargetRegistry::getInstance().getOrCreate(
         nativeId, _platformContext);
     target->setLayout(width, height, opaque, highBitDepth);
+    target->setDeviceIndependentFonts(count > 5 && arguments[5].isBool() &&
+                                      arguments[5].getBool());
     return makeJsiObject(runtime, std::make_shared<JsiSkGraphiteContext>(
                                       _platformContext, std::move(target)));
   }
 
+  /**
+   Retires the target made for a view id from the JS side: (nativeId). Called
+   when the view component unmounts; a no-op once a view bound to the id,
+   whose teardown retires it. A context JS still holds keeps the target for
+   the view to bind to, as React's StrictMode runs this cleanup right after
+   mount (see RNSkGraphiteTargetRegistry).
+   */
+  JSI_HOST_FUNCTION(destroyGraphiteContext) {
+    if (count < 1 || !arguments[0].isNumber()) {
+      throw jsi::JSError(runtime,
+                         "destroyGraphiteContext: expected (nativeId)");
+    }
+    auto nativeId = static_cast<size_t>(arguments[0].asNumber());
+    RNSkGraphiteTargetRegistry::getInstance().removeIfUnbound(nativeId);
+    return jsi::Value::undefined();
+  }
+
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installHostMethod(runtime, prototype, "allocateNativeId",
+                      &RNSkJsiViewApi::allocateNativeId);
     installHostMethod(runtime, prototype, "setJsiProperty",
                       &RNSkJsiViewApi::setJsiProperty);
     installHostMethod(runtime, prototype, "requestRedraw",
@@ -342,6 +402,8 @@ public:
     installHostMethod(runtime, prototype, "size", &RNSkJsiViewApi::size);
     installHostMethod(runtime, prototype, "makeGraphiteContext",
                       &RNSkJsiViewApi::makeGraphiteContext);
+    installHostMethod(runtime, prototype, "destroyGraphiteContext",
+                      &RNSkJsiViewApi::destroyGraphiteContext);
   }
 
   /**
@@ -351,11 +413,6 @@ public:
   explicit RNSkJsiViewApi(std::shared_ptr<RNSkPlatformContext> platformContext)
       : JsiSkNativeObject<RNSkJsiViewApi>(platformContext),
         _platformContext(platformContext) {}
-
-  /**
-   Call to remove all draw view infos
-   */
-  void unregisterAll() { ViewRegistry::getInstance().clear(); }
 
   /**
    * Registers a skia view
@@ -383,29 +440,7 @@ public:
    */
   void unregisterSkiaView(size_t nativeId) {
     ViewRegistry::getInstance().removeViewInfo(nativeId);
-  }
-
-  /**
-   Sets a skia draw view for the given id. This function can be used
-   to mark that an underlying SkiaView is not available (it could be
-   removed due to ex. a transition). The view can be set to a nullptr
-   or a valid view, effectively toggling the view's availability.
-   */
-  void setSkiaView(size_t nativeId, std::shared_ptr<RNSkView> view) {
-    ViewRegistry::getInstance().withViewInfo(
-        nativeId,
-        [&](std::shared_ptr<RNSkViewInfo> info) {
-          if (view != nullptr) {
-            info->view = view;
-            info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
-            info->props.clear();
-          } else {
-            info->view = view; // Set to nullptr
-          }
-          return nullptr;
-        },
-        /* revive= */ view != nullptr);
+    RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
   }
 
 private:

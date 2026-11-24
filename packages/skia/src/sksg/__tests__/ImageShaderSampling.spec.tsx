@@ -11,7 +11,7 @@ const RECT = { x: 0, y: 0, width: SIZE, height: SIZE };
 // A 2x2 checkerboard blown up to 256x256: every filter mode produces a
 // distinctive result at the seam between two texels.
 const makeCheckerboard = (Skia: Skia) => {
-  const surface = Skia.Surface.Make(2, 2)!;
+  const surface = Skia.Surface.MakeRaster(2, 2)!;
   const canvas = surface.getCanvas();
   const black = Skia.Paint();
   black.setColor(Skia.Color("black"));
@@ -25,8 +25,8 @@ const makeCheckerboard = (Skia: Skia) => {
   return surface.makeImageSnapshot();
 };
 
-const luminanceAt = (image: SkImage, x: number, y: number) => {
-  const pixels = image.readPixels() as Uint8Array;
+const luminanceAt = async (image: SkImage, x: number, y: number) => {
+  const pixels = (await image.readPixels()) as Uint8Array;
   return pixels[(y * image.width() + x) * 4];
 };
 
@@ -45,7 +45,7 @@ const drawShader = async (image: SkImage, sampling?: SamplingOptions) => {
       />
     </skRect>
   );
-  const surface = Skia.Surface.Make(SIZE, SIZE)!;
+  const surface = Skia.Surface.MakeRaster(SIZE, SIZE)!;
   root.drawOnCanvas(surface.getCanvas());
   surface.flush();
   const out = surface.makeImageSnapshot();
@@ -61,8 +61,8 @@ describe("ImageShader sampling", () => {
       mipmap: MipmapMode.None,
     });
     // Nearest keeps the texel boundary a hard step - no blending at the seam.
-    expect(luminanceAt(image, 126, 60)).toBe(0);
-    expect(luminanceAt(image, 130, 60)).toBe(255);
+    expect(await luminanceAt(image, 126, 60)).toBe(0);
+    expect(await luminanceAt(image, 130, 60)).toBe(255);
   });
 
   it("defaults to linear sampling rather than a cubic filter", async () => {
@@ -70,6 +70,6 @@ describe("ImageShader sampling", () => {
     const image = await drawShader(makeCheckerboard(Skia));
     // A B-spline cubic (B=1, C=0) never reaches the source extremes, so the
     // far corner of the top-left texel stays washed out under it.
-    expect(luminanceAt(image, 2, 2)).toBe(0);
+    expect(await luminanceAt(image, 2, 2)).toBe(0);
   });
 });

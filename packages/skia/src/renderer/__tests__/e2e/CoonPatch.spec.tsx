@@ -38,7 +38,7 @@ describe("CoonsPatch", () => {
         patch={[topLeft, topRight, bottomRight, bottomLeft]}
       />
     );
-    checkImage(img, "snapshots/coons-patch/simple.png");
+    await checkImage(img, "snapshots/coons-patch/simple.png");
   });
   it("Coons Patch with opacity", async () => {
     const vec = (x: number, y: number) => ({ x, y });
@@ -71,7 +71,7 @@ describe("CoonsPatch", () => {
         />
       </>
     );
-    checkImage(img, "snapshots/coons-patch/patch-with-opacity.png");
+    await checkImage(img, "snapshots/coons-patch/patch-with-opacity.png");
   });
   it("should draw a patch when the optional paint and blend mode are omitted", async () => {
     const result = await surface.eval(
@@ -107,19 +107,27 @@ describe("CoonsPatch", () => {
             canvas.drawPatch(cubics, colors);
           }
           offscreen.flush();
-          return Array.from(offscreen.makeImageSnapshot().readPixels()!);
+          return offscreen
+            .makeImageSnapshot()
+            .readPixels()
+            .then((pixels) => Array.from(pixels!));
         };
         const defaultPaint = Skia.Paint();
         defaultPaint.setAntiAlias(false);
-        const reference = render(defaultPaint);
-        const implicit = render(null);
-        let mismatches = 0;
-        for (let i = 0; i < reference.length; i++) {
-          if (reference[i] !== implicit[i]) {
-            mismatches++;
+        return Promise.all([render(defaultPaint), render(null)]).then(
+          ([reference, implicit]) => {
+            let mismatches = 0;
+            for (let i = 0; i < reference.length; i++) {
+              if (reference[i] !== implicit[i]) {
+                mismatches++;
+              }
+            }
+            return [
+              mismatches,
+              reference.filter((value) => value !== 0).length,
+            ];
           }
-        }
-        return [mismatches, reference.filter((value) => value !== 0).length];
+        );
       },
       { modulate: BlendMode.Modulate }
     );
@@ -172,7 +180,10 @@ describe("CoonsPatch", () => {
           );
           offscreen.getCanvas().drawPatch(cubics, colors, texs, mode, paint);
           offscreen.flush();
-          return Array.from(offscreen.makeImageSnapshot().readPixels()!);
+          return offscreen
+            .makeImageSnapshot()
+            .readPixels()
+            .then((pixels) => Array.from(pixels!));
         };
         const count = (a: number[], b: number[]) => {
           let mismatches = 0;
@@ -183,11 +194,14 @@ describe("CoonsPatch", () => {
           }
           return mismatches;
         };
-        const reference = render(ctx.modulate);
-        return [
-          count(reference, render(null)),
-          count(reference, render(ctx.srcOver)),
-        ];
+        return Promise.all([
+          render(ctx.modulate),
+          render(null),
+          render(ctx.srcOver),
+        ]).then(([reference, implicit, srcOver]) => [
+          count(reference, implicit),
+          count(reference, srcOver),
+        ]);
       },
       {
         modulate: BlendMode.Modulate,

@@ -1,5 +1,7 @@
 ## React Native Skia Example App
 
+This example app is for iOS, Android, and Web. For macOS, use the [macOS runner](../example-macos/README.md).
+
 ## Getting Started
 
 ### Prerequisites
@@ -44,7 +46,7 @@ yarn android
 
 Run linting with auto-fix:
 ```bash
-yarn lint --fix
+yarn lint
 ```
 
 Run TypeScript type checking:

@@ -75,7 +75,7 @@ const useRectToPatch = (
         c2: symmetric(bl.c2, bl.pos),
       },
     ];
-  }, [mesh]);
+  });
 
 interface CoonsPatchMeshGradientProps {
   rows: number;
@@ -166,7 +166,7 @@ export const CoonsPatchMeshGradient = ({
         ),
       };
     });
-  }, [clock]);
+  });
 
   const meshGesture = useSharedValue(defaultMesh);
 

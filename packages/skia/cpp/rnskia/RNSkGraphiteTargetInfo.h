@@ -25,6 +25,25 @@ struct RNSkGraphiteTargetInfo {
   // recorded, not when it is replayed.
   bool useP3ColorSpace = false;
   skgpu::graphite::TextureInfo textureInfo;
+  // Pixels per point the frame is recorded with: the density of the layout
+  // the size comes from, read along with it so that the two always agree
+  // (see RNSkGraphiteTarget::resolveTargetInfo); 0 when the platform did not
+  // say (see RNSkWindowSurface::setLayoutSize). Not part of the texture: a
+  // frame recorded at another density still fits the texture.
+  float pixelDensity = 0;
+
+  /** Whether both describe the same texture: size, format, usage, color space.
+   */
+  bool operator==(const RNSkGraphiteTargetInfo &other) const {
+    return width == other.width && height == other.height &&
+           colorType == other.colorType &&
+           useP3ColorSpace == other.useP3ColorSpace &&
+           textureInfo == other.textureInfo;
+  }
+
+  bool operator!=(const RNSkGraphiteTargetInfo &other) const {
+    return !(*this == other);
+  }
 };
 
 } // namespace RNSkia

@@ -38,9 +38,12 @@ const GradientCanvas = ({
     <View style={styles.column}>
       <Canvas
         style={styles.canvas}
-        opaque
         highBitDepth={highBitDepth}
-        onSize={size}
+        android={{ backingView: "SurfaceView" }}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          size.value = { width, height };
+        }}
       >
         <Fill>
           <LinearGradient start={start} end={end} colors={[colorA, colorB]} />

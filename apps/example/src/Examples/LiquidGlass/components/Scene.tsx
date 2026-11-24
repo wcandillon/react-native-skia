@@ -105,7 +105,7 @@ export const Scene = ({
   filter: filterCB,
   shader: shaderFilter,
 }: SceneProps) => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   const { width, height } = size;
   const props = useButtonGroup({ width, height }, r);
   const { progress, c1, box, bounds } = props;
@@ -162,7 +162,7 @@ export const Scene = ({
   return (
     <View style={{ flex: 1 }}>
       <GestureDetector gesture={gesture}>
-        <Canvas style={{ flex: 1 }} ref={ref}>
+        <Canvas style={{ flex: 1 }} onLayout={onLayout}>
           <Pattern />
           <BackdropFilter filter={<ImageFilter filter={filter} />} />
           <ButtonGroup {...props} />

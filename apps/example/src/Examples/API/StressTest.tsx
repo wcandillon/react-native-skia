@@ -8,7 +8,8 @@ import {
 } from "react-native";
 import type { SkImage, SkSurface } from "react-native-skia";
 import { Canvas, Image, Skia } from "react-native-skia";
-import { runOnUI, useSharedValue, withTiming } from "react-native-reanimated";
+import { useSharedValue, withTiming } from "react-native-reanimated";
+import { scheduleOnUI } from "react-native-worklets";
 
 export const StressTest = () => {
   const image = useSharedValue<SkImage | null>(null);
@@ -60,7 +61,7 @@ export const StressTest = () => {
       >
         <Image image={image} width={200} height={200} />
       </Canvas>
-      <Button onPress={runOnUI(start)} title="Start" />
+      <Button onPress={() => scheduleOnUI(start)} title="Start" />
     </ScrollView>
   );
 };

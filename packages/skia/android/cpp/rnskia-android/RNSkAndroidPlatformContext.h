@@ -29,6 +29,11 @@ public:
                             jniPlatformContext->getPixelDensity()),
         _jniPlatformContext(jniPlatformContext) {}
 
+  // Follows display density changes (see PlatformContext.java).
+  float getPixelDensity() override {
+    return _jniPlatformContext->getPixelDensity();
+  }
+
   ~RNSkAndroidPlatformContext() override = default;
 
   void performStreamOperation(
@@ -53,10 +58,6 @@ public:
 
   void runOnMainThread(std::function<void()> task) override {
     _jniPlatformContext->runTaskOnMainThread(std::move(task));
-  }
-
-  sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override {
-    return _jniPlatformContext->takeScreenshotFromViewTag(tag);
   }
 
 private:

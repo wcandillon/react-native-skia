@@ -18,6 +18,7 @@ import type { InputMatrix, SkMatrix } from "./Matrix";
 import type { SkImageFilter } from "./ImageFilter";
 import type { SkVertices } from "./Vertices";
 import type { SkTextBlob } from "./TextBlob";
+import type { SkShapeBlob } from "./ShapeBlob";
 import type { SkPicture } from "./Picture";
 import type { SkRSXform } from "./RSXform";
 
@@ -40,7 +41,12 @@ export interface SkCanvas {
    * @param top
    * @param paint
    */
-  drawImage: (image: SkImage, x: number, y: number, paint?: SkPaint) => void;
+  drawImage: (
+    image: SkImage,
+    x: number,
+    y: number,
+    paint?: SkPaint | null
+  ) => void;
 
   /**
    * Draws sub-rectangle src from provided image, scaled and translated to fill dst rectangle.
@@ -232,7 +238,7 @@ export interface SkCanvas {
     colors?: readonly SkColor[] | null,
     texs?: readonly SkPoint[] | null,
     mode?: BlendMode | null,
-    paint?: SkPaint
+    paint?: SkPaint | null
   ): void;
 
   /**
@@ -354,6 +360,19 @@ export interface SkCanvas {
   drawTextBlob(blob: SkTextBlob, x: number, y: number, paint: SkPaint): void;
 
   /**
+   * Draws every shape of the blob with one `drawVertices` call, under the
+   * current matrix and clip. The sprites are rasterized at the device scale of
+   * this canvas (unless the blob has a fixed `rasterScale`) and rasterized
+   * again only when that scale leaves 0.75 to 1.5 times the scale of the
+   * current atlas; a rotation never does.
+   * @param blob
+   * @param paint - optional: its alpha, blend mode, color filter and image
+   * filter apply to the shapes; its color, shader, style, path effect and mask
+   * filter are ignored.
+   */
+  drawShapes(blob: SkShapeBlob, paint?: SkPaint | null): void;
+
+  /**
    * Draws a run of glyphs, at corresponding positions, in a given font.
    * @param glyphs the array of glyph IDs (Uint16TypedArray)
    * @param positions the array of x,y floats to position each glyph
@@ -405,7 +424,7 @@ export interface SkCanvas {
    * @param flags
    */
   saveLayer(
-    paint?: SkPaint,
+    paint?: SkPaint | null,
     bounds?: SkRect | null,
     backdrop?: SkImageFilter | null,
     flags?: SaveLayerFlag
@@ -514,9 +533,9 @@ export interface SkCanvas {
    * @param {SkRect[]} srcs - The source rectangles.
    * @param {SkRSXform[]} dsts - The destination transformations.
    * @param {SkPaint} paint - The paint used for drawing.
-   * @param {BlendMode} [blendMode] - The blend mode used for drawing. Optional.
-   * @param {SkColor[]} [colors] - The colors used for drawing. Optional.
-   * @param {CubicResampler | FilterOptions} [sampling] - The sampling options. Optional.
+   * @param {BlendMode | null} [blendMode] - The blend mode used for drawing. Optional, null or undefined defaults to DstOver.
+   * @param {SkColor[] | null} [colors] - The colors used for drawing. Optional, null or undefined draws without per-sprite colors.
+   * @param {CubicResampler | FilterOptions | null} [sampling] - The sampling options. Optional, null or undefined defaults to linear filtering.
    * @returns {void} This method does not return anything.
    */
   drawAtlas(
@@ -524,21 +543,23 @@ export interface SkCanvas {
     srcs: SkRect[],
     dsts: SkRSXform[],
     paint: SkPaint,
-    blendMode?: BlendMode,
-    colors?: SkColor[],
-    sampling?: SamplingOptions
+    blendMode?: BlendMode | null,
+    colors?: readonly SkColor[] | null,
+    sampling?: SamplingOptions | null
   ): void;
 
-  /** Read Image pixels
+  /**
+   * Resolves to the pixels of the canvas, like `image.readPixels()` on a
+   * snapshot of it: a Float32Array for an F32 color type, else a
+   * Uint8Array; to null when nothing could be read.
    *
    * @param srcX - x-axis upper left corner of the rectangle to read from
    * @param srcY - y-axis upper left corner of the rectangle to read from
    * @param imageInfo - describes the pixel format and dimensions of the data to read into
-   * @return Float32Array or Uint8Array with data or null if the read failed.
    */
   readPixels(
     srcX: number,
     srcY: number,
     imageInfo: ImageInfo
-  ): Float32Array | Uint8Array | null;
+  ): Promise<Float32Array | Uint8Array | null>;
 }

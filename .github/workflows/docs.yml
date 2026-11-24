@@ -1,12 +1,15 @@
-name: Deploy Documentation
+name: Deploy docs
 
 on:
+  # Run by hand for documentation-only changes.
   workflow_dispatch:
     branches:
       - main
+  # Called by the release workflow after a release from main.
+  workflow_call:
 
 jobs:
-  build_and_deploy_docs:
+  deploy-docs:
     if: ${{ contains(fromJSON('["shopify/react-native-skia", "wcandillon/react-native-skia"]'), github.repository) }}
     runs-on: ubuntu-latest
     steps:

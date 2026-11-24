@@ -1,16 +1,28 @@
 # React Native Skia
 
-High-performance 2d Graphics for React Native using Skia
-
 [![CI](https://github.com/wcandillon/react-native-skia/actions/workflows/ci.yml/badge.svg)](https://github.com/wcandillon/react-native-skia/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/react-native-skia.svg?style=flat)](https://www.npmjs.com/package/react-native-skia)
-[![issues](https://img.shields.io/github/issues/wcandillon/react-native-skia.svg?style=flat)](https://github.com/wcandillon/react-native-skia/issues)
 
-<img width="400" alt="skia" src="https://user-images.githubusercontent.com/306134/146549218-b7959ad9-0107-4c1c-b439-b96c780f5230.png">
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/skia.png?alt=media&token=875765bb-4898-4ffc-a8db-b6b777657373">
+    <img alt="React Native Skia Logo" src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/skia.png?alt=media&token=875765bb-4898-4ffc-a8db-b6b777657373" width="450">
+  </picture>
+</div>
 
-Checkout the full documentation [here](https://wcandillon.github.io/react-native-skia).
+React Native Skia bring Skia, the rendering engine behind Google Chrome to React Native to React Native.
 
-React Native Skia brings the Skia Graphics Library to React Native. Skia serves as the graphics engine for Google Chrome and Chrome OS, Android, Flutter, Mozilla Firefox and Firefox OS, and many other products.
+We use Graphite, Skia’s new GPU backend built on WebGPU (Dawn). It plugs directly into [React Native WebGPU](https://wcandillon.dev/article/hello-graphite-webgpu), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, at zero cost. The result is a unified GPU runtime for React Native.  See [Documentation](https://wcandillon.github.io/react-native-skia/).
+
+React Native Skia has been downloaded more than 60 millions times on npm. And today, it powers the user-experiences of some of the top apps on the App Store and Google Play, including several that have won awards from Apple, Google, and Expo.
+
+## Platinum Sponsors
+
+<div align="center">
+  <a href="https://expo.dev/" target="_blank" rel="sponsored">
+    <img width="80" height="80" alt="Expo" src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/expo.png?alt=media&token=6e688636-6a41-4d6a-b3ad-ec8ae1308b00" />
+  </a>
+</div>
 
 ## Getting Started
 
@@ -26,9 +38,10 @@ React Native Skia v3 renders with [Graphite](https://skia.org/docs/user/graphite
 
 | | v3 | v2 |
 |:--|:--|:--|
-| npm | `react-native-skia` | `react-native-skia@2` (`@shopify/react-native-skia` up to 2.14) |
-| Skia backend | Graphite | Ganesh |
-| Platforms | iOS, Android (API level 26 and above), macOS, Mac Catalyst, Web | iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, Web |
+| npm | `react-native-skia` | `react-native-skia@2` |
+| Skia backend | Graphite (Vulkan/Metal) | Ganesh (OpenGL/Metal) |
+| Architecture | multi-threaded | single-threaded |
+| Platforms | iOS, Android, macOS, Mac Catalyst, tvOS, Web | iOS, Android, macOS, Mac Catalyst, tvOS, Android TV, Web |
 | Branch | [`main`](https://github.com/wcandillon/react-native-skia/tree/main) | [`2.x`](https://github.com/wcandillon/react-native-skia/tree/2.x) |
 | Documentation | [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) | [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/) |
 

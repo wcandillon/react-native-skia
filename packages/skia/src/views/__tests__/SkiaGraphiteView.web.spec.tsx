@@ -65,7 +65,7 @@ const submitFrame = (ctx: SkGraphiteContext) => {
 
 describe("SkiaGraphiteView on the web", () => {
   it("presents a submitted recording before the next frame", async () => {
-    const { CanvasKitMock, rawCanvas, rawSurface } = installCanvasKit();
+    const { CanvasKitMock, rawCanvas, rawSurfaces } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
@@ -80,13 +80,13 @@ describe("SkiaGraphiteView on the web", () => {
     await flushMicrotasks();
     expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
     expect(rawCanvas.drawPicture).toHaveBeenCalledWith(picture);
-    expect(rawSurface.flush).toHaveBeenCalledTimes(1);
+    expect(rawSurfaces[0].flush).toHaveBeenCalledTimes(1);
 
     await view.unmount();
   });
 
   it("presents queued recordings in submission order in one frame", async () => {
-    const { rawCanvas, rawSurface } = installCanvasKit();
+    const { rawCanvas, rawSurfaces } = installCanvasKit();
     canvasSize.width = 360;
     canvasSize.height = 520;
 
@@ -96,7 +96,24 @@ describe("SkiaGraphiteView on the web", () => {
     const second = submitFrame(ctx);
     await flushMicrotasks();
     expect(rawCanvas.drawPicture.mock.calls).toEqual([[first], [second]]);
-    expect(rawSurface.flush).toHaveBeenCalledTimes(1);
+    expect(rawSurfaces[0].flush).toHaveBeenCalledTimes(1);
+
+    await view.unmount();
+  });
+
+  it("counts submitted recordings as pending until they are drawn", async () => {
+    installCanvasKit();
+    canvasSize.width = 360;
+    canvasSize.height = 520;
+
+    const view = mountView();
+    const ctx = view.ref.current!.getContext();
+    expect(ctx.pendingFrames).toBe(0);
+    submitFrame(ctx);
+    submitFrame(ctx);
+    expect(ctx.pendingFrames).toBe(2);
+    await flushMicrotasks();
+    expect(ctx.pendingFrames).toBe(0);
 
     await view.unmount();
   });

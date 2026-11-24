@@ -1,16 +1,24 @@
 #pragma once
 
+#include <chrono>
+#include <functional>
 #include <memory>
+#include <utility>
 
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <fbjni/fbjni.h>
 #include <jni.h>
 
+#include "JniPresentThread.h"
 #include "JniSkiaManager.h"
+#include "RNSkAnimationFrame.h"
 #include "RNSkLog.h"
+#include "RNSkPresentThread.h"
+#include "RNSkPresentThreadTimer.h"
 #include "RNSkView.h"
 #include "RNSkWindowSurface.h"
+#include "rnsurface/FrameScheduler.h"
 
 namespace RNSkia {
 namespace jni = facebook::jni;
@@ -18,7 +26,15 @@ namespace jni = facebook::jni;
 /**
  * The JNI side of SkiaView: owns the native view and the window surface it
  * presents into, and relays the surface callbacks of the backing SurfaceView
- * or TextureView, whose ANativeWindow it acquires for the surface.
+ * or TextureView, whose ANativeWindow it acquires for the surface. The view
+ * presents on the present thread (see RNSkPresentThread.h), and the Java
+ * view posts the surface callbacks there too, as the window belongs to that
+ * thread (see RNSkWindowSurface); this object is destroyed there as well
+ * (see SkiaView.dropInstance), so no call below runs under a present. The
+ * view's frame scheduler (see rnsurface::FrameScheduler) gets its inputs
+ * from here: the animation frames from the AChoreographer of the thread (see
+ * AnimationFrames), the polls for the GPU from a timer of the thread (see
+ * PresentThreadTimer), and the TextureView's draws from the Java view.
  */
 class JniSkiaView : public jni::HybridClass<JniSkiaView> {
 public:
@@ -35,12 +51,17 @@ public:
         {makeNativeMethod("initHybrid", JniSkiaView::initHybrid),
          makeNativeMethod("surfaceAvailable", JniSkiaView::surfaceAvailable),
          makeNativeMethod("surfaceDestroyed", JniSkiaView::surfaceDestroyed),
+         makeNativeMethod("surfaceAbandoned", JniSkiaView::surfaceAbandoned),
          makeNativeMethod("surfaceSizeChanged",
                           JniSkiaView::surfaceSizeChanged),
          makeNativeMethod("setLayoutSize", JniSkiaView::setLayoutSize),
+         makeNativeMethod("setSurfaceHighBitDepth",
+                          JniSkiaView::setSurfaceHighBitDepth),
          makeNativeMethod("registerView", JniSkiaView::registerView),
          makeNativeMethod("unregisterView", JniSkiaView::unregisterView),
-         makeNativeMethod("presentFrame", JniSkiaView::presentFrame)});
+         makeNativeMethod("frameConsumed", JniSkiaView::frameConsumed),
+         makeNativeMethod("cancelScheduledFrames",
+                          JniSkiaView::cancelScheduledFrames)});
   }
 
   // The manager is owned by the RNSkiaModule and is destroyed when the module
@@ -51,36 +72,65 @@ public:
   std::shared_ptr<RNSkManager> getSkiaManager() { return _manager.lock(); }
 
 protected:
+  // Present thread. Attaching the window asks the view for a frame, posted
+  // behind this call.
   void surfaceAvailable(jobject surface, int width, int height, bool isSurface,
                         bool highBitDepth) {
     attachWindow(surface, width, height, isSurface, highBitDepth);
-    _view->redraw();
   }
 
+  // Present thread. The window follows the new size by the next present of a
+  // frame made for it, which the surface asks for.
   void surfaceSizeChanged(jobject surface, int width, int height,
                           bool isSurface, bool highBitDepth) {
     // Setting width/height to zero is nothing we need to care about when
     // it comes to invalidating the surface.
-    if (width != 0 || height != 0) {
-      if (_surface->isAttached()) {
-        _surface->resize(width, height);
-      } else {
-        attachWindow(surface, width, height, isSurface, highBitDepth);
-      }
+    if (width == 0 && height == 0) {
+      return;
     }
-    // Paint the new size right away rather than on the next scheduled redraw.
-    _view->redraw();
+    if (_surface->isAttached()) {
+      _surface->resize(width, height);
+    } else {
+      attachWindow(surface, width, height, isSurface, highBitDepth);
+    }
   }
 
+  // Present thread, before the platform destroys the window: lets go of it
+  // (see RNSkWindowSurface::detach).
   void surfaceDestroyed() { _surface->detach(); }
 
+  // Main thread, as the platform is about to destroy the window, which it
+  // does without waiting for surfaceDestroyed() to run on the present thread
+  // (see SkiaView.onSurfaceDestroyed): nothing is presented onto it from here
+  // until then (see RNSkWindowSurface::abandon).
+  void surfaceAbandoned() { _surface->abandon(); }
+
   /**
-   The pixel size the backing view was laid out with. The surface it gets
-   (SurfaceView or TextureView) has exactly this size, so a frame recorded
-   before the surface exists already matches it. Main thread.
+   The pixel size the backing view was laid out with, and the density of that
+   layout. The surface it gets (SurfaceView or TextureView) has exactly this
+   size, so a frame recorded before the surface exists already matches it.
+   The density changes along with the layout (a display density change lays
+   the view out again), so frames keep the scale of the size they are
+   recorded for. Main thread.
    */
-  void setLayoutSize(int width, int height) {
-    _surface->setLayoutSize(width, height);
+  void setLayoutSize(int width, int height, float pixelDensity) {
+    float previous = 0;
+    bool known = _surface->getPixelDensity(&previous);
+    _surface->setLayoutSize(width, height, pixelDensity);
+    // A new size redraws once the surface follows it; a new density alone
+    // does not change the surface.
+    if (known && previous != pixelDensity) {
+      _view->requestRedraw();
+    }
+  }
+
+  /**
+   The bit depth the backing view was created with, which its surface gets
+   (see SkiaView.updateView), so that a frame recorded before the surface
+   exists, or while it is away, is recorded for its format. Main thread.
+   */
+  void setSurfaceHighBitDepth(bool highBitDepth) {
+    _surface->setHighBitDepth(highBitDepth);
   }
 
   void registerView(int nativeId) {
@@ -91,23 +141,30 @@ protected:
     manager->registerSkiaView(nativeId, _view);
   }
 
-  // React dropped the Java view. The Java side destroys this object right
-  // after (SkiaView.dropInstance), and with it the native view and its
-  // surface: their destructors give back the GPU memory the view holds. Left
-  // to the garbage collector, that memory would wait for the Java object to
-  // be finalized, which may never happen: the collector cannot see it.
+  // Main thread: React dropped the Java view. The Java side destroys this
+  // object right after, on the present thread (SkiaView.dropInstance), and
+  // with it the native view and its surface: their destructors give back the
+  // GPU memory the view holds. Left to the garbage collector, that memory
+  // would wait for the Java object to be finalized, which may never happen:
+  // the collector cannot see it.
   void unregisterView() {
     auto manager = getSkiaManager();
     if (manager == nullptr) {
       return;
     }
-    manager->setSkiaView(_view->getNativeId(), nullptr);
     manager->unregisterSkiaView(_view->getNativeId());
   }
 
-  // Choreographer tick: presents the queued recordings, returns whether more
-  // are already waiting.
-  bool presentFrame() { return _view->presentFrame(); }
+  // Present thread: the TextureView drew the frame it was given (see
+  // SkiaView.onSurfaceTextureUpdated). This object is destroyed on that
+  // thread too (see SkiaView.dropInstance), never under the call.
+  void frameConsumed() { _view->onFrameConsumed(); }
+
+  // Present thread: the view left its window, or the window lost its
+  // surface (see SkiaView.cancelFrames). An animation frame already asked
+  // for still fires, as AChoreographer has no cancel: it is dropped, or
+  // serves a request made since (see AnimationFrames::onFrame).
+  void cancelScheduledFrames() { _view->cancelFrames(); }
 
 private:
   friend HybridBase;
@@ -118,19 +175,136 @@ private:
     auto context = skiaManager->cthis()->getPlatformContext();
     _surface = std::make_shared<RNSkWindowSurface>();
     _view = std::make_shared<RNSkView>(context, _surface);
-    // A submitted recording arms the Java view's frame callback. Weak: the
-    // Java view owns this object through its hybrid data.
-    jni::weak_ref<jhybridobject> weakJava = jni::make_weak(jThis);
-    _view->setFrameScheduler([weakJava]() {
-      auto javaPart = weakJava.lockLocal();
-      if (!javaPart) {
+    // Tasks for the present thread go straight to it (see
+    // RNSkPresentThread.h). The Java view, which is called back for its
+    // frame rate vote, is reached through a weak reference: it owns this
+    // object through its hybrid data.
+    auto javaView = std::make_shared<JavaView>(jThis);
+    auto runOnPresentThread = [](std::function<void()> task) {
+      presentThread().post(std::move(task));
+    };
+    _view->setPresentThread(runOnPresentThread);
+    // The entries of the view and its window that belong to the present
+    // thread are bound to it there (see RNSkView::bindPresentThread), ahead
+    // of the surface callbacks the Java view posts behind this: the thread
+    // runs its tasks in order.
+    runOnPresentThread([surface = _surface, view = _view]() {
+      surface->bindPresentingThread();
+      view->bindPresentThread();
+    });
+    // What the view's frame scheduler asks of the platform, on the present
+    // thread (see RNSkView::FrameHost). Weak: the view may outlive this
+    // object in the registry for a moment.
+    _animationFrames = std::make_shared<AnimationFrames>(_view);
+    std::weak_ptr<AnimationFrames> weakFrames = _animationFrames;
+    RNSkView::FrameHost host;
+    host.requestAnimationFrame = [weakFrames]() {
+      if (auto frames = weakFrames.lock()) {
+        frames->request();
+      }
+    };
+    // The timer the view polls the GPU and waits for the end of a slot with
+    // (see RNSkView::pollSubmittedWorkDone and waitForSlotEnd).
+    host.setTimeout = [](std::chrono::nanoseconds delay,
+                         std::function<void()> task) {
+      PresentThreadTimer::getInstance().setTimeout(delay, std::move(task));
+    };
+    // The Java view's frame rate vote (see SkiaView.onFramePresented). A
+    // Java call from the native thread, which is attached (see
+    // attachPresentThread). The local reference goes with the scope: no
+    // Java frame is below to let go of it.
+    host.onFramePresented = [javaView]() {
+      callJavaFromPresentThread([&]() {
+        jni::JniLocalScope localScope(jni::Environment::current(), 4);
+        if (auto javaPart = javaView->weak->lockLocal()) {
+          static const auto method =
+              javaPart->getClass()->getMethod<void()>("onFramePresented");
+          method(javaPart);
+        }
+      });
+    };
+    _view->setFrameHost(std::move(host));
+  }
+
+  /**
+   A weak reference to the Java view for the callbacks the native view hands
+   out, which are copied and destroyed on whichever thread holds them last
+   (the target copies the frame request on the render thread that submits a
+   recording). A JNI reference needs the thread attached to the JVM to be
+   made or let go of, which such a thread is not: the callbacks share one,
+   made here and released under a thread scope.
+   */
+  struct JavaView {
+    explicit JavaView(jni::alias_ref<jhybridobject> jThis)
+        : weak(std::make_unique<jni::weak_ref<jhybridobject>>(
+              jni::make_weak(jThis))) {}
+    ~JavaView() {
+      jni::ThreadScope threadScope;
+      weak.reset();
+    }
+    std::unique_ptr<jni::weak_ref<jhybridobject>> weak;
+  };
+
+  /**
+   The animation frames of the view, on the present thread: the next frame of
+   the display, from the thread's AChoreographer (its looper is the
+   thread's, see rnsurface::RenderThread), with what that frame's timeline
+   says of it (see AnimationFrameSource).
+   */
+  class AnimationFrames : public std::enable_shared_from_this<AnimationFrames> {
+  public:
+    explicit AnimationFrames(std::weak_ptr<RNSkView> view)
+        : _view(std::move(view)) {}
+
+    // A callback has no cancel, so one is outstanding at most: a request
+    // made while the callback of a cancelled one is still to fire takes
+    // that callback rather than a second, which would call back twice per
+    // frame from then on. The token outlives this object, so a callback
+    // that fires after it finds nothing.
+    void request() {
+      if (_pending) {
         return;
       }
-      static const auto method =
-          javaPart->getClass()->getMethod<void()>("scheduleFrame");
-      method(javaPart);
-    });
-  }
+      _pending = true;
+      auto *token = new std::weak_ptr<AnimationFrames>(weak_from_this());
+      if (AnimationFrameSource::post(onFrame, token)) {
+        return;
+      }
+      // No connection to the display's events. The frame goes without a
+      // frame of the display, as a task behind those queued, rather than
+      // never: the scheduler keeps its frames until the animation frame it
+      // asked for.
+      if (!_loggedNoChoreographer) {
+        _loggedNoChoreographer = true;
+        RNSkLogger::logToConsole(
+            "No AChoreographer on the present thread: presenting unpaced");
+      }
+      presentThread().post(
+          [token]() { onFrame(AnimationFrameSource::unpaced(), token); });
+    }
+
+  private:
+    static void onFrame(const AnimationFrameSource::AnimationFrame &frame,
+                        void *data) {
+      auto *token = static_cast<std::weak_ptr<AnimationFrames> *>(data);
+      if (auto frames = token->lock()) {
+        frames->_pending = false;
+        auto view = frames->_view.lock();
+        // Not asked for any more after a cancel: the scheduler hears of the
+        // animation frames it asked for only.
+        if (view != nullptr && view->hasPendingAnimationFrame()) {
+          view->onAnimationFrame(frame);
+        }
+      }
+      delete token;
+    }
+
+    std::weak_ptr<RNSkView> _view;
+    // A callback was asked of the choreographer and has not fired. Present
+    // thread, as the rest.
+    bool _pending = false;
+    bool _loggedNoChoreographer = false;
+  };
 
   /**
    Takes the ANativeWindow behind an android.view.Surface (SurfaceView) or a
@@ -139,8 +313,15 @@ private:
    */
   void attachWindow(jobject surface, int width, int height, bool isSurface,
                     bool highBitDepth) {
-    // Release the old surface and its window first.
-    _surface->detach();
+    // The previous window, if any, goes as the new one attaches (see
+    // RNSkWindowSurface::attach); not detach(), which would take down an
+    // abandon the main thread sets while this runs.
+    // A TextureView draws the latest frame presented to it; a SurfaceView's
+    // frames show in turn (see RNSkView::setPresentMode), and the scheduler
+    // paces each its own way.
+    _view->setPresentMode(
+        isSurface ? rnsurface::FrameScheduler::PresentMode::kFifo
+                  : rnsurface::FrameScheduler::PresentMode::kMailbox);
     JNIEnv *env = jni::Environment::current();
     jobject jSurface = surface;
     // The Surface created over a TextureView's SurfaceTexture; it lives as
@@ -178,8 +359,8 @@ private:
 
   /**
    Gives back what attachWindow() took, once the Dawn surface drawing into the
-   window is gone. Runs from RNSkWindowSurface::detach() or its destructor, so
-   on any thread.
+   window is gone. Runs from RNSkWindowSurface::detach() on the present
+   thread, or from its destructor, so on any thread.
    */
   static void releaseWindow(ANativeWindow *window, jobject ownedSurface) {
     jni::ThreadScope threadScope;
@@ -202,6 +383,7 @@ private:
   // is destroyed.
   std::shared_ptr<RNSkWindowSurface> _surface;
   std::shared_ptr<RNSkView> _view;
+  std::shared_ptr<AnimationFrames> _animationFrames;
 };
 
 } // namespace RNSkia

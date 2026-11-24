@@ -2,8 +2,7 @@ import React from "react";
 
 import { BlurMask, Circle, Fill, Group } from "../../components";
 import type { SkImage } from "../../../skia/types";
-import { AlphaType, ColorType } from "../../../skia/types";
-import { surface } from "../setup";
+import { readAllPixels, surface } from "../setup";
 
 // `respectCTM` decides whether the blur sigma is scaled by the current
 // transformation matrix, so it is only observable under a scaled CTM - hence
@@ -28,15 +27,8 @@ const Scene = ({ respectCTM }: { respectCTM?: boolean }) => {
 
 // Number of pixels the shape and its blur cover: a blur whose sigma follows the
 // CTM reaches considerably further than one that ignores it.
-const coveredArea = (image: SkImage) => {
-  const width = image.width();
-  const height = image.height();
-  const pixels = image.readPixels(0, 0, {
-    width,
-    height,
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Unpremul,
-  })!;
+const coveredArea = async (image: SkImage) => {
+  const pixels = await readAllPixels(image);
   let count = 0;
   for (let i = 0; i < pixels.length; i += 4) {
     if (pixels[i] < 250) {
@@ -48,9 +40,11 @@ const coveredArea = (image: SkImage) => {
 
 describe("Mask filters", () => {
   it("BlurMask defaults respectCTM to true", async () => {
-    const withDefault = coveredArea(await surface.draw(<Scene />));
-    const respectingCTM = coveredArea(await surface.draw(<Scene respectCTM />));
-    const ignoringCTM = coveredArea(
+    const withDefault = await coveredArea(await surface.draw(<Scene />));
+    const respectingCTM = await coveredArea(
+      await surface.draw(<Scene respectCTM />)
+    );
+    const ignoringCTM = await coveredArea(
       await surface.draw(<Scene respectCTM={false} />)
     );
     // Sanity check: the two explicit values must actually differ, otherwise the

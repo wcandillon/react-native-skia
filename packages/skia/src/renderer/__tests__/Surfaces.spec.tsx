@@ -8,7 +8,7 @@ import { AlphaType, ColorType } from "../../skia/types";
 import { drawOnNode } from "./setup";
 
 describe("Surface", () => {
-  it("asImage() draws the content of the surface", () => {
+  it("asImage() draws the content of the surface", async () => {
     const { Skia } = setupSkia();
     const source = Skia.Surface.MakeOffscreen(2, 2)!;
     source.getCanvas().drawColor(Skia.Color("cyan"));
@@ -17,7 +17,7 @@ describe("Surface", () => {
     const target = Skia.Surface.MakeOffscreen(2, 2)!;
     target.getCanvas().drawImage(image, 0, 0);
     target.flush();
-    const pixels = target.makeImageSnapshot().readPixels(0, 0, {
+    const pixels = await target.makeImageSnapshot().readPixels(0, 0, {
       width: 1,
       height: 1,
       colorType: ColorType.RGBA_8888,
@@ -25,17 +25,17 @@ describe("Surface", () => {
     });
     expect(Array.from(pixels!)).toEqual([0, 255, 255, 255]);
   });
-  it("MakeNonImageTexture on a CPU surface shouldn't leak", () => {
+  it("MakeNonImageTexture on a CPU surface shouldn't leak", async () => {
     const { Skia } = setupSkia();
     // When leaking, the WASM memory limit will be reached quite quickly
     // causing the test to fail
     for (let i = 0; i < 500; i++) {
-      using surface = Skia.Surface.Make(1920, 1080)!;
+      using surface = Skia.Surface.MakeRaster(1920, 1080)!;
       const canvas = surface.getCanvas();
       canvas.clear(Skia.Color("cyan"));
       surface.flush();
       using image = surface.makeImageSnapshot();
-      using copy = image.makeNonTextureImage();
+      using copy = await image.makeRasterImage();
       expect(copy).toBeDefined();
     }
   });
@@ -44,7 +44,7 @@ describe("Surface", () => {
     // When leaking, the WASM memory limit will be reached quite quickly
     // causing the test to fail
     for (let i = 0; i < 500; i++) {
-      using surface = Skia.Surface.Make(1920, 1080)!;
+      using surface = Skia.Surface.MakeRaster(1920, 1080)!;
       const canvas = surface.getCanvas();
       canvas.clear(Skia.Color("cyan"));
       surface.flush();
@@ -80,7 +80,7 @@ describe("Surface", () => {
       );
       surface.flush();
       //console.log(`Iteration ${i} took ${Math.floor(performance.now() - t)}ms`);
-      processResult(surface, "snapshots/leak.png");
+      await processResult(surface, "snapshots/leak.png");
     }
   });
 });

@@ -1,5 +1,10 @@
+import fs from "fs";
 import path from "path";
 
+import type { AppleArchitecture, AppleSDK } from "./apple-configuration";
+import { appleConfigurations, appleSDKs } from "./apple-configuration";
+import { applyPatches } from "./patches";
+import { prepareDawnHeaders } from "./prepare-dawn-headers";
 import { $, fileOps } from "./utils";
 
 const DEBUG = false;
@@ -9,8 +14,21 @@ export const SkiaSrc = path.join(__dirname, "../../../externals/skia");
 export const ProjectRoot = path.join(__dirname, "../../..");
 export const PackageRoot = path.join(__dirname, "..");
 export const OutFolder = path.join(SkiaSrc, DEBUG ? "debug" : "out");
+export const SkiaPatches = path.join(__dirname, "skia-patches");
+
+/** Applies the Skia patches, skipping those already in the pinned checkout. */
+export const applySkiaPatches = () => applyPatches(SkiaSrc, SkiaPatches);
+
+// The wasm build output, which is also the layout of the release asset:
+// lib/ (archives), skia/ (headers), emdawnwebgpu/ and metadata.json.
+export const WasmLibs = path.join(PackageRoot, "libs", "wasm");
+// Stands in for Dawn on wasm: see skia-patches/wasm-emdawnwebgpu-dependency.patch.
+export const EmdawnwebgpuDir = path.join(WasmLibs, "emdawnwebgpu");
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
+
+/** Minimum Android API used by both Skia's GN and Dawn's CMake builds. */
+export const androidPlatform = 26;
 
 const NoParagraphArgs = [
   ["skia_use_harfbuzz", false],
@@ -74,6 +92,8 @@ export const commonArgs = [
   ["skia_enable_pdf", false],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
+  // Graphite only: Ganesh is not used on any platform.
+  ["skia_enable_ganesh", false],
   ["skia_enable_graphite", true],
   ["skia_use_dawn", true],
   // m152 turns PartitionAlloc on by default for clang builds, which leaves
@@ -81,17 +101,11 @@ export const commonArgs = [
   // prebuilt libskia.a (the allocator lives in its own target we don't ship).
   // Skia's noop raw_ptr shims are used instead.
   ["skia_use_partition_alloc", false],
-  // C++20 is required for Graphite builds (Dawn uses C++20 concepts)
-  // Passed via extra_cflags_cc per-target instead of skia_use_cpp20 (not available in all Skia versions)
 ];
 
-export type PlatformName = "apple-ios" | "apple-macos" | "android";
-
-export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
-
-export const isApplePlatform = (
-  name: PlatformName
-): name is ApplePlatformName => name.startsWith("apple-");
+// Build groups identify Android, wasm or one Apple SDK, independently of library
+// format. GN keeps its own CPU/platform spellings.
+export type PlatformName = "android" | "wasm" | AppleSDK;
 
 type Arg = (string | boolean | number)[];
 export type Target = {
@@ -113,12 +127,12 @@ export type Platform<PlatformTarget extends Target = Target> = {
   options?: Arg[];
 };
 
-// The deployment target of the podspec (s.platforms).
-const appleMinTarget = "15.1";
-const appleSimulatorMinTarget = appleMinTarget;
-
 // Common Apple build arguments shared across all Apple platforms
 const appleCommonArgs: Arg[] = [
+  // Cross builds also compile macOS host tools, such as libgrapheme generators.
+  // Their current_os is "mac" even when the destination is iOS/tvOS/Catalyst.
+  // Keep the host deployment target independent of that destination's minimum.
+  ["macos_min_target", `"${appleConfigurations.macos.minimumTarget}"`],
   ["skia_use_metal", true],
   ["skia_use_gl", false],
   ["cc", '"clang"'],
@@ -127,7 +141,7 @@ const appleCommonArgs: Arg[] = [
 ];
 
 // Common Apple output names shared across all Apple platforms
-const appleOutputNames = [
+export const appleOutputNames = [
   "libskia.a",
   "libskshaper.a",
   "libsvg.a",
@@ -136,11 +150,67 @@ const appleOutputNames = [
   ...ParagraphApple,
 ];
 
-export const configurations: { android: Platform<AndroidTarget> } & Record<
-  ApplePlatformName,
-  Platform
-> = {
-  "android": {
+/** Configure Skia's GN toolchain for one SDK and its supported architectures. */
+const apple = (sdk: AppleSDK): Platform => {
+  const configuration = appleConfigurations[sdk];
+  const isCatalyst = configuration.variant === "maccatalyst";
+  let platform = "ios";
+  if (isCatalyst || configuration.platform === "macos") {
+    platform = "mac";
+  } else if (configuration.platform === "tvos") {
+    platform = "tvos";
+  }
+  const targets = Object.fromEntries(
+    configuration.architectures.map((architecture: AppleArchitecture) => {
+      const args: Arg[] = [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]];
+      // ios_min_target carries this SDK's floor, including tvOS/Catalyst.
+      // macos_min_target remains separate for macOS host generators in the same run.
+      if (configuration.platform !== "macos") {
+        args.unshift(["ios_min_target", `"${configuration.minimumTarget}"`]);
+      }
+      if (configuration.variant === "simulator") {
+        args.push(["ios_use_simulator", true]);
+      }
+      // Catalyst needs an environment selector in addition to target_os.
+      if (isCatalyst) {
+        args.push(["target_environment", '"catalyst"']);
+      }
+      return [
+        architecture,
+        {
+          cpu: architecture === "x86_64" ? "x64" : architecture,
+          platform,
+          args,
+        },
+      ];
+    })
+  );
+  return {
+    targets,
+    args: appleCommonArgs,
+    outputRoot: `libs/apple/${sdk}`,
+    outputNames: appleOutputNames,
+  };
+};
+
+// The module libraries a wasm consumer links, in addition to libskia.a. GN
+// names them lib<name>.wasm.a; they are staged without the infix.
+export const wasmOutputNames = [
+  "libskia.a",
+  "libskshaper.a",
+  "libsvg.a",
+  "libskottie.a",
+  "libsksg.a",
+  "libskresources.a",
+  "libjsonreader.a",
+  ...ParagraphApple,
+];
+
+export const configurations: {
+  android: Platform<AndroidTarget>;
+  wasm: Platform;
+} & Record<AppleSDK, Platform> = {
+  android: {
     targets: {
       arm: {
         platform: "android",
@@ -164,7 +234,7 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       },
     },
     args: [
-      ["ndk_api", 26],
+      ["ndk_api", androidPlatform],
       ["ndk", `"${NdkDir}"`],
       ["skia_use_system_freetype2", false],
       ["skia_use_gl", false],
@@ -192,73 +262,69 @@ export const configurations: { android: Platform<AndroidTarget> } & Record<
       ...ParagraphOutputsAndroid,
     ],
   },
-  "apple-ios": {
+  // Graphite on the browser's WebGPU. Built with Emscripten from the emsdk
+  // Skia pins; see wasm-configuration.ts for the toolchain and for what a
+  // consumer of these archives has to match.
+  wasm: {
     targets: {
-      "arm64-iphoneos": {
-        cpu: "arm64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${appleMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "arm64-iphonesimulator": {
-        cpu: "arm64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${appleSimulatorMinTarget}"`],
-          ["ios_use_simulator", true],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "x64-iphonesimulator": {
-        cpu: "x64",
-        platform: "ios",
-        args: [
-          ["ios_min_target", `"${appleSimulatorMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "arm64-maccatalyst": {
-        cpu: "arm64",
-        platform: "mac",
-        args: [
-          ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${appleMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
-      },
-      "x64-maccatalyst": {
-        cpu: "x64",
-        platform: "mac",
-        args: [
-          ["target_environment", '"catalyst"'],
-          ["ios_min_target", `"${appleMinTarget}"`],
-          ["extra_cflags_cc", `["-fexceptions", "-frtti"]`],
-        ],
+      wasm32: {
+        platform: "wasm",
+        cpu: "wasm",
       },
     },
-    args: appleCommonArgs,
-    outputRoot: "libs/ios",
-    outputNames: appleOutputNames,
+    args: [
+      // No WebGL: it is a Ganesh backend.
+      ["skia_use_webgl", false],
+      // The browser implements WebGPU: Dawn is neither built nor linked.
+      ["skia_emdawnwebgpu_dir", `"${EmdawnwebgpuDir}"`],
+      // A module with threads needs a shared memory, which browsers only give
+      // to cross-origin isolated pages.
+      ["skia_wasm_enable_pthreads", false],
+      // No system fonts on the web: FreeType with fonts supplied as data.
+      ["skia_use_freetype", true],
+      ["skia_use_system_freetype2", false],
+      ["skia_enable_fontmgr_custom_directory", false],
+      // Same text stack as the Apple targets: no ICU data to ship.
+      ...ParagraphArgsApple,
+    ],
+    outputRoot: "libs/wasm",
+    outputNames: wasmOutputNames,
   },
-  "apple-macos": {
-    targets: {
-      "arm64-macosx": {
-        cpu: "arm64",
-        platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
-      },
-      "x64-macosx": {
-        cpu: "x64",
-        platform: "mac",
-        args: [["extra_cflags_cc", `["-fexceptions", "-frtti"]`]],
-      },
-    },
-    args: appleCommonArgs,
-    outputRoot: "libs/macos",
-    outputNames: appleOutputNames,
-  },
+  ...(Object.fromEntries(appleSDKs.map((sdk) => [sdk, apple(sdk)])) as Record<
+    AppleSDK,
+    Platform
+  >),
+};
+
+/** Per-architecture build selectors for SDK groups and Android CPU targets. */
+export const skiaTargets = Object.fromEntries(
+  Object.entries(configurations).flatMap(([platform, configuration]) =>
+    Object.keys(configuration.targets).map((architecture) => [
+      `${platform}-${architecture}`,
+      { platform: platform as PlatformName, architecture },
+    ])
+  )
+) as Record<string, { platform: PlatformName; architecture: string }>;
+
+/** GN intermediates are separate from the SDK libraries uploaded by CI. */
+export const skiaBuildDir = (platform: PlatformName, architecture: string) =>
+  platform === "android" || platform === "wasm"
+    ? path.join(OutFolder, platform, architecture)
+    : path.join(OutFolder, "apple", `${platform}-${architecture}`);
+
+export const skiaTargetOutputDir = (name: string) => {
+  const { platform, architecture } = skiaTargets[name];
+  if (platform === "wasm") {
+    return path.join(WasmLibs, "lib");
+  }
+  return platform === "android"
+    ? path.join(
+        PackageRoot,
+        "libs",
+        "android",
+        configurations.android.targets[architecture].output
+      )
+    : path.join(PackageRoot, "libs", "apple", name);
 };
 
 const copyModule = (module: string) => {
@@ -268,10 +334,18 @@ const copyModule = (module: string) => {
   fileOps.cp(srcDir, destDir);
 };
 
-export const copyHeaders = () => {
-  const fs = require("fs");
+/** Prepare Dawn inputs before removing or copying any existing headers. */
+export const copyHeaders = async () => {
+  const dawnInclude = await prepareDawnHeaders();
   console.log("⚙️ Copying Skia headers...");
   process.chdir(PackageRoot);
+
+  // Sources first: a run that cannot copy leaves the current headers in place.
+  if (!fs.existsSync("../../externals/skia/include")) {
+    throw new Error(
+      "No Skia headers found in externals/skia: check out the submodules with `git submodule update --init --recursive`"
+    );
+  }
 
   console.log("   Cleaning up existing directories...");
   fileOps.rm("./cpp/skia");
@@ -296,32 +370,7 @@ export const copyHeaders = () => {
     );
   }
 
-  // Dawn headers: from the Dawn built locally with `yarn build-dawn` when there
-  // is one (it is what the native builds then link), otherwise from the
-  // react-native-webgpu-dawn package, the same way Gradle and the podspec pick
-  // the library.
   {
-    const localDawnInclude = path.join(PackageRoot, "libs", "dawn", "include");
-    let dawnInclude: string;
-    if (fs.existsSync(path.join(localDawnInclude, "webgpu", "webgpu.h"))) {
-      console.log(
-        "   📦 Copying Dawn headers from the local build (libs/dawn)..."
-      );
-      dawnInclude = localDawnInclude;
-    } else {
-      let dawnPackage: string;
-      try {
-        dawnPackage = path.dirname(
-          require.resolve("react-native-webgpu-dawn/package.json")
-        );
-      } catch (e) {
-        throw new Error(
-          "No Dawn headers found: install dependencies (react-native-webgpu-dawn) or build Dawn locally with `yarn build-dawn`"
-        );
-      }
-      console.log(`   📦 Copying Dawn headers from ${dawnPackage}...`);
-      dawnInclude = path.join(dawnPackage, "include");
-    }
     fileOps.mkdir("./cpp/dawn/include");
     fileOps.cp(path.join(dawnInclude, "dawn"), "./cpp/dawn/include/dawn");
     fileOps.cp(path.join(dawnInclude, "webgpu"), "./cpp/dawn/include/webgpu");
@@ -464,10 +513,23 @@ export const copyHeaders = () => {
     "../../externals/skia/modules/skunicode/include/SkUnicode_icu.h",
     "./cpp/skia/modules/skunicode/include/SkUnicode_icu.h"
   );
-  // Check for duplicate header names and issue warnings
+  // Check for duplicate header names and issue warnings. The pod's header
+  // search path is recursive, so a header name present twice is ambiguous
+  // for a bare #include "Name.h" (#3209). Skia includes its own headers by
+  // their full path, so the pairs it ships are fine as long as the wrapper
+  // includes them by path too.
+  const knownDuplicateHeaders = [
+    // include/cpu/Recorder.h (skcpu::Recorder, included by Graphite's
+    // Recorder.h since m157) and include/gpu/graphite/Recorder.h.
+    "Recorder.h",
+  ];
   const duplicateHeaders = $(
     "find ./cpp -name '*.h' -type f | sed 's/.*\\///' | sort | uniq -d"
-  ).toString();
+  )
+    .toString()
+    .split("\n")
+    .filter((name: string) => name && !knownDuplicateHeaders.includes(name))
+    .join("\n");
   if (duplicateHeaders.trim()) {
     console.warn("⚠️  WARNING: Found duplicate header names:");
     duplicateHeaders
@@ -490,5 +552,10 @@ export const copyHeaders = () => {
     );
     process.exit(1);
   }
+  // Use the build's patch set on pristine or already patched header copies.
+  // Source/build sections whose files were not copied are left out.
+  applyPatches(path.join(PackageRoot, "cpp/skia"), SkiaPatches, {
+    copiedFilesOnly: true,
+  });
   console.log("✅ Skia headers copied to ./cpp/skia");
 };

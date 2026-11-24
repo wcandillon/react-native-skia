@@ -43,14 +43,14 @@ describe("Simple", () => {
     const { Skia } = importSkia();
     const root = new SkiaSGRoot(Skia);
     await root.render(<skCircle r={128} color="cyan" />);
-    const surface = Skia.Surface.Make(768, 768)!;
+    const surface = Skia.Surface.MakeRaster(768, 768)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    checkImage(image, "snapshots/sksg/simple.png");
+    await checkImage(image, "snapshots/sksg/simple.png");
   });
   it("should have a simple render (2)", async () => {
     const { Skia } = importSkia();
@@ -61,14 +61,14 @@ describe("Simple", () => {
         <skCircle r={128} cx={768 / 2} cy={768 / 2} color="cyan" />
       </>
     );
-    const surface = Skia.Surface.Make(768, 768)!;
+    const surface = Skia.Surface.MakeRaster(768, 768)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    checkImage(image, "snapshots/sksg/simple2.png");
+    await checkImage(image, "snapshots/sksg/simple2.png");
   });
   it("simple demo", async () => {
     const { Skia } = importSkia();
@@ -98,14 +98,14 @@ describe("Simple", () => {
         </skGroup>
       </>
     );
-    const surface = Skia.Surface.Make(width, height)!;
+    const surface = Skia.Surface.MakeRaster(width, height)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    checkImage(image, "snapshots/sksg/breathe.png");
+    await checkImage(image, "snapshots/sksg/breathe.png");
   });
 
   it("simple demo (2)", async () => {
@@ -136,13 +136,13 @@ describe("Simple", () => {
         </skGroup>
       </>
     );
-    const surface = Skia.Surface.Make(width, height)!;
+    const surface = Skia.Surface.MakeRaster(width, height)!;
     expect(surface).toBeDefined();
     const canvas = surface.getCanvas();
     root.drawOnCanvas(canvas);
     surface.flush();
     const image = surface.makeImageSnapshot();
     expect(image).toBeDefined();
-    checkImage(image, "snapshots/sksg/breathe-0.png");
+    await checkImage(image, "snapshots/sksg/breathe-0.png");
   });
 });

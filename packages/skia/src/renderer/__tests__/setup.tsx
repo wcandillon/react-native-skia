@@ -5,27 +5,28 @@ import path from "path";
 
 import React from "react";
 import type { ReactNode } from "react";
-import type { Server, WebSocket } from "ws";
+import type { WebSocketServer } from "ws";
 
 import type * as SkiaExports from "../../index";
 import { JsiSkApi } from "../../skia/web/JsiSkia";
 import { Group } from "../components";
 import type { SkImage, SkFont, Skia, SkCanvas } from "../../skia/types";
-import { isPath } from "../../skia/types";
+import { AlphaType, ColorType, isPath } from "../../skia/types";
 import { E2E } from "../../__tests__/setup";
 import { LoadSkiaWeb } from "../../web/LoadSkiaWeb";
 import { SkiaSGRoot } from "../../sksg/Reconciler";
 import type { Node } from "../../sksg/Node";
 
 import { SkiaObject } from "./e2e/setup";
+import type { Channel } from "./e2e/setup/Channel";
 
 jest.setTimeout(180 * 1000);
 
 type TestOS = "ios" | "android" | "web" | "node" | "macos";
 
 declare global {
-  var testServer: Server;
-  var testClient: WebSocket;
+  var testServer: WebSocketServer;
+  var testConnection: { channel: Channel | null };
   var testOS: TestOS;
 }
 export let surface: TestingSurface;
@@ -110,23 +111,73 @@ beforeAll(async () => {
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-// Error envelopes are JSON objects starting with "{" (0x7b). PNG payloads start
-// with the 0x89 signature and base64/other JSON responses won't carry $$error,
-// so we only attempt a parse when the buffer looks like a JSON object.
-const parseErrorResponse = (raw: Buffer): string | null => {
-  if (raw[0] !== 0x7b) {
-    return null;
+// A snapshot's colour pipeline can move a channel by a few units, so colours
+// are read as names rather than exact bytes.
+const classifyColor = (red: number, green: number, blue: number) => {
+  if (red < 60 && green > 200 && blue > 200) {
+    return "cyan";
   }
-  try {
-    const obj = JSON.parse(raw.toString());
-    if (obj && typeof obj === "object" && "$$error" in obj) {
-      return String(obj.$$error);
-    }
-  } catch {
-    // Not a JSON object; treat as a normal payload.
+  if (red > 200 && green < 60 && blue < 60) {
+    return "red";
+  }
+  if (red < 60 && green < 60 && blue > 200) {
+    return "blue";
+  }
+  if (red < 60 && green > 200 && blue < 60) {
+    return "green";
   }
   return null;
 };
+
+export const nameColor = (pixel: ArrayLike<number> | null) => {
+  if (pixel === null) {
+    return "unreadable";
+  }
+  const [red, green, blue] = [pixel[0], pixel[1], pixel[2]];
+  return classifyColor(red, green, blue) ?? `rgb(${red}, ${green}, ${blue})`;
+};
+
+// Every pixel of a snapshot, as unpremultiplied RGBA bytes.
+export const readAllPixels = async (image: SkImage) => {
+  const pixels = await image.readPixels(0, 0, {
+    width: image.width(),
+    height: image.height(),
+    colorType: ColorType.RGBA_8888,
+    alphaType: AlphaType.Unpremul,
+  });
+  if (pixels === null) {
+    throw new Error("The snapshot has no readable pixels");
+  }
+  return pixels;
+};
+
+// The pixels of a screen snapshot in each colour it names.
+export const countColors = async (image: SkImage) => {
+  const pixels = await readAllPixels(image);
+  const counts = { cyan: 0, red: 0, blue: 0, green: 0 };
+  for (let i = 0; i < pixels.length; i += 4) {
+    const color = classifyColor(pixels[i], pixels[i + 1], pixels[i + 2]);
+    if (color !== null) {
+      counts[color]++;
+    }
+  }
+  return counts;
+};
+
+// The colour of the screen at a fraction of its width and of its height.
+export const readScreenColor = async (image: SkImage, fraction: number) =>
+  nameColor(
+    await image.readPixels(
+      Math.round(image.width() * fraction),
+      Math.round(image.height() * fraction),
+      {
+        width: 1,
+        height: 1,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Unpremul,
+      }
+    )
+  );
 
 export const resolveFile = (uri: string) =>
   fs.readFileSync(path.resolve(__dirname, `../../${uri}`));
@@ -169,7 +220,7 @@ export const BirdGIF = resolveFile("skia/__tests__/assets/bird.gif").toString(
 
 export const loadImage = (uri: string) => {
   const Skia = global.SkiaApi;
-  const image = Skia.Image.MakeImageFromEncoded(
+  const image = Skia.Image.MakeFromEncoded(
     Skia.Data.fromBytes(resolveFile(uri))
   );
   expect(image).toBeTruthy();
@@ -178,9 +229,7 @@ export const loadImage = (uri: string) => {
 
 export const loadFont = (uri: string, ftSize?: number) => {
   const Skia = global.SkiaApi;
-  const tf = Skia.Typeface.MakeFreeTypeFaceFromData(
-    Skia.Data.fromBytes(resolveFile(uri))
-  );
+  const tf = Skia.Typeface.MakeFromData(Skia.Data.fromBytes(resolveFile(uri)));
   expect(tf).toBeTruthy();
   return Skia.Font(tf!, ftSize ?? fontSize);
 };
@@ -239,7 +288,7 @@ export const mountCanvas = async (element: ReactNode) => {
 export const serialize = async (element: ReactNode) => {
   const { root, render } = await mountCanvas(element);
   await render();
-  const serialized = serializeNode(root.sg);
+  const serialized = await serializeNode(root.sg);
   return JSON.stringify(serialized);
 };
 
@@ -253,13 +302,27 @@ interface SerializedNode {
   children: SerializedNode[];
 }
 
-const serializeSkOjects = (obj: any): any => {
+// Asynchronous: an image without an asset name is sent encoded, and encoding
+// is a promise.
+const serializeSkOjects = async (obj: any): Promise<any> => {
   if (typeof obj === "function") {
     return { __typename__: "Function", source: `${obj.toString()}` };
   } else if (obj instanceof Float32Array) {
     return { __typename__: "Float32Array", value: Array.from(obj) };
   } else if (Array.isArray(obj)) {
-    return obj.map((item) => serializeSkOjects(item));
+    // Font and image bytes come as arrays of millions of numbers: a promise
+    // per element would take minutes and gigabytes, so an array of
+    // primitives is passed through as is.
+    if (
+      obj.every(
+        (item) =>
+          item === null ||
+          (typeof item !== "object" && typeof item !== "function")
+      )
+    ) {
+      return obj;
+    }
+    return Promise.all(obj.map((item) => serializeSkOjects(item)));
   } else if (obj && typeof obj === "object" && "__typename__" in obj) {
     if (obj instanceof SkiaObject) {
       const skObj: SkiaObject<EvalContext, any> = obj;
@@ -300,7 +363,7 @@ const serializeSkOjects = (obj: any): any => {
       if (!asset) {
         return {
           __typename__: "RawImage",
-          data: obj.encodeToBase64(),
+          data: await obj.encodeToBase64(),
         };
       }
       return {
@@ -350,31 +413,31 @@ const serializeSkOjects = (obj: any): any => {
       };
     }
   } else if (obj && typeof obj === "object") {
-    const result = Object.keys(obj).reduce((acc, key) => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      acc[key] = serializeSkOjects(obj[key]);
-      return acc;
-    }, {});
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = await serializeSkOjects(obj[key]);
+    }
     return result;
   }
   return obj;
 };
 
-const serializeNode = (node: Node<any>): SerializedNode => {
+const serializeNode = async (node: Node<any>): Promise<SerializedNode> => {
   const props: any = {};
   const ogProps = node.props;
   if (ogProps) {
-    Object.keys(ogProps)
-      .filter((key) => key !== "children")
-      .forEach((key) => {
-        props[key] = serializeSkOjects(ogProps[key]);
-      });
+    for (const key of Object.keys(ogProps)) {
+      if (key !== "children") {
+        props[key] = await serializeSkOjects(ogProps[key]);
+      }
+    }
   }
   return {
     type: node.type,
     props,
-    children: node.children.map((child) => serializeNode(child)),
+    children: await Promise.all(
+      node.children.map((child) => serializeNode(child))
+    ),
   };
 };
 
@@ -443,26 +506,25 @@ class LocalSurface implements TestingSurface {
   }
 }
 
-class RemoteSurface implements TestingSurface {
+export class RemoteSurface implements TestingSurface {
   readonly width = 256;
   readonly height = 256;
   readonly fontSize = 32;
   readonly OS = global.testOS;
 
-  eval<Ctx extends EvalContext, R>(
+  async eval<Ctx extends EvalContext, R>(
     fn: (Skia: Skia, ctx: Ctx) => any,
     context?: Ctx
   ): Promise<R> {
-    const ctx = this.prepareContext(context);
-    const body = { code: fn.toString(), ctx };
-    return this.handleImageResponse<R>(JSON.stringify(body), true);
+    const ctx = await this.prepareContext(context);
+    return this.channel.call<R>("eval", { code: fn.toString(), ctx });
   }
 
   async drawOffscreen<Ctx extends EvalContext>(
     fn: (Skia: Skia, canvas: SkCanvas, ctx: Ctx) => void,
     context?: Ctx
   ) {
-    const ctx = this.prepareContext(context);
+    const ctx = await this.prepareContext(context);
     const code = `(Skia, ctx, size, scale) => {
 const surface = Skia.Surface.MakeOffscreen(size, size);
 if (!surface) {
@@ -476,86 +538,45 @@ canvas.restore();
 surface.flush();
 return surface.makeImageSnapshot().encodeToBase64();
 }`;
-    const body = { code, ctx };
-    const base64 = await this.handleImageResponse<string>(
-      JSON.stringify(body),
-      true
-    );
-    const Skia = global.SkiaApi;
-    const data = Skia.Data.fromBase64(base64);
-    const image = Skia.Image.MakeImageFromEncoded(data);
-    if (image === null) {
-      throw new Error("Unable to decode image");
-    }
-    return image;
+    return decodeImage(await this.channel.call<string>("eval", { code, ctx }));
   }
 
   async draw(node: ReactNode) {
-    return this.handleImageResponse(await serialize(node));
+    const tree = JSON.parse(await serialize(node));
+    return decodeImage(await this.channel.call<string>("draw", tree));
   }
 
-  screen(screen: string) {
-    return this.handleImageResponse(JSON.stringify({ screen }));
+  async screen(name: string) {
+    return decodeImage(await this.channel.call<string>("screen", { name }));
   }
 
-  private get client() {
-    if (global.testClient === null) {
+  private get channel() {
+    const { channel } = global.testConnection;
+    if (channel === null) {
       throw new Error("Client is not connected. Did you call init?");
     }
-    return global.testClient!;
+    return channel;
   }
 
-  private prepareContext<Ctx extends EvalContext>(context?: Ctx): EvalContext {
+  private async prepareContext<Ctx extends EvalContext>(
+    context?: Ctx
+  ): Promise<EvalContext> {
     const ctx: EvalContext = {};
     if (context) {
-      Object.keys(context).forEach((key) => {
-        ctx[key] = serializeSkOjects(context[key]);
-      });
+      for (const key of Object.keys(context)) {
+        ctx[key] = await serializeSkOjects(context[key]);
+      }
     }
     return ctx;
   }
-
-  private handleImageResponse<R = SkImage>(
-    body: string,
-    json?: boolean
-  ): Promise<R> {
-    // Guard against an eval that never replies (e.g. the device threw before it
-    // could post a result back). Without this the host would await forever and
-    // a single failing case would stall the whole serial suite.
-    const EVAL_TIMEOUT_MS = 30 * 1000;
-    return new Promise((resolve, reject) => {
-      const onMessage = (raw: Buffer) => {
-        clearTimeout(timeout);
-        // The device reports a thrown error as { $$error: message } (always
-        // JSON, even for image responses) so the matching test can `.rejects`
-        // instead of hanging or trying to decode an error string as a PNG.
-        const error = parseErrorResponse(raw);
-        if (error !== null) {
-          reject(new Error(error));
-          return;
-        }
-        resolve(json ? JSON.parse(raw.toString()) : this.decodeImage(raw));
-      };
-      const timeout = setTimeout(() => {
-        this.client.off("message", onMessage);
-        reject(
-          new Error(
-            `eval timed out after ${EVAL_TIMEOUT_MS}ms without a response from the device`
-          )
-        );
-      }, EVAL_TIMEOUT_MS);
-      this.client.once("message", onMessage);
-      this.client.send(body);
-    });
-  }
-
-  private decodeImage(raw: Buffer) {
-    const Skia = global.SkiaApi;
-    const data = Skia.Data.fromBytes(new Uint8Array(raw));
-    const image = Skia.Image.MakeImageFromEncoded(data);
-    if (image === null) {
-      throw new Error("Unable to decode image");
-    }
-    return image;
-  }
 }
+
+// The app sends every image as a base64 PNG.
+const decodeImage = (base64: string) => {
+  const Skia = global.SkiaApi;
+  const image = Skia.Image.MakeFromEncoded(Skia.Data.fromBase64(base64));
+  if (image === null) {
+    throw new Error("Unable to decode image");
+  }
+  return image;
+};

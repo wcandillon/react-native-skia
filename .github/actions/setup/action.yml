@@ -46,8 +46,19 @@ runs:
       env:
         YARN_ENABLE_GLOBAL_CACHE: ${{ runner.environment == 'self-hosted' }}
 
-    # Copies the Skia, Graphite and Dawn headers. The prebuilt binaries are
-    # resolved from node_modules by the podspec and build.gradle.
+    # Cache only the small header ZIP, using the same location as Apple downloads.
+    # Preparation still verifies its checksum, including on node_modules hits.
+    - name: Cache Dawn header archive
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/Library/Caches/react-native-skia/*/*/dawn-headers.zip
+          ~/.cache/react-native-skia/*/*/dawn-headers.zip
+          ~/AppData/Local/react-native-skia/*/*/dawn-headers.zip
+        key: ${{ runner.os }}-${{ runner.arch }}-dawn-headers-${{ hashFiles('packages/skia/binaries.json') }}
+
+    # Copies Skia and Graphite from the checkout. Missing Dawn headers are
+    # prepared from the pinned release, including on node_modules cache hits.
     - name: Copy Skia headers
       working-directory: packages/skia
       run: yarn copy-skia-headers

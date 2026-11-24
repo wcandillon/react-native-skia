@@ -14,7 +14,7 @@ import {
   useCanvasSize,
 } from "react-native-skia";
 import type { VideoPlayer } from "react-native-webgpu";
-import { createVideoPlayer, importDevice } from "react-native-webgpu";
+import { createTestVideoPlayer, importDevice } from "react-native-webgpu";
 
 const VIDEO_URL =
   "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4";
@@ -148,7 +148,7 @@ const Frame = ({ image, width, height, filter }: FrameProps) => {
 // is published through a shared value. Tap the video to pause and resume, and
 // pick a Skia effect in the bar at the bottom.
 export const Video = () => {
-  const { ref, size } = useCanvasSize();
+  const { size, onLayout } = useCanvasSize();
   const image = useSharedValue<SkImage | null>(null);
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const [paused, setPaused] = useState(false);
@@ -156,7 +156,7 @@ export const Video = () => {
 
   useEffect(() => {
     const device = importDevice(Skia.getNativeDevice());
-    const video = createVideoPlayer(VIDEO_URL);
+    const video = createTestVideoPlayer(VIDEO_URL);
     setPlayer(video);
     let texture: GPUTexture | null = null;
     let frameId = 0;
@@ -190,7 +190,7 @@ export const Video = () => {
         frame.release();
         // A new image is what makes the canvas redraw
         const previous = image.value;
-        image.value = Skia.Image.MakeImageFromGPUTexture(texture);
+        image.value = Skia.Image.MakeFromGPUTexture(texture);
         previous?.dispose();
       }
       frameId = requestAnimationFrame(render);
@@ -223,7 +223,7 @@ export const Video = () => {
   return (
     <View style={styles.container}>
       <Pressable style={StyleSheet.absoluteFill} onPress={toggle}>
-        <Canvas ref={ref} style={StyleSheet.absoluteFill}>
+        <Canvas onLayout={onLayout} style={StyleSheet.absoluteFill}>
           <Frame
             image={image}
             width={size.width}
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1a1a1a",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
   },

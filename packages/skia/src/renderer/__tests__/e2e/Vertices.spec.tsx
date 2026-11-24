@@ -14,7 +14,24 @@ describe("Vertices", () => {
         <Vertices vertices={vertices} colors={colors} />
       </>
     );
-    checkImage(img, "snapshots/vertices/vertices.png");
+    await checkImage(img, "snapshots/vertices/vertices.png");
+  });
+  it("should draw a single triangle from a Float32Array", async () => {
+    const { Skia } = importSkia();
+    // Interleaved x, y pairs
+    const vertices = new Float32Array([64, 0, 128, 256, 0, 256]);
+    // Non-string colors: Float32Array, number, and number[]
+    const colors = [
+      Skia.Color("#61dafb"),
+      0xfffb61da,
+      [0xda / 255, 0xfb / 255, 0x61 / 255, 1],
+    ];
+    const img = await surface.draw(
+      <>
+        <Vertices vertices={vertices} colors={colors} />
+      </>
+    );
+    await checkImage(img, "snapshots/vertices/vertices.png");
   });
   it("should draw a single triangle strip", async () => {
     const { vec } = importSkia();
@@ -25,6 +42,6 @@ describe("Vertices", () => {
         <Vertices vertices={vertices} colors={colors} mode="triangleStrip" />
       </>
     );
-    checkImage(img, "snapshots/vertices/strip.png");
+    await checkImage(img, "snapshots/vertices/strip.png");
   });
 });

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useMemo } from "react";
 import { Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import type { SkPicture } from "react-native-skia";
-import { Canvas, Rect, SkiaPictureView, Skia, useSVG } from "react-native-skia";
+import { Canvas, Picture, Rect, Skia, useSVG } from "react-native-skia";
 
 import { Octocat } from "./SvgIcons/OctocatIcon";
 import { StackExchange } from "./SvgIcons/StackExchangeIcon";
@@ -68,7 +68,11 @@ interface IconProps {
 const style = { width: 48, height: 48 };
 
 const Icon = ({ icon }: IconProps) => {
-  return <SkiaPictureView picture={icon} style={style} />;
+  return (
+    <Canvas style={style}>
+      <Picture picture={icon} />
+    </Canvas>
+  );
 };
 
 type Props = { color: string };

@@ -32,7 +32,7 @@ export interface ImageFactory {
    * @returns If the encoded format is not supported, or subset is outside of the bounds of the decoded
    *  image, nullptr is returned.
    */
-  MakeImageFromEncoded: (encoded: SkData) => SkImage | null;
+  MakeFromEncoded: (encoded: SkData) => SkImage | null;
 
   /**
    * Web only. Creates an image from a `CanvasImageSource`: an
@@ -41,31 +41,28 @@ export interface ImageFactory {
    * On native platforms, camera and video frames are rendered into a texture
    * of the shared device by React Native WebGPU
    * (`queue.copyExternalImageToTexture()`), and the texture is wrapped with
-   * {@link MakeImageFromGPUTexture}. Calling this method there throws.
+   * {@link MakeFromGPUTexture}. Calling this method there throws.
    *
    * @param source The image source
    */
-  MakeImageFromNativeBuffer: (source: CanvasImageSource) => SkImage;
+  MakeFromNativeBuffer: (source: CanvasImageSource) => SkImage;
 
   /**
-   * Returns an image that will be a screenshot of the view represented by
-   * the view tag
-   * @param viewTag - The tag of the view to make an image from.
-   * @returns Returns a valid SkImage, if the view tag is invalid, nullptr is returned.
-   */
-  MakeImageFromViewTag: (viewTag: number) => Promise<SkImage | null>;
-
-  /**
-   * Returns an image with the given pixel data and format.
-   * Note that we will always make a copy of the pixel data, because of inconsistencies in
-   * behavior between GPU and CPU (i.e. the pixel data will be turned into a GPU texture and
-   * not modifiable after creation).
+   * Returns a raster (CPU) image with the given pixel data and format.
+   * The pixel data is always copied: the image is not modifiable after
+   * creation. Drawing the image uploads it on the first frame that draws
+   * it, once, shared by every canvas; call `makeTextureImage()` on it to
+   * upload it beforehand.
    *
    * @param info
    * @param data - bytes representing the pixel data.
    * @param bytesPerRow
    */
-  MakeImage(info: ImageInfo, data: SkData, bytesPerRow: number): SkImage | null;
+  MakeRaster(
+    info: ImageInfo,
+    data: SkData,
+    bytesPerRow: number
+  ): SkImage | null;
 
   /**
    * Creates an SkImage from a WebGPU texture, without copying it.
@@ -81,7 +78,7 @@ export interface ImageFactory {
    * @param texture - The GPUTexture (see {@link GPUTextureHandle})
    * @returns An SkImage sampling the texture, or throws if the texture is invalid
    */
-  MakeImageFromGPUTexture(texture: GPUTextureHandle): SkImage;
+  MakeFromGPUTexture(texture: GPUTextureHandle): SkImage;
 
   /**
    * Draws an SkImage into a new WebGPU texture on the shared device.

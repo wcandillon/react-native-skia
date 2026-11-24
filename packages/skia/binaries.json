@@ -1,0 +1,104 @@
+{
+  "version": "158.1.0",
+  "tag": "binaries-158.1.0",
+  "skia": "m158a",
+  "dawn": {
+    "commit": "1716e88cc9e58398fab5d4473f7f2e858667b677",
+    "repository": "https://dawn.googlesource.com/dawn.git",
+    "patches": [
+      "metal-platforms.patch",
+      "metal-suspend-submissions-in-background.patch",
+      "vulkan-fifo-three-images-android.patch"
+    ]
+  },
+  "assets": {
+    "skia-graphite-android-armeabi-v7a.zip": {
+      "sha256": "47781a5c9a8cadcacfd34ecc7ba4fb693720317ecf5a3222d06f2a8e2d68bfbf",
+      "size": 15722986
+    },
+    "dawn-android-armeabi-v7a.zip": {
+      "sha256": "2b57530193b024be85f285b6da30298afd53900c9280fb2ffdd46f008c3f3d1e",
+      "size": 4885803
+    },
+    "skia-graphite-android-arm64-v8a.zip": {
+      "sha256": "ea089e96d0f6ceab54d548086d59b16aa3eb4cb74b938e01615090d161d85682",
+      "size": 16819745
+    },
+    "dawn-android-arm64-v8a.zip": {
+      "sha256": "9d6ba71daeb9b10b0209d542a0579bbb55dcf9be88af1792aaa5681b92860b94",
+      "size": 5308117
+    },
+    "skia-graphite-android-x86.zip": {
+      "sha256": "2b3da6ede43dec15b4daaed779d98f5b86b445c4805db2b4a289460fc079a029",
+      "size": 17308398
+    },
+    "dawn-android-x86.zip": {
+      "sha256": "a2d86b4c796e41124cf12a455644dc668cab2d77c1d920892b8d8633d87c15de",
+      "size": 6066809
+    },
+    "skia-graphite-android-x86_64.zip": {
+      "sha256": "91c49f9174bd3d869cb633b3ddcfe8ba50e91cc20a7e3b41f99cda951d54386b",
+      "size": 16894623
+    },
+    "dawn-android-x86_64.zip": {
+      "sha256": "2dc9d121cd1d03b9d864daf42ea89363ac7aa9307194bfd624d13243ec744335",
+      "size": 5659211
+    },
+    "dawn-headers.zip": {
+      "sha256": "52306f91ada60f507924ae2b377423b4630ba2610f6921771026831d1dcd7ee6",
+      "size": 150497
+    },
+    "dawn-LICENSE.txt": {
+      "sha256": "0493f897193af1796d5054659f45ec7d4c5af648fa67a99f01d30e55cc805abc",
+      "size": 11829
+    },
+    "skia-graphite-apple-iphoneos.zip": {
+      "sha256": "73f4f5f26decc5406ecf51d49b8fa4f49e1d22fe01888921d060c7dda5df24a2",
+      "size": 13661198
+    },
+    "dawn-apple-iphoneos.zip": {
+      "sha256": "02447594afe473f138e8af0bca7797da5065cb47fd386e9b865e8979b8f56323",
+      "size": 5165717
+    },
+    "skia-graphite-apple-iphonesimulator.zip": {
+      "sha256": "a241b57f7bf5e3496e3886336593a3272427701346f1cbf3000309fd305e36b5",
+      "size": 27756601
+    },
+    "dawn-apple-iphonesimulator.zip": {
+      "sha256": "6dbd06127709c7bc2f291f624943386642c86507a10c51f978ccacbacd8b2073",
+      "size": 10355986
+    },
+    "skia-graphite-apple-maccatalyst.zip": {
+      "sha256": "7555f273222a6a53d14cea1111d1442fee0cfbaf61503f233678a37271509921",
+      "size": 28586272
+    },
+    "dawn-apple-maccatalyst.zip": {
+      "sha256": "2b7469f7634e751159f500bc75c71db3c019440cb74f3dbd79589d0e3cb491d8",
+      "size": 10682325
+    },
+    "skia-graphite-apple-appletvos.zip": {
+      "sha256": "9a76b0e38fac39a92decee00dc1827982b93c79c4e46fad5023cc8745af1a7ef",
+      "size": 13661376
+    },
+    "dawn-apple-appletvos.zip": {
+      "sha256": "a20dd2d2e7355588a576e49a8efaff00124ebb241e9c94600b66fcfaeeb88754",
+      "size": 5163794
+    },
+    "skia-graphite-apple-appletvsimulator.zip": {
+      "sha256": "f633d90ab9f4030183ec5da9c09e2b0415fb55e689e82825945dc8a46a233297",
+      "size": 27755222
+    },
+    "dawn-apple-appletvsimulator.zip": {
+      "sha256": "2d41261a7bd067c32c001fd39eadafa29c22e625f77cfba3f7ec22b110ae8b3a",
+      "size": 10352864
+    },
+    "skia-graphite-apple-macos.zip": {
+      "sha256": "fe3a7388c25e807774bac85b2b3526947bde8717beb4c6379b810e62185c602d",
+      "size": 28540342
+    },
+    "dawn-apple-macos.zip": {
+      "sha256": "79f72607b6793e299fa6668c3c589f96f90f581b28a7782b6688239607facb9b",
+      "size": 10596222
+    }
+  }
+}

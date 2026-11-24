@@ -23,26 +23,22 @@ import type {
   SkiaWebViewHandle,
 } from "../specs/NativeSkiaModule.web";
 
-import { SkiaViewNativeId } from "./SkiaViewNativeId";
 import { useSkiaWebRenderer } from "./SkiaWebRenderer";
 import type { Renderer, WebFrame } from "./SkiaWebRenderer";
 
-// The web has no Graphite: the view paints pictures on a WebGL canvas (with
-// context-loss recovery and the destroy-context-after-render mode). It shows
-// one of two kinds of content. The picture of a <Canvas> or a
-// <SkiaPictureView> is a whole frame: the latest one wins. The recordings
-// submitted through the view's context (SkiaGraphiteView) keep their native
-// semantics, presented in submission order and never dropped, with one
-// difference: the surface starts cleared on every frame, so a recording draws
-// the whole frame rather than a delta.
+// The web has no Graphite: the view paints pictures through the WebGL
+// context the page shares (see SkiaWebRenderer). It shows one of two kinds
+// of content. The picture of a <Canvas> is a whole frame: the latest one
+// wins. The recordings submitted through the view's context
+// (SkiaGraphiteView) keep their native semantics, presented in submission
+// order and never dropped, with one difference: the surface starts cleared on
+// every frame, so a recording draws the whole frame rather than a delta.
 
-export interface SkiaViewHandle extends SkiaWebViewHandle {
-  /** The canvas element, for Reanimated's measure(). */
-  readonly canvasRef: () => HTMLCanvasElement | null;
-}
+export type SkiaViewHandle = SkiaWebViewHandle;
 
 export interface SkiaViewProps extends ViewProps {
   ref?: React.Ref<SkiaViewHandle>;
+  /** @deprecated Does nothing: every view shares one WebGL context. */
   __destroyWebGLContextAfterRender?: boolean;
 }
 
@@ -87,6 +83,8 @@ class WebGraphiteRecording implements SkGraphiteRecording {
 interface RecordingTarget {
   getSize(): { width: number; height: number };
   submit(recording: WebGraphiteRecording): void;
+  /** Recordings submitted and not yet drawn. */
+  pendingFrames(): number;
 }
 
 class WebGraphiteContext implements SkGraphiteContext {
@@ -101,6 +99,10 @@ class WebGraphiteContext implements SkGraphiteContext {
 
   get height() {
     return this.target.getSize().height;
+  }
+
+  get pendingFrames() {
+    return this.target.pendingFrames();
   }
 
   beginRecording(): SkCanvas {
@@ -149,7 +151,7 @@ class WebGraphiteContext implements SkGraphiteContext {
 export const SkiaView = (props: SkiaViewProps) => {
   const { ref, onLayout } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // The picture of a <Canvas> or a <SkiaPictureView>: a whole frame.
+  // The picture of a <Canvas>: a whole frame.
   const pictureRef = useRef<SkPicture | null>(null);
   // Recordings submitted since the last frame, in order, and the frame on
   // screen, replayed when the surface is recreated.
@@ -160,11 +162,9 @@ export const SkiaView = (props: SkiaViewProps) => {
     () =>
       props.nativeID !== undefined
         ? Number(props.nativeID)
-        : SkiaViewNativeId.current++,
+        : (global.SkiaViewApi as ISkiaViewApiWeb).allocateNativeId(),
     [props.nativeID]
   );
-
-  const isStatic = props.__destroyWebGLContextAfterRender === true;
 
   // Presents the recordings submitted since the last frame. A frame that
   // cannot be painted yet (unmeasured canvas, lost context) stays queued for
@@ -198,7 +198,7 @@ export const SkiaView = (props: SkiaViewProps) => {
     },
     [present]
   );
-  const rendererRef = useSkiaWebRenderer(canvasRef, isStatic, {
+  const rendererRef = useSkiaWebRenderer(canvasRef, {
     paint,
     onLayout,
   });
@@ -243,6 +243,8 @@ export const SkiaView = (props: SkiaViewProps) => {
     [redraw]
   );
 
+  const pendingFrames = useCallback(() => queueRef.current.length, []);
+
   const getSize = useCallback(
     () => ({
       width: canvasRef.current?.clientWidth || 0,
@@ -252,8 +254,9 @@ export const SkiaView = (props: SkiaViewProps) => {
   );
 
   const getContext = useCallback(
-    (): SkGraphiteContext => new WebGraphiteContext({ getSize, submit }),
-    [getSize, submit]
+    (): SkGraphiteContext =>
+      new WebGraphiteContext({ getSize, submit, pendingFrames }),
+    [getSize, submit, pendingFrames]
   );
 
   const makeImageSnapshot = useCallback(
@@ -337,9 +340,6 @@ export const SkiaView = (props: SkiaViewProps) => {
       makeImageSnapshot,
       measure,
       measureInWindow,
-      get canvasRef() {
-        return () => canvasRef.current;
-      },
     }),
     [
       setPicture,
@@ -394,16 +394,14 @@ export const SkiaView = (props: SkiaViewProps) => {
     ref: _ref,
     onLayout: _onLayout,
     nativeID: _nativeID,
-    __destroyWebGLContextAfterRender: _isStatic,
+    // Deprecated, kept out of the DOM.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    __destroyWebGLContextAfterRender: _destroyWebGLContextAfterRender,
     ...viewProps
   } = props;
   return (
     <Platform.View nativeID={`${nativeId}`} {...viewProps}>
       <canvas
-        // A canvas element is bound to one context kind for life (WebGL for
-        // the live renderer, 2D for the static one), so switching renderers
-        // needs a fresh element.
-        key={isStatic ? "static" : "webgl"}
         ref={canvasRef}
         style={{ display: "block", width: "100%", height: "100%" }}
       />

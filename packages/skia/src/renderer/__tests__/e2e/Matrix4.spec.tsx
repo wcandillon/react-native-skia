@@ -124,7 +124,7 @@ describe("Matrix4", () => {
         <Rect rect={rct} color="cyan" opacity={0.5} matrix={m3} />
       </Group>
     );
-    checkImage(image, "snapshots/matrix4/perspective.png");
+    await checkImage(image, "snapshots/matrix4/perspective.png");
   });
   it("Should do a perspective transformation (2)", async () => {
     const { width, height } = surface;
@@ -151,7 +151,7 @@ describe("Matrix4", () => {
         />
       </Group>
     );
-    checkImage(image, "snapshots/matrix4/perspective.png");
+    await checkImage(image, "snapshots/matrix4/perspective.png");
   });
   it("Should do a perspective transformation (4)", async () => {
     const { width, height } = surface;
@@ -172,7 +172,7 @@ describe("Matrix4", () => {
         <Rect rect={rct} color="cyan" opacity={0.5} matrix={matrix} />
       </Group>
     );
-    checkImage(image, "snapshots/matrix4/perspective.png");
+    await checkImage(image, "snapshots/matrix4/perspective.png");
   });
   it("Should do a perspective transformation (5)", async () => {
     const { width, height } = surface;
@@ -193,7 +193,7 @@ describe("Matrix4", () => {
         <Rect rect={rct} color="cyan" opacity={0.5} matrix={matrix} />
       </Group>
     );
-    checkImage(image, "snapshots/matrix4/perspective.png");
+    await checkImage(image, "snapshots/matrix4/perspective.png");
   });
   it("concat() should accept 4x4 matrices (1)", async () => {
     const result = await surface.eval((Skia) => {

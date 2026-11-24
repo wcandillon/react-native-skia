@@ -27,13 +27,16 @@ export const ImageLoading = () => {
   });
   const loadImage = async () => {
     const data = await Skia.Data.fromURI("https://picsum.photos/200/300");
-    const image = Skia.Image.MakeImageFromEncoded(data);
+    const image = Skia.Image.MakeFromEncoded(data);
 
     setSkimage(image);
   };
   const updateImage = () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.Make(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(
+      skimage.width(),
+      skimage.height()
+    );
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }
@@ -59,7 +62,10 @@ export const ImageLoading = () => {
   };
   const saveImage = async () => {
     if (!skimage) return;
-    const offscreen = Skia.Surface.Make(skimage.width(), skimage.height());
+    const offscreen = Skia.Surface.MakeRaster(
+      skimage.width(),
+      skimage.height()
+    );
     if (!offscreen) {
       throw new Error("Couldn't load the image");
     }
@@ -73,7 +79,7 @@ export const ImageLoading = () => {
     let snapshot = offscreen.makeImageSnapshot();
 
     console.log("Step 3");
-    let imageBase64 = snapshot.encodeToBase64(ImageFormat.JPEG, 100);
+    let imageBase64 = await snapshot.encodeToBase64(ImageFormat.JPEG, 100);
     console.log("image encoded to base64", imageBase64.length);
     return imageBase64;
   };
@@ -82,7 +88,14 @@ export const ImageLoading = () => {
       <Button onPress={loadImage} title="1. Load Image" />
       <Button onPress={updateImage} title="2. Update Image" />
       <Button onPress={saveImage} title="3. Save Image" />
-      <Canvas testID="image-loading-canvas" onSize={size} style={{ flex: 1 }}>
+      <Canvas
+        testID="image-loading-canvas"
+        style={{ flex: 1 }}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          size.value = { width, height };
+        }}
+      >
         <Image image={skimage} rect={rect} />
       </Canvas>
     </View>

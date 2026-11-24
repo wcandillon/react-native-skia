@@ -95,81 +95,68 @@ export interface SkImage extends SkJSIInstance<"Image"> {
     localMatrix?: SkMatrix
   ): SkShader;
 
-  /** Encodes Image pixels, returning result as UInt8Array. Returns existing
-     encoded data if present; otherwise, SkImage is encoded with
-     SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
-     SkImage.
-
-    Returns nullptr if existing encoded data is missing or invalid, and
-    encoding fails.
-
-    @param fmt - PNG is the default value.
-    @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
-
-    @return  Uint8Array with data
-  */
-  encodeToBytes(fmt?: ImageFormat, quality?: number): Uint8Array;
-
-  /** Encodes Image pixels, returning result as a base64 encoded string. Returns existing
-     encoded data if present; otherwise, SkImage is encoded with
-     SkEncodedImageFormat::kPNG. Skia must be built with SK_ENCODE_PNG to encode
-     SkImage.
-
-    Returns nullptr if existing encoded data is missing or invalid, and
-    encoding fails.
-
-    @param fmt - PNG is the default value.
-    @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
-
-    @return  base64 encoded string of data
-  */
-  encodeToBase64(fmt?: ImageFormat, quality?: number): string;
-
-  /** Read Image pixels
+  /**
+   * Resolves to the pixels of the image encoded in `fmt` (PNG by default),
+   * as a Uint8Array. A GPU image is read back first; the encoding runs on
+   * a background thread. Returns existing encoded data if present.
    *
-   * On a GPU image, only the requested rectangle is read back from the GPU,
-   * and the call waits for it. To read back without blocking, call
-   * {@link makeRasterImage} first.
+   * Rejects when the image cannot be read back or encoded.
+   *
+   * @param fmt - PNG is the default value.
+   * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
+   */
+  encodeToBytes(fmt?: ImageFormat, quality?: number): Promise<Uint8Array>;
+
+  /**
+   * Resolves to the pixels of the image encoded in `fmt` (PNG by default),
+   * as a base64 string. A GPU image is read back first; the encoding runs
+   * on a background thread. Returns existing encoded data if present.
+   *
+   * Rejects when the image cannot be read back or encoded.
+   *
+   * @param fmt - PNG is the default value.
+   * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
+   */
+  encodeToBase64(fmt?: ImageFormat, quality?: number): Promise<string>;
+
+  /**
+   * Resolves to the pixels of the image, converted to `imageInfo` (the
+   * image's own by default): a Float32Array for an F32 color type, else a
+   * Uint8Array; to null when nothing could be read. On a GPU image, only
+   * the requested rectangle is read back; the part of the rectangle
+   * outside the image stays zero.
    *
    * @param srcX - optional x-axis upper left corner of the rectangle to read from
    * @param srcY - optional y-axis upper left corner of the rectangle to read from
    * @param imageInfo - optional describes the pixel format and dimensions of the data to read into
-   * @return Float32Array or Uint8Array with data or null if the read failed.
    */
   readPixels(
     srcX?: number,
     srcY?: number,
     imageInfo?: ImageInfo
-  ): Float32Array | Uint8Array | null;
+  ): Promise<Float32Array | Uint8Array | null>;
 
   /**
-   * Returns raster image or lazy image. Copies SkImage backed by GPU texture
-   * into CPU memory if needed, waiting for the GPU. Returns original SkImage
-   * if decoded in raster bitmap, or if encoded in a stream.
-   * Returns null if the conversion fails.
+   * Resolves to a CPU image: a GPU image is read back from the GPU, an
+   * encoded image is decoded on a background thread, and a raster image
+   * resolves to itself. Rejects when the readback fails.
    *
-   * This is the synchronous counterpart of {@link makeRasterImage}, for
-   * worklets and scripts; on the JS thread, prefer `makeRasterImage()`.
-   */
-  makeNonTextureImage(): SkImage | null;
-
-  /**
-   * Resolves to a CPU image, without blocking the calling thread: a GPU
-   * image is read back from the GPU, an encoded image is decoded on a
-   * background thread, and a raster image resolves to itself.
-   *
-   * Encoding or reading the pixels of the result is then a CPU operation.
-   * The promise resolves on the JS thread: call it from there, not from a
-   * worklet (see {@link makeNonTextureImage}).
+   * Readbacks are asynchronous, as the GPU is: there is no synchronous
+   * counterpart. The promise settles on the runtime that called: the React
+   * Native runtime, the Reanimated UI runtime, or a worklet runtime of your
+   * own (which polls for the result through its own setTimeout while it
+   * waits).
    */
   makeRasterImage(): Promise<SkImage>;
 
   /**
    * Returns a GPU image: the image is uploaded now, on the calling thread,
    * and every canvas draws it afterwards without a copy. A raster image
-   * drawn directly is uploaded once per canvas instead, and an encoded
-   * image is decoded first. Returns the image itself when it already is a
-   * GPU image. Throws if the upload fails.
+   * drawn directly is uploaded on the first frame that draws it instead,
+   * once, shared by every canvas, and held in a cache for as long as it is
+   * drawn;
+   * an encoded image is decoded first. Returns the image itself when it
+   * already is a GPU image. Throws if the upload fails.
    *
    * Native only: on the Web, a texture belongs to the canvas that created
    * it, so the image is returned as is.

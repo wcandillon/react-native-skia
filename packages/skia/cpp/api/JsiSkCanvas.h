@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,12 +21,14 @@
 #include "JsiSkRRect.h"
 #include "JsiSkRSXform.h"
 #include "JsiSkSVG.h"
+#include "JsiSkShapeBlob.h"
 #include "JsiSkTextBlob.h"
 #include "JsiSkVertices.h"
 
 #include "utils/RNSkTypedArray.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkAtlas.h"
 
 #include <jsi/jsi.h>
 
@@ -51,15 +54,17 @@ class JsiSkCanvas : public JsiSkNativeObject<JsiSkCanvas> {
 public:
   static constexpr const char *CLASS_NAME = "Canvas";
 
-  void drawPaint(std::shared_ptr<SkPaint> paint) { _canvas->drawPaint(*paint); }
+  void drawPaint(std::shared_ptr<SkPaint> paint) {
+    getCanvas()->drawPaint(*paint);
+  }
 
   void drawLine(double x1, double y1, double x2, double y2,
                 std::shared_ptr<SkPaint> paint) {
-    _canvas->drawLine(x1, y1, x2, y2, *paint);
+    getCanvas()->drawLine(x1, y1, x2, y2, *paint);
   }
 
   void drawRect(std::shared_ptr<SkRect> rect, std::shared_ptr<SkPaint> paint) {
-    _canvas->drawRect(*rect, *paint);
+    getCanvas()->drawRect(*rect, *paint);
   }
 
   // The drawImage* variants stay raw: they dispatch on exact argument counts
@@ -69,10 +74,10 @@ public:
     auto x = arguments[1].asNumber();
     auto y = arguments[2].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 4) {
+    if (count >= 4 && !arguments[3].isNull() && !arguments[3].isUndefined()) {
       paint = JsiSkPaint::fromValue(runtime, arguments[3]);
     }
-    _canvas->drawImage(image, x, y, SkSamplingOptions(), paint.get());
+    getCanvas()->drawImage(image, x, y, SkSamplingOptions(), paint.get());
     return jsi::Value::undefined();
   }
 
@@ -82,9 +87,10 @@ public:
     auto dest = JsiSkRect::fromValue(runtime, arguments[2]);
     auto paint = JsiSkPaint::fromValue(runtime, arguments[3]);
     auto fastSample = count >= 5 && arguments[4].getBool();
-    _canvas->drawImageRect(image, *src, *dest, SkSamplingOptions(), paint.get(),
-                           fastSample ? SkCanvas::kFast_SrcRectConstraint
-                                      : SkCanvas::kStrict_SrcRectConstraint);
+    getCanvas()->drawImageRect(
+        image, *src, *dest, SkSamplingOptions(), paint.get(),
+        fastSample ? SkCanvas::kFast_SrcRectConstraint
+                   : SkCanvas::kStrict_SrcRectConstraint);
     return jsi::Value::undefined();
   }
 
@@ -95,12 +101,10 @@ public:
     float B = arguments[3].asNumber();
     float C = arguments[4].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 6) {
-      if (!arguments[5].isNull()) {
-        paint = JsiSkPaint::fromValue(runtime, arguments[5]);
-      }
+    if (count >= 6 && !arguments[5].isNull() && !arguments[5].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[5]);
     }
-    _canvas->drawImage(image, x, y, SkSamplingOptions({B, C}), paint.get());
+    getCanvas()->drawImage(image, x, y, SkSamplingOptions({B, C}), paint.get());
     return jsi::Value::undefined();
   }
 
@@ -111,12 +115,10 @@ public:
     auto fm = (SkFilterMode)arguments[3].asNumber();
     auto mm = (SkMipmapMode)arguments[4].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 6) {
-      if (!arguments[5].isNull()) {
-        paint = JsiSkPaint::fromValue(runtime, arguments[5]);
-      }
+    if (count >= 6 && !arguments[5].isNull() && !arguments[5].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[5]);
     }
-    _canvas->drawImage(image, x, y, SkSamplingOptions(fm, mm), paint.get());
+    getCanvas()->drawImage(image, x, y, SkSamplingOptions(fm, mm), paint.get());
     return jsi::Value::undefined();
   }
 
@@ -126,13 +128,11 @@ public:
     auto dest = JsiSkRect::fromValue(runtime, arguments[2]);
     auto fm = (SkFilterMode)arguments[3].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 5) {
-      if (!arguments[4].isNull()) {
-        paint = JsiSkPaint::fromValue(runtime, arguments[4]);
-      }
+    if (count >= 5 && !arguments[4].isNull() && !arguments[4].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[4]);
     }
-    _canvas->drawImageNine(image.get(), center->round(), *dest, fm,
-                           paint.get());
+    getCanvas()->drawImageNine(image.get(), center->round(), *dest, fm,
+                               paint.get());
     return jsi::Value::undefined();
   }
 
@@ -143,15 +143,14 @@ public:
     float B = arguments[3].asNumber();
     float C = arguments[4].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 6) {
-      if (!arguments[5].isNull()) {
-        paint = JsiSkPaint::fromValue(runtime, arguments[5]);
-      }
+    if (count >= 6 && !arguments[5].isNull() && !arguments[5].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[5]);
     }
     auto constraint =
         SkCanvas::kStrict_SrcRectConstraint; // TODO: get from caller
-    _canvas->drawImageRect(image.get(), *src, *dest, SkSamplingOptions({B, C}),
-                           paint.get(), constraint);
+    getCanvas()->drawImageRect(image.get(), *src, *dest,
+                               SkSamplingOptions({B, C}), paint.get(),
+                               constraint);
     return jsi::Value::undefined();
   }
 
@@ -162,65 +161,63 @@ public:
     auto filter = (SkFilterMode)arguments[3].asNumber();
     auto mipmap = (SkMipmapMode)arguments[4].asNumber();
     std::shared_ptr<SkPaint> paint;
-    if (count == 6) {
-      if (!arguments[5].isNull()) {
-        paint = JsiSkPaint::fromValue(runtime, arguments[5]);
-      }
+    if (count >= 6 && !arguments[5].isNull() && !arguments[5].isUndefined()) {
+      paint = JsiSkPaint::fromValue(runtime, arguments[5]);
     }
     auto constraint = SkCanvas::kStrict_SrcRectConstraint;
-    _canvas->drawImageRect(image.get(), *src, *dest, {filter, mipmap},
-                           paint.get(), constraint);
+    getCanvas()->drawImageRect(image.get(), *src, *dest, {filter, mipmap},
+                               paint.get(), constraint);
     return jsi::Value::undefined();
   }
 
   void drawCircle(double cx, double cy, double radius,
                   std::shared_ptr<SkPaint> paint) {
-    _canvas->drawCircle(cx, cy, radius, *paint);
+    getCanvas()->drawCircle(cx, cy, radius, *paint);
   }
 
   void drawArc(std::shared_ptr<SkRect> oval, double startAngle,
                double sweepAngle, bool useCenter,
                std::shared_ptr<SkPaint> paint) {
-    _canvas->drawArc(*oval, startAngle, sweepAngle, useCenter, *paint);
+    getCanvas()->drawArc(*oval, startAngle, sweepAngle, useCenter, *paint);
   }
 
   void drawRRect(std::shared_ptr<SkRRect> rect,
                  std::shared_ptr<SkPaint> paint) {
-    _canvas->drawRRect(*rect, *paint);
+    getCanvas()->drawRRect(*rect, *paint);
   }
 
   void drawDRRect(std::shared_ptr<SkRRect> outer,
                   std::shared_ptr<SkRRect> inner,
                   std::shared_ptr<SkPaint> paint) {
-    _canvas->drawDRRect(*outer, *inner, *paint);
+    getCanvas()->drawDRRect(*outer, *inner, *paint);
   }
 
   void drawOval(std::shared_ptr<SkRect> rect, std::shared_ptr<SkPaint> paint) {
-    _canvas->drawOval(*rect, *paint);
+    getCanvas()->drawOval(*rect, *paint);
   }
 
-  void restoreToCount(double c) { _canvas->restoreToCount(c); }
+  void restoreToCount(double c) { getCanvas()->restoreToCount(c); }
 
-  int getSaveCount() { return static_cast<int>(_canvas->getSaveCount()); }
+  int getSaveCount() { return static_cast<int>(getCanvas()->getSaveCount()); }
 
   std::shared_ptr<JsiSkMatrix> getTotalMatrix() {
     return std::make_shared<JsiSkMatrix>(getContext(),
-                                         _canvas->getTotalMatrix());
+                                         getCanvas()->getTotalMatrix());
   }
 
   void drawPoints(double pointMode, std::vector<SkPoint> points,
                   std::shared_ptr<SkPaint> paint) {
-    // Check if we have at least one point
     if (points.empty()) {
-      throw std::invalid_argument("Points array must not be empty");
+      return;
     }
     auto p = SkSpan(points.data(), points.size());
-    _canvas->drawPoints(static_cast<SkCanvas::PointMode>(pointMode), p, *paint);
+    getCanvas()->drawPoints(static_cast<SkCanvas::PointMode>(pointMode), p,
+                            *paint);
   }
 
   void drawVertices(sk_sp<SkVertices> vertices, double blendMode,
                     std::shared_ptr<SkPaint> paint) {
-    _canvas->drawVertices(vertices, toBlendMode(blendMode), *paint);
+    getCanvas()->drawVertices(vertices, toBlendMode(blendMode), *paint);
   }
 
   JSI_HOST_FUNCTION(drawPatch) {
@@ -290,27 +287,34 @@ public:
       paint = JsiSkPaint::fromValue(runtime, arguments[4]);
     }
     SkPaint defaultPaint;
-    _canvas->drawPatch(cubics.data(), colors.empty() ? nullptr : colors.data(),
-                       texs.empty() ? nullptr : texs.data(), blendMode,
-                       paint ? *paint : defaultPaint);
+    getCanvas()->drawPatch(cubics.data(),
+                           colors.empty() ? nullptr : colors.data(),
+                           texs.empty() ? nullptr : texs.data(), blendMode,
+                           paint ? *paint : defaultPaint);
     return jsi::Value::undefined();
   }
 
   void drawPath(std::shared_ptr<SkPathBuilder> path,
                 std::shared_ptr<SkPaint> paint) {
-    _canvas->drawPath(path->snapshot(), *paint);
+    getCanvas()->drawPath(path->snapshot(), *paint);
   }
 
   void drawText(std::string textVal, double x, double y,
                 std::shared_ptr<SkPaint> paint, std::shared_ptr<SkFont> font) {
     auto text = textVal.c_str();
-    _canvas->drawSimpleText(text, strlen(text), SkTextEncoding::kUTF8, x, y,
-                            *font, *paint);
+    getCanvas()->drawSimpleText(text, strlen(text), SkTextEncoding::kUTF8, x, y,
+                                *font, *paint);
   }
 
   void drawTextBlob(sk_sp<SkTextBlob> blob, double x, double y,
                     std::shared_ptr<SkPaint> paint) {
-    _canvas->drawTextBlob(blob, x, y, *paint);
+    getCanvas()->drawTextBlob(blob, x, y, *paint);
+  }
+
+  // One drawVertices call for every shape of the blob (see RNSkShapeBlob.h).
+  void drawShapes(std::shared_ptr<RNSkShapeBlob> blob,
+                  JsiOptional<std::shared_ptr<SkPaint>> paint) {
+    blob->draw(getCanvas(), paint.has_value() ? paint.value().get() : nullptr);
   }
 
   void drawGlyphs(std::vector<int> glyphIds, std::vector<SkPoint> positions,
@@ -332,7 +336,7 @@ public:
 
     auto g = SkSpan(glyphs.data(), glyphs.size());
     auto p = SkSpan(positions.data(), positions.size());
-    _canvas->drawGlyphs(g, p, origin, *font, *paint);
+    getCanvas()->drawGlyphs(g, p, origin, *font, *paint);
   }
 
   void drawSvg(sk_sp<SkSVGDOM> svgdom, JsiOptional<double> w,
@@ -340,69 +344,83 @@ public:
     if (w.has_value() && h.has_value()) {
       svgdom->setContainerSize(SkSize::Make(*w, *h));
     } else {
-      auto canvasSize = _canvas->getBaseLayerSize();
+      auto canvasSize = getCanvas()->getBaseLayerSize();
       svgdom->setContainerSize(SkSize::Make(canvasSize));
     }
-    svgdom->render(_canvas);
+    svgdom->render(getCanvas());
   }
 
   void clipPath(std::shared_ptr<SkPathBuilder> path, double op,
                 bool doAntiAlias) {
-    _canvas->clipPath(path->snapshot(), static_cast<SkClipOp>(op), doAntiAlias);
+    getCanvas()->clipPath(path->snapshot(), static_cast<SkClipOp>(op),
+                          doAntiAlias);
   }
 
   void clipRect(std::shared_ptr<SkRect> rect, double op, bool doAntiAlias) {
-    _canvas->clipRect(*rect, static_cast<SkClipOp>(op), doAntiAlias);
+    getCanvas()->clipRect(*rect, static_cast<SkClipOp>(op), doAntiAlias);
   }
 
   void clipRRect(std::shared_ptr<SkRRect> rrect, double op, bool doAntiAlias) {
-    _canvas->clipRRect(*rrect, static_cast<SkClipOp>(op), doAntiAlias);
+    getCanvas()->clipRRect(*rrect, static_cast<SkClipOp>(op), doAntiAlias);
   }
 
-  int save() { return _canvas->save(); }
+  int save() { return getCanvas()->save(); }
 
   JSI_HOST_FUNCTION(saveLayer) {
-    SkPaint *paint = (count >= 1 && !arguments[0].isUndefined())
-                         ? JsiSkPaint::fromValue(runtime, arguments[0]).get()
-                         : nullptr;
-    SkRect *bounds =
-        count >= 2 && !arguments[1].isNull() && !arguments[1].isUndefined()
-            ? JsiSkRect::fromValue(runtime, arguments[1]).get()
+    // Keep the wrapper smart pointers alive for the duration of the call:
+    // JsiSkRect::fromValue() (and, in principle, the others) may return a
+    // freshly allocated temporary when the argument is a plain JS object
+    // rather than a host object, so taking .get() from a temporary would
+    // leave a dangling pointer once the expression finishes evaluating.
+    std::shared_ptr<SkPaint> paintPtr =
+        (count >= 1 && !arguments[0].isNull() && !arguments[0].isUndefined())
+            ? JsiSkPaint::fromValue(runtime, arguments[0])
             : nullptr;
-    SkImageFilter *backdrop =
-        count >= 3 && !arguments[2].isNull() && !arguments[2].isUndefined()
-            ? JsiSkImageFilter::fromValue(runtime, arguments[2]).get()
+    std::shared_ptr<SkRect> boundsPtr =
+        (count >= 2 && !arguments[1].isNull() && !arguments[1].isUndefined())
+            ? JsiSkRect::fromValue(runtime, arguments[1])
             : nullptr;
-    SkCanvas::SaveLayerFlags flags = count >= 4 ? arguments[3].asNumber() : 0;
-    return jsi::Value(_canvas->saveLayer(
-        SkCanvas::SaveLayerRec(bounds, paint, backdrop, flags)));
+    sk_sp<SkImageFilter> backdropPtr =
+        (count >= 3 && !arguments[2].isNull() && !arguments[2].isUndefined())
+            ? JsiSkImageFilter::fromValue(runtime, arguments[2])
+            : nullptr;
+    SkCanvas::SaveLayerFlags flags =
+        count >= 4 && !arguments[3].isNull() && !arguments[3].isUndefined()
+            ? static_cast<SkCanvas::SaveLayerFlags>(arguments[3].asNumber())
+            : 0;
+    return jsi::Value(getCanvas()->saveLayer(SkCanvas::SaveLayerRec(
+        boundsPtr.get(), paintPtr.get(), backdropPtr.get(), flags)));
   }
 
-  void restore() { _canvas->restore(); }
+  void restore() { getCanvas()->restore(); }
 
   void rotate(double degrees, double rx, double ry) {
-    _canvas->rotate(degrees, rx, ry);
+    getCanvas()->rotate(degrees, rx, ry);
   }
 
-  void translate(double dx, double dy) { _canvas->translate(dx, dy); }
+  void translate(double dx, double dy) { getCanvas()->translate(dx, dy); }
 
-  void scale(double sx, double sy) { _canvas->scale(sx, sy); }
+  void scale(double sx, double sy) { getCanvas()->scale(sx, sy); }
 
-  void skew(double sx, double sy) { _canvas->skew(sx, sy); }
+  void skew(double sx, double sy) { getCanvas()->skew(sx, sy); }
 
   void drawColor(JsiColor cl, JsiOptional<double> mode) {
     if (mode.has_value()) {
-      _canvas->drawColor(cl, toBlendMode(*mode));
+      getCanvas()->drawColor(cl, toBlendMode(*mode));
     } else {
-      _canvas->drawColor(cl);
+      getCanvas()->drawColor(cl);
     }
   }
 
-  void clear(JsiColor cl) { _canvas->clear(cl); }
+  void clear(JsiColor cl) { getCanvas()->clear(cl); }
 
-  void concat(std::shared_ptr<SkMatrix> matrix) { _canvas->concat(*matrix); }
+  void concat(std::shared_ptr<SkMatrix> matrix) {
+    getCanvas()->concat(*matrix);
+  }
 
-  void drawPicture(sk_sp<SkPicture> picture) { _canvas->drawPicture(picture); }
+  void drawPicture(sk_sp<SkPicture> picture) {
+    getCanvas()->drawPicture(picture);
+  }
 
   JSI_HOST_FUNCTION(drawAtlas) {
     auto atlas = JsiSkImage::fromValue(runtime, arguments[0]);
@@ -439,7 +457,7 @@ public:
     }
 
     std::vector<SkColor> colors;
-    if (count > 5 && !arguments[5].isUndefined()) {
+    if (count >= 6 && !arguments[5].isNull() && !arguments[5].isUndefined()) {
       auto colorsArray = arguments[5].asObject(runtime).asArray(runtime);
       int colorsSize = static_cast<int>(colorsArray.size(runtime));
 
@@ -469,18 +487,24 @@ public:
       }
     }
     SkSamplingOptions sampling(SkFilterMode::kLinear);
-    if (count > 6) {
+    if (count >= 7 && !arguments[6].isNull() && !arguments[6].isUndefined()) {
       sampling = SamplingOptionsFromValue(runtime, arguments[6]);
     }
     auto x = SkSpan(xforms.data(), xforms.size());
     auto t = SkSpan(skRects.data(), skRects.size());
     auto c = SkSpan(colors.data(), colors.size());
-    _canvas->drawAtlas(atlas.get(), x, t, c, blendMode, sampling, nullptr,
-                       paint.get());
+    drawAtlasAsVertices(getCanvas(), atlas.get(), x, t, c, blendMode, sampling,
+                        paint.get());
 
     return jsi::Value::undefined();
   }
 
+  // Resolves to the pixels of the canvas under `imageInfo` at (srcX, srcY),
+  // like image.readPixels(); to null when nothing could be read. A Graphite
+  // canvas has no readback of its own: the canvas of a surface reads from a
+  // snapshot of the surface (a copy task on its recorder, submitted so that
+  // the texture can be read back). A canvas without an owning surface (a
+  // picture-recording canvas) has its pixels at hand, read right here.
   JSI_HOST_FUNCTION(readPixels) {
     auto srcX = static_cast<int>(arguments[0].asNumber());
     auto srcY = static_cast<int>(arguments[1].asNumber());
@@ -488,47 +512,24 @@ public:
     if (!info) {
       return jsi::Value::null();
     }
-    size_t bytesPerRow = 0;
-    if (count > 4 && !arguments[4].isUndefined()) {
-      bytesPerRow = static_cast<size_t>(arguments[4].asNumber());
-    } else {
-      bytesPerRow = info->minRowBytes();
-    }
-    auto dest =
-        count > 3
-            ? RNSkTypedArray::getTypedArray(runtime, arguments[3], *info)
-            : RNSkTypedArray::getTypedArray(runtime, jsi::Value::null(), *info);
-    if (!dest.isObject()) {
-      return jsi::Value::null();
-    }
-    jsi::ArrayBuffer buffer =
-        dest.asObject(runtime)
-            .getProperty(runtime, jsi::PropNameID::forAscii(runtime, "buffer"))
-            .asObject(runtime)
-            .getArrayBuffer(runtime);
-    auto bfrPtr = reinterpret_cast<void *>(buffer.data(runtime));
-
-    // A Graphite canvas has no readback of its own: the canvas of a surface
-    // reads from a snapshot of the surface (a copy task on its recorder,
-    // submitted so that the texture can be read back). A canvas without an
-    // owning surface (a picture-recording canvas) falls through to the raster
-    // read below.
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
       if (auto *recorder = _surface->recorder()) {
-        DawnContext::getInstance().submitRecording(recorder->snap().get());
+        DawnContext::getInstance().submitRecording(recorder);
       }
-      if (!JsiSkImage::readPixelsInto(snapshot, *info, bfrPtr, bytesPerRow,
-                                      srcX, srcY)) {
-        return jsi::Value::null();
-      }
-      return dest;
+      return JsiSkImage::readPixelsAsync(
+          runtime, getContext(), std::move(snapshot), *info, srcX, srcY);
     }
-
-    if (!_canvas->readPixels(*info, bfrPtr, bytesPerRow, srcX, srcY)) {
-      return jsi::Value::null();
+    auto canvas = getCanvas();
+    auto rowBytes = info->minRowBytes();
+    auto pixels = JsiSkImage::allocatePixels(*info, rowBytes);
+    if (pixels == nullptr) {
+      return JsiSkImage::unreadable(runtime, *info);
     }
-    return dest;
+    auto read = canvas->readPixels(*info, pixels->writable_data(), rowBytes,
+                                   srcX, srcY);
+    return RNSkAsync::settled(
+        runtime, JsiSkImage::settlePixels(read ? pixels : nullptr, *info));
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
@@ -567,6 +568,7 @@ public:
     installMethod(runtime, prototype, "drawText", &JsiSkCanvas::drawText);
     installMethod(runtime, prototype, "drawTextBlob",
                   &JsiSkCanvas::drawTextBlob);
+    installMethod(runtime, prototype, "drawShapes", &JsiSkCanvas::drawShapes);
     installMethod(runtime, prototype, "drawGlyphs", &JsiSkCanvas::drawGlyphs);
     installMethod(runtime, prototype, "drawSvg", &JsiSkCanvas::drawSvg);
     installMethod(runtime, prototype, "clipPath", &JsiSkCanvas::clipPath);
@@ -598,30 +600,46 @@ public:
     setCanvas(canvas);
   }
 
-  ~JsiSkCanvas() override {
-    // The canvas may hold the last reference to its surface, and the GC may
-    // finalize it on any thread: a Graphite surface has to be destroyed on
-    // the thread of its recorder (see Dispatcher).
-    if (_dispatcher) {
-      _dispatcher->release(std::move(_surface));
-    }
-  }
+  ~JsiSkCanvas() override { detach(); }
 
   void setCanvas(SkCanvas *canvas) { _canvas = canvas; }
-  SkCanvas *getCanvas() { return _canvas; }
 
-  // Optionally associate the canvas with its owning surface, keeping it alive
-  // as long as the canvas. This lets readPixels fall back to a surface
-  // snapshot on Graphite, which has no synchronous canvas readback. The
-  // dispatcher is the one of the thread the surface was created on.
+  // Every draw goes through here: once the owner of the SkCanvas has
+  // detached the wrapper (see detach), the call throws instead of drawing
+  // through a dangling pointer.
+  SkCanvas *getCanvas() {
+    if (_canvas == nullptr) {
+      throw std::runtime_error("Attempted to use a canvas whose surface was "
+                               "disposed or whose recording has finished.");
+    }
+    return _canvas;
+  }
+
+  // Associates the canvas with its owning surface, keeping it alive as long
+  // as the canvas. This lets readPixels fall back to a surface snapshot on
+  // Graphite, which has no synchronous canvas readback. The dispatcher is the
+  // one of the thread the surface was created on.
   void setSurface(sk_sp<SkSurface> surface,
                   std::shared_ptr<Dispatcher> dispatcher) {
     _surface = std::move(surface);
     _dispatcher = std::move(dispatcher);
   }
 
+  // Called by the owner of the SkCanvas (JsiSkSurface, JsiSkPictureRecorder,
+  // JsiSkGraphiteContext) once that canvas is gone, and by the destructor:
+  // forgets the pointer and lets go of the surface. The canvas may hold the
+  // last reference to its surface, and the GC may finalize it on any thread:
+  // a Graphite surface has to be destroyed on the thread of its recorder (see
+  // Dispatcher).
+  void detach() {
+    _canvas = nullptr;
+    if (_dispatcher) {
+      _dispatcher->release(std::move(_surface));
+    }
+  }
+
 private:
-  SkCanvas *_canvas;
+  SkCanvas *_canvas = nullptr;
   sk_sp<SkSurface> _surface;
   std::shared_ptr<Dispatcher> _dispatcher;
 };

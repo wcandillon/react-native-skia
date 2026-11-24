@@ -95,10 +95,10 @@ std::shared_ptr<T> getJsiObject(jsi::Runtime &runtime,
  * - `static constexpr const char *CLASS_NAME` — the public __typename__
  *   (e.g. "Rect"); also used as the boxing brand, so it must be unique.
  * - `static void definePrototype(jsi::Runtime&, jsi::Object& prototype)` —
- *   installs methods/getters. The shared pieces (`__typename__`, `__box()`
- *   and the boxing reconstructor) are installed by
- *   NativeObject::installPrototype; wrapping classes additionally call
- *   `installCommon(runtime, proto)` to install dispose().
+ *   installs methods/getters. The shared pieces (`__typename__` and the
+ *   boxing reconstructor) are installed by NativeObject::installPrototype;
+ *   wrapping classes additionally call `installCommon(runtime, proto)` to
+ *   install dispose().
  *
  * Most methods use typed C++ signatures installed with installMethod /
  * installGetter / installChainableMethod (arguments and results converted
@@ -331,8 +331,8 @@ public:
   }
 
   /**
-   * Installs dispose() on the prototype (the shared pieces — __typename__,
-   * __box() and the boxing reconstructor — are installed by
+   * Installs dispose() on the prototype (the shared pieces — __typename__ and
+   * the boxing reconstructor — are installed by
    * NativeObject::installPrototype). Must be called from definePrototype().
    */
   static void installCommon(jsi::Runtime &runtime, jsi::Object &prototype) {

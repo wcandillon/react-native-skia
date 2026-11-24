@@ -64,15 +64,11 @@ public:
   virtual void runOnMainThread(std::function<void()> func) = 0;
 
   /**
-   * Takes a screenshot of a given view represented by the view tag
-   * @param tag React view tag
-   */
-  virtual sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) = 0;
-
-  /**
-   * Returns an SkStream wrapping the require uri provided.
+   * Loads the resource at the uri on a thread of the platform's and hands
+   * `op` a stream over its bytes, or nullptr when it could not be loaded.
+   * `op` is called exactly once, on that thread.
    * @param sourceUri Uri for the resource to load as a string
-   * @op Operation to execute when the stream has successfuly been loaded.
+   * @param op Operation to execute with the stream.
    */
   virtual void performStreamOperation(
       const std::string &sourceUri,
@@ -117,21 +113,6 @@ public:
   }
 
   /**
-   * Creates an skImage containing the screenshot of a native view and its
-   * children.
-   * @param viewTag React viewtag
-   * @param callback Called when image is ready or with null if something
-   * failed.
-   */
-  virtual void
-  makeViewScreenshot(int viewTag,
-                     std::function<void(sk_sp<SkImage>)> callback) {
-    runOnMainThread([this, callback, viewTag]() {
-      callback(takeScreenshotFromViewTag(viewTag));
-    });
-  }
-
-  /**
    * Raises an exception on the platform. This function does not necessarily
    * throw an exception and stop execution, so it is important to stop execution
    * by returning after calling the function
@@ -142,9 +123,11 @@ public:
   }
 
   /**
-   * @return Current scale factor for pixels
+   * @return Current scale factor for pixels. A view records its frames with
+   * the density of its own layout when the platform gives one (see
+   * RNSkWindowSurface::setLayoutSize); this one is for everything else.
    */
-  float getPixelDensity() { return _pixelDensity; }
+  virtual float getPixelDensity() { return _pixelDensity; }
 
   /**
    * Whether views render in Display P3 rather than sRGB: true on Apple

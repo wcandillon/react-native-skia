@@ -2,13 +2,17 @@
 // RNSkGraphiteProducer.h (which the view headers include on their own).
 #include "RNSkGraphiteProducer.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
+#include <vector>
 
+#include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkThreadPool.h"
 #include "api/recorder/DrawingCtx.h"
 #include "api/recorder/RNRecorder.h"
+#include "rnsurface/FrameClock.h"
 #include "utils/RNSkLog.h"
 
 #include "include/core/SkCanvas.h"
@@ -16,7 +20,42 @@
 
 namespace RNSkia {
 
-RNSkGraphiteProducer::~RNSkGraphiteProducer() = default;
+namespace {
+
+/**
+ The render thread pool, set up on first use to trim the recorders of its
+ threads once GPU resources went away (see DawnContext::trimThreadRecorders):
+ a view torn down with its content, or textures the image cache let go of.
+ A thread that ran no job for RNSkThreadPool::kIdleDelay lets go of all it
+ can; one still recording, of what went unused that long.
+ */
+RNSkThreadPool &renderPool() {
+  static RNSkThreadPool &pool = []() -> RNSkThreadPool & {
+    auto &threads = RNSkThreadPool::getInstance();
+    threads.setIdleTask([](bool idle) {
+      // What went away with the request is older than this by the time the
+      // task runs, what the views still drawing use is not.
+      DawnContext::trimThreadRecorders(RNSkThreadPool::kIdleDelay / 2, idle);
+    });
+    ImageProvider::setReleaseListener(
+        []() { RNSkThreadPool::getInstance().requestIdleTask(); });
+    return threads;
+  }();
+  return pool;
+}
+
+} // namespace
+
+RNSkGraphiteProducer::RNSkGraphiteProducer(Scheduler::Policy policy)
+    : _scheduler(policy), _lane(renderPool().acquireLane()) {}
+
+RNSkGraphiteProducer::~RNSkGraphiteProducer() {
+  auto &pool = renderPool();
+  pool.releaseLane(_lane);
+  // The content goes away with the view: what the recorder of its render
+  // thread still caches for it is freed once the thread is idle.
+  pool.requestIdleTask();
+}
 
 void RNSkGraphiteProducer::drawContent(SkCanvas *canvas, Recorder *recorder,
                                        const sk_sp<SkPicture> &picture,
@@ -41,9 +80,17 @@ void RNSkGraphiteProducer::setTarget(
     retiredTarget = std::exchange(_target, std::move(target));
     // A frame still queued on the previous target is not coming through this
     // view anymore (the view unbound itself from it): do not wait for it.
-    _presentPending = false;
+    // The recording that waited behind it was made for that target too, and
+    // goes there: a target never drops a recording.
+    if (_waiting != nullptr && retiredTarget != nullptr) {
+      retiredTarget->submit(std::move(_waiting));
+    }
+    _ready = nullptr;
+    _waiting = nullptr;
+    _taken.reset();
     _dirty = true;
-    kickLocked();
+    applyLocked(_scheduler.onRecordingsForgotten(rnsurface::frameClockNow()));
+    requestRecordingLocked();
   }
 }
 
@@ -71,7 +118,7 @@ void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
     retiredPicture = std::exchange(_picture, std::move(picture));
     _dirty = dirty;
     if (dirty) {
-      kickLocked();
+      requestRecordingLocked();
     }
   }
   // Both are released here, outside the lock.
@@ -79,7 +126,21 @@ void RNSkGraphiteProducer::replaceContent(std::shared_ptr<Recorder> recorder,
 
 bool RNSkGraphiteProducer::hasContent() {
   std::lock_guard<std::mutex> lock(_mutex);
-  return _recorder != nullptr || _picture != nullptr;
+  return hasContentLocked();
+}
+
+bool RNSkGraphiteProducer::hasFrameComing() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _scheduler.isRecording() || _waiting != nullptr ||
+         (_dirty && _target != nullptr && hasContentLocked());
+}
+
+bool RNSkGraphiteProducer::hasContentLocked() const {
+  // A recording whose shared values have not been read yet is not content:
+  // its animated properties are unset, and replaying it would draw them wrong.
+  // The view keeps showing the previous frame until the mapper has read them,
+  // which schedules the frame that draws it (applyUpdates).
+  return (_recorder != nullptr && _recorder->isReady()) || _picture != nullptr;
 }
 
 bool RNSkGraphiteProducer::applyUpdatesTo(
@@ -89,8 +150,20 @@ bool RNSkGraphiteProducer::applyUpdatesTo(
     return false;
   }
   // The values are written into the commands by the next replay, which the
-  // caller schedules: the mapper never waits for a draw.
-  recorder->readUpdates(runtime, values);
+  // caller schedules: the mapper never waits for a draw. A value the
+  // recording cannot read (invalid for its prop) leaves its property unset
+  // and is reported here, once: an error escaping into the mapper would be
+  // fatal and take the other mappers of that frame down with it.
+  if (auto error = recorder->readUpdates(runtime, values)) {
+    const auto message = "React Native Skia: a shared value could not be "
+                         "read, its property stays unset: " +
+                         *error;
+    try {
+      RNSkLogger::errorToJavascriptConsole(runtime, message);
+    } catch (const std::exception &) {
+      RNSkLogger::logToConsole(message);
+    }
+  }
   return true;
 }
 
@@ -110,58 +183,139 @@ bool RNSkGraphiteProducer::applyUpdates(jsi::Runtime &runtime,
   }
   std::lock_guard<std::mutex> lock(_mutex);
   _dirty = true;
-  kickLocked();
+  requestRecordingLocked();
   return true;
 }
 
 bool RNSkGraphiteProducer::requestFrame() {
   std::lock_guard<std::mutex> lock(_mutex);
   _dirty = true;
-  kickLocked();
-  return _target != nullptr && (_recorder != nullptr || _picture != nullptr);
+  requestRecordingLocked();
+  return _target != nullptr && hasContentLocked();
 }
 
-void RNSkGraphiteProducer::onFramePresented() {
+void RNSkGraphiteProducer::setPresentMode(Scheduler::PresentMode presentMode) {
   std::lock_guard<std::mutex> lock(_mutex);
-  _presentPending = false;
-  if (_dirty) {
-    kickLocked();
-  }
+  _scheduler.setPresentMode(presentMode);
 }
 
-void RNSkGraphiteProducer::kickLocked() {
-  if (_inFlight || _presentPending || _target == nullptr ||
-      (_recorder == nullptr && _picture == nullptr)) {
+void RNSkGraphiteProducer::cancelFrames() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _scheduler.cancel();
+}
+
+bool RNSkGraphiteProducer::hasPendingAnimationFrame() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _scheduler.hasPendingAnimationFrame();
+}
+
+void RNSkGraphiteProducer::onFramesTaken(
+    const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  if (_ready == nullptr || std::find(recordings.begin(), recordings.end(),
+                                     _ready) == recordings.end()) {
     return;
   }
-  _inFlight = true;
-  std::weak_ptr<RNSkGraphiteProducer> weakThis = weak_from_this();
-  RNSkThreadPool::getInstance().post([weakThis]() {
-    if (auto self = weakThis.lock()) {
-      self->produce();
-    }
-  });
+  _taken = _ready;
+  _ready = nullptr;
+  applyLocked(_scheduler.onReadyFrameTaken(rnsurface::frameClockNow()));
+}
+
+void RNSkGraphiteProducer::onFramesReturned(
+    const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  auto taken = _taken.lock();
+  _taken.reset();
+  // A recording that became the ready one meanwhile keeps the slot: the one
+  // given back is on the target ahead of it, and goes first all the same.
+  if (taken == nullptr || _ready != nullptr ||
+      std::find(recordings.begin(), recordings.end(), taken) ==
+          recordings.end()) {
+    return;
+  }
+  _ready = std::move(taken);
+  _scheduler.onReadyFrameReturned();
+}
+
+void RNSkGraphiteProducer::requestRecordingLocked() {
+  if (_target == nullptr || !hasContentLocked()) {
+    return;
+  }
+  forgetUnpresentableLocked();
+  applyLocked(_scheduler.onRecordingRequested(rnsurface::frameClockNow()));
+}
+
+void RNSkGraphiteProducer::forgetUnpresentableLocked() {
+  // Not waited for: the target dropped it with every other recording made
+  // for that device (see RNSkGraphiteTarget::submit), or the view skips it.
+  if (_ready != nullptr && !_ready->isCurrent()) {
+    _ready = nullptr;
+    applyLocked(_scheduler.onReadyFrameTaken(rnsurface::frameClockNow()));
+  }
+}
+
+void RNSkGraphiteProducer::queueReadyLocked() {
+  // Submitted under the lock, so that the view finds the ready recording
+  // known by the time it takes it off the target (see onFramesTaken).
+  if (_target != nullptr && _target->submit(_ready)) {
+    return;
+  }
+  _ready = nullptr;
+  applyLocked(_scheduler.onReadyFrameTaken(rnsurface::frameClockNow()));
+}
+
+void RNSkGraphiteProducer::applyLocked(const Scheduler::Actions &actions) {
+  if (actions.queueRecording && _ready == nullptr && _waiting != nullptr) {
+    // The recording that waited for the window to take the one before it.
+    _ready = std::move(_waiting);
+    _waiting = nullptr;
+    queueReadyLocked();
+  }
+  if (actions.startRecording) {
+    std::weak_ptr<RNSkGraphiteProducer> weakThis = weak_from_this();
+    // Always on the same thread (see RNSkThreadPool::acquireLane), so that
+    // the frames of this view find a warm recorder.
+    renderPool().post(_lane, [weakThis]() {
+      if (auto self = weakThis.lock()) {
+        self->produce();
+      }
+    });
+  }
 }
 
 void RNSkGraphiteProducer::produce() {
+  // The duration of the job is one of the scheduler's inputs: what it
+  // measures against a frame of the display.
+  const auto startedAt = rnsurface::frameClockNow();
   std::shared_ptr<RNSkGraphiteTarget> target;
   std::shared_ptr<Recorder> recorder;
   sk_sp<SkPicture> picture;
   {
     std::lock_guard<std::mutex> lock(_mutex);
     target = _target;
-    recorder = _recorder;
-    picture = _picture;
+    // A commit may have replaced the content this job was started for with a
+    // recording that has not read its values yet: nothing to replay until it
+    // has (the read schedules the job), and the content stays dirty below.
+    if (hasContentLocked()) {
+      recorder = _recorder;
+      picture = _picture;
+    }
     _dirty = false;
   }
   std::shared_ptr<RNSkGraphiteRecording> recording;
   if (target && (recorder || picture)) {
     SkCanvas *canvas = nullptr;
-    try {
-      canvas = target->beginRecording();
-    } catch (const std::exception &) {
-      // No surface and no layout yet: the view asks for a frame once it
-      // has a size.
+    // Without a GPU nothing records, and Skia.gpu says why.
+    if (auto *context = DawnContext::tryGetInstance()) {
+      try {
+        // On the recorder of this pool thread, the same for every frame of
+        // the view: a view holds no recorder of its own (see
+        // RNSkGraphiteTarget::beginRecording).
+        canvas = target->beginRecording(context->getThreadRecorder());
+      } catch (const std::exception &e) {
+        RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
+                                 e.what());
+      }
     }
     if (canvas != nullptr) {
       try {
@@ -180,30 +334,40 @@ void RNSkGraphiteProducer::produce() {
     }
   }
   std::lock_guard<std::mutex> lock(_mutex);
-  _inFlight = false;
-  if (recording != nullptr) {
-    // Queued even if the view was bound to another target while this job
-    // ran: a target never drops a recording, a later one on the same
-    // recorder may depend on resources this one uploads. Submitted under the
-    // lock: a frame presented in between (a redraw replaying the last one)
-    // would otherwise clear the flag before the recording is even queued.
-    target->submit(std::move(recording));
-    if (target == _target) {
-      // The next job starts when this frame is on screen.
-      _presentPending = true;
-      return;
+  const auto now = rnsurface::frameClockNow();
+  if (recording != nullptr && target == _target) {
+    const auto actions = _scheduler.onRecordingFinished(now, now - startedAt,
+                                                        /* produced= */ true);
+    if (actions.queueRecording) {
+      _ready = std::move(recording);
+      queueReadyLocked();
+    } else {
+      // The window has not taken the recording before this one: it waits
+      // here, and no job starts meanwhile (see onFramesTaken).
+      _waiting = std::move(recording);
     }
-    // The frame went to the previous target; the new one has none yet.
+    // Values that arrived during the replay start the next job right away
+    // when the view runs a frame deeper than the window, once the window
+    // took the ready recording otherwise.
+    Scheduler::Actions next;
+    next.startRecording = actions.startRecording;
+    applyLocked(next);
+    return;
+  }
+  if (recording != nullptr) {
+    // Queued even though the view was bound to another target while this
+    // job ran: a target never drops a recording, a later one on the same
+    // recorder may depend on resources this one uploads. The new target has
+    // none yet.
+    target->submit(std::move(recording));
   }
   // Nothing was recorded for the current target: keep the content dirty so
   // that the next request (a surface, a resize) records it. A request that
-  // landed while this job ran (binding a new target is one) was only noted
-  // as dirty; it starts the next job now.
-  const bool requested = _dirty;
+  // landed while this job ran (binding a new target is one) was only noted;
+  // it starts the next job now.
   _dirty = true;
-  if (requested) {
-    kickLocked();
-  }
+  applyLocked(_scheduler.onRecordingFinished(now, now - startedAt,
+                                             /* produced= */ false));
 }
 
 void RNSkGraphiteProducer::renderInto(SkCanvas *canvas, float pixelDensity) {
@@ -211,8 +375,10 @@ void RNSkGraphiteProducer::renderInto(SkCanvas *canvas, float pixelDensity) {
   sk_sp<SkPicture> picture;
   {
     std::lock_guard<std::mutex> lock(_mutex);
-    recorder = _recorder;
-    picture = _picture;
+    if (hasContentLocked()) {
+      recorder = _recorder;
+      picture = _picture;
+    }
   }
   drawContent(canvas, recorder.get(), picture, pixelDensity);
 }

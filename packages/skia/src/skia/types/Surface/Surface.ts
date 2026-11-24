@@ -33,7 +33,7 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
    * its own surface (use a second surface for a feedback loop).
    * `makeImageSnapshot()` makes a copy instead.
    *
-   * On the Web, and for a CPU surface (`Skia.Surface.Make`), this is a
+   * On the Web, and for a CPU surface (`Skia.Surface.MakeRaster`), this is a
    * snapshot taken at call time.
    */
   asImage(): SkImage;

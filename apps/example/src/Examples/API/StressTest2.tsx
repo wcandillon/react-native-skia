@@ -6,11 +6,10 @@ import { Canvas, Image, Skia } from "react-native-skia";
 import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
-  runOnJS,
-  runOnUI,
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
+import { scheduleOnRN, scheduleOnUI } from "react-native-worklets";
 
 // This is the default configuration
 configureReanimatedLogger({
@@ -42,7 +41,7 @@ const usePictureAsTexture = (picture: SkPicture | null, size: SkSize) => {
       texture.value = null;
       return;
     }
-    runOnUI(drawPicture)(picture, texture, size);
+    scheduleOnUI(drawPicture, picture, texture, size);
   }, [picture, size, texture]);
   return texture;
 };
@@ -78,7 +77,7 @@ const createPictureWithGPUResources = (
     canvas.drawImage(content.value, 0, 0);
   }
   const result = rec.finishRecordingAsPicture();
-  runOnJS(setPicture)(result);
+  scheduleOnRN(setPicture, result);
 };
 
 export const StressTest2 = () => {
@@ -107,7 +106,7 @@ export const StressTest2 = () => {
 
     // Use setInterval to rapidly update the picture, triggering React re-renders
     intervalRef.current = setInterval(() => {
-      runOnUI(createPictureWithGPUResources)(content, setPicture);
+      scheduleOnUI(createPictureWithGPUResources, content, setPicture);
     }, 32) as unknown; // ~60fps to stress the system and trigger the race condition
   };
 

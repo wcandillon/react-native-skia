@@ -28,8 +28,10 @@ class JsiSkSurfaceFactory : public JsiSkNativeObject<JsiSkSurfaceFactory> {
 public:
   static constexpr const char *CLASS_NAME = "SurfaceFactory";
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkSurface>> Make(int width,
-                                                                   int height) {
+  // A CPU surface: its pixels live in memory, and its snapshots are raster
+  // images. MakeOffscreen() is the GPU counterpart.
+  std::variant<std::nullptr_t, std::shared_ptr<JsiSkSurface>>
+  MakeRaster(int width, int height) {
     auto imageInfo = SkImageInfo::MakeN32Premul(width, height);
     auto surface = SkSurfaces::Raster(imageInfo);
     if (surface == nullptr) {
@@ -63,7 +65,7 @@ public:
   }
 
   // Pointer-based texture interop with react-native-webgpu, the surface
-  // counterpart of JsiSkImageFactory::MakeImageFromGPUTexture: Skia draws
+  // counterpart of JsiSkImageFactory::MakeFromGPUTexture: Skia draws
   // directly into a texture created on the shared device, so WebGPU can
   // sample what Skia drew without any copy.
   JSI_HOST_FUNCTION(MakeFromGPUTexture) {
@@ -88,7 +90,8 @@ public:
   size_t getMemoryPressure() override { return 2048; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installMethod(runtime, prototype, "Make", &JsiSkSurfaceFactory::Make);
+    installMethod(runtime, prototype, "MakeRaster",
+                  &JsiSkSurfaceFactory::MakeRaster);
     installHostMethod(runtime, prototype, "MakeOffscreen",
                       &JsiSkSurfaceFactory::MakeOffscreen);
     installHostMethod(runtime, prototype, "MakeFromGPUTexture",

@@ -1,6 +1,6 @@
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import { createStackNavigator } from "../../components/Navigation";
 import { ImageLoading } from "../ImageLoading/ImageLoading";
 
 import type { Routes } from "./Routes";
@@ -21,10 +21,9 @@ import { ImageFilters } from "./ImageFilters";
 import { UseCanvas } from "./UseCanvas";
 import { FreezeExample } from "./Freeze";
 import { Touch } from "./Touch";
-import { PictureViewExample } from "./PictureView";
 import { OnLayoutDemo } from "./OnLayout";
-import { OnSize } from "./OnSize";
-import { Snapshot } from "./Snapshot";
+import { CanvasSize } from "./CanvasSize";
+import { CanvasResize } from "./CanvasResize";
 import { IconsExample } from "./Icons";
 import { FontMgr } from "./FontMgr";
 import { AnimatedImages } from "./AnimatedImages";
@@ -47,8 +46,9 @@ import { WebLayout } from "./WebLayout";
 import { WebGLContexts } from "./WebGLContexts";
 import { WebGLLifecycle } from "./WebGLLifecycle";
 import { WebMemory } from "./WebMemory";
+import { WebOffscreen } from "./WebOffscreen";
 
-const Stack = createNativeStackNavigator<Routes>();
+const Stack = createStackNavigator<Routes>();
 
 export const API = () => {
   return (
@@ -122,13 +122,6 @@ export const API = () => {
         component={GlyphBounds}
         options={{
           title: "🔠 Glyph Bounds",
-        }}
-      />
-      <Stack.Screen
-        name="Snapshot"
-        component={Snapshot}
-        options={{
-          title: "📺 View Snapshot",
         }}
       />
       <Stack.Screen
@@ -237,13 +230,6 @@ export const API = () => {
         }}
       />
       <Stack.Screen
-        name="PictureView"
-        component={PictureViewExample}
-        options={{
-          title: "🖼 Picture View",
-        }}
-      />
-      <Stack.Screen
         name="Checker"
         component={FreezeExample}
         options={{
@@ -265,10 +251,17 @@ export const API = () => {
         }}
       />
       <Stack.Screen
-        name="OnSize"
-        component={OnSize}
+        name="CanvasSize"
+        component={CanvasSize}
         options={{
-          title: "📏 OnSize",
+          title: "📏 Canvas Size",
+        }}
+      />
+      <Stack.Screen
+        name="CanvasResize"
+        component={CanvasResize}
+        options={{
+          title: "↔️ Canvas Resize",
         }}
       />
       <Stack.Screen
@@ -367,6 +360,13 @@ export const API = () => {
         component={WebMemory}
         options={{
           title: "💧 WASM Memory",
+        }}
+      />
+      <Stack.Screen
+        name="WebOffscreen"
+        component={WebOffscreen}
+        options={{
+          title: "🧱 Offscreen Surfaces",
         }}
       />
     </Stack.Navigator>

@@ -11,7 +11,7 @@ beforeAll(async () => {
 
 export const setupSkia = (width = 256, height = 256) => {
   expect(Skia).toBeDefined();
-  const surface = Skia.Surface.Make(width, height)!;
+  const surface = Skia.Surface.MakeRaster(width, height)!;
   expect(surface).toBeDefined();
   const canvas = surface.getCanvas();
   expect(canvas).toBeDefined();

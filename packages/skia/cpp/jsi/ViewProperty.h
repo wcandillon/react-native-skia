@@ -25,10 +25,10 @@ class ViewProperty {
 public:
   /**
    * Probes the JS value for the native objects a view can display (a picture
-   * or a recorder); anything else yields an empty property. Defined in
-   * ViewProperty.cpp: the recorder headers depend on the include order
-   * established by JsiSkApi.h, which this header (included by every platform
-   * view) must not pull in.
+   * or a recorder) and for booleans (view options, such as
+   * deviceIndependentFonts); anything else yields an empty property. Defined in
+   * RNSkManager.cpp so that this header (included by every platform view)
+   * does not pull in the recorder headers.
    */
   ViewProperty(jsi::Runtime &runtime, const jsi::Value &value);
 
@@ -44,9 +44,13 @@ public:
     return std::get<std::shared_ptr<RNSkia::Recorder>>(_value);
   }
 
+  bool isBool() { return std::holds_alternative<bool>(_value); }
+
+  bool getBool() { return std::get<bool>(_value); }
+
 private:
   std::variant<std::nullptr_t, sk_sp<SkPicture>,
-               std::shared_ptr<RNSkia::Recorder>>
+               std::shared_ptr<RNSkia::Recorder>, bool>
       _value = nullptr;
 };
 } // namespace RNJsi

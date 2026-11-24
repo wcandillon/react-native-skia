@@ -41,7 +41,7 @@ export const Label = ({ state, y, graphs, width, height }: LabelProps) => {
         [graph.data.maxPrice, graph.data.minPrice]
       )
     );
-  }, [y, state]);
+  });
   const subtitle = "+ $314,15";
   const titleX = useDerivedValue(() => {
     if (!titleFont) {
@@ -49,11 +49,11 @@ export const Label = ({ state, y, graphs, width, height }: LabelProps) => {
     }
     const graph = graphs[state.value.current];
     const title = format(graph.data.maxPrice);
-    const titleWidth = titleFont.getTextWidth(title);
+    const titleWidth = titleFont.measureText(title).width;
     return width / 2 - titleWidth / 2;
-  }, [state, titleFont]);
+  });
 
-  const subtitleWidth = subtitleFont?.getTextWidth(subtitle) ?? 0;
+  const subtitleWidth = subtitleFont?.measureText(subtitle).width ?? 0;
   return (
     <>
       <Text

@@ -1,8 +1,9 @@
 import React from "react";
 
-import { checkImage, docPath } from "../../../__tests__/setup";
+import { checkImage, docPath, itRunsE2eOnly } from "../../../__tests__/setup";
+import { AlphaType, ColorType } from "../../../skia/types";
 import { Circle } from "../../components";
-import { surface, importSkia } from "../setup";
+import { nameColor, surface, importSkia } from "../setup";
 
 describe("Offscreen Drawings", () => {
   it("Should use the canvas API to build an image", async () => {
@@ -25,9 +26,9 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/circle.png"));
+    await checkImage(image, docPath("offscreen/circle.png"));
   });
   it("Should transfer one surface image to another", async () => {
     const { width, height } = surface;
@@ -52,9 +53,9 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/circle.png"));
+    await checkImage(image, docPath("offscreen/circle.png"));
   });
 
   it("Should render to multiple offscreen surfaces at once (1)", async () => {
@@ -92,9 +93,9 @@ describe("Offscreen Drawings", () => {
     );
     const { Skia } = importSkia();
     const data = Skia.Data.fromBase64(raw);
-    const image = Skia.Image.MakeImageFromEncoded(data)!;
+    const image = Skia.Image.MakeFromEncoded(data)!;
     expect(data).toBeDefined();
-    checkImage(image, docPath("offscreen/multiple_circles.png"));
+    await checkImage(image, docPath("offscreen/multiple_circles.png"));
   });
   it("Should use the React API to build an image", async () => {
     const { width, height } = surface;
@@ -105,6 +106,22 @@ describe("Offscreen Drawings", () => {
       { width, height }
     );
     expect(image).not.toBeNull();
-    checkImage(image!, docPath("offscreen/circle.png"));
+    await checkImage(image!, docPath("offscreen/circle.png"));
   });
+});
+
+describe("isOnMainThread", () => {
+  itRunsE2eOnly(
+    "is true on the UI thread and false on the JS thread",
+    async () => {
+      const image = await surface.screen("IsOnMainThread");
+      const pixel = await image.readPixels(10, 10, {
+        width: 1,
+        height: 1,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Unpremul,
+      });
+      expect(nameColor(pixel)).toBe("cyan");
+    }
+  );
 });

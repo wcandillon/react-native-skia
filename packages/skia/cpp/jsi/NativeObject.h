@@ -66,7 +66,7 @@ template <typename Derived> class NativeObject;
  * ```
  */
 template <typename Derived>
-class NativeObject : public jsi::NativeState,
+class NativeObject : public NativeObjectBase,
                      public std::enable_shared_from_this<Derived> {
 public:
   // Marker type for SFINAE detection in JSIConverter
@@ -136,24 +136,13 @@ public:
       defineProperty.call(runtime, prototype, toStringTag, descriptor);
     }
 
-    // Install the shared pieces every native object needs for JS type
-    // detection and cross-runtime transfer (worklets):
-    // - `__typename__` (CLASS_NAME), used by JS type guards and as the
-    //   boxing brand
-    // - `__box()`, which wraps the object into a RNJsi::BoxedNativeObject
-    //   HostObject that worklets can pass across runtimes by reference
-    // See registerCustomSerializable in src/skia/SkiaWorkletSerialization.ts.
+    // `__typename__` (CLASS_NAME) is what the JS type guards read. Worklet
+    // serialization does not go through the prototype: the serializer
+    // recognizes and boxes native objects from their native state, see
+    // NativeObjectWorkletHelpers in jsi/BoxedNativeObject.h.
     prototype.setProperty(
         runtime, "__typename__",
         jsi::String::createFromUtf8(runtime, Derived::CLASS_NAME));
-
-    auto boxFunc = jsi::Function::createFromHostFunction(
-        runtime, jsi::PropNameID::forUtf8(runtime, "__box"), 0,
-        [](jsi::Runtime &rt, const jsi::Value &thisValue, const jsi::Value *,
-           size_t) -> jsi::Value {
-          return RNJsi::boxNativeObject(rt, thisValue);
-        });
-    prototype.setProperty(runtime, "__box", boxFunc);
 
     // Install a generic toJSON so JSON.stringify sees the data properties.
     // They live on the prototype (getters), and JSON.stringify only
@@ -186,7 +175,7 @@ public:
                 continue;
               }
               auto value = self.getProperty(rt, name.c_str());
-              // Skip methods (dispose, __box, ...) — JSON.stringify would
+              // Skip methods (dispose, ...) — JSON.stringify would
               // drop them anyway; skipping avoids serializing them at all.
               if (value.isObject() && value.asObject(rt).isFunction(rt)) {
                 continue;
@@ -296,20 +285,14 @@ public:
     // Store creation runtime for logging etc.
     instance->setCreationRuntime(&runtime);
 
-    // Create a new object
-    jsi::Object obj(runtime);
+    // Create the object with its prototype (installed on first use) in one
+    // step. Hermes builds it natively; setting the prototype afterwards cost a
+    // lookup of Object.setPrototypeOf and a call into JS for every wrapper.
+    auto &prototype = ensurePrototype(runtime);
+    auto obj = jsi::Object::create(runtime, jsi::Value(runtime, prototype));
 
     // Attach native state
     obj.setNativeState(runtime, instance);
-
-    // Install (on first use) and apply the prototype
-    {
-      auto &prototype = ensurePrototype(runtime);
-      auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
-      auto setPrototypeOf =
-          objectCtor.getPropertyAsFunction(runtime, "setPrototypeOf");
-      setPrototypeOf.call(runtime, obj, prototype);
-    }
 
     // Set memory pressure hint for GC
     auto pressure = instance->getMemoryPressure();
@@ -359,11 +342,10 @@ public:
   jsi::Runtime *getCreationRuntime() const { return _creationRuntime; }
 
 protected:
-  explicit NativeObject(const char *name) : _name(name) {}
+  explicit NativeObject(const char *name) : NativeObjectBase(name) {}
 
   virtual ~NativeObject() {}
 
-  const char *_name;
   jsi::Runtime *_creationRuntime = nullptr;
 
   // ============================================================
@@ -415,6 +397,25 @@ protected:
   }
 
   /**
+   * Defines `name` on the prototype as an enumerable, configurable accessor
+   * whose getter is `getterFunc` (Object.defineProperty).
+   */
+  static void defineGetter(jsi::Runtime &runtime, jsi::Object &prototype,
+                           const char *name, jsi::Function getterFunc) {
+    auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
+    auto defineProperty =
+        objectCtor.getPropertyAsFunction(runtime, "defineProperty");
+
+    jsi::Object descriptor(runtime);
+    descriptor.setProperty(runtime, "get", getterFunc);
+    descriptor.setProperty(runtime, "enumerable", true);
+    descriptor.setProperty(runtime, "configurable", true);
+
+    defineProperty.call(runtime, prototype,
+                        jsi::String::createFromUtf8(runtime, name), descriptor);
+  }
+
+  /**
    * Install a getter on the prototype.
    */
   template <typename ReturnType>
@@ -436,19 +437,27 @@ protected:
                 rt, std::move(result));
           }
         });
+    defineGetter(runtime, prototype, name, std::move(getterFunc));
+  }
 
-    // Use Object.defineProperty to create a proper getter
-    auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
-    auto defineProperty =
-        objectCtor.getPropertyAsFunction(runtime, "defineProperty");
-
-    jsi::Object descriptor(runtime);
-    descriptor.setProperty(runtime, "get", getterFunc);
-    descriptor.setProperty(runtime, "enumerable", true);
-    descriptor.setProperty(runtime, "configurable", true);
-
-    defineProperty.call(runtime, prototype,
-                        jsi::String::createFromUtf8(runtime, name), descriptor);
+  /**
+   * Install a getter whose native implementation builds the value itself
+   * from the calling jsi::Runtime (a plain object of several fields, for
+   * instance), where no JSIConverter applies.
+   */
+  static void
+  installGetterWithRuntime(jsi::Runtime &runtime, jsi::Object &prototype,
+                           const char *name,
+                           jsi::Value (Derived::*getter)(jsi::Runtime &)) {
+    auto getterFunc = jsi::Function::createFromHostFunction(
+        runtime, jsi::PropNameID::forUtf8(runtime, std::string("get_") + name),
+        0,
+        [getter](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+          return (native.get()->*getter)(rt);
+        });
+    defineGetter(runtime, prototype, name, std::move(getterFunc));
   }
 
   /**

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <deque>
 #include <functional>
@@ -12,6 +13,7 @@
 
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
+#include "RNSkGpuActivity.h"
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkPlatformContext.h"
 #include "RNSkWindowSurface.h"
@@ -22,6 +24,7 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImageInfo.h"
+#include "include/core/SkSurfaceProps.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/TextureInfo.h"
@@ -32,28 +35,48 @@
 namespace RNSkia {
 
 /**
- * The Graphite recorder of one view. Shared by the view's target and by every
+ * The Graphite recorder of a target JS records into (see
+ * RNSkGraphiteTarget::beginRecording()). Shared by the target and by every
  * recording snapped from it, so that the recorder outlives its recordings
- * whichever of them is released last.
+ * whichever of them is released last. Made for one GPU device (see
+ * DawnContext::generation()): once that device is lost the target makes a
+ * new one, and the recordings of this one are dropped. Declarative content
+ * is recorded on the recorders of the render thread pool instead, which
+ * outlive everything (see DawnContext::getThreadRecorder).
  */
 struct RNSkGraphiteRecorder {
   std::unique_ptr<skgpu::graphite::Recorder> recorder;
+  uint64_t generation = 0;
 };
 
 /**
- * A frame snapped from a view's recorder, with the description of the target
- * it was recorded for. Immutable once snapped: it can be replayed any number
- * of times, from any thread.
+ * A frame snapped from a recorder, with the generation of the GPU device it
+ * was recorded for and the description of the target. Immutable once
+ * snapped: it can be replayed any number of times, from any thread, onto the
+ * device it was recorded for (see isCurrent).
  */
 class RNSkGraphiteRecording {
 public:
-  RNSkGraphiteRecording(std::shared_ptr<RNSkGraphiteRecorder> recorder,
-                        std::unique_ptr<skgpu::graphite::Recording> recording,
-                        const RNSkGraphiteTargetInfo &target)
-      : _recorder(std::move(recorder)), _recording(std::move(recording)),
-        _target(target) {}
+  /**
+   `recorder` is the target's own recorder when the frame was recorded on
+   one, kept alive by the recording; nullptr for a thread's recorder.
+   */
+  RNSkGraphiteRecording(
+      std::unique_ptr<skgpu::graphite::Recording> recording,
+      uint64_t generation, const RNSkGraphiteTargetInfo &target,
+      std::shared_ptr<RNSkGraphiteRecorder> recorder = nullptr)
+      : _generation(generation), _recorder(std::move(recorder)),
+        _recording(std::move(recording)), _target(target) {}
 
   skgpu::graphite::Recording *get() const { return _recording.get(); }
+
+  /**
+   Whether the recording can be replayed right now: it was recorded for the
+   GPU device in use, and that device is not lost. A recording made for a
+   lost device can never be replayed, and the device replacing it would
+   refuse its resources (see DawnContext).
+   */
+  bool isCurrent() const { return DawnContext::isCurrent(_generation); }
 
   /**
    Whether the recording was made for a texture of the given size. A deferred
@@ -97,22 +120,27 @@ public:
   }
 
 private:
-  // Declared before the recording so that the recording is released first.
+  uint64_t _generation;
+  // The target's own recorder when the frame was recorded on one, so that
+  // it outlives the recording; declared before the recording so that the
+  // recording is released first.
   std::shared_ptr<RNSkGraphiteRecorder> _recorder;
   std::unique_ptr<skgpu::graphite::Recording> _recording;
   RNSkGraphiteTargetInfo _target;
 };
 
 /**
- * What a view and the producers recording for it share: the view's recorder,
- * the queue of recordings waiting to be presented and the description of the
- * target texture. Created by whichever side comes first (see
+ * What a view and the producers recording for it share: the queue of
+ * recordings waiting to be presented and the description of the target
+ * texture. Created by whichever side comes first (see
  * RNSkGraphiteTargetRegistry) and kept alive by both.
  *
  * Recording happens on the producer's thread (the JS thread, a worklet
  * runtime or the render thread pool), presenting on the main thread; the
- * queue is the hand-off. A recorder serves one thread at a time, which is
- * enforced by allowing a single open recording.
+ * queue is the hand-off. A frame is recorded on the recorder of the thread
+ * recording it (the render thread pool) or on a recorder of the target's own
+ * (JS); either way a single recording is open at a time, and it is snapped
+ * on the thread that opened it.
  */
 class RNSkGraphiteTarget {
 public:
@@ -123,7 +151,8 @@ public:
 
   /**
    The layout size (points) and the props the format follows from, as known
-   to JS. Used until the view has a surface of its own.
+   to JS. Used until the platform view knows better: the pixel size it was
+   laid out with, and the bit depth of its surface (see resolveTargetInfo).
    */
   void setLayout(float width, float height, bool opaque, bool highBitDepth) {
     std::lock_guard<std::mutex> lock(_stateMutex);
@@ -133,57 +162,80 @@ public:
     _highBitDepth = highBitDepth;
   }
 
+  /**
+   Whether the next recordings use device independent fonts (see
+   recordingSurfacePropsLocked). Any thread; applies from the next recording
+   on. Returns whether the option changed.
+   */
+  bool setDeviceIndependentFonts(bool deviceIndependentFonts) {
+    std::lock_guard<std::mutex> lock(_stateMutex);
+    return std::exchange(_deviceIndependentFonts, deviceIndependentFonts) !=
+           deviceIndependentFonts;
+  }
+
   /** Current width of the target, in points. */
   float getWidth() {
-    return resolveTargetInfo().width / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.width / info.pixelDensity;
   }
 
   /** Current height of the target, in points. */
   float getHeight() {
-    return resolveTargetInfo().height / _context->getPixelDensity();
+    auto info = resolveTargetInfo();
+    return info.height / info.pixelDensity;
   }
 
   /**
-   Returns a canvas that records the next frame, in points. The canvas is
-   deleted by finishRecording(). Throws while a recording is already open.
+   Returns a canvas that records the next frame, in points, on the recorder
+   of the calling thread (see DawnContext::getThreadRecorder): the render
+   thread pool records the declarative content of every view this way, a
+   view always on the same thread (see RNSkThreadPool::acquireLane), so a
+   view holds no recorder of its own and the recorders of a few threads
+   serve every view, each with a warm cache and atlases for its views.
+   finishRecording() snaps it, on the same thread, before the thread records
+   anything else (a recorder takes one deferred canvas at a time). The canvas
+   is deleted by finishRecording(). Returns nullptr while the view has no
+   size. Throws while a recording is already open, or when no deferred canvas
+   can be made.
+   */
+  SkCanvas *beginRecording(const DawnContext::RecorderRef &recorder) {
+    auto target = resolveTargetInfo();
+    std::lock_guard<std::mutex> lock(_stateMutex);
+    return openRecordingLocked(recorder.recorder, recorder.generation, nullptr,
+                               target);
+  }
+
+  /**
+   Same, on a recorder of the target's own, made on the first call and again
+   once the GPU device it was made for is lost: for JS, which records across
+   calls (SkiaViewApi.makeGraphiteContext) and may open a recording on
+   another target before finishing this one. Throws while a recording is
+   already open, or when no recorder or deferred canvas can be made.
    */
   SkCanvas *beginRecording() {
     auto target = resolveTargetInfo();
     std::lock_guard<std::mutex> lock(_stateMutex);
-    if (_recording) {
-      throw std::runtime_error("SkiaGraphiteView: a recording is already open, "
-                               "call finishRecording() first.");
-    }
-    if (target.width <= 0 || target.height <= 0) {
-      throw std::runtime_error("SkiaGraphiteView: the view has no size yet.");
-    }
-    if (_recorder == nullptr) {
+    // A recorder made for a GPU device that was lost since is replaced: the
+    // recordings still holding it keep it alive until they are dropped.
+    const auto generation = DawnContext::generation();
+    if (_ownRecorder == nullptr || _ownRecorder->generation != generation) {
       auto recorder = std::make_shared<RNSkGraphiteRecorder>();
       recorder->recorder = DawnContext::getInstance().makeRecorder();
+      recorder->generation = generation;
       if (recorder->recorder == nullptr) {
         throw std::runtime_error(
             "SkiaGraphiteView: could not create a Graphite recorder.");
       }
-      _recorder = std::move(recorder);
+      _ownRecorder = std::move(recorder);
     }
-    auto imageInfo = SkImageInfo::Make(
-        target.width, target.height, target.colorType, kPremul_SkAlphaType,
-        DawnUtils::viewColorSpace(target.useP3ColorSpace));
-    auto *canvas =
-        _recorder->recorder->makeDeferredCanvas(imageInfo, target.textureInfo);
-    if (canvas == nullptr) {
-      throw std::runtime_error(
-          "SkiaGraphiteView: could not create a deferred canvas.");
-    }
-    // The canvas loads whatever the target holds: the producer clears.
-    auto pd = _context->getPixelDensity();
-    canvas->scale(pd, pd);
-    _recording = true;
-    _recordingTarget = target;
-    return canvas;
+    return openRecordingLocked(_ownRecorder->recorder.get(),
+                               _ownRecorder->generation, _ownRecorder, target);
   }
 
-  /** Snaps the open recording. Throws when no recording is open. */
+  /**
+   Snaps the open recording, on the thread that opened it. Throws when no
+   recording is open.
+   */
   std::shared_ptr<RNSkGraphiteRecording> finishRecording() {
     std::lock_guard<std::mutex> lock(_stateMutex);
     if (!_recording) {
@@ -191,29 +243,52 @@ public:
                                "beginRecording() first.");
     }
     _recording = false;
-    auto recording = _recorder->recorder->snap();
+    auto *recorder = std::exchange(_openRecorder, nullptr);
+    auto owner = std::move(_openOwner);
+    // The snap compiles the pipelines the frame needs, inline: GPU work the
+    // warmup stays behind (see RNSkGpuActivity).
+    RNSkGpuActivity::Scope activity;
+    auto recording = recorder->snap();
     if (recording == nullptr) {
       throw std::runtime_error(
           "SkiaGraphiteView: snapping the recording failed.");
     }
     return std::make_shared<RNSkGraphiteRecording>(
-        _recorder, std::move(recording), _recordingTarget);
+        std::move(recording), _openGeneration, _recordingTarget,
+        std::move(owner));
   }
 
   /**
    Queues a recording for the next frame. Recordings are never dropped: a
-   later frame may depend on resources an earlier one uploaded.
+   later frame may depend on resources an earlier one uploaded. This holds
+   before the view exists too, as the registry owns the target until the
+   view is gone (see RNSkGraphiteTargetRegistry). The one exception is a
+   recording made for a lost GPU device (see RNSkGraphiteRecording::isCurrent):
+   it can never be presented, and a client recording on every frame
+   regardless would grow the queue without bound, so it is dropped, along
+   with whatever waits in the queue, which was made for that device too.
+   Returns whether the recording was queued.
    */
-  void submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
+  bool submit(std::shared_ptr<RNSkGraphiteRecording> recording) {
     std::function<void()> requestFrame;
     {
       std::lock_guard<std::mutex> lock(_queueMutex);
+      // Counted before anything can be done with it, so pendingFrames()
+      // never reads below zero.
+      _submitted.fetch_add(1, std::memory_order_relaxed);
+      if (!recording->isCurrent()) {
+        // Dropped, with whatever waited: done, as far as pacing goes.
+        _done.fetch_add(_queue.size() + 1, std::memory_order_release);
+        _queue.clear();
+        return false;
+      }
       _queue.push_back(std::move(recording));
       requestFrame = _requestFrame;
     }
     if (requestFrame) {
       requestFrame();
     }
+    return true;
   }
 
   // View side ----------------------------------------------------------------
@@ -269,6 +344,20 @@ public:
     _queue.insert(_queue.begin(), recordings.begin(), recordings.end());
   }
 
+  /**
+   Present thread. Queues recordings presented before once more, ahead of
+   anything waiting: the last frame, which a redraw could not get onto the
+   window (no drawable). They were done when first presented, so they are
+   submitted again as far as pacing goes: pending until presented, and done
+   then, as every recording taken off the queue is (see onRecordingsDone).
+   */
+  void requeuePresented(
+      const std::vector<std::shared_ptr<RNSkGraphiteRecording>> &recordings) {
+    std::lock_guard<std::mutex> lock(_queueMutex);
+    _submitted.fetch_add(recordings.size(), std::memory_order_relaxed);
+    _queue.insert(_queue.begin(), recordings.begin(), recordings.end());
+  }
+
   /** The most recently submitted recording still waiting, if any. */
   std::shared_ptr<RNSkGraphiteRecording> peekLatest() {
     std::lock_guard<std::mutex> lock(_queueMutex);
@@ -280,13 +369,98 @@ public:
     return !_queue.empty();
   }
 
+  /**
+   Present thread. `count` recordings taken from the queue are done:
+   presented, or dropped by the present for a size the window no longer has.
+   What a client pacing on pendingFrames() waits for; the declarative
+   producer hears of its own recording by identity instead (see
+   RNSkGraphiteProducer::onFramesTaken).
+   */
+  void onRecordingsDone(size_t count) {
+    _done.fetch_add(count, std::memory_order_release);
+  }
+
+  /**
+   Any thread. Recordings submitted and not yet presented (or dropped). A
+   client recording on every vsync keeps this at or below a budget, as the
+   view's frame scheduler does for the declarative producer, so that a
+   GPU-bound view does not build a queue that is never dropped.
+   */
+  uint64_t pendingFrames() const {
+    const auto done = _done.load(std::memory_order_acquire);
+    const auto submitted = _submitted.load(std::memory_order_relaxed);
+    return submitted > done ? submitted - done : 0;
+  }
+
 private:
+  /**
+   The surface props a recording is made with, under the state lock. With
+   the defaults Graphite rasterizes a glyph for the exact transform it is
+   drawn with, so text that rotates or scales every frame is masked again,
+   and its blobs rebuilt (findOrCreateBlob), on every frame. With device
+   independent fonts (the deviceIndependentFonts prop), glyphs in the SDF
+   size range are rasterized once as distance fields and reused under any
+   rotation or scale; the smallest sizes keep using masks, and the largest
+   paths, as with the defaults. It is opt-in: distance fields cost more GPU
+   time per glyph than masks, which text that does not rotate or scale pays
+   for nothing (1.3 to 1.9 times the GPU time on 4,000 to 12,000 translating
+   blobs on an iPhone 14 Pro). The pixel geometry stays unknown either way:
+   the target may be translucent or composited, and the recording is
+   replayed onto whatever texture the view has at that point, so LCD text is
+   never an option here.
+   */
+  SkSurfaceProps recordingSurfacePropsLocked() const {
+    return SkSurfaceProps(_deviceIndependentFonts
+                              ? SkSurfaceProps::kUseDeviceIndependentFonts_Flag
+                              : 0,
+                          kUnknown_SkPixelGeometry);
+  }
+
+  /**
+   Opens a recording on `recorder`, made for `generation`; `owner` keeps the
+   recorder alive when it is the target's own. Returns nullptr while the view
+   has no size. Called with the state lock held.
+   */
+  SkCanvas *openRecordingLocked(skgpu::graphite::Recorder *recorder,
+                                uint64_t generation,
+                                std::shared_ptr<RNSkGraphiteRecorder> owner,
+                                const RNSkGraphiteTargetInfo &target) {
+    if (_recording) {
+      throw std::runtime_error("SkiaGraphiteView: a recording is already open, "
+                               "call finishRecording() first.");
+    }
+    if (target.width <= 0 || target.height <= 0) {
+      return nullptr;
+    }
+    auto imageInfo = SkImageInfo::Make(
+        target.width, target.height, target.colorType, kPremul_SkAlphaType,
+        DawnUtils::viewColorSpace(target.useP3ColorSpace));
+    auto surfaceProps = recordingSurfacePropsLocked();
+    auto *canvas = recorder->makeDeferredCanvas(imageInfo, target.textureInfo,
+                                                &surfaceProps);
+    if (canvas == nullptr) {
+      throw std::runtime_error(
+          "SkiaGraphiteView: could not create a deferred canvas.");
+    }
+    // The canvas loads whatever the target holds: the producer clears.
+    canvas->scale(target.pixelDensity, target.pixelDensity);
+    _recording = true;
+    _openRecorder = recorder;
+    _openGeneration = generation;
+    _openOwner = std::move(owner);
+    _recordingTarget = target;
+    return canvas;
+  }
+
   /**
    The target to record against: the view's surface when it has one, else
    the pixel size the platform laid the view out with, else the layout size
    JS measured; in the last two cases with the format and the color space
-   the surface will be created with, following the same rules (see
-   RNSkWindowSurface and SkiaView.java).
+   the surface has, or will have: the bit depth the platform view knows
+   (the one of its backing view, which keeps it, see SkiaView.java), else
+   the one the props call for, following the same rules; the color space
+   the platform view knows (the colorSpace prop, see SkiaView.mm), else
+   the platform's default.
    */
   RNSkGraphiteTargetInfo resolveTargetInfo() {
     std::shared_ptr<RNSkWindowSurface> surface;
@@ -304,8 +478,21 @@ private:
     }
     RNSkGraphiteTargetInfo info;
     if (surface && surface->getTargetInfo(&info)) {
+      // The density of the layout the window has the size of (see
+      // RNSkWindowSurface::updateTargetInfo), else the platform's.
+      if (info.pixelDensity <= 0) {
+        info.pixelDensity = _context->getPixelDensity();
+      }
       return info;
     }
+    // The density the platform laid the view out with, which follows
+    // display density changes along with its size (see
+    // RNSkWindowSurface::setLayoutSize), else the platform's.
+    float pixelDensity = 0;
+    if (!surface || !surface->getPixelDensity(&pixelDensity)) {
+      pixelDensity = _context->getPixelDensity();
+    }
+    info.pixelDensity = pixelDensity;
 #if defined(__ANDROID__)
     // The 10-bit buffer format only has 2 bits of alpha: translucent views
     // stay 8-bit.
@@ -315,18 +502,27 @@ private:
 #else
     (void)opaque;
 #endif
+    if (surface) {
+      // The window keeps the bit depth it was attached with, whatever the
+      // props say later (on Android they are read at mount): a frame
+      // recorded while it is away is recorded for the one it comes back
+      // with.
+      surface->getHighBitDepth(&highBitDepth);
+    }
     if (!surface || !surface->getLayoutSize(&info.width, &info.height)) {
       // Not laid out yet (JS gets its onLayout before the platform lays the
       // view out): the size JS measured, in points. The layout is on the
       // pixel grid, so the product is an integer up to rounding errors.
-      double pd = _context->getPixelDensity();
-      info.width = static_cast<int>(std::lround(width * pd));
-      info.height = static_cast<int>(std::lround(height * pd));
-    } else {
+      info.width = static_cast<int>(std::lround(width * pixelDensity));
+      info.height = static_cast<int>(std::lround(height * pixelDensity));
     }
     info.colorType = highBitDepth ? DawnUtils::HighBitDepthColorType
                                   : DawnUtils::PreferedColorType;
-    info.useP3ColorSpace = _context->prefersP3ColorSpace();
+    bool useP3ColorSpace = _context->prefersP3ColorSpace();
+    if (surface) {
+      surface->getUseP3ColorSpace(&useP3ColorSpace);
+    }
+    info.useP3ColorSpace = useP3ColorSpace;
     info.textureInfo = skgpu::graphite::TextureInfos::MakeDawn(
         skgpu::graphite::DawnTextureInfo(
             skgpu::graphite::SampleCount::k1, skgpu::Mipmapped::kNo,
@@ -338,26 +534,45 @@ private:
 
   std::shared_ptr<RNSkPlatformContext> _context;
 
-  // Recorder, open recording and target description.
+  // The target's own recorder (JS, see beginRecording()), the open recording
+  // (its recorder, the generation it was made for, the owner keeping the
+  // recorder alive when it is the target's own, and the target it was opened
+  // against) and the target description.
   std::mutex _stateMutex;
-  std::shared_ptr<RNSkGraphiteRecorder> _recorder;
+  std::shared_ptr<RNSkGraphiteRecorder> _ownRecorder;
   bool _recording = false;
+  skgpu::graphite::Recorder *_openRecorder = nullptr;
+  uint64_t _openGeneration = 0;
+  std::shared_ptr<RNSkGraphiteRecorder> _openOwner;
   RNSkGraphiteTargetInfo _recordingTarget;
   std::weak_ptr<RNSkWindowSurface> _surface;
   float _layoutWidth = 0;
   float _layoutHeight = 0;
   bool _opaque = false;
   bool _highBitDepth = false;
+  bool _deviceIndependentFonts = false;
 
   // Hand-off to the main thread.
   std::mutex _queueMutex;
   std::deque<std::shared_ptr<RNSkGraphiteRecording>> _queue;
   std::function<void()> _requestFrame;
+
+  // Pacing counters, see pendingFrames().
+  std::atomic<uint64_t> _submitted{0};
+  std::atomic<uint64_t> _done{0};
 };
 
 /**
- * Targets by native view id. Entries are weak: a target lives as long as the
- * view or a JS context object holds it.
+ * Targets by native view id. The registry owns every target. An entry is
+ * made by whichever side comes first, the context JS makes for the id or the
+ * view binding to it, and kept until the platform view of the id is
+ * unregistered or, for an id no view ever bound to, until JS retires it. A
+ * retired entry lets go of its target without forgetting it: for as long as
+ * a context JS made holds the target, whoever comes for the id next, the view
+ * binding to it or another context, takes it over (see removeIfUnbound). A
+ * reload clears the registry, as native ids start over with the next bundle
+ * (see ~RNSkManager). The same ownership as the SurfaceRegistry of
+ * react-native-webgpu.
  */
 class RNSkGraphiteTargetRegistry {
 public:
@@ -370,28 +585,122 @@ public:
   RNSkGraphiteTargetRegistry &
   operator=(const RNSkGraphiteTargetRegistry &) = delete;
 
+  /** The target of the id, for the context JS makes; made when missing. */
   std::shared_ptr<RNSkGraphiteTarget>
   getOrCreate(size_t nativeId,
               const std::shared_ptr<RNSkPlatformContext> &context) {
     std::lock_guard<std::mutex> lock(_mutex);
-    auto it = _targets.find(nativeId);
-    if (it != _targets.end()) {
-      if (auto target = it->second.lock()) {
-        return target;
+    auto &entry = getOrCreateLocked(nativeId, context);
+    return entry.target;
+  }
+
+  /**
+   The target of the id, for the view binding to it; made when missing. From
+   here on the entry is the view's: its unregistration retires it, not JS
+   (see removeIfUnbound). Made and marked under one lock, so that a removal
+   racing with the bind either finds the entry bound or runs before it is
+   made again.
+   */
+  std::shared_ptr<RNSkGraphiteTarget>
+  bind(size_t nativeId, const std::shared_ptr<RNSkPlatformContext> &context) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto &entry = getOrCreateLocked(nativeId, context);
+    entry.bound = true;
+    return entry.target;
+  }
+
+  /** Retires the entry of a platform view that is gone. */
+  void remove(size_t nativeId) {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      auto it = _entries.find(nativeId);
+      if (it == _entries.end()) {
+        return;
+      }
+      target = std::move(it->second.target);
+      _entries.erase(it);
+    }
+    // The target, and the GPU resources of its queue, may be destroyed here,
+    // outside of the lock.
+  }
+
+  /**
+   Retires the entry from the JS side, when the view component unmounts,
+   unless a view bound to it: that entry is the view's, and its teardown
+   retires it. React's StrictMode simulates an unmount without unmounting
+   the native views, which would otherwise orphan a bound view. It runs that
+   cleanup right after mount, before the native view registered when the UI
+   thread lags, and the context the first effect run made stays in use. So
+   the target is let go of, not forgotten: for as long as a context holds
+   it, the view binding to the id takes it over (see getOrCreateLocked).
+   */
+  void removeIfUnbound(size_t nativeId) {
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      auto it = _entries.find(nativeId);
+      if (it != _entries.end() && !it->second.bound && it->second.target) {
+        target = std::move(it->second.target);
+        if (target.use_count() == 1) {
+          // No context holds it: nothing is left to take over.
+          _entries.erase(it);
+        } else {
+          it->second.retired = target;
+        }
+      }
+      // The entries retired earlier whose context is gone by now.
+      for (auto entry = _entries.begin(); entry != _entries.end();) {
+        entry = entry->second.isExpired() ? _entries.erase(entry) : ++entry;
       }
     }
-    for (auto entry = _targets.begin(); entry != _targets.end();) {
-      entry = entry->second.expired() ? _targets.erase(entry) : ++entry;
+    // The target, and the GPU resources of its queue, may be destroyed here,
+    // outside of the lock, when no context holds it.
+  }
+
+  /** Drops every entry: the bundle is going away (see ~RNSkManager). */
+  void clear() {
+    std::unordered_map<size_t, Entry> entries;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      entries.swap(_entries);
     }
-    auto target = std::make_shared<RNSkGraphiteTarget>(context);
-    _targets[nativeId] = target;
-    return target;
   }
 
 private:
+  struct Entry {
+    /** The target, owned until JS retires the entry. */
+    std::shared_ptr<RNSkGraphiteTarget> target;
+    /**
+     The target of a retired entry, for as long as a context JS made holds
+     it, for whoever comes for the id next (see getOrCreateLocked).
+     */
+    std::weak_ptr<RNSkGraphiteTarget> retired;
+    bool bound = false;
+    /** Retired, and its context gone: nothing left to take over. */
+    bool isExpired() const { return !target && retired.expired(); }
+  };
+
   RNSkGraphiteTargetRegistry() = default;
+
+  Entry &
+  getOrCreateLocked(size_t nativeId,
+                    const std::shared_ptr<RNSkPlatformContext> &context) {
+    auto &entry = _entries[nativeId];
+    if (!entry.target) {
+      // A new id, or one JS retired: the target a context still holds, when
+      // there is one, is owned again from here on.
+      entry.target = entry.retired.lock();
+      entry.retired.reset();
+      if (!entry.target) {
+        entry.target = std::make_shared<RNSkGraphiteTarget>(context);
+      }
+    }
+    return entry;
+  }
+
   std::mutex _mutex;
-  std::unordered_map<size_t, std::weak_ptr<RNSkGraphiteTarget>> _targets;
+  std::unordered_map<size_t, Entry> _entries;
 };
 
 } // namespace RNSkia

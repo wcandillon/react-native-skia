@@ -1,13 +1,17 @@
 #pragma once
 
-#import <React/RCTBridgeModule.h>
+#import <CoreFoundation/CoreFoundation.h>
+#if !TARGET_OS_OSX
+#import <UIKit/UIKit.h>
+#else
+#import <AppKit/AppKit.h>
+#endif // !TARGET_OS_OSX
 
 #include <functional>
 #include <memory>
 #include <string>
 
 #include "RNSkPlatformContext.h"
-#include "ViewScreenshotService.h"
 
 namespace facebook {
 namespace react {
@@ -20,7 +24,6 @@ namespace RNSkia {
 class RNSkApplePlatformContext : public RNSkPlatformContext {
 public:
   RNSkApplePlatformContext(
-      RCTViewRegistry *viewRegistry,
       std::shared_ptr<facebook::react::CallInvoker> jsCallInvoker)
 #if !TARGET_OS_OSX
       : RNSkPlatformContext(jsCallInvoker, [[UIScreen mainScreen] scale]) {
@@ -28,10 +31,6 @@ public:
       : RNSkPlatformContext(jsCallInvoker,
                             [[NSScreen mainScreen] backingScaleFactor]) {
 #endif // !TARGET_OS_OSX
-
-    // Create screenshot manager
-    _screenshotService =
-        [[ViewScreenshotService alloc] initWithViewRegistry:viewRegistry];
     _prefersP3ColorSpace = mainScreenSupportsP3();
   }
 
@@ -45,11 +44,19 @@ public:
    */
   static bool mainScreenSupportsP3();
 
+  /**
+   Keeps DawnContext::isForeground up to date from the application's
+   notifications: false from UIApplicationWillResignActive until
+   UIApplicationDidBecomeActive, as Apple asks Metal apps to stop submitting
+   work when deactivated. Called once, on the main thread (RNSkiaModule's
+   init), where alone the application state may be read; nothing on macOS,
+   where a hidden app may use the GPU.
+   */
+  static void observeApplicationState();
+
   bool prefersP3ColorSpace() override { return _prefersP3ColorSpace; }
 
   void runOnMainThread(std::function<void()>) override;
-
-  sk_sp<SkImage> takeScreenshotFromViewTag(size_t tag) override;
 
   virtual void performStreamOperation(
       const std::string &sourceUri,
@@ -66,7 +73,6 @@ public:
   std::string resolveFontFamily(const std::string &familyName) override;
 
 private:
-  ViewScreenshotService *_screenshotService;
   bool _prefersP3ColorSpace = false;
 };
 

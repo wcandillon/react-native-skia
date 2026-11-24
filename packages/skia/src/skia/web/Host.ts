@@ -14,6 +14,9 @@ export abstract class Host {
 
   constructor(CanvasKit: CanvasKit) {
     this.CanvasKit = CanvasKit;
+    // React's development build enumerates the properties of a changed prop,
+    // and CanvasKit carries views of the whole WebAssembly heap.
+    Object.defineProperty(this, "CanvasKit", { enumerable: false });
   }
 }
 

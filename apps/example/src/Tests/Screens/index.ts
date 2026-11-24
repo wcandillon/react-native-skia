@@ -1,19 +1,46 @@
 import type { FC } from "react";
 
-import { Snapshot1 } from "./Snapshot1";
-import { Snapshot2 } from "./Snapshot2";
-import { Snapshot3 } from "./Snapshot3";
-import { Snapshot4 } from "./Snapshot4";
-import { Snapshot5 } from "./Snapshot5";
-import { Snapshot6 } from "./Snapshot6";
-import { Snapshot7 } from "./Snapshot7";
+import {
+  ClippedSubviewsBack,
+  ClippedSubviewsSharedValueChanged,
+  ClippedSubviewsStateChanged,
+  ClippedSubviewsTwice,
+} from "./ClippedSubviews";
+import { GraphitePendingFrames } from "./GraphitePendingFrames";
+import { GraphiteView, GraphiteViewTransform } from "./GraphiteView";
+import { IsOnMainThread } from "./IsOnMainThread";
+import { OnLayout } from "./OnLayout";
+import { ResizeGrow, ResizeShrink } from "./Resize";
+import { SharedImage } from "./SharedImage";
+import { SharedValueReads } from "./SharedValueReads";
 
-export const Screens: Record<string, FC> = {
-  Snapshot1,
-  Snapshot2,
-  Snapshot3,
-  Snapshot4,
-  Snapshot5,
-  Snapshot6,
-  Snapshot7,
+// When Tests snapshots a screen: once it is mounted, or once it says it has
+// settled (see useScreenDone), which it does anew each time it is requested.
+export interface Screen {
+  readonly snapshot: "onMount" | "onDone";
+  readonly component: FC;
+}
+
+const shown = (component: FC): Screen => ({ snapshot: "onMount", component });
+const settling = (component: FC): Screen => ({
+  snapshot: "onDone",
+  component,
+});
+
+export const Screens: Readonly<Record<string, Screen>> = {
+  ClippedSubviewsBack: settling(ClippedSubviewsBack),
+  ClippedSubviewsSharedValueChanged: settling(
+    ClippedSubviewsSharedValueChanged
+  ),
+  ClippedSubviewsStateChanged: settling(ClippedSubviewsStateChanged),
+  ClippedSubviewsTwice: settling(ClippedSubviewsTwice),
+  GraphitePendingFrames: settling(GraphitePendingFrames),
+  GraphiteView: shown(GraphiteView),
+  GraphiteViewTransform: shown(GraphiteViewTransform),
+  IsOnMainThread: shown(IsOnMainThread),
+  OnLayout: shown(OnLayout),
+  ResizeGrow: shown(ResizeGrow),
+  ResizeShrink: shown(ResizeShrink),
+  SharedImage: shown(SharedImage),
+  SharedValueReads: shown(SharedValueReads),
 };

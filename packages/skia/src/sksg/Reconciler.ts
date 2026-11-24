@@ -13,7 +13,6 @@ import "./Elements";
 
 const skiaReconciler = ReactReconciler(sksgHostConfig);
 
-// @ts-expect-error DefinitelyTyped is not up to date
 skiaReconciler.injectIntoDevTools();
 
 export class SkiaSGRoot {
@@ -34,31 +33,50 @@ export class SkiaSGRoot {
       null,
       "",
       console.error,
+      console.error,
+      console.error,
+      () => {},
       null
     );
   }
 
   get sg() {
     const children = this.container.root;
-    return { type: NodeType.Group, props: {}, children, isDeclaration: false };
+    return { type: NodeType.Group, props: {}, children };
   }
 
   private updateContainer(element: ReactNode) {
+    const { recordCount } = this.container;
     return new Promise((resolve) => {
       skiaReconciler.updateContainer(element, this.root, null, () => {
+        if (this.container.recordCount === recordCount) {
+          this.container.recordAfterCommit();
+        }
         resolve(true);
       });
     });
   }
 
+  /**
+   * Commits the element and records the scene graph once. The container
+   * records it at the end of a commit that changes the host tree
+   * (resetAfterCommit), which React does not call for a commit that changes
+   * nothing, such as the one of an element React bails out on (the same one
+   * again): the completion callback updateContainer() is given records that
+   * one, so a shared value changed since the last render is picked up.
+   */
   async render(element: ReactNode) {
     this.container.mount();
     await this.updateContainer(element);
-    this.container.redraw();
   }
 
   drawOnCanvas(canvas: SkCanvas) {
     this.container.drawOnCanvas(canvas);
+  }
+
+  /** See Container.readSharedValues(). */
+  readSharedValues() {
+    this.container.readSharedValues();
   }
 
   getPicture() {

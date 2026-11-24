@@ -1,0 +1,9 @@
+# Generated native project, dependencies and bundles.
+*.xcworkspace/
+.xcode.env
+Pods/
+ReactTestApp-Resources.podspec.json
+build/
+node_modules/
+dist/*
+!dist/.gitignore

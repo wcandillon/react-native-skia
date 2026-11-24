@@ -51,9 +51,8 @@ public:
     return std::vector<double>(widths.begin(), widths.end());
   }
 
-  // TODO: deprecate
-  int getTextWidth(std::string str,
-                   std::optional<std::shared_ptr<SkPaint>> paint) {
+  double getTextWidth(std::string str,
+                      std::optional<std::shared_ptr<SkPaint>> paint) {
     auto numGlyphIDs = getObject()->countText(str.c_str(), str.length(),
                                               SkTextEncoding::kUTF8);
     std::vector<SkGlyphID> glyphs;
@@ -66,7 +65,7 @@ public:
     auto w = SkSpan(widths.data(), widths.size());
     getObject()->getWidthsBounds(
         g, w, {}, paint.has_value() ? paint.value().get() : nullptr);
-    return std::accumulate(widths.begin(), widths.end(), 0);
+    return std::accumulate(widths.begin(), widths.end(), 0.0);
   }
 
   std::shared_ptr<JsiSkRect>
@@ -184,7 +183,7 @@ public:
     installMethod(runtime, prototype, "getSkewX", &JsiSkFont::getSkewX);
     installMethod(runtime, prototype, "getTypeface", &JsiSkFont::getTypeface);
     installMethod(runtime, prototype, "setEdging", &JsiSkFont::setEdging);
-    installMethod(runtime, prototype, "embeddedBitmaps",
+    installMethod(runtime, prototype, "setEmbeddedBitmaps",
                   &JsiSkFont::setEmbeddedBitmaps);
     installMethod(runtime, prototype, "setHinting", &JsiSkFont::setHinting);
     installMethod(runtime, prototype, "setLinearMetrics",
@@ -193,6 +192,7 @@ public:
     installMethod(runtime, prototype, "setSkewX", &JsiSkFont::setSkewX);
     installMethod(runtime, prototype, "setSize", &JsiSkFont::setSize);
     installMethod(runtime, prototype, "setEmbolden", &JsiSkFont::setEmbolden);
+    installMethod(runtime, prototype, "isEmbolden", &JsiSkFont::isEmbolden);
     installMethod(runtime, prototype, "setSubpixel", &JsiSkFont::setSubpixel);
     installMethod(runtime, prototype, "setTypeface", &JsiSkFont::setTypeface);
     installMethod(runtime, prototype, "getGlyphWidths",

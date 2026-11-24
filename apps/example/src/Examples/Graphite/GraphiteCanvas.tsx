@@ -70,7 +70,9 @@ const AnimatedCanvas = ({ image, onSnapshot }: AnimatedCanvasProps) => {
     const timeout = setTimeout(() => {
       const snapshot = ref.current?.makeImageSnapshot();
       if (snapshot) {
-        onSnapshot(`data:image/png;base64,${snapshot.encodeToBase64()}`);
+        snapshot.encodeToBase64().then((base64) => {
+          onSnapshot(`data:image/png;base64,${base64}`);
+        });
       }
     }, 1000);
     return () => clearTimeout(timeout);
@@ -94,7 +96,15 @@ const AnimatedCanvas = ({ image, onSnapshot }: AnimatedCanvasProps) => {
     () => size.value.height / 2 - imageSize.value / 2
   );
   return (
-    <Canvas ref={ref} style={styles.canvas} opaque onSize={size}>
+    <Canvas
+      ref={ref}
+      style={styles.canvas}
+      android={{ backingView: "SurfaceView" }}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        size.value = { width, height };
+      }}
+    >
       <Fill color="#0b1020" />
       {image && (
         <Group transform={transform} origin={origin}>

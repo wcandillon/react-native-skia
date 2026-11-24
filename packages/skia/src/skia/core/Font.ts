@@ -131,7 +131,7 @@ const loadTypefaces = (typefacesToLoad: Record<string, DataModule[]>) => {
     return typefacesToLoad[familyName].map((typefaceToLoad) => {
       return Skia.Data.fromURI(Platform.resolveAsset(typefaceToLoad)).then(
         (data) => {
-          const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data);
+          const tf = Skia.Typeface.MakeFromData(data);
           if (tf === null) {
             throw new Error(`Couldn't create typeface for ${familyName}`);
           }

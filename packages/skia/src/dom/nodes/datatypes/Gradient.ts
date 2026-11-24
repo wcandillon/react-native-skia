@@ -21,10 +21,14 @@ export const processColor = (
   color: number | string | Float32Array | number[]
 ) => {
   "worklet";
-  if (typeof color === "string" || typeof color === "number") {
+  // A converted color first: the renderer converts its static colors once
+  // and passes them back here on every frame.
+  if (color instanceof Float32Array) {
+    return color;
+  } else if (typeof color === "string" || typeof color === "number") {
     return Skia.Color(color);
-  } else if (Array.isArray(color) || color instanceof Float32Array) {
-    return color instanceof Float32Array ? color : new Float32Array(color);
+  } else if (Array.isArray(color)) {
+    return new Float32Array(color);
   } else {
     throw new Error(
       `Invalid color type: ${typeof color}. Expected number, string, or array.`

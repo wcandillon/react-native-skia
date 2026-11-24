@@ -5,4 +5,5 @@ export type Routes = {
   Helmet: undefined;
   Cloth: undefined;
   Video: undefined;
+  ViewSnapshot: undefined;
 };

@@ -1,13 +1,17 @@
-import React, { useImperativeHandle, useMemo, useRef } from "react";
+import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
 
 import type { SkGraphiteContext } from "../skia/types";
 import SkiaViewNativeComponent from "../specs/SkiaViewNativeComponent";
-import { Platform } from "../Platform";
 
 import { SkiaViewApi } from "./api";
-import { androidNativeProps } from "./android";
+import {
+  androidNativeProps,
+  resolveOpaque,
+  useBackingViewWarning,
+} from "./android";
+import { useAppleFormatWarning } from "./apple";
 import type { SkiaGraphiteViewNativeProps } from "./types";
-import { SkiaViewNativeId } from "./SkiaViewNativeId";
+import { measureLayout } from "./measureLayout";
 
 export interface SkiaGraphiteViewRef {
   /**
@@ -22,36 +26,46 @@ export interface SkiaGraphiteViewProps extends SkiaGraphiteViewNativeProps {
   ref?: React.Ref<SkiaGraphiteViewRef>;
 }
 
-// The layout is known synchronously on the new architecture;
-// getBoundingClientRect became stable in React Native 0.83. On the web the
-// view measures itself (see SkiaView.web).
-const measureLayout = (view: unknown) => {
-  if (Platform.OS === "web") {
-    return { width: 0, height: 0 };
-  }
-  const host = view as {
-    getBoundingClientRect?: () => { width: number; height: number };
-    unstable_getBoundingClientRect: () => { width: number; height: number };
-  };
-  return host.getBoundingClientRect
-    ? host.getBoundingClientRect()
-    : host.unstable_getBoundingClientRect();
-};
-
 /**
  * A view whose frames are recorded from JavaScript, on any runtime, through
  * the context of its ref. See {@link SkGraphiteContext}.
  */
 export const SkiaGraphiteView = ({
-  opaque = false,
   highBitDepth = false,
+  deviceIndependentFonts = false,
+  colorSpace,
   android,
   ref,
   ...viewProps
 }: SkiaGraphiteViewProps) => {
-  const nativeId = useMemo(() => SkiaViewNativeId.current++, []);
+  const nativeId = useMemo(() => SkiaViewApi.allocateNativeId(), []);
   const viewRef =
     useRef<React.ComponentRef<typeof SkiaViewNativeComponent>>(null);
+  useBackingViewWarning({ highBitDepth, android });
+  useAppleFormatWarning({ highBitDepth, colorSpace });
+  // What the surface format follows from on Android, see makeGraphiteContext.
+  const opaque = resolveOpaque({ highBitDepth, android });
+  // Retires the native target made for this id on unmount, in case no native
+  // view ever bound to it; a bound target is retired by the view's teardown.
+  // StrictMode runs this cleanup right after mount too, possibly before the
+  // native view registered: a context kept from the first effect run keeps
+  // its target, which the native view takes over when it registers.
+  useEffect(
+    () => () => {
+      if (SkiaViewApi && SkiaViewApi.destroyGraphiteContext) {
+        SkiaViewApi.destroyGraphiteContext(nativeId);
+      }
+    },
+    [nativeId]
+  );
+  // A context made already keeps the target: the option is set on it.
+  useEffect(() => {
+    SkiaViewApi.setJsiProperty(
+      nativeId,
+      "deviceIndependentFonts",
+      deviceIndependentFonts
+    );
+  }, [nativeId, deviceIndependentFonts]);
   useImperativeHandle(
     ref,
     () => ({
@@ -70,20 +84,21 @@ export const SkiaGraphiteView = ({
           size.width,
           size.height,
           opaque,
-          highBitDepth
+          highBitDepth,
+          deviceIndependentFonts
         );
       },
     }),
-    [nativeId, opaque, highBitDepth]
+    [nativeId, opaque, highBitDepth, deviceIndependentFonts]
   );
   return (
     <SkiaViewNativeComponent
       ref={viewRef}
       collapsable={false}
       nativeID={`${nativeId}`}
-      opaque={opaque}
       highBitDepth={highBitDepth}
-      {...androidNativeProps(android)}
+      colorSpace={colorSpace ?? ""}
+      {...androidNativeProps({ highBitDepth, android })}
       {...viewProps}
     />
   );

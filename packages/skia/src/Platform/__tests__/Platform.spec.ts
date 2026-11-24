@@ -16,13 +16,18 @@ jest.mock("react-native", () => ({
   },
 }));
 
-jest.mock("react-native/Libraries/Image/AssetRegistry", () => ({
-  getAssetByID: (id: number) => ({
-    httpServerLocation: "/assets",
-    name: `font-${id}`,
-    type: "ttf",
+// React Native < 0.87 only: virtual since the module is gone from 0.87.
+jest.mock(
+  "react-native/Libraries/Image/AssetRegistry",
+  () => ({
+    getAssetByID: (id: number) => ({
+      httpServerLocation: "/assets",
+      name: `font-${id}`,
+      type: "ttf",
+    }),
   }),
-}));
+  { virtual: true }
+);
 
 const metroAsset = {
   uri: "https://localhost/assets/font.ttf",
@@ -42,30 +47,22 @@ describe("Platform.resolveAsset", () => {
     });
     it("prefers react-native/asset-registry (React Native 0.87+)", () => {
       jest.isolateModules(() => {
-        jest.doMock(
-          "react-native/asset-registry",
-          () => ({
-            getAssetByID: (id: number) => ({
-              httpServerLocation: "/registry",
-              name: `font-${id}`,
-              type: "otf",
-            }),
+        jest.doMock("react-native/asset-registry", () => ({
+          getAssetByID: (id: number) => ({
+            httpServerLocation: "/registry",
+            name: `font-${id}`,
+            type: "otf",
           }),
-          { virtual: true }
-        );
+        }));
         const { Platform } = require("../Platform.web");
         expect(Platform.resolveAsset(42)).toBe("/registry/font-42.otf");
       });
     });
     it("falls back to Libraries/Image/AssetRegistry (React Native < 0.87)", () => {
       jest.isolateModules(() => {
-        jest.doMock(
-          "react-native/asset-registry",
-          () => {
-            throw new Error("Cannot find module 'react-native/asset-registry'");
-          },
-          { virtual: true }
-        );
+        jest.doMock("react-native/asset-registry", () => {
+          throw new Error("Cannot find module 'react-native/asset-registry'");
+        });
         const { Platform } = require("../Platform.web");
         expect(Platform.resolveAsset(42)).toBe("/assets/font-42.ttf");
       });

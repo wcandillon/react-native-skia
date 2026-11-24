@@ -225,7 +225,7 @@ const parseCSSColor = (cssStr: string) => {
   // #abc and #abc123 syntax.
   if (str[0] === "#") {
     if (str.length === 4) {
-      var iv = parseInt(str.substr(1), 16); // TODO(deanm): Stricter parsing.
+      var iv = parseInt(str.slice(1), 16); // TODO(deanm): Stricter parsing.
       if (!(iv >= 0 && iv <= 0xfff)) {
         return null;
       } // Covers NaN.
@@ -236,13 +236,13 @@ const parseCSSColor = (cssStr: string) => {
         1,
       ];
     } else if (str.length === 7) {
-      var iv = parseInt(str.substr(1), 16); // TODO(deanm): Stricter parsing.
+      var iv = parseInt(str.slice(1), 16); // TODO(deanm): Stricter parsing.
       if (!(iv >= 0 && iv <= 0xffffff)) {
         return null;
       } // Covers NaN.
       return [(iv & 0xff0000) >> 16, (iv & 0xff00) >> 8, iv & 0xff, 1];
     } else if (str.length === 9) {
-      var iv = parseInt(str.substr(1), 16); // TODO(deanm): Stricter parsing.
+      var iv = parseInt(str.slice(1), 16); // TODO(deanm): Stricter parsing.
       if (!(iv >= 0 && iv <= 0xffffffff)) {
         return null; // Covers NaN.
       }
@@ -260,8 +260,8 @@ const parseCSSColor = (cssStr: string) => {
   var op = str.indexOf("("),
     ep = str.indexOf(")");
   if (op !== -1 && ep + 1 === str.length) {
-    var fname = str.substr(0, op);
-    var params = str.substr(op + 1, ep - (op + 1)).split(",");
+    var fname = str.slice(0, op);
+    var params = str.slice(op + 1, ep).split(",");
     var alpha = 1; // To allow case fallthrough.
     switch (fname) {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment

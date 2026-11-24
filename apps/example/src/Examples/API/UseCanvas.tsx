@@ -50,7 +50,7 @@ const Ring = ({ index, progress, size }: RingProps) => {
     );
     const scale = mix(progress.value, 0.3, 1);
     return [{ translateX: x }, { translateY: y }, { scale }];
-  }, [progress, R]);
+  });
 
   return (
     <Circle
@@ -71,10 +71,9 @@ const BreatheDemo = ({ size }: SizeProps) => {
 
   const progress = useLoop({ duration: 3000 });
 
-  const transform = useDerivedValue(
-    () => [{ rotate: mix(progress.value, -Math.PI, 0) }],
-    [progress]
-  );
+  const transform = useDerivedValue(() => [
+    { rotate: mix(progress.value, -Math.PI, 0) },
+  ]);
 
   return (
     <>
@@ -118,7 +117,13 @@ export const UseCanvas = () => {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
-        <Canvas style={{ flex: 1 }} onSize={size}>
+        <Canvas
+          style={{ flex: 1 }}
+          onLayout={(e) => {
+            const { layout } = e.nativeEvent;
+            size.value = { width: layout.width, height: layout.height };
+          }}
+        >
           <Bridge>
             <MyComp size={size} />
           </Bridge>

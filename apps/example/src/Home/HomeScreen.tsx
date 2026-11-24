@@ -1,12 +1,13 @@
 import React from "react";
-import { ScrollView } from "react-native";
-// Side-effect import: installs navigator.gpu. Required here because Metro's
-// inlineRequires defers module evaluation to first binding use, so without it
-// react-native-webgpu would not be initialized when the WebGPU section's
-// availability check below runs.
-import "react-native-webgpu";
+import { Platform, ScrollView } from "react-native";
 
 import { HomeScreenButton } from "./HomeScreenButton";
+
+// Install navigator.gpu before checking availability. A direct require runs
+// despite inlineRequires, while skipping macOS's unlinked WebGPU module.
+if (Platform.OS !== "macos") {
+  require("react-native-webgpu");
+}
 
 export const HomeScreen = () => {
   const hasWebGPU = typeof navigator !== "undefined" && navigator.gpu != null;
@@ -127,6 +128,16 @@ export const HomeScreen = () => {
         route="Performance"
       />
       <HomeScreenButton
+        title="🔤 Text Blobs"
+        description="Rotating text blobs benchmark"
+        route="TextBlobs"
+      />
+      <HomeScreenButton
+        title="⏱ Benchmark"
+        description="Scenes for performance regression runs"
+        route="Benchmark"
+      />
+      <HomeScreenButton
         title="🖼 Pictures"
         description="Animated circle trail using Pictures"
         route="Pictures"
@@ -158,6 +169,13 @@ export const HomeScreen = () => {
         description="SurfaceView vs TextureView"
         route="AndroidViews"
       />
+      {Platform.OS !== "macos" && (
+        <HomeScreenButton
+          title="🌙 Background GPU"
+          description="GPU work while the app is in the background (#4290)"
+          route="BackgroundGpu"
+        />
+      )}
     </ScrollView>
   );
 };

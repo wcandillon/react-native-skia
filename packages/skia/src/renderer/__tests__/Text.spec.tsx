@@ -24,7 +24,7 @@ describe("Test different text examples", () => {
         <Text x={0} y={fontSize} font={font} text="Hello World" />
       </>
     );
-    processResult(surface, docPath("text/hello-world.png"));
+    await processResult(surface, docPath("text/hello-world.png"));
   });
 
   it("Should draw Hello World vertically", async () => {
@@ -39,7 +39,7 @@ describe("Test different text examples", () => {
         <Glyphs font={font} glyphs={glyphs} />
       </>
     );
-    processResult(surface, docPath("text/hello-world-vertical.png"));
+    await processResult(surface, docPath("text/hello-world-vertical.png"));
   });
 
   it("Should render the text around a circle", async () => {
@@ -55,7 +55,7 @@ describe("Test different text examples", () => {
         </Group>
       </>
     );
-    processResult(surface, docPath("text/text-path.png"));
+    await processResult(surface, docPath("text/text-path.png"));
   });
 
   it("Should render a text blob", async () => {
@@ -68,7 +68,7 @@ describe("Test different text examples", () => {
         <TextBlob blob={blob} y={fontSize} x={0} />
       </>
     );
-    processResult(surface, docPath("text/text-blob.png"));
+    await processResult(surface, docPath("text/text-blob.png"));
   });
 
   it("Should render text with Emojis", async () => {
@@ -81,7 +81,7 @@ describe("Test different text examples", () => {
         )
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+    const tf = Skia.Typeface.MakeFromData(data)!;
     expect(tf).toBeTruthy();
     const emojiFont = Skia.Font(tf, fontSize);
     const surface = await drawOnNode(
@@ -90,7 +90,7 @@ describe("Test different text examples", () => {
         <Text text="🙋🌎" font={emojiFont} y={fontSize} x={0} />
       </>
     );
-    processResult(surface, docPath("text/text-emoji.png"));
+    await processResult(surface, docPath("text/text-emoji.png"));
   });
 
   it("Should calculate chinese text width correctly", async () => {
@@ -103,10 +103,13 @@ describe("Test different text examples", () => {
         )
       )
     );
-    const tf = Skia.Typeface.MakeFreeTypeFaceFromData(data)!;
+    const tf = Skia.Typeface.MakeFromData(data)!;
     expect(tf).toBeTruthy();
     const font = Skia.Font(tf, fontSize);
     const text = "欢迎";
+    const textWidth = font
+      .getGlyphWidths(font.getGlyphIDs(text))
+      .reduce((sum, glyphWidth) => sum + glyphWidth, 0);
     const padding = 16;
     const surface = await drawOnNode(
       <>
@@ -114,20 +117,20 @@ describe("Test different text examples", () => {
           text={text}
           font={font}
           y={height / 2}
-          x={(width - font.getTextWidth(text)) / 2}
+          x={(width - textWidth) / 2}
         />
 
         <Text
           text={text}
           font={font}
           y={height / 2 + fontSize + padding}
-          x={(width - font.getTextWidth(text)) / 2}
+          x={(width - textWidth) / 2}
           style={"stroke"}
           color={"black"}
           strokeWidth={1}
         />
       </>
     );
-    processResult(surface, docPath("text/welcome.png"));
+    await processResult(surface, docPath("text/welcome.png"));
   });
 });

@@ -10,9 +10,8 @@
 #import <React/RCTViewComponentView.h>
 
 /**
- * The Fabric component behind <Canvas>, <SkiaPictureView> and
- * <SkiaGraphiteView>: a CAMetalLayer presenting Graphite recordings on the
- * display link. The frames are recorded by the native render thread pool
+ * The Fabric component behind <Canvas> and <SkiaGraphiteView>: a
+ * CAMetalLayer presenting Graphite recordings on the display link. The frames are recorded by the native render thread pool
  * (declarative content) or by JS (SkiaViewApi.makeGraphiteContext).
  */
 @interface SkiaView : RCTViewComponentView

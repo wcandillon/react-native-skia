@@ -64,10 +64,10 @@ const sidebars = {
       label: "Shapes",
       items: [
         "shapes/path",
-        "shapes/path-migration",
         "shapes/polygons",
         "shapes/ellipses",
         "shapes/atlas",
+        "shapes/shape-blob",
         "shapes/vertices",
         "shapes/patch",
       ],
@@ -76,7 +76,7 @@ const sidebars = {
       collapsed: true,
       type: "category",
       label: "Images",
-      items: ["image", "animated-images", "image-svg", "snapshotviews"],
+      items: ["image", "animated-images", "image-svg"],
     },
     {
       type: "doc",

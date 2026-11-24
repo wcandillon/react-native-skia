@@ -14,20 +14,62 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <atomic>
 #include <cmath>
 #include <memory>
 
+#include "MetalLayerColorSpace.h"
 #import "RNSkManager.h"
+#include "RNSkPresentThread.h"
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#include "rnsurface/FrameClock.h"
+#include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
 
-// Whether rendering must be skipped: drawing while the app is in the
-// background can clear the CAMetalLayer, leaving the canvas empty when the app
-// comes back (https://github.com/Shopify/react-native-skia/issues/1257). The
-// application state is main-thread only, so this is answered there only.
+// React Native 0.82 added invalidate to RCTComponentViewProtocol. Declare it
+// for older supported versions. See -[SkiaView invalidate].
+@interface RCTViewComponentView (SkiaInvalidate)
+- (void)invalidate;
+@end
+
+@interface SkiaView ()
+// What the view's frame scheduler asks of the platform view (see
+// RNSkView::FrameHost).
+- (void)requestAnimationFrame;
+@end
+
+namespace {
+
+// A time of Core Animation's clock (seconds of mach absolute time) on the
+// clock of the frame scheduler (see rnsurface::frameClockNow).
+rnsurface::FrameScheduler::Nanos frameNanos(CFTimeInterval seconds) {
+  return static_cast<rnsurface::FrameScheduler::Nanos>(seconds * 1.0e9);
+}
+
+// A frame of the display, as the scheduler reads it. A frame presented makes
+// the frame of the display that ends at `end` as long as the compositor
+// finds it there when it builds that frame, a moment before: a quarter of a
+// frame is left for it, and a frame ready later than that waits for the next
+// animation frame rather than land in a frame of the display that gets one
+// already.
+rnsurface::FrameScheduler::AnimationFrame animationFrame(CFTimeInterval start,
+                                                         CFTimeInterval end) {
+  const auto interval = frameNanos(end - start);
+  return {frameNanos(start), interval, frameNanos(end) - interval / 4};
+}
+
+} // namespace
+
+// Whether the window can show a frame: not while the app is in the background
+// (hidden on macOS), where GPU work is refused and can leave the canvas empty
+// when the app comes back
+// (https://github.com/Shopify/react-native-skia/issues/1257). Read once when
+// the view is created; the application's notifications keep it up to date
+// from then on (see appDidEnterBackground:). The application state is
+// main-thread only, so this is answered there only.
 static bool appIsBackgrounded() {
 #if !TARGET_OS_OSX
   auto state = UIApplication.sharedApplication.applicationState;
@@ -37,40 +79,124 @@ static bool appIsBackgrounded() {
 #endif // !TARGET_OS_OSX
 }
 
+// The color space the colorSpace prop asks for: "srgb" or "display-p3",
+// else (the prop is not set) the display's: Display P3 on a wide color gamut
+// display, sRGB otherwise (see RNSkPlatformContext::prefersP3ColorSpace).
+static bool
+usesP3ColorSpace(const std::string &colorSpace,
+                 const std::shared_ptr<RNSkia::RNSkPlatformContext> &context) {
+  if (colorSpace == "srgb") {
+    return false;
+  }
+  if (colorSpace == "display-p3") {
+    return true;
+  }
+  return context->prefersP3ColorSpace();
+}
+
 @implementation SkiaView {
-  // The native view, the window surface and the layer it presents into. All
-  // three exist while the view is in the hierarchy (see willMoveToSuperview:).
+  // The native view and its window surface, from the view's first superview
+  // until it is recycled, and the layer the surface presents into, while the
+  // view is in a superview (see willMoveToSuperview:).
   std::shared_ptr<RNSkia::RNSkView> _view;
   std::shared_ptr<RNSkia::RNSkWindowSurface> _surface;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
   CAMetalLayer *_layer;
 #pragma clang diagnostic pop
-  // Owned by the module, which outlives its views (see finalizeUpdates:).
-  RNSkia::RNSkManager *_manager;
+  // Owned by the module (see finalizeUpdates:). A view can outlive its
+  // manager: on a reload the module is invalidated on the JS thread while
+  // Fabric still holds the views of the old bundle, which it deallocates
+  // afterwards on the main thread. The weak reference makes that late
+  // unregistration a no-op, and a concurrent one keep the manager alive for
+  // the duration of the call.
+  std::weak_ptr<RNSkia::RNSkManager> _manager;
   size_t _nativeId;
+  // The highBitDepth and colorSpace props (see usesP3ColorSpace) as they are
+  // when the native view is created: the format and the color space of the
+  // canvas are chosen then and kept, as the backing view is on Android (see
+  // setHighBitDepth:).
   bool _highBitDepth;
-#if !TARGET_OS_OSX
+  std::string _colorSpace;
+  // Whether the window can show a frame (see appIsBackgrounded). Written on
+  // the main thread, read on the present thread, by the surface, which holds
+  // this rather than the view (see leavePresentThread).
+  std::shared_ptr<std::atomic<bool>> _canPresent;
+  // Whether the present thread presents the view: from the enter task to the
+  // leave task. What a recording that reaches the present thread looks at
+  // before it touches the view (see leavePresentThread). Present thread.
+  std::shared_ptr<bool> _presenting;
+  // The main thread's record of the window: whether one is attached (the
+  // attach itself runs on the present thread, see attachSurface), and at
+  // which size in pixels. A new size is handed over with resize(), which
+  // never waits for the present thread, rather than by attaching again.
+  bool _windowAttached;
+  int _attachedWidth;
+  int _attachedHeight;
+  // The view the present thread presents, while the view is in a superview:
+  // set and cleared there, by tasks posted in order with those that present
+  // (see enterPresentThread and leavePresentThread).
+  std::shared_ptr<RNSkia::RNSkView> _presentView;
+  // Present thread. Created as the view enters a superview on macOS, where
+  // the link is bound to the view and follows its display, and on the first
+  // animation frame elsewhere, so that a canvas that never animates has none.
   CADisplayLink *_displayLink;
-#endif
+
+  // The screen maximum used for the last frame-rate request. Present thread.
+  // This belongs to the current link: a recycled view's new link must ask
+  // again. Comparing rates also picks up a new display rate (see
+  // updateMaximumFramesPerSecond).
+  float _requestedFramesPerSecond;
+  // The display's rate, read on the main thread as the view enters a window
+  // or changes screens, 0 until then.
+  std::atomic<float> _maximumFramesPerSecond;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
   if (self = [super initWithFrame:frame]) {
-    _manager = [RNSkiaModule latestActiveSkManager].get();
+    _manager = [RNSkiaModule latestActiveSkManager];
     _nativeId = 0;
     _highBitDepth = false;
+    _canPresent = std::make_shared<std::atomic<bool>>(!appIsBackgrounded());
+    _presenting = std::make_shared<bool>(false);
+    _windowAttached = false;
+    _attachedWidth = 0;
+    _attachedHeight = 0;
+    _requestedFramesPerSecond = 0;
+    _maximumFramesPerSecond = 0;
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+#if !TARGET_OS_OSX
+    [center addObserver:self
+               selector:@selector(appDidEnterBackground:)
+                   name:UIApplicationDidEnterBackgroundNotification
+                 object:nil];
+    [center addObserver:self
+               selector:@selector(appWillEnterForeground:)
+                   name:UIApplicationWillEnterForegroundNotification
+                 object:nil];
+#else
+    [center addObserver:self
+               selector:@selector(appDidEnterBackground:)
+                   name:NSApplicationDidHideNotification
+                 object:nil];
+    [center addObserver:self
+               selector:@selector(appWillEnterForeground:)
+                   name:NSApplicationDidUnhideNotification
+                 object:nil];
+#endif // !TARGET_OS_OSX
   }
   return self;
 }
 
 #pragma mark - Lifecycle
 
-// The native view lives while the view is in the hierarchy: it is created
-// when the view gets a superview and torn down when it leaves it, so that a
-// view kept around by a transition does not keep a surface.
+// The native view is created when the view first gets a superview and lives
+// until the view is recycled, as on Android: what it shows stays with it
+// while the view is out of its superview, where a scroll view that clips its
+// subviews keeps the rows scrolled away. The window goes then, the layer with
+// its drawables included, so that a view out of the hierarchy holds none.
 #if !TARGET_OS_OSX
 - (void)willMoveToSuperview:(UIView *)newSuperView {
   [super willMoveToSuperview:newSuperView];
@@ -78,52 +204,220 @@ static bool appIsBackgrounded() {
 - (void)viewWillMoveToSuperview:(NSView *)newSuperView {
   [super viewWillMoveToSuperview:newSuperView];
 #endif // !TARGET_OS_OSX
-  if (newSuperView == nullptr || _view != nullptr || _manager == nullptr) {
+  auto manager = _manager.lock();
+  if (newSuperView == nullptr || manager == nullptr) {
     return;
   }
-  auto context = _manager->getPlatformContext();
+  if (_layer == nil) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
-  _layer = [CAMetalLayer layer];
+    _layer = [CAMetalLayer layer];
 #pragma clang diagnostic pop
-  _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
-  // The window belongs to the main thread, and is left alone while the app
-  // is in the background (the frame is requeued and presented on return).
-  _surface->setCanPresent([]() {
-    return [[NSThread currentThread] isMainThread] && !appIsBackgrounded();
-  });
-  _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
-  [self.layer addSublayer:_layer];
-  if (_nativeId != 0) {
-    _manager->setSkiaView(_nativeId, _view);
+    // The surface is configured with a premultiplied alpha mode, for which
+    // Dawn sets the layer non-opaque on every Configure, on the present
+    // thread. A CAMetalLayer is opaque by default, so the first of those
+    // calls would change the layer there, in an implicit CATransaction that
+    // the thread's run loop then commits: a commit of the layer tree off the
+    // main thread (#4474). Set here, Dawn's call changes nothing (see the
+    // asserts in attachWindowWithWidth:height:).
+    _layer.opaque = NO;
+    // The layer is tagged with its colorspace as it is made, on the main
+    // thread, and committed with it: no frame is shown under another tag, and
+    // the present thread configures the surface without touching a
+    // CATransaction (#4474). The bit depth and the color space are those of
+    // the native view, which do not change (see setHighBitDepth:).
+    RNSkia::applyCAMetalLayerColorSpace(
+        _layer, _highBitDepth,
+        usesP3ColorSpace(_colorSpace, manager->getPlatformContext()));
+    [self.layer addSublayer:_layer];
+    // AppKit lays out a view put in a superview only when asked: the layout
+    // attaches the window's surface to the layer (see layoutSubviews).
+    [self setNeedsLayout];
+    // A view put back gets its window onto the new layer now rather than on
+    // the layout, which comes after the Core Animation commit that carries
+    // the layer: the attach, on the present thread, ends with a redraw that
+    // shows the last frame on it (a new layer shows none, see showsFrame).
+    // On an idle present thread that redraw lands within a frame of the
+    // commit (0.6 to 2.4 ms after it on an iPhone 14 Pro); behind another
+    // view's first present, which waits for its pipelines to compile, the
+    // layer shows nothing until the thread gets to it, rather than the main
+    // thread waiting for the compile.
+    if (_view != nullptr) {
+      [self enterPresentThread];
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      _layer.frame =
+          CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
+      [self attachSurface];
+      [CATransaction commit];
+    }
   }
+  if (_view != nullptr) {
+    return;
+  }
+  auto context = manager->getPlatformContext();
+  _surface = std::make_shared<RNSkia::RNSkWindowSurface>();
+  _surface->setHighBitDepth(_highBitDepth);
+  _surface->setUseP3ColorSpace(usesP3ColorSpace(_colorSpace, context));
+  // The window is left alone while the app is in the background: what the
+  // view holds is presented on its next frame once the app is back (see
+  // appWillEnterForeground:). Dawn holds GPU work committed meanwhile anyway
+  // (see DawnContext), so a present racing the notification is held there.
+  _surface->setCanPresent(
+      [canPresent = _canPresent]() { return canPresent->load(); });
+  _view = std::make_shared<RNSkia::RNSkView>(context, _surface);
+  // Presents, redraws and frame requests go to the present thread, where
+  // the view is the one the tasks posted before see.
+  _view->setPresentThread([](std::function<void()> task) {
+    RNSkia::presentThread().post(std::move(task));
+  });
+  // The entries of the view and its window that belong to the present
+  // thread are bound to it there (see RNSkView::bindPresentThread), ahead
+  // of everything posted behind this.
+  {
+    auto surface = _surface;
+    auto view = _view;
+    RNSkia::presentThread().post([=]() {
+      surface->bindPresentingThread();
+      view->bindPresentThread();
+    });
+  }
+  // A CAMetalLayer shows each frame presented in turn. The view's frame
+  // scheduler asks for the display's frames on the present thread: the
+  // display link, while the view is in a superview. Out of it the view has
+  // no window and its scheduler asks for nothing; a request from a view let
+  // go of since (see leavePresentThread) stops at _presenting.
+  _view->setPresentMode(rnsurface::FrameScheduler::PresentMode::kFifo);
   __weak SkiaView *weakSelf = self;
-  _view->setFrameScheduler([weakSelf]() { [weakSelf scheduleFrame]; });
+  RNSkia::RNSkView::FrameHost host;
+  host.requestAnimationFrame = [weakSelf, presenting = _presenting]() {
+    if (*presenting) {
+      [weakSelf requestAnimationFrame];
+    }
+  };
+  _view->setFrameHost(std::move(host));
+  [self enterPresentThread];
+  if (_nativeId != 0) {
+    manager->registerSkiaView(_nativeId, _view);
+  }
 }
 
 - (void)removeFromSuperview {
-  [self stopDisplayLink];
-  if (_view != nullptr) {
-    [_layer removeFromSuperlayer];
-    if (_nativeId != 0 && _manager != nullptr) {
-      _manager->setSkiaView(_nativeId, nullptr);
-    }
-    _view = nullptr;
-    _surface = nullptr;
-    _layer = nil;
-  }
+  [self leavePresentThread];
+  [_layer removeFromSuperlayer];
+  _layer = nil;
   [super removeFromSuperview];
 }
 
+// Main thread, as the view gets a superview: the present thread presents the
+// view from the tasks posted after this one on.
+- (void)enterPresentThread {
+  __weak SkiaView *weakSelf = self;
+  auto view = _view;
+  auto presenting = _presenting;
+
+#if TARGET_OS_OSX
+  // AppKit binds the link to the view, which follows it between displays,
+  // and makes it on the main thread only: it is made paused here and joins
+  // the present thread's run loop in the same task that lets frame requests
+  // through. The link holds the view as its target until the leave task
+  // invalidates it, so the task finds the view.
+  CADisplayLink *displayLink = [self displayLinkWithTarget:self
+                                                  selector:@selector(onFrame:)];
+  displayLink.paused = YES;
+#endif // TARGET_OS_OSX
+  RNSkia::presentThread().post([=]() {
+    *presenting = true;
+    SkiaView *strongSelf = weakSelf;
+    if (strongSelf != nil) {
+      strongSelf->_presentView = view;
+#if TARGET_OS_OSX
+      strongSelf->_displayLink = displayLink;
+      [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                        forMode:NSRunLoopCommonModes];
+#endif // TARGET_OS_OSX
+    }
+  });
+}
+
+// Main thread, as the view leaves its superview or is recycled: the present
+// thread stops presenting the view, and lets go of the window, after the
+// present in flight if any, so that the main thread does not wait for it.
+// Only this layer's window: the view may be back with a new one by then. The
+// task holds the layer, which so outlives the Dawn surface over it, and whose
+// address cannot come back as the new layer's meanwhile. The display link
+// goes in the same task: on iOS, an animation frame asked for between two
+// would make a new one that outlives the leave (see requestAnimationFrame);
+// on macOS, the link made at the enter holds the view until then. The view goes
+// on the main thread, where UIKit expects it to, as this task owns the last
+// reference to it once Fabric let go of it (see invalidate). A strong capture
+// cannot promise that: the block would let go on the present thread, racing the
+// main thread for the last release. So the reference is taken here, by hand,
+// and let go of only on the main thread, once the autorelease pool of the work
+// is drained. Every task posted before this one runs under that reference, also
+// where it loads a weak one. Nothing of the present thread loads one after
+// this task (a recording from a stale RNSkView stops at _presenting), and the
+// surface asks _canPresent rather than the view.
+- (void)leavePresentThread {
+  if (_surface == nullptr) {
+    return;
+  }
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  void *retainedSelf = (__bridge_retained void *)self;
+  RNSkia::presentThread().post([=]() {
+    @autoreleasepool {
+      __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
+      *view->_presenting = false;
+      // Whatever the scheduler asked for goes with the link.
+      if (view->_presentView != nullptr) {
+        view->_presentView->cancelFrames();
+      }
+      [view->_displayLink invalidate];
+      view->_displayLink = nil;
+      // The next link must request the screen's rate again.
+      view->_requestedFramesPerSecond = 0;
+      view->_presentView = nullptr;
+      surface->detach((__bridge void *)layer);
+    }
+    dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
+                     [](void *retained) { CFRelease(retained); });
+  });
+  _windowAttached = false;
+}
+
+// Main thread: the leave task handed the view back here, after invalidating
+// the display link, which holds the view while the view is in a superview on
+// macOS, and while it animates elsewhere (see leavePresentThread).
 - (void)dealloc {
-  [self stopDisplayLink];
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
 }
 
+// Fabric either recycles an unmounted view (prepareForRecycle) or, with the
+// pool full or the view opting out, lets go of it (invalidate): the native
+// view and the window go now either way, rather than with the view.
 - (void)prepareForRecycle {
   [super prepareForRecycle];
-  [self stopDisplayLink];
+  [self releaseNativeView];
+}
+
+// React Native 0.82+ calls this when an unmounted view is not recycled.
+// Drop the category above when older versions leave the peer range.
+- (void)invalidate {
+  [super invalidate];
+  [self releaseNativeView];
+}
+
+// Unregistered first, so that the native view is not destroyed under the
+// registry's lock: it goes as the present thread lets go of it.
+- (void)releaseNativeView {
   [self unregisterView];
+  [self leavePresentThread];
+  [_layer removeFromSuperlayer];
+  _view = nullptr;
+  _surface = nullptr;
+  _layer = nil;
 }
 
 - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
@@ -132,59 +426,140 @@ static bool appIsBackgrounded() {
     // this flag is only set when the view is inserted and we want to set the
     // manager here since the view could be recycled or the app could be
     // refreshed and we would have a stale manager then
-    _manager = [RNSkiaModule latestActiveSkManager].get();
+    _manager = [RNSkiaModule latestActiveSkManager];
   }
 }
 
+// Once: a recycled view takes its next id from its props, and a pooled one
+// must not unregister an id another view may have since.
 - (void)unregisterView {
-  if (_manager != nullptr && _nativeId != 0) {
-    _manager->unregisterSkiaView(_nativeId);
+  auto manager = _manager.lock();
+  if (manager != nullptr && _nativeId != 0) {
+    manager->unregisterSkiaView(_nativeId);
+  }
+  _nativeId = 0;
+}
+
+#pragma mark - Application state
+
+// The app went to the background (was hidden on macOS): frames wait there.
+- (void)appDidEnterBackground:(NSNotification *)notification {
+  _canPresent->store(false);
+}
+
+// The app is coming back: what waited is presented on the view's next frame.
+- (void)appWillEnterForeground:(NSNotification *)notification {
+  _canPresent->store(true);
+  if (_view != nullptr) {
+    auto view = _view;
+    RNSkia::presentThread().post([=]() { view->onCanPresent(); });
   }
 }
 
 #pragma mark - Frames
 
-// Presents on the display link: armed when a recording is submitted, paused
-// again once the queue is empty. macOS has no CADisplayLink on the minimum
-// deployment target, so frames are presented as soon as the main thread gets
-// to them there.
-- (void)scheduleFrame {
+// The view's frame scheduler asks for the next frame of the display (see
+// RNSkView::FrameHost): the display link, which ticks on the present thread,
+// made on the first request outside macOS (see enterPresentThread), unpaused
+// here and paused again once the scheduler asks for no more (see onFrame:),
+// so an idle view does not keep the display at its full rate. Only asked for
+// between the enter and the leave tasks (see _presenting). Present thread.
+- (void)requestAnimationFrame {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
                                                selector:@selector(onFrame:)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop]
+    [_displayLink addToRunLoop:[NSRunLoop currentRunLoop]
                        forMode:NSRunLoopCommonModes];
   }
+#endif // !TARGET_OS_OSX
+  [self requestFullFrameRate];
   _displayLink.paused = NO;
-#else
-  if (_view != nullptr) {
-    _view->presentFrame();
-  }
-#endif
 }
 
-#if !TARGET_OS_OSX
+#pragma mark - Display refresh rate
+
+// AppKit and UIKit use different window-move hooks. Both update the same
+// main-thread screen information consumed by requestFullFrameRate.
+#if TARGET_OS_OSX
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  [center removeObserver:self
+                    name:NSWindowDidChangeScreenNotification
+                  object:nil];
+  if (self.window != nil) {
+    [center addObserver:self
+               selector:@selector(windowDidChangeScreen:)
+                   name:NSWindowDidChangeScreenNotification
+                 object:self.window];
+  }
+  [self updateMaximumFramesPerSecond];
+}
+
+// The view-bound link follows screen moves; its explicit rate must follow too.
+- (void)windowDidChangeScreen:(NSNotification *)notification {
+  [self updateMaximumFramesPerSecond];
+}
+#else
+- (void)didMoveToWindow {
+  [super didMoveToWindow];
+  [self updateMaximumFramesPerSecond];
+}
+#endif // TARGET_OS_OSX
+
+// Read AppKit/UIKit only on the main thread, including when a window detaches.
+- (void)updateMaximumFramesPerSecond {
+#if !TARGET_OS_VISION
+  auto screen = self.window.screen;
+  _maximumFramesPerSecond =
+      screen != nil ? (float)screen.maximumFramesPerSecond : 0;
+#endif // !TARGET_OS_VISION
+}
+
+// Request the screen's full rate, and update the request when that rate
+// changes. UIKit needs an explicit request to avoid 60 Hz callbacks on a
+// ProMotion screen. On iPhone, rates above 60 Hz also need
+// CADisableMinimumFrameDurationOnPhone. Present thread; the default range
+// restores normal behavior on 60 Hz screens.
+- (void)requestFullFrameRate {
+#if !TARGET_OS_VISION
+  const float maxFps = _maximumFramesPerSecond.load();
+  if (maxFps <= 0 || maxFps == _requestedFramesPerSecond) {
+    return;
+  }
+  _requestedFramesPerSecond = maxFps;
+  _displayLink.preferredFrameRateRange =
+      maxFps > 60 ? CAFrameRateRangeMake(60, maxFps, maxFps)
+                  : CAFrameRateRangeDefault;
+#endif // !TARGET_OS_VISION
+}
+
+#pragma mark - Display callbacks
+
+// No autorelease pool of its own: the link is a run loop source, so the
+// present thread's loop returns after each tick and drains its pool then
+// (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
-  if (_view == nullptr || !_view->presentFrame()) {
+  // A frame of the display, from this tick to the next. The scheduler hears
+  // of the animation frames it asked for only, and asks for the next while
+  // frames are left or keep coming.
+  if (_presentView != nullptr && _presentView->hasPendingAnimationFrame()) {
+    _presentView->onAnimationFrame(
+        animationFrame(link.timestamp, link.targetTimestamp));
+  }
+  if (_presentView == nullptr || !_presentView->hasPendingAnimationFrame()) {
     link.paused = YES;
   }
-}
-#endif
-
-- (void)stopDisplayLink {
-#if !TARGET_OS_OSX
-  [_displayLink invalidate];
-  _displayLink = nil;
-#endif
 }
 
 #pragma mark - Render
 
 - (void)drawRect:(CGRect)rect {
-  // The OS asked for a draw: present what the view holds right away.
+  // The OS asked for a draw: present what the view holds on the present
+  // thread's next turn.
   if (_view != nullptr) {
-    _view->redraw();
+    _view->requestRedraw();
   }
 }
 
@@ -192,30 +567,122 @@ static bool appIsBackgrounded() {
 
 - (void)layoutSubviews {
   [super layoutSubviews];
-  if (_surface != nullptr) {
+  if (_surface != nullptr && _layer != nil) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _layer.frame =
         CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
-    [self attachSurface];
+    [self updateWindowSize];
     [CATransaction commit];
   }
 }
 
-// Configures the layer as the Dawn surface of the view at its current size:
-// on every layout, and again when the bit depth changes so that the layer's
-// pixel format follows.
-- (void)attachSurface {
-  auto context = _view->getPlatformContext();
-  // The layout is on the pixel grid: round rather than truncate, so that a
-  // product like 1169.9999 gives the pixel size the layout means.
-  float pd = context->getPixelDensity();
-  int w = static_cast<int>(std::lround(_layer.frame.size.width * pd));
-  int h = static_cast<int>(std::lround(_layer.frame.size.height * pd));
+// The size of the layer in pixels. The layout is on the pixel grid: round
+// rather than truncate, so that a product like 1169.9999 gives the pixel size
+// the layout means.
+- (void)pixelWidth:(int *)width height:(int *)height {
+  float pd = _view->getPlatformContext()->getPixelDensity();
+  *width = static_cast<int>(std::lround(_layer.frame.size.width * pd));
+  *height = static_cast<int>(std::lround(_layer.frame.size.height * pd));
+}
+
+// On every layout: the window is attached the first time it has a size, and
+// handed a new size from then on with resize(), which the present thread
+// configures the swapchain for by its next present. A size of zero takes the
+// window away until the next size: Dawn refuses an empty surface, and without
+// one the frames wait.
+- (void)updateWindowSize {
+  int w = 0;
+  int h = 0;
+  [self pixelWidth:&w height:&h];
   _surface->setLayoutSize(w, h);
-  // The layer is owned by the view: nothing to release with the window.
-  _surface->attach((__bridge void *)_layer, w, h, _highBitDepth,
-                   context->prefersP3ColorSpace(), nullptr);
+  if (!_windowAttached || w == 0 || h == 0) {
+    [self attachWindowWithWidth:w height:h];
+    return;
+  }
+  if (w != _attachedWidth || h != _attachedHeight) {
+    _attachedWidth = w;
+    _attachedHeight = h;
+    _surface->resize(w, h);
+  }
+}
+
+// Configures the layer as the Dawn surface of the view, at the layer's size:
+// as the view comes back into a superview with a new layer (see
+// attachWindowWithWidth:height:).
+- (void)attachSurface {
+  int w = 0;
+  int h = 0;
+  [self pixelWidth:&w height:&h];
+  _surface->setLayoutSize(w, h);
+  [self attachWindowWithWidth:w height:h];
+}
+
+// Attaches the window at the layout size just set, in pixels, or takes it
+// away at a size of zero. The attach runs on the present thread, in order
+// with the presents, detaches and redraws posted before it: a present in
+// flight holds the thread for as long as its pipelines take to compile, and
+// the main thread must not wait for that. It takes the layout size as it is
+// when it runs, so that a layout in between is not lost (a resize() before the
+// window exists is dropped), and does nothing at a size of zero (that layout
+// posted a detach after it). A layout that handed resize() a size while the
+// window was being attached was dropped too: the window takes the latest layout
+// size once attached. The main thread records the window as attached right
+// away, so that later layouts resize it.
+- (void)attachWindowWithWidth:(int)w height:(int)h {
+  if (w == 0 || h == 0) {
+    [self detachWindow];
+    return;
+  }
+  _windowAttached = true;
+  _attachedWidth = w;
+  _attachedHeight = h;
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  const bool highBitDepth = _highBitDepth;
+  const bool useP3ColorSpace =
+      usesP3ColorSpace(_colorSpace, _view->getPlatformContext());
+  // The layer was tagged with the colorspace of this bit depth and color
+  // space when it was made (see willMoveToSuperview:), for the format the
+  // attach asks for, which a Metal surface grants (see
+  // RNSkWindowSurface::attach).
+  RNSkia::presentThread().post([=]() {
+    int width = 0;
+    int height = 0;
+    if (!surface->getLayoutSize(&width, &height) || width == 0 || height == 0) {
+      return;
+    }
+    // Configuring the surface, at the first present after this, must not
+    // change the layer, which would open a CATransaction on this thread
+    // (#4474). Dawn sets the layer's opacity from the alpha mode: the view
+    // made the layer non-opaque for the premultiplied mode of
+    // RNSkWindowSurface::configureSurface, and the two must stay in step.
+    NSCAssert(!layer.opaque, @"The CAMetalLayer must be made non-opaque on "
+                             @"the main thread before the attach");
+    // The layer is owned by the view: nothing to release with the window.
+    surface->attach((__bridge void *)layer, width, height, highBitDepth,
+                    useP3ColorSpace, nullptr);
+    int latestWidth = 0;
+    int latestHeight = 0;
+    if (surface->getLayoutSize(&latestWidth, &latestHeight) &&
+        (latestWidth != width || latestHeight != height)) {
+      surface->resize(latestWidth, latestHeight);
+    }
+  });
+}
+
+// Takes the window away on the present thread, after the present in flight:
+// the layout collapsed to zero. Only this layer's window: an attach posted
+// after this one, for another layer, stays (see RNSkWindowSurface::detach).
+- (void)detachWindow {
+  if (!_windowAttached) {
+    return;
+  }
+  _windowAttached = false;
+  auto surface = _surface;
+  CAMetalLayer *layer = _layer;
+  RNSkia::presentThread().post(
+      [=]() { surface->detach((__bridge void *)layer); });
 }
 
 #pragma mark - Props
@@ -232,27 +699,39 @@ static bool appIsBackgrounded() {
       [[RCTConvert NSString:RCTNSStringFromString(newProps.nativeId)] intValue];
   [self bindNativeId:nativeId];
   [self setHighBitDepth:newProps.highBitDepth];
-  // opaque, androidSurfaceType and androidZOrderOnTop select the backing view
-  // on Android; a CAMetalLayer composites like any other layer.
+  [self setColorSpace:newProps.colorSpace];
+  // The android* props (backing view, opacity, z-order) select and set up the
+  // backing view on Android; a CAMetalLayer composites like any other layer.
 }
 
 // Not setNativeId:, which is the setter of RCTViewComponentView's nativeId
 // (the string Fabric assigns from the nativeID prop).
 - (void)bindNativeId:(size_t)nativeId {
   _nativeId = nativeId;
-  if (_view != nullptr) {
-    _manager->registerSkiaView(nativeId, _view);
+  auto manager = _manager.lock();
+  if (_view != nullptr && manager != nullptr) {
+    manager->registerSkiaView(nativeId, _view);
   }
 }
 
+// The bit depth and the color space are read when the native view is created
+// and kept until it goes (see releaseNativeView), as the backing view and its
+// format are on Android: a change on a mounted canvas is ignored, with a
+// warning in development from JS (see views/apple.ts). The layer is
+// then tagged once, as it is made, and its pixel format never changes under a
+// frame it shows.
 - (void)setHighBitDepth:(bool)highBitDepth {
-  if (_highBitDepth == highBitDepth) {
+  if (_surface != nullptr) {
     return;
   }
   _highBitDepth = highBitDepth;
-  if (_surface != nullptr && _surface->isAttached()) {
-    [self attachSurface];
+}
+
+- (void)setColorSpace:(const std::string &)colorSpace {
+  if (_surface != nullptr) {
+    return;
   }
+  _colorSpace = colorSpace;
 }
 
 @end

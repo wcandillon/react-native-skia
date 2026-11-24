@@ -9,6 +9,7 @@ A texture is an image that lives on the GPU.
 React Native Skia provides hooks that create textures off the JS thread and expose them as Reanimated shared values.
 
 With Graphite, textures are shared between threads: a texture created on one thread can be drawn by any canvas and from any runtime.
+A texture belongs to the GPU device, which [can be lost](/docs/webgpu#device-loss) while the app runs: the hooks make theirs again on the new device, and `useGpu()` lets a texture of your own do the same.
 
 ## `useTexture`
 
@@ -40,7 +41,7 @@ const Demo = () => {
 This hook allows you to upload an image to the GPU.
 It accepts an image source as argument.
 It loads and decodes the image off the JS thread, like [`useImage`](/docs/images#useimage), then uploads it with `makeTextureImage()` on the UI thread.
-An image drawn by several canvases is uploaded once this way; see [GPU and CPU images](/docs/images#gpu-and-cpu-images).
+The upload is paid before the first frame that draws the image, and the texture is held for as long as the image; see [GPU and CPU images](/docs/images#gpu-and-cpu-images).
 
 ```tsx twoslash
 import { useWindowDimensions } from "react-native";
@@ -93,12 +94,13 @@ const Demo = () => {
 
 ## Under the hood
 
-Reanimated provides a [`runOnUI`](https://docs.swmansion.com/react-native-reanimated/docs/threading/runOnUI) function that enables the execution of JavaScript code on the UI thread. The hooks above use it to create GPU textures without blocking the JS thread.
+React Native Worklets provides a [`scheduleOnUI`](https://docs.swmansion.com/react-native-worklets/docs/threading/scheduleOnUI) function that enables the execution of JavaScript code on the UI thread. The hooks above use it to create GPU textures without blocking the JS thread.
 
 ```tsx twoslash
 import { useEffect } from "react";
-import { runOnUI, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
+import { scheduleOnUI } from "react-native-worklets";
 import { Skia, Canvas, Image } from "react-native-skia";
 import type { SkImage } from "react-native-skia";
 
@@ -114,7 +116,7 @@ const createTexture = (image: SharedValue<SkImage | null>) => {
 const Demo = () => {
   const image = useSharedValue<SkImage | null>(null);
   useEffect(() => {
-    runOnUI(createTexture)(image);
+    scheduleOnUI(createTexture, image);
   }, []);
   
   return (
@@ -125,7 +127,7 @@ const Demo = () => {
 };
 ```
 
-This example demonstrates how to create a texture, draw a cyan color onto it, and then display it using the `Image` component from `react-native-skia`. The `runOnUI` function ensures that the texture creation and drawing operations are performed on the UI thread.
+This example demonstrates how to create a texture, draw a cyan color onto it, and then display it using the `Image` component from `react-native-skia`. The `scheduleOnUI` function ensures that the texture creation and drawing operations are performed on the UI thread.
 
 Since textures are shared between threads, you can also create one directly on the JS thread, without Reanimated:
 
@@ -156,13 +158,15 @@ const Demo = () => {
 Draw into the surface, flush it, and whatever samples the image on the next frame sees the new content.
 
 ```tsx twoslash
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useSharedValue, useFrameCallback } from "react-native-reanimated";
-import { Skia, Canvas, Image } from "react-native-skia";
+import { Skia, Canvas, Image, useGpu } from "react-native-skia";
 
 const Demo = () => {
-  const surface = useMemo(() => Skia.Surface.MakeOffscreen(200, 200)!, []);
-  // The image is created once and follows the surface.
+  // Both are made again once a lost GPU device has been replaced.
+  const gpu = useGpu();
+  const surface = useMemo(() => Skia.Surface.MakeOffscreen(200, 200)!, [gpu]);
+  // The image is created once per surface and follows it.
   const image = useMemo(() => surface.asImage(), [surface]);
   const t = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -188,7 +192,7 @@ Never draw the image onto its own surface: use a second surface for a feedback l
 :::info
 
 On the Web, a texture belongs to the WebGL context that created it, and each canvas has its own context.
-Call `makeNonTextureImage()` on the snapshot before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
+Read the snapshot back with `makeRasterImage()` before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
 
 :::
 

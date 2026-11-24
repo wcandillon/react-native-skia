@@ -1,10 +1,17 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "rnskia/RNSkPlatformContext.h"
 
 #include "JsiSkNativeObjects.h"
+#include "jsi/JsiPromises.h"
+#include "rnskia/RNSkRuntimeScheduler.h"
 
 #include "rnskia/RNDawnContext.h"
 
@@ -47,6 +54,7 @@
 #include "JsiSkSVGFactory.h"
 #include "JsiSkShader.h"
 #include "JsiSkShaderFactory.h"
+#include "JsiSkShapeBlob.h"
 #include "JsiSkSurfaceFactory.h"
 #include "JsiSkTextBlobFactory.h"
 #include "JsiSkTypeface.h"
@@ -149,6 +157,10 @@ public:
     return JsiSkVertices::createCtor(getContext())(runtime, thisValue,
                                                    arguments, count);
   }
+  JSI_HOST_FUNCTION(ShapeBlob) {
+    return JsiSkShapeBlob::createCtor(getContext())(runtime, thisValue,
+                                                    arguments, count);
+  }
   JSI_HOST_FUNCTION(PictureRecorder) {
     return JsiSkPictureRecorder::createCtor(getContext())(runtime, thisValue,
                                                           arguments, count);
@@ -159,7 +171,9 @@ public:
   JSI_HOST_FUNCTION(getNativeDevice) {
     // Raw WGPUDevice pointer of the Graphite device, as a BigInt. Consumed by
     // react-native-webgpu's importDevice(), which AddRefs it; the pointer
-    // stays owned by DawnContext and is valid for the process lifetime.
+    // stays owned by DawnContext and is valid for the process lifetime. It
+    // is the device in use: a lost one is replaced (see DawnContext), and
+    // Skia.gpu.lost tells JS to import the new one.
     auto &dawnContext = DawnContext::getInstance();
     return jsi::BigInt::fromUint64(
         runtime, reinterpret_cast<uint64_t>(dawnContext.getWGPUDevice().Get()));
@@ -168,6 +182,31 @@ public:
   JSI_HOST_FUNCTION(Recorder) {
     return JsiRecorder::createCtor(getContext())(runtime, thisValue, arguments,
                                                  count);
+  }
+
+  // The GPU Skia renders with, or why there is none (Skia.gpu, see
+  // src/skia/types/Skia.ts). A fresh object per read, of plain values, and
+  // the promise of the device's loss (see getLostPromise).
+  jsi::Value getGpu(jsi::Runtime &runtime) {
+    const auto &gpu = DawnContext::getGpuInfo();
+    auto string = [&runtime](const std::string &value) {
+      return jsi::String::createFromUtf8(runtime, value);
+    };
+    jsi::Object result(runtime);
+    result.setProperty(runtime, "isAvailable", gpu.available);
+    result.setProperty(runtime, "backend", string(gpu.adapter.backend));
+    result.setProperty(runtime, "vendor", string(gpu.adapter.vendor));
+    result.setProperty(runtime, "architecture",
+                       string(gpu.adapter.architecture));
+    result.setProperty(runtime, "device", string(gpu.adapter.device));
+    result.setProperty(runtime, "description", string(gpu.adapter.description));
+    result.setProperty(runtime, "error",
+                       gpu.available ? jsi::Value::null()
+                                     : jsi::Value(runtime, string(gpu.error)));
+    result.setProperty(runtime, "lost",
+                       getLostPromise(runtime, gpu.generation));
+    result.setProperty(runtime, "foreground", DawnContext::isForeground());
+    return result;
   }
 
   // Factory properties: like the legacy HostObject implementation, each
@@ -230,6 +269,7 @@ public:
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
+    installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);
     installHostMethod(runtime, prototype, "Font", &JsiSkApi::Font);
     installHostMethod(runtime, prototype, "Paint", &JsiSkApi::Paint);
     installHostMethod(runtime, prototype, "RSXform", &JsiSkApi::RSXform);
@@ -245,6 +285,7 @@ public:
                       &JsiSkApi::ContourMeasureIter);
     installHostMethod(runtime, prototype, "MakeVertices",
                       &JsiSkApi::MakeVertices);
+    installHostMethod(runtime, prototype, "ShapeBlob", &JsiSkApi::ShapeBlob);
     installHostMethod(runtime, prototype, "PictureRecorder",
                       &JsiSkApi::PictureRecorder);
     installHostMethod(runtime, prototype, "Color", &JsiSkApi::Color);
@@ -283,6 +324,111 @@ public:
   }
 
 private:
+  /**
+   Skia.gpu.lost: the promise of the loss of the device in use, one per
+   device and per runtime (like WebGPU's GPUDevice.lost, the same promise for
+   every read while the device is in use), resolved on the runtime that read
+   it once React Native Skia has tried to replace the device. `generation` is
+   the device Skia.gpu describes (see DawnContext::generation()); 0 without
+   a GPU, whose promise never resolves. The pending promise is kept in the
+   runtime's runtimeData, so that it goes with the runtime, and settled
+   through the runtime's scheduler (see RNSkRuntimeScheduler); on a worklet
+   runtime of the app's own, which polls for its results only while it waits
+   for some, the loss is delivered with the next such wait.
+   */
+  jsi::Value getLostPromise(jsi::Runtime &runtime, uint64_t generation) {
+    static const jsi::UUID kSlot(0x7c2a3b4e, 0x6b5f, 0x11f0, 0x8d4b,
+                                 0x0242ac120003ULL);
+    auto slot =
+        std::static_pointer_cast<LostPromise>(runtime.getRuntimeData(kSlot));
+    if (slot == nullptr) {
+      slot = std::make_shared<LostPromise>();
+      runtime.setRuntimeData(kSlot, slot);
+      auto &registry = lostPromises();
+      std::lock_guard<std::mutex> lock(registry.mutex);
+      registry.entries.push_back(
+          {slot, RNSkRuntimeScheduler::get(runtime, getContext())});
+      if (!registry.listening) {
+        // Told of every loss, on the thread that replaced the device: each
+        // runtime settles its own promise on its own thread.
+        registry.listening = true;
+        DawnContext::addLossListener([](const DawnContext::LossInfo &info) {
+          notifyLostPromises(info);
+        });
+      }
+    }
+    if (slot->value.has_value() && slot->generation == generation) {
+      return jsi::Value(runtime, *slot->value);
+    }
+    std::shared_ptr<RNJsi::JsiPromises::Promise> promise;
+    auto value = RNJsi::JsiPromises::createPromiseAsJSIValue(
+        runtime,
+        [&promise](jsi::Runtime &,
+                   std::shared_ptr<RNJsi::JsiPromises::Promise> created) {
+          promise = std::move(created);
+        });
+    slot->generation = generation;
+    slot->promise = std::move(promise);
+    slot->value.emplace(runtime, value);
+    return value;
+  }
+
+private:
+  /** The pending Skia.gpu.lost of one runtime; owned by the runtime. */
+  struct LostPromise {
+    uint64_t generation = 0;
+    std::shared_ptr<RNJsi::JsiPromises::Promise> promise;
+    std::optional<jsi::Value> value;
+  };
+
+  struct LostPromises {
+    std::mutex mutex;
+    bool listening = false;
+    std::vector<std::pair<std::weak_ptr<LostPromise>,
+                          std::weak_ptr<RNSkRuntimeScheduler>>>
+        entries;
+  };
+
+  // Never destroyed: a loss may be reported during process teardown.
+  static LostPromises &lostPromises() {
+    static auto *registry = new LostPromises();
+    return *registry;
+  }
+
+  // Settles the promise of the lost device on every runtime that holds one.
+  // Any thread; the slots and schedulers of runtimes gone since are skipped
+  // and forgotten.
+  static void notifyLostPromises(const DawnContext::LossInfo &info) {
+    auto &registry = lostPromises();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    for (auto it = registry.entries.begin(); it != registry.entries.end();) {
+      auto scheduler = it->second.lock();
+      if (it->first.expired() || scheduler == nullptr) {
+        it = registry.entries.erase(it);
+        continue;
+      }
+      // The slot is captured weakly: it dies with its runtime, on that
+      // runtime's thread, not with a job dropped elsewhere. Nothing expects
+      // this job (see RNSkRuntimeScheduler::postEvent).
+      scheduler->postEvent([weakSlot = it->first, info](jsi::Runtime &runtime) {
+        auto slot = weakSlot.lock();
+        if (slot == nullptr || slot->promise == nullptr ||
+            slot->generation != info.generation) {
+          return;
+        }
+        auto promise = std::move(slot->promise);
+        slot->value.reset();
+        jsi::Object result(runtime);
+        result.setProperty(runtime, "reason",
+                           jsi::String::createFromUtf8(runtime, info.reason));
+        result.setProperty(runtime, "message",
+                           jsi::String::createFromUtf8(runtime, info.message));
+        promise->resolve(jsi::Value(runtime, result));
+      });
+      ++it;
+    }
+  }
+
   std::shared_ptr<JsiSkSVGFactory> _svgFactory;
   std::shared_ptr<JsiSkImageFactory> _imageFactory;
   std::shared_ptr<JsiSkAnimatedImageFactory> _animatedImageFactory;

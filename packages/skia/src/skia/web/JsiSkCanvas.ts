@@ -3,6 +3,7 @@ import type {
   CanvasKit,
   CubicResampler as CKCubicResampler,
   FilterOptions as CKFilterOptions,
+  Paint,
 } from "canvaskit-wasm";
 
 import {
@@ -27,6 +28,7 @@ import {
   type InputRRect,
   type SkSVG,
   type SkTextBlob,
+  type SkShapeBlob,
   type SkVertices,
   type SkRSXform,
   type CubicResampler,
@@ -43,6 +45,7 @@ import { JsiSkVertices } from "./JsiSkVertices";
 import { JsiSkPath } from "./JsiSkPath";
 import { JsiSkFont } from "./JsiSkFont";
 import { JsiSkTextBlob } from "./JsiSkTextBlob";
+import { JsiSkShapeBlob } from "./JsiSkShapeBlob";
 import { JsiSkPicture } from "./JsiSkPicture";
 import { JsiSkMatrix } from "./JsiSkMatrix";
 import { JsiSkImageFilter } from "./JsiSkImageFilter";
@@ -65,12 +68,12 @@ export class JsiSkCanvas
     );
   }
 
-  drawImage(image: SkImage, x: number, y: number, paint?: SkPaint) {
+  drawImage(image: SkImage, x: number, y: number, paint?: SkPaint | null) {
     this.ref.drawImage(
       JsiSkImage.fromValue(image),
       x,
       y,
-      paint ? JsiSkPaint.fromValue(paint) : paint
+      paint ? JsiSkPaint.fromValue(paint) : undefined
     );
   }
 
@@ -203,21 +206,39 @@ export class JsiSkCanvas
     colors?: SkColor[] | null,
     texs?: SkPoint[] | null,
     mode?: BlendMode | null,
-    paint?: SkPaint
+    paint?: SkPaint | null
   ) {
-    const defaultPaint = paint ? null : new this.CanvasKit.Paint();
-    try {
+    this.withPaint(paint, (p) => {
       this.ref.drawPatch(
         cubics.map(({ x, y }) => [x, y]).flat(),
-        colors,
-        texs ? texs.flatMap((p) => Array.from(JsiSkPoint.fromValue(p))) : texs,
+        colors ?? null,
+        texs
+          ? texs.flatMap((pt) => Array.from(JsiSkPoint.fromValue(pt)))
+          : null,
         mode !== undefined && mode !== null
           ? getEnum(this.CanvasKit, "BlendMode", mode)
           : null,
-        paint ? JsiSkPaint.fromValue(paint) : defaultPaint!
+        p
       );
+    });
+  }
+
+  // Draws with the caller's paint if given, otherwise with a temporary
+  // CanvasKit paint that is deleted right after the call. Canvas wrappers
+  // are rarely disposed, so caching the paint on them would leak it.
+  private withPaint(
+    paint: SkPaint | null | undefined,
+    draw: (p: Paint) => void
+  ) {
+    if (paint) {
+      draw(JsiSkPaint.fromValue<Paint>(paint));
+      return;
+    }
+    const defaultPaint = new this.CanvasKit.Paint();
+    try {
+      draw(defaultPaint);
     } finally {
-      defaultPaint?.delete();
+      defaultPaint.delete();
     }
   }
 
@@ -233,6 +254,9 @@ export class JsiSkCanvas
   }
 
   drawPoints(mode: PointMode, points: SkPoint[], paint: SkPaint) {
+    if (points.length === 0) {
+      return;
+    }
     this.ref.drawPoints(
       getEnum(this.CanvasKit, "PointMode", mode),
       points.map(({ x, y }) => [x, y]).flat(),
@@ -303,6 +327,13 @@ export class JsiSkCanvas
     );
   }
 
+  drawShapes(blob: SkShapeBlob, paint?: SkPaint | null) {
+    JsiSkShapeBlob.fromValue(blob).draw(
+      this.ref,
+      paint ? JsiSkPaint.fromValue<Paint>(paint) : null
+    );
+  }
+
   drawGlyphs(
     glyphs: number[],
     positions: SkPoint[],
@@ -333,7 +364,7 @@ export class JsiSkCanvas
   }
 
   saveLayer(
-    paint?: SkPaint,
+    paint?: SkPaint | null,
     bounds?: SkRect | null,
     backdrop?: SkImageFilter | null,
     flags?: SaveLayerFlag
@@ -414,9 +445,9 @@ export class JsiSkCanvas
     srcs: SkRect[],
     dsts: SkRSXform[],
     paint: SkPaint,
-    blendMode?: BlendMode,
-    colors?: SkColor[],
-    sampling?: CubicResampler | FilterOptions
+    blendMode?: BlendMode | null,
+    colors?: readonly SkColor[] | null,
+    sampling?: CubicResampler | FilterOptions | null
   ) {
     const src = srcs.flatMap((s) =>
       Array.from(JsiSkRect.fromValue(this.CanvasKit, s))
@@ -450,7 +481,7 @@ export class JsiSkCanvas
       src,
       dst,
       JsiSkPaint.fromValue(paint),
-      blendMode !== undefined
+      blendMode !== undefined && blendMode !== null
         ? getEnum(this.CanvasKit, "BlendMode", blendMode)
         : this.CanvasKit.BlendMode.DstOver,
       cls,
@@ -466,6 +497,10 @@ export class JsiSkCanvas
       alphaType: getEnum(this.CanvasKit, "AlphaType", imageInfo.alphaType),
       colorType: getEnum(this.CanvasKit, "ColorType", imageInfo.colorType),
     };
-    return this.ref.readPixels(srcX, srcY, pxInfo);
+    // CanvasKit reads synchronously; a promise like on native, where the GPU
+    // is asynchronous.
+    return new Promise<Float32Array | Uint8Array | null>((resolve) =>
+      resolve(this.ref.readPixels(srcX, srcY, pxInfo))
+    );
   }
 }

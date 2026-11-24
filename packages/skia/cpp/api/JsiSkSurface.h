@@ -45,8 +45,10 @@ public:
   }
 
   ~JsiSkSurface() override {
+    // Collected by the GC: a canvas that JS still holds keeps the surface
+    // alive (see getCanvas), so only the wrapper's own reference goes.
     if (!isDisposed()) {
-      releaseResources();
+      releaseSurface();
     }
   }
 
@@ -56,12 +58,19 @@ public:
 
   std::shared_ptr<JsiSkCanvas> getCanvas() {
     auto surface = getObject();
-    auto canvas =
-        std::make_shared<JsiSkCanvas>(getContext(), surface->getCanvas());
-    // Keep a reference to the owning surface so the canvas can read pixels back
-    // through a snapshot on Graphite (which lacks synchronous canvas readback).
-    canvas->setSurface(surface, _dispatcher);
-    return canvas;
+    // One wrapper per surface, as on CanvasKit: every call hands back the
+    // same canvas (NativeObject::create caches the JS object per runtime),
+    // and dispose() has a single canvas to detach.
+    if (!_canvas) {
+      _canvas =
+          std::make_shared<JsiSkCanvas>(getContext(), surface->getCanvas());
+      // The canvas keeps a reference to the surface so that it can read pixels
+      // back through a snapshot on Graphite (which lacks synchronous canvas
+      // readback), and so that it outlives a surface wrapper the GC collected
+      // first.
+      _canvas->setSurface(surface, _dispatcher);
+    }
+    return _canvas;
   }
 
   void flush(JsiOptional<bool> syncParam) {
@@ -73,12 +82,12 @@ public:
     // draws into (see Surface.MakeFromGPUTexture). #3916
     bool sync = syncParam.has_value() && *syncParam;
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
-    // only Graphite-backed surfaces need to snap and submit a recording.
+    // only Graphite-backed surfaces need to snap and submit a recording. One
+    // made on a GPU device lost since submits nothing (see DawnContext).
     if (auto *recorder = surface->recorder()) {
-      auto recording = recorder->snap();
       DawnContext::getInstance().submitRecording(
-          recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
-                                : skgpu::graphite::SyncToCpu::kNo);
+          recorder, sync ? skgpu::graphite::SyncToCpu::kYes
+                         : skgpu::graphite::SyncToCpu::kNo);
     }
   }
 
@@ -114,8 +123,7 @@ public:
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.
     if (auto *recorder = surface->recorder()) {
-      auto recording = recorder->snap();
-      DawnContext::getInstance().submitRecording(recording.get());
+      DawnContext::getInstance().submitRecording(recorder);
     }
     if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
@@ -192,6 +200,17 @@ public:
 
 protected:
   void releaseResources() override {
+    // dispose(): the canvas lets go of its reference too, so that the texture
+    // is freed now rather than once the canvas is collected (#4275). Drawing
+    // on the canvas throws from here on.
+    if (_canvas) {
+      _canvas->detach();
+    }
+    releaseSurface();
+  }
+
+private:
+  void releaseSurface() {
     // Destroying a Graphite surface flushes it into its recorder and
     // deregisters it from it, and a recorder is single-threaded. The GC may
     // finalize this object on any thread, and dispose() may be called from
@@ -201,8 +220,8 @@ protected:
     _dispatcher->release(std::move(surface));
   }
 
-private:
   std::shared_ptr<Dispatcher> _dispatcher;
+  std::shared_ptr<JsiSkCanvas> _canvas;
 };
 
 } // namespace RNSkia

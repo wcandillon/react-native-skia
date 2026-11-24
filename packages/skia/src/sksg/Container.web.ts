@@ -1,4 +1,5 @@
 import Rea from "../external/reanimated/ReanimatedProxy";
+import { Worklets } from "../external/reanimated/WorkletsProxy";
 import type { Skia } from "../skia/types";
 import { HAS_REANIMATED_3 } from "../external/reanimated/renderHelpers";
 
@@ -7,7 +8,7 @@ import { Recorder, disposeRecording } from "./Recorder/Recorder";
 import { visit } from "./Recorder/Visitor";
 import { replay } from "./Recorder/Player";
 import { createDrawingContext } from "./Recorder/DrawingContext";
-import { Container, StaticContainer } from "./StaticContainer";
+import { JsContainer, StaticContainer } from "./StaticContainer";
 
 import "../skia/NativeSetup";
 import "../views/api";
@@ -42,15 +43,8 @@ const drawOnscreen = (Skia: Skia, nativeId: number, recording: Recording) => {
   recording.lastPicture = picture;
 };
 
-class ReanimatedContainer extends Container {
+class ReanimatedContainer extends JsContainer {
   private mapperId: number | null = null;
-
-  constructor(
-    Skia: Skia,
-    private nativeId: number
-  ) {
-    super(Skia);
-  }
 
   unmount() {
     super.unmount();
@@ -66,10 +60,10 @@ class ReanimatedContainer extends Container {
       this.recording = null;
       // Deferred through the same channel as the draw calls so it runs after
       // any of them that are still queued.
-      Rea.runOnUI(() => {
+      Worklets.scheduleOnUI(() => {
         "worklet";
         disposeRecording(recording);
-      })();
+      });
     }
   }
 
@@ -82,13 +76,14 @@ class ReanimatedContainer extends Container {
       return;
     }
     const previousRecording = this.recording;
-    const recorder = new Recorder();
+    const recorder = new Recorder(this.Skia);
     visit(recorder, this.root);
     const record = recorder.getRecording();
     const { animationValues } = record;
     this.recording = {
       commands: record.commands,
       paintPool: record.paintPool,
+      disposables: record.disposables,
     };
     const { nativeId, Skia, recording } = this;
     if (animationValues.size > 0) {
@@ -97,14 +92,14 @@ class ReanimatedContainer extends Container {
         drawOnscreen(Skia, nativeId, recording!);
       }, Array.from(animationValues));
     }
-    Rea.runOnUI(() => {
+    Worklets.scheduleOnUI(() => {
       "worklet";
       if (previousRecording) {
         // Runs after any still-queued draw of the previous recording.
         disposeRecording(previousRecording);
       }
       drawOnscreen(Skia, nativeId, recording!);
-    })();
+    });
   }
 }
 

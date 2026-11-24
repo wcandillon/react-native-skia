@@ -16,6 +16,9 @@
   "types": "lib/typescript/index.d.ts",
   "files": [
     "scripts/setup-canvaskit.js",
+    "scripts/apple-binaries-utils.sh",
+    "scripts/prepare-apple-binaries.sh",
+    "scripts/spm-plugin.js",
     "src/**",
     "lib/**",
     "!**/__tests__/**",
@@ -33,6 +36,7 @@
     "cpp/**/*.{h,cpp}",
     "apple/**",
     "react-native-skia.podspec",
+    "binaries.json",
     "Package.swift",
     "include/**",
     "react-native.config.js",
@@ -40,15 +44,19 @@
   ],
   "scripts": {
     "lint": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache --fix",
+    "lint:ci": "eslint . --ext .ts,.tsx  --max-warnings 0 --cache",
     "tsc": "tsc --noEmit",
     "test": "jest",
     "e2e": "E2E=true yarn test -i e2e",
+    "test-cpp": "sh ./cpp-tests/run.sh",
     "release": "semantic-release",
     "build": "bob build && merge-dirs lib/typescript/src lib/commonjs && merge-dirs lib/typescript/src lib/module",
     "clean-skia": "yarn rimraf ./libs && yarn rimraf ../../externals/skia/out",
     "build-skia": "tsx ./scripts/build-skia.ts",
     "build-dawn": "tsx ./scripts/build-dawn.ts",
     "package-binaries": "tsx ./scripts/package-binaries.ts",
+    "package-skia-wasm": "tsx ./scripts/package-skia-wasm.ts",
+    "prepare-dawn-headers": "tsx ./scripts/prepare-dawn-headers.ts",
     "copy-skia-headers": "tsx ./scripts/copy-skia-headers.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
     "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
@@ -76,11 +84,15 @@
     }
   ],
   "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/wcandillon"
+  },
   "licenseFilename": "LICENSE.md",
   "readmeFilename": "README.md",
   "peerDependencies": {
     "react": ">=19.0",
-    "react-native": ">=0.78",
+    "react-native": ">=0.79",
     "react-native-reanimated": ">=4.0.0",
     "react-native-worklets": ">=0.7.0"
   },
@@ -112,10 +124,10 @@
     "@types/pngjs": "6.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/react-reconciler": "0.28.9",
+    "@types/react-reconciler": "0.33.1",
     "@types/ws": "8.5.3",
     "eslint": "9.36.0",
-    "eslint-config-react-native-wcandillon": "5.0.0",
+    "eslint-config-react-native-wcandillon": "5.0.1",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "extract-zip": "^2.0.1",
@@ -125,12 +137,12 @@
     "merge-dirs": "0.2.1",
     "pngjs": "6.0.0",
     "prettier": "2.8.7",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "react-native": "0.83.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
     "react-native-builder-bob": "0.18.2",
-    "react-native-reanimated": "4.3.1",
-    "react-native-worklets": "0.8.3",
+    "react-native-reanimated": "4.7.1",
+    "react-native-worklets": "0.13.1",
     "rimraf": "3.0.2",
     "semantic-release": "^24.1.0",
     "semantic-release-yarn": "^3.0.2",
@@ -141,12 +153,8 @@
     "ws": "8.21.0"
   },
   "dependencies": {
-    "canvaskit-wasm": "0.41.0",
-    "react-native-skia-graphite-android": "154.2.0",
-    "react-native-skia-graphite-apple-ios": "154.2.0",
-    "react-native-skia-graphite-apple-macos": "154.2.0",
-    "react-native-webgpu-dawn": "154.2.0",
-    "react-reconciler": "0.31.0"
+    "canvaskit-wasm": "0.41.1",
+    "react-reconciler": "0.33.0"
   },
   "eslintIgnore": [
     "node_modules/",
@@ -183,5 +191,9 @@
         }
       ]
     ]
+  },
+  "swiftpmConfig": {
+    "name": "ReactNativeSkia",
+    "autolinkingPlugin": "./scripts/spm-plugin.js"
   }
 }

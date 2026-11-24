@@ -6,7 +6,7 @@ name: Build on Windows
 on: workflow_dispatch
 
 jobs:
-  build-windows-library:
+  build-library:
     runs-on: windows-latest
     steps:
       - name: Checkout
