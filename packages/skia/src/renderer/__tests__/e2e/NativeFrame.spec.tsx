@@ -38,6 +38,7 @@ interface TestGPUSharedTextureMemory {
 }
 declare const RNWebGPU: {
   importDevice: (pointer: bigint) => TestGPUDevice & {
+    readonly features: { has(name: string): boolean };
     importSharedTextureMemory(descriptor: {
       source: unknown;
     }): TestGPUSharedTextureMemory;
@@ -182,6 +183,15 @@ describe("Native frames", () => {
           }
           const size = 16;
           const device = RNWebGPU.importDevice(Skia.getNativeDevice());
+          if (
+            !device.features.has("shared-texture-memory-ahardware-buffer") &&
+            !device.features.has("shared-texture-memory-iosurface")
+          ) {
+            return {
+              kind: "skip",
+              reason: "the adapter cannot import native buffers",
+            };
+          }
           const buffer = RNWebGPU.createNativeBuffer(size, size);
           let memory: TestGPUSharedTextureMemory;
           try {
@@ -206,7 +216,13 @@ describe("Native frames", () => {
             dst?.dispose();
             if (texture) {
               if (accessing) {
-                memory.endAccess(texture);
+                try {
+                  memory.endAccess(texture);
+                } catch {
+                  // It throws when the access failed, on a lost device for
+                  // instance: the step that failed first reports why, and the
+                  // rest still has to be released.
+                }
               }
               texture.destroy();
             }
