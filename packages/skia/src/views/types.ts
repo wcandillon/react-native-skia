@@ -4,8 +4,7 @@ import type { SharedValue } from "react-native-reanimated";
 import type { SkGraphiteContext, SkImage, SkRect, SkSize } from "../skia/types";
 
 /** The Android view a canvas draws into, see {@link AndroidCanvasProps}. */
-export type AndroidBackingView =
-  "TextureView" | "SurfaceView" | "HardwareBufferView";
+export type AndroidBackingView = "TextureView" | "SurfaceView";
 
 /** The options of a canvas backed by a `TextureView`, the default. */
 export interface AndroidTextureViewProps {
@@ -55,18 +54,6 @@ export interface AndroidSurfaceViewProps {
   zOrderMediaOverlay?: boolean;
 }
 
-/** The options of a canvas backed by a `HardwareBufferView`. */
-export interface AndroidHardwareBufferViewProps {
-  /**
-   * A plain view drawing each frame's `AHardwareBuffer` inline: composited
-   * like a `TextureView`, without its extra copy (Android 10 and later, the
-   * opt-in of React Native WebGPU). Not available in React Native Skia yet:
-   * the canvas uses a `TextureView`, with a warning in development. Always
-   * composites with alpha.
-   */
-  backingView: "HardwareBufferView";
-}
-
 /**
  * Android-only rendering options: the native view behind the canvas and its
  * options. The view is created when the canvas mounts and kept: a change of
@@ -75,9 +62,7 @@ export interface AndroidHardwareBufferViewProps {
  * z-order options on Android 11 and later. Ignored on iOS and web.
  */
 export type AndroidCanvasProps =
-  | AndroidTextureViewProps
-  | AndroidSurfaceViewProps
-  | AndroidHardwareBufferViewProps;
+  AndroidTextureViewProps | AndroidSurfaceViewProps;
 
 export interface ISkiaViewApi {
   web?: boolean;
