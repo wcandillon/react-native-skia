@@ -156,20 +156,6 @@ inline AdapterDescription describeAdapter(const wgpu::Adapter &adapter) {
   return result;
 }
 
-// Dawn's own SwiftShader test (gpu_info::IsGoogleSwiftshader): Google's
-// vendor ID with SwiftShader's device ID. The Android emulator exposes the
-// host's SwiftShader through gfxstream, which keeps the IDs and the name, so
-// either identifies it.
-inline bool isSwiftShader(const wgpu::Adapter &adapter) {
-  wgpu::AdapterInfo info;
-  adapter.GetInfo(&info);
-  constexpr uint32_t kVendorIDGoogle = 0x1AE0;
-  constexpr uint32_t kDeviceIDSwiftShader = 0xC0DE;
-  return (info.vendorID == kVendorIDGoogle &&
-          info.deviceID == kDeviceIDSwiftShader) ||
-         toString(info.device).find("SwiftShader") != std::string::npos;
-}
-
 // Dawn's own Imagination test (gpu_info::IsImgTec): the PCI vendor ID of
 // Imagination Technologies, whose PowerVR GPUs ship in the Pixel 10 and 11.
 inline bool isImagination(const wgpu::Adapter &adapter) {
@@ -378,16 +364,14 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
 #endif
 #ifdef __ANDROID__
   // Dawn checks an imported AHardwareBuffer's allocation size against the
-  // VkImage it binds to, and the Android emulator's SwiftShader driver reports
-  // that size as 0 for every buffer. The first import (react-native-webgpu's
-  // view snapshots draw into an imported AHardwareBuffer on Android 13+) then
-  // fails as an internal error, which Dawn turns into a device loss: nothing
-  // renders for the rest of the process. Dawn itself skips the check on the
-  // Samsung, Qualcomm and Huawei drivers that misreport the size; do the same
-  // for SwiftShader. Real devices keep the check.
-  if (isSwiftShader(adapter)) {
-    toggles.push_back("ignore_imported_ahardwarebuffer_vulkan_image_size");
-  }
+  // VkImage it binds to, and some drivers report that size wrong: Dawn skips
+  // the check itself on Samsung, Qualcomm and Huawei, and the emulator
+  // (gfxstream, on SwiftShader or the host GPU) reports 0 for every buffer
+  // (#4508). A failed check is an internal error, which Dawn turns into a
+  // device loss: nothing renders for the rest of the process. Skip it on all
+  // of Android, as Chromium (https://crbug.com/377935752) and
+  // react-native-webgpu do on the devices they create.
+  toggles.push_back("ignore_imported_ahardwarebuffer_vulkan_image_size");
 #endif
   wgpu::DawnTogglesDescriptor togglesDesc;
   togglesDesc.enabledToggleCount = toggles.size();
