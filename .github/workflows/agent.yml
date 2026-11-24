@@ -1,4 +1,4 @@
-name: Agent
+name: Run agent
 # A Claude Code agent run started by hand. It builds and launches the example
 # app on its own simulator or emulator, lets the agent open every example
 # through deep links and look at the screen through screenshots, and keeps
@@ -61,7 +61,7 @@ permissions:
   contents: read
 
 jobs:
-  ios:
+  agent-ios:
     if: inputs.platform != 'android'
     # ios-simulator keeps the job off the phone's listener (see ci.yml).
     runs-on: [self-hosted, macOS, ios-simulator]
@@ -224,13 +224,13 @@ jobs:
           fi
 
   # The Android tour runs on a hosted runner, as the CI Android job does: the
-  # build and the emulator are the same recipe as build-test-android in
+  # build and the emulator are the same recipe as e2e-android-emulator in
   # ci.yml, only the emulator is booted by hand here because it has to stay
   # up across the steps the agent runs in. The runner is the job's own
   # machine, so Metro keeps its default port and nothing has to be kept apart
   # from another job. Linux is also where the action isolates the agent's
   # subprocesses.
-  android:
+  agent-android:
     if: inputs.platform != 'ios'
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -316,7 +316,7 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > $GITHUB_WORKSPACE/apps/example/android/local.properties
 
       # Restore only: the CI push runs on main keep both caches fresh, and
-      # the repository's cache limit is tight (see build-test-android).
+      # the repository's cache limit is tight (see e2e-android-emulator).
       - name: Restore Gradle cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

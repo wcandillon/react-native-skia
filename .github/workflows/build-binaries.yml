@@ -1,4 +1,4 @@
-name: Build and publish binaries
+name: Release binaries
 # Builds Skia Graphite and the Dawn it pins, packages them into the
 # react-native-skia-graphite-* and react-native-webgpu-dawn npm packages, and
 # publishes them, all in one run. The build outputs are archived as the assets of

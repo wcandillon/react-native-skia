@@ -27,7 +27,7 @@
     "react-native-screens": "4.19.0",
     "react-native-skia": "workspace:*",
     "react-native-svg": "15.16.1",
-    "react-native-webgpu": "0.22.0",
+    "react-native-webgpu": "0.24.0",
     "react-native-worklets": "0.12.2",
     "three": "0.184.0"
   },
