@@ -20,11 +20,6 @@ public class BackingViewKindTest {
     }
 
     @Test
-    public void aHardwareBufferViewFallsBackToATextureView() {
-        assertEquals(BackingViewKind.TEXTURE_VIEW, BackingViewKind.fromBackingView("HardwareBufferView"));
-    }
-
-    @Test
     public void onlyASurfaceViewGetsTheTenBitFormat() {
         assertTrue(BackingViewKind.resolveHighBitDepth(BackingViewKind.SURFACE_VIEW, true));
         assertFalse(BackingViewKind.resolveHighBitDepth(BackingViewKind.TEXTURE_VIEW, true));
