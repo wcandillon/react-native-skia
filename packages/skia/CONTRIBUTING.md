@@ -26,7 +26,7 @@ The minimum Apple deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0. Ke
 The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, along with Dawn, the WebGPU implementation Graphite renders with, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. There is no `postinstall` step:
 
 - On Android, Gradle downloads them at build time from the GitHub release `binaries-<version>` of this repository, one archive per ABI being built. `packages/skia/binaries.json` pins the version and the sha256 of every archive. They are resolved as Gradle dependencies, so they are cached in the Gradle user home and later builds work offline; the `prepareSkiaBinaries` task verifies them and extracts them into `android/build/binaries`. To download from a mirror, or from a directory with `file:///...`, set the `reactNativeSkiaBinariesUrl` Gradle property or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable to a location holding `binaries-<version>/<asset>`.
-- On Apple platforms they are installed as npm dependencies (`react-native-skia-graphite-apple-*`, and `react-native-webgpu-dawn` for Dawn), which CocoaPods and SwiftPM resolve.
+- On Apple platforms an Xcode build phase prepares the selected SDK's archives from that same pinned release. CocoaPods adds the phase during `pod install`; optional SwiftPM integration adds it during `react-native spm update`. Headers ship in the main `react-native-skia` package, without binary npm dependencies. See [Apple binary preparation](#how-apple-binaries-are-prepared) for caching, local builds, and errors.
 
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
@@ -68,7 +68,7 @@ Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), th
 
 Both Apple builders accept SDK groups (`iphoneos`, `iphonesimulator`, `maccatalyst`, `appletvos`, `appletvsimulator`, `macos`) and individual targets such as `iphonesimulator-arm64` or `iphonesimulator-x86_64`. A group builds its configured architectures and produces lipo'd universal libraries when it has multiple architectures; a single target keeps only that architecture. Single-architecture SDKs copy their libraries directly.
 
-Skia stages per-architecture archives in `libs/apple/<sdk>-<arch>` and writes assembled libraries plus `metadata.json` to `libs/apple/<sdk>`, including for single-architecture builds. After successful SDK assembly, its consumed staging directories are removed. Dawn uses the same layout under `libs/dawn/apple`. GN/CMake build directories remain available for incremental builds. Neither builder assembles XCFrameworks. `package-binaries` still creates the existing Apple npm XCFrameworks for compatibility; the CocoaPods/SwiftPM consumers have not migrated to the raw SDK archives yet.
+Skia stages per-architecture archives in `libs/apple/<sdk>-<arch>` and writes assembled libraries plus `metadata.json` to `libs/apple/<sdk>`, including for single-architecture builds. After successful SDK assembly, its consumed staging directories are removed. Dawn uses the same layout under `libs/dawn/apple`. GN/CMake build directories remain available for incremental builds. Neither builder assembles XCFrameworks. Native consumers assemble the requested SDK slices during their Xcode build; `package-binaries` also creates the existing Apple npm XCFrameworks for other consumers.
 
 After each Apple target compiles, both builders verify every Mach-O object's platform and architecture in its `.a` libraries before copying them or starting the next target. Each check expects only that target's architecture. The check reads archive headers and load commands directly, without extracting objects or running a tool per object.
 
@@ -114,7 +114,7 @@ Make sure `$ANDROID_NDK` and `$ANDROID_HOME` are set (see [Building](#building))
 
 #### 3. Test the example app locally
 
-Binaries you build locally take precedence over the released ones: `build.gradle` uses `packages/skia/libs/android` when it exists (and then requires it to hold the ABIs being built), and the podspec keeps `libs/ios`, `libs/tvos`, and `libs/macos` when they hold xcframeworks without a `.version` stamp (the stamp marks frameworks copied from npm). Apple SDK builds must first pass through `yarn package-binaries --skia-version=<version>` to assemble those compatibility XCFrameworks. For Dawn, the native integration similarly reads `libs/dawn/apple/libwebgpu_dawn.xcframework` after packaging; raw SDK output alone does not override the package's Dawn.
+Binaries you build locally take precedence over released ones: Android reads `packages/skia/libs/android` and `libs/dawn/android`, while Apple preparation reads `libs/apple/<sdk>` and `libs/dawn/apple/<sdk>`. Those directories must hold the ABIs/architectures being built. No packaging command is needed before testing local Apple SDK output.
 
 Delete `packages/skia/libs` (and run `pod install` again) to go back to the published binaries.
 
@@ -228,13 +228,13 @@ The same packages and release assets can be generated locally from a full `yarn 
 
 #### 5. Point the library at the new binaries
 
-Bump the prebuilt binary versions in `packages/skia/package.json` (`react-native-skia-graphite-apple-*` and `react-native-webgpu-dawn`) to the version you just published, and replace `packages/skia/binaries.json`, which is what Gradle downloads the Android binaries from, with the `checksums.json` of the new release:
+Replace `packages/skia/binaries.json`, which pins both Android and Apple downloads, with the `checksums.json` of the new release:
 
 ```sh
 curl -fL https://github.com/wcandillon/react-native-skia/releases/download/binaries-<version>/checksums.json -o packages/skia/binaries.json
 ```
 
-Both must name the same version. Then delete `packages/skia/libs`, run `yarn`, and re-run `pod install` in the example app so it consumes the released binaries. react-native-webgpu depends on the same `react-native-webgpu-dawn` version; the podspec and Gradle refuse an app whose two packages resolve different ones.
+Remove local overrides under `packages/skia/libs` when switching back to released binaries, refresh the copied headers, and re-run the example's `pod install` or `spm update`. The new pin selects its own download cache. react-native-webgpu must provide the same Dawn version; the native integrations refuse mismatches.
 
 Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md`, and to the reference copy in react-native-webgpu's documentation (`apps/docs/content/docs/integrations/react-native-skia.mdx` there), so users can pair the two libraries.
 
@@ -243,9 +243,11 @@ Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.m
 CocoaPods stays the default. `Package.swift` is additive: SwiftPM ignores the
 podspec, and CocoaPods ignores `Package.swift`.
 
-SwiftPM support requires **React Native 0.87 or newer**: earlier releases ship
-no `scripts/spm`. `apps/example` is on an older version, so it cannot exercise
-this path.
+Automatic SwiftPM binary preparation requires **React Native 0.87.1 or newer**.
+RN 0.87.0 introduced SwiftPM tooling but lacks the autolinking plugin's
+`scriptPhases` hook. Use CocoaPods or upgrade for this integration; The main
+example uses CocoaPods; `spm-example` exercises the optional SwiftPM path
+separately.
 
 The harness is `spm-example/` at the repo root, deliberately outside the yarn
 workspace so its React Native does not collide with the workspace's. Its
@@ -259,7 +261,11 @@ xcodebuild -project SpmExample.xcodeproj -scheme SpmExample \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-Autolinking references the library through a symlink at
+`spm-plugin.js` registers Skia's package and product with RN's `Autolinked`
+aggregate. RN delegates native registration to the plugin, so adding only the
+preparation phase would leave the native module unlinked.
+
+The plugin references the installed Skia package through a symlink at
 `<app>/ios/build/generated/autolinking/libs/ReactNativeSkia`, and SwiftPM
 resolves the manifest's relative paths against that symlink rather than against
 `packages/skia`. The two React Native package paths are therefore identical for
@@ -267,13 +273,18 @@ every standard app. The target name is pinned in `react-native.config.js`;
 without it a future React Native release would derive it from the podspec
 instead and change the header import prefix.
 
+Autolinking recreates this generated symlink. After moving the checkout, rerun
+`npx react-native spm update` from `ios/` to refresh its absolute target path.
+The manifest allows only `apple`, `cpp`, and `include` into resource discovery,
+excluding build products and JS dependencies automatically.
+
 CocoaPods defines `RCT_NEW_ARCH_ENABLED` and `RCT_REMOVE_LEGACY_ARCH`
 project-wide for a New Architecture app; the SwiftPM path defines neither.
 Skia's own sources no longer gate on them, but React's headers do
 (`RCT_REMOVE_LEGACY_ARCH` hides the legacy bridge API), so `Package.swift`
 defines both itself.
 
-The native library requires iOS 15.1, tvOS 15.1, and macOS 14.0 (see the podspec).
+The native binaries require iOS 15.1, tvOS 15.1, and macOS 14.0.
 The SwiftPM integration currently targets iOS, and the platform floor of
 `Package.swift` stays at `.iOS(.v15)`: React Native's generated `Autolinked`
 aggregate is hardcoded to iOS 15.0, and SwiftPM refuses to link a product whose
@@ -281,20 +292,48 @@ floor is above the depending target's.
 
 #### Binaries
 
-The manifest links the `react-native-skia-graphite-apple-ios` and
-`react-native-webgpu-dawn` npm packages, the same ones the CocoaPods build
-uses, so no network is needed once dependencies are installed. They are
-resolved by path, from either a sibling in `node_modules` or this monorepo's
-root, and the manifest fails with an explanatory message when one is missing,
-which is what an `--omit=optional` install looks like.
+The plugin generates `build/generated/autolinking/ReactNativeSkiaBinaries`,
+a tiny C package carrying static library link settings, and an app phase before
+compilation. `Package.swift` depends on that package alongside React Native's
+generated packages. Source compilation uses headers bundled in npm, so SwiftPM
+resolution does not need binary placeholders or all-platform downloads.
 
-A remote Swift package with the binaries as `url` targets was tried and dropped: the
-path-based manifest covers React Native's SwiftPM autolinking, and hosting the
-xcframework zips was the only thing that still needed a GitHub release.
+The app phase uses the same cache, SDK selection, local overrides, and errors
+as CocoaPods (see [Apple binary preparation](#how-apple-binaries-are-prepared)). It
+calls Bash directly and stages libraries into `$BUILT_PRODUCTS_DIR` before app linking. Rerun
+`react-native spm update` after upgrading Skia or changing Dawn ownership so
+the generated phase and link settings match the installed package.
 
-After changing which binaries a checkout uses, delete
-`ios/<App>.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
-a stale pin silently keeps the previous source.
+The app's **User Script Sandboxing** must be **NO** for this preparation phase,
+as it accesses the shared release cache and build products. The phase reports
+an explicit error if sandboxing is enabled. CocoaPods sets this on the Skia
+pod target automatically.
+
+### How Apple binaries are prepared
+
+This section explains what the scripts do automatically during setup and app builds (both CocoaPods and SwiftPM). No extra manual steps are required.
+
+0. `pod install` or `react-native spm update` registers the Xcode build phase.
+
+   CocoaPods or the RN 0.87.1+ SwiftPM plugin (`spm-plugin.js`) adds the phase automatically.
+   The phase runs `prepare-apple-binaries.sh`, which sources `apple-binaries-utils.sh`.
+   No binaries are downloaded during setup.
+
+During each Apple app build, the script:
+
+1. Selects the SDK, platform variant, and required architectures from Xcode.
+2. Uses local overrides or downloads the selected SDK's Skia and Dawn archives.
+3. Verifies pinned checksums and SDK metadata before use.
+4. Updates the selected XCFramework slice under `$OBJROOT/ReactNativeSkiaBinaries`.
+5. Stages `librnskia_*.a` files in build products for static linking.
+6. Reuses unchanged downloads, slices, and libraries on later builds.
+
+- Downloads share `~/Library/Caches/react-native-skia`, similar to React Native and Hermes handling.
+- Set `RNSKIA_CACHE_DIR` to change the cache location.
+- Shared Dawn requires matching release versions and Dawn commits in WebGPU's `binaries.json`.
+- Expand **Prepare React Native Skia binaries** in Xcode's report navigator for errors.
+
+See [installation](../../apps/docs/docs/getting-started/installation.md#prebuilt-binaries) for downloads and mirrors, [Apple builds](#apple) for local outputs, and [SwiftPM binaries](#binaries) for SwiftPM integration.
 
 ### Publishing
 
