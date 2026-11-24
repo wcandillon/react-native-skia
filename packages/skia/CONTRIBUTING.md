@@ -236,7 +236,7 @@ curl -fL https://github.com/wcandillon/react-native-skia/releases/download/binar
 
 Remove local overrides under `packages/skia/libs` when switching back to released binaries, refresh the copied headers, and re-run the example's `pod install` or `spm update`. The new pin selects its own download cache. react-native-webgpu must provide the same Dawn version; the native integrations refuse mismatches.
 
-Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md`, and to the reference copy in react-native-webgpu's documentation (`apps/docs/content/docs/integrations/react-native-skia.mdx` there), so users can pair the two libraries.
+Add the new milestone row to the compatibility table in `apps/docs/docs/webgpu.md` so users can pair the two libraries. It is the only copy: react-native-webgpu's documentation links to it.
 
 ### Swift Package Manager (preview)
 
