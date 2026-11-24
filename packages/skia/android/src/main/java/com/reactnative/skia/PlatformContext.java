@@ -13,16 +13,11 @@ import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.common.LifecycleState;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
 
 public class PlatformContext implements LifecycleEventListener {
     @DoNotStrip
@@ -106,16 +101,6 @@ public class PlatformContext implements LifecycleEventListener {
         sMainThreadWakeup = wakeup;
     }
 
-    private byte[] getStreamAsBytes(InputStream is) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        int nRead;
-        byte[] data = new byte[4 * 0x400];
-        while ((nRead = is.read(data, 0, data.length)) != -1) {
-            buffer.write(data, 0, nRead);
-        }
-        return buffer.toByteArray();
-    }
-
     @DoNotStrip
     public byte[] getJniStreamFromSource(String sourceUri) throws IOException {
         // First try loading the input as a resource directly
@@ -128,7 +113,7 @@ public class PlatformContext implements LifecycleEventListener {
 
         if (resourceId != 0) {
             // We can just return the input stream directly
-            return getStreamAsBytes(mContext.getResources().openRawResource(resourceId));
+            return SourceBytes.read(mContext.getResources().openRawResource(resourceId));
         }
 
         // We should try to open a connection and return a stream to download this
@@ -144,12 +129,7 @@ public class PlatformContext implements LifecycleEventListener {
 
             // TODO: Base64??
 
-            URL url = uri.toURL();
-            URLConnection connection = url.openConnection();
-            connection.connect();
-
-            BufferedInputStream b = new BufferedInputStream(url.openStream(), 8192);
-            return getStreamAsBytes(b);
+            return SourceBytes.fromUrl(uri.toURL());
 
         } catch (URISyntaxException e) {
             e.printStackTrace();

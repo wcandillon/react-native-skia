@@ -585,6 +585,9 @@ public:
                       &JsiSkSkottie::getTextProps);
     installMethod(runtime, prototype, "setColor", &JsiSkSkottie::setColor);
     installMethod(runtime, prototype, "setText", &JsiSkSkottie::setText);
+    installMethod(runtime, prototype, "setOpacity", &JsiSkSkottie::setOpacity);
+    installMethod(runtime, prototype, "setTransform",
+                  &JsiSkSkottie::setTransform);
   }
   // #endregion
 

@@ -6,6 +6,7 @@
     "metro.config.js",
     "jest.config.js",
     "lib",
+    "libs",
     "scripts"
   ],
   "compilerOptions": {

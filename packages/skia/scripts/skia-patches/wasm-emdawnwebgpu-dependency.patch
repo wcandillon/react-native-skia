@@ -1,0 +1,57 @@
+[wasm] Use an emdawnwebgpu package in place of Dawn
+
+Dawn native cannot be built for wasm and is not needed there: the browser
+implements WebGPU. With skia_use_dawn, a wasm build still scheduled the CMake
+builds of Dawn and Tint and put Dawn's native headers on the include path.
+
+skia_emdawnwebgpu_dir names an emdawnwebgpu package (Dawn's emdawnwebgpu_pkg
+target, generated from the pinned Dawn checkout by build-skia.ts). When it is
+set for a wasm build the dawn target only adds the package's include
+directories. Other builds are unchanged.
+
+Not sent upstream yet.
+
+---
+diff --git a/third_party/dawn/args.gni b/third_party/dawn/args.gni
+--- a/third_party/dawn/args.gni
++++ b/third_party/dawn/args.gni
+@@ -10,4 +10,10 @@ declare_args() {
+   dawn_enable_metal = is_mac || is_ios
+   dawn_enable_vulkan = is_linux || is_android
+   dawn_use_agility_sdk = false
++
++  # An emdawnwebgpu package, as built by Dawn's emdawnwebgpu_pkg target. When
++  # set for a wasm build it stands in for Dawn: the browser implements WebGPU,
++  # so only the package headers are needed to compile. Its JS library is added
++  # when linking, with --use-port=<this directory>/emdawnwebgpu.port.py.
++  skia_emdawnwebgpu_dir = ""
+ }
+diff --git a/third_party/dawn/BUILD.gn b/third_party/dawn/BUILD.gn
+--- a/third_party/dawn/BUILD.gn
++++ b/third_party/dawn/BUILD.gn
+@@ -322,10 +322,22 @@ config("dawn_defines") {
+   }
+ }
+ 
++config("emdawnwebgpu_api_config") {
++  include_dirs = [
++    "$skia_emdawnwebgpu_dir/webgpu/include",
++    "$skia_emdawnwebgpu_dir/webgpu_cpp/include",
++  ]
++}
++
+ group("dawn") {
+-  public_deps = [ ":dawn_cmake" ]
++  if (is_wasm && skia_emdawnwebgpu_dir != "") {
++    # Nothing to build or link: see skia_emdawnwebgpu_dir.
++    public_configs = [ ":emdawnwebgpu_api_config" ]
++  } else {
++    public_deps = [ ":dawn_cmake" ]
+ 
+-  public_configs = [ ":dawn_api_config" ]
++    public_configs = [ ":dawn_api_config" ]
+ 
+-  all_dependent_configs = [ ":dawn_defines" ]
++    all_dependent_configs = [ ":dawn_defines" ]
++  }
+ }

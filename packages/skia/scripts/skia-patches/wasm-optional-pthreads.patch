@@ -1,0 +1,70 @@
+[wasm] Make pthreads optional for standalone wasm builds
+
+Standalone wasm targets always compile with -pthread. Objects built that way
+need a shared memory, which browsers only give to cross-origin isolated pages,
+so they cannot go into a module meant to be embedded in any page.
+
+skia_wasm_enable_pthreads keeps the current behavior by default and lets a
+library build turn threads off, as CanvasKit does.
+
+Not sent upstream yet.
+
+---
+diff --git a/gn/toolchain/wasm.gni b/gn/toolchain/wasm.gni
+--- a/gn/toolchain/wasm.gni
++++ b/gn/toolchain/wasm.gni
+@@ -12,6 +12,11 @@ declare_args() {
+   # The location of an activated emsdk. We default to the one brought in by
+   # DEPS and bin/activate-emsdk.
+   skia_emsdk_dir = rebase_path("../../third_party/externals/emsdk")
++
++  # Standalone wasm targets use pthreads by default. A module built with them
++  # needs a shared memory, which browsers only provide to cross-origin isolated
++  # pages, so a library meant to be embedded in any page turns this off.
++  skia_wasm_enable_pthreads = true
+ }
+ 
+ # Defines a WASM library target.
+diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
+--- a/gn/skia/BUILD.gn
++++ b/gn/skia/BUILD.gn
+@@ -862,10 +862,10 @@ if (is_wasm) {
+     }
+   } else {
+     config("wasm") {
+-      common = [
+-        "--sysroot=$skia_emsdk_dir/upstream/emscripten/cache/sysroot",
+-        "-pthread",
+-      ]
++      common = [ "--sysroot=$skia_emsdk_dir/upstream/emscripten/cache/sysroot" ]
++      if (skia_wasm_enable_pthreads) {
++        common += [ "-pthread" ]
++      }
+       cflags = common
+       ldflags = common
+       ldflags += [
+@@ -881,18 +881,22 @@ if (is_wasm) {
+       if (is_debug) {
+         ldflags += [
+           "-sASSERTIONS=1",
+-          "-sPTHREADS_DEBUG=1",
+           "-gsource-map",
+         ]
++        if (skia_wasm_enable_pthreads) {
++          ldflags += [ "-sPTHREADS_DEBUG=1" ]
++        }
+       }
+     }
+ 
+     config("wasm_exe") {
+       ldflags = [
+-        "-sPROXY_TO_PTHREAD=1",
+         "-sEXIT_RUNTIME=1",
+         "-sEXPORTED_RUNTIME_METHODS=['FS', 'callMain']",
+       ]
++      if (skia_wasm_enable_pthreads) {
++        ldflags += [ "-sPROXY_TO_PTHREAD=1" ]
++      }
+       if (!is_official_build) {
+         resources_dir = rebase_path("//resources", root_build_dir)
+         ldflags += [
