@@ -25,15 +25,6 @@ on:
         required: false
         type: boolean
         default: true
-      apple_dawn:
-        description: 'Where the Apple Dawn builds run: "self-hosted" (one job on the self-hosted Mac, after Skia), "hosted" (one macos-latest job per SDK, alongside Skia), or "both" to compare their timings (the packages use the self-hosted build)'
-        required: false
-        type: choice
-        options:
-          - both
-          - self-hosted
-          - hosted
-        default: both
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,7 +37,6 @@ jobs:
       skia_branch: ${{ steps.skia.outputs.branch }}
       skia_version: ${{ steps.version.outputs.skia_version }}
       npm_version: ${{ steps.version.outputs.npm_version }}
-      dawn_matrix: ${{ steps.dawn-matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
@@ -121,45 +111,6 @@ jobs:
           SKIA_BRANCH: ${{ steps.skia.outputs.branch }}
           RESPIN: ${{ inputs.respin }}
 
-      # The build-dawn matrix: the Android ABIs on ubuntu-latest, and the
-      # Apple SDKs on the self-hosted Mac (one job for all of them), on
-      # macos-latest (one job per SDK), or on both. With both, the hosted
-      # builds are uploaded as hosted-dawn-<sdk>, which the package job does
-      # not download, and may fail without failing the run: they are only
-      # there to be timed against the self-hosted build.
-      - name: Dawn build matrix
-        id: dawn-matrix
-        run: |
-          set -eo pipefail
-          sdks="iphoneos iphonesimulator maccatalyst appletvos appletvsimulator macos"
-          entries=()
-          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-            entries+=("$(jq -nc --arg abi "$abi" '{target: "android-\($abi)", targets: "android-\($abi)", runner: "ubuntu-latest", output: "packages/skia/libs/dawn/android/\($abi)", artifact: "dawn-android-\($abi)", headers: false, experimental: false, timeout: 120}')")
-          done
-          if [ "$APPLE_DAWN" != "hosted" ]; then
-            entries+=("$(jq -nc --arg sdks "$sdks" '{target: "apple", targets: $sdks, runner: ["self-hosted", "macOS"], output: "packages/skia/libs/dawn/apple", artifact: "dawn-apple", headers: true, experimental: false, timeout: 240}')")
-          fi
-          if [ "$APPLE_DAWN" != "self-hosted" ]; then
-            prefix="dawn"
-            experimental=false
-            if [ "$APPLE_DAWN" = "both" ]; then
-              prefix="hosted-dawn"
-              experimental=true
-            fi
-            for sdk in $sdks; do
-              headers=false
-              if [ "$APPLE_DAWN" = "hosted" ] && [ "$sdk" = "iphoneos" ]; then
-                headers=true
-              fi
-              entries+=("$(jq -nc --arg sdk "$sdk" --arg prefix "$prefix" --argjson headers "$headers" --argjson experimental "$experimental" '{target: "hosted-\($sdk)", targets: $sdk, runner: "macos-latest", output: "packages/skia/libs/dawn/apple/\($sdk)", artifact: "\($prefix)-\($sdk)", headers: $headers, experimental: $experimental, timeout: 180}')")
-            done
-          fi
-          matrix=$(printf '%s\n' "${entries[@]}" | jq -sc '{include: .}')
-          echo "$matrix" | jq .
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-        env:
-          APPLE_DAWN: ${{ inputs.apple_dawn }}
-
       # npm never lets a version be republished. A package already on npm at
       # this version is skipped by the publish step (a rerun after a partial
       # publish, or a first version published by hand), so only a version
@@ -194,12 +145,13 @@ jobs:
   # targets only need the NDK toolchain and build on ubuntu-latest. The Apple
   # targets build on the self-hosted Mac (an M1 Max with 64GB, shared with the
   # CI of this and two other repositories), which is both free and faster
-  # than the hosted runners; the standard macos-latest runner (3 cores, 7GB)
-  # is the free fallback if the machine is unavailable. The machine runs one
-  # job at a time, so the Apple SDKs build in a single job: ninja already
-  # uses every core, and the checkout, the dependency sync and the patches
-  # then happen once rather than once per SDK. It uploads them together as
-  # skia-apple, one subdirectory per SDK.
+  # than the hosted runners: it built Dawn for every Apple SDK in 7 minutes,
+  # when one macos-latest job (3 cores, 7GB) took 7 to 24 minutes for a
+  # single SDK. The Apple SDKs build in a single job per library (skia-apple
+  # here, dawn-apple in build-dawn), which the machine's two runners run side
+  # by side: ninja already uses every core, and the checkout, the dependency
+  # sync and the patches happen once rather than once per SDK. The job
+  # uploads them together, one subdirectory per SDK.
   build-skia:
     needs: prepare
     timeout-minutes: ${{ matrix.timeout }}
@@ -299,15 +251,50 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Android on ubuntu-latest; Apple wherever the apple_dawn input says (see
-  # the Dawn build matrix step of the prepare job).
+  # Same runners as build-skia: Android on ubuntu-latest, and every Apple SDK
+  # in one job on the self-hosted Mac, uploaded together as dawn-apple.
   build-dawn:
     needs: prepare
     timeout-minutes: ${{ matrix.timeout }}
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.dawn_matrix) }}
+      matrix:
+        include:
+          - target: android-armeabi-v7a
+            targets: android-armeabi-v7a
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/armeabi-v7a
+            artifact: dawn-android-armeabi-v7a
+            headers: false
+            timeout: 120
+          - target: android-arm64-v8a
+            targets: android-arm64-v8a
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/arm64-v8a
+            artifact: dawn-android-arm64-v8a
+            headers: false
+            timeout: 120
+          - target: android-x86
+            targets: android-x86
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/x86
+            artifact: dawn-android-x86
+            headers: false
+            timeout: 120
+          - target: android-x86_64
+            targets: android-x86_64
+            runner: ubuntu-latest
+            output: packages/skia/libs/dawn/android/x86_64
+            artifact: dawn-android-x86_64
+            headers: false
+            timeout: 120
+          - target: apple
+            targets: iphoneos iphonesimulator maccatalyst appletvos appletvsimulator macos
+            runner: [self-hosted, macOS]
+            output: packages/skia/libs/dawn/apple
+            artifact: dawn-apple
+            headers: true
+            timeout: 240
     name: dawn-${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     steps:

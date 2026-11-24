@@ -107,16 +107,18 @@ diff --git a/third_party/dawn/build_dawn.py b/third_party/dawn/build_dawn.py
    args = parser.parse_args()
  
    cmake_exe = shutil.which("cmake")
-@@ -75,6 +79,8 @@ def main():
+@@ -75,6 +79,10 @@ def main():
    # The headers are a dependency for all libraries.
    # We want to build the other listed dawn components into one big library.
    build_targets = ["webgpu_headers_gen", "dawn_proc", "dawn_native"]
 +  if args.headers_only:
-+    build_targets = ["webgpu_headers_gen"]
++    # The interface libraries that carry the generated dawn/ headers
++    # (dawn/webgpu.h, dawn/webgpu_cpp.h, ...) and the webgpu/ ones.
++    build_targets = ["dawn_headers", "dawncpp_headers", "webgpu_headers_gen"]
    depfile_path = args.depfile_path
  
    # On Windows, Debug build has CRT compatibility issues with Skia (MTd vs MT).
-@@ -174,9 +180,16 @@ def main():
+@@ -174,9 +182,16 @@ def main():
      configure_cmd.append(f"-DCMAKE_C_COMPILER={args.cc.replace(os.sep, '/')}")
      configure_cmd.append(f"-DCMAKE_CXX_COMPILER={args.cxx.replace(os.sep, '/')}")
  
@@ -134,7 +136,7 @@ diff --git a/third_party/dawn/build_dawn.py b/third_party/dawn/build_dawn.py
    env = os.environ.copy()
    # Don't write .pyc files, which can cause race conditions when building
    # tint and dawn in parallel.
-@@ -216,6 +229,11 @@ def main():
+@@ -216,6 +231,11 @@ def main():
    dependencies, object_files = discover_dependencies(build_dir, build_targets)
    write_depfile(output_path, depfile_path, dependencies)
  
