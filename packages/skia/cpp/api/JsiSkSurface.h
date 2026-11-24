@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <utility>
 
 #include <jsi/jsi.h>
@@ -217,7 +219,49 @@ private:
     // another runtime: let the thread that created the surface destroy it.
     auto surface = getObjectUnchecked();
     setObject(nullptr);
+    const bool graphite = surface != nullptr && surface->recorder() != nullptr;
     _dispatcher->release(std::move(surface));
+    if (graphite) {
+      scheduleTrim();
+    }
+  }
+
+  /**
+   The texture of a released surface goes back to the recorder of its
+   thread, which keeps it for reuse. That thread trims what went unused
+   after its submits (see DawnContext::trimThreadIfDue), but the last
+   surface it releases is followed by none: the trim is scheduled on the
+   JS thread, once the texture is old enough to go. A surface of another
+   thread (a worklet runtime) has no such trim: the next submit there
+   serves.
+   */
+  void scheduleTrim() {
+    if (!_dispatcher->claimTrim()) {
+      return;
+    }
+    std::weak_ptr<Dispatcher> weak = _dispatcher;
+    auto context = getContext();
+    std::thread([weak, context]() {
+      std::this_thread::sleep_for(DawnContext::kThreadTrimDelay +
+                                  std::chrono::milliseconds(100));
+      if (auto dispatcher = weak.lock()) {
+        // Released before the hop: it may be dropped (a reload).
+        dispatcher->releaseTrim();
+      }
+      context->runOnJavascriptThread([weak](jsi::Runtime &) {
+        auto dispatcher = weak.lock();
+        if (dispatcher == nullptr) {
+          return;
+        }
+        if (!dispatcher->isCurrentThread()) {
+          dispatcher->markTrimUnsupported();
+          return;
+        }
+        // The surfaces the GC finalized elsewhere first.
+        dispatcher->processQueue();
+        DawnContext::trimThreadRecorders(DawnContext::kThreadTrimDelay, false);
+      });
+    }).detach();
   }
 
   std::shared_ptr<Dispatcher> _dispatcher;

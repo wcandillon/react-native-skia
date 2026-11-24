@@ -26,6 +26,7 @@
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkThreadPool.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
@@ -462,6 +463,50 @@ public:
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
       skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    const bool inserted = snapAndRun(recorder, syncToCpu);
+    if (recorder != nullptr && recorder == threadSlot().recorder.get()) {
+      trimThreadIfDue();
+    }
+    return inserted;
+  }
+
+  /**
+   How long a resource a thread outside the render pool cached went unused
+   before that thread lets go of it, and how often at most it checks (see
+   trimThreadIfDue): the pool's own delay (RNSkThreadPool::kIdleDelay).
+   */
+  static constexpr std::chrono::milliseconds kThreadTrimDelay =
+      RNSkThreadPool::kIdleDelay;
+
+  /**
+   Trims the recorders of the calling thread of what went unused for
+   kThreadTrimDelay, at most once per kThreadTrimDelay: what a thread outside
+   the render pool (the JS thread, a worklet runtime) does after its submits
+   (see submitRecording), since nothing else would. Its drawing recorder
+   otherwise keeps every scratch texture its offscreen surfaces let go of,
+   up to Graphite's budget (256 MB by default), for as long as the thread
+   lives. The render pool trims its threads itself, once idle (see
+   RNSkGraphiteProducer). Never makes a recorder. Any thread.
+   */
+  static void trimThreadIfDue() {
+    if (RNSkThreadPool::isPoolThread()) {
+      return;
+    }
+    auto &slot = threadSlot();
+    if (slot.recorder == nullptr) {
+      return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - slot.lastTrim < kThreadTrimDelay) {
+      return;
+    }
+    slot.lastTrim = now;
+    trimThreadRecorders(kThreadTrimDelay, false);
+  }
+
+private:
+  bool snapAndRun(skgpu::graphite::Recorder *recorder,
+                  skgpu::graphite::SyncToCpu syncToCpu) {
     if (recorder == nullptr) {
       return false;
     }
@@ -494,6 +539,7 @@ public:
     return inserted;
   }
 
+public:
   /**
    Replays the recordings, in order, onto the target surface (a deferred
    canvas target) and submits them as one batch. A recording Graphite
@@ -840,6 +886,8 @@ private:
   struct ThreadRecorder {
     std::unique_ptr<skgpu::graphite::Recorder> recorder;
     uint64_t generation = 0;
+    // The latest trim (see trimThreadIfDue).
+    std::chrono::steady_clock::time_point lastTrim{};
     ~ThreadRecorder() {
       if (recorder == nullptr) {
         return;

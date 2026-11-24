@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -79,7 +80,28 @@ public:
     return count;
   }
 
+  /**
+   * Claims the trim scheduled for this thread once its surfaces went away
+   * (see JsiSkSurface::scheduleTrim): false when one is already pending, or
+   * when the thread turned out not to be the JS thread, which is the only
+   * one a trim can be scheduled on.
+   */
+  bool claimTrim() {
+    return !_trimUnsupported.load(std::memory_order_relaxed) &&
+           !_trimPending.exchange(true, std::memory_order_acq_rel);
+  }
+
+  /** Lets the next release schedule a trim again (see claimTrim). */
+  void releaseTrim() { _trimPending.store(false, std::memory_order_release); }
+
+  /** The thread is not the JS thread: no trim is scheduled for it again. */
+  void markTrimUnsupported() {
+    _trimUnsupported.store(true, std::memory_order_relaxed);
+  }
+
 private:
+  std::atomic<bool> _trimPending{false};
+  std::atomic<bool> _trimUnsupported{false};
   std::thread::id _threadId;
   std::mutex _mutex;
   std::queue<Operation> _queue;
