@@ -76,7 +76,7 @@ public:
     // only Graphite-backed surfaces need to snap and submit a recording.
     if (auto *recorder = surface->recorder()) {
       auto recording = recorder->snap();
-      DawnContext::getInstance().submitRecordingOrThrow(
+      DawnContext::getInstance().submitRecording(
           recording.get(), sync ? skgpu::graphite::SyncToCpu::kYes
                                 : skgpu::graphite::SyncToCpu::kNo);
     }
@@ -110,10 +110,6 @@ public:
           rect->x(), rect->y(), rect->width(), rect->height()));
     } else {
       image = surface->makeImageSnapshot();
-    }
-    // Before outputImage is updated, so that it keeps its previous content.
-    if (image == nullptr) {
-      return jsi::Value::null();
     }
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.

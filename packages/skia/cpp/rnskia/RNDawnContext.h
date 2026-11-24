@@ -301,35 +301,6 @@ public:
     fGraphiteContext->submit(syncToCpu);
   }
 
-  // submitRecording() for the recordings JS asks for (Surface.flush(),
-  // makeImageSnapshot()): when Graphite cannot snap, insert or submit the
-  // recording, the draws it holds are lost, and this throws so that JS learns
-  // it instead of reading back or encoding a stale texture. The context is
-  // submitted either way, for the work other recordings inserted.
-  void submitRecordingOrThrow(
-      skgpu::graphite::Recording *recording,
-      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
-    std::lock_guard<std::mutex> lock(_mutex);
-    if (recording == nullptr) {
-      throw std::runtime_error("Graphite could not snap the recording");
-    }
-    skgpu::graphite::InsertRecordingInfo info;
-    info.fRecording = recording;
-    auto status = fGraphiteContext->insertRecording(info);
-    auto submitted = fGraphiteContext->submit(syncToCpu);
-    // InsertStatus converts to true on success.
-    if (!static_cast<bool>(status)) {
-      throw std::runtime_error(
-          "Graphite rejected the recording (InsertStatus " +
-          std::to_string(static_cast<int>(
-              static_cast<skgpu::graphite::InsertStatus::V>(status))) +
-          "): " + status.message());
-    }
-    if (!submitted) {
-      throw std::runtime_error("Graphite could not submit the recording");
-    }
-  }
-
   // Create offscreen surface
   sk_sp<SkSurface> MakeOffscreen(int width, int height,
                                  bool useP3ColorSpace = false) {
