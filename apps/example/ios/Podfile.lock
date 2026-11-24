@@ -1890,7 +1890,7 @@ PODS:
     - React-Core
     - React-jsi
   - ReactTestApp-Resources (1.0.0-dev)
-  - RNGestureHandler (2.33.0):
+  - RNGestureHandler (2.33.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2537,7 +2537,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 0207d6133274a7cbfc3d0dae326e3055c8cfcf9e
   React-mutationobservernativemodule: b97a67c29f724d18a92379e7390f24350acb433a
   react-native-safe-area-context: b1c9f15a36e597e9cef4c5526e209ef2645bc2e0
-  react-native-skia: 26a76fa1315c73a0a7736762488dd153a45d4115
+  react-native-skia: bf1185de616420b621627518154096089037289a
   react-native-webgpu: 2e5f8b1e611657ed77906c75b48fcdbb34bc9f8e
   React-NativeModulesApple: 8cfb2f308f48c48068c96b932e7f0e4297c23342
   React-networking: 3325cf73ecbdaacab0da91260b094baf36061a56
@@ -2579,7 +2579,7 @@ SPEC CHECKSUMS:
   ReactNativeHost: f7120f0a75150bb8fa3bd309b60e98aa8e025147
   ReactTestApp-DevSupport: 8c34bc3b9ee42c553e27be2172ac331d414fc852
   ReactTestApp-Resources: 1bd9ff10e4c24f2ad87101a32023721ae923bccf
-  RNGestureHandler: c30d0805eccd9b0f143c252ae769131096337322
+  RNGestureHandler: 0124c0b5117c1376f013aaac888ed4134ca88b58
   RNReanimated: ed309a4f658a5bb0e807df58424c5aea7a7395de
   RNScreens: f15a5bda1ddeff8575b8ce41d83885b67129f84b
   RNSVG: 0851af4352d2e692b44aada9dd7a1d361c18fcfc

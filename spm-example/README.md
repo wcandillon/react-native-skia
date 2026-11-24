@@ -5,10 +5,13 @@ Package Manager** instead of CocoaPods. It exists to prove
 `packages/skia/Package.swift` actually builds and renders, and it is what the
 `build-test-ios-spm` CI job runs.
 
-iOS only, and Graphite only, like the library itself since v3: the package
-links the prebuilt Skia Graphite archives and the Dawn WebGPU implementation
-they render through. CocoaPods remains the supported default for this library;
-see the Swift Package Manager section of
+iOS only, and Graphite only: this harness exercises the library's current
+SwiftPM integration. The native library also supports tvOS and macOS
+through CocoaPods; see the
+[platform requirements](../apps/docs/docs/getting-started/installation.md#requirements).
+The package links the prebuilt Skia Graphite archives and the Dawn WebGPU
+implementation they render through. CocoaPods remains the supported default
+for this library; see the Swift Package Manager section of
 [`packages/skia/CONTRIBUTING.md`](../packages/skia/CONTRIBUTING.md) for the
 design notes.
 

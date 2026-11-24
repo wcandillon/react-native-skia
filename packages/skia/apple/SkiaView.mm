@@ -14,7 +14,6 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <memory>
@@ -25,36 +24,42 @@
 #import "RNSkView.h"
 #import "RNSkWindowSurface.h"
 #import "RNSkiaModule.h"
+#include "rnsurface/FrameClock.h"
 #include "rnsurface/FrameScheduler.h"
 
 using namespace facebook::react;
 
-// React Native 0.82 added invalidate to RCTComponentViewProtocol; before that
-// (the peer range starts at 0.79, react-native-macos is at 0.81) nothing
-// declares or implements it. See -[SkiaView invalidate].
+// React Native 0.82 added invalidate to RCTComponentViewProtocol. Declare it
+// for older supported versions. See -[SkiaView invalidate].
 @interface RCTViewComponentView (SkiaInvalidate)
 - (void)invalidate;
 @end
 
 @interface SkiaView ()
-// What the frame scheduler asks of the view (see SkiaViewPresentHost).
-- (void)postFrameCallback;
-- (int)presentFrame;
+// What the view's frame scheduler asks of the platform view (see
+// RNSkView::FrameHost).
+- (void)requestAnimationFrame;
 @end
 
 namespace {
 
-// What the scheduler asks of the view (see rnsurface::FrameScheduler), on
-// the present thread: the display link for the vsync, the native view for
-// the present.
-class SkiaViewPresentHost : public rnsurface::FrameScheduler::Host {
-public:
-  __weak SkiaView *view = nil;
+// A time of Core Animation's clock (seconds of mach absolute time) on the
+// clock of the frame scheduler (see rnsurface::frameClockNow).
+rnsurface::FrameScheduler::Nanos frameNanos(CFTimeInterval seconds) {
+  return static_cast<rnsurface::FrameScheduler::Nanos>(seconds * 1.0e9);
+}
 
-  void postFrameCallback() override { [view postFrameCallback]; }
-
-  int presentFrame() override { return [view presentFrame]; }
-};
+// A frame of the display, as the scheduler reads it. A frame presented makes
+// the frame of the display that ends at `end` as long as the compositor
+// finds it there when it builds that frame, a moment before: a quarter of a
+// frame is left for it, and a frame ready later than that waits for the next
+// animation frame rather than land in a frame of the display that gets one
+// already.
+rnsurface::FrameScheduler::AnimationFrame animationFrame(CFTimeInterval start,
+                                                         CFTimeInterval end) {
+  const auto interval = frameNanos(end - start);
+  return {frameNanos(start), interval, frameNanos(end) - interval / 4};
+}
 
 } // namespace
 
@@ -132,38 +137,19 @@ usesP3ColorSpace(const std::string &colorSpace,
   // set and cleared there, by tasks posted in order with those that present
   // (see enterPresentThread and leavePresentThread).
   std::shared_ptr<RNSkia::RNSkView> _presentView;
-  // Whether the window is attached, as the posted attach and detach left it
-  // (see attachWindowWithWidth:height: and detachWindow): without one the
-  // frames wait, and the display link stays paused. Present thread.
-  bool _hasWindow;
-  // Decides when the queued recordings are presented (see scheduleFrame:).
-  // Made on the main thread, used on the present thread only. The host
-  // outlives the scheduler, which refers to it (see dealloc).
-  std::unique_ptr<SkiaViewPresentHost> _presentHost;
-  std::unique_ptr<rnsurface::FrameScheduler> _scheduler;
-#if !TARGET_OS_OSX
-  // Present thread.
+  // Present thread. Created as the view enters a superview on macOS, where
+  // the link is bound to the view and follows its display, and on the first
+  // animation frame elsewhere, so that a canvas that never animates has none.
   CADisplayLink *_displayLink;
-  // Whether the display link asked for the display's full rate yet (see
-  // requestFullFrameRate). Present thread.
-  bool _fullFrameRateRequested;
+
+  // The screen maximum used for the last frame-rate request. Present thread.
+  // This belongs to the current link: a recycled view's new link must ask
+  // again. Comparing rates also picks up a new display rate (see
+  // updateMaximumFramesPerSecond).
+  float _requestedFramesPerSecond;
   // The display's rate, read on the main thread as the view enters a window
-  // (UIKit), 0 until then.
+  // or changes screens, 0 until then.
   std::atomic<float> _maximumFramesPerSecond;
-  // Whether a frame went to the window since the display link's last tick,
-  // and when the interval of that tick ends (see scheduleFrame:). Present
-  // thread.
-  bool _presentedSinceTick;
-  CFTimeInterval _tickTarget;
-#else
-  // Whether a tick is scheduled, when the last one ran (see
-  // presentAgainLater), and which ticks are still wanted: the leave moves
-  // the count on, and a tick scheduled before it does nothing. Present
-  // thread.
-  bool _presentAgainScheduled;
-  CFTimeInterval _lastTick;
-  uint64_t _tickGeneration;
-#endif
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -176,22 +162,8 @@ usesP3ColorSpace(const std::string &colorSpace,
     _windowAttached = false;
     _attachedWidth = 0;
     _attachedHeight = 0;
-    _hasWindow = false;
-    _presentHost = std::make_unique<SkiaViewPresentHost>();
-    _presentHost->view = self;
-    _scheduler = std::make_unique<rnsurface::FrameScheduler>(*_presentHost);
-    // A CAMetalLayer shows each frame presented in turn.
-    _scheduler->setWindow(rnsurface::FrameScheduler::Window::kShowsEachFrame);
-#if TARGET_OS_OSX
-    _presentAgainScheduled = false;
-    _lastTick = 0;
-    _tickGeneration = 0;
-#else
-    _fullFrameRateRequested = false;
+    _requestedFramesPerSecond = 0;
     _maximumFramesPerSecond = 0;
-    _presentedSinceTick = false;
-    _tickTarget = 0;
-#endif
     static const auto defaultProps = std::make_shared<const SkiaViewProps>();
     _props = defaultProps;
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
@@ -213,7 +185,7 @@ usesP3ColorSpace(const std::string &colorSpace,
                selector:@selector(appWillEnterForeground:)
                    name:NSApplicationDidUnhideNotification
                  object:nil];
-#endif
+#endif // !TARGET_OS_OSX
   }
   return self;
 }
@@ -310,18 +282,21 @@ usesP3ColorSpace(const std::string &colorSpace,
       view->bindPresentThread();
     });
   }
-  [self enterPresentThread];
-  // A submitted recording goes to the scheduler, on the present thread,
-  // which arms the display link, or presents on the spot for a window
-  // resized since the frame it shows (see
-  // rnsurface::FrameScheduler::requestFrame).
+  // A CAMetalLayer shows each frame presented in turn. The view's frame
+  // scheduler asks for the display's frames on the present thread: the
+  // display link, while the view is in a superview. Out of it the view has
+  // no window and its scheduler asks for nothing; a request from a view let
+  // go of since (see leavePresentThread) stops at _presenting.
+  _view->setPresentMode(rnsurface::FrameScheduler::PresentMode::kFifo);
   __weak SkiaView *weakSelf = self;
-  _view->setFrameScheduler(
-      [weakSelf, presenting = _presenting](bool forResizedWindow) {
-        if (*presenting) {
-          [weakSelf scheduleFrame:forResizedWindow];
-        }
-      });
+  RNSkia::RNSkView::FrameHost host;
+  host.requestAnimationFrame = [weakSelf, presenting = _presenting]() {
+    if (*presenting) {
+      [weakSelf requestAnimationFrame];
+    }
+  };
+  _view->setFrameHost(std::move(host));
+  [self enterPresentThread];
   if (_nativeId != 0) {
     manager->registerSkiaView(_nativeId, _view);
   }
@@ -340,11 +315,27 @@ usesP3ColorSpace(const std::string &colorSpace,
   __weak SkiaView *weakSelf = self;
   auto view = _view;
   auto presenting = _presenting;
+
+#if TARGET_OS_OSX
+  // AppKit binds the link to the view, which follows it between displays,
+  // and makes it on the main thread only: it is made paused here and joins
+  // the present thread's run loop in the same task that lets frame requests
+  // through. The link holds the view as its target until the leave task
+  // invalidates it, so the task finds the view.
+  CADisplayLink *displayLink = [self displayLinkWithTarget:self
+                                                  selector:@selector(onFrame:)];
+  displayLink.paused = YES;
+#endif // TARGET_OS_OSX
   RNSkia::presentThread().post([=]() {
     *presenting = true;
     SkiaView *strongSelf = weakSelf;
     if (strongSelf != nil) {
       strongSelf->_presentView = view;
+#if TARGET_OS_OSX
+      strongSelf->_displayLink = displayLink;
+      [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                        forMode:NSRunLoopCommonModes];
+#endif // TARGET_OS_OSX
     }
   });
 }
@@ -355,14 +346,15 @@ usesP3ColorSpace(const std::string &colorSpace,
 // Only this layer's window: the view may be back with a new one by then. The
 // task holds the layer, which so outlives the Dawn surface over it, and whose
 // address cannot come back as the new layer's meanwhile. The display link
-// goes in the same task: a frame scheduled between two would make a new one
-// that outlives the leave (see scheduleFrame). The view goes on the main
-// thread, where UIKit expects it to, as this task owns the last reference to
-// it once Fabric let go of it (see invalidate). A strong capture cannot
-// promise that: the block would let go on the present thread, racing the main
-// thread for the last release. So the reference is taken here, by hand, and
-// let go of only on the main thread, once the autorelease pool of the work is
-// drained. Every task posted before this one runs under that reference, also
+// goes in the same task: on iOS, an animation frame asked for between two
+// would make a new one that outlives the leave (see requestAnimationFrame);
+// on macOS, the link made at the enter holds the view until then. The view goes
+// on the main thread, where UIKit expects it to, as this task owns the last
+// reference to it once Fabric let go of it (see invalidate). A strong capture
+// cannot promise that: the block would let go on the present thread, racing the
+// main thread for the last release. So the reference is taken here, by hand,
+// and let go of only on the main thread, once the autorelease pool of the work
+// is drained. Every task posted before this one runs under that reference, also
 // where it loads a weak one. Nothing of the present thread loads one after
 // this task (a recording from a stale RNSkView stops at _presenting), and the
 // surface asks _canPresent rather than the view.
@@ -378,22 +370,15 @@ usesP3ColorSpace(const std::string &colorSpace,
       __unsafe_unretained SkiaView *view = (__bridge SkiaView *)retainedSelf;
       *view->_presenting = false;
       // Whatever the scheduler asked for goes with the link.
-      view->_scheduler->cancel();
-#if !TARGET_OS_OSX
+      if (view->_presentView != nullptr) {
+        view->_presentView->cancelFrames();
+      }
       [view->_displayLink invalidate];
       view->_displayLink = nil;
-      // The request belonged to that link: the next one must ask again.
-      view->_fullFrameRateRequested = false;
-      view->_presentedSinceTick = false;
-#else
-      // A tick scheduled is let go of (see presentAgainLater): the scheduler
-      // forgot it, and the next request schedules one of its own.
-      view->_presentAgainScheduled = false;
-      view->_tickGeneration++;
-#endif
+      // The next link must request the screen's rate again.
+      view->_requestedFramesPerSecond = 0;
       view->_presentView = nullptr;
       surface->detach((__bridge void *)layer);
-      view->_hasWindow = false;
     }
     dispatch_async_f(dispatch_get_main_queue(), retainedSelf,
                      [](void *retained) { CFRelease(retained); });
@@ -401,16 +386,12 @@ usesP3ColorSpace(const std::string &colorSpace,
   _windowAttached = false;
 }
 
-// Main thread: the display link held the view until the leave task
-// invalidated it, and that task handed the view back here (see
-// leavePresentThread).
+// Main thread: the leave task handed the view back here, after invalidating
+// the display link, which holds the view while the view is in a superview on
+// macOS, and while it animates elsewhere (see leavePresentThread).
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [self unregisterView];
-  // The scheduler before the host it refers to; the present thread is done
-  // with both (see leavePresentThread).
-  _scheduler = nullptr;
-  _presentHost = nullptr;
 }
 
 // Fabric either recycles an unmounted view (prepareForRecycle) or, with the
@@ -421,9 +402,8 @@ usesP3ColorSpace(const std::string &colorSpace,
   [self releaseNativeView];
 }
 
-// Only called from React Native 0.82 on, which implements it on every view:
-// on an earlier version nothing gets here. Drop the category above once the
-// peer range starts at 0.82 and react-native-macos has caught up.
+// React Native 0.82+ calls this when an unmounted view is not recycled.
+// Drop the category above when older versions leave the peer range.
 - (void)invalidate {
   [super invalidate];
   [self releaseNativeView];
@@ -478,40 +458,13 @@ usesP3ColorSpace(const std::string &colorSpace,
 
 #pragma mark - Frames
 
-// A recording is waiting (see RNSkView::setFrameScheduler): the scheduler
-// arms the display link for it, or presents it on the spot when it is for a
-// window resized since the frame it shows. Present thread.
-- (void)scheduleFrame:(bool)forResizedWindow {
-  // Out of its superview, or at a size of zero, the view has no window: the
-  // frames wait, and attaching one redraws them (see
-  // RNSkWindowSurface::attach). A link would only tick for nothing, and out
-  // of the superview hold the view.
-  if (_presentView == nullptr || !_hasWindow) {
-    return;
-  }
-#if !TARGET_OS_OSX
-  // One present per vsync. A frame for a resized window goes on the spot
-  // only while nothing went to the window since the display link's last
-  // tick: a second present in the same interval shows no sooner (the
-  // display takes one frame per vsync), and takes a second of the layer's
-  // three drawables; once they are all in flight, the next present blocks
-  // this thread until one comes back. The frame waits for the next tick
-  // instead, like any other.
-  if (forResizedWindow && _presentedSinceTick &&
-      CACurrentMediaTime() < _tickTarget) {
-    forResizedWindow = false;
-  }
-#endif
-  _scheduler->requestFrame(forResizedWindow);
-}
-
-// The scheduler asks for the next vsync: the display link, which ticks on
-// the present thread, started and unpaused here and paused again once the
-// scheduler has nothing outstanding (see onFrame:), so that an idle view
-// does not keep the display at its full rate. macOS has no CADisplayLink on
-// the minimum deployment target, so the frame is presented a frame later
-// there (see presentAgainLater). Present thread.
-- (void)postFrameCallback {
+// The view's frame scheduler asks for the next frame of the display (see
+// RNSkView::FrameHost): the display link, which ticks on the present thread,
+// made on the first request outside macOS (see enterPresentThread), unpaused
+// here and paused again once the scheduler asks for no more (see onFrame:),
+// so an idle view does not keep the display at its full rate. Only asked for
+// between the enter and the leave tasks (see _presenting). Present thread.
+- (void)requestAnimationFrame {
 #if !TARGET_OS_OSX
   if (_displayLink == nil) {
     _displayLink = [CADisplayLink displayLinkWithTarget:self
@@ -519,119 +472,86 @@ usesP3ColorSpace(const std::string &colorSpace,
     [_displayLink addToRunLoop:[NSRunLoop currentRunLoop]
                        forMode:NSRunLoopCommonModes];
   }
+#endif // !TARGET_OS_OSX
   [self requestFullFrameRate];
   _displayLink.paused = NO;
+}
+
+#pragma mark - Display refresh rate
+
+// AppKit and UIKit use different window-move hooks. Both update the same
+// main-thread screen information consumed by requestFullFrameRate.
+#if TARGET_OS_OSX
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  [center removeObserver:self
+                    name:NSWindowDidChangeScreenNotification
+                  object:nil];
+  if (self.window != nil) {
+    [center addObserver:self
+               selector:@selector(windowDidChangeScreen:)
+                   name:NSWindowDidChangeScreenNotification
+                 object:self.window];
+  }
+  [self updateMaximumFramesPerSecond];
+}
+
+// The view-bound link follows screen moves; its explicit rate must follow too.
+- (void)windowDidChangeScreen:(NSNotification *)notification {
+  [self updateMaximumFramesPerSecond];
+}
 #else
-  [self presentAgainLater];
-#endif
-}
-
-// The scheduler presents: the queued recordings go to the window (see
-// RNSkView::presentFrame). Present thread.
-- (int)presentFrame {
-  if (_presentView == nullptr) {
-    return rnsurface::FrameScheduler::kNothingPresented;
-  }
-  const int result = _presentView->presentFrame();
-#if !TARGET_OS_OSX
-  if ((result & rnsurface::FrameScheduler::kPresented) != 0) {
-    _presentedSinceTick = true;
-  }
-#endif
-  return result;
-}
-
-#if !TARGET_OS_OSX
-// The display's rate, for the display link (see requestFullFrameRate): UIKit
-// is only read on the main thread.
 - (void)didMoveToWindow {
   [super didMoveToWindow];
+  [self updateMaximumFramesPerSecond];
+}
+#endif // TARGET_OS_OSX
+
+// Read AppKit/UIKit only on the main thread, including when a window detaches.
+- (void)updateMaximumFramesPerSecond {
 #if !TARGET_OS_VISION
-  UIScreen *screen = self.window.screen;
-  if (screen != nil) {
-    _maximumFramesPerSecond = (float)screen.maximumFramesPerSecond;
-  }
-#endif
+  auto screen = self.window.screen;
+  _maximumFramesPerSecond =
+      screen != nil ? (float)screen.maximumFramesPerSecond : 0;
+#endif // !TARGET_OS_VISION
 }
 
-// A display link fires at 60 Hz until it asks for more, also while the
-// display already runs at 120 Hz for another link (Reanimated asks for 120):
-// a 120 Hz producer would then be presented every other frame. Ask for the
-// display's full rate once the view knows its screen. On iPhone this needs
-// CADisableMinimumFrameDurationOnPhone in the app's Info.plist too, else iOS
-// caps every link at 60 Hz. The link is paused while nothing is queued, so an
-// idle view does not keep the display at its full rate. Present thread.
+// Request the screen's full rate, and update the request when that rate
+// changes. UIKit needs an explicit request to avoid 60 Hz callbacks on a
+// ProMotion screen. On iPhone, rates above 60 Hz also need
+// CADisableMinimumFrameDurationOnPhone. Present thread; the default range
+// restores normal behavior on 60 Hz screens.
 - (void)requestFullFrameRate {
 #if !TARGET_OS_VISION
-  if (_fullFrameRateRequested) {
-    return;
-  }
   const float maxFps = _maximumFramesPerSecond.load();
-  if (maxFps <= 0) {
+  if (maxFps <= 0 || maxFps == _requestedFramesPerSecond) {
     return;
   }
-  _fullFrameRateRequested = true;
-  if (maxFps > 60) {
-    _displayLink.preferredFrameRateRange =
-        CAFrameRateRangeMake(60, maxFps, maxFps);
-  }
-#endif
+  _requestedFramesPerSecond = maxFps;
+  _displayLink.preferredFrameRateRange =
+      maxFps > 60 ? CAFrameRateRangeMake(60, maxFps, maxFps)
+                  : CAFrameRateRangeDefault;
+#endif // !TARGET_OS_VISION
 }
+
+#pragma mark - Display callbacks
 
 // No autorelease pool of its own: the link is a run loop source, so the
 // present thread's loop returns after each tick and drains its pool then
 // (see rnsurface::RenderThread::loop).
 - (void)onFrame:(CADisplayLink *)link {
-  _presentedSinceTick = false;
-  _tickTarget = link.targetTimestamp;
-  _scheduler->onFrame();
-  // The scheduler asked for another tick while recordings are left: more
-  // were submitted meanwhile, or the window could not take one.
-  if (!_scheduler->isFrameCallbackPosted()) {
+  // A frame of the display, from this tick to the next. The scheduler hears
+  // of the animation frames it asked for only, and asks for the next while
+  // frames are left or keep coming.
+  if (_presentView != nullptr && _presentView->hasPendingAnimationFrame()) {
+    _presentView->onAnimationFrame(
+        animationFrame(link.timestamp, link.targetTimestamp));
+  }
+  if (_presentView == nullptr || !_presentView->hasPendingAnimationFrame()) {
     link.paused = YES;
   }
 }
-#else
-// A tick stands in for the vsync macOS has no display link for on the
-// minimum deployment target. The first tick after an idle stretch runs as
-// soon as the present thread gets to it, as presenting did before the
-// scheduler: nothing waits for a cadence that has not started. The ticks
-// after it come at 60 Hz from the previous one, for the frames left over
-// (the window could not take one) and the frames that keep coming. Present
-// thread.
-- (void)presentAgainLater {
-  if (_presentAgainScheduled) {
-    return;
-  }
-  _presentAgainScheduled = true;
-  const CFTimeInterval interval = 1.0 / 60;
-  const CFTimeInterval delay =
-      std::max(0.0, _lastTick + interval - CACurrentMediaTime());
-  const uint64_t generation = _tickGeneration;
-  __weak SkiaView *weakSelf = self;
-  auto presenting = _presenting;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                               static_cast<int64_t>(delay * NSEC_PER_SEC)),
-                 dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-                   RNSkia::presentThread().post([=]() {
-                     if (!*presenting) {
-                       return;
-                     }
-                     SkiaView *strongSelf = weakSelf;
-                     if (strongSelf == nil ||
-                         strongSelf->_tickGeneration != generation) {
-                       // Left meanwhile (see leavePresentThread): the scheduler
-                       // forgot what it asked for, and asks again for what
-                       // comes next.
-                       return;
-                     }
-                     strongSelf->_presentAgainScheduled = false;
-                     strongSelf->_lastTick = CACurrentMediaTime();
-                     strongSelf->_scheduler->onFrame();
-                   });
-                 });
-}
-#endif
 
 #pragma mark - Render
 
@@ -717,7 +637,6 @@ usesP3ColorSpace(const std::string &colorSpace,
   _windowAttached = true;
   _attachedWidth = w;
   _attachedHeight = h;
-  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
   const bool highBitDepth = _highBitDepth;
@@ -749,10 +668,6 @@ usesP3ColorSpace(const std::string &colorSpace,
         (latestWidth != width || latestHeight != height)) {
       surface->resize(latestWidth, latestHeight);
     }
-    SkiaView *strongSelf = weakSelf;
-    if (strongSelf != nil) {
-      strongSelf->_hasWindow = surface->isAttached();
-    }
   });
 }
 
@@ -764,16 +679,10 @@ usesP3ColorSpace(const std::string &colorSpace,
     return;
   }
   _windowAttached = false;
-  __weak SkiaView *weakSelf = self;
   auto surface = _surface;
   CAMetalLayer *layer = _layer;
-  RNSkia::presentThread().post([=]() {
-    surface->detach((__bridge void *)layer);
-    SkiaView *strongSelf = weakSelf;
-    if (strongSelf != nil) {
-      strongSelf->_hasWindow = surface->isAttached();
-    }
-  });
+  RNSkia::presentThread().post(
+      [=]() { surface->detach((__bridge void *)layer); });
 }
 
 #pragma mark - Props

@@ -1,0 +1,18 @@
+{
+  "name": "example",
+  "displayName": "Skia macOS Example",
+  "singleApp": "example-app",
+  "components": [
+    {
+      "appKey": "example",
+      "displayName": "example",
+      "slug": "example-app"
+    }
+  ],
+  "resources": {
+    "macos": ["dist/assets", "dist/main.macos.jsbundle"]
+  },
+  "macos": {
+    "metalAPIValidation": false
+  }
+}

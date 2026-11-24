@@ -179,7 +179,7 @@ jobs:
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The workflow's own token instead of the Claude GitHub App, which is
@@ -281,7 +281,7 @@ jobs:
           swap-storage: false
 
       - name: Install JDK
-        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -439,7 +439,7 @@ jobs:
           adb exec-out screencap -p > "$AGENT_OUTPUT/launch.png"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

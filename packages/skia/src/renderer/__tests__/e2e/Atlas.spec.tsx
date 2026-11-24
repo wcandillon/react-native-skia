@@ -427,6 +427,54 @@ describe("Atlas", () => {
       }
     );
   });
+  it("should draw the atlas under a perspective matrix", async () => {
+    // Graphite's vertices render step mishandles depth under perspective, so
+    // an atlas drawn as vertices came out with cut or missing sprites.
+    const { Skia, rect, drawAsImage } = importSkia();
+    const { width, height } = surface;
+    const size = 64;
+    const texture = await drawAsImage(
+      <Group>
+        <Rect rect={rect(0, 0, size / 2, size / 2)} color="red" />
+        <Rect rect={rect(size / 2, 0, size / 2, size / 2)} color="green" />
+        <Rect rect={rect(0, size / 2, size / 2, size / 2)} color="blue" />
+        <Rect
+          rect={rect(size / 2, size / 2, size / 2, size / 2)}
+          color="yellow"
+        />
+      </Group>,
+      { width: size, height: size }
+    );
+    const cols = 3;
+    const rows = 3;
+    const pad = Math.min(width, height) * 0.2;
+    const cell = (Math.min(width, height) - pad * 2) / cols;
+    const scale = (cell * 0.9) / size;
+    const sprites = new Array(cols * rows)
+      .fill(0)
+      .map(() => rect(0, 0, size, size));
+    const transforms = sprites.map((_, i) => {
+      const x = pad + (i % cols) * cell + cell * 0.05;
+      const y = pad + Math.floor(i / cols) * cell + cell * 0.05;
+      return Skia.RSXform(scale, 0, x, y);
+    });
+    const img = await surface.draw(
+      <Group
+        transform={[
+          { translate: [width / 2, height / 2] },
+          { perspective: 300 },
+          { rotateX: 0.7 },
+          { rotateY: 0.3 },
+          { translate: [-width / 2, -height / 2] },
+        ]}
+      >
+        <Atlas image={texture} sprites={sprites} transforms={transforms} />
+      </Group>
+    );
+    await checkImage(img, "snapshots/atlas/perspective.png", {
+      maxPixelDiff: 500,
+    });
+  });
   it("should accept null as a texture", async () => {
     const { Skia, rect } = importSkia();
     const size = { width: 25, height: 25 * 0.45 };

@@ -33,6 +33,7 @@
     "cpp/**/*.{h,cpp}",
     "apple/**",
     "react-native-skia.podspec",
+    "binaries.json",
     "Package.swift",
     "include/**",
     "react-native.config.js",
@@ -51,6 +52,8 @@
     "build-skia": "tsx ./scripts/build-skia.ts",
     "build-dawn": "tsx ./scripts/build-dawn.ts",
     "package-binaries": "tsx ./scripts/package-binaries.ts",
+    "package-skia-wasm": "tsx ./scripts/package-skia-wasm.ts",
+    "prepare-dawn-headers": "tsx ./scripts/prepare-dawn-headers.ts",
     "copy-skia-headers": "tsx ./scripts/copy-skia-headers.ts",
     "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
     "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
@@ -78,6 +81,10 @@
     }
   ],
   "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/wcandillon"
+  },
   "licenseFilename": "LICENSE.md",
   "readmeFilename": "README.md",
   "peerDependencies": {
@@ -144,7 +151,6 @@
   },
   "dependencies": {
     "canvaskit-wasm": "0.41.1",
-    "react-native-skia-graphite-android": "158.0.0",
     "react-native-skia-graphite-apple-ios": "158.0.0",
     "react-native-skia-graphite-apple-macos": "158.0.0",
     "react-native-skia-graphite-apple-tvos": "158.0.0",
