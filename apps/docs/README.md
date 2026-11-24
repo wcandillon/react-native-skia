@@ -34,7 +34,7 @@ This command type checks every `tsx twoslash` code block of the documentation.
 
 ### Deployment
 
-The website is deployed to [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) by the **Deploy Documentation** workflow (`.github/workflows/docs.yml`), which is triggered manually.
+The website is deployed to [wcandillon.github.io/react-native-skia](https://wcandillon.github.io/react-native-skia/) by the **Deploy docs** workflow (`.github/workflows/docs.yml`), which is triggered manually.
 
 The `main` branch holds the documentation of the latest version (v3).
 The v2 documentation is a frozen build stored in the `docs-v2` branch: the workflow copies it into the `v2/` folder of the website, where it is served at [wcandillon.github.io/react-native-skia/v2](https://wcandillon.github.io/react-native-skia/v2/).

@@ -3,7 +3,7 @@
 A minimal React Native app that consumes `react-native-skia` through **Swift
 Package Manager** instead of CocoaPods. It exists to prove
 `packages/skia/Package.swift` actually builds and renders, and it is what the
-`build-test-ios-spm` CI job runs.
+`build-ios-spm` CI job runs.
 
 iOS only, and Graphite only: this harness exercises the library's current
 SwiftPM integration. The native library also supports tvOS and macOS
