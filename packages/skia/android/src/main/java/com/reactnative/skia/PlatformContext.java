@@ -14,10 +14,7 @@ import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.common.LifecycleState;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URISyntaxException;
 
 public class PlatformContext implements LifecycleEventListener {
     @DoNotStrip
@@ -102,7 +99,12 @@ public class PlatformContext implements LifecycleEventListener {
     }
 
     @DoNotStrip
-    public byte[] getJniStreamFromSource(String sourceUri) throws IOException {
+    public byte[] getJniStreamFromSource(String sourceUri) {
+        // Returns null on any failure so the load rejects instead of ending the app
+        return SourceBytes.orNull(() -> loadSource(sourceUri));
+    }
+
+    private byte[] loadSource(String sourceUri) throws Exception {
         // First try loading the input as a resource directly
         int resourceId = mContext.getResources().getIdentifier(sourceUri, "drawable", mContext.getPackageName());
 
@@ -112,35 +114,19 @@ public class PlatformContext implements LifecycleEventListener {
         }
 
         if (resourceId != 0) {
-            // We can just return the input stream directly
-            return SourceBytes.read(mContext.getResources().openRawResource(resourceId));
+            return SourceBytes.readAndClose(mContext.getResources().openRawResource(resourceId));
         }
 
         // We should try to open a connection and return a stream to download this
         // object
-        URI uri = null;
-        try {
-            uri = new URI(sourceUri);
+        URI uri = new URI(sourceUri);
 
-            String scheme = uri.getScheme();
+        if (uri.getScheme() == null)
+            throw new Exception("Invalid URI scheme");
 
-            if (scheme == null)
-                throw new Exception("Invalid URI scheme");
+        // TODO: Base64??
 
-            // TODO: Base64??
-
-            return SourceBytes.fromUrl(uri.toURL());
-
-        } catch (URISyntaxException e) {
-            e.printStackTrace();
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
+        return SourceBytes.fromUrl(uri.toURL());
     }
 
     @Override

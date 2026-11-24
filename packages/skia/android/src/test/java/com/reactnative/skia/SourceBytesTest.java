@@ -2,6 +2,8 @@ package com.reactnative.skia;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -23,6 +25,48 @@ public class SourceBytesTest {
         byte[] bytes = new byte[10000];
         Arrays.fill(bytes, (byte) 7);
         assertArrayEquals(bytes, SourceBytes.read(new ByteArrayInputStream(bytes)));
+    }
+
+    @Test
+    public void aResourceStreamIsClosedOnceRead() throws IOException {
+        TrackedStream stream = new TrackedStream(new byte[] { 1, 2, 3 }, false);
+        assertArrayEquals(new byte[] { 1, 2, 3 }, SourceBytes.readAndClose(stream));
+        assertTrue(stream.closed);
+    }
+
+    @Test
+    public void aStreamThatFailsMidReadGivesNullAndIsClosed() {
+        TrackedStream stream = new TrackedStream(new byte[] { 1, 2, 3 }, true);
+        assertNull(SourceBytes.orNull(() -> SourceBytes.readAndClose(stream)));
+        assertTrue(stream.closed);
+    }
+
+    @Test
+    public void aLoadThatThrowsGivesNull() {
+        // e.g. Resources.NotFoundException from openRawResource for a color drawable
+        assertNull(SourceBytes.orNull(() -> {
+            throw new IllegalStateException("not a file resource");
+        }));
+        assertNull(SourceBytes.orNull(() -> {
+            throw new Exception("Invalid URI scheme");
+        }));
+    }
+
+    @Test
+    public void runningOutOfMemoryOnALoadGivesNull() {
+        assertNull(SourceBytes.orNull(() -> {
+            throw new OutOfMemoryError("large download");
+        }));
+    }
+
+    @Test
+    public void anUnreachableUrlGivesNull() throws Exception {
+        int port;
+        try (ServerSocket server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            port = server.getLocalPort();
+        }
+        URL url = new URL("http://127.0.0.1:" + port + "/cat.png");
+        assertNull(SourceBytes.orNull(() -> SourceBytes.fromUrl(url)));
     }
 
     @Test
@@ -70,6 +114,37 @@ public class SourceBytesTest {
             out.flush();
         } catch (IOException e) {
             // the client went away
+        }
+    }
+
+    private static final class TrackedStream extends InputStream {
+        private final ByteArrayInputStream bytes;
+        private final boolean failAfterFirstRead;
+        private int reads;
+        boolean closed;
+
+        TrackedStream(byte[] bytes, boolean failAfterFirstRead) {
+            this.bytes = new ByteArrayInputStream(bytes);
+            this.failAfterFirstRead = failAfterFirstRead;
+        }
+
+        @Override
+        public int read() throws IOException {
+            byte[] one = new byte[1];
+            return read(one, 0, 1) == -1 ? -1 : one[0] & 0xff;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (failAfterFirstRead && reads++ > 0) {
+                throw new IOException("connection reset");
+            }
+            return bytes.read(b, off, len);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
         }
     }
 }

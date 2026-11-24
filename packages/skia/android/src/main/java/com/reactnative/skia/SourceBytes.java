@@ -12,6 +12,31 @@ final class SourceBytes {
     private SourceBytes() {
     }
 
+    /** Loads the bytes of a source; may throw. */
+    interface Loader {
+        byte[] load() throws Exception;
+    }
+
+    // A failed load must return null so the JS side rejects (Skia.Data.fromURI,
+    // useImage, useData, useFonts). Anything thrown from getJniStreamFromSource
+    // reaches the native loader thread, where nothing catches it and the app
+    // ends. OutOfMemoryError is included for large downloads.
+    static byte[] orNull(Loader loader) {
+        try {
+            return loader.load();
+        } catch (Exception | OutOfMemoryError e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    // Reads a resource stream and closes it.
+    static byte[] readAndClose(InputStream is) throws IOException {
+        try (InputStream in = is) {
+            return read(in);
+        }
+    }
+
     static byte[] read(InputStream is) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         int nRead;
