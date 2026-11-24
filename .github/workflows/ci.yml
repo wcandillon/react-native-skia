@@ -1,11 +1,11 @@
 name: Run CI
 # Pushes to main/next only run the cheap ubuntu jobs (lint, test, test-web,
 # build-library), the Android build (with its emulator and device runs on main
-# only), the SwiftPM build, and (on main only) the macOS build. The native
-# builds and the emulator/simulator runs happen on pull requests and in the
-# merge queue, so a merge does not pay for the full suite twice. The SwiftPM
-# and macOS builds run on push, and on the pull requests whose diff can
-# affect them (see changes).
+# only), the SwiftPM build, the Apple SDK check, and (on main only) the macOS
+# build. The native builds and the emulator/simulator runs happen on pull
+# requests and in the merge queue, so a merge does not pay for the full suite
+# twice. The SwiftPM and macOS builds and the Apple SDK check run on push, and
+# on the pull requests whose diff can affect them (see changes).
 on:
   push:
     branches:
@@ -657,19 +657,21 @@ jobs:
       - name: Build example for macOS
         run: yarn turbo run build:macos --concurrency 1
 
-  # Decides whether build-ios-spm (output spm) and build-macos
-  # (output macos) run on a pull request. The SwiftPM job only proves that
-  # packages/skia/Package.swift resolves and compiles, so a pull request pays
-  # for it only when its diff touches what can change the outcome: the
-  # manifest and the autolinking config, the Apple and C++ sources it
-  # compiles, the scripts that copy the headers from the Skia submodule and
-  # the submodule itself, the binary release pin and package dependencies,
-  # the example that links it, or CI itself. The macOS job follows the same
-  # idea for apps/example-macos, whose dependencies only change for macOS.
-  # JavaScript changes in apps/example/src do not affect the native build;
-  # the lint job bundles them for macOS instead. Pushes to main/next, the
-  # merge queue and manual runs set both outputs unconditionally: a change
-  # these lists miss still shows up on main, and those runs save the
+  # Decides whether build-ios-spm (output spm), build-macos (output macos) and
+  # check-apple-sdks (output apple) run on a pull request. The SwiftPM job
+  # only proves that packages/skia/Package.swift resolves and compiles, so a
+  # pull request pays for it only when its diff touches what can change the
+  # outcome: the manifest and the autolinking config, the Apple and C++
+  # sources it compiles, the scripts that copy the headers from the Skia
+  # submodule and the submodule itself, the binary release pin and package
+  # dependencies, the example that links it, or CI itself. The macOS job
+  # follows the same idea for apps/example-macos, whose dependencies only
+  # change for macOS. JavaScript changes in apps/example/src do not affect
+  # the native build; the lint job bundles them for macOS instead. The Apple
+  # SDK check compiles sources under packages/skia/apple on their own, so it
+  # follows that directory, its script and CI itself. Pushes to main/next,
+  # the merge queue and manual runs set every output unconditionally: a
+  # change these lists miss still shows up on main, and those runs save the
   # node_modules cache the pull request runs restore (see
   # .github/actions/setup).
   changes:
@@ -678,6 +680,7 @@ jobs:
     outputs:
       spm: ${{ steps.diff.outputs.spm }}
       macos: ${{ steps.diff.outputs.macos }}
+      apple: ${{ steps.diff.outputs.apple }}
     steps:
       - name: Checkout
         if: github.event_name == 'pull_request'
@@ -695,12 +698,14 @@ jobs:
           if [ "$EVENT" != "pull_request" ]; then
             echo "spm=true" >> "$GITHUB_OUTPUT"
             echo "macos=true" >> "$GITHUB_OUTPUT"
+            echo "apple=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git fetch --depth=1 origin "$BASE"
           changed=$(git diff --name-only "$BASE" HEAD)
           spm=false
           macos=false
+          apple=false
           while IFS= read -r file; do
             case "$file" in
               packages/skia/Package.swift|packages/skia/package.json|packages/skia/binaries.json|packages/skia/react-native.config.js|\
@@ -721,9 +726,32 @@ jobs:
                 macos=true
                 ;;
             esac
+            case "$file" in
+              packages/skia/apple/*|packages/skia/scripts/check-apple-sdks.sh|\
+              .github/workflows/ci.yml)
+                echo "apple: $file"
+                apple=true
+                ;;
+            esac
           done <<< "$changed"
           echo "spm=$spm" >> "$GITHUB_OUTPUT"
           echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          echo "apple=$apple" >> "$GITHUB_OUTPUT"
+
+  # Syntax-checks the Apple sources against every Apple SDK. It runs from this
+  # workflow, behind changes, so that it can be a required check: a job that
+  # `if` skips reports as passing, while a workflow that a paths filter skips
+  # never reports at all and would leave the pull request waiting forever.
+  check-apple-sdks:
+    needs: changes
+    if: needs.changes.outputs.apple == 'true'
+    # Syntax-check only: no yarn install, no pods, no submodule, no simulator.
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - name: Compile Apple sources for iOS, macOS and tvOS
+        run: packages/skia/scripts/check-apple-sdks.sh
 
   # The SwiftPM example builds on a GitHub-hosted Mac. It needs no Metro,
   # simulator or CocoaPods, so nothing ties it to the self-hosted machine, and
