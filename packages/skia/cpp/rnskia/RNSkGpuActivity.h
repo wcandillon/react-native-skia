@@ -11,16 +11,11 @@ namespace RNSkia {
  * The GPU device's use by the frames: a recording thread snapping a frame
  * (which compiles the pipelines the frame needs, inline), the present
  * thread replaying and presenting one, an upload, a readback. What the
- * pipeline warmup stays behind (see RNSkPipelineWarmup). A warmup compile
- * holds Dawn's device lock for its whole duration: Graphite precompiles
- * through the synchronous CreateRenderPipeline, and Dawn, with implicit
- * device synchronization, serializes every call on the device behind one
- * lock. So a compile that runs while a frame is made or shown makes that
- * frame wait for it, and a lower thread priority does not help a thread
- * that holds the lock a frame needs. The frames mark their work (see
- * Scope), and the warmup compiles only once nothing is marked and nothing
- * was for a while (see waitForIdle): at most one compile, the one in
- * flight as a frame starts, ever delays a frame.
+ * pipeline warmup stays behind (see RNSkPipelineWarmup), so that its
+ * compiles do not run while a frame is made or shown. The frames mark their
+ * work (see Scope), and the warmup compiles only once nothing is marked and
+ * nothing was for a while (see waitForIdle): at most one compile, the one in
+ * flight as a frame starts, runs beside a frame.
  */
 class RNSkGpuActivity {
 public:

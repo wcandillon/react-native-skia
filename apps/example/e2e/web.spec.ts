@@ -209,6 +209,47 @@ test("WebGLLifecycle: context lifetime", async ({ page }) => {
   expect(errors, errors.join("\n")).toEqual([]);
 });
 
+// A SkiaImageView is an <img> of its image, with no canvas of its own.
+test("ImageViews: image views show their image without a canvas", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  await page.goto("/image-views");
+  // Stops the grid mounting and unmounting, with every cell mounted.
+  await page.getByTestId("churn").click();
+  const grid = page.getByTestId("grid");
+  await expect(grid.locator("img")).toHaveCount(120, { timeout: 60_000 });
+  await expect(grid.locator("canvas")).toHaveCount(0);
+  const pixel = await grid
+    .locator("img")
+    .first()
+    .evaluate(async (element: HTMLImageElement) => {
+      await element.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = element.naturalWidth;
+      canvas.height = element.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return null;
+      }
+      ctx.drawImage(element, 0, 0);
+      const { data } = ctx.getImageData(
+        Math.floor(canvas.width / 2),
+        Math.floor(canvas.height / 2),
+        1,
+        1
+      );
+      return Array.from(data);
+    });
+  // The middle of the drawing's gradient-filled circle.
+  expect(pixel).not.toBeNull();
+  const [r, g, b, a] = pixel!;
+  expect(a).toBe(255);
+  expect(Math.max(r, g, b)).toBeGreaterThan(100);
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
 // Skia.Surface.MakeOffscreen() is a render target on the shared WebGL
 // context: making and disposing surfaces past the browser's context limit
 // must not cost a context, a surface the app kept survives, and a canvas can

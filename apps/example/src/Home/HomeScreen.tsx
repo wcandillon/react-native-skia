@@ -169,6 +169,11 @@ export const HomeScreen = () => {
         description="SurfaceView vs TextureView"
         route="AndroidViews"
       />
+      <HomeScreenButton
+        title="🖼 Image Views"
+        description="Canvas vs SkiaImageView, mounting and unmounting"
+        route="ImageViews"
+      />
       {Platform.OS !== "macos" && (
         <HomeScreenButton
           title="🌙 Background GPU"

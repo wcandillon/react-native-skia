@@ -169,7 +169,8 @@
     },
     "ios": {
       "componentProvider": {
-        "SkiaView": "SkiaView"
+        "SkiaView": "SkiaView",
+        "SkiaImageView": "SkiaImageView"
       }
     }
   },

@@ -16,7 +16,8 @@ namespace RNSkia {
  * Attaches the calling thread to the JVM for good (JniPlatformContext.cpp).
  * The first task of the present thread: the Java calls made from it (a
  * posted Runnable, the frame rate vote of each frame) would otherwise each
- * attach and detach it, a java.lang.Thread made and dropped per frame.
+ * attach and detach it, a java.lang.Thread made and dropped per frame. The
+ * images' worker takes it first too (see RNSkPresentedImages::worker).
  */
 void attachPresentThread();
 #endif

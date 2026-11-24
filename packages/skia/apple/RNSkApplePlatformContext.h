@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "RNSkPlatformContext.h"
@@ -71,6 +72,17 @@ public:
   std::vector<std::string> getSystemFontFamilies() override;
 
   std::string resolveFontFamily(const std::string &familyName) override;
+
+  std::optional<PresentedTarget>
+  makePresentedTarget(const SkImageInfo &info) override;
+
+  bool makesPresentedBuffers() override { return true; }
+
+  bool canPresentP3Bitmaps() override { return true; }
+
+  void discardPresentedBitmap(uint32_t id) override;
+
+  void presentFailure(uint32_t id) override;
 
 private:
   bool _prefersP3ColorSpace = false;
