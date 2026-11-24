@@ -167,7 +167,7 @@ describe("Native frames", () => {
   // allocation size against the image it binds, and the Android emulator's
   // drivers report 0 (SwiftShader, and the host GPU through gfxstream): the
   // check fails as an internal error, which loses the device (#4508). Skia
-  // skips the check on the emulator; real devices keep it.
+  // skips the check on Android.
   itRunsE2eOnly(
     "draws into a native buffer imported on its device",
     async () => {
