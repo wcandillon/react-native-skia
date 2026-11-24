@@ -7,7 +7,7 @@ export interface NativeProps extends ViewProps {
   highBitDepth?: boolean;
   colorSpace?: string;
   nativeID: string;
-  androidBackingView?: "TextureView" | "SurfaceView" | "HardwareBufferView";
+  androidBackingView?: "TextureView" | "SurfaceView";
   androidOpaque?: boolean;
   androidZOrderOnTop?: boolean;
   androidZOrderMediaOverlay?: boolean;
