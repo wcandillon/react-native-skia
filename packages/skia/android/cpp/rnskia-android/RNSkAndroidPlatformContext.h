@@ -91,6 +91,7 @@ public:
         width, height,
         mipMapped ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo,
         textureInfo);
+    OpenGLContext::getInstance().markExternalTextureImported();
     return SkImages::BorrowTextureFrom(
         OpenGLContext::getInstance().getDirectContext(), backendTexture,
         kTopLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType,
