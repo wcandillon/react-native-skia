@@ -36,7 +36,7 @@ The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphi
 
 `yarn prepare-dawn-headers` also runs this preparation on its own. It uses the system user cache (`RNSKIA_CACHE_DIR` to override) and `REACT_NATIVE_SKIA_BINARIES_URL` for mirrors; it does not build Dawn. A source build with `yarn build-dawn <target>` supplies both source and generated headers, replacing downloaded ones. The Dawn checkout's forwarding headers alone are insufficient.
 
-The binary packages are built and published by the **Build and publish binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
+The binary packages are built and published by the **Release binaries** workflow (`.github/workflows/build-binaries.yml`), see [Upgrading Skia](#upgrading-skia).
 
 ### Building
 
@@ -62,7 +62,7 @@ Skia writes `.a` libraries to `libs/android/<abi>`. Dawn writes `libwebgpu_dawn.
 
 `yarn build-skia wasm` builds Skia Graphite for the browser's WebGPU with the Emscripten release Skia pins (installed in the Skia checkout on first use). There is no Dawn build: the browser implements WebGPU, and the WebGPU headers and JavaScript glue are generated from the pinned Dawn checkout.
 
-Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), the WebGPU package (`emdawnwebgpu/`) and `metadata.json`, which records the Emscripten version, flags and defines a consumer has to match. These archives are not a module: the [skia-wasm](https://github.com/wcandillon/skia-wasm) repository links them into one. `yarn package-skia-wasm` zips them. The Build and release Skia wasm workflow (`.github/workflows/build-skia-wasm.yml`) does both and publishes the archive as the GitHub release `skia-wasm-<version>`, which skia-wasm pins.
+Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), the WebGPU package (`emdawnwebgpu/`) and `metadata.json`, which records the Emscripten version, flags and defines a consumer has to match. These archives are not a module: the [skia-wasm](https://github.com/wcandillon/skia-wasm) repository links them into one. `yarn package-skia-wasm` zips them. The Release Skia wasm workflow (`.github/workflows/build-skia-wasm.yml`) does both and publishes the archive as the GitHub release `skia-wasm-<version>`, which skia-wasm pins.
 
 #### Apple
 
@@ -190,7 +190,7 @@ Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compi
 
 #### 4. Publish the binary npm packages (GitHub Actions)
 
-With the submodule bump merged (the workflow detects the Skia branch from the checked-in submodule), run **Build and publish binaries** (`.github/workflows/build-binaries.yml`) from the Actions tab. It is `workflow_dispatch` only and takes these inputs:
+With the submodule bump merged (the workflow detects the Skia branch from the checked-in submodule), run **Release binaries** (`.github/workflows/build-binaries.yml`) from the Actions tab. It is `workflow_dispatch` only and takes these inputs:
 
 - `skia_branch`: build a Skia branch other than the submodule commit.
 - `respin`: a letter for another build of the same Skia branch; it becomes the minor of the npm version (see below).
@@ -298,7 +298,7 @@ a stale pin silently keeps the previous source.
 
 ### Publishing
 
-Releases are published from GitHub Actions by the **Create a release (react-native-skia)** workflow (`.github/workflows/build-npm-react-native-skia.yml`), which is triggered manually and runs [semantic-release](https://github.com/semantic-release/semantic-release):
+Releases are published from GitHub Actions by the **Release npm package** workflow (`.github/workflows/build-npm-react-native-skia.yml`), which is triggered manually and runs [semantic-release](https://github.com/semantic-release/semantic-release):
 
 - On `main`, it publishes the next v3 version under the `latest` dist-tag.
 - On `2.x`, it publishes the next v2 version under the `2.x` dist-tag, so that `latest` stays on v3.

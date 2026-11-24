@@ -1,4 +1,4 @@
-name: apple-sdks
+name: Check Apple SDKs
 on:
   push:
     branches:
@@ -9,7 +9,7 @@ on:
       - "packages/skia/scripts/check-apple-sdks.sh"
       - ".github/workflows/apple-sdks.yml"
 jobs:
-  apple-sdks:
+  check-apple-sdks:
     # Syntax-check only: no yarn install, no pods, no submodule, no simulator.
     runs-on: macos-latest
     timeout-minutes: 10

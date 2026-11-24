@@ -60,7 +60,7 @@ the default plan, without measurements.
 
 ## On the self-hosted Mac
 
-The `Benchmark` workflow (`.github/workflows/benchmark.yml`, Actions tab, "Run
+The `Run benchmark` workflow (`.github/workflows/benchmark.yml`, Actions tab, "Run
 workflow") runs the FPS benchmark on the Android phone plugged into the
 self-hosted Mac. There is no iPhone on that machine, so it is Android only.
 It measures the `baseline` ref (default `main`) and then the candidate (`ref`,

@@ -1,4 +1,4 @@
-name: Build and release Skia wasm
+name: Release Skia wasm
 # Builds Skia Graphite for the browser's WebGPU (`yarn build-skia wasm`) and
 # archives it as skia-graphite-wasm.zip (`yarn package-skia-wasm`): the
 # archives, the Skia headers, the emdawnwebgpu package and metadata.json.
