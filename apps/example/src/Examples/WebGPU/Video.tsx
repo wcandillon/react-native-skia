@@ -14,7 +14,7 @@ import {
   useCanvasSize,
 } from "react-native-skia";
 import type { VideoPlayer } from "react-native-webgpu";
-import { createVideoPlayer, importDevice } from "react-native-webgpu";
+import { createTestVideoPlayer, importDevice } from "react-native-webgpu";
 
 const VIDEO_URL =
   "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4";
@@ -156,7 +156,7 @@ export const Video = () => {
 
   useEffect(() => {
     const device = importDevice(Skia.getNativeDevice());
-    const video = createVideoPlayer(VIDEO_URL);
+    const video = createTestVideoPlayer(VIDEO_URL);
     setPlayer(video);
     let texture: GPUTexture | null = null;
     let frameId = 0;

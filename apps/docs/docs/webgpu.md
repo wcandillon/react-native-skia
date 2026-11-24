@@ -430,7 +430,7 @@ There is one path on both platforms, whatever the format of the frame. It needs 
 
 ### Playing a video
 
-[`createVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
+[`createTestVideoPlayer()`](https://wcandillon.github.io/react-native-webgpu/api/video-player) from React Native WebGPU decodes a video into native buffers, with the playback controls of an `HTMLMediaElement` (`play()`, `pause()`, `currentTime`, `loop`, `volume`).
 `copyLatestFrame()` returns the most recently decoded frame, or `null` when no new frame was decoded since the last call.
 Copy each new frame into a texture, wrap the texture into an image, and publish the image through a shared value:
 
@@ -439,7 +439,7 @@ import React, { useEffect } from "react";
 import { useSharedValue } from "react-native-reanimated";
 import type { SkImage } from "react-native-skia";
 import { Canvas, Image, Skia, useCanvasSize } from "react-native-skia";
-import { createVideoPlayer, importDevice } from "react-native-webgpu";
+import { createTestVideoPlayer, importDevice } from "react-native-webgpu";
 
 export const Video = ({ url }: { url: string }) => {
   const { size, onLayout } = useCanvasSize();
@@ -447,7 +447,7 @@ export const Video = ({ url }: { url: string }) => {
 
   useEffect(() => {
     const device = importDevice(Skia.getNativeDevice());
-    const player = createVideoPlayer(url);
+    const player = createTestVideoPlayer(url);
     let texture: GPUTexture | null = null;
     let raf = 0;
     const render = () => {

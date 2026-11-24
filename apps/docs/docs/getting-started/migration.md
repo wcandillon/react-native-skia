@@ -153,7 +153,7 @@ The following APIs were removed in favor of it:
 
 | Removed | Replacement |
 |:--|:--|
-| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createVideoPlayer()`, whose frames are copied into a texture that Skia draws. See [native buffers](/docs/webgpu#native-buffers). |
+| `Skia.Video()` and `useVideo()` | React Native WebGPU's `createTestVideoPlayer()`, whose frames are copied into a texture that Skia draws. See [native buffers](/docs/webgpu#native-buffers). |
 | `Skia.NativeBuffer.MakeFromImage()` | Export the image as a WebGPU texture with `Skia.Image.MakeGPUTextureFromImage()`. See [exporting an image](/docs/webgpu#exporting-an-image). |
 | `Skia.NativeBuffer.MakeTestBuffer()` | React Native WebGPU's `createTestVideoFrame()`. |
 | `Skia.NativeBuffer.Release()` | `NativeVideoFrame.release()`: React Native WebGPU owns the buffers it hands out. |
