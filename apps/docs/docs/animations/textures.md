@@ -187,6 +187,8 @@ const Demo = () => {
 };
 ```
 
+Flush the surface before drawing its image into another surface too: each surface submits its own drawing only, so flushing the second does not flush the first, and the order of the flushes is the order on the GPU.
+
 Never draw the image onto its own surface: use a second surface for a feedback loop.
 
 :::info

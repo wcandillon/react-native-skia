@@ -29,7 +29,8 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
    * Returns an image sharing the texture of the surface, without a copy: a
    * canvas drawing it shows what the surface holds by the time the drawing
    * reaches the GPU. Call `flush()` on the surface after drawing into it and
-   * before the frame that samples the image, and never draw the image onto
+   * before the frame that samples the image, or before drawing the image into
+   * another surface: flushing that one does not flush this one. Never draw the image onto
    * its own surface (use a second surface for a feedback loop).
    * `makeImageSnapshot()` makes a copy instead.
    *

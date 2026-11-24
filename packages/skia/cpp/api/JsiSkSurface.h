@@ -198,6 +198,11 @@ public:
 
 protected:
   void releaseResources() override {
+    // What was drawn and not flushed still reaches the texture, which may
+    // outlive the surface (Surface.MakeFromGPUTexture, asImage()).
+    if (_recorder) {
+      DawnContext::getInstance().submitPendingSurface(*_recorder);
+    }
     // dispose(): the canvas lets go of its reference too, so that the texture
     // is freed now rather than once the canvas is collected (#4275). Drawing
     // on the canvas throws from here on.

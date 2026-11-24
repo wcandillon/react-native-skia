@@ -624,6 +624,9 @@ public:
       throw std::runtime_error("Attempted to use a canvas whose surface was "
                                "disposed or whose recording has finished.");
     }
+    if (_recorder) {
+      _recorder->markPending();
+    }
     return _canvas;
   }
 

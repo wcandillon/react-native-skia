@@ -214,9 +214,9 @@ public:
 
   /** Sets isForeground(); the platform calls it from its main thread. */
   static void setForeground(bool foreground) noexcept {
-    foregroundFlag().store(foreground, std::memory_order_release);
-    if (foreground &&
-        purgeOnForeground().exchange(false, std::memory_order_acq_rel)) {
+    // Sequentially consistent, with purgeOnForeground: see reduceMemory().
+    foregroundFlag().store(foreground);
+    if (foreground && purgeOnForeground().exchange(false)) {
       purgeGpuResources();
     }
   }
@@ -413,8 +413,14 @@ public:
 
     skgpu::graphite::Recorder *get() const { return _recorder.get(); }
 
+    /** The surface is about to be drawn into (see submitPendingSurface). */
+    void markPending() { _pending = true; }
+
   private:
     friend class DawnContext;
+    // Whether something may be recorded and not submitted: a new surface is
+    // yet to be cleared.
+    bool _pending = true;
     std::unique_ptr<skgpu::graphite::Recorder> _recorder;
     uint64_t _generation;
     // The latest trim (see submitSurface).
@@ -443,6 +449,7 @@ public:
   bool submitSurface(
       SurfaceRecorder &surface,
       skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    surface._pending = false;
     const bool inserted =
         snapAndRun(surface.get(), syncToCpu, surface._generation);
     const auto now = std::chrono::steady_clock::now();
@@ -453,6 +460,17 @@ public:
     // What the drawing uploaded is the upload recorder's of this thread.
     trimThreadIfDue();
     return inserted;
+  }
+
+  /**
+   Submits what was drawn into the surface since its last submit, if anything:
+   its recorder is about to go, and what it recorded with it. Called by the
+   thread using the surface.
+   */
+  void submitPendingSurface(SurfaceRecorder &surface) {
+    if (surface._pending) {
+      submitSurface(surface);
+    }
   }
 
   /** A thread's recorder with the generation it was made for. */
@@ -1420,8 +1438,12 @@ private:
 #if defined(__APPLE__)
       if (!isForeground()) {
         // Asked for again once the app is back (see setForeground).
-        purgeOnForeground().store(true, std::memory_order_release);
-        return;
+        purgeOnForeground().store(true);
+        // The app may have come back in between, before it could see the
+        // request: whichever of the two takes the request serves it.
+        if (!foregroundFlag().load() || !purgeOnForeground().exchange(false)) {
+          return;
+        }
       }
 #endif
       {
@@ -1437,6 +1459,14 @@ private:
           }
           tick();
           current->context->checkAsyncWorkCompletion();
+          // Both may have waited for a device.destroy() from JS (the device is
+          // shared with react-native-webgpu) to finish. One that starts after
+          // this is caught by Dawn, in binaries built with
+          // dawn-patches/reduce-memory-usage-lost-device.patch
+          // (react-native-webgpu-dawn 158.0.0 is not).
+          if (current->lost.load(std::memory_order_acquire)) {
+            return;
+          }
           device = current->backendContext.fDevice;
         }
         // Outside the context lock, which frames need.

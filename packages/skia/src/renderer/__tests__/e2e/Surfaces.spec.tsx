@@ -1,3 +1,5 @@
+import { itRunsE2eOnly } from "../../../__tests__/setup";
+import { AlphaType, ColorType } from "../../../skia/types";
 import { surface } from "../setup";
 
 describe("Surfaces", () => {
@@ -36,6 +38,35 @@ describe("Surfaces", () => {
     });
     expect(result).toBe(true);
   });
+
+  itRunsE2eOnly(
+    "submits what was not flushed when the surface is disposed",
+    async () => {
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          const source = Skia.Surface.MakeOffscreen(16, 16)!;
+          const image = source.asImage();
+          // Flushed once, so that the draw below is all there is to submit.
+          source.flush();
+          source.getCanvas().drawColor(Skia.Color("cyan"));
+          source.dispose();
+          using target = Skia.Surface.MakeOffscreen(16, 16)!;
+          target.getCanvas().drawImage(image, 0, 0);
+          return target
+            .getCanvas()
+            .readPixels(0, 0, {
+              width: 16,
+              height: 16,
+              colorType: ctx.colorType,
+              alphaType: ctx.alphaType,
+            })
+            .then((pixels) => (pixels ? Array.from(pixels.slice(0, 4)) : null));
+        },
+        { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
+      );
+      expect(result).toEqual([0, 255, 255, 255]);
+    }
+  );
 
   it("disposing the surface detaches its canvas", async () => {
     // CanvasKit frees the canvas along with the surface: nothing to observe
