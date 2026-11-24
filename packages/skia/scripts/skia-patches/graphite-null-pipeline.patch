@@ -1,3 +1,12 @@
+[graphite] Handle a missing graphics pipeline when adding a recording fails
+
+A pipeline handle can have no pipeline when its creation or the recording's
+commands failed. Skip those handles instead of dereferencing null.
+
+Upstream: https://skia-review.googlesource.com/c/skia/+/1421717
+Drop this patch when the pinned Skia includes this change.
+
+---
 diff --git a/src/gpu/graphite/QueueManager.cpp b/src/gpu/graphite/QueueManager.cpp
 index 63d47a5a34..0708722656 100644
 --- a/src/gpu/graphite/QueueManager.cpp
