@@ -1,4 +1,4 @@
-name: Benchmark
+name: Run benchmark
 # The performance regression benchmark (apps/example/benchmarks), started by
 # hand, on the Android phone plugged into the self-hosted Mac. The Mac has no
 # iPhone, so the job is Android only.
@@ -66,7 +66,7 @@ permissions:
   contents: read
 
 jobs:
-  android:
+  benchmark-android:
     runs-on: [self-hosted, macOS]
     timeout-minutes: 240
     env:

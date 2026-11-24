@@ -14,7 +14,7 @@ React Native Skia bring Skia, the rendering engine behind Google Chrome to React
 
 We use Graphite, Skia’s new GPU backend built on WebGPU (Dawn). It plugs directly into [React Native WebGPU](https://wcandillon.dev/article/hello-graphite-webgpu), so 2D drawings, 3D scenes, and machine learning models share the same GPU device and the same canvas, at zero cost. The result is a unified GPU runtime for React Native.  See [Documentation](https://wcandillon.github.io/react-native-skia/).
 
-React Native Skia has been downloaded more than 60 millions times on NPM. And today, it powers the user-experiences of some of the top apps on the App Store and Google Play, including several that have won awards from Apple, Google, and Expo.
+React Native Skia has been downloaded more than 60 millions times on npm. And today, it powers the user-experiences of some of the top apps on the App Store and Google Play, including several that have won awards from Apple, Google, and Expo.
 
 ## Platinum Sponsors
 

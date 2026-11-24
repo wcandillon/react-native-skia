@@ -1,4 +1,4 @@
-name: Build and release Skia wasm
+name: Release Skia Wasm
 # Builds Skia Graphite for the browser's WebGPU (`yarn build-skia wasm`) and
 # archives it as skia-graphite-wasm.zip (`yarn package-skia-wasm`): the
 # archives, the Skia headers, the emdawnwebgpu package and metadata.json.
@@ -153,7 +153,7 @@ jobs:
         working-directory: externals/depot_tools
         run: ./update_depot_tools
 
-      - name: Build Skia (wasm)
+      - name: Build Skia (Wasm)
         working-directory: packages/skia
         run: yarn build-skia wasm
         env:
