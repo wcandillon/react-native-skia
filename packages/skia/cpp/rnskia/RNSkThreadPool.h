@@ -30,7 +30,9 @@ namespace RNSkia {
  * When one thread of RNSkThreadPool runs the pool's idle task, and whether it
  * runs it idle (see RNSkThreadPool::setIdleTask). The task is due the delay
  * after the first request the thread has not served: later ones do not put
- * it off, and one run serves them all. A thread that runs it busy owes it a
+ * it off, and one run serves them all, but for those a busy run is too soon
+ * for (made less than the delay before it), which it runs again for, the
+ * delay after the latest. A thread that runs it busy owes it a
  * run once it ran no job for the delay, and each job puts that run off: the
  * jobs of the views a request comes from can still be running when it is
  * made. A request does not put it off: the thread runs the task at whichever
@@ -53,6 +55,7 @@ public:
     if (!_firstRequest) {
       _firstRequest = now;
     }
+    _latestRequest = now;
   }
 
   /** When the thread runs the idle task next; nothing while it owes none. */
@@ -72,13 +75,19 @@ public:
   }
 
   /**
-   The thread runs the idle task at `now`, which serves every request made
-   so far. Returns whether it runs it idle; run busy, it owes the task an
-   idle run.
+   The thread runs the idle task at `now`. Run idle, it serves every request
+   made so far. Run busy, it serves those made at least the delay before:
+   it lets go only of what went unused for a while, so what went away with
+   a later one is still there, and it runs the task again for that one.
+   Returns whether it runs it idle; run busy, it owes the task an idle run.
    */
   bool run(Clock::time_point now) {
-    _firstRequest.reset();
     const bool idle = now - _lastJobEnd >= _delay;
+    if (!idle && _latestRequest && now - *_latestRequest < _delay) {
+      _firstRequest = _latestRequest;
+    } else {
+      _firstRequest.reset();
+    }
     _idleRunOwed = !idle;
     return idle;
   }
@@ -90,6 +99,7 @@ private:
   const Clock::duration _delay;
   // When the first request the thread has not served was made.
   std::optional<Clock::time_point> _firstRequest;
+  std::optional<Clock::time_point> _latestRequest;
   bool _idleRunOwed = false;
   Clock::time_point _lastJobEnd;
 };
@@ -184,8 +194,9 @@ public:
    Asks every thread to run the idle task kIdleDelay from now, as soon as no
    job is waiting on it: a thread busy with jobs runs it between two of
    them, once its queue is empty. Requests add up: one run serves every
-   request a thread has not served, kIdleDelay after the first, so that
-   requests that keep coming do not put the run off. Any thread.
+   request a thread has not served (a busy one, those at least kIdleDelay
+   old), kIdleDelay after the first, so that requests that keep coming do
+   not put the run off. Any thread.
    */
   void requestIdleTask() {
     const auto now = Clock::now();
@@ -207,7 +218,7 @@ private:
     std::condition_variable condition;
     std::deque<std::function<void()>> jobs;
     // When the thread runs the idle task. Under the lock: requestIdleTask()
-    // writes to it from any thread. Made just before the thread starts.
+    // writes to it from any thread. Made before any thread starts.
     RNSkIdleTaskSchedule schedule{kIdleDelay, Clock::now()};
   };
 
@@ -247,12 +258,18 @@ private:
   void run(unsigned index) {
     configureThread(index);
     auto &worker = *_workers[index];
+    // When the last job ended, told to the schedule under the next lock.
+    std::optional<Clock::time_point> jobEnd;
     for (;;) {
       std::function<void()> job;
       std::function<void(bool)> idleTask;
       bool idle = false;
       {
         std::unique_lock<std::mutex> lock(worker.mutex);
+        if (jobEnd) {
+          worker.schedule.ranJob(*jobEnd);
+          jobEnd.reset();
+        }
         for (;;) {
           if (!worker.jobs.empty()) {
             job = std::move(worker.jobs.front());
@@ -279,9 +296,7 @@ private:
       }
       if (job) {
         job();
-        const auto end = Clock::now();
-        std::lock_guard<std::mutex> lock(worker.mutex);
-        worker.schedule.ranJob(end);
+        jobEnd = Clock::now();
       } else if (idleTask) {
         idleTask(idle);
       }

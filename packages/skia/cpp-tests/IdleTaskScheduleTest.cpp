@@ -115,6 +115,26 @@ void requestsThatKeepComingDoNotPutTheRunOff() {
          "the next run is due the delay after the first request since");
 }
 
+// Views on the lane of a thread an animating canvas keeps busy, unmounting
+// less than the delay apart: a busy run lets go only of what went unused
+// for a while, so the thread runs the task again for the later one.
+void aBusyRunDoesNotServeARequestMadeLessThanTheDelayBefore() {
+  RNSkIdleTaskSchedule schedule(kDelay, at(0));
+  schedule.request(at(10000));
+  schedule.request(at(11500));
+  schedule.ranJob(at(11900));
+  expect(!schedule.run(at(12000)), "a busy thread runs the task busy");
+  schedule.ranJob(at(13400));
+  expect(schedule.due() == at(13500),
+         "and runs it again the delay after the later request, though jobs "
+         "put the owed run off");
+  schedule.ranJob(at(13500));
+  expect(!schedule.run(at(13500)), "busy again");
+  schedule.ranJob(at(14000));
+  expect(schedule.due() == at(16000),
+         "which serves the request: only the owed idle run is left");
+}
+
 // A view dropped on another thread, or an image the cache let go of, while
 // this one owes an idle run.
 void aRequestDoesNotPutAnOwedIdleRunOff() {
@@ -156,6 +176,7 @@ int main() {
   aThreadKeptBusyRunsTheTaskIdleOnceItsJobsStop();
   requestsAddUp();
   requestsThatKeepComingDoNotPutTheRunOff();
+  aBusyRunDoesNotServeARequestMadeLessThanTheDelayBefore();
   aRequestDoesNotPutAnOwedIdleRunOff();
   aRequestComesFirstWhileTheThreadOwingARunKeepsRecording();
   if (failures > 0) {
