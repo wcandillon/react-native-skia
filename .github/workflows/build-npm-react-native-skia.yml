@@ -49,7 +49,7 @@ jobs:
           "
           cat .releaserc
 
-      - name: Build NPM Package
+      - name: Build npm package
         working-directory: packages/skia
         run: |
           yarn release
