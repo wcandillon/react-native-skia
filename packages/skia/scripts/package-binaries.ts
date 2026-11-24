@@ -50,6 +50,8 @@
  *   --artifacts     Directory holding the build workflow's artifacts, one
  *                   subdirectory per artifact (skia-iphoneos, skia-android-arm64,
  *                   dawn-iphoneos, dawn-headers, ...), to stage into libs/.
+ *                   skia-apple and dawn-apple hold every Apple SDK at once,
+ *                   one subdirectory per SDK.
  *   --output        Where the packages are written (default: build/binaries).
  *   --release-output Where the release assets are written (default:
  *                   build/release).
@@ -185,13 +187,31 @@ const artifactDestinations = (): Record<string, string> => {
   return destinations;
 };
 
+/**
+ * Where an artifact is in the downloaded artifacts. A job that builds every
+ * Apple SDK uploads them together as skia-apple or dawn-apple, one
+ * subdirectory per SDK, in place of skia-<sdk> or dawn-<sdk>.
+ */
+const artifactSource = (artifactsDir: string, artifact: string) => {
+  const source = path.join(artifactsDir, artifact);
+  const [, library, sdk] = artifact.match(/^(skia|dawn)-(.+)$/) ?? [];
+  if (
+    fs.existsSync(source) ||
+    !library ||
+    !appleSDKs.includes(sdk as (typeof appleSDKs)[number])
+  ) {
+    return source;
+  }
+  return path.join(artifactsDir, `${library}-apple`, sdk);
+};
+
 const stageArtifacts = (artifactsDir: string) => {
   console.log(`📥 Staging ${artifactsDir} into ${LibsRoot}`);
   fileOps.rm(LibsRoot);
   const destinations = artifactDestinations();
   const missing: string[] = [];
   for (const [artifact, destination] of Object.entries(destinations)) {
-    const source = path.join(artifactsDir, artifact);
+    const source = artifactSource(artifactsDir, artifact);
     if (!fs.existsSync(source)) {
       missing.push(artifact);
       continue;
