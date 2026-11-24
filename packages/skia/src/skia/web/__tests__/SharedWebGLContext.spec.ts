@@ -135,4 +135,37 @@ describe("SharedWebGLContext", () => {
     expect(Surface.MakeOffscreen(8, 8)).not.toBeNull();
     expect(registry.size).toBe(1);
   });
+
+  it("reuses the surfaces of many sizes drawn in turn", () => {
+    const { CanvasKitMock } = factory();
+    const shared = getSharedWebGLContext(
+      CanvasKitMock as unknown as CanvasKit
+    )!;
+    // The buffer is at its full size: growing it drops the surfaces.
+    shared.acquireScreen(500, 500);
+    CanvasKitMock.MakeOnScreenGLSurface.mockClear();
+    for (let frame = 0; frame < 3; frame++) {
+      for (let i = 0; i < 20; i++) {
+        shared.acquireScreen(100 + i, 100 + i);
+      }
+    }
+    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(20);
+  });
+
+  it("keeps the surface of a size in use while another view is resized", () => {
+    const { CanvasKitMock } = factory();
+    const shared = getSharedWebGLContext(
+      CanvasKitMock as unknown as CanvasKit
+    )!;
+    shared.acquireScreen(1000, 1000);
+    const inUse = shared.acquireScreen(50, 50);
+    for (let i = 0; i < 200; i++) {
+      shared.acquireScreen(100 + i, 100);
+      expect(shared.acquireScreen(50, 50)).toBe(inUse);
+    }
+    // The sizes the resize went through are not kept forever.
+    CanvasKitMock.MakeOnScreenGLSurface.mockClear();
+    shared.acquireScreen(100, 100);
+    expect(CanvasKitMock.MakeOnScreenGLSurface).toHaveBeenCalledTimes(1);
+  });
 });
