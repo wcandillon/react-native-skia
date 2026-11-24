@@ -179,6 +179,7 @@ public:
           "Failed to convert HardwareBuffer to OpenGL Texture!");
       return nullptr;
     }
+    markExternalTextureImported();
     sk_sp<SkImage> image = SkImages::BorrowTextureFrom(
         _directContext.get(), backendTex, kTopLeft_GrSurfaceOrigin, colorType,
         kOpaque_SkAlphaType, nullptr, deleteImageProc, deleteImageCtx);
@@ -213,6 +214,16 @@ public:
   }
 
   GrDirectContext *getDirectContext() { return _directContext.get(); }
+
+  // Whether an image backed by a texture Skia doesn't own (native buffer, video
+  // frame, native texture) was ever imported in this context. Such a texture
+  // can use the GL_TEXTURE_EXTERNAL_OES target, see
+  // RNSkOpenGLCanvasProvider::updateTexImage().
+  bool hasImportedExternalTexture() const {
+    return _hasImportedExternalTexture;
+  }
+  void markExternalTextureImported() { _hasImportedExternalTexture = true; }
+
   void makeCurrent() {
     if (_glContext != nullptr) {
       _glContext->makeCurrent(_glSurface.get());
@@ -223,6 +234,7 @@ private:
   std::unique_ptr<gl::Context> _glContext;
   std::unique_ptr<gl::Surface> _glSurface;
   sk_sp<GrDirectContext> _directContext;
+  bool _hasImportedExternalTexture = false;
 
   OpenGLContext() {
     auto display = OpenGLSharedContext::getInstance().getDisplay();
