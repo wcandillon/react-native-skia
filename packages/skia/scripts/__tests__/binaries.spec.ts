@@ -7,7 +7,7 @@ const readJson = (file: string) =>
 
 // binaries.json is the checksums.json of a binaries-<version> release.
 // Apple and Android consumers share the installed release pin. Native headers
-// ship in this package; platform binary npm packages are not runtime dependencies.
+// ship in this package; the binaries are never npm dependencies.
 describe("binaries.json", () => {
   const binaries = readJson("binaries.json");
   const { dependencies } = readJson("package.json");

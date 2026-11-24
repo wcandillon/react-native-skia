@@ -23,12 +23,6 @@ export const DawnOut = path.join(OutFolder, "dawn");
 export const DawnLibs = path.join(PackageRoot, "libs", "dawn");
 export const DawnLib = "libwebgpu_dawn";
 export const DawnPatches = path.join(__dirname, "dawn-patches");
-// XCFramework destination used by npm packaging and native consumers.
-export const DawnAppleXcframework = path.join(
-  DawnLibs,
-  "apple",
-  `${DawnLib}.xcframework`
-);
 
 /** Library families select Android .so or Apple .a outputs, not individual SDKs. */
 export type DawnOS = "android" | "apple";

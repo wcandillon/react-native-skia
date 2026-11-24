@@ -101,11 +101,8 @@ if (!missingLocalLibs.isEmpty()) {
 
 // Both packages must link the exact same Dawn. react-native-webgpu ships the
 // binaries.json of the release it downloads its Dawn from, which must be the
-// release this package links. Older releases depend on
-// react-native-webgpu-dawn, whose version must be the version of the binaries,
-// or vendor their own Dawn and record the Dawn commit it was built from
-// (`dawnCommit`), which must be the commit this Graphite build's Dawn was
-// built from.
+// release this package links. Older releases (before 0.24.0) cannot be paired
+// with this one.
 def webgpuDir = null
 try {
     webgpuDir = resolveNodePackage('react-native-webgpu', projectDir)
@@ -131,30 +128,11 @@ if (webgpuDir != null) {
                 "(${webgpuDawnCommit?.take(10)}). Align the two packages so the app contains exactly one Dawn.")
         }
         logger.warn("react-native-skia: Dawn versions match (${binaries.version})")
-    } else if (webgpuJson.dependencies?.get('react-native-webgpu-dawn') != null) {
-        def webgpuDawnDir = resolveNodePackage('react-native-webgpu-dawn', file(webgpuDir))
-        def webgpuDawnVersion = new groovy.json.JsonSlurper().parse(file("${webgpuDawnDir}/package.json")).version
-        if (webgpuDawnVersion != binaries.version) {
-            throw new GradleException(
-                "react-native-skia: Dawn version mismatch. This Graphite build links " +
-                "the Dawn of binaries ${binaries.version} but react-native-webgpu resolves " +
-                "react-native-webgpu-dawn ${webgpuDawnVersion}. Align the two packages so the " +
-                "app contains exactly one Dawn.")
-        }
-        logger.warn("react-native-skia: Dawn versions match (${binaries.version})")
-    } else if (webgpuJson.dawnCommit == null) {
+    } else {
         throw new GradleException(
             "react-native-skia: the installed react-native-webgpu (${webgpuJson.version}) " +
-            "neither depends on react-native-webgpu-dawn nor declares the Dawn commit it " +
-            "vendors, so it cannot be paired with this Graphite build. Upgrade react-native-webgpu.")
-    } else if (webgpuJson.dawnCommit.toString() != dawnCommit) {
-        throw new GradleException(
-            "react-native-skia: Dawn version mismatch. This Graphite build links Dawn " +
-            "${dawnCommit?.take(10)} (binaries ${binaries.version}) but " +
-            "react-native-webgpu ${webgpuJson.version} vendors Dawn ${webgpuJson.dawnCommit.toString().take(10)}. " +
-            "Align the two packages so the app contains exactly one Dawn.")
-    } else {
-        logger.warn("react-native-skia: Dawn versions match (commit ${dawnCommit?.take(10)})")
+            "does not ship a binaries.json, so it cannot be paired with this Graphite build. " +
+            "Upgrade react-native-webgpu to 0.24.0 or later.")
     }
     dawnShippedByWebgpu = true
 }

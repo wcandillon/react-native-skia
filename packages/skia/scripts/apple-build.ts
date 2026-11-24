@@ -113,39 +113,3 @@ export const validateAppleLibraries = (root: string, libraries: string[]) => {
     }
   }
 };
-
-/**
- * Assemble XCFrameworks for npm distribution from SDK libraries.
- * SDK download archives contain the static libraries directly.
- */
-export const createAppleXCFramework = (
-  root: string,
-  library: string,
-  destination: string,
-  sdks: AppleSDK[],
-  headers?: string
-) => {
-  const inputs = sdks
-    .map((sdk) => path.join(root, sdk, library))
-    .filter((file) => fs.existsSync(file));
-  if (inputs.length === 0) {
-    throw new Error(`No Apple libraries found for ${destination}`);
-  }
-  fs.rmSync(destination, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  // XCFrameworks separate platforms; lipo combines architectures within one SDK.
-  execFileSync(
-    "xcodebuild",
-    [
-      "-create-xcframework",
-      ...inputs.flatMap((file) => [
-        "-library",
-        file,
-        ...(headers ? ["-headers", headers] : []),
-      ]),
-      "-output",
-      destination,
-    ],
-    { stdio: "inherit" }
-  );
-};

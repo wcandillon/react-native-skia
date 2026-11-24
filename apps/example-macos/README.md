@@ -20,8 +20,8 @@ yarn workspace example-macos pod:install:macos
 yarn workspace example-macos build:macos
 ```
 
-Skia and Dawn binaries come from the installed npm packages; no source build is
-needed. The app targets macOS 14.0.
+Skia and Dawn binaries are downloaded from the GitHub release pinned in
+`packages/skia/binaries.json`; no source build is needed. The app targets macOS 14.0.
 
 ## Run
 
