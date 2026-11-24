@@ -1,6 +1,6 @@
 package com.reactnative.skia;
 
-import android.content.ComponentCallbacks;
+import android.content.ComponentCallbacks2;
 import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,7 +36,7 @@ public class PlatformContext implements LifecycleEventListener {
 
     // The display density can change while the app runs (display size
     // setting, foldables): the native side follows it.
-    private final ComponentCallbacks mComponentCallbacks = new ComponentCallbacks() {
+    private final ComponentCallbacks2 mComponentCallbacks = new ComponentCallbacks2() {
         @Override
         public void onConfigurationChanged(Configuration newConfig) {
             updatePixelDensity();
@@ -44,6 +44,16 @@ public class PlatformContext implements LifecycleEventListener {
 
         @Override
         public void onLowMemory() {
+            purgeGpuResourcesNative();
+        }
+
+        @Override
+        public void onTrimMemory(int level) {
+            // Android 14 and later never call onLowMemory(), and of the trim
+            // levels only send UI_HIDDEN (any app switch) and BACKGROUND.
+            if (level >= TRIM_MEMORY_BACKGROUND) {
+                purgeGpuResourcesNative();
+            }
         }
     };
 
@@ -171,6 +181,9 @@ public class PlatformContext implements LifecycleEventListener {
 
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
+
+    // Frees the GPU memory nothing uses (DawnContext::purgeGpuResources).
+    private static native void purgeGpuResourcesNative();
 
     // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
     private static native void setCacheDirectoryNative(String directory);

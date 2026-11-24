@@ -183,6 +183,12 @@ void RNSkApplePlatformContext::observeApplicationState() {
                     usingBlock:^(NSNotification *) {
                       DawnContext::setForeground(true);
                     }];
+    [center addObserverForName:UIApplicationDidReceiveMemoryWarningNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      DawnContext::purgeGpuResources();
+                    }];
   });
 #endif // !TARGET_OS_OSX
 }

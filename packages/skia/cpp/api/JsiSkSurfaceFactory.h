@@ -54,14 +54,15 @@ public:
         }
       }
     }
-    auto context = getContext();
+    // A recorder of its own: the surface may be drawn into on another thread
+    // than this one (see DawnContext::SurfaceRecorder).
+    auto &dawn = DawnContext::getInstance();
+    auto recorder = dawn.makeSurfaceRecorder(width, height);
     auto surface =
-        context->makeOffscreenSurface(width, height, useP3ColorSpace);
-    if (surface == nullptr) {
-      return jsi::Value::null();
-    }
-    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
-                                      getContext(), std::move(surface)));
+        dawn.MakeOffscreen(width, height, useP3ColorSpace, recorder.get());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSurface>(
+                     getContext(), std::move(surface), std::move(recorder)));
   }
 
   // Pointer-based texture interop with react-native-webgpu, the surface
@@ -78,13 +79,18 @@ public:
     // the surface exists.
     wgpu::Texture texture =
         gpuTextureFromValue(runtime, arguments[0], "MakeFromGPUTexture");
-    auto surface = DawnContext::getInstance().MakeSurfaceFromTexture(texture);
+    auto &dawn = DawnContext::getInstance();
+    auto recorder =
+        dawn.makeSurfaceRecorder(static_cast<int>(texture.GetWidth()),
+                                 static_cast<int>(texture.GetHeight()));
+    auto surface = dawn.MakeSurfaceFromTexture(texture, *recorder);
     if (surface == nullptr) {
       throw std::runtime_error(
           "MakeFromGPUTexture: failed to wrap the texture");
     }
-    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
-                                      getContext(), std::move(surface)));
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSurface>(
+                     getContext(), std::move(surface), std::move(recorder)));
   }
 
   size_t getMemoryPressure() override { return 2048; }

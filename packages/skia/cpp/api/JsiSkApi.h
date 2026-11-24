@@ -168,12 +168,10 @@ public:
   JSI_HOST_FUNCTION(Color) {
     return JsiSkColor::createCtor()(runtime, thisValue, arguments, count);
   }
-  JSI_HOST_FUNCTION(purgeThreadGpuCache) {
-    // Everything the recorders of the calling thread cache without using it:
-    // scratch textures, the textures of released surfaces, atlas pages.
-    // What GPU work still in flight uses stays until a later trim. Never
-    // makes a recorder, never waits for the GPU (see trimThreadRecorders).
+  JSI_HOST_FUNCTION(purgeGpuResources) {
+    // The recorders of this thread, which only it may touch, then Dawn.
     DawnContext::trimThreadRecorders(std::chrono::milliseconds(0), true);
+    DawnContext::purgeGpuResources();
     return jsi::Value::undefined();
   }
   JSI_HOST_FUNCTION(getNativeDevice) {
@@ -275,8 +273,8 @@ public:
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installHostMethod(runtime, prototype, "purgeThreadGpuCache",
-                      &JsiSkApi::purgeThreadGpuCache);
+    installHostMethod(runtime, prototype, "purgeGpuResources",
+                      &JsiSkApi::purgeGpuResources);
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
     installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);

@@ -37,6 +37,8 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::runMainThreadTasks),
       makeNativeMethod("setForegroundNative",
                        JniPlatformContext::setForegroundNative),
+      makeNativeMethod("purgeGpuResourcesNative",
+                       JniPlatformContext::purgeGpuResourcesNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
       makeNativeMethod("setPixelDensityNative",
@@ -95,6 +97,10 @@ jboolean JniPlatformContext::postAndWaitNative(
 void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
                                              jboolean foreground) {
   DawnContext::setForeground(foreground == JNI_TRUE);
+}
+
+void JniPlatformContext::purgeGpuResourcesNative(jni::alias_ref<jclass>) {
+  DawnContext::purgeGpuResources();
 }
 
 void JniPlatformContext::setCacheDirectoryNative(

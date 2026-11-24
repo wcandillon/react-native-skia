@@ -8,7 +8,6 @@
 
 #include "CustomBlendModes.h"
 #include "JsiSkConverters.h"
-#include "JsiSkDispatcher.h"
 #include "JsiSkFont.h"
 #include "JsiSkImage.h"
 #include "JsiSkImageInfo.h"
@@ -49,6 +48,19 @@
 namespace RNSkia {
 
 namespace jsi = facebook::jsi;
+
+/**
+ * A surface with the recorder it was made on, destroyed in that order: the
+ * surface deregisters itself from its recorder.
+ */
+struct SurfaceAndRecorder {
+  SurfaceAndRecorder(std::shared_ptr<DawnContext::SurfaceRecorder> recorder,
+                     sk_sp<SkSurface> surface)
+      : recorder(std::move(recorder)), surface(std::move(surface)) {}
+  // Destroyed last.
+  std::shared_ptr<DawnContext::SurfaceRecorder> recorder;
+  sk_sp<SkSurface> surface;
+};
 
 class JsiSkCanvas : public JsiSkNativeObject<JsiSkCanvas> {
 public:
@@ -514,8 +526,8 @@ public:
     }
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
-      if (auto *recorder = _surface->recorder()) {
-        DawnContext::getInstance().submitRecording(recorder);
+      if (_recorder) {
+        DawnContext::getInstance().submitSurface(*_recorder);
       }
       return JsiSkImage::readPixelsAsync(
           runtime, getContext(), std::move(snapshot), *info, srcX, srcY);
@@ -616,31 +628,28 @@ public:
   }
 
   // Associates the canvas with its owning surface, keeping it alive as long
-  // as the canvas. This lets readPixels fall back to a surface snapshot on
-  // Graphite, which has no synchronous canvas readback. The dispatcher is the
-  // one of the thread the surface was created on.
+  // as the canvas, along with the recorder of the surface. This lets readPixels
+  // fall back to a surface snapshot on Graphite, which has no synchronous
+  // canvas readback.
   void setSurface(sk_sp<SkSurface> surface,
-                  std::shared_ptr<Dispatcher> dispatcher) {
+                  std::shared_ptr<DawnContext::SurfaceRecorder> recorder) {
     _surface = std::move(surface);
-    _dispatcher = std::move(dispatcher);
+    _recorder = std::move(recorder);
   }
 
   // Called by the owner of the SkCanvas (JsiSkSurface, JsiSkPictureRecorder,
   // JsiSkGraphiteContext) once that canvas is gone, and by the destructor:
-  // forgets the pointer and lets go of the surface. The canvas may hold the
-  // last reference to its surface, and the GC may finalize it on any thread:
-  // a Graphite surface has to be destroyed on the thread of its recorder (see
-  // Dispatcher).
+  // forgets the pointer and lets go of the surface and its recorder.
   void detach() {
     _canvas = nullptr;
-    if (_dispatcher) {
-      _dispatcher->release(std::move(_surface));
-    }
+    // Declared so that the surface goes before its recorder.
+    auto released =
+        SurfaceAndRecorder(std::move(_recorder), std::move(_surface));
   }
 
 private:
   SkCanvas *_canvas = nullptr;
   sk_sp<SkSurface> _surface;
-  std::shared_ptr<Dispatcher> _dispatcher;
+  std::shared_ptr<DawnContext::SurfaceRecorder> _recorder;
 };
 } // namespace RNSkia

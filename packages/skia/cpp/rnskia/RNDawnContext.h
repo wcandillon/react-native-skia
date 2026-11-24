@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -214,6 +215,10 @@ public:
   /** Sets isForeground(); the platform calls it from its main thread. */
   static void setForeground(bool foreground) noexcept {
     foregroundFlag().store(foreground, std::memory_order_release);
+    if (foreground &&
+        purgeOnForeground().exchange(false, std::memory_order_acq_rel)) {
+      purgeGpuResources();
+    }
   }
 
   /**
@@ -392,6 +397,64 @@ public:
     return currentRecorder(threadSlot());
   }
 
+  /**
+   A recorder of its own for an offscreen surface JS made (see
+   MakeOffscreen): a surface may be drawn into on another thread than the one
+   that made it, which would race with whatever that thread records, or
+   trims, on its own recorder. Used by one thread at a time, as the surface
+   is. Must outlive the surface (see JsiSkSurface). One made for a device
+   lost since submits nothing.
+   */
+  class SurfaceRecorder {
+  public:
+    SurfaceRecorder(std::unique_ptr<skgpu::graphite::Recorder> recorder,
+                    uint64_t generation)
+        : _recorder(std::move(recorder)), _generation(generation) {}
+
+    skgpu::graphite::Recorder *get() const { return _recorder.get(); }
+
+  private:
+    friend class DawnContext;
+    std::unique_ptr<skgpu::graphite::Recorder> _recorder;
+    uint64_t _generation;
+    // The latest trim (see submitSurface).
+    std::chrono::steady_clock::time_point _lastTrim =
+        std::chrono::steady_clock::now();
+  };
+
+  /** See SurfaceRecorder. Throws when no recorder can be made. Any thread. */
+  std::shared_ptr<SurfaceRecorder> makeSurfaceRecorder(int width, int height) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto recorder = makeRecorderLocked(
+        /* forUploads= */ false, surfaceBudget(width, height));
+    if (recorder == nullptr) {
+      throw std::runtime_error("Failed to create graphite context");
+    }
+    return std::make_shared<SurfaceRecorder>(
+        std::move(recorder), _current.load(std::memory_order_acquire)->id);
+  }
+
+  /**
+   Snaps what was recorded into the surface of the recorder and runs it on
+   the GPU (see submitRecording), then, at most once per kThreadTrimDelay,
+   frees what the recorder cached and did not use for that long. Called by
+   the thread using the surface.
+   */
+  bool submitSurface(
+      SurfaceRecorder &surface,
+      skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    const bool inserted =
+        snapAndRun(surface.get(), syncToCpu, surface._generation);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - surface._lastTrim >= kThreadTrimDelay) {
+      surface._lastTrim = now;
+      surface.get()->performDeferredCleanup(kThreadTrimDelay);
+    }
+    // What the drawing uploaded is the upload recorder's of this thread.
+    trimThreadIfDue();
+    return inserted;
+  }
+
   /** A thread's recorder with the generation it was made for. */
   struct RecorderRef {
     skgpu::graphite::Recorder *recorder = nullptr;
@@ -425,13 +488,14 @@ public:
    */
   static void trimThreadRecorders(std::chrono::milliseconds unusedFor,
                                   bool everything) {
-    auto *instance = tryGetInstance();
-    if (instance == nullptr) {
-      return;
-    }
+    // Looked at first: the GPU is not probed for a thread that has nothing.
     auto &drawing = threadSlot();
     auto &uploads = uploadSlot();
     if (drawing.recorder == nullptr && uploads.recorder == nullptr) {
+      return;
+    }
+    auto *instance = tryGetInstance();
+    if (instance == nullptr) {
       return;
     }
     instance->checkFinishedWork();
@@ -452,8 +516,41 @@ public:
   }
 
   /**
+   Hands the GPU memory nothing uses back to the system: Dawn keeps the
+   memory of disposed surfaces and images for reuse otherwise. What is alive
+   keeps its content and its caches. Returns at once; a background thread
+   does the work, for as long as Dawn says deletions are pending and then
+   once more after the render threads trimmed their own recorders. Requests
+   made meanwhile are served by the same thread. Nothing happens before the
+   GPU is first used, nor, on iOS, where GPU work is refused in the
+   background (see isForeground). Any thread.
+   */
+  static void purgeGpuResources() noexcept {
+    auto *instance = probedInstance().load(std::memory_order_acquire);
+    if (instance == nullptr) {
+      return;
+    }
+    auto &purge = purgeState();
+    {
+      std::lock_guard<std::mutex> lock(purge.mutex);
+      purge.requested = true;
+      if (purge.running) {
+        return;
+      }
+      purge.running = true;
+    }
+    try {
+      std::thread([instance]() { instance->runPurges(); }).detach();
+    } catch (const std::exception &e) {
+      RNSkLogger::logToConsole("Purging GPU resources failed: %s", e.what());
+      std::lock_guard<std::mutex> lock(purge.mutex);
+      purge.running = false;
+    }
+  }
+
+  /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
-   thread's (see getRecorder), also behind the surfaces made on it; any
+   thread's (see getRecorder), not a surface's (see submitSurface); any
    other submits nothing. A recording made for a lost device (see
    generation()) is dropped: nothing can run it, and the device in use would
    refuse its resources. Called on the recorder's thread. Returns whether
@@ -483,7 +580,7 @@ public:
    kThreadTrimDelay, at most once per kThreadTrimDelay: what a thread outside
    the render pool (the JS thread, a worklet runtime) does after its submits
    (see submitRecording), since nothing else would. Its drawing recorder
-   otherwise keeps every scratch texture its offscreen surfaces let go of,
+   otherwise keeps every scratch texture its snapshots and uploads let go of,
    up to Graphite's budget (256 MB by default), for as long as the thread
    lives. The render pool trims its threads itself, once idle (see
    RNSkGraphiteProducer). Never makes a recorder. Any thread.
@@ -493,7 +590,7 @@ public:
       return;
     }
     auto &slot = threadSlot();
-    if (slot.recorder == nullptr) {
+    if (slot.recorder == nullptr && uploadSlot().recorder == nullptr) {
       return;
     }
     const auto now = std::chrono::steady_clock::now();
@@ -505,8 +602,26 @@ public:
   }
 
 private:
+  /**
+   The budget of the recorder of a surface of that size: its layers and blurs
+   take textures of its size, up to several at once. Graphite's default, made
+   for a thread's whole content, is the most it gets.
+   */
+  static size_t surfaceBudget(int width, int height) {
+    constexpr uint64_t kMin = 32 * 1024 * 1024;
+    // 64 bits: the product overflows a 32-bit size_t.
+    const auto bytes = static_cast<uint64_t>(std::max(width, 0)) *
+                       static_cast<uint64_t>(std::max(height, 0)) * 4;
+    return static_cast<size_t>(std::clamp<uint64_t>(
+        bytes * 8, kMin,
+        skgpu::graphite::RecorderOptions::kDefaultRecorderBudget));
+  }
+
+  // `generation` is the one the recorder was made for; looked up, for a
+  // thread's recorder, when absent.
   bool snapAndRun(skgpu::graphite::Recorder *recorder,
-                  skgpu::graphite::SyncToCpu syncToCpu) {
+                  skgpu::graphite::SyncToCpu syncToCpu,
+                  std::optional<uint64_t> generation = std::nullopt) {
     if (recorder == nullptr) {
       return false;
     }
@@ -519,7 +634,7 @@ private:
     }
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
-    if (generationOf(recorder) != current->id ||
+    if (generation.value_or(generationOf(recorder)) != current->id ||
         current->lost.load(std::memory_order_acquire)) {
       return false;
     }
@@ -628,9 +743,11 @@ public:
     return upload(image, mipmapped).texture;
   }
 
-  // Create offscreen surface
+  // Create an offscreen surface, on the recorder of this thread unless given
+  // one of its own (see SurfaceRecorder).
   sk_sp<SkSurface> MakeOffscreen(int width, int height,
-                                 bool useP3ColorSpace = false) {
+                                 bool useP3ColorSpace = false,
+                                 SurfaceRecorder *recorder = nullptr) {
     sk_sp<SkColorSpace> colorSpace =
         useP3ColorSpace ? SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
                                                 SkNamedGamut::kDisplayP3)
@@ -638,7 +755,8 @@ public:
     SkImageInfo info =
         SkImageInfo::Make(width, height, DawnUtils::PreferedColorType,
                           kPremul_SkAlphaType, colorSpace);
-    sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(getRecorder(), info);
+    sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(
+        recorder != nullptr ? recorder->get() : getRecorder(), info);
 
     if (!surface) {
       throw std::runtime_error("Failed to create offscreen Skia surface.");
@@ -721,7 +839,9 @@ public:
   // The texture must have RenderAttachment usage; give it TextureBinding too
   // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
   // The surface retains the texture for its lifetime.
-  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+  // `recorder` is the surface's own (see SurfaceRecorder).
+  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture,
+                                          SurfaceRecorder &recorder) {
     if (!texture) {
       return nullptr;
     }
@@ -740,7 +860,7 @@ public:
 
     // The color type is derived from the texture format.
     return SkSurfaces::WrapBackendTexture(
-        getRecorder(), backendTexture,
+        recorder.get(), backendTexture,
         nullptr, // colorspace
         nullptr, // surfaceProps
         [](void *context) {
@@ -837,6 +957,8 @@ public:
    or for one destroyed already. Any thread.
    */
   void destroyRetiredDevice(uint64_t generation) {
+    // Before the context lock, as in reduceMemory().
+    std::lock_guard<std::mutex> destroyLock(_destroyMutex);
     std::lock_guard<std::mutex> lock(_mutex);
     for (auto *retired : _retired) {
       if (retired->id == generation && !retired->deviceDestroyed) {
@@ -925,6 +1047,13 @@ private:
     return foreground;
   }
 
+  // The context once probed, for what must not probe the GPU itself (see
+  // purgeGpuResources).
+  static std::atomic<DawnContext *> &probedInstance() noexcept {
+    static std::atomic<DawnContext *> instance{nullptr};
+    return instance;
+  }
+
   static const Probe &probe() noexcept {
     // Attempted once: a device without a usable GPU does not get one by
     // asking again, and the attempt enumerates drivers. The context is never
@@ -935,6 +1064,7 @@ private:
       auto *probe = new Probe();
       try {
         probe->instance = new DawnContext();
+        probedInstance().store(probe->instance, std::memory_order_release);
         probe->info.available = true;
         probe->info.adapter = DawnUtils::describeAdapter(
             probe->instance->getWGPUDevice().GetAdapter());
@@ -1135,8 +1265,10 @@ private:
    A recorder for the device in use; `forUploads` for the upload recorder of
    a thread (see upload()). Called with the context lock held.
    */
-  std::unique_ptr<skgpu::graphite::Recorder>
-  makeRecorderLocked(bool forUploads = false) {
+  std::unique_ptr<skgpu::graphite::Recorder> makeRecorderLocked(
+      bool forUploads = false,
+      size_t budget =
+          skgpu::graphite::RecorderOptions::kDefaultRecorderBudget) {
     auto *current = _current.load(std::memory_order_acquire);
     if (forUploads) {
       // Skia's default image provider, and no budget: the textures it makes
@@ -1149,6 +1281,7 @@ private:
       return current->context->makeRecorder(options);
     }
     skgpu::graphite::RecorderOptions options;
+    options.fGpuBudgetInBytes = budget;
     // The provider uploads through upload() (see ImageProvider), and serves
     // the recorder textures of the device in use only. The context is never
     // destroyed, so the capture is safe.
@@ -1176,7 +1309,7 @@ private:
    */
   ImageProvider::Upload upload(const sk_sp<SkImage> &image, bool mipmapped) {
     // A recorder of its own: snapping the recorder of this thread would also
-    // submit what the offscreen surfaces of this thread recorded so far. It
+    // submit what was recorded on it so far. It
     // only uploads, so it keeps Skia's default image provider rather than
     // the image cache, which uploads through here.
     auto &slot = uploadSlot();
@@ -1239,6 +1372,80 @@ private:
   static ThreadRecorder &uploadSlot() {
     static thread_local ThreadRecorder slot;
     return slot;
+  }
+
+  // A purge that could not run while the app was in the background.
+  static std::atomic<bool> &purgeOnForeground() noexcept {
+    static std::atomic<bool> flag{false};
+    return flag;
+  }
+
+  struct PurgeState {
+    std::mutex mutex;
+    bool running = false;
+    bool requested = false;
+  };
+
+  static PurgeState &purgeState() noexcept {
+    static auto *state = new PurgeState();
+    return *state;
+  }
+
+  // The purge thread (see purgeGpuResources).
+  void runPurges() noexcept {
+    auto &purge = purgeState();
+    for (;;) {
+      {
+        std::lock_guard<std::mutex> lock(purge.mutex);
+        if (!purge.requested) {
+          purge.running = false;
+          return;
+        }
+        purge.requested = false;
+      }
+      RNSkThreadPool::getInstance().requestIdleTask();
+      reduceMemory();
+      // The render threads trim their recorders kIdleDelay after being asked.
+      std::this_thread::sleep_for(RNSkThreadPool::kIdleDelay +
+                                  std::chrono::milliseconds(500));
+      reduceMemory();
+    }
+  }
+
+  // Asks Dawn to free what it holds for reuse, and again while it says
+  // deletions are still pending on submitted work.
+  void reduceMemory() noexcept {
+    constexpr int kMaxPasses = 10;
+    for (int pass = 0; pass < kMaxPasses; pass++) {
+#if defined(__APPLE__)
+      if (!isForeground()) {
+        // Asked for again once the app is back (see setForeground).
+        purgeOnForeground().store(true, std::memory_order_release);
+        return;
+      }
+#endif
+      {
+        // Keeps destroyRetiredDevice() from destroying the device under Dawn;
+        // not held while waiting below.
+        std::lock_guard<std::mutex> destroyLock(_destroyMutex);
+        wgpu::Device device;
+        {
+          std::lock_guard<std::mutex> lock(_mutex);
+          auto *current = _current.load(std::memory_order_acquire);
+          if (current->lost.load(std::memory_order_acquire)) {
+            return;
+          }
+          tick();
+          current->context->checkAsyncWorkCompletion();
+          device = current->backendContext.fDevice;
+        }
+        // Outside the context lock, which frames need.
+        if (!dawn::native::ReduceMemoryUsage(device.Get())) {
+          return;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
   }
 
   /** The recorder of a thread that ended (see ThreadRecorder). */
@@ -1383,6 +1590,9 @@ private:
   // every view (isDeviceLost, isCurrent), hence atomic.
   std::atomic<Generation *> _current{nullptr};
   std::vector<Generation *> _retired;
+  // Held while Dawn is asked to free memory of a device (see reduceMemory)
+  // and while one is destroyed. Taken before _mutex.
+  std::mutex _destroyMutex;
   uint64_t _lastGenerationId = 0;
   // Guards every Context operation, and the replacement of the device.
   std::mutex _mutex;
