@@ -43,12 +43,18 @@ const createTexture = (
   size: SkSize
 ) => {
   "worklet";
-  texture.value = renderPicture(picture, size);
+  try {
+    texture.value = renderPicture(picture, size);
+  } catch {
+    // Too large for a texture, or Graphite could not run the draws.
+    texture.value = null;
+  }
 };
 
 // On the web a WebGL texture belongs to the context that made it: the
 // texture is a CPU copy, drawable by any canvas, read back asynchronously.
-const createRasterTexture = (picture: SkPicture, size: SkSize) =>
+// Async, so that a failure to draw the picture rejects too.
+const createRasterTexture = async (picture: SkPicture, size: SkSize) =>
   renderPicture(picture, size).makeRasterImage();
 
 export const useTexture = (

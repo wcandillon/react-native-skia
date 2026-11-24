@@ -216,6 +216,21 @@ describe.each([
     unmount();
   });
 
+  it("leaves no texture when the draws are lost", async () => {
+    mockSurface.flush.mockImplementationOnce(() => {
+      throw new Error("Graphite could not submit the recording");
+    });
+    const { texture, unmount } = mountTexture(() =>
+      usePictureAsTexture(picture, size)
+    );
+    // A previous picture's texture must not stay.
+    texture.value = {} as SkImage;
+    expect(flushUIQueue).not.toThrow();
+    await flushPromises();
+    expect(texture.value).toBeNull();
+    unmount();
+  });
+
   it("schedules nothing until there is a picture", () => {
     const texture = renderTexture(() => usePictureAsTexture(null, size));
     expect(mockCalls).toEqual({ scheduleOnUI: 0, deprecatedRunOnUI: 0 });

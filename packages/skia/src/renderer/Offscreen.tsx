@@ -38,15 +38,20 @@ export const drawAsImage = async (
 
 // Resolves to a CPU image of the picture: the snapshot is read back from
 // the GPU, on the runtime that called (the JS thread or a worklet runtime).
+// Rejects when the picture cannot be drawn.
 export const drawAsImageFromPicture = (
   picture: SkPicture,
   size: SkSize
 ): Promise<SkImage> => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
-  const canvas = surface.getCanvas();
-  canvas.drawPicture(picture);
-  surface.flush();
-  const image = surface.makeImageSnapshot();
-  return image.makeRasterImage();
+  try {
+    const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
+    const canvas = surface.getCanvas();
+    canvas.drawPicture(picture);
+    surface.flush();
+    const image = surface.makeImageSnapshot();
+    return image.makeRasterImage();
+  } catch (error) {
+    return Promise.reject(error);
+  }
 };
