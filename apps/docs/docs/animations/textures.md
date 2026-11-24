@@ -196,4 +196,29 @@ Read the snapshot back with `makeRasterImage()` before drawing it in a canvas. T
 
 :::
 
+## Releasing GPU memory
+
+Disposing a surface does not hand its texture back to the system: Skia keeps it for the next surface of the same size made on that thread.
+What goes unused is freed a few seconds later, the next time the thread draws.
+When a thread is done drawing offscreen for a while, at the end of a video export for instance, `Skia.freeGpuResources()` frees what it caches right away.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+const exportFrames = (count: number) => {
+  const surface = Skia.Surface.MakeOffscreen(1920, 1080)!;
+  for (let i = 0; i < count; i++) {
+    const canvas = surface.getCanvas();
+    canvas.drawColor(Skia.Color("black"));
+    // ... draw and encode the frame
+    surface.flush(i === count - 1);
+  }
+  surface.dispose();
+  // The last flush waited for the GPU: everything can go.
+  Skia.freeGpuResources();
+};
+```
+
+It only frees what the calling thread caches: call it on the thread, or worklet runtime, that drew.
+
 Textures can also be shared with WebGPU: see [WebGPU](/docs/webgpu).

@@ -179,6 +179,17 @@ export interface Skia {
   Skottie: SkottieFactory;
   Recorder(): JsiRecorder;
   /**
+   * Frees the GPU memory Skia caches, without using it, for the thread it is
+   * called on: the textures of released surfaces kept for reuse, scratch
+   * textures, and the pages of the glyph and path atlases. Call it once that
+   * thread is done drawing offscreen for a while, at the end of an export
+   * for instance. Textures the GPU is still working with are freed later:
+   * flush the last surface with `flush(true)` first to free everything.
+   * Unused resources are also freed on their own a few seconds after they
+   * were last used, the next time the thread draws. A no-op on the Web.
+   */
+  freeGpuResources(): void;
+  /**
    * Raw WGPUDevice pointer of Skia's Graphite device, as a BigInt. Pass it to
    * react-native-webgpu's importDevice() to get a GPUDevice sharing Skia's
    * device (zero-copy interop). Native only.

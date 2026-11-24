@@ -168,6 +168,14 @@ public:
   JSI_HOST_FUNCTION(Color) {
     return JsiSkColor::createCtor()(runtime, thisValue, arguments, count);
   }
+  JSI_HOST_FUNCTION(freeGpuResources) {
+    // Everything the recorders of the calling thread cache without using it:
+    // scratch textures, the textures of released surfaces, atlas pages.
+    // What GPU work still in flight uses stays until a later trim. Never
+    // makes a recorder, never waits for the GPU (see trimThreadRecorders).
+    DawnContext::trimThreadRecorders(std::chrono::milliseconds(0), true);
+    return jsi::Value::undefined();
+  }
   JSI_HOST_FUNCTION(getNativeDevice) {
     // Raw WGPUDevice pointer of the Graphite device, as a BigInt. Consumed by
     // react-native-webgpu's importDevice(), which AddRefs it; the pointer
@@ -267,6 +275,8 @@ public:
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installHostMethod(runtime, prototype, "freeGpuResources",
+                      &JsiSkApi::freeGpuResources);
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
     installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);
