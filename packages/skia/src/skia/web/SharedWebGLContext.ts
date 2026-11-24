@@ -21,9 +21,10 @@ import { JsiSkSurface } from "./JsiSkSurface";
 //
 // The drawing buffer only ever grows, to the largest view so far, and a view
 // draws in its bottom-left corner: resizing the buffer reallocates it, which
-// costs about 0.7 ms, while copying a corner out of it costs about 0.01 ms
-// (measured on Chrome; handing the buffer over with transferToImageBitmap
-// is as cheap, but it has to be the view's size).
+// costs about 0.7 ms. Copying a corner out of it takes the JS thread about
+// 0.01 ms where the 2D canvas is GPU accelerated; the rest of the cost is in
+// the browser's GPU process. Where it is not accelerated, the copy can wait
+// for the GPU: 0.5 ms each with ten views (measured on Chrome, Apple M5 Max).
 //
 // What is left to lose the context is a GPU reset (or WEBGL_lose_context, in
 // tests). The browser restores it once it can, provided the loss was
@@ -75,9 +76,12 @@ const getGL = (canvas: SharedCanvas): GL | null => {
   return element.getContext("webgl2") ?? element.getContext("webgl");
 };
 
-// Surfaces on the drawing buffer are kept per size: a page that animates a
-// few views of different sizes reuses them every frame.
-const MAX_SCREENS = 8;
+// Surfaces on the drawing buffer are kept per size: a page that animates views
+// of different sizes reuses them every frame. Building one blocks the JS thread
+// for about 0.45 ms, and views that draw in turn miss on every draw once there
+// are more sizes than this, so it is well above what a page animates at once.
+// The surfaces wrap the drawing buffer: they own no pixels.
+const MAX_SCREENS = 64;
 
 export class SharedWebGLContext {
   readonly gl: GL;
@@ -86,8 +90,8 @@ export class SharedWebGLContext {
   // Counts the GrDirectContexts built so far: a surface built on an earlier
   // one is dead.
   private generation = 0;
-  // The surfaces wrapping the drawing buffer, by "width x height", oldest
-  // first.
+  // The surfaces wrapping the drawing buffer, by "width x height", least
+  // recently used first.
   private readonly screens = new Map<string, JsiSkSurface>();
   private readonly restoreListeners = new Set<() => void>();
   // A failing surface fails on every frame: say so once.
@@ -215,6 +219,10 @@ export class SharedWebGLContext {
     const key = `${width}x${height}`;
     const known = screens.get(key);
     if (known) {
+      // Back to the end of the map: the sizes in use outlive the ones a resize
+      // went through.
+      screens.delete(key);
+      screens.set(key, known);
       return known;
     }
     const surface = this.CanvasKit.MakeOnScreenGLSurface(
@@ -237,9 +245,9 @@ export class SharedWebGLContext {
       return null;
     }
     if (screens.size === MAX_SCREENS) {
-      const oldest = screens.keys().next().value!;
-      screens.get(oldest)!.ref.delete();
-      screens.delete(oldest);
+      const leastRecent = screens.keys().next().value!;
+      screens.get(leastRecent)!.ref.delete();
+      screens.delete(leastRecent);
     }
     const screen = new JsiSkSurface(this.CanvasKit, surface);
     screens.set(key, screen);
