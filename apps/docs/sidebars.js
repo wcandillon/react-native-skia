@@ -32,6 +32,11 @@ const sidebars = {
       id: "webgpu",
     },
     {
+      type: "doc",
+      label: "Errors",
+      id: "errors",
+    },
+    {
       collapsed: true,
       type: "category",
       label: "Canvas",

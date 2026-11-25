@@ -16,6 +16,7 @@
 
 #include "jsi/BoxedNativeObject.h"
 #include "jsi/JSICache.h"
+#include "jsi/NamedError.h"
 
 // Forward declare to avoid circular dependency
 namespace RNJsi {
@@ -368,9 +369,11 @@ protected:
         runtime, jsi::PropNameID::forUtf8(runtime, name), sizeof...(Args),
         [method](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          return callMethod(native.get(), method, rt, args,
-                            std::index_sequence_for<Args...>{}, count);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            return callMethod(native.get(), method, rt, args,
+                              std::index_sequence_for<Args...>{}, count);
+          });
         });
     prototype.setProperty(runtime, name, func);
   }
@@ -388,10 +391,12 @@ protected:
         runtime, jsi::PropNameID::forUtf8(runtime, name), sizeof...(Args),
         [method](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          return callMethodWithRuntime(native.get(), method, rt, args,
-                                       std::index_sequence_for<Args...>{},
-                                       count);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            return callMethodWithRuntime(native.get(), method, rt, args,
+                                         std::index_sequence_for<Args...>{},
+                                         count);
+          });
         });
     prototype.setProperty(runtime, name, func);
   }
@@ -427,15 +432,17 @@ protected:
         0,
         [getter](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          if constexpr (std::is_same_v<ReturnType, void>) {
-            (native.get()->*getter)();
-            return jsi::Value::undefined();
-          } else {
-            ReturnType result = (native.get()->*getter)();
-            return RNJsi::JSIConverter<std::decay_t<ReturnType>>::toJSI(
-                rt, std::move(result));
-          }
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            if constexpr (std::is_same_v<ReturnType, void>) {
+              (native.get()->*getter)();
+              return jsi::Value::undefined();
+            } else {
+              ReturnType result = (native.get()->*getter)();
+              return RNJsi::JSIConverter<std::decay_t<ReturnType>>::toJSI(
+                  rt, std::move(result));
+            }
+          });
         });
     defineGetter(runtime, prototype, name, std::move(getterFunc));
   }
@@ -454,8 +461,10 @@ protected:
         0,
         [getter](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          return (native.get()->*getter)(rt);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            return (native.get()->*getter)(rt);
+          });
         });
     defineGetter(runtime, prototype, name, std::move(getterFunc));
   }
@@ -472,14 +481,16 @@ protected:
         1,
         [setter](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          if (count < 1) {
-            throw jsi::JSError(rt, "Setter requires a value argument");
-          }
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          auto value = RNJsi::JSIConverter<std::decay_t<ValueType>>::fromJSI(
-              rt, args[0], false);
-          (native.get()->*setter)(std::move(value));
-          return jsi::Value::undefined();
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            if (count < 1) {
+              throw jsi::JSError(rt, "Setter requires a value argument");
+            }
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            auto value = RNJsi::JSIConverter<std::decay_t<ValueType>>::fromJSI(
+                rt, args[0], false);
+            (native.get()->*setter)(std::move(value));
+            return jsi::Value::undefined();
+          });
         });
 
     // Use Object.defineProperty to create a proper setter
@@ -522,10 +533,12 @@ protected:
         0,
         [getter](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          ReturnType result = (native.get()->*getter)();
-          return RNJsi::JSIConverter<std::decay_t<ReturnType>>::toJSI(
-              rt, std::move(result));
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            ReturnType result = (native.get()->*getter)();
+            return RNJsi::JSIConverter<std::decay_t<ReturnType>>::toJSI(
+                rt, std::move(result));
+          });
         });
 
     auto setterFunc = jsi::Function::createFromHostFunction(
@@ -533,14 +546,16 @@ protected:
         1,
         [setter](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          if (count < 1) {
-            throw jsi::JSError(rt, "Setter requires a value argument");
-          }
-          auto native = NativeObject<Derived>::fromValue(rt, thisVal);
-          auto value = RNJsi::JSIConverter<std::decay_t<ValueType>>::fromJSI(
-              rt, args[0], false);
-          (native.get()->*setter)(std::move(value));
-          return jsi::Value::undefined();
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            if (count < 1) {
+              throw jsi::JSError(rt, "Setter requires a value argument");
+            }
+            auto native = NativeObject<Derived>::fromValue(rt, thisVal);
+            auto value = RNJsi::JSIConverter<std::decay_t<ValueType>>::fromJSI(
+                rt, args[0], false);
+            (native.get()->*setter)(std::move(value));
+            return jsi::Value::undefined();
+          });
         });
 
     auto objectCtor = runtime.global().getPropertyAsObject(runtime, "Object");
