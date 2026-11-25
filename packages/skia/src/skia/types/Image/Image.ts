@@ -100,7 +100,10 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * as a Uint8Array. A GPU image is read back first; the encoding runs on
    * a background thread. Returns existing encoded data if present.
    *
-   * Rejects when the image cannot be read back or encoded.
+   * Rejects with a `SkiaValidationError` for a format there is no encoder
+   * for, with an `AbortError` when the GPU device is lost before the image
+   * is read back, and with a `SkiaInternalError` when the readback or the
+   * encoding fails.
    *
    * @param fmt - PNG is the default value.
    * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
@@ -112,7 +115,10 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * as a base64 string. A GPU image is read back first; the encoding runs
    * on a background thread. Returns existing encoded data if present.
    *
-   * Rejects when the image cannot be read back or encoded.
+   * Rejects with a `SkiaValidationError` for a format there is no encoder
+   * for, with an `AbortError` when the GPU device is lost before the image
+   * is read back, and with a `SkiaInternalError` when the readback or the
+   * encoding fails.
    *
    * @param fmt - PNG is the default value.
    * @param quality - a value from 0 to 100; 100 is the least lossy. May be ignored.
@@ -122,9 +128,15 @@ export interface SkImage extends SkJSIInstance<"Image"> {
   /**
    * Resolves to the pixels of the image, converted to `imageInfo` (the
    * image's own by default): a Float32Array for an F32 color type, else a
-   * Uint8Array; to null when nothing could be read. On a GPU image, only
-   * the requested rectangle is read back; the part of the rectangle
-   * outside the image stays zero.
+   * Uint8Array. On a GPU image, only the requested rectangle is read
+   * back; the part of the rectangle outside the image stays zero, all of
+   * it for a rectangle entirely outside.
+   *
+   * Rejects with a `SkiaValidationError` (or a `SkiaOutOfMemoryError`) for
+   * an `imageInfo` no pixels can be allocated for, with an `AbortError` when
+   * the GPU device is lost before the image is read back, with a
+   * `SkiaDecodeError` for an encoded image that cannot be decoded, and with
+   * a `SkiaInternalError` when the read fails.
    *
    * @param srcX - optional x-axis upper left corner of the rectangle to read from
    * @param srcY - optional y-axis upper left corner of the rectangle to read from
@@ -134,12 +146,15 @@ export interface SkImage extends SkJSIInstance<"Image"> {
     srcX?: number,
     srcY?: number,
     imageInfo?: ImageInfo
-  ): Promise<Float32Array | Uint8Array | null>;
+  ): Promise<Float32Array | Uint8Array>;
 
   /**
    * Resolves to a CPU image: a GPU image is read back from the GPU, an
    * encoded image is decoded on a background thread, and a raster image
-   * resolves to itself. Rejects when the readback fails.
+   * resolves to itself. Rejects with an `AbortError` when the GPU device is
+   * lost before the image is read back, with a `SkiaDecodeError` for an
+   * encoded image that cannot be decoded, and with a `SkiaInternalError`
+   * when the readback fails.
    *
    * Readbacks are asynchronous, as the GPU is: there is no synchronous
    * counterpart. The promise settles on the runtime that called: the React
@@ -156,7 +171,8 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * once, shared by every canvas, and held in a cache for as long as it is
    * drawn;
    * an encoded image is decoded first. Returns the image itself when it
-   * already is a GPU image. Throws if the upload fails.
+   * already is a GPU image. Throws a `SkiaOutOfMemoryError` if the upload
+   * fails.
    *
    * Native only: on the Web, a texture belongs to the canvas that created
    * it, so the image is returned as is.

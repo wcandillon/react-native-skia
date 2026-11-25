@@ -12,6 +12,7 @@
 #include "JsiSkMatrix.h"
 #include "JsiSkNativeObjects.h"
 #include "JsiSkShader.h"
+#include "SkiaErrors.h"
 #include "api/third_party/base64.h"
 #include "jsi/JsiPromises.h"
 #include "rnskia/RNSkAsync.h"
@@ -177,6 +178,14 @@ public:
     return std::make_shared<JsiSkShader>(getContext(), std::move(shader));
   }
 
+  /** Whether encodeImageData() has an encoder for the ImageFormat value. */
+  static bool isEncodableFormat(double format) {
+    auto value = static_cast<SkEncodedImageFormat>(format);
+    return value == SkEncodedImageFormat::kPNG ||
+           value == SkEncodedImageFormat::kJPEG ||
+           value == SkEncodedImageFormat::kWEBP;
+  }
+
   // Encodes a CPU image (raster, or encoded and decoded here). Runs on the
   // worker thread: nothing of it touches a JS runtime.
   static sk_sp<SkData> encodeImageData(const sk_sp<SkImage> &image,
@@ -226,28 +235,61 @@ public:
   // calling thread never waits for the GPU.
 
   /**
+   Why a GPU readback started on `generation` (DawnContext::generation())
+   failed, as the error to reject with: an AbortError when the device was
+   lost meanwhile (WebGPU's mapAsync rejects the same way), else a
+   SkiaInternalError.
+   */
+  static RNJsi::NamedError readbackError(const std::string &method,
+                                         uint64_t generation) {
+    if (generation == 0 || !DawnContext::isCurrent(generation)) {
+      return SkiaErrors::abort(method +
+                               ": the GPU device was lost before the image "
+                               "could be read back");
+    }
+    return SkiaErrors::internal(method + ": reading the image back failed");
+  }
+
+  /** A CPU copy of an image, or why there is none. */
+  struct RasterResult {
+    sk_sp<SkImage> image;
+    std::shared_ptr<RNJsi::NamedError> error;
+  };
+
+  /**
    The pixels of `image` on the CPU: the image itself when it already is a
    CPU image (raster, or encoded: it decodes where it is read), else a
    raster copy read back from the GPU. `deliver` runs once, on whichever
-   thread the pixels arrive on, with nullptr when the readback failed.
+   thread the pixels arrive on, with the error to reject with when the
+   readback failed.
    */
-  static void withRasterImage(sk_sp<SkImage> image,
-                              std::function<void(sk_sp<SkImage>)> deliver) {
+  static void withRasterImage(sk_sp<SkImage> image, const std::string &method,
+                              std::function<void(RasterResult)> deliver) {
     if (!image->isTextureBacked()) {
-      deliver(std::move(image));
+      deliver({std::move(image), nullptr});
       return;
     }
     auto *context = DawnContext::tryGetInstance();
     if (context == nullptr) {
-      deliver(nullptr);
+      deliver({nullptr,
+               std::make_shared<RNJsi::NamedError>(SkiaErrors::gpuUnavailable(
+                   DawnContext::getGpuInfo().error))});
       return;
     }
+    auto generation = DawnContext::generation();
     auto bounds = image->bounds();
     context->readPixels(
         image, bounds,
-        [image, deliver = std::move(deliver)](ReadResult result) {
-          deliver(DawnContext::MakeRasterImage(image->imageInfo(),
-                                               std::move(result)));
+        [image, method, generation,
+         deliver = std::move(deliver)](ReadResult result) {
+          auto raster = DawnContext::MakeRasterImage(image->imageInfo(),
+                                                     std::move(result));
+          if (raster == nullptr) {
+            deliver({nullptr, std::make_shared<RNJsi::NamedError>(
+                                  readbackError(method, generation))});
+            return;
+          }
+          deliver({std::move(raster), nullptr});
         });
   }
 
@@ -261,7 +303,10 @@ public:
   /**
    Encodes the image on the worker thread, read back first when it is on the
    GPU, and settles the promise with `resolve(runtime, promise, data)`;
-   rejects it, naming `method`, when the readback or the encoding failed.
+   rejects it with a SkiaValidationError for a format there is no encoder
+   for, with an AbortError when the GPU device is lost before the image is
+   read back, and with a SkiaInternalError when the readback or the
+   encoding fails.
    */
   jsi::Value
   encodeAsync(jsi::Runtime &runtime, const jsi::Value *arguments, size_t count,
@@ -272,23 +317,34 @@ public:
     auto format = optionalNumber(arguments, count, 0);
     auto quality = optionalNumber(arguments, count, 1);
     auto image = getObject();
+    if (format.has_value() && !isEncodableFormat(*format)) {
+      auto error = SkiaErrors::validation(
+          std::string(method) +
+          ": the format must be ImageFormat.PNG, ImageFormat.JPEG or "
+          "ImageFormat.WEBP");
+      return RNSkAsync::settled(
+          runtime, [error](jsi::Runtime &, RNSkAsync::Promise &promise) {
+            promise.reject(error);
+          });
+    }
     return RNSkAsync::run(
         runtime, getContext(),
         [image, format, quality, method,
          resolve = std::move(resolve)](RNSkAsync::Complete complete) {
-          withRasterImage(image, [=](sk_sp<SkImage> raster) {
-            if (raster == nullptr) {
-              complete([method](jsi::Runtime &, RNSkAsync::Promise &promise) {
-                promise.reject(std::string(method) +
-                               ": reading the image back failed");
+          withRasterImage(image, method, [=](RasterResult raster) {
+            if (raster.error != nullptr) {
+              complete([error = raster.error](jsi::Runtime &,
+                                              RNSkAsync::Promise &promise) {
+                promise.reject(*error);
               });
               return;
             }
             RNSkWorker::getInstance().post([=]() {
-              auto data = encodeImageData(raster, format, quality);
+              auto data = encodeImageData(raster.image, format, quality);
               complete([=](jsi::Runtime &runtime, RNSkAsync::Promise &promise) {
                 if (data == nullptr) {
-                  promise.reject(std::string(method) + " failed");
+                  promise.reject(SkiaErrors::internal(
+                      std::string(method) + ": encoding the image failed"));
                   return;
                 }
                 resolve(runtime, promise, data);
@@ -358,35 +414,41 @@ public:
     return SkData::MakeFromMalloc(memory, size);
   }
 
-  /** A promise rejected for a read that no pixels can be allocated for. */
+  /**
+   A promise rejected for a read that no pixels can be allocated for: a
+   SkiaValidationError for an `info` that describes no pixels (empty, or of
+   an unknown color type), a SkiaOutOfMemoryError for one too large.
+   */
   static jsi::Value unreadable(jsi::Runtime &runtime, const SkImageInfo &info) {
-    return RNSkAsync::settled(runtime, [info](jsi::Runtime &,
-                                              RNSkAsync::Promise &promise) {
-      promise.reject("readPixels: no pixels can be read into " +
-                     std::to_string(info.width()) + "x" +
-                     std::to_string(info.height()) + " of this color type.");
-    });
+    auto size =
+        std::to_string(info.width()) + "x" + std::to_string(info.height());
+    auto error = info.isEmpty() || info.colorType() == kUnknown_SkColorType
+                     ? SkiaErrors::validation(
+                           "readPixels: the image info describes no pixels (" +
+                           size + ", or an unknown color type)")
+                     : SkiaErrors::outOfMemory(
+                           "readPixels: no memory for the pixels of " + size);
+    return RNSkAsync::settled(
+        runtime, [error](jsi::Runtime &, RNSkAsync::Promise &promise) {
+          promise.reject(error);
+        });
   }
 
   /**
    The settling of a promise with `pixels` under `info`: a typed array of
    the color type of `info` (Float32Array for F32, else Uint8Array), filled
-   on the runtime (a JS object cannot be filled from another thread); null
-   for no pixels.
+   on the runtime (a JS object cannot be filled from another thread).
    */
   static RNSkAsync::Settle settlePixels(sk_sp<SkData> pixels,
                                         SkImageInfo info) {
     return [pixels = std::move(pixels), info](jsi::Runtime &runtime,
                                               RNSkAsync::Promise &promise) {
-      if (pixels == nullptr) {
-        promise.resolve(jsi::Value::null());
-        return;
-      }
       auto dstInfo = info;
       auto array =
           RNSkTypedArray::getTypedArray(runtime, jsi::Value::null(), dstInfo);
       if (!array.isObject()) {
-        promise.resolve(jsi::Value::null());
+        promise.reject(SkiaErrors::validation(
+            "readPixels: no typed array holds pixels of this color type"));
         return;
       }
       jsi::ArrayBuffer buffer =
@@ -401,15 +463,27 @@ public:
     };
   }
 
+  /** The settling of a promise with `error`. */
+  static RNSkAsync::Settle settleError(RNJsi::NamedError error) {
+    return [error = std::move(error)](jsi::Runtime &,
+                                      RNSkAsync::Promise &promise) {
+      promise.reject(error);
+    };
+  }
+
   /**
    Resolves to the pixels of `image` under `dstInfo` at (srcX, srcY), in a
    typed array of the color type of `dstInfo` (Float32Array for F32, else
-   Uint8Array), converted from the image's color and alpha types; to null
-   when nothing could be read; rejected for a `dstInfo` no pixels can be
-   allocated for. A CPU image is read on the worker thread (decoded if
-   needed). A Graphite image is read back from the GPU, only the requested
-   rectangle: like SkImage::readPixels(), the part of the rectangle outside
-   the image is left untouched, zero.
+   Uint8Array), converted from the image's color and alpha types. Like
+   SkImage::readPixels(), the part of the rectangle outside the image is
+   left untouched, zero: a rectangle entirely outside of it resolves to
+   zeros. Rejects with a SkiaValidationError or a SkiaOutOfMemoryError for
+   a `dstInfo` no pixels can be allocated for, with an AbortError when the
+   GPU device is lost before the image is read back, with a
+   SkiaDecodeError for an encoded image that cannot be decoded, and with a
+   SkiaInternalError when the read fails. A CPU image is read on the worker
+   thread (decoded if needed). A Graphite image is read back from the GPU,
+   only the requested rectangle.
    */
   static jsi::Value readPixelsAsync(
       jsi::Runtime &runtime, std::shared_ptr<RNSkPlatformContext> context,
@@ -423,27 +497,40 @@ public:
         runtime, std::move(context),
         [image, dstInfo, srcX, srcY, rowBytes,
          pixels](RNSkAsync::Complete complete) {
-          auto settle = [pixels, dstInfo](bool read) {
-            return settlePixels(read ? pixels : nullptr, dstInfo);
-          };
+          auto srcRect =
+              SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
+          if (!srcRect.intersect(image->bounds())) {
+            // Nothing of the image in the rectangle: all of it stays zero.
+            complete(settlePixels(pixels, dstInfo));
+            return;
+          }
           if (!image->isTextureBacked()) {
             RNSkWorker::getInstance().post([=]() {
-              complete(settle(image->readPixels(nullptr, dstInfo,
-                                                pixels->writable_data(),
-                                                rowBytes, srcX, srcY)));
+              if (image->readPixels(nullptr, dstInfo, pixels->writable_data(),
+                                    rowBytes, srcX, srcY)) {
+                complete(settlePixels(pixels, dstInfo));
+              } else if (image->isLazyGenerated()) {
+                complete(settleError(SkiaErrors::decode(
+                    "readPixels: the encoded image cannot be decoded",
+                    "image")));
+              } else {
+                complete(settleError(SkiaErrors::internal(
+                    "readPixels: the pixels cannot be converted to the "
+                    "image info")));
+              }
             });
             return;
           }
-          auto srcRect =
-              SkIRect::MakeXYWH(srcX, srcY, dstInfo.width(), dstInfo.height());
           auto *dawn = DawnContext::tryGetInstance();
-          if (!srcRect.intersect(image->bounds()) || dawn == nullptr) {
-            complete(settle(false));
+          if (dawn == nullptr) {
+            complete(settleError(
+                SkiaErrors::gpuUnavailable(DawnContext::getGpuInfo().error)));
             return;
           }
+          auto generation = DawnContext::generation();
           dawn->readPixels(image, srcRect, [=](ReadResult result) {
             if (result == nullptr) {
-              complete(settle(false));
+              complete(settleError(readbackError("readPixels", generation)));
               return;
             }
             // The callback runs inside the context lock (see
@@ -459,7 +546,13 @@ public:
               auto read = destination.extractSubset(
                               &subset, srcRect.makeOffset(-srcX, -srcY)) &&
                           source.readPixels(subset);
-              complete(settle(read));
+              if (read) {
+                complete(settlePixels(pixels, dstInfo));
+              } else {
+                complete(settleError(SkiaErrors::internal(
+                    "readPixels: the pixels cannot be converted to the "
+                    "image info")));
+              }
             });
           });
         });
@@ -498,8 +591,8 @@ public:
     auto texture =
         DawnContext::getInstance().MakeTextureImage(image, mipmapped);
     if (texture == nullptr) {
-      throw jsi::JSError(runtime,
-                         "makeTextureImage: uploading the image failed");
+      throw SkiaErrors::outOfMemory(
+          "makeTextureImage: uploading the image failed");
     }
     if (texture == image) {
       return jsi::Value(runtime, thisValue);
@@ -527,22 +620,30 @@ public:
           auto settle = [context](sk_sp<SkImage> raster) {
             return [context, raster = std::move(raster)](
                        jsi::Runtime &runtime, RNSkAsync::Promise &promise) {
-              if (raster == nullptr) {
-                promise.reject(
-                    "makeRasterImage: reading the image back failed");
-                return;
-              }
               promise.resolve(makeJsiObject(
                   runtime, std::make_shared<JsiSkImage>(context, raster)));
             };
           };
           if (image->isTextureBacked()) {
-            withRasterImage(image, [=](sk_sp<SkImage> raster) {
-              complete(settle(std::move(raster)));
+            withRasterImage(image, "makeRasterImage", [=](RasterResult raster) {
+              if (raster.error != nullptr) {
+                complete(settleError(*raster.error));
+                return;
+              }
+              complete(settle(std::move(raster.image)));
             });
           } else {
-            RNSkWorker::getInstance().post(
-                [=]() { complete(settle(image->makeRasterImage(nullptr))); });
+            RNSkWorker::getInstance().post([=]() {
+              auto raster = image->makeRasterImage(nullptr);
+              if (raster == nullptr) {
+                // An encoded image, whose bytes do not decode.
+                complete(settleError(SkiaErrors::decode(
+                    "makeRasterImage: the encoded image cannot be decoded",
+                    "image")));
+                return;
+              }
+              complete(settle(std::move(raster)));
+            });
           }
         });
   }

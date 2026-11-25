@@ -8,6 +8,7 @@
 
 #include "JsiSkData.h"
 #include "JsiSkNativeObjects.h"
+#include "SkiaErrors.h"
 #include "api/third_party/base64.h"
 #include "rnskia/RNSkAsync.h"
 
@@ -38,7 +39,15 @@ public:
                           data = std::move(data)](jsi::Runtime &runtime,
                                                   RNSkAsync::Promise &promise) {
                   if (data == nullptr) {
-                    promise.reject("fromURI: could not load " + uri);
+                    // A remote resource fails like fetch() does, with a
+                    // TypeError; a local one is not there.
+                    bool remote = uri.rfind("http://", 0) == 0 ||
+                                  uri.rfind("https://", 0) == 0;
+                    promise.reject(remote
+                                       ? SkiaErrors::typeError(
+                                             "fromURI: could not load " + uri)
+                                       : SkiaErrors::notFound(
+                                             "fromURI: no resource at " + uri));
                     return;
                   }
                   promise.resolve(makeJsiObject(
@@ -68,14 +77,14 @@ public:
     size_t len;
     auto err = Base64::Decode(base64Str.c_str(), size, nullptr, &len);
     if (err != Base64::Error::kNone) {
-      throw std::runtime_error("Error decoding base64 string");
+      throw SkiaErrors::validation("fromBase64: invalid base64 string");
     }
 
     // Create data object and decode
     auto data = SkData::MakeUninitialized(len);
     err = Base64::Decode(base64Str.c_str(), size, data->writable_data(), &len);
     if (err != Base64::Error::kNone) {
-      throw std::runtime_error("Error decoding base64 string");
+      throw SkiaErrors::validation("fromBase64: invalid base64 string");
     }
 
     return std::make_shared<JsiSkData>(getContext(), std::move(data));

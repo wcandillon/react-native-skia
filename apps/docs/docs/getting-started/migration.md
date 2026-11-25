@@ -217,6 +217,7 @@ A `null` check after one of these factories becomes a `try`/`catch`, or goes awa
 | `Skia.Image.MakeRaster()` | `null` | Throws a `SkiaValidationError`. |
 | `Skia.PathEffect.MakeLine2D()`, `MakePath1D()`, `MakePath2D()`, `MakeDash()`, `MakeDiscrete()` | `null`, or an effect that drew nothing | Throws a `SkiaValidationError`. |
 | `picture.serialize()` | `null` | Throws a `SkiaInternalError`. |
+| `Skia.Data.fromBase64()` | An `Error` | Throws a `SkiaValidationError`. |
 
 ```diff
   const effect = Skia.RuntimeEffect.Make(source);
@@ -224,6 +225,14 @@ A `null` check after one of these factories becomes a `try`/`catch`, or goes awa
 -   throw new Error("Couldn't compile the shader");
 - }
 ```
+
+The promises resolve with their result or reject with a named error; none resolves `null`:
+
+| Promise | v2 | v3 |
+|:--|:--|:--|
+| `image.readPixels()`, `canvas.readPixels()` | `null` when nothing could be read | Rejects with a named error: an `AbortError` when the GPU device is lost before the image is read back, a `SkiaValidationError` for an image info that describes no pixels (or a canvas that records a picture), a `SkiaInternalError` when the read fails. A rectangle entirely outside the image resolves to zeros. |
+| `image.encodeToBytes()`, `image.encodeToBase64()`, `image.makeRasterImage()` | A plain `Error` | Rejects with an `AbortError`, a `SkiaValidationError` (a format there is no encoder for) or a `SkiaInternalError`. |
+| `Skia.Data.fromURI()` | A plain `Error`; a missing file on the web resolved to the error page | Rejects with a `TypeError` when a remote resource cannot be loaded, as `fetch` does, and with an error named `NotFoundError` when there is nothing at the uri. |
 
 `Skia.PathEffect.MakeCorner(0)` still returns `null`: a radius of zero has no effect, and `<CornerPathEffect r={0} />` now draws the path as is instead of throwing.
 

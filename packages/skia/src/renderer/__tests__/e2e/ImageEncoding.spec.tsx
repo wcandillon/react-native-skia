@@ -280,13 +280,18 @@ describe("Image Encoding", () => {
         )!;
         return image.encodeToBytes(ctx.format).then(
           (encoded) => `resolved ${String(encoded)}`,
-          (error) => (error instanceof Error ? error.message : String(error))
+          (error) =>
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error)
         );
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
     );
 
-    expect(result).toContain("encodeToBytes failed");
+    expect(result).toContain(
+      "SkiaInternalError: encodeToBytes: encoding the image failed"
+    );
   });
 
   it("SkImage.encodeToBase64: rejects for an image the encoder cannot encode", async () => {
@@ -306,12 +311,17 @@ describe("Image Encoding", () => {
         )!;
         return image.encodeToBase64(ctx.format).then(
           (encoded) => `resolved ${String(encoded)}`,
-          (error) => (error instanceof Error ? error.message : String(error))
+          (error) =>
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error)
         );
       },
       { imageInfoBase: IMAGE_INFO_BASE, format: IMAGE_FORMAT.JPEG }
     );
 
-    expect(result).toContain("encodeToBase64 failed");
+    expect(result).toContain(
+      "SkiaInternalError: encodeToBase64: encoding the image failed"
+    );
   });
 });
