@@ -107,6 +107,7 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "SpmExample" */;
 			buildPhases = (
 				658A88AFBFD620F8BC6F91BA /* Sync SPM Autolinking */,
+				E60A0BA5B3DB2D9164D35100 /* Prepare React Native Skia binaries */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				B174F870C259554596A4373B /* Embed React Native Flavored Frameworks */,
@@ -229,6 +230,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -euo pipefail\n\ndestination=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$destination\"\n\nvalidate_framework() {\n  source=\"$1\"\n  name=\"$2\"\n  if [ -z \"$source\" ] || [ ! -d \"$source\" ]; then\n    echo \"error: React Native SwiftPM framework '$name' is unavailable for configuration '$CONFIGURATION' and SDK '$SDK_NAME': $source\"\n    exit 1\n  fi\n  binary=\"${name%.framework}\"\n  if [ ! -e \"$source/$binary\" ] && [ ! -e \"$source/Versions/Current/$binary\" ]; then\n    echo \"error: React Native SwiftPM framework '$name' is invalid for configuration '$CONFIGURATION': expected $source/$binary or $source/Versions/Current/$binary\"\n    exit 1\n  fi\n}\n\ncopy_and_sign() {\n  source=\"$1\"\n  name=\"$2\"\n  /usr/bin/rsync -a --delete \"$source/\" \"$destination/$name/\"\n  if [ \"${CODE_SIGNING_ALLOWED:-YES}\" != \"NO\" ]; then\n    identity=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n    if [ \"$identity\" = \"-\" ]; then\n      /usr/bin/codesign --force --sign - --timestamp=none --preserve-metadata=identifier,entitlements,flags \"$destination/$name\"\n    else\n      /usr/bin/codesign --force --sign \"$identity\" --preserve-metadata=identifier,entitlements,flags \"$destination/$name\"\n    fi\n  fi\n}\n\nvalidate_framework \"${RN_SPM_REACT_FRAMEWORK:-}\" \"React.framework\"\nvalidate_framework \"${RN_SPM_REACT_NATIVE_DEPENDENCIES_FRAMEWORK:-}\" \"ReactNativeDependencies.framework\"\nvalidate_framework \"${RN_SPM_HERMES_FRAMEWORK:-}\" \"hermesvm.framework\"\ncopy_and_sign \"${RN_SPM_REACT_FRAMEWORK:-}\" \"React.framework\"\ncopy_and_sign \"${RN_SPM_REACT_NATIVE_DEPENDENCIES_FRAMEWORK:-}\" \"ReactNativeDependencies.framework\"\ncopy_and_sign \"${RN_SPM_HERMES_FRAMEWORK:-}\" \"hermesvm.framework\"\n";
+		};
+		E60A0BA5B3DB2D9164D35100 /* Prepare React Native Skia binaries */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Prepare React Native Skia binaries";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eo pipefail\n# Check before reading package files, which script sandboxing may already deny.\nif [ \"${ENABLE_USER_SCRIPT_SANDBOXING:-NO}\" = YES ]; then\n  echo \"error: [react-native-skia] Set User Script Sandboxing to No on this app target; preparation needs release-cache and build-product access.\" >&2\n  exit 1\nfi\nPREPARE_SCRIPT=\"$SRCROOT\"/'../../packages/skia/scripts/prepare-apple-binaries.sh'\nif [ ! -f \"$PREPARE_SCRIPT\" ]; then\n  echo \"error: [react-native-skia] Binary preparation script is missing. Reinstall dependencies and rerun react-native spm update.\" >&2\n  exit 1\nfi\nexec /bin/bash \"$PREPARE_SCRIPT\" --project-root \"$SRCROOT\" --output \"$BUILT_PRODUCTS_DIR\" --assembly-root \"$OBJROOT/ReactNativeSkiaBinaries\" --dawn own\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

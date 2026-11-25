@@ -1,8 +1,9 @@
 /**
  * Builds the monolithic Dawn (libwebgpu_dawn) from the Dawn checkout Skia
  * pins, into packages/skia/libs/dawn. It is the Dawn the Skia Graphite
- * binaries were compiled against, shipped as the react-native-webgpu-dawn npm
- * package that react-native-skia and react-native-webgpu both link.
+ * binaries were compiled against, released with them as the assets of the
+ * GitHub release binaries-<version> that react-native-skia and
+ * react-native-webgpu both link.
  *
  * Usage (from packages/skia):
  *   yarn build-dawn                              # every target
@@ -18,7 +19,7 @@
  * produce lipo'd universal libraries; single-architecture builds copy the archive.
  * Staging directories are removed on successful SDK assembly; CMake intermediates remain.
  * Android uses libs/dawn/android/<abi>/ (e.g. libs/dawn/android/arm64-v8a/).
- * package-binaries assembles XCFrameworks for npm distribution.
+ * package-binaries archives them as release assets.
  *
  * See apple-configuration.ts for SDK groups/architectures and
  * dawn-configuration.ts (dawnTargets) for the full target list.

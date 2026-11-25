@@ -1,5 +1,6 @@
 import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
+import type { SkImage, SkSurface } from "../../../skia/types";
 import { setupSkia } from "../../../skia/__tests__/setup";
 import { surface } from "../setup";
 
@@ -29,8 +30,20 @@ interface TestGPUDevice {
     ): void;
   };
 }
+interface TestGPUSharedTextureMemory {
+  createTexture(): TestGPUTexture;
+  beginAccess(texture: TestGPUTexture, initialized: boolean): void;
+  endAccess(texture: TestGPUTexture): unknown;
+  destroy(): void;
+}
 declare const RNWebGPU: {
-  importDevice: (pointer: bigint) => TestGPUDevice;
+  importDevice: (pointer: bigint) => TestGPUDevice & {
+    readonly features: { has(name: string): boolean };
+    importSharedTextureMemory(descriptor: {
+      source: unknown;
+    }): TestGPUSharedTextureMemory;
+  };
+  createNativeBuffer?: (width: number, height: number) => { release(): void };
   createTestVideoFrame: (
     width: number,
     height: number
@@ -150,6 +163,123 @@ describe("Native frames", () => {
       expect(Math.abs(value - expected[i])).toBeLessThanOrEqual(2);
     });
   });
+
+  // An AHardwareBuffer imported on Skia's device. Dawn checks the buffer's
+  // allocation size against the image it binds, and the Android emulator's
+  // drivers report 0 (SwiftShader, and the host GPU through gfxstream): the
+  // check fails as an internal error, which loses the device (#4508). Skia
+  // skips the check on Android.
+  itRunsE2eOnly(
+    "draws into a native buffer imported on its device",
+    async () => {
+      const result = await surface.eval(
+        (Skia, ctx): EvalResult | Promise<EvalResult> => {
+          if (typeof RNWebGPU.createNativeBuffer !== "function") {
+            return {
+              kind: "skip",
+              reason:
+                "the installed react-native-webgpu has no createNativeBuffer",
+            };
+          }
+          const size = 16;
+          const device = RNWebGPU.importDevice(Skia.getNativeDevice());
+          if (
+            !device.features.has("shared-texture-memory-ahardware-buffer") &&
+            !device.features.has("shared-texture-memory-iosurface")
+          ) {
+            return {
+              kind: "skip",
+              reason: "the adapter cannot import native buffers",
+            };
+          }
+          const buffer = RNWebGPU.createNativeBuffer(size, size);
+          let memory: TestGPUSharedTextureMemory;
+          try {
+            memory = device.importSharedTextureMemory({ source: buffer });
+          } catch (e) {
+            buffer.release();
+            return {
+              kind: "fail",
+              reason: `the import failed: ${(e as Error).message ?? e}`,
+            };
+          }
+          // Everything created below, released on every path once the
+          // read back settles (or as soon as a step throws).
+          let texture: TestGPUTexture | null = null;
+          let accessing = false;
+          let target: SkSurface | null = null;
+          let dst: SkSurface | null = null;
+          let image: SkImage | null = null;
+          const cleanup = () => {
+            image?.dispose();
+            target?.dispose();
+            dst?.dispose();
+            if (texture) {
+              if (accessing) {
+                try {
+                  memory.endAccess(texture);
+                } catch {
+                  // It throws when the access failed, on a lost device for
+                  // instance: the step that failed first reports why, and the
+                  // rest still has to be released.
+                }
+              }
+              texture.destroy();
+            }
+            memory.destroy();
+            buffer.release();
+          };
+          const run = (): EvalResult | Promise<EvalResult> => {
+            texture = memory.createTexture();
+            memory.beginAccess(texture, false);
+            accessing = true;
+            target = Skia.Surface.MakeFromGPUTexture(texture);
+            dst = Skia.Surface.MakeOffscreen(size, size);
+            if (!target || !dst) {
+              return { kind: "fail", reason: "could not create the surfaces" };
+            }
+            target.getCanvas().drawColor(Skia.Color("red"));
+            target.flush();
+            // Read back through Skia: the buffer's texture as an image.
+            image = Skia.Image.MakeFromGPUTexture(texture);
+            dst.getCanvas().drawImage(image, 0, 0);
+            dst.flush();
+            return dst
+              .getCanvas()
+              .readPixels(0, 0, {
+                width: size,
+                height: size,
+                colorType: ctx.colorType,
+                alphaType: ctx.alphaType,
+              })
+              .then((pixels): EvalResult => {
+                if (!pixels) {
+                  return { kind: "fail", reason: "readPixels returned null" };
+                }
+                return { kind: "ok", pixels: Array.from(pixels.slice(0, 4)) };
+              });
+          };
+          let pending: EvalResult | Promise<EvalResult>;
+          try {
+            pending = run();
+          } catch (e) {
+            cleanup();
+            throw e;
+          }
+          return Promise.resolve(pending).finally(cleanup);
+        },
+        { colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }
+      );
+      if (result.kind === "skip") {
+        console.warn(`[NativeFrame] skipped: ${result.reason}`);
+        return;
+      }
+      if (result.kind === "fail") {
+        throw new Error(result.reason);
+      }
+      expect(result.pixels).toEqual([255, 0, 0, 255]);
+    }
+  );
 
   itRunsE2eOnly("rejects native buffers on native platforms", async () => {
     const result = await surface.eval((Skia) => {

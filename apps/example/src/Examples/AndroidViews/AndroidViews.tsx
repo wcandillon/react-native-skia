@@ -44,11 +44,7 @@ import {
 // while the canvas animates, and extra shapes make every frame slower to
 // record.
 
-const backingViews: AndroidBackingView[] = [
-  "TextureView",
-  "SurfaceView",
-  "HardwareBufferView",
-];
+const backingViews: AndroidBackingView[] = ["TextureView", "SurfaceView"];
 const extraShapeCounts = [0, 4000, 12000];
 const extraShapeSpacing = 4;
 
@@ -64,8 +60,6 @@ const androidProps = (
       return { backingView, opaque, zOrderOnTop, zOrderMediaOverlay };
     case "TextureView":
       return { backingView, opaque };
-    case "HardwareBufferView":
-      return { backingView };
   }
 };
 
@@ -297,12 +291,11 @@ export const AndroidViews = () => {
         />
         <Text style={styles.hint}>
           The backing view is created when the canvas mounts: a chip remounts
-          the canvas (HardwareBufferView is not available in Skia yet and falls
-          back to a TextureView, with a warning). opaque applies in place, and
-          so do the z-order switches on Android 11 and later. A SurfaceView
-          ignores the rounded clip and the overlay; with zOrderOnTop it also
-          covers the controls when they overlap, and with zOrderMediaOverlay it
-          moves above the other SurfaceView.
+          the canvas. opaque applies in place, and so do the z-order switches on
+          Android 11 and later. A SurfaceView ignores the rounded clip and the
+          overlay; with zOrderOnTop it also covers the controls when they
+          overlap, and with zOrderMediaOverlay it moves above the other
+          SurfaceView.
         </Text>
       </ScrollView>
     </View>

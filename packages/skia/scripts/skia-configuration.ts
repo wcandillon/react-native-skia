@@ -69,10 +69,11 @@ const ParagraphOutputsAndroid = BUILD_WITH_PARAGRAPH
   ? ["libskparagraph.a", "libskunicode_core.a", "libskunicode_icu.a"]
   : [];
 
-// Dawn is not taken from the GN build: skia_use_dawn makes it build Dawn's
-// non-monolithic libdawn_combined.a as a dependency of the Graphite sources,
-// but what ships is the monolithic libwebgpu_dawn that build-dawn.ts builds
-// from the same checkout.
+// Dawn is not taken from the GN build: what ships is the monolithic
+// libwebgpu_dawn that build-dawn.ts builds from the same checkout. The
+// Graphite sources only need Dawn's headers, so skia_dawn_headers_only (see
+// skia-patches/skia-dawn-dependency.patch) keeps GN from compiling all of
+// Dawn a second time for every target.
 
 export const commonArgs = [
   // No RAW codec: React Native apps do not decode camera RAW files through
@@ -92,8 +93,11 @@ export const commonArgs = [
   ["skia_enable_pdf", false],
   ["paragraph_tests_enabled", false],
   ["is_component_build", false],
+  // Graphite only: Ganesh is not used on any platform.
+  ["skia_enable_ganesh", false],
   ["skia_enable_graphite", true],
   ["skia_use_dawn", true],
+  ["skia_dawn_headers_only", true],
   // m152 turns PartitionAlloc on by default for clang builds, which leaves
   // raw_ptr/PartitionAddressSpace symbols undefined when linking against the
   // prebuilt libskia.a (the allocator lives in its own target we don't ship).
@@ -271,8 +275,7 @@ export const configurations: {
       },
     },
     args: [
-      // Graphite only. The WebGL (Ganesh) backend would be a separate build.
-      ["skia_enable_ganesh", false],
+      // No WebGL: it is a Ganesh backend.
       ["skia_use_webgl", false],
       // The browser implements WebGPU: Dawn is neither built nor linked.
       ["skia_emdawnwebgpu_dir", `"${EmdawnwebgpuDir}"`],

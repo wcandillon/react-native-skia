@@ -14167,7 +14167,7 @@ __metadata:
     react-native-skia: "workspace:*"
     react-native-svg: 15.16.1
     react-native-test-app: 5.4.17
-    react-native-webgpu: 0.20.0
+    react-native-webgpu: 0.24.0
     react-native-worklets: 0.12.2
     three: 0.184.0
   languageName: unknown
@@ -14227,7 +14227,7 @@ __metadata:
     react-native-svg: 15.16.1
     react-native-test-app: 5.4.17
     react-native-web: ^0.21.2
-    react-native-webgpu: 0.20.0
+    react-native-webgpu: 0.24.0
     react-native-worklets: 0.13.1
     react-test-renderer: 19.3.0
     three: 0.184.0
@@ -24851,27 +24851,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-skia-graphite-apple-ios@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-skia-graphite-apple-ios@npm:158.0.0"
-  checksum: be8cea926a20756cf48088cdc75ca9b4b4b4c328e4cd7ad846c6d31d4fbdf6114dbfa00d546b83541a86534160e2bf3ae53bc1d378dfee57e7d44e09d7a0542b
-  languageName: node
-  linkType: hard
-
-"react-native-skia-graphite-apple-macos@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-skia-graphite-apple-macos@npm:158.0.0"
-  checksum: 61b14ad117919ce1215c1e44ba5f478cd97ebabead39df71a069e06992e6385fb1d85406fcc898c5d189e665e899ccd02b816cd34a389607ea765a7f47bc129a
-  languageName: node
-  linkType: hard
-
-"react-native-skia-graphite-apple-tvos@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-skia-graphite-apple-tvos@npm:158.0.0"
-  checksum: eb4191148323277e0a4c5c0ef9fc38afc8b55ff629badf7c7c23cddb2c6fb9ef328e976c3758c7637e76ab0122155365cebad9fad0587aefc06a0fa3898711b9
-  languageName: node
-  linkType: hard
-
 "react-native-skia-monorepo@workspace:.":
   version: 0.0.0-use.local
   resolution: "react-native-skia-monorepo@workspace:."
@@ -24921,10 +24900,6 @@ __metadata:
     react-native: 0.88.1
     react-native-builder-bob: 0.18.2
     react-native-reanimated: 4.7.1
-    react-native-skia-graphite-apple-ios: 158.0.0
-    react-native-skia-graphite-apple-macos: 158.0.0
-    react-native-skia-graphite-apple-tvos: 158.0.0
-    react-native-webgpu-dawn: 158.0.0
     react-native-worklets: 0.13.1
     react-reconciler: 0.33.0
     rimraf: 3.0.2
@@ -25033,18 +25008,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webgpu-dawn@npm:158.0.0":
-  version: 158.0.0
-  resolution: "react-native-webgpu-dawn@npm:158.0.0"
-  checksum: 91affe20aa3a65cb2f33861c501cf56bb2d59b148fa159f4dc8bbdf232e995db42ae499ea86f131cb107106b55eaa747ec42f36565db7e43a823a9d4f64ec9dd
-  languageName: node
-  linkType: hard
-
-"react-native-webgpu@npm:0.20.0":
-  version: 0.20.0
-  resolution: "react-native-webgpu@npm:0.20.0"
-  dependencies:
-    react-native-webgpu-dawn: 157.1.0
+"react-native-webgpu@npm:0.24.0":
+  version: 0.24.0
+  resolution: "react-native-webgpu@npm:0.24.0"
   peerDependencies:
     react: "*"
     react-native: ">=0.81.0"
@@ -25055,7 +25021,7 @@ __metadata:
       optional: true
     react-native-worklets:
       optional: true
-  checksum: 3eff7b0821bf292749f39e4a1e5239f38ffb3db3eac8225144fceccdaf765d9de3edf73b5272568be7d768dc0a5455c40f0228cdbec2fb8a67edbda5bd3ae578
+  checksum: d4d3a441586326df7861398e866c9fbb2e9481f002c6c3ebc813dd49a9978ce2460ab5298df9951f687f80455661b645b07bebd7ce8795688d7e6aa74b6abe96
   languageName: node
   linkType: hard
 
