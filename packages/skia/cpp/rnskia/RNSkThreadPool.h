@@ -122,6 +122,13 @@ public:
   RNSkThreadPool(const RNSkThreadPool &) = delete;
   RNSkThreadPool &operator=(const RNSkThreadPool &) = delete;
 
+  /**
+   Whether the calling thread is one of the pool's: those trim the GPU
+   resources they cache in their idle task (see RNSkGraphiteProducer), other
+   threads after their own submits (see DawnContext::trimThreadIfDue).
+   */
+  static bool isPoolThread() { return poolThreadFlag(); }
+
   /** The number of threads, hence of lanes. */
   size_t size() const { return _workers.size(); }
 
@@ -245,7 +252,13 @@ private:
     return {_idleRequest, _idleRequestTime, _idleTask};
   }
 
+  static bool &poolThreadFlag() {
+    static thread_local bool flag = false;
+    return flag;
+  }
+
   void run(unsigned index) {
+    poolThreadFlag() = true;
     configureThread(index);
     auto &worker = *_workers[index];
     RNSkIdleTaskSchedule schedule(kIdleDelay, Clock::now());

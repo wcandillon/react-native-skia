@@ -25,6 +25,7 @@ const mockSurface = {
   getCanvas: () => mockCanvas,
   flush: jest.fn(),
   makeImageSnapshot: () => mockSnapshot,
+  dispose: jest.fn(),
 };
 const mockMakeOffscreen = jest.fn((_width: number, _height: number) => {
   return mockSurface;

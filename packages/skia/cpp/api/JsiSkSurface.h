@@ -9,7 +9,6 @@
 #include <jsi/jsi.h>
 
 #include "JsiSkConverters.h"
-#include "JsiSkDispatcher.h"
 #include "JsiSkNativeObjects.h"
 
 #include "JsiSkCanvas.h"
@@ -17,6 +16,7 @@
 
 #include "rnskia/RNDawnContext.h"
 #include "rnskia/RNSkAsync.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -36,15 +36,11 @@ public:
   static constexpr const char *CLASS_NAME = "Surface";
 
   JsiSkSurface(std::shared_ptr<RNSkPlatformContext> context,
-               sk_sp<SkSurface> surface)
+               sk_sp<SkSurface> surface,
+               std::shared_ptr<RNSkSurfaceRecorder> recorder = nullptr)
       : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
             std::move(context), std::move(surface)),
-        _dispatcher(Dispatcher::getDispatcher()) {
-    // The surface belongs to the recorder of this thread, which is also the
-    // thread that destroys the surfaces finalized elsewhere (see
-    // releaseResources).
-    _dispatcher->processQueue();
-  }
+        _recorder(std::move(recorder)) {}
 
   ~JsiSkSurface() override {
     // Collected by the GC: a canvas that JS still holds keeps the surface
@@ -70,13 +66,12 @@ public:
       // back through a snapshot on Graphite (which lacks synchronous canvas
       // readback), and so that it outlives a surface wrapper the GC collected
       // first.
-      _canvas->setSurface(surface, _dispatcher);
+      _canvas->setSurface(surface, _recorder);
     }
     return _canvas;
   }
 
   void flush(JsiOptional<bool> syncParam) {
-    _dispatcher->processQueue();
     auto surface = getObject();
     // When `sync` is true, block until the GPU has finished executing the
     // submitted work. Required before a consumer on a different command queue
@@ -86,10 +81,9 @@ public:
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder;
     // only Graphite-backed surfaces need to snap and submit a recording. One
     // made on a GPU device lost since submits nothing (see DawnContext).
-    if (auto *recorder = surface->recorder()) {
-      DawnContext::getInstance().submitRecording(
-          recorder, sync ? skgpu::graphite::SyncToCpu::kYes
-                         : skgpu::graphite::SyncToCpu::kNo);
+    if (_recorder) {
+      _recorder->flush(sync ? skgpu::graphite::SyncToCpu::kYes
+                            : skgpu::graphite::SyncToCpu::kNo);
     }
   }
 
@@ -97,29 +91,30 @@ public:
   // they were lost (see DawnContext::submitRecordingAsync). Nothing blocks:
   // the readback thread waits for the GPU.
   JSI_HOST_FUNCTION(flushAsync) {
-    _dispatcher->processQueue();
     auto surface = getObject();
-    if (surface->recorder() == nullptr) {
+    if (!_recorder) {
       // A raster surface holds its draws already.
       return RNSkAsync::settled(
           runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
             promise.resolve(jsi::Value::undefined());
           });
     }
+    // The surface's own recorder (see RNSkSurfaceRecorder), which the work
+    // keeps alive with the surface.
     return RNSkAsync::run(
-        runtime, getContext(), [surface](RNSkAsync::Complete complete) {
-          DawnContext::getInstance().submitRecordingAsync(
-              surface->recorder(),
-              [complete = std::move(complete)](std::string error) {
-                complete([error = std::move(error)](
-                             jsi::Runtime &, RNSkAsync::Promise &promise) {
-                  if (error.empty()) {
-                    promise.resolve(jsi::Value::undefined());
-                  } else {
-                    promise.reject("flushAsync: " + error);
-                  }
-                });
-              });
+        runtime, getContext(),
+        [surface, recorder = _recorder](RNSkAsync::Complete complete) {
+          recorder->flushAsync([complete =
+                                    std::move(complete)](std::string error) {
+            complete([error = std::move(error)](jsi::Runtime &,
+                                                RNSkAsync::Promise &promise) {
+              if (error.empty()) {
+                promise.resolve(jsi::Value::undefined());
+              } else {
+                promise.reject("flushAsync: " + error);
+              }
+            });
+          });
         });
   }
 
@@ -127,7 +122,6 @@ public:
   // drawing it shows what the surface holds by then (flush the surface
   // first). A raster surface has no texture to share: its snapshot instead.
   std::shared_ptr<JsiSkImage> asImage() {
-    _dispatcher->processQueue();
     auto surface = getObject();
     auto sharesTexture = surface->recorder() != nullptr;
     auto image = sharesTexture ? SkSurfaces::AsImage(surface)
@@ -142,7 +136,6 @@ public:
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
-    _dispatcher->processQueue();
     auto surface = getObject();
     sk_sp<SkImage> image;
     if (count > 0 && arguments[0].isObject()) {
@@ -154,8 +147,8 @@ public:
     }
     // A raster surface (e.g. Skia.Surface.Make) has no Graphite recorder; its
     // snapshot is already a valid CPU image, so skip the recording submit.
-    if (auto *recorder = surface->recorder()) {
-      DawnContext::getInstance().submitRecording(recorder);
+    if (_recorder) {
+      _recorder->flush();
     }
     // Without a snapshot (e.g. bounds outside of the surface), outputImage
     // keeps its previous content and the image returned is a null one.
@@ -215,6 +208,12 @@ public:
       estimated = safeAdd(estimated, pixelBytes / 2); // depth-stencil buffers
     }
 
+    // The recorder of the surface: the buffers it draws with (measured at
+    // about 2 MB on Adreno).
+    if (_recorder) {
+      estimated = safeAdd(estimated, 2 * 1024 * 1024);
+    }
+
     // Add a small overhead buffer for bookkeeping allocations.
     estimated = safeAdd(estimated, 128 * 1024);
 
@@ -236,6 +235,11 @@ public:
 
 protected:
   void releaseResources() override {
+    // What was drawn and not flushed still reaches the texture, which may
+    // outlive the surface (Surface.MakeFromGPUTexture, asImage()).
+    if (_recorder) {
+      _recorder->flushIfDirty();
+    }
     // dispose(): the canvas lets go of its reference too, so that the texture
     // is freed now rather than once the canvas is collected (#4275). Drawing
     // on the canvas throws from here on.
@@ -247,16 +251,17 @@ protected:
 
 private:
   void releaseSurface() {
-    // Destroying a Graphite surface flushes it into its recorder and
-    // deregisters it from it, and a recorder is single-threaded. The GC may
-    // finalize this object on any thread, and dispose() may be called from
-    // another runtime: let the thread that created the surface destroy it.
-    auto surface = getObjectUnchecked();
+    // Destroying a Graphite surface deregisters it from its recorder, which is
+    // the surface's alone (see RNSkSurfaceRecorder): whichever thread
+    // lets go of both last destroys them, the GC's included. Nothing else can
+    // be using them then.
+    auto released =
+        SurfaceAndRecorder(std::move(_recorder), getObjectUnchecked());
     setObject(nullptr);
-    _dispatcher->release(std::move(surface));
   }
 
-  std::shared_ptr<Dispatcher> _dispatcher;
+  // The recorder of the surface, for it alone; nullptr for a raster surface.
+  std::shared_ptr<RNSkSurfaceRecorder> _recorder;
   std::shared_ptr<JsiSkCanvas> _canvas;
 };
 

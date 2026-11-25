@@ -20,6 +20,7 @@
 
 #include "JniPresentThread.h"
 #include "RNDawnContext.h"
+#include "RNSkGpuPurge.h"
 #include "RNSkPresentThread.h"
 
 namespace RNSkia {
@@ -37,6 +38,10 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::runMainThreadTasks),
       makeNativeMethod("setForegroundNative",
                        JniPlatformContext::setForegroundNative),
+      makeNativeMethod("onLowMemoryNative",
+                       JniPlatformContext::onLowMemoryNative),
+      makeNativeMethod("onTrimMemoryNative",
+                       JniPlatformContext::onTrimMemoryNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
       makeNativeMethod("setPixelDensityNative",
@@ -95,6 +100,15 @@ jboolean JniPlatformContext::postAndWaitNative(
 void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
                                              jboolean foreground) {
   DawnContext::setForeground(foreground == JNI_TRUE);
+}
+
+void JniPlatformContext::onLowMemoryNative(jni::alias_ref<jclass>) {
+  RNSkGpuPurge::onLowMemory();
+}
+
+void JniPlatformContext::onTrimMemoryNative(jni::alias_ref<jclass>,
+                                            jint level) {
+  RNSkGpuPurge::onTrimMemory(level);
 }
 
 void JniPlatformContext::setCacheDirectoryNative(

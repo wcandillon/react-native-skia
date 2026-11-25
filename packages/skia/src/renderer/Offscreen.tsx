@@ -48,5 +48,6 @@ export const drawAsImageFromPicture = (
   canvas.drawPicture(picture);
   surface.flush();
   const image = surface.makeImageSnapshot();
+  surface.dispose();
   return image.makeRasterImage();
 };

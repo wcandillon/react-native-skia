@@ -34,7 +34,9 @@ const renderPicture = (picture: SkPicture, size: SkSize) => {
   const canvas = surface.getCanvas();
   canvas.drawPicture(picture);
   surface.flush();
-  return surface.makeImageSnapshot();
+  const image = surface.makeImageSnapshot();
+  surface.dispose();
+  return image;
 };
 
 const createTexture = (
