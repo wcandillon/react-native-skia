@@ -72,7 +72,10 @@ export class JsiSkSurface
         ? Array.from(JsiSkRect.fromValue(this.CanvasKit, bounds))
         : undefined
     );
-    if (outputImage) {
+    // Typed as non-nullable, but null when Skia cannot make the snapshot
+    // (e.g. bounds outside of the surface): outputImage then keeps its
+    // previous content.
+    if (outputImage && image) {
       outputImage.ref = image;
     }
     return new JsiSkImage(this.CanvasKit, image);

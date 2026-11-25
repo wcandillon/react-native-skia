@@ -457,7 +457,8 @@ public:
    generation()) is dropped: nothing can run it, and the device in use would
    refuse its resources. Called on the recorder's thread. Returns whether
    the recording runs: false when there was nothing to run, when it was
-   dropped, or when Graphite rejected it (which is logged).
+   dropped, or when Graphite could not snap, insert or submit it (which is
+   logged).
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
@@ -469,13 +470,15 @@ public:
     // the warmup stays behind (see RNSkGpuActivity), as is the run.
     RNSkGpuActivity::Scope activity;
     auto recording = recorder->snap();
-    if (recording == nullptr) {
-      return false;
-    }
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
     if (generationOf(recorder) != current->id ||
         current->lost.load(std::memory_order_acquire)) {
+      return false;
+    }
+    // After the check above: a snap failing for a lost device is a drop.
+    if (recording == nullptr) {
+      RNSkLogger::logToConsole("Graphite could not snap a recording");
       return false;
     }
     skgpu::graphite::InsertRecordingInfo info;
@@ -490,8 +493,13 @@ public:
               static_cast<skgpu::graphite::InsertStatus::V>(status)),
           status.message().c_str());
     }
-    current->context->submit(syncToCpu);
-    return inserted;
+    // Submitted either way, for the work other recordings inserted.
+    const bool submitted = current->context->submit(syncToCpu);
+    // Unless the device was lost meanwhile: its work is dropped, as above.
+    if (!submitted && !current->lost.load(std::memory_order_acquire)) {
+      RNSkLogger::logToConsole("Graphite could not submit a recording");
+    }
+    return inserted && submitted;
   }
 
   /**
