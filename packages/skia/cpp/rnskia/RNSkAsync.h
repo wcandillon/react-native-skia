@@ -67,6 +67,10 @@ public:
                 [promise, settle = std::move(settle)](jsi::Runtime &runtime) {
                   try {
                     settle(runtime, *promise);
+                  } catch (const RNJsi::NamedError &error) {
+                    // A SkiaDecodeError, an AbortError...: the error of
+                    // its name.
+                    promise->reject(error);
                   } catch (const jsi::JSError &error) {
                     // The JS error itself (a RangeError for a typed array
                     // too large, say), name and stack kept.

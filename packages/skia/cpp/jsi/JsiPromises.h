@@ -7,6 +7,7 @@
 #include <jsi/jsi.h>
 
 #include "api/third_party/base64.h"
+#include "jsi/NamedError.h"
 
 namespace RNJsi {
 namespace jsi = facebook::jsi;
@@ -37,6 +38,8 @@ public:
     void reject(const std::string &error);
     /** Rejects with the JS error `error` carries, as thrown. */
     void reject(const jsi::JSError &error);
+    /** Rejects with the JS error of the name `error` carries. */
+    void reject(const NamedError &error);
 
     jsi::Runtime &runtime_;
     jsi::Function resolve_;

@@ -1,12 +1,16 @@
 import type { CanvasKit, EmbindEnumEntity } from "canvaskit-wasm";
 
 import type { SkJSIInstance } from "../types";
+import { SkiaError } from "../types/Errors";
 
 export const throwNotImplementedOnRNWeb = <T>(): T => {
   if (typeof jest !== "undefined") {
     return jest.fn() as unknown as T;
   }
-  throw new Error("Not implemented on React Native Web");
+  throw new SkiaError(
+    "Not implemented on React Native Web",
+    "NotSupportedError"
+  );
 };
 
 export abstract class Host {
