@@ -179,12 +179,17 @@ export interface Skia {
   Skottie: SkottieFactory;
   Recorder(): JsiRecorder;
   /**
-   * Hands the GPU memory nothing uses back to the system. Skia keeps the
-   * memory of disposed surfaces and images for reuse otherwise: call it after
-   * disposing of many of them, at the end of an export for instance, not
-   * every frame. What is alive is not affected. Returns right away; the
-   * memory is freed in the background, or once the app is active again on
-   * iOS. A no-op on the Web.
+   * Returns the GPU memory nothing uses to the system. Most apps should never
+   * call it: Skia reuses the memory of what you dispose of, and purges on its
+   * own when the system is short of memory.
+   *
+   * It is meant for a one-off peak (a video export) followed by a long
+   * stretch that needs far less GPU memory. Not for a render loop, not after
+   * each `dispose()`, not on unmount: memory Skia would have reused has to be
+   * requested from the system again. What is alive is not affected.
+   *
+   * Returns right away; the memory is freed in the background, or once the
+   * app is active again on iOS. A no-op on the Web.
    */
   purgeGpuResources(): void;
   /**

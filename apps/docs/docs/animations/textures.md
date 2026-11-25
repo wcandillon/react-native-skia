@@ -205,6 +205,28 @@ A surface must only be used by one thread at a time.
 
 Skia frees what the cache has not used for a few seconds as you draw into the surface. The rest goes with the surface: call `dispose()` once you are done with it. Keep a snapshot (`makeImageSnapshot()`) if you still need its content.
 
-Disposed surfaces leave their memory to Skia, for the next ones. `Skia.purgeGpuResources()` hands what nothing uses back to the system, in the background: call it after disposing of many surfaces, at the end of an export for instance, not every frame.
+Disposed surfaces leave their memory to Skia, for the next ones.
+
+### Purging GPU memory
+
+**Most apps should never call `Skia.purgeGpuResources()`.** Dispose of the surfaces and images you are done with, and Skia reuses their memory. When the system runs short of memory, React Native Skia purges on its own: on an iOS memory warning, and on Android on `onLowMemory()` and on `onTrimMemory()` from `TRIM_MEMORY_BACKGROUND`.
+
+The one case for calling it is a one-off peak followed by a long stretch that needs far less GPU memory, while the app stays in the foreground. For example, a video export just finished and the app is back to a light screen:
+
+```tsx
+// The export is over, and no other one follows
+exportSurfaces.forEach((surface) => surface.dispose());
+Skia.purgeGpuResources();
+```
+
+Do not call it:
+
+- in a render loop, or after each `dispose()`;
+- when a component unmounts or on navigation: the next screen usually wants that memory back;
+- to fix a leak or an out-of-memory error: it only returns memory that nothing uses, so a surface you have not disposed of stays.
+
+Purging too often makes an app slower: memory that Skia would have reused has to be requested from the system again.
+
+It returns right away and works in the background (on iOS, once the app is active). On the Web it does nothing: the browser manages GPU memory there. In a native app, Skia's GPU memory counts towards your app's, and the system can end the app for using too much of it.
 
 Textures can also be shared with WebGPU: see [WebGPU](/docs/webgpu).
