@@ -172,7 +172,8 @@ export interface SkImage extends SkJSIInstance<"Image"> {
    * drawn;
    * an encoded image is decoded first. Returns the image itself when it
    * already is a GPU image. Throws a `SkiaOutOfMemoryError` if the upload
-   * fails.
+   * fails. While the GPU device is lost, returns the image as it is, which a
+   * canvas uploads when it draws it.
    *
    * Native only: on the Web, a texture belongs to the canvas that created
    * it, so the image is returned as is.

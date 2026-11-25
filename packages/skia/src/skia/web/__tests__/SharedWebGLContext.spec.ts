@@ -78,7 +78,10 @@ describe("SharedWebGLContext", () => {
     ctx.lose();
     // Gone already, even before the loss is announced.
     expect(() => kept.getCanvas()).toThrow(/context .* was lost/);
-    expect(Surface.MakeOffscreen(64, 64)).toBeNull();
+    // A surface is made all the same, on the CPU, like the objects of a
+    // lost GPU device on native.
+    expect(Surface.MakeOffscreen(64, 64)).toBeTruthy();
+    expect(CanvasKitMock.MakeSurface).toHaveBeenCalledWith(64, 64);
     await flushMicrotasks();
     expect(ctx.restoreAllowed).toBe(true);
     expect(grContext.releaseResourcesAndAbandonContext).toHaveBeenCalledTimes(

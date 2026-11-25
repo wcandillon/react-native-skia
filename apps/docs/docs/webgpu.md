@@ -69,7 +69,7 @@ It can be read synchronously on every runtime, a worklet included, and it flips 
 import { Skia } from "react-native-skia";
 import { useFrameCallback } from "react-native-reanimated";
 
-const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+const surface = Skia.Surface.MakeOffscreen(256, 256);
 
 useFrameCallback(() => {
   "worklet";
@@ -90,7 +90,8 @@ On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on th
 
 The device can be lost while the app runs: a driver reset, or the GPU out of memory.
 React Native Skia then replaces it with a new device, and canvases render again on their own.
-Everything made on the lost device is gone for good, though safe to use (it draws nothing): offscreen surfaces and the images taken from them, texture images, snapshots of views, and the device `Skia.getNativeDevice()` returned.
+Everything made on the lost device is gone for good, though safe to use (it draws nothing, and reading its pixels back rejects with an `AbortError`): offscreen surfaces and the images taken from them, texture images, snapshots of views, and the device `Skia.getNativeDevice()` returned.
+As with a lost WebGPU device, the GPU factories do not throw while the device is lost: `Skia.Surface.MakeOffscreen()`, `Skia.Image.MakeFromGPUTexture()` or a view snapshot made meanwhile are dead the same way, and `image.makeTextureImage()` returns the image as it is.
 
 `Skia.gpu.lost` is the promise of the loss of the device in use, like WebGPU's `GPUDevice.lost`.
 It resolves once React Native Skia has replaced the device; `Skia.gpu` then describes the new device, with a `lost` promise of its own for the next loss.
@@ -116,7 +117,7 @@ const Demo = () => {
   const gpu = useGpu();
   // Made again on the new device after a loss.
   const image = useMemo(() => {
-    const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+    const surface = Skia.Surface.MakeOffscreen(256, 256);
     surface.getCanvas().drawColor(Skia.Color("cyan"));
     surface.flush();
     return surface.makeImageSnapshot();

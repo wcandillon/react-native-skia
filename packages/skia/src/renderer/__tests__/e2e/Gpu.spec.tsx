@@ -71,31 +71,55 @@ describe("GPU info", () => {
       (Skia, ctx) => {
         const before = Skia.gpu;
         // Made on the device about to be lost: dead afterwards, but safe.
-        const stale = Skia.Surface.MakeOffscreen(16, 16)!;
+        const stale = Skia.Surface.MakeOffscreen(16, 16);
         stale.getCanvas().drawColor(Skia.Color("red"));
         stale.flush();
         const { lost } = before;
         const sameLostPromise = Skia.gpu.lost === lost;
         ctx.forceGpuDeviceLoss();
+        // Like a WebGPU device's factories, the GPU factories do not throw
+        // around a loss: what they make while the device is lost draws
+        // nothing, and its readbacks reject with an AbortError.
+        let threwAroundLoss: string | null = null;
+        let duringLoss: ReturnType<typeof Skia.Surface.MakeOffscreen> | null =
+          null;
+        try {
+          duringLoss = Skia.Surface.MakeOffscreen(16, 16);
+          duringLoss.getCanvas().drawColor(Skia.Color("red"));
+          duringLoss.flush();
+        } catch (e) {
+          threwAroundLoss = (e as Error).name;
+        }
+        const settled = (promise: Promise<unknown>) =>
+          promise.then(
+            () => "resolved",
+            (e: Error) => e.name
+          );
         return lost.then((info) => {
           const after = Skia.gpu;
           // Using what the lost device made: no crash, nothing drawn.
           stale.getCanvas().drawColor(Skia.Color("cyan"));
           stale.flush();
           const staleSnapshot = stale.makeImageSnapshot();
+          const duringLossSnapshot = duringLoss
+            ? duringLoss.makeImageSnapshot()
+            : null;
           // The new device renders.
-          const fresh = Skia.Surface.MakeOffscreen(16, 16)!;
+          const fresh = Skia.Surface.MakeOffscreen(16, 16);
           fresh.getCanvas().drawColor(Skia.Color("cyan"));
           fresh.flush();
           return Promise.all([
-            staleSnapshot ? staleSnapshot.readPixels() : null,
+            settled(staleSnapshot.readPixels()),
+            duringLossSnapshot
+              ? settled(duringLossSnapshot.readPixels())
+              : "resolved",
             fresh.makeImageSnapshot().readPixels(8, 8, {
               width: 1,
               height: 1,
               colorType: ctx.colorType,
               alphaType: ctx.alphaType,
             }),
-          ]).then(([stalePixels, pixel]) => ({
+          ]).then(([staleRead, duringLossRead, pixel]) => ({
             sameLostPromise,
             reason: info.reason,
             message: info.message,
@@ -103,8 +127,10 @@ describe("GPU info", () => {
             isAvailable: after.isAvailable,
             error: after.error,
             newLostPromise: after.lost !== lost,
-            stalePixels: stalePixels === null ? null : Array.from(stalePixels),
-            pixel: pixel === null ? null : Array.from(pixel),
+            staleRead,
+            duringLossRead,
+            threwAroundLoss,
+            pixel: Array.from(pixel),
           }));
         });
       },
@@ -124,13 +150,12 @@ describe("GPU info", () => {
     expect(result.isAvailable).toBe(true);
     expect(result.error).toBeNull();
     expect(result.newLostPromise).toBe(true);
-    // The lost device's surface draws nothing: no pixels, or not cyan.
-    if (result.stalePixels !== null) {
-      expect(nameColor(Uint8Array.from(result.stalePixels))).not.toBe("cyan");
-    }
-    expect(nameColor(result.pixel && Uint8Array.from(result.pixel))).toBe(
-      "cyan"
-    );
+    // Nothing can be read back from what the lost device made.
+    expect(result.staleRead).toBe("AbortError");
+    expect(result.threwAroundLoss).toBeNull();
+    // Made before the loss was reported, or dead: either way, no throw.
+    expect(["resolved", "AbortError"]).toContain(result.duringLossRead);
+    expect(nameColor(Uint8Array.from(result.pixel))).toBe("cyan");
     // Views render on the new device too: the canvas records its content
     // again, and its window is configured on the device.
     const image = await surface.draw(<Fill color="cyan" />);

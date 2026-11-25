@@ -73,7 +73,11 @@ export interface ImageFactory {
    * Native only.
    *
    * @param texture - The GPUTexture (see {@link GPUTextureHandle})
-   * @returns An SkImage sampling the texture, or throws if the texture is invalid
+   * Throws a `SkiaValidationError` for a texture without the
+   * TEXTURE_BINDING usage, or that is not of the shared device. While the
+   * GPU device is lost, it returns an image that draws nothing.
+   *
+   * @returns An SkImage sampling the texture
    */
   MakeFromGPUTexture(texture: GPUTextureHandle): SkImage;
 
@@ -86,7 +90,10 @@ export interface ImageFactory {
    * Native only.
    *
    * @param image - The SkImage to draw into the texture
-   * @returns A WGPUTexture pointer for adoptTexture(), or throws on failure
+   * Throws a `SkiaOutOfMemoryError` when there is no GPU memory for the
+   * texture.
+   *
+   * @returns A WGPUTexture pointer for adoptTexture()
    */
   MakeGPUTextureFromImage(image: SkImage): bigint;
 }

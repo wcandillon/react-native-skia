@@ -5,6 +5,7 @@
 
 #include <jsi/jsi.h>
 
+#include "SkiaErrors.h"
 #include "webgpu/webgpu_cpp.h"
 
 namespace RNSkia {
@@ -27,19 +28,19 @@ inline wgpu::Texture gpuTextureFromValue(jsi::Runtime &runtime,
     auto pointer =
         value.asObject(runtime).getProperty(runtime, "nativePointer");
     if (!pointer.isBigInt()) {
-      throw std::runtime_error(
+      throw SkiaErrors::typeError(
           std::string(method) +
           " expects a GPUTexture created with react-native-webgpu on the "
           "shared device (or a WGPUTexture pointer as a BigInt)");
     }
     raw = pointer.asBigInt(runtime).asUint64(runtime);
   } else {
-    throw std::runtime_error(std::string(method) +
-                             " expects a GPUTexture or a WGPUTexture pointer");
+    throw SkiaErrors::typeError(
+        std::string(method) + " expects a GPUTexture or a WGPUTexture pointer");
   }
   auto texture = reinterpret_cast<WGPUTexture>(raw);
   if (texture == nullptr) {
-    throw std::runtime_error(std::string(method) + ": the texture is null");
+    throw SkiaErrors::typeError(std::string(method) + ": the texture is null");
   }
   wgpuTextureAddRef(texture);
   return wgpu::Texture::Acquire(texture);
