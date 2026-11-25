@@ -459,7 +459,7 @@ public:
    refuse its resources. Called on the recorder's thread. Returns whether
    the recording runs: false when there was nothing to run, when it was
    dropped, or when Graphite could not snap, insert or submit it (which is
-   logged).
+   reported, see RNSkUncapturedErrors).
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
@@ -479,7 +479,8 @@ public:
     }
     // After the check above: a snap failing for a lost device is a drop.
     if (recording == nullptr) {
-      RNSkLogger::logToConsole("Graphite could not snap a recording");
+      RNSkUncapturedErrors::report(
+          "SkiaInternalError", "Graphite could not snap a recording", "submit");
       return false;
     }
     skgpu::graphite::InsertRecordingInfo info;
@@ -500,7 +501,9 @@ public:
     const bool submitted = current->context->submit(syncToCpu);
     // Unless the device was lost meanwhile: its work is dropped, as above.
     if (!submitted && !current->lost.load(std::memory_order_acquire)) {
-      RNSkLogger::logToConsole("Graphite could not submit a recording");
+      RNSkUncapturedErrors::report("SkiaInternalError",
+                                   "Graphite could not submit a recording",
+                                   "submit");
     }
     return inserted && submitted;
   }
