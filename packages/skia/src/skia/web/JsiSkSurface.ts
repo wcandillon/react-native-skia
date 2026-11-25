@@ -42,6 +42,13 @@ export class JsiSkSurface
     this.ref.flush();
   }
 
+  flushAsync() {
+    this.assertAlive();
+    // CanvasKit reports no completion: the draws are with the browser.
+    this.ref.flush();
+    return Promise.resolve();
+  }
+
   width() {
     return this.ref.width();
   }

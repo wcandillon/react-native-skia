@@ -83,11 +83,17 @@ describe("GPU info", () => {
           stale.getCanvas().drawColor(Skia.Color("cyan"));
           stale.flush();
           const staleSnapshot = stale.makeImageSnapshot();
+          // Awaiting them says so: the draws are lost.
+          stale.getCanvas().drawColor(Skia.Color("cyan"));
+          const staleFlush = stale.flushAsync().then(
+            () => null,
+            (e: Error) => e.message
+          );
           // The new device renders.
           const fresh = Skia.Surface.MakeOffscreen(16, 16)!;
           fresh.getCanvas().drawColor(Skia.Color("cyan"));
-          fresh.flush();
           return Promise.all([
+            fresh.flushAsync().then(() => staleFlush),
             staleSnapshot ? staleSnapshot.readPixels() : null,
             fresh.makeImageSnapshot().readPixels(8, 8, {
               width: 1,
@@ -95,7 +101,8 @@ describe("GPU info", () => {
               colorType: ctx.colorType,
               alphaType: ctx.alphaType,
             }),
-          ]).then(([stalePixels, pixel]) => ({
+          ]).then(([staleFlushError, stalePixels, pixel]) => ({
+            staleFlushError,
             sameLostPromise,
             reason: info.reason,
             message: info.message,
@@ -124,6 +131,7 @@ describe("GPU info", () => {
     expect(result.isAvailable).toBe(true);
     expect(result.error).toBeNull();
     expect(result.newLostPromise).toBe(true);
+    expect(result.staleFlushError).toContain("the GPU device was lost");
     // The lost device's surface draws nothing: no pixels, or not cyan.
     if (result.stalePixels !== null) {
       expect(nameColor(Uint8Array.from(result.stalePixels))).not.toBe("cyan");
