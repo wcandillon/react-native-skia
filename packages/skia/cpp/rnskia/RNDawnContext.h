@@ -484,13 +484,12 @@ public:
 
   /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
-   thread's (see getRecorder), also behind the surfaces made on it; any
-   other submits nothing. A recording made for a lost device (see
-   generation()) is dropped: nothing can run it, and the device in use would
-   refuse its resources. Called on the recorder's thread. Returns whether
-   the recording runs: false when there was nothing to run, when it was
-   dropped, or when Graphite could not snap, insert or submit it (which is
-   logged).
+   thread's (see getRecorder); any other submits nothing. A recording made
+   for a lost device (see generation()) is dropped: nothing can run it, and
+   the device in use would refuse its resources. Called on the recorder's
+   thread. Returns whether the recording runs: false when there was nothing
+   to run, when it was dropped, or when Graphite could not snap, insert or
+   submit it (which is logged).
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
