@@ -922,9 +922,7 @@ public:
       current->context->checkAsyncWorkCompletion();
       // Both may have waited for a device.destroy() from JS (the device is
       // shared with react-native-webgpu) to finish. One that starts after
-      // this is caught by Dawn, in binaries built with
-      // dawn-patches/reduce-memory-usage-lost-device.patch
-      // (react-native-webgpu-dawn 158.0.0 is not).
+      // this is caught by Dawn's ReduceMemoryUsage().
       if (current->lost.load(std::memory_order_acquire)) {
         return false;
       }
