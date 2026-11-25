@@ -63,7 +63,7 @@ const svg = Skia.SVG.MakeFromString(
   `<svg viewBox='0 0 290 500' xmlns='http://www.w3.org/2000/svg'>
     <circle cx='31' cy='325' r='120px' fill='#c02aaa'/>
   </svg>`
-)!;
+);
 
 export const SVG = () => {
   return (
@@ -106,7 +106,7 @@ const SVGWithCustomFonts = () => {
       <text x='10' y='50' font-family='Roboto' font-size='24'>Custom Font</text>
     </svg>`,
     fontMgr
-  )!;
+  );
 
   return (
     <Canvas style={{ flex: 1 }}>
@@ -198,7 +198,7 @@ const svg = Skia.SVG.MakeFromString(
   `<svg viewBox='0 0 20 20' width="20" height="20" xmlns='http://www.w3.org/2000/svg'>
     <circle cx='10' cy='10' r='10' fill='#00ffff'/>
   </svg>`
-)!;
+);
 
 const width = 256;
 const height = 256;

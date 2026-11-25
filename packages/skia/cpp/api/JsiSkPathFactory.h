@@ -18,6 +18,7 @@
 #include "JsiSkPoint.h"
 #include "JsiSkRRect.h"
 #include "JsiSkRect.h"
+#include "SkiaErrors.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -59,10 +60,14 @@ public:
   std::shared_ptr<JsiSkPath> MakeFromSVGString(std::string svgString) {
     auto result = SkParsePath::FromSVGString(svgString.c_str());
     if (!result.has_value()) {
-      throw std::runtime_error("Could not parse Svg path");
+      throw SkiaErrors::decode("MakeFromSVGString: invalid SVG path string \"" +
+                                   (svgString.size() > 64
+                                        ? svgString.substr(0, 64) + "..."
+                                        : svgString) +
+                                   "\"",
+                               "path");
     }
-    return std::make_shared<JsiSkPath>(getContext(),
-                                       std::move(result.value()));
+    return std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
   }
 
   NullablePath MakeFromOp(std::shared_ptr<SkPathBuilder> pathOne,
@@ -73,56 +78,54 @@ public:
     if (!result.has_value()) {
       return nullptr;
     }
-    return std::make_shared<JsiSkPath>(getContext(),
-                                       std::move(result.value()));
+    return std::make_shared<JsiSkPath>(getContext(), std::move(result.value()));
   }
 
-  NullablePath MakeFromCmds(std::vector<std::vector<double>> cmds) {
+  // A command list as PathCommand[] spells it: a verb, then its numbers.
+  // A command that does not fit is a TypeError naming it.
+  std::shared_ptr<JsiSkPath>
+  MakeFromCmds(std::vector<std::vector<double>> cmds) {
     SkPathBuilder builder;
-    for (const auto &cmd : cmds) {
+    for (size_t i = 0; i < cmds.size(); i++) {
+      const auto &cmd = cmds[i];
+      auto invalid = [i](const std::string &reason) {
+        return SkiaErrors::typeError("MakeFromCmds: command " +
+                                     std::to_string(i) + " " + reason);
+      };
       if (cmd.size() < 1) {
-        RNSkLogger::logToConsole("Invalid command found (got an empty array)");
-        return nullptr;
+        throw invalid("is an empty array");
       }
       auto verb = static_cast<int>(cmd[0]);
+      auto expect = [&](size_t size, const char *name) {
+        if (cmd.size() < size) {
+          throw invalid(std::string("(") + name + ") needs " +
+                        std::to_string(size - 1) + " numbers, got " +
+                        std::to_string(cmd.size() - 1));
+        }
+      };
       switch (verb) {
       case MOVE: {
-        if (cmd.size() < 3) {
-          RNSkLogger::logToConsole("Invalid move command found");
-          return nullptr;
-        }
+        expect(3, "move");
         builder.moveTo(cmd[1], cmd[2]);
         break;
       }
       case LINE: {
-        if (cmd.size() < 3) {
-          RNSkLogger::logToConsole("Invalid line command found");
-          return nullptr;
-        }
+        expect(3, "line");
         builder.lineTo(cmd[1], cmd[2]);
         break;
       }
       case QUAD: {
-        if (cmd.size() < 5) {
-          RNSkLogger::logToConsole("Invalid line command found");
-          return nullptr;
-        }
+        expect(5, "quad");
         builder.quadTo(cmd[1], cmd[2], cmd[3], cmd[4]);
         break;
       }
       case CONIC: {
-        if (cmd.size() < 6) {
-          RNSkLogger::logToConsole("Invalid line command found");
-          return nullptr;
-        }
+        expect(6, "conic");
         builder.conicTo(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
         break;
       }
       case CUBIC: {
-        if (cmd.size() < 7) {
-          RNSkLogger::logToConsole("Invalid line command found");
-          return nullptr;
-        }
+        expect(7, "cubic");
         builder.cubicTo(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5], cmd[6]);
         break;
       }
@@ -131,8 +134,7 @@ public:
         break;
       }
       default: {
-        RNSkLogger::logToConsole("Found an unknown command");
-        return nullptr;
+        throw invalid("has an unknown verb " + std::to_string(verb));
       }
       }
     }
@@ -158,9 +160,8 @@ public:
                                   JsiOptional<double> startIndex) {
     SkPathBuilder builder;
     builder.addOval(rect, toDirection(isCCW),
-                    startIndex.has_value()
-                        ? static_cast<unsigned>(*startIndex)
-                        : 0);
+                    startIndex.has_value() ? static_cast<unsigned>(*startIndex)
+                                           : 0);
     return std::make_shared<JsiSkPath>(getContext(), builder.snapshot());
   }
 

@@ -7,6 +7,7 @@
 
 #include "JsiSkNativeObjects.h"
 #include "JsiSkSkottie.h"
+#include "SkiaErrors.h"
 
 namespace RNSkia {
 
@@ -49,7 +50,9 @@ public:
     auto managedAnimation = std::make_shared<ManagedAnimation>(
         json, std::move(assets), std::move(fontMgr));
     if (!managedAnimation->_animation) {
-      return jsi::Value::null();
+      throw SkiaErrors::decode(
+          "Skottie.Make: the JSON is not a Lottie animation Skottie can read",
+          "skottie");
     }
     return makeJsiObject(
         runtime, std::make_shared<JsiSkSkottie>(getContext(),

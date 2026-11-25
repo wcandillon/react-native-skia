@@ -7,6 +7,7 @@ import type {
   ImageFactory,
   GPUTextureHandle,
 } from "../types";
+import { SkiaDecodeError, SkiaValidationError } from "../types/Errors";
 
 import { Host, getEnum, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkImage } from "./JsiSkImage";
@@ -71,7 +72,10 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
       JsiSkData.fromValue(encoded)
     );
     if (image === null) {
-      return null;
+      throw new SkiaDecodeError(
+        "Image.MakeFromEncoded: the data is not an image format Skia can decode",
+        "image"
+      );
     }
     return new JsiSkImage(this.CanvasKit, image);
   }
@@ -90,7 +94,9 @@ export class JsiSkImageFactory extends Host implements ImageFactory {
       bytesPerRow
     );
     if (image === null) {
-      return null;
+      throw new SkiaValidationError(
+        "Image.MakeRaster: the image info is invalid, or bytesPerRow is less than a row of pixels, or the data is shorter than bytesPerRow * height"
+      );
     }
     return new JsiSkImage(this.CanvasKit, image);
   }

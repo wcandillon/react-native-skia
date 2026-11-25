@@ -12,6 +12,7 @@
 #include "JsiSkImage.h"
 #include "JsiSkImageInfo.h"
 #include "JsiSkNativeObjects.h"
+#include "SkiaErrors.h"
 
 #include "rnskia/RNDawnContext.h"
 
@@ -27,11 +28,12 @@ public:
     return std::make_shared<JsiSkImage>(getContext(), nullptr);
   }
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
-  MakeFromEncoded(sk_sp<SkData> data) {
+  std::shared_ptr<JsiSkImage> MakeFromEncoded(sk_sp<SkData> data) {
     auto image = SkImages::DeferredFromEncodedData(data);
     if (image == nullptr) {
-      return nullptr;
+      throw SkiaErrors::decode("Image.MakeFromEncoded: the data is not an "
+                               "image format Skia can decode",
+                               "image");
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }
@@ -42,7 +44,7 @@ public:
   // only exists on Web, where it draws a CanvasImageSource; on native it
   // points callers at the texture path.
   JSI_HOST_FUNCTION(MakeFromNativeBuffer) {
-    throw std::runtime_error(
+    throw SkiaErrors::notSupported(
         "MakeFromNativeBuffer is only available on Web. On native "
         "platforms, copy the frame into a texture with react-native-webgpu's "
         "queue.copyExternalImageToTexture() and wrap the texture with "
@@ -50,12 +52,15 @@ public:
   }
 
   // A raster (CPU) image holding a copy of the pixels.
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkImage>>
-  MakeRaster(std::shared_ptr<SkImageInfo> imageInfo, sk_sp<SkData> pixelData,
-             double bytesPerRow) {
+  std::shared_ptr<JsiSkImage> MakeRaster(std::shared_ptr<SkImageInfo> imageInfo,
+                                         sk_sp<SkData> pixelData,
+                                         double bytesPerRow) {
     auto image = SkImages::RasterFromData(*imageInfo, pixelData, bytesPerRow);
     if (image == nullptr) {
-      return nullptr;
+      throw SkiaErrors::validation(
+          "Image.MakeRaster: the image info is invalid, or bytesPerRow is "
+          "less than a row of pixels, or the data is shorter than "
+          "bytesPerRow * height");
     }
     return std::make_shared<JsiSkImage>(getContext(), std::move(image));
   }

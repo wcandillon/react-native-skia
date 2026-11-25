@@ -23,11 +23,9 @@ vec4 main(vec2 pos) {
   vec2 normalized = pos/canvas;
   return vec4(normalized.x, normalized.y, 0.5, 1);
 }`);
-
-if (!source) {
-  throw new Error("Couldn't compile the shader")
-}
 ```
+
+`RuntimeEffect.Make` throws an `SkSLCompilationError` when the shader does not compile: its `messages` give the line and position of each error (see [Errors](/docs/errors)).
 
 ## Shader
 
@@ -50,7 +48,7 @@ vec4 main(vec2 pos) {
   // normalized x,y values go from 0 to 1, the canvas is 256x256
   vec2 normalized = pos/vec2(256);
   return vec4(normalized.x, normalized.y, 0.5, 1);
-}`)!;
+}`);
 
 const SimpleShader = () => {
   return (
@@ -82,7 +80,7 @@ uniform float blue;
 vec4 main(vec2 pos) {
   vec2 normalized = pos/vec2(2 * r);
   return distance(pos, c) > r ? vec4(1) : vec4(normalized, blue, 1);
-}`)!;
+}`);
 
 const UniformShader = () => {
   const r = 128;
@@ -111,7 +109,7 @@ uniform shader image;
 half4 main(float2 xy) {   
   xy.x += sin(xy.y / 3) * 4;
   return image.eval(xy).rbga;
-}`)!;
+}`);
 
 const NestedShader = () => {
   const image = useImage(require("./assets/oslo.jpg"));

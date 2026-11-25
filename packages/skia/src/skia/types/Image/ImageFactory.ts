@@ -26,13 +26,11 @@ export interface ImageFactory {
    * Return an Image backed by the encoded data, but attempt to defer decoding until the image
    * is actually used/drawn. This deferral allows the system to cache the result, either on the
    * CPU or on the GPU, depending on where the image is drawn.
-   * This decoding uses the codecs that have been compiled into CanvasKit. If the bytes are
-   * invalid (or an unrecognized codec), null will be returned. See Image.h for more details.
+   * Throws a `SkiaDecodeError` when the bytes are not an image format Skia
+   * can decode.
    * @param data - Data object with bytes of data
-   * @returns If the encoded format is not supported, or subset is outside of the bounds of the decoded
-   *  image, nullptr is returned.
    */
-  MakeFromEncoded: (encoded: SkData) => SkImage | null;
+  MakeFromEncoded: (encoded: SkData) => SkImage;
 
   /**
    * Web only. Creates an image from a `CanvasImageSource`: an
@@ -54,15 +52,14 @@ export interface ImageFactory {
    * it, once, shared by every canvas; call `makeTextureImage()` on it to
    * upload it beforehand.
    *
+   * Throws a `SkiaValidationError` when the image info is invalid, or the
+   * data does not hold `bytesPerRow * height` bytes.
+   *
    * @param info
    * @param data - bytes representing the pixel data.
    * @param bytesPerRow
    */
-  MakeRaster(
-    info: ImageInfo,
-    data: SkData,
-    bytesPerRow: number
-  ): SkImage | null;
+  MakeRaster(info: ImageInfo, data: SkData, bytesPerRow: number): SkImage;
 
   /**
    * Creates an SkImage from a WebGPU texture, without copying it.

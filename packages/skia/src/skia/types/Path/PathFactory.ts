@@ -8,15 +8,15 @@ import type { SkPath, PathOp, PathCommand, StrokeOpts } from "./Path";
 export interface PathFactory {
   Make(): SkPath;
   /**
-   * Creates a new path from the provided SVG string. If this fails, null will be
-   * returned instead.
+   * Creates a new path from the provided SVG path string. Throws a
+   * `SkiaDecodeError` when the string is not a valid SVG path.
    * @param str
    */
-  MakeFromSVGString(str: string): SkPath | null;
+  MakeFromSVGString(str: string): SkPath;
 
   /**
-   * Creates a new path by combining the given paths according to op. If this fails, null will
-   * be returned instead.
+   * Creates a new path by combining the given paths according to op, or
+   * null when the operation has no result.
    * @param one
    * @param two
    * @param op
@@ -24,11 +24,11 @@ export interface PathFactory {
   MakeFromOp(one: SkPath, two: SkPath, op: PathOp): SkPath | null;
 
   /**
-   * Creates a new path from the given list of path commands. If this fails, null will be
-   * returned instead.
+   * Creates a new path from the given list of path commands. Throws a
+   * `TypeError`, naming the command, when a command is malformed.
    * @param cmds
    */
-  MakeFromCmds(cmds: PathCommand[]): SkPath | null;
+  MakeFromCmds(cmds: PathCommand[]): SkPath;
 
   /**
    * Converts the text to a path with the given font at location x / y.
@@ -87,7 +87,7 @@ export interface PathFactory {
    * Creates a new stroked path from the input path.
    * @param path - source path to stroke
    * @param opts - stroke options (width, cap, join, miter_limit, precision)
-   * @returns stroked path or null if operation fails
+   * @returns stroked path or null when the operation has no result
    */
   Stroke(path: SkPath, opts?: StrokeOpts): SkPath | null;
 
@@ -97,7 +97,7 @@ export interface PathFactory {
    * @param start - start of trim (0-1)
    * @param end - end of trim (0-1)
    * @param isComplement - if true, returns the complement
-   * @returns trimmed path or null if operation fails
+   * @returns trimmed path or null when the operation has no result
    */
   Trim(
     path: SkPath,
@@ -109,7 +109,7 @@ export interface PathFactory {
   /**
    * Simplifies the path to non-overlapping contours.
    * @param path - source path
-   * @returns simplified path or null if operation fails
+   * @returns simplified path or null when the operation has no result
    */
   Simplify(path: SkPath): SkPath | null;
 
@@ -119,14 +119,14 @@ export interface PathFactory {
    * @param on - length of dash
    * @param off - length of gap
    * @param phase - offset into dash pattern
-   * @returns dashed path or null if operation fails
+   * @returns dashed path or null when the operation has no result
    */
   Dash(path: SkPath, on: number, off: number, phase: number): SkPath | null;
 
   /**
    * Creates a path with Winding fill type.
    * @param path - source path
-   * @returns path with winding fill or null if operation fails
+   * @returns path with winding fill or null when the operation has no result
    */
   AsWinding(path: SkPath): SkPath | null;
 

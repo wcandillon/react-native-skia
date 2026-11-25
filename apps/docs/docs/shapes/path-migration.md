@@ -142,7 +142,7 @@ const path = Skia.PathBuilder.Make()
 To combine an existing path with new elements:
 
 ```tsx
-const basePath = Skia.Path.MakeFromSVGString("M10 10 L90 90")!;
+const basePath = Skia.Path.MakeFromSVGString("M10 10 L90 90");
 const combined = Skia.PathBuilder.MakeFromPath(basePath)
   .lineTo(90, 10)
   .close()

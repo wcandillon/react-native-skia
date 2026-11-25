@@ -8,6 +8,7 @@
 
 #include "JsiSkNativeObjects.h"
 #include "JsiSkRuntimeEffect.h"
+#include "SkiaErrors.h"
 
 namespace RNSkia {
 
@@ -23,8 +24,7 @@ public:
     auto effect = result.effect;
     auto errorText = result.errorText;
     if (!effect) {
-      throw std::runtime_error("Error in sksl:\n" +
-                               std::string(errorText.c_str()));
+      throw SkiaErrors::compilation(std::string(errorText.c_str()));
     }
     return std::make_shared<JsiSkRuntimeEffect>(getContext(),
                                                 std::move(effect));

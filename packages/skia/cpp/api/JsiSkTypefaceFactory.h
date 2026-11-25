@@ -11,6 +11,7 @@
 #include "JsiSkFontMgrFactory.h"
 #include "JsiSkNativeObjects.h"
 #include "JsiSkTypeface.h"
+#include "SkiaErrors.h"
 
 namespace RNSkia {
 
@@ -20,12 +21,13 @@ class JsiSkTypefaceFactory : public JsiSkNativeObject<JsiSkTypefaceFactory> {
 public:
   static constexpr const char *CLASS_NAME = "TypefaceFactory";
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkTypeface>>
-  MakeFromData(sk_sp<SkData> data) {
+  std::shared_ptr<JsiSkTypeface> MakeFromData(sk_sp<SkData> data) {
     auto fontMgr = JsiSkFontMgrFactory::getFontMgr(getContext());
     auto typeface = fontMgr->makeFromData(std::move(data));
     if (typeface == nullptr) {
-      return nullptr;
+      throw SkiaErrors::decode(
+          "Typeface.MakeFromData: the data is not a font Skia can read",
+          "typeface");
     }
     return std::make_shared<JsiSkTypeface>(getContext(), std::move(typeface));
   }

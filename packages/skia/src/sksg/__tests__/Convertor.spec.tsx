@@ -200,7 +200,11 @@ describe("Record-time conversion", () => {
     const root = new SkiaSGRoot(Skia);
     await root.render(<skPath path="not a path" start={0} end={1} />);
     expect(() => root.drawOnCanvas(surface.getCanvas())).toThrow(
-      /Invalid path/
+      expect.objectContaining({
+        name: "SkiaDecodeError",
+        format: "path",
+        message: expect.stringMatching(/invalid SVG path string "not a path"/),
+      })
     );
     await root.unmount();
   });

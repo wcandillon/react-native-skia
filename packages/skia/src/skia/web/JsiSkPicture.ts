@@ -8,6 +8,7 @@ import type {
   SkPicture,
   SkMatrix,
 } from "../types";
+import { SkiaInternalError } from "../types/Errors";
 
 import { HostObject, getEnum } from "./Host";
 import { JsiSkShader } from "./JsiSkShader";
@@ -42,6 +43,10 @@ export class JsiSkPicture
   }
 
   serialize() {
-    return this.ref.serialize();
+    const bytes = this.ref.serialize();
+    if (bytes === null) {
+      throw new SkiaInternalError("Picture.serialize: serialization failed");
+    }
+    return bytes;
   }
 }

@@ -11,6 +11,7 @@ import type {
   StrokeOpts,
 } from "../types";
 import type { PathFactory } from "../types/Path/PathFactory";
+import { SkiaDecodeError } from "../types/Errors";
 
 import { Host, getEnum, optEnum, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkPath } from "./JsiSkPath";
@@ -19,6 +20,31 @@ import { JsiSkRect } from "./JsiSkRect";
 import { JsiSkRRect } from "./JsiSkRRect";
 
 const pinT = (t: number) => Math.min(Math.max(t, 0), 1);
+
+// The number of values each verb of a PathCommand takes after itself.
+const PathVerbArity = [2, 2, 4, 5, 6, 0];
+const PathVerbNames = ["move", "line", "quad", "conic", "cubic", "close"];
+
+// A command that does not fit is a TypeError naming it, as on native.
+const validatePathCommands = (cmds: PathCommand[]) => {
+  cmds.forEach((cmd, i) => {
+    if (cmd.length < 1) {
+      throw new TypeError(`MakeFromCmds: command ${i} is an empty array`);
+    }
+    const verb = cmd[0];
+    const arity = PathVerbArity[verb];
+    if (arity === undefined) {
+      throw new TypeError(
+        `MakeFromCmds: command ${i} has an unknown verb ${verb}`
+      );
+    }
+    if (cmd.length < arity + 1) {
+      throw new TypeError(
+        `MakeFromCmds: command ${i} (${PathVerbNames[verb]}) needs ${arity} numbers, got ${cmd.length - 1}`
+      );
+    }
+  });
+};
 
 export class JsiSkPathFactory extends Host implements PathFactory {
   constructor(CanvasKit: CanvasKit) {
@@ -32,7 +58,12 @@ export class JsiSkPathFactory extends Host implements PathFactory {
   MakeFromSVGString(str: string) {
     const path = this.CanvasKit.Path.MakeFromSVGString(str);
     if (path === null) {
-      return null;
+      throw new SkiaDecodeError(
+        `MakeFromSVGString: invalid SVG path string "${
+          str.length > 64 ? str.slice(0, 64) + "..." : str
+        }"`,
+        "path"
+      );
     }
     const result = new JsiSkPath(
       this.CanvasKit,
@@ -70,9 +101,10 @@ export class JsiSkPathFactory extends Host implements PathFactory {
   }
 
   MakeFromCmds(cmds: PathCommand[]) {
+    validatePathCommands(cmds);
     const path = this.CanvasKit.Path.MakeFromCmds(cmds.flat());
     if (path === null) {
-      return null;
+      throw new TypeError("MakeFromCmds: invalid path commands");
     }
     const result = new JsiSkPath(
       this.CanvasKit,

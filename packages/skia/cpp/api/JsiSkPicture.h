@@ -10,6 +10,7 @@
 #include "JsiSkNativeObjects.h"
 #include "JsiSkRect.h"
 #include "JsiSkShader.h"
+#include "SkiaErrors.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -45,6 +46,9 @@ public:
 
   JSI_HOST_FUNCTION(serialize) {
     auto data = getObject()->serialize();
+    if (data == nullptr) {
+      throw SkiaErrors::internal("Picture.serialize: serialization failed");
+    }
     auto arrayCtor =
         runtime.global().getPropertyAsFunction(runtime, "Uint8Array");
     size_t size = data->size();
