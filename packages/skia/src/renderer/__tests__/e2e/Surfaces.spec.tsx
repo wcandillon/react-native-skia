@@ -91,6 +91,7 @@ describe("Surfaces", () => {
       expect(result).toEqual([16, 16]);
     });
   });
+
   ["GPU", "raster"].forEach((kind) => {
     it(`flushAsync() resolves once the draws are in the surface (${kind})`, async () => {
       // No async/await: the code runs through Hermes' eval on the device.
