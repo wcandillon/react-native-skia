@@ -84,6 +84,29 @@ useFrameCallback(() => {
 
 Held work does not finish until the app comes back, so `surface.flush(true)`, which waits for the GPU, blocks its thread until then. Check `Skia.gpu.foreground` before calling it.
 
+`surface.flushAsync()` waits for the GPU without blocking: it returns a promise that resolves once the GPU has run the draws.
+The promise rejects when the draws were lost, which `flush()` only logs: Graphite could not record or submit them, the GPU failed to run them, or the device was lost.
+Use it when what comes next needs the draws in the texture, a video encoder for instance.
+
+```tsx twoslash
+import { Skia } from "react-native-skia";
+
+const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+
+const drawFrame = async () => {
+  surface.getCanvas().drawColor(Skia.Color("cyan"));
+  try {
+    await surface.flushAsync();
+    // The texture of the surface holds the frame
+  } catch (e) {
+    // The frame was lost: draw it again, or stop
+  }
+};
+```
+
+The promise covers the draws pending on the thread, as the GPU surfaces of a thread are submitted together.
+While the app is in the background, it settles on return.
+
 On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.
 
 ### Device loss

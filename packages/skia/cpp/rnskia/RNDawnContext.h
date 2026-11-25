@@ -324,14 +324,7 @@ public:
       readback.generation = current;
       readback.done = workDone(current);
     }
-    {
-      std::lock_guard<std::mutex> lock(_readbacksMutex);
-      _readbacks.push_back(readback);
-    }
-    std::call_once(_readbackThreadOnce, [this]() {
-      std::thread([this]() { awaitReadbacks(); }).detach();
-    });
-    _readbacksCondition.notify_one();
+    awaitReadback(std::move(readback));
   }
 
   /**
@@ -500,6 +493,111 @@ public:
       RNSkLogger::logToConsole("Graphite could not submit a recording");
     }
     return inserted && submitted;
+  }
+
+  /**
+   submitRecording() for a caller that awaits the GPU (Surface.flushAsync()):
+   `callback` is called exactly once, with an empty string once the GPU has
+   run the recording, or with what lost the draws: Graphite could not snap,
+   insert or submit the recording, the GPU failed to run it, or its device
+   was lost, before or since. It runs on whichever thread sees the work
+   done, inside the context lock, or right away, outside of it, when nothing
+   was submitted: it must not use the context nor a JS runtime (hand the
+   result to the right thread instead). The readback thread waits for the
+   GPU (see awaitReadbacks), so that the callback runs even when nothing
+   else submits. Called on the recorder's thread.
+   */
+  void submitRecordingAsync(skgpu::graphite::Recorder *recorder,
+                            std::function<void(std::string)> callback) {
+    if (recorder == nullptr) {
+      callback("");
+      return;
+    }
+    // Lives until Graphite calls the finished proc, which it does exactly
+    // once, whatever happens to the recording. The fields are guarded by
+    // the context lock, which every call into the context holds.
+    struct Request {
+      std::function<void(std::string)> callback;
+      Generation *generation;
+      std::shared_ptr<std::atomic<bool>> delivered;
+      // While the recording is inserted and submitted, the proc leaves the
+      // result here: only the caller knows what failed by then.
+      bool submitting = true;
+      bool finished = false;
+      bool succeeded = false;
+    };
+    static const char *kLost = "the GPU device was lost";
+    std::string failure;
+    Readback readback;
+    {
+      RNSkGpuActivity::Scope activity;
+      auto recording = recorder->snap();
+      std::unique_lock<std::mutex> lock(_mutex);
+      auto *current = _current.load(std::memory_order_acquire);
+      if (generationOf(recorder) != current->id ||
+          current->lost.load(std::memory_order_acquire)) {
+        failure = kLost;
+      } else if (recording == nullptr) {
+        failure = "Graphite could not snap the recording";
+      }
+      if (!failure.empty()) {
+        lock.unlock();
+        callback(failure);
+        return;
+      }
+      readback.delivered = std::make_shared<std::atomic<bool>>(false);
+      auto *request =
+          new Request{std::move(callback), current, readback.delivered};
+      skgpu::graphite::InsertRecordingInfo info;
+      info.fRecording = recording.get();
+      info.fFinishedContext = request;
+      info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
+                              skgpu::CallbackResult result) {
+        auto *request = static_cast<Request *>(context);
+        const bool succeeded = result == skgpu::CallbackResult::kSuccess;
+        if (request->submitting) {
+          request->finished = true;
+          request->succeeded = succeeded;
+          return;
+        }
+        // A lost device reports its work as done: the draws are lost.
+        if (request->generation->lost.load(std::memory_order_acquire)) {
+          request->callback(kLost);
+        } else {
+          request->callback(succeeded ? ""
+                                      : "the GPU could not run the recording");
+        }
+        request->delivered->store(true, std::memory_order_release);
+        delete request;
+      };
+      auto status = current->context->insertRecording(info);
+      // Submitted either way, for the work other recordings inserted.
+      const bool submitted = current->context->submit();
+      request->submitting = false;
+      if (request->finished) {
+        // Failed, or run by the GPU already.
+        if (current->lost.load(std::memory_order_acquire)) {
+          failure = kLost;
+        } else if (!static_cast<bool>(status)) {
+          const int code = static_cast<int>(
+              static_cast<skgpu::graphite::InsertStatus::V>(status));
+          failure = "Graphite rejected the recording (InsertStatus " +
+                    std::to_string(code) + "): " + status.message();
+        } else if (!submitted) {
+          failure = "Graphite could not submit the recording";
+        } else if (!request->succeeded) {
+          failure = "the GPU could not run the recording";
+        }
+        request->callback(failure);
+        delete request;
+        return;
+      }
+      // GPU work from here until the callback ran (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
+      readback.generation = current;
+      readback.done = workDone(current);
+    }
+    awaitReadback(std::move(readback));
   }
 
   /**
@@ -1219,6 +1317,31 @@ private:
         [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
   }
 
+  // What the readback thread waits for (see _readbacks).
+  struct Readback {
+    Generation *generation = nullptr;
+    wgpu::Future done;
+    // Set by the readback's callback (see readPixels), once it ran.
+    std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
+    // The times the context was asked without the callback having run.
+    int retries = 0;
+  };
+
+  // Hands a readback to the readback thread, which the first one starts.
+  void awaitReadback(Readback readback) {
+    {
+      std::lock_guard<std::mutex> lock(_readbacksMutex);
+      _readbacks.push_back(std::move(readback));
+    }
+    std::call_once(_readbackThreadOnce, [this]() {
+      std::thread([this]() { awaitReadbacks(); }).detach();
+    });
+    _readbacksCondition.notify_one();
+  }
+
   // The readback thread: for each readback, in order, waits for the GPU to
   // be done with it, then has its context (the one it was asked of: a
   // generation since lost delivers its own) deliver the result. The wait is
@@ -1362,17 +1485,8 @@ private:
 
   // The readbacks waiting for the GPU, for the readback thread (see
   // readPixels and awaitReadbacks); the thread is started by the first one.
-  struct Readback {
-    Generation *generation = nullptr;
-    wgpu::Future done;
-    // Set by the readback's callback (see readPixels), once it ran.
-    std::shared_ptr<std::atomic<bool>> delivered;
-    // The readback as GPU work in flight, until the last copy of this
-    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
-    std::shared_ptr<RNSkGpuActivity::Scope> activity;
-    // The times the context was asked without the callback having run.
-    int retries = 0;
-  };
+  // A recording whose completion is awaited is one too (see
+  // submitRecordingAsync).
   std::once_flag _readbackThreadOnce;
   std::mutex _readbacksMutex;
   std::condition_variable _readbacksCondition;
