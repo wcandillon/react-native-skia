@@ -218,7 +218,7 @@ export const copyLib = (
  * (e.g. libs/apple/iphonesimulator-arm64/), then assembled under libs/apple/<sdk>/
  * (e.g. libs/apple/iphonesimulator/). Staging directories are removed on successful
  * SDK assembly; GN intermediates remain. Android uses libs/android/<abi>/
- * (e.g. libs/android/arm64-v8a/). package-binaries assembles npm XCFrameworks.
+ * (e.g. libs/android/arm64-v8a/). package-binaries archives them as release assets.
  * wasm uses libs/wasm/ with its own headers and emdawnwebgpu package next to
  * the archives; see wasm-configuration.ts.
  *

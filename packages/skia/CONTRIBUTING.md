@@ -26,7 +26,7 @@ The minimum Apple deployment targets are iOS 15.1, tvOS 15.1, and macOS 14.0. Ke
 The Skia prebuilt binaries ship the [Graphite](https://skia.org/docs/user/graphite/) backend, the default since v3, along with Dawn, the WebGPU implementation Graphite renders with, built from the Dawn commit the Skia release pins and shared with react-native-webgpu. There is no `postinstall` step:
 
 - On Android, Gradle downloads them at build time from the GitHub release `binaries-<version>` of this repository, one archive per ABI being built. `packages/skia/binaries.json` pins the version and the sha256 of every archive. They are resolved as Gradle dependencies, so they are cached in the Gradle user home and later builds work offline; the `prepareSkiaBinaries` task verifies them and extracts them into `android/build/binaries`. To download from a mirror, or from a directory with `file:///...`, set the `reactNativeSkiaBinariesUrl` Gradle property or the `REACT_NATIVE_SKIA_BINARIES_URL` environment variable to a location holding `binaries-<version>/<asset>`.
-- On Apple platforms an Xcode build phase prepares the selected SDK's archives from that same pinned release. CocoaPods adds the phase during `pod install`; optional SwiftPM integration adds it during `react-native spm update`. Headers ship in the main `react-native-skia` package, without binary npm dependencies. See [Apple binary preparation](#how-apple-binaries-are-prepared) for caching, local builds, and errors.
+- On Apple platforms an Xcode build phase prepares the selected SDK's archives from that same pinned release. CocoaPods adds the phase during `pod install`; optional SwiftPM integration adds it during `react-native spm update`. Headers ship in the main `react-native-skia` package. See [Apple binary preparation](#how-apple-binaries-are-prepared) for caching, local builds, and errors.
 
 - Checkout submodules: `git submodule update --init --recursive`
 - Install dependencies: `yarn`
@@ -68,13 +68,13 @@ Skia writes `.a` libraries to `libs/wasm/lib`, next to the headers (`skia/`), th
 
 Both Apple builders accept SDK groups (`iphoneos`, `iphonesimulator`, `maccatalyst`, `appletvos`, `appletvsimulator`, `macos`) and individual targets such as `iphonesimulator-arm64` or `iphonesimulator-x86_64`. A group builds its configured architectures and produces lipo'd universal libraries when it has multiple architectures; a single target keeps only that architecture. Single-architecture SDKs copy their libraries directly.
 
-Skia stages per-architecture archives in `libs/apple/<sdk>-<arch>` and writes assembled libraries plus `metadata.json` to `libs/apple/<sdk>`, including for single-architecture builds. After successful SDK assembly, its consumed staging directories are removed. Dawn uses the same layout under `libs/dawn/apple`. GN/CMake build directories remain available for incremental builds. Neither builder assembles XCFrameworks. Native consumers assemble the requested SDK slices during their Xcode build; `package-binaries` also creates the existing Apple npm XCFrameworks for other consumers.
+Skia stages per-architecture archives in `libs/apple/<sdk>-<arch>` and writes assembled libraries plus `metadata.json` to `libs/apple/<sdk>`, including for single-architecture builds. After successful SDK assembly, its consumed staging directories are removed. Dawn uses the same layout under `libs/dawn/apple`. GN/CMake build directories remain available for incremental builds. Neither builder assembles XCFrameworks. Native consumers assemble the requested SDK slices during their Xcode build.
 
 After each Apple target compiles, both builders verify every Mach-O object's platform and architecture in its `.a` libraries before copying them or starting the next target. Each check expects only that target's architecture. The check reads archive headers and load commands directly, without extracting objects or running a tool per object.
 
 ### Upgrading Skia
 
-Upgrading to a new Skia milestone (for example `chrome/m147` to `chrome/m150`) is a multi-stage process: bump the submodule, build locally and fix the C++ API churn, test the example app against the freshly built binaries, and publish the binary npm packages from CI. The steps below use `m150` as the running example; substitute the milestone you are upgrading to.
+Upgrading to a new Skia milestone (for example `chrome/m147` to `chrome/m150`) is a multi-stage process: bump the submodule, build locally and fix the C++ API churn, test the example app against the freshly built binaries, and publish the binaries from CI. The steps below use `m150` as the running example; substitute the milestone you are upgrading to.
 
 #### 1. Update the Skia submodule
 
@@ -188,29 +188,15 @@ From the repository root, install the native dependencies and build the example 
 
 Run the e2e tests (see [Testing](#testing)) to validate behavior, not just compilation.
 
-#### 4. Publish the binary npm packages (GitHub Actions)
+#### 4. Publish the binaries (GitHub Actions)
 
 With the submodule bump merged (the workflow detects the Skia branch from the checked-in submodule), run **Release binaries** (`.github/workflows/build-binaries.yml`) from the Actions tab. It is `workflow_dispatch` only and takes these inputs:
 
 - `skia_branch`: build a Skia branch other than the submodule commit.
-- `respin`: a letter for another build of the same Skia branch; it becomes the minor of the npm version (see below).
-- `dry_run`: on by default. Build and package, upload the packages as the `npm-packages` artifact of the run and the release assets as `release-assets`, and skip the npm publish and the GitHub release. Run it first; the real run is the same workflow with `dry_run` unchecked.
+- `respin`: a letter for another build of the same Skia branch; it becomes the minor of the version (see below).
+- `dry_run`: on by default. Build and package, upload the release assets as the `release-assets` artifact of the run, and skip the GitHub release. Run it first; the real run is the same workflow with `dry_run` unchecked.
 
-One run builds everything and publishes it: Skia for iOS (device, simulator and Mac Catalyst), tvOS (device and simulator), macOS and the four Android ABIs, the monolithic Dawn (`libwebgpu_dawn`) for the same platforms from the Dawn commit Skia pins in its DEPS, with the patches in `scripts/dawn-patches` applied, and then the five npm packages generated by `scripts/package-binaries.ts` from the build artifacts:
-
-| Package | Contents |
-|:--|:--|
-| `react-native-skia-graphite-android` | the Skia archives per ABI |
-| `react-native-skia-graphite-apple-ios` | the Skia xcframeworks and a `Package.swift` |
-| `react-native-skia-graphite-apple-tvos` | the Skia xcframeworks and a `Package.swift` |
-| `react-native-skia-graphite-apple-macos` | the Skia xcframeworks and a `Package.swift` |
-| `react-native-webgpu-dawn` | `libwebgpu_dawn` for Android and Apple, the Dawn headers and a `Package.swift`, shared by react-native-skia and react-native-webgpu |
-
-They all carry the same version, derived from the Skia branch the submodule commit is on, without its `chrome/` prefix: `m150` right after a milestone bump, but once `chrome/m154` has moved past the pinned commit it is the Chromium release branch that still ends there, for example `m154_8037_58` (Chrome 154.0.8037.58). The milestone is the major and the `respin` letter the minor: `m154` is 154.0.0, `m154_8037_58b` is 154.2.0, and the branch digits do not affect it. npm never lets a version be republished: a package already on npm at the run's version is skipped by the publish step (so a rerun after a partial publish, or a first version published by hand, does not block the others), and a rebuild of the same branch once every package exists needs the next letter, which the workflow checks before building.
-
-Publishing uses npm trusted publishing (OIDC): the workflow file must be registered as the trusted publisher of each package on npmjs.com (repository `wcandillon/react-native-skia`, workflow `build-binaries.yml`, no environment), and the first version of a new package has to be published by hand from the `npm-packages` artifact of a dry run.
-
-The same run archives those files as the assets of the GitHub release `binaries-<version>` (a pre-release, so it never becomes the repository's latest release). Android archives are made from the package directories. Apple archives come directly from the combined SDK outputs, without npm XCFramework containers:
+One run builds everything and publishes it: Skia for iOS (device, simulator and Mac Catalyst), tvOS (device and simulator), macOS and the four Android ABIs, and the monolithic Dawn (`libwebgpu_dawn`) for the same platforms from the Dawn commit Skia pins in its DEPS, with the patches in `scripts/dawn-patches` applied. `scripts/package-binaries.ts` archives the build artifacts as the assets of the GitHub release `binaries-<version>` (a pre-release, so it never becomes the repository's latest release):
 
 | Asset | Contents |
 |:--|:--|
@@ -222,9 +208,11 @@ The same run archives those files as the assets of the GitHub release `binaries-
 | `dawn-apple-<sdk>.zip` | `libwebgpu_dawn.a` for one SDK, plus `metadata.json` |
 | `checksums.json` | the version, the Skia branch, the Dawn commit, and the sha256 and size of every asset |
 
-Each Apple SDK archive is extracted into its own SDK directory; its metadata records the platform, variant, architectures, deployment target, and library names. Android archives retain their existing ABI subdirectories. A release that is already published is left alone, like a version already on npm.
+Each Apple SDK archive is extracted into its own SDK directory; its metadata records the platform, variant, architectures, deployment target, and library names. Android archives retain their ABI subdirectories.
 
-The same packages and release assets can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`. `yarn package-binaries --from-packages=<dir>` makes the release assets alone, from package directories that exist already (one subdirectory per package name): this historical mode preserves the previous per-XCFramework Apple asset layout, allowing an older npm release to be reproduced from extracted tarballs.
+The version is derived from the Skia branch the submodule commit is on, without its `chrome/` prefix: `m150` right after a milestone bump, but once `chrome/m154` has moved past the pinned commit it is the Chromium release branch that still ends there, for example `m154_8037_58` (Chrome 154.0.8037.58). The milestone is the major and the `respin` letter the minor: `m154` is 154.0.0, `m154_8037_58b` is 154.2.0, and the branch digits do not affect it. A published release is never replaced, since `binaries.json` pins the checksums of its assets: a rebuild of the same branch needs the next letter, which the workflow checks before building.
+
+The same release assets can be generated locally from a full `yarn build-skia` and `yarn build-dawn` with `yarn package-binaries --skia-version=m154_8037_58b`, or from the downloaded artifacts of a run with `--artifacts=<dir>`. They are written to `build/release`.
 
 #### 5. Point the library at the new binaries
 

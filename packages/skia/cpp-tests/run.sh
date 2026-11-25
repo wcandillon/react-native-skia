@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds and runs the host-side C++ tests against the Skia headers that
 # `yarn copy-skia-headers` puts in cpp/skia (SKIA_INCLUDE overrides it) and
-# the Dawn headers the react-native-webgpu-dawn package puts in cpp/dawn
+# the Dawn headers `yarn copy-skia-headers` puts in cpp/dawn
 # (DAWN_INCLUDE overrides it).
 set -e
 cd "$(dirname "$0")/.."
