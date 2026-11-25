@@ -212,7 +212,7 @@ copy_library() {
 # The caller holds the assembly lock across both assembly and linker staging.
 assemble_module() {
   local root="$CONTAINERS/$MODULE" library existing=true temporary previous='' old_archs platform variant ignored deployment
-  local signature_file="$CONTAINERS/$MODULE/.slices/$SDK.signature"
+  local signature_file="$CONTAINERS/$MODULE/.slices/$SDK.stamp"
   CONTAINER_ROOT="$root"
   for library in "${MODULE_LIBRARIES[@]}"; do
     if [[ ! -f "$root/${library%.a}.xcframework/$META_IDENTIFIER/$library" || ! -f "$root/${library%.a}.xcframework/Info.plist" ]]; then existing=false; fi
@@ -228,6 +228,7 @@ assemble_module() {
     previous="$platform-$(printf '%s\n' "$old_archs" | LC_ALL=C sort | paste -sd _ -)${variant:+-$variant}"
   fi
   mkdir -p "$temporary/.slices"
+  rm -f "$temporary/.slices/$SDK.signature"
   cp "$SOURCE_DIRECTORY/metadata.json" "$temporary/.slices/$SDK.json"
   for library in "${MODULE_LIBRARIES[@]}"; do
     local container="$temporary/${library%.a}.xcframework"
@@ -236,7 +237,7 @@ assemble_module() {
     copy_library "$SOURCE_DIRECTORY/$library" "$container/$META_IDENTIFIER/$library"
     write_xcframework_plist "$container" "$library" "$temporary/.slices"
   done
-  printf '%s\n' "$SOURCE_SIGNATURE" > "$temporary/.slices/$SDK.signature"
+  printf '%s\n' "$SOURCE_SIGNATURE" > "$temporary/.slices/$SDK.stamp"
   replace_directory "$temporary" "$root"
   note "Prepared $SDK XCFramework slices ($(printf '%s' "$META_ARCHS" | tr '\n' ' '))"
 }
@@ -248,10 +249,15 @@ assemble_module() {
 # rather than dynamic frameworks copied into the app's Frameworks directory.
 # Build-product stamps include SDK/version/source identity, avoiding equal-size
 # archives from another platform and unnecessary copies on incremental builds.
+# Stamps must never use the .signature extension: Xcode collects *.signature
+# files from build products into the archive, and App Store Connect rejects
+# them as invalid XCFramework code signatures (ITMS-91063).
 stage_module() {
-  local library destination temporary stamp="$OUTPUT/.rnskia-$MODULE.signature"
+  local library destination temporary stamp="$OUTPUT/.rnskia-$MODULE.stamp"
   local signature="$SDK:$VERSION:$SOURCE_SIGNATURE" name
   mkdir -p "$OUTPUT"
+  # Archive build folders persist across runs; drop stamps from older releases.
+  rm -f "$OUTPUT/.rnskia-$MODULE.signature"
   for library in "${MODULE_LIBRARIES[@]}"; do
     name="${library#lib}"
     destination="$OUTPUT/librnskia_$name"
