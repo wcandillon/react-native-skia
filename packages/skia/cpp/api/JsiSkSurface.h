@@ -152,8 +152,15 @@ public:
     sk_sp<SkImage> image;
     if (count > 0 && arguments[0].isObject()) {
       auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-      image = surface->makeImageSnapshot(SkIRect::MakeXYWH(
-          rect->x(), rect->y(), rect->width(), rect->height()));
+      auto bounds = SkIRect::MakeXYWH(rect->x(), rect->y(), rect->width(),
+                                      rect->height());
+      if (!SkIRect::Intersects(
+              bounds, SkIRect::MakeWH(surface->width(), surface->height()))) {
+        // Nothing of the surface to snapshot: outputImage keeps its content.
+        throw SkiaErrors::validation(
+            "makeImageSnapshot: the bounds lie outside of the surface");
+      }
+      image = surface->makeImageSnapshot(bounds);
     } else {
       image = surface->makeImageSnapshot();
     }

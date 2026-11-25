@@ -218,6 +218,7 @@ A `null` check after one of these factories becomes a `try`/`catch`, or goes awa
 | `Skia.PathEffect.MakeLine2D()`, `MakePath1D()`, `MakePath2D()`, `MakeDash()`, `MakeDiscrete()` | `null`, or an effect that drew nothing | Throws a `SkiaValidationError`. |
 | `picture.serialize()` | `null` | Throws a `SkiaInternalError`. |
 | `Skia.Surface.MakeOffscreen()`, `Skia.Surface.MakeRaster()` | `null` | Throws a `SkiaValidationError` for a size below 1x1 (or, for a GPU surface, larger than the GPU's largest texture), a `SkiaOutOfMemoryError` when there is no memory for it, and a `SkiaGPUUnavailableError` without a GPU. While the GPU device is lost, `MakeOffscreen()` returns a surface that draws nothing, like WebGPU does. |
+| `surface.makeImageSnapshot(bounds)` | A null image when `bounds` lie outside of the surface | Throws a `SkiaValidationError`; an `outputImage` keeps its content. |
 | `Skia.Image.MakeFromGPUTexture()`, `Skia.Surface.MakeFromGPUTexture()`, `Skia.Image.MakeGPUTextureFromImage()`, `image.makeTextureImage()`, `ref.current.makeImageSnapshot()` | A plain `Error` | Throws a `TypeError` for an argument that is not a texture, a `SkiaValidationError` for a texture without the usage it needs (or a canvas that is not mounted), a `SkiaOutOfMemoryError` when there is no GPU memory. While the GPU device is lost, they make objects that draw nothing instead of throwing. |
 | `Skia.Data.fromBase64()` | An `Error` | Throws a `SkiaValidationError`. |
 
