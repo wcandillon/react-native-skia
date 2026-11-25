@@ -51,6 +51,30 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
   flush(sync?: boolean): void;
 
   /**
+   * `flush()` as a promise: resolves once the GPU has run the draws, without
+   * blocking the thread, and rejects when they were lost (`flush()` only
+   * logs it). Await it before handing the texture this surface draws into
+   * to a consumer that needs the draws in it: a video encoder, another
+   * command queue (see `Skia.Surface.MakeFromGPUTexture`).
+   *
+   * The draws of all the GPU surfaces of a thread are recorded together and
+   * submitted by the first call that needs them, so the promise covers the
+   * draws pending on the thread, and an error may come from the draws of
+   * another surface.
+   *
+   * It rejects when Graphite cannot record, insert or submit the draws, when
+   * the GPU fails to run them, and when the GPU device of the surface is
+   * lost, before the call or before the work is done (see `Skia.gpu.lost`).
+   * This departs from `GPUQueue.onSubmittedWorkDone()` in WebGPU, which
+   * resolves in these cases. While the app is in the background the GPU
+   * work is held, and so is the promise (see `Skia.gpu.foreground`).
+   *
+   * A CPU surface (`Skia.Surface.MakeRaster`) resolves right away, as does
+   * the Web.
+   */
+  flushAsync(): Promise<void>;
+
+  /**
    * Returns the possibly scaled width of the surface.
    */
   width(): number;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include <jsi/jsi.h>
@@ -15,6 +16,7 @@
 #include "JsiSkImage.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkAsync.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -89,6 +91,38 @@ public:
           recorder, sync ? skgpu::graphite::SyncToCpu::kYes
                          : skgpu::graphite::SyncToCpu::kNo);
     }
+  }
+
+  // flush() as a promise of the GPU being done with the draws, rejected when
+  // they were lost (see DawnContext::submitRecordingAsync). Nothing blocks:
+  // the readback thread waits for the GPU.
+  JSI_HOST_FUNCTION(flushAsync) {
+    _dispatcher->processQueue();
+    auto surface = getObject();
+    auto *recorder = surface->recorder();
+    if (recorder == nullptr) {
+      // A raster surface holds its draws already.
+      return RNSkAsync::settled(
+          runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
+            promise.resolve(jsi::Value::undefined());
+          });
+    }
+    // The surface is kept until the promise settles: its recorder with it.
+    return RNSkAsync::run(
+        runtime, getContext(),
+        [surface, recorder](RNSkAsync::Complete complete) {
+          DawnContext::getInstance().submitRecordingAsync(
+              recorder, [complete = std::move(complete)](std::string error) {
+                complete([error = std::move(error)](
+                             jsi::Runtime &, RNSkAsync::Promise &promise) {
+                  if (error.empty()) {
+                    promise.resolve(jsi::Value::undefined());
+                  } else {
+                    promise.reject("flushAsync: " + error);
+                  }
+                });
+              });
+        });
   }
 
   // An image sharing the texture of the surface, without a copy: a canvas
@@ -198,6 +232,8 @@ public:
                       &JsiSkSurface::makeImageSnapshot);
     installMethod(runtime, prototype, "asImage", &JsiSkSurface::asImage);
     installMethod(runtime, prototype, "flush", &JsiSkSurface::flush);
+    installHostMethod(runtime, prototype, "flushAsync",
+                      &JsiSkSurface::flushAsync);
   }
 
 protected:

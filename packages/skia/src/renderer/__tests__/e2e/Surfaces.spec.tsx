@@ -1,3 +1,4 @@
+import { AlphaType, ColorType } from "../../../skia/types";
 import { surface } from "../setup";
 
 describe("Surfaces", () => {
@@ -88,6 +89,45 @@ describe("Surfaces", () => {
         { gpu: kind === "GPU" }
       );
       expect(result).toEqual([16, 16]);
+    });
+  });
+  ["GPU", "raster"].forEach((kind) => {
+    it(`flushAsync() resolves once the draws are in the surface (${kind})`, async () => {
+      // No async/await: the code runs through Hermes' eval on the device.
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          const sf = ctx.gpu
+            ? Skia.Surface.MakeOffscreen(16, 16)!
+            : Skia.Surface.MakeRaster(16, 16)!;
+          sf.getCanvas().drawColor(Skia.Color("cyan"));
+          const first = sf.flushAsync();
+          // Nothing pending: resolves all the same.
+          const second = sf.flushAsync();
+          return Promise.all([first, second]).then((values) =>
+            sf
+              .makeImageSnapshot()
+              .readPixels(8, 8, {
+                width: 1,
+                height: 1,
+                colorType: ctx.colorType,
+                alphaType: ctx.alphaType,
+              })
+              .then((pixel) => ({
+                isPromise: first instanceof Promise,
+                values: values.map((value) => value === undefined),
+                pixel: pixel === null ? null : Array.from(pixel),
+              }))
+          );
+        },
+        {
+          gpu: kind === "GPU",
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        }
+      );
+      expect(result.isPromise).toBe(true);
+      expect(result.values).toEqual([true, true]);
+      expect(result.pixel).toEqual([0, 255, 255, 255]);
     });
   });
 });
