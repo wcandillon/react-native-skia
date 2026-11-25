@@ -1317,6 +1317,19 @@ private:
         [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
   }
 
+  // What the readback thread waits for (see _readbacks).
+  struct Readback {
+    Generation *generation = nullptr;
+    wgpu::Future done;
+    // Set by the readback's callback (see readPixels), once it ran.
+    std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
+    // The times the context was asked without the callback having run.
+    int retries = 0;
+  };
+
   // Hands a readback to the readback thread, which the first one starts.
   void awaitReadback(Readback readback) {
     {
@@ -1474,17 +1487,6 @@ private:
   // readPixels and awaitReadbacks); the thread is started by the first one.
   // A recording whose completion is awaited is one too (see
   // submitRecordingAsync).
-  struct Readback {
-    Generation *generation = nullptr;
-    wgpu::Future done;
-    // Set by the readback's callback (see readPixels), once it ran.
-    std::shared_ptr<std::atomic<bool>> delivered;
-    // The readback as GPU work in flight, until the last copy of this
-    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
-    std::shared_ptr<RNSkGpuActivity::Scope> activity;
-    // The times the context was asked without the callback having run.
-    int retries = 0;
-  };
   std::once_flag _readbackThreadOnce;
   std::mutex _readbacksMutex;
   std::condition_variable _readbacksCondition;

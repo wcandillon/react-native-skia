@@ -99,20 +99,18 @@ public:
   JSI_HOST_FUNCTION(flushAsync) {
     _dispatcher->processQueue();
     auto surface = getObject();
-    auto *recorder = surface->recorder();
-    if (recorder == nullptr) {
+    if (surface->recorder() == nullptr) {
       // A raster surface holds its draws already.
       return RNSkAsync::settled(
           runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
             promise.resolve(jsi::Value::undefined());
           });
     }
-    // The surface is kept until the promise settles: its recorder with it.
     return RNSkAsync::run(
-        runtime, getContext(),
-        [surface, recorder](RNSkAsync::Complete complete) {
+        runtime, getContext(), [surface](RNSkAsync::Complete complete) {
           DawnContext::getInstance().submitRecordingAsync(
-              recorder, [complete = std::move(complete)](std::string error) {
+              surface->recorder(),
+              [complete = std::move(complete)](std::string error) {
                 complete([error = std::move(error)](
                              jsi::Runtime &, RNSkAsync::Promise &promise) {
                   if (error.empty()) {
