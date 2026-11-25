@@ -209,7 +209,7 @@ Disposed surfaces leave their memory to Skia, for the next ones.
 
 ### Purging GPU memory
 
-**Most apps should never call `Skia.purgeGpuResources()`.** Dispose of the surfaces and images you are done with, and Skia reuses their memory. When the system runs short of memory, React Native Skia purges on its own: on an iOS memory warning, and on Android on `onLowMemory()` and on `onTrimMemory()` from `TRIM_MEMORY_BACKGROUND`.
+**Most apps should never call `Skia.purgeGpuResources()`.** Dispose of the surfaces and images you are done with, and Skia reuses their memory. React Native Skia purges on its own: on iOS on a memory warning, and on Android each time the app goes to the background (`onTrimMemory()` from `TRIM_MEMORY_UI_HIDDEN`) and on `onLowMemory()`.
 
 The one case for calling it is a one-off peak followed by a long stretch that needs far less GPU memory, while the app stays in the foreground. For example, a video export just finished and the app is back to a light screen:
 

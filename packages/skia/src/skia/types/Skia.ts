@@ -181,7 +181,8 @@ export interface Skia {
   /**
    * Returns the GPU memory nothing uses to the system. Most apps should never
    * call it: Skia reuses the memory of what you dispose of, and purges on its
-   * own when the system is short of memory.
+   * own when the system is short of memory and, on Android, each time the app
+   * goes to the background.
    *
    * It is meant for a one-off peak (a video export) followed by a long
    * stretch that needs far less GPU memory. Not for a render loop, not after

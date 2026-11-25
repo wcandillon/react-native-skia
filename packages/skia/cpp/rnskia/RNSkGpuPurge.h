@@ -13,9 +13,10 @@ namespace RNSkia {
 
 /**
  * Skia.purgeGpuResources(), which the system also brings about when it is
- * short of memory: gives the GPU memory nothing uses back to the system.
- * Dawn keeps the memory of disposed surfaces and images for reuse otherwise.
- * What is alive keeps its content and its caches.
+ * short of memory and, on Android, when the app goes to the background:
+ * gives the GPU memory nothing uses back to the system. Dawn keeps the
+ * memory of disposed surfaces and images for reuse otherwise. What is alive
+ * keeps its content and its caches.
  *
  * The platform only reports what the system said (onMemoryWarning,
  * onLowMemory, onTrimMemory): whether it calls for a purge is decided here.
@@ -73,10 +74,11 @@ public:
 
   /**
    Android, ComponentCallbacks2.onTrimMemory(): purges from
-   kTrimMemoryBackground. Any thread.
+   kTrimMemoryUiHidden, which is each time the app goes to the background.
+   Any thread.
    */
   static void onTrimMemory(int level) noexcept {
-    if (level >= kTrimMemoryBackground) {
+    if (level >= kTrimMemoryUiHidden) {
       request();
     }
   }
@@ -100,13 +102,16 @@ private:
       std::chrono::milliseconds(500);
 
   /**
-   ComponentCallbacks2.TRIM_MEMORY_BACKGROUND: the process is in the
-   background, among those the system ends for their memory. The level
-   below, TRIM_MEMORY_UI_HIDDEN, comes with every app switch, where the app
-   is often back at once and wants that memory again. Since Android 14 these
-   two are the only levels sent.
+   ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN: the app is no longer visible.
+   It draws nothing there, and the system ends the processes in the
+   background that hold the most memory first. The system sends it each time
+   the app leaves the foreground, and it may be all it sends:
+   TRIM_MEMORY_BACKGROUND did not come to an app left in the background
+   until it was cached and frozen (a Samsung on Android 17). The levels
+   below this one are for an app in the foreground, and are no longer sent
+   since Android 14.
    */
-  static constexpr int kTrimMemoryBackground = 40;
+  static constexpr int kTrimMemoryUiHidden = 20;
 
   struct State {
     std::mutex mutex;
