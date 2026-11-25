@@ -1,6 +1,7 @@
 import type { CanvasKit, Surface } from "canvaskit-wasm";
 
 import type { SkCanvas, SkImage, SkRect, SkSurface } from "../types";
+import { SkiaValidationError } from "../types/Errors";
 
 import { HostObject } from "./Host";
 import { JsiSkCanvas } from "./JsiSkCanvas";
@@ -72,6 +73,14 @@ export class JsiSkSurface
         ? Array.from(JsiSkRect.fromValue(this.CanvasKit, bounds))
         : undefined
     );
+    // Typed as non-nullable, but null when Skia cannot make the snapshot
+    // (bounds outside of the surface): outputImage then keeps its previous
+    // content, as on native.
+    if (!image) {
+      throw new SkiaValidationError(
+        "makeImageSnapshot: the bounds lie outside of the surface"
+      );
+    }
     if (outputImage) {
       outputImage.ref = image;
     }
