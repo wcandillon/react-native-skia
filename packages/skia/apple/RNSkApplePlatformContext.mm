@@ -188,7 +188,7 @@ void RNSkApplePlatformContext::observeApplicationState() {
                         object:nil
                          queue:nil
                     usingBlock:^(NSNotification *) {
-                      RNSkGpuPurge::request();
+                      RNSkGpuPurge::onMemoryWarning();
                     }];
   });
 #endif // !TARGET_OS_OSX

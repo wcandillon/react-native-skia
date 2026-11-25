@@ -454,45 +454,32 @@ public:
   }
 
   /**
-   Frees the GPU memory the recorders of the calling thread hold without
-   using it, on that thread (a recorder belongs to the thread it records
-   on): what went unused for `unusedFor`, or, with `everything`, all they
-   can let go of, the pages of their atlases included. `everything` is for a
-   thread that records nothing for now (a render thread once idle, see
-   RNSkGraphiteProducer): the atlases lose no content by it, as Graphite
-   empties them at every snap when recordings may be inserted in any order.
-   The upload recorder lets go of everything either way: what it made
-   belongs to the image cache (see makeRecorderLocked). The GPU work that
-   finished releases its resources first, and Dawn runs the deletions it
-   deferred after. Never makes a recorder. Any thread.
+   Trims the recorders of the calling thread, on that thread (a recorder
+   belongs to the thread it records on): frees the GPU memory they hold and
+   did not use for `unusedFor`. The routine of a thread that keeps recording
+   (see trimThreadIfDue, RNSkGraphiteProducer). The upload recorder lets go
+   of everything either way: what it made belongs to the image cache (see
+   makeRecorderLocked). The GPU work that finished releases its resources
+   first, and Dawn runs the deletions it deferred after. Never makes a
+   recorder. Any thread.
    */
-  static void trimThreadRecorders(std::chrono::milliseconds unusedFor,
-                                  bool everything) {
-    // Looked at first: the GPU is not probed for a thread that has nothing.
-    auto &drawing = threadSlot();
-    auto &uploads = uploadSlot();
-    if (drawing.recorder == nullptr && uploads.recorder == nullptr) {
-      return;
-    }
-    auto *instance = tryGetInstance();
-    if (instance == nullptr) {
-      return;
-    }
-    instance->checkFinishedWork();
-    if (drawing.recorder != nullptr) {
-      if (everything) {
-        drawing.recorder->freeGpuResources();
-      } else {
-        drawing.recorder->performDeferredCleanup(unusedFor);
-      }
-    }
-    if (uploads.recorder != nullptr) {
-      // Not performDeferredCleanup(0): a resource it takes back from the
-      // return queue counts as used at that moment, so it would keep every
-      // texture the image cache let go of since the last call.
-      uploads.recorder->freeGpuResources();
-    }
-    instance->checkFinishedWork();
+  static void trimThreadRecorders(std::chrono::milliseconds unusedFor) {
+    freeFromThreadRecorders([unusedFor](skgpu::graphite::Recorder &drawing) {
+      drawing.performDeferredCleanup(unusedFor);
+    });
+  }
+
+  /**
+   Purges the recorders of the calling thread: frees all they can let go of,
+   the pages of their atlases included. For a thread that records nothing
+   for now (a render thread once idle, see RNSkGraphiteProducer) and for
+   Skia.purgeGpuResources() (see RNSkGpuPurge). The atlases lose no content
+   by it, as Graphite empties them at every snap when recordings may be
+   inserted in any order. Otherwise as trimThreadRecorders().
+   */
+  static void purgeThreadRecorders() {
+    freeFromThreadRecorders(
+        [](skgpu::graphite::Recorder &drawing) { drawing.freeGpuResources(); });
   }
 
   /**
@@ -584,7 +571,7 @@ public:
       return;
     }
     slot.lastTrim = now;
-    trimThreadRecorders(kThreadTrimDelay, false);
+    trimThreadRecorders(kThreadTrimDelay);
   }
 
   /**
@@ -1346,6 +1333,35 @@ private:
   static ThreadRecorder &uploadSlot() {
     static thread_local ThreadRecorder slot;
     return slot;
+  }
+
+  /**
+   What trimThreadRecorders() and purgeThreadRecorders() share: `freeDrawing`
+   frees what the drawing recorder of the calling thread is to let go of.
+   */
+  template <typename FreeDrawing>
+  static void freeFromThreadRecorders(FreeDrawing &&freeDrawing) {
+    // Looked at first: the GPU is not probed for a thread that has nothing.
+    auto &drawing = threadSlot();
+    auto &uploads = uploadSlot();
+    if (drawing.recorder == nullptr && uploads.recorder == nullptr) {
+      return;
+    }
+    auto *instance = tryGetInstance();
+    if (instance == nullptr) {
+      return;
+    }
+    instance->checkFinishedWork();
+    if (drawing.recorder != nullptr) {
+      freeDrawing(*drawing.recorder);
+    }
+    if (uploads.recorder != nullptr) {
+      // Not performDeferredCleanup(0): a resource it takes back from the
+      // return queue counts as used at that moment, so it would keep every
+      // texture the image cache let go of since the last call.
+      uploads.recorder->freeGpuResources();
+    }
+    instance->checkFinishedWork();
   }
 
   /** The recorder of a thread that ended (see ThreadRecorder). */

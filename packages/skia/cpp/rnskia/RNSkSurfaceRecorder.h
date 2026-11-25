@@ -56,11 +56,11 @@ public:
     _dirty = false;
     const bool submitted = DawnContext::getInstance().submitRecording(
         _recorder.get(), _generation, syncToCpu);
-    // Throttled: the scratch textures the recorder cached and did not use
-    // for a while go.
+    // Trimmed, throttled: the scratch textures the recorder cached and did
+    // not use for a while go.
     const auto now = std::chrono::steady_clock::now();
-    if (now - _lastCleanup >= DawnContext::kThreadTrimDelay) {
-      _lastCleanup = now;
+    if (now - _lastTrim >= DawnContext::kThreadTrimDelay) {
+      _lastTrim = now;
       _recorder->performDeferredCleanup(DawnContext::kThreadTrimDelay);
     }
     // The images the drawing uploaded went through the upload recorder of
@@ -107,8 +107,8 @@ private:
   // Whether something was drawn and not submitted. A new surface is dirty:
   // its initial clear is yet to be submitted.
   bool _dirty = true;
-  // The latest cleanup (see flush).
-  std::chrono::steady_clock::time_point _lastCleanup =
+  // The latest trim (see flush).
+  std::chrono::steady_clock::time_point _lastTrim =
       std::chrono::steady_clock::now();
 };
 

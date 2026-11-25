@@ -38,8 +38,10 @@ void JniPlatformContext::registerNatives() {
                        JniPlatformContext::runMainThreadTasks),
       makeNativeMethod("setForegroundNative",
                        JniPlatformContext::setForegroundNative),
-      makeNativeMethod("purgeGpuResourcesNative",
-                       JniPlatformContext::purgeGpuResourcesNative),
+      makeNativeMethod("onLowMemoryNative",
+                       JniPlatformContext::onLowMemoryNative),
+      makeNativeMethod("onTrimMemoryNative",
+                       JniPlatformContext::onTrimMemoryNative),
       makeNativeMethod("setCacheDirectoryNative",
                        JniPlatformContext::setCacheDirectoryNative),
       makeNativeMethod("setPixelDensityNative",
@@ -100,8 +102,13 @@ void JniPlatformContext::setForegroundNative(jni::alias_ref<jclass>,
   DawnContext::setForeground(foreground == JNI_TRUE);
 }
 
-void JniPlatformContext::purgeGpuResourcesNative(jni::alias_ref<jclass>) {
-  RNSkGpuPurge::request();
+void JniPlatformContext::onLowMemoryNative(jni::alias_ref<jclass>) {
+  RNSkGpuPurge::onLowMemory();
+}
+
+void JniPlatformContext::onTrimMemoryNative(jni::alias_ref<jclass>,
+                                            jint level) {
+  RNSkGpuPurge::onTrimMemory(level);
 }
 
 void JniPlatformContext::setCacheDirectoryNative(

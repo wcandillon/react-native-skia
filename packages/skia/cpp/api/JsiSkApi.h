@@ -171,7 +171,7 @@ public:
   }
   JSI_HOST_FUNCTION(purgeGpuResources) {
     // The recorders of this thread, which only it may touch, then Dawn.
-    DawnContext::trimThreadRecorders(std::chrono::milliseconds(0), true);
+    DawnContext::purgeThreadRecorders();
     RNSkGpuPurge::request();
     return jsi::Value::undefined();
   }

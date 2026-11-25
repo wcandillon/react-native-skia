@@ -35,7 +35,9 @@ public class PlatformContext implements LifecycleEventListener {
     private static ParcelFileDescriptor sMainThreadWakeup;
 
     // The display density can change while the app runs (display size
-    // setting, foldables): the native side follows it.
+    // setting, foldables): the native side follows it. What the system says
+    // about memory goes to the native side as it comes, which decides when
+    // the GPU memory nothing uses goes back to the system (RNSkGpuPurge).
     private final ComponentCallbacks2 mComponentCallbacks = new ComponentCallbacks2() {
         @Override
         public void onConfigurationChanged(Configuration newConfig) {
@@ -44,16 +46,12 @@ public class PlatformContext implements LifecycleEventListener {
 
         @Override
         public void onLowMemory() {
-            purgeGpuResourcesNative();
+            onLowMemoryNative();
         }
 
         @Override
         public void onTrimMemory(int level) {
-            // Android 14 and later never call onLowMemory(), and of the trim
-            // levels only send UI_HIDDEN (any app switch) and BACKGROUND.
-            if (level >= TRIM_MEMORY_BACKGROUND) {
-                purgeGpuResourcesNative();
-            }
+            onTrimMemoryNative(level);
         }
     };
 
@@ -182,8 +180,11 @@ public class PlatformContext implements LifecycleEventListener {
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
 
-    // Frees the GPU memory nothing uses (RNSkGpuPurge).
-    private static native void purgeGpuResourcesNative();
+    // What the system says about memory (RNSkGpuPurge::onLowMemory,
+    // RNSkGpuPurge::onTrimMemory).
+    private static native void onLowMemoryNative();
+
+    private static native void onTrimMemoryNative(int level);
 
     // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
     private static native void setCacheDirectoryNative(String directory);
