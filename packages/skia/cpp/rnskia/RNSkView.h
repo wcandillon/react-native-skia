@@ -113,6 +113,7 @@ public:
    */
   void setNativeId(size_t nativeId) {
     _nativeId = nativeId;
+    _producer->setViewId(static_cast<int64_t>(nativeId));
     // The registry's entry, not the view's: after a reload a recycled view
     // still holds the target of the previous bundle.
     auto target = RNSkGraphiteTargetRegistry::getInstance().bind(

@@ -26,6 +26,7 @@
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkUncapturedErrors.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
@@ -484,11 +485,13 @@ public:
     // InsertStatus converts to true on success.
     const bool inserted = static_cast<bool>(status);
     if (!inserted) {
-      RNSkLogger::logToConsole(
-          "Graphite rejected a recording (InsertStatus %d): %s",
-          static_cast<int>(
-              static_cast<skgpu::graphite::InsertStatus::V>(status)),
-          status.message().c_str());
+      RNSkUncapturedErrors::report(
+          "SkiaInternalError",
+          "Graphite rejected a recording (InsertStatus " +
+              std::to_string(static_cast<int>(
+                  static_cast<skgpu::graphite::InsertStatus::V>(status))) +
+              "): " + status.message().c_str(),
+          "submit");
     }
     current->context->submit(syncToCpu);
     return inserted;
@@ -517,11 +520,13 @@ public:
       auto status = current->context->insertRecording(info);
       // InsertStatus converts to true on success.
       if (!static_cast<bool>(status)) {
-        RNSkLogger::logToConsole(
-            "Graphite rejected a recording (InsertStatus %d): %s",
-            static_cast<int>(
-                static_cast<skgpu::graphite::InsertStatus::V>(status)),
-            status.message().c_str());
+        RNSkUncapturedErrors::report(
+            "SkiaInternalError",
+            "Graphite rejected a recording (InsertStatus " +
+                std::to_string(static_cast<int>(
+                    static_cast<skgpu::graphite::InsertStatus::V>(status))) +
+                "): " + status.message().c_str(),
+            "submit");
       }
     }
     current->context->submit();
@@ -1123,7 +1128,10 @@ private:
           } catch (const std::exception &e) {
             // No recorder could be made: a failed upload, which the provider
             // remembers for a moment (see ImageProvider::Uploader).
-            RNSkLogger::logToConsole("Uploading an image failed: %s", e.what());
+            RNSkUncapturedErrors::report(
+                "SkiaOutOfMemoryError",
+                std::string("uploading an image failed: ") + e.what(),
+                "render");
             return ImageProvider::Upload{nullptr, generation};
           }
         },

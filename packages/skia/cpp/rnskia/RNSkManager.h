@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "RNSkPlatformContext.h"
+#include "RNSkUncapturedErrors.h"
 
 namespace facebook {
 namespace react {
@@ -60,6 +61,14 @@ private:
    * module.
    */
   void installBindings();
+
+  /**
+   * Dispatches a failure no JS caller saw on the React Native runtime: the
+   * uncapturederror event of Skia.gpu (see RNSkUncapturedErrors).
+   */
+  static void
+  dispatchUncapturedError(jsi::Runtime &runtime,
+                          const RNSkUncapturedErrors::Report &report);
 
   jsi::Runtime *_jsRuntime;
   std::shared_ptr<RNSkPlatformContext> _platformContext;

@@ -14,6 +14,7 @@
 #include "api/JsiSkPicture.h"
 #include "api/recorder/JsiRecorder.h"
 #include "jsi/BoxedNativeObject.h"
+#include "jsi/NamedError.h"
 #include "jsi/ViewProperty.h"
 
 namespace RNSkia {
@@ -38,12 +39,44 @@ RNSkManager::RNSkManager(
           view->requestRedraw();
         }
       });
+  // Failures with no JS caller (see RNSkUncapturedErrors) are dispatched on
+  // this runtime, as Skia.gpu's uncapturederror event: through the
+  // CallInvoker, which drops them once the runtime is gone.
+  std::weak_ptr<RNSkPlatformContext> weakContext = platformContext;
+  RNSkUncapturedErrors::setSink(
+      [weakContext](const RNSkUncapturedErrors::Report &report) {
+        auto context = weakContext.lock();
+        if (context == nullptr) {
+          return;
+        }
+        context->runOnJavascriptThread([report](jsi::Runtime &runtime) {
+          dispatchUncapturedError(runtime, report);
+        });
+      });
   // Install bindings
   installBindings();
 }
 
+void RNSkManager::dispatchUncapturedError(
+    jsi::Runtime &runtime, const RNSkUncapturedErrors::Report &report) {
+  auto dispatch =
+      runtime.global().getProperty(runtime, "__RNSkiaDispatchUncapturedError");
+  if (!dispatch.isObject() || !dispatch.asObject(runtime).isFunction(runtime)) {
+    RNSkLogger::logToConsole("React Native Skia (" + report.source +
+                             "): " + report.name + ": " + report.message);
+    return;
+  }
+  auto error = RNJsi::NamedError(report.name, report.message).toValue(runtime);
+  dispatch.asObject(runtime).asFunction(runtime).call(
+      runtime, error, jsi::String::createFromUtf8(runtime, report.source),
+      report.viewId >= 0 ? jsi::Value(static_cast<double>(report.viewId))
+                         : jsi::Value::null());
+}
+
 RNSkManager::~RNSkManager() {
   DawnContext::removeLossListener(_lossListener);
+  // The runtime is going away: the native log takes the reports from now on.
+  RNSkUncapturedErrors::setSink(nullptr);
   // The runtime that made the Graphite contexts is going away, with the
   // views of its bundle: nothing binds to or draws into a target kept past
   // this point (the next bundle's views get ids of their own, see

@@ -47,6 +47,7 @@ const { isAvailable, backend, device, description, error } = Skia.gpu;
 | `error` | Why the GPU is unavailable; `null` when it is |
 | `lost` | The promise of the loss of the device, see [device loss](#device-loss) |
 | `foreground` | Whether the app is in the foreground and active, where GPU work runs, see [background and foreground](#background-and-foreground) |
+| `addEventListener("uncapturederror", listener)`, `onuncapturederror` | The failures with no caller to throw to, like WebGPU's `GPUDevice`: see [uncaptured errors](/docs/errors#uncaptured-errors) |
 
 ### Availability
 

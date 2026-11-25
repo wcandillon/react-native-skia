@@ -236,6 +236,8 @@ The promises resolve with their result or reject with a named error; none resolv
 | `image.encodeToBytes()`, `image.encodeToBase64()`, `image.makeRasterImage()` | A plain `Error` | Rejects with an `AbortError`, a `SkiaValidationError` (a format there is no encoder for) or a `SkiaInternalError`. |
 | `Skia.Data.fromURI()` | A plain `Error`; a missing file on the web resolved to the error page | Rejects with a `TypeError` when a remote resource cannot be loaded, as `fetch` does, and with an error named `NotFoundError` when there is nothing at the uri. |
 
+Failures with no caller to throw to (a frame of a canvas that cannot be replayed, GPU work that Graphite rejects) were only logged by the native code. They are now dispatched as an `uncapturederror` event on `Skia.gpu`, and logged with `console.error` unless a listener prevents it (see [uncaptured errors](/docs/errors#uncaptured-errors)).
+
 `Skia.PathEffect.MakeCorner(0)` still returns `null`: a radius of zero has no effect, and `<CornerPathEffect r={0} />` now draws the path as is instead of throwing.
 
 The loading hooks (`useImage()`, `useSVG()`, `useTypeface()`, `useFont()`, `useAnimatedImage()`, `useData()`) still return `null` until loaded and when loading fails, and pass the error the factory raised to `onError`: a `SkiaDecodeError` for bytes that cannot be decoded (it was a generic `Could not load data`).

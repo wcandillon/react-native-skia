@@ -4,14 +4,14 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
-import type { SkGpuInfo, SkGpuLostInfo } from "../../types";
+import type { SkGpuEvents, SkGpuInfo, SkGpuLostInfo } from "../../types";
 import type * as Gpu from "../Gpu";
 
 // Skia.gpu as the native module serves it: a fresh object per read, with the
 // promise of the loss of the device in use, one per device. Losing the
 // device settles that promise, and the next read describes the device made
 // in its place (or that none could be made).
-type MockDeviceInfo = Omit<SkGpuInfo, "lost">;
+type MockDeviceInfo = Omit<SkGpuInfo, "lost" | keyof SkGpuEvents>;
 // What a test says about a device, the rest being the same for all.
 type MockDeviceOverrides = Partial<
   Pick<MockDeviceInfo, "isAvailable" | "device" | "error">
@@ -48,7 +48,7 @@ const mockCurrentDevice = () => mockDevices[mockDevices.length - 1];
 
 jest.mock("../../Skia", () => ({
   Skia: {
-    get gpu(): SkGpuInfo {
+    get gpu(): Omit<SkGpuInfo, keyof SkGpuEvents> {
       mockReads.count += 1;
       const current = mockCurrentDevice();
       return { ...current.info, lost: current.lost };

@@ -3,9 +3,18 @@ import NativeSkiaModule from "../specs/NativeSkiaModule";
 
 import { registerSkiaWorkletSerialization } from "./SkiaWorkletSerialization";
 import { SkiaErrorConstructors } from "./types/Errors";
+import type { SkUncapturedErrorSource } from "./types/Skia";
+import { dispatchUncapturedError, installGpuEvents } from "./UncapturedErrors";
 
 declare global {
   var __RNSkiaErrors: typeof SkiaErrorConstructors | undefined;
+  var __RNSkiaDispatchUncapturedError:
+    | ((
+        error: Error,
+        source: SkUncapturedErrorSource,
+        viewId: number | null
+      ) => void)
+    | undefined;
   var __skiaScheduleOnUI: ((settle: () => void) => void) | undefined;
 }
 
@@ -52,6 +61,12 @@ if (Platform.OS !== "web" && global.SkiaApi == null) {
     throw new Error(
       `Native Skia Module failed to correctly install JSI Bindings! Result: ${result}`
     );
+  }
+  // The failures native code had no caller to throw to: Skia.gpu's
+  // uncapturederror event (see cpp/rnskia/RNSkUncapturedErrors.h).
+  globalThis.__RNSkiaDispatchUncapturedError = dispatchUncapturedError;
+  if (globalThis.SkiaApi) {
+    installGpuEvents(globalThis.SkiaApi);
   }
   // Skia objects use the JSI NativeState pattern and need a custom
   // serializer to be transferable to worklet runtimes (Reanimated).

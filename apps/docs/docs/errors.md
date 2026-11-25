@@ -19,6 +19,7 @@ React Native Skia reports failures the way WebGPU does: a call that fails throws
 | A valid call without a result (a path operation with an empty outcome, the end of an iteration) | Returns `null` |
 | Asynchronous work that fails | Rejects with a named error |
 | An API the platform does not have | Throws an error named `NotSupportedError` |
+| A failure with no caller to throw to (a frame of a canvas, GPU work) | Dispatches an `uncapturederror` event on `Skia.gpu` (see [below](#uncaptured-errors)) |
 
 ## Error classes
 
@@ -63,3 +64,25 @@ const onError = (e: unknown) => {
   }
 };
 ```
+
+## Uncaptured errors
+
+Some failures happen with no call to throw from: a frame of a canvas that cannot be replayed on a render thread, an animated value that cannot be read, GPU work that Graphite rejects, an image that cannot be uploaded.
+Like WebGPU's `GPUDevice`, `Skia.gpu` dispatches them as an `uncapturederror` event:
+
+```tsx
+import { Skia } from "react-native-skia";
+
+Skia.gpu.addEventListener("uncapturederror", (event) => {
+  // event.source: "render", "recorder", "submit" or "surface"
+  // event.viewId: the nativeID of the canvas concerned, or null
+  reportToCrashService(event.error, { source: event.source });
+  // Keeps the error out of the console.
+  event.preventDefault();
+});
+```
+
+`Skia.gpu.onuncapturederror` takes a single handler, which runs before the listeners.
+Without a listener that calls `preventDefault()`, the error is logged with `console.error`.
+The events are dispatched on the React Native runtime (and on the web page), whichever read of `Skia.gpu` the listener was added through.
+The same error from the same source is dispatched once a second at most, so that a failure repeating on every frame does not flood the JS thread.
