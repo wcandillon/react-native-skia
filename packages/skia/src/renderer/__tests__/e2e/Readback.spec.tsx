@@ -61,14 +61,16 @@ describe("Readback", () => {
         const read = (image: typeof snapshot, x: number, y: number) =>
           image
             .readPixels(x, y, { width: 4, height: 2, ...ctx })
-            .then((pixels) => Array.from(pixels ?? []));
+            .then((pixels) => Array.from(pixels));
         return snapshot.makeRasterImage().then((raster) =>
           Promise.all([
             read(snapshot, -2, 6),
             read(snapshot, 6, 7),
             read(raster, -2, 6),
             read(raster, 6, 7),
-            snapshot.readPixels(8, 0, { width: 1, height: 1, ...ctx }),
+            snapshot
+              .readPixels(8, 0, { width: 1, height: 1, ...ctx })
+              .then((pixels) => Array.from(pixels)),
           ]).then(([gpuLeft, gpuRight, cpuLeft, cpuRight, outside]) => ({
             gpu: [gpuLeft, gpuRight],
             cpu: [cpuLeft, cpuRight],
@@ -88,7 +90,8 @@ describe("Readback", () => {
       );
       // Same as a CPU image.
       expect(result.gpu).toEqual(result.cpu);
-      expect(result.outside).toBe(null);
+      // A rectangle entirely outside of the image reads zeros.
+      expect(result.outside).toEqual(none);
     }
   );
 

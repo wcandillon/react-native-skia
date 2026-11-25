@@ -187,6 +187,8 @@ export const resolveFont = (uri: string) =>
 
 (global as any).fetch = jest.fn((uri: string) =>
   Promise.resolve({
+    ok: true,
+    status: 200,
     arrayBuffer: () => Promise.resolve(resolveFile(uri)),
   })
 );

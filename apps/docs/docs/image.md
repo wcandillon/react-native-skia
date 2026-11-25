@@ -214,8 +214,10 @@ const ImageDemo = () => {
 | `height`        | Returns the possibly scaled height of the image.                      |
 | `width`         | Returns the possibly scaled width of the image.                       |
 | `getImageInfo`  | Returns the image info for the image.                                 |
-| `encodeToBytes` | Resolves to the image pixels encoded as a `Uint8Array`; rejects when the image cannot be read back or encoded. |
-| `encodeToBase64`| Resolves to the image pixels encoded as a base64 string; rejects when the image cannot be read back or encoded. |
-| `readPixels`    | Resolves to the image pixels as a `Uint8Array` or `Float32Array`, or to null when nothing could be read. On a GPU image, only the requested rectangle is read back. |
+| `encodeToBytes` | Resolves to the image pixels encoded as a `Uint8Array`. |
+| `encodeToBase64`| Resolves to the image pixels encoded as a base64 string. |
+| `readPixels`    | Resolves to the image pixels as a `Uint8Array` or `Float32Array`. On a GPU image, only the requested rectangle is read back; the part of the rectangle outside the image is zero. |
+
+These promises reject with a named error (see [Errors](/docs/errors)): an `AbortError` when the GPU device is lost before the image is read back, a `SkiaValidationError` for a format or an image info they cannot use, and a `SkiaInternalError` when the readback or the encoding fails.
 | `makeRasterImage` | Resolves to a CPU copy of the image, read back from the GPU or decoded on a background thread. See [GPU and CPU images](#gpu-and-cpu-images). |
 | `makeTextureImage` | Uploads the image to the GPU now and returns the GPU image. See [GPU and CPU images](#gpu-and-cpu-images). |

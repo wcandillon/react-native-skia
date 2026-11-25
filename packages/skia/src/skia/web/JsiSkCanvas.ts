@@ -35,6 +35,7 @@ import {
   type FilterOptions,
   isCubicSampling,
 } from "../types";
+import { SkiaValidationError } from "../types/Errors";
 
 import { getEnum, HostObject } from "./Host";
 import { JsiSkPaint } from "./JsiSkPaint";
@@ -499,8 +500,14 @@ export class JsiSkCanvas
     };
     // CanvasKit reads synchronously; a promise like on native, where the GPU
     // is asynchronous.
-    return new Promise<Float32Array | Uint8Array | null>((resolve) =>
-      resolve(this.ref.readPixels(srcX, srcY, pxInfo))
-    );
+    return new Promise<Float32Array | Uint8Array>((resolve) => {
+      const pixels = this.ref.readPixels(srcX, srcY, pxInfo);
+      if (!pixels) {
+        throw new SkiaValidationError(
+          "readPixels: this canvas has no pixels to read (it records a picture), or the rectangle lies outside of it"
+        );
+      }
+      resolve(pixels);
+    });
   }
 }

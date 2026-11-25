@@ -500,20 +500,26 @@ public:
   }
 
   // Resolves to the pixels of the canvas under `imageInfo` at (srcX, srcY),
-  // like image.readPixels(); to null when nothing could be read. A Graphite
-  // canvas has no readback of its own: the canvas of a surface reads from a
-  // snapshot of the surface (a copy task on its recorder, submitted so that
-  // the texture can be read back). A canvas without an owning surface (a
-  // picture-recording canvas) has its pixels at hand, read right here.
+  // and rejects, like image.readPixels(). A Graphite canvas has no readback
+  // of its own: the canvas of a surface reads from a snapshot of the surface
+  // (a copy task on its recorder, submitted so that the texture can be read
+  // back). A canvas without an owning surface has its pixels at hand, read
+  // right here; a picture-recording canvas has none, and rejects with a
+  // SkiaValidationError.
   JSI_HOST_FUNCTION(readPixels) {
     auto srcX = static_cast<int>(arguments[0].asNumber());
     auto srcY = static_cast<int>(arguments[1].asNumber());
     auto info = JsiSkImageInfo::fromValue(runtime, arguments[2]);
     if (!info) {
-      return jsi::Value::null();
+      throw SkiaErrors::typeError("readPixels expects an image info");
     }
     if (_surface) {
       auto snapshot = _surface->makeImageSnapshot();
+      if (snapshot == nullptr) {
+        return RNSkAsync::settled(
+            runtime, JsiSkImage::settleError(JsiSkImage::readbackError(
+                         "readPixels", DawnContext::generation())));
+      }
       if (auto *recorder = _surface->recorder()) {
         DawnContext::getInstance().submitRecording(recorder);
       }
@@ -526,10 +532,15 @@ public:
     if (pixels == nullptr) {
       return JsiSkImage::unreadable(runtime, *info);
     }
-    auto read = canvas->readPixels(*info, pixels->writable_data(), rowBytes,
-                                   srcX, srcY);
-    return RNSkAsync::settled(
-        runtime, JsiSkImage::settlePixels(read ? pixels : nullptr, *info));
+    if (!canvas->readPixels(*info, pixels->writable_data(), rowBytes, srcX,
+                            srcY)) {
+      return RNSkAsync::settled(
+          runtime, JsiSkImage::settleError(SkiaErrors::validation(
+                       "readPixels: this canvas has no pixels to read (it "
+                       "records a picture), or the rectangle lies outside "
+                       "of it")));
+    }
+    return RNSkAsync::settled(runtime, JsiSkImage::settlePixels(pixels, *info));
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {

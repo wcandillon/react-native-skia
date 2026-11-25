@@ -27,3 +27,20 @@ describe("Data", () => {
     expect(data.ref.byteLength).not.toEqual(oslo.byteLength);
   });
 });
+
+describe("Data errors", () => {
+  it("rejects fromURI with a NotFoundError for a missing resource", async () => {
+    const { Skia } = setupSkia();
+    const { fetch } = global;
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: false, status: 404 } as Response)
+    );
+    try {
+      await expect(Skia.Data.fromURI("missing.png")).rejects.toMatchObject({
+        name: "NotFoundError",
+      });
+    } finally {
+      global.fetch = fetch;
+    }
+  });
+});
