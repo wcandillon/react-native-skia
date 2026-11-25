@@ -8,6 +8,7 @@
 
 #include "RNSkGraphiteTargetInfo.h"
 #include "RNSkSurface.h"
+#include "RNSkWindowLifecycle.h"
 #include "RNSkWindowState.h"
 #include "rnsurface/FrameScheduler.h"
 #include "rnsurface/ThreadChecker.h"
@@ -30,7 +31,9 @@ namespace RNSkia {
  * The window a platform view presents into: a CAMetalLayer on Apple
  * platforms, an ANativeWindow on Android, configured as a Dawn surface. The
  * platform view only acquires the native handle and forwards its lifecycle
- * (attach, resize, detach); everything else lives here.
+ * (attach, resize, detach); everything else lives here. What the window is
+ * through its life, and what follows from what, is the lifecycle's (see
+ * RNSkWindowLifecycle); the Dawn objects and the calls on them are here.
  *
  * Threading: the window belongs to the thread the view presents on (see
  * RNSkView::setPresentThread): the present thread of the process, one for
@@ -170,12 +173,12 @@ public:
    */
   void setWaitForPreviousWork(
       rnsurface::FrameScheduler::WaitForPreviousWork waitForPreviousWork) {
-    _waitForPreviousWork = waitForPreviousWork;
+    _lifecycle.setWaitForPreviousWork(waitForPreviousWork);
   }
 
   rnsurface::FrameScheduler::WaitForPreviousWork
   getWaitForPreviousWork() const {
-    return _waitForPreviousWork;
+    return _lifecycle.getWaitForPreviousWork();
   }
 
   /**
@@ -205,14 +208,14 @@ public:
    present later (see rnsurface::FrameScheduler::Actions::deferPresent).
    Presenting thread.
    */
-  void deferNextPresent(bool defer) { _deferNextPresent = defer; }
+  void deferNextPresent(bool defer) { _lifecycle.deferNextPresent(defer); }
 
   /**
    How many frames went to the window so far: what tells a frame presented
    from one whose present is deferred, or dropped with its swapchain, across a
    call that may do either. Presenting thread.
    */
-  uint64_t presentCount() const { return _presentCount; }
+  uint64_t presentCount() const { return _lifecycle.presentCount(); }
 
   /**
    Makes the deferred present, whatever the GPU is on: the view calls it once
@@ -362,10 +365,13 @@ private:
   // What detach() does, without the thread check: the destructor runs
   // wherever the last owner lets go of the window.
   void detachNow();
-  // Lets go of the Dawn surface and gives the window back to its releaser,
-  // leaving the abandon, if any, up: what detach() does before it takes the
-  // abandon down, and what attach() does to the previous window.
+  // Lets go of the window, leaving the abandon, if any, up: what attach()
+  // does to a window it could not make a surface over.
   void releaseWindow();
+  // Lets go of the Dawn surface and gives the window back to its releaser:
+  // the objects alone, for the lifecycle to follow (attach, release or
+  // detach, see RNSkWindowLifecycle).
+  void releaseResources();
   // Whether the window is the target the caller read (see getTargetInfo):
   // as it is, or as resize() noted it should be (the size is taken then,
   // see takePendingSize). It is neither when the window was resized again,
@@ -395,6 +401,10 @@ private:
   // surface, or with one made for a device replaced since the sweep (the
   // next frame sweeps again).
   bool ensureDevice();
+  // Whether the GPU is done with the work held from the last present (see
+  // presentNow): what the lifecycle asks while it remembers one. Without a
+  // GPU context there is nothing to wait for.
+  bool isGpuDone();
   // Configures the swapchain for the current size, format and usage.
   void configureSurface();
   // Configures the swapchain when the window attached or resized since it
@@ -420,9 +430,6 @@ private:
   // Presents the swapchain texture, and remembers the work submitted up to
   // here as what the next present waits for.
   void presentNow();
-  // Whether the window takes a frame: it has no present deferred, or the
-  // swapchain that frame was replayed into is about to be configured again.
-  bool takesFrame() const { return !_presentDeferred || _needsConfigure; }
   // Graphite needs more than RenderAttachment on the swapchain texture:
   // TextureBinding so a render pass can reload the existing contents through
   // LoadOp::ExpandResolveTexture (any backdrop filter or mid-frame readback
@@ -443,36 +450,23 @@ private:
     }
   }
 
-  // The device the window is configured on, and its generation (see
-  // DawnContext::generation()): a lost device is replaced, and the window
-  // configured again on the new one (see retireReplacedDevice). The surface
-  // is null between the two, and while the window is detached; the
-  // generation is 0 then.
+  // What the window is through its life (see RNSkWindowLifecycle): the
+  // handle attached, whether it has a surface and on which generation of the
+  // device (see DawnContext::generation()), whether its swapchain is to be
+  // configured, the present deferred, the abandon.
+  RNSkWindowLifecycle _lifecycle;
+  // The device the window is configured on: a lost device is replaced, and
+  // the window configured again on the new one (see retireReplacedDevice).
+  // The surface is null between the two, and while the window is detached.
   wgpu::Device _device;
-  uint64_t _generation = 0;
   wgpu::Surface _surface;
-  void *_nativeHandle = nullptr;
-  bool _showsFrame = false;
   Releaser _releaser;
   int _width = 0;
   int _height = 0;
   wgpu::TextureFormat _format = wgpu::TextureFormat::Undefined;
   wgpu::TextureUsage _usage = wgpu::TextureUsage::RenderAttachment;
-  // The window attached or resized since the swapchain was configured (see
-  // configureIfNeeded).
-  bool _needsConfigure = false;
-  // The platform took the window back before detach() ran (see abandon).
-  // Taken down by detach() alone, never by attach() (see releaseWindow).
-  std::atomic<bool> _abandoned{false};
-  // Where a frame waits while the GPU is on the frame before it, whether a
-  // present is deferred, and the work submitted up to the last present,
-  // until the GPU is done with it (see isPreviousWorkDone).
-  rnsurface::FrameScheduler::WaitForPreviousWork _waitForPreviousWork =
-      rnsurface::FrameScheduler::WaitForPreviousWork::kNever;
-  bool _presentDeferred = false;
-  bool _deferNextPresent = false;
-  uint64_t _presentCount = 0;
-  bool _hasPresentedWork = false;
+  // The work submitted up to the last present, while the lifecycle remembers
+  // one (see isPreviousWorkDone).
   wgpu::Future _presentedWork{};
   uint64_t _presentedWorkGeneration = 0;
   SkColorType _colorType = kUnknown_SkColorType;

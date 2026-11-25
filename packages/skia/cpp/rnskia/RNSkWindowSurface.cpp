@@ -69,14 +69,12 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::attach");
   // The window held already, attached again (Apple's attachSurface, as the
   // bit depth or the color space changes), keeps what it shows. A layout
-  // does not attach: it resizes the attached window (see resize).
-  const bool showsFrame = _showsFrame && nativeHandle == _nativeHandle;
-  // Not detach(): an abandon that lands while this runs (the platform taking
-  // the window back as it attaches) must be kept for the detach posted
-  // behind, not taken down here.
-  releaseWindow();
-  _showsFrame = showsFrame;
-  _nativeHandle = nativeHandle;
+  // does not attach: it resizes the attached window (see resize). Not a
+  // detach: an abandon that lands while this runs (the platform taking the
+  // window back as it attaches) must be kept for the detach posted behind,
+  // not taken down here.
+  releaseResources();
+  _lifecycle.attach(nativeHandle);
   _releaser = std::move(releaser);
   // Called from the platform view (Java or Objective-C), where an exception
   // would take the process down: without a GPU (probed the first time the
@@ -88,7 +86,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     return;
   }
   _device = context->getWGPUDevice();
-  _generation = DawnContext::generation();
+  _lifecycle.bindDevice(DawnContext::generation());
   _surface = context->MakeWGPUSurface(nativeHandle);
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
@@ -111,7 +109,7 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
     }
   }
   _usage = supportedSurfaceUsage();
-  _needsConfigure = true;
+  _lifecycle.surfaceMade();
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
@@ -147,82 +145,74 @@ void RNSkWindowSurface::detach() {
 
 void RNSkWindowSurface::detach(void *nativeHandle) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::detach");
-  if (nativeHandle != nullptr && nativeHandle == _nativeHandle) {
+  if (_lifecycle.isWindow(nativeHandle)) {
     detachNow();
   }
 }
 
 void RNSkWindowSurface::detachNow() {
-  releaseWindow();
+  releaseResources();
   // The window the platform took back is let go of now (see abandon). Only
   // here, not in attach(): an abandon is always followed by this detach,
   // and an attach for another window comes behind it.
-  _abandoned.store(false, std::memory_order_release);
+  _lifecycle.detach();
 }
 
 void RNSkWindowSurface::releaseWindow() {
+  releaseResources();
+  _lifecycle.release();
+}
+
+void RNSkWindowSurface::releaseResources() {
   // The surface goes before the window it draws into, and with it the frame
   // it held. The next window has presented nothing yet.
   _surface = nullptr;
-  _presentDeferred = false;
-  _hasPresentedWork = false;
-  _needsConfigure = false;
   {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     _hasPendingSize = false;
   }
-  _generation = 0;
+  // While the lifecycle still has the window: its description is taken once
+  // more, not taken away (see readState).
   updateTargetInfo();
-  if (_releaser && _nativeHandle != nullptr) {
-    _releaser(_nativeHandle);
+  if (_releaser && _lifecycle.isAttached()) {
+    _releaser(_lifecycle.window());
   }
   _releaser = nullptr;
-  _nativeHandle = nullptr;
-  _showsFrame = false;
 }
 
-void RNSkWindowSurface::abandon() {
-  _abandoned.store(true, std::memory_order_release);
-}
+void RNSkWindowSurface::abandon() { _lifecycle.abandon(); }
 
 bool RNSkWindowSurface::isAttached() {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::isAttached");
-  return _nativeHandle != nullptr;
+  return _lifecycle.isAttached();
 }
 
 bool RNSkWindowSurface::showsFrame() {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::showsFrame");
-  return _showsFrame;
+  return _lifecycle.showsFrame();
 }
 
 bool RNSkWindowSurface::isPreviousWorkDone() {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::isPreviousWorkDone");
-  if (!_hasPresentedWork) {
-    return true;
-  }
+  return _lifecycle.isPreviousWorkDone([this]() { return isGpuDone(); });
+}
+
+bool RNSkWindowSurface::isGpuDone() {
   auto *context = DawnContext::tryGetInstance();
-  if (context != nullptr &&
-      !context->isDone(_presentedWork, _presentedWorkGeneration)) {
-    return false;
-  }
-  _hasPresentedWork = false;
-  return true;
+  return context == nullptr ||
+         context->isDone(_presentedWork, _presentedWorkGeneration);
 }
 
 bool RNSkWindowSurface::hasDeferredPresent() {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::hasDeferredPresent");
-  return _presentDeferred;
+  return _lifecycle.hasDeferredPresent();
 }
 
 bool RNSkWindowSurface::presentDeferredFrame() {
   RNSURFACE_ASSERT_THREAD(_presentingThread,
                           "RNSkWindowSurface::presentDeferredFrame");
-  if (!_presentDeferred) {
-    return false;
-  }
-  _presentDeferred = false;
   // The window the platform took back gets nothing (see abandon), and a
   // device lost since has nothing to present with: the frame is lost with
   // either, and the view shows its last one again on what comes next. The
@@ -230,8 +220,8 @@ bool RNSkWindowSurface::presentDeferredFrame() {
   // where the frame is, until a present sweeps it (see
   // retireReplacedDevice), and presenting it would show nothing and count
   // as a frame shown.
-  if (!_surface || _abandoned.load(std::memory_order_acquire) ||
-      DawnContext::isDeviceLost() || _generation != DawnContext::generation()) {
+  if (!_lifecycle.takeDeferredPresent(DawnContext::isDeviceLost(),
+                                      DawnContext::generation())) {
     return false;
   }
   RNSkGpuActivity::Scope activity;
@@ -334,7 +324,7 @@ void RNSkWindowSurface::updateTargetInfo() {
   std::lock_guard<std::mutex> lock(_targetInfoMutex);
   // Kept while the surface is away for a device replacement (see
   // ensureDevice): the frames recorded meanwhile are for this window.
-  if (_nativeHandle == nullptr) {
+  if (!_lifecycle.isAttached()) {
     _hasTargetInfo = false;
     return;
   }
@@ -386,21 +376,19 @@ void RNSkWindowSurface::takePendingSize() {
   }
   _width = _pendingWidth;
   _height = _pendingHeight;
-  _needsConfigure = true;
+  _lifecycle.resized();
 }
 
 void RNSkWindowSurface::configureIfNeeded() {
-  if (!_needsConfigure) {
-    return;
+  if (_lifecycle.needsConfigure()) {
+    configureSurface();
   }
-  _needsConfigure = false;
-  configureSurface();
 }
 
 void RNSkWindowSurface::configureSurface() {
   // The swapchain is made again: Dawn destroys the image the previous one
   // had acquired, and the frame whose present was deferred with it.
-  _presentDeferred = false;
+  _lifecycle.configured();
   wgpu::SurfaceConfiguration config;
   config.device = _device;
   config.format = _format;
@@ -452,25 +440,19 @@ bool RNSkWindowSurface::surfaceSupportsFormat(wgpu::TextureFormat format) {
 RNSkWindowState RNSkWindowSurface::readState(RNSkGraphiteTargetInfo *info) {
   RNSURFACE_ASSERT_THREAD(_presentingThread, "RNSkWindowSurface::readState");
   // Whether a window is attached is its handle, not its description, which
-  // detach() takes once more before it lets go of the window.
-  if (_nativeHandle == nullptr) {
-    return RNSkWindowState::kNone;
-  }
-  // A lost device (see DawnContext::isDeviceLost) takes no frame until it
-  // is replaced: the view keeps its last one and the queue waits. A window
-  // whose surface is away for the replacement (see ensureDevice) is ready:
-  // presenting is what brings the surface back.
-  if (DawnContext::isDeviceLost()) {
-    return RNSkWindowState::kNoDevice;
-  }
-  if (_canPresent && !_canPresent()) {
-    return RNSkWindowState::kCannotPresent;
-  }
-  if (info != nullptr) {
+  // detach() takes once more before it lets go of the window. A lost device
+  // (see DawnContext::isDeviceLost) takes no frame until it is replaced: the
+  // view keeps its last one and the queue waits. A window whose surface is
+  // away for the replacement (see ensureDevice) is ready: presenting is what
+  // brings the surface back.
+  const auto state = _lifecycle.state(DawnContext::isDeviceLost(), [this]() {
+    return !_canPresent || _canPresent();
+  });
+  if (state == RNSkWindowState::kReady && info != nullptr) {
     std::lock_guard<std::mutex> infoLock(_targetInfoMutex);
     *info = _targetInfo;
   }
-  return RNSkWindowState::kReady;
+  return state;
 }
 
 bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
@@ -484,7 +466,7 @@ bool RNSkWindowSurface::isTarget(const RNSkGraphiteTargetInfo &target) {
 }
 
 void RNSkWindowSurface::retireReplacedDevice() {
-  const auto generation = _generation;
+  const auto generation = _lifecycle.generation();
   if (generation == 0 || generation == DawnContext::generation()) {
     return;
   }
@@ -501,37 +483,39 @@ void RNSkWindowSurface::retireReplacedDevice() {
 void RNSkWindowSurface::releaseSurfacesOn(uint64_t generation) {
   std::lock_guard<std::mutex> listLock(windowsMutex());
   for (auto *window : windows()) {
-    if (window->_generation == generation) {
+    if (window->_lifecycle.dropSurfaceOn(generation)) {
       window->_surface = nullptr;
-      window->_presentDeferred = false;
-      window->_hasPresentedWork = false;
-      window->_generation = 0;
     }
   }
 }
 
 bool RNSkWindowSurface::ensureDevice() {
   const auto generation = DawnContext::generation();
-  if (_surface) {
+  switch (_lifecycle.checkSurface(generation)) {
+  case RNSkWindowLifecycle::SurfaceCheck::kUsable:
+    return true;
+  case RNSkWindowLifecycle::SurfaceCheck::kStale:
     // A surface on a device replaced since the sweep (see
     // retireReplacedDevice) is let go of on the next frame, not configured
     // on a device that is gone.
-    return _generation == generation;
+    return false;
+  case RNSkWindowLifecycle::SurfaceCheck::kMissing:
+    break;
   }
   auto *context = DawnContext::tryGetInstance();
   if (context == nullptr) {
     return false;
   }
   _device = context->getWGPUDevice();
-  _generation = generation;
-  _surface = context->MakeWGPUSurface(_nativeHandle);
+  _lifecycle.bindDevice(generation);
+  _surface = context->MakeWGPUSurface(_lifecycle.window());
   if (!_surface) {
     RNSkLogger::logToConsole("Could not create a surface over the window");
     return false;
   }
   _usage = supportedSurfaceUsage();
+  _lifecycle.surfaceMade();
   configureSurface();
-  _needsConfigure = false;
   updateTargetInfo();
   return true;
 }
@@ -559,7 +543,7 @@ bool RNSkWindowSurface::presentRecordings(
   }
   // Before the window acquires an image: a frame it does not take holds
   // nothing.
-  if (!takesFrame()) {
+  if (!_lifecycle.takesFrame()) {
     return false;
   }
   configureIfNeeded();
@@ -599,7 +583,7 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
   }
   // Before the window acquires an image: a frame it does not take holds
   // nothing.
-  if (!takesFrame()) {
+  if (!_lifecycle.takesFrame()) {
     return false;
   }
   configureIfNeeded();
@@ -628,7 +612,7 @@ bool RNSkWindowSurface::presentImage(const RNSkGraphiteTargetInfo &target,
 
 bool RNSkWindowSurface::canPresent() {
   return readState(nullptr) == RNSkWindowState::kReady &&
-         !_abandoned.load(std::memory_order_acquire);
+         !_lifecycle.isAbandoned();
 }
 
 bool RNSkWindowSurface::presentTexture() {
@@ -640,19 +624,19 @@ bool RNSkWindowSurface::presentTexture() {
   // frame is lost with it, and the device is kept. The recordings were
   // replayed all the same; the caller keeps them and replays them again onto
   // the next window (see presentRecordings).
-  if (_abandoned.load(std::memory_order_acquire)) {
-    return false;
-  }
-  // The GPU is still on the frame presented before: a present now would
-  // wait for it, here, with every other canvas behind. The work is
+  //
+  // Else the GPU may still be on the frame presented before: a present now
+  // would wait for it, here, with every other canvas behind. The work is
   // submitted, so the GPU goes on to it without a pause; the present is
   // the view's to make once the GPU is done (see presentDeferredFrame). The
   // same for a present the view asked to defer (see deferNextPresent).
-  if (_waitForPreviousWork ==
-          rnsurface::FrameScheduler::WaitForPreviousWork::kBeforePresent &&
-      (_deferNextPresent || !isPreviousWorkDone())) {
-    _presentDeferred = true;
+  switch (_lifecycle.offerFrame([this]() { return isGpuDone(); })) {
+  case RNSkWindowLifecycle::Offer::kDeclined:
+    return false;
+  case RNSkWindowLifecycle::Offer::kDeferred:
     return true;
+  case RNSkWindowLifecycle::Offer::kPresent:
+    break;
   }
   presentNow();
   return true;
@@ -660,17 +644,14 @@ bool RNSkWindowSurface::presentTexture() {
 
 void RNSkWindowSurface::presentNow() {
   _surface.Present();
-  _showsFrame = true;
-  _presentCount++;
-  if (_waitForPreviousWork ==
-      rnsurface::FrameScheduler::WaitForPreviousWork::kNever) {
+  if (!_lifecycle.presented()) {
     return;
   }
   // Everything submitted so far, this frame's work included: what the fence
   // of its buffer waits for, and the next present for that fence.
   if (auto *context = DawnContext::tryGetInstance()) {
     _presentedWork = context->onSubmittedWorkDone(&_presentedWorkGeneration);
-    _hasPresentedWork = true;
+    _lifecycle.rememberPresentedWork();
   }
 }
 
