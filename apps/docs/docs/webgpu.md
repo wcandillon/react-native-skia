@@ -104,7 +104,7 @@ const drawFrame = async () => {
 };
 ```
 
-The promise covers the draws pending on the thread, as the GPU surfaces of a thread are submitted together.
+The promise covers the draws of this surface: each surface submits its own drawing.
 While the app is in the background, it settles on return.
 
 On Android, `Skia.gpu.foreground` is whether the host activity is resumed; on the web, whether the document is visible.

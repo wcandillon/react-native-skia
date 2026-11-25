@@ -58,10 +58,9 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
    * to a consumer that needs the draws in it: a video encoder, another
    * command queue (see `Skia.Surface.MakeFromGPUTexture`).
    *
-   * The draws of all the GPU surfaces of a thread are recorded together and
-   * submitted by the first call that needs them, so the promise covers the
-   * draws pending on the thread, and an error may come from the draws of
-   * another surface.
+   * Each GPU surface records and submits its own draws: the promise covers
+   * what was drawn into this surface, not what is pending on another one
+   * (flush that one first when this one draws its image, see `asImage()`).
    *
    * It rejects when Graphite cannot record, insert or submit the draws, when
    * the GPU fails to run them, and when the GPU device of the surface is

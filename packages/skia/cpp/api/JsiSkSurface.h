@@ -16,6 +16,7 @@
 
 #include "rnskia/RNDawnContext.h"
 #include "rnskia/RNSkAsync.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -90,29 +91,30 @@ public:
   // they were lost (see DawnContext::submitRecordingAsync). Nothing blocks:
   // the readback thread waits for the GPU.
   JSI_HOST_FUNCTION(flushAsync) {
-    _dispatcher->processQueue();
     auto surface = getObject();
-    if (surface->recorder() == nullptr) {
+    if (!_recorder) {
       // A raster surface holds its draws already.
       return RNSkAsync::settled(
           runtime, [](jsi::Runtime &, RNSkAsync::Promise &promise) {
             promise.resolve(jsi::Value::undefined());
           });
     }
+    // The surface's own recorder (see RNSkSurfaceRecorder), which the work
+    // keeps alive with the surface.
     return RNSkAsync::run(
-        runtime, getContext(), [surface](RNSkAsync::Complete complete) {
-          DawnContext::getInstance().submitRecordingAsync(
-              surface->recorder(),
-              [complete = std::move(complete)](std::string error) {
-                complete([error = std::move(error)](
-                             jsi::Runtime &, RNSkAsync::Promise &promise) {
-                  if (error.empty()) {
-                    promise.resolve(jsi::Value::undefined());
-                  } else {
-                    promise.reject("flushAsync: " + error);
-                  }
-                });
-              });
+        runtime, getContext(),
+        [surface, recorder = _recorder](RNSkAsync::Complete complete) {
+          recorder->flushAsync([complete =
+                                    std::move(complete)](std::string error) {
+            complete([error = std::move(error)](jsi::Runtime &,
+                                                RNSkAsync::Promise &promise) {
+              if (error.empty()) {
+                promise.resolve(jsi::Value::undefined());
+              } else {
+                promise.reject("flushAsync: " + error);
+              }
+            });
+          });
         });
   }
 

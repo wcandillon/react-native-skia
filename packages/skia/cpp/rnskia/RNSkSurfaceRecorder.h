@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "RNDawnContext.h"
@@ -56,17 +58,21 @@ public:
     _dirty = false;
     const bool submitted = DawnContext::getInstance().submitRecording(
         _recorder.get(), _generation, syncToCpu);
-    // Trimmed, throttled: the scratch textures the recorder cached and did
-    // not use for a while go.
-    const auto now = std::chrono::steady_clock::now();
-    if (now - _lastTrim >= DawnContext::kThreadTrimDelay) {
-      _lastTrim = now;
-      _recorder->performDeferredCleanup(DawnContext::kThreadTrimDelay);
-    }
-    // The images the drawing uploaded went through the upload recorder of
-    // this thread, not this one.
-    DawnContext::trimThreadIfDue();
+    trimIfDue();
     return submitted;
+  }
+
+  /**
+   surface.flushAsync(): flush(), with `callback` called exactly once: with
+   an empty string once the GPU has run what was drawn into the surface, or
+   with what lost it (see DawnContext::submitRecordingAsync, which says where
+   the callback runs). Called by the thread using the surface.
+   */
+  void flushAsync(std::function<void(std::string)> callback) {
+    _dirty = false;
+    DawnContext::getInstance().submitRecordingAsync(
+        _recorder.get(), _generation, std::move(callback));
+    trimIfDue();
   }
 
   /**
@@ -81,6 +87,20 @@ public:
   }
 
 private:
+  /**
+   After a flush. Trimmed, throttled: the scratch textures the recorder
+   cached and did not use for a while go. The images the drawing uploaded
+   went through the upload recorder of this thread, not this one.
+   */
+  void trimIfDue() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - _lastTrim >= DawnContext::kThreadTrimDelay) {
+      _lastTrim = now;
+      _recorder->performDeferredCleanup(DawnContext::kThreadTrimDelay);
+    }
+    DawnContext::trimThreadIfDue();
+  }
+
   RNSkSurfaceRecorder(std::unique_ptr<skgpu::graphite::Recorder> recorder,
                       uint64_t generation)
       : _recorder(std::move(recorder)), _generation(generation) {}

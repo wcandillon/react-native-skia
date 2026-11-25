@@ -584,9 +584,13 @@ public:
    was submitted: it must not use the context nor a JS runtime (hand the
    result to the right thread instead). The readback thread waits for the
    GPU (see awaitReadbacks), so that the callback runs even when nothing
-   else submits. Called on the recorder's thread.
+   else submits. `generation` as for submitRecording(): the one a recorder of
+   its own was made for (see makeRecorder), or none for a thread's, looked
+   up. Never trims (see RNSkSurfaceRecorder). Called on the recorder's
+   thread.
    */
   void submitRecordingAsync(skgpu::graphite::Recorder *recorder,
+                            std::optional<uint64_t> generation,
                             std::function<void(std::string)> callback) {
     if (recorder == nullptr) {
       callback("");
@@ -613,7 +617,7 @@ public:
       auto recording = recorder->snap();
       std::unique_lock<std::mutex> lock(_mutex);
       auto *current = _current.load(std::memory_order_acquire);
-      if (generationOf(recorder) != current->id ||
+      if (generation.value_or(generationOf(recorder)) != current->id ||
           current->lost.load(std::memory_order_acquire)) {
         failure = kLost;
       } else if (recording == nullptr) {
