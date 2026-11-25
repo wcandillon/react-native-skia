@@ -55,7 +55,7 @@ export interface SkGpuLostInfo {
  * none, `isAvailable` is false and `error` says why: every `Canvas` stays
  * blank, CPU work (paths, decoding, encoding, raster images) still runs, and
  * the APIs that need the GPU (offscreen surfaces, snapshots, texture images)
- * throw an Error with the same message. The library's Android manifest
+ * throw a `SkiaGPUUnavailableError` with the same message. The library's Android manifest
  * declares Vulkan 1.1 as a required feature, so the Play Store does not
  * serve the app to such devices unless the app removes that declaration and
  * handles them itself with this flag.
@@ -65,11 +65,14 @@ export interface SkGpuLostInfo {
  * iOS. React Native Skia then replaces it with a new device, and `lost`
  * resolves once it has. Canvases render again on their own. Everything made
  * on the lost device is gone for good, though safe to use (it draws
- * nothing): offscreen surfaces and the images taken from them, texture
- * images (`makeTextureImage`, `MakeFromGPUTexture`), snapshots of views,
- * and the device `Skia.getNativeDevice()` returned, which WebGPU code
- * imports again. An app that keeps such objects makes them again when `lost`
- * resolves, or with the `useGpu` hook in React. `isAvailable` is false
+ * nothing, and reading it back rejects with an `AbortError`): offscreen
+ * surfaces and the images taken from them, texture images
+ * (`makeTextureImage`, `MakeFromGPUTexture`), snapshots of views, and the
+ * device `Skia.getNativeDevice()` returned, which WebGPU code imports again.
+ * Like a lost WebGPU device's, the GPU factories do not throw while the
+ * device is lost: what they make meanwhile is dead the same way. An app that
+ * keeps such objects makes them again when `lost` resolves, or with the
+ * `useGpu` hook in React. `isAvailable` is false
  * between the loss and the replacement, and stays false, with `error` saying
  * why, if no replacement could be made.
  */

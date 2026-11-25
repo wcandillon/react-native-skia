@@ -71,9 +71,11 @@ public:
   // crosses the package boundary through its nativePointer (see
   // JsiGPUTexture.h); the device handoff works the same way.
 
+  // Like a WebGPU device's createView(), it never fails for a lost device:
+  // the image is a dead one then (see JsiSkImage::makeDead).
   JSI_HOST_FUNCTION(MakeFromGPUTexture) {
     if (count < 1) {
-      throw std::runtime_error(
+      throw SkiaErrors::typeError(
           "MakeFromGPUTexture requires a GPUTexture argument");
     }
     // The wrapped SkImage retains the texture for its lifetime (see
@@ -81,32 +83,55 @@ public:
     // the JS GPUTexture.
     wgpu::Texture texture =
         gpuTextureFromValue(runtime, arguments[0], "MakeFromGPUTexture");
-    auto &dawnContext = DawnContext::getInstance();
-    auto image = dawnContext.MakeImageFromTexture(
-        texture, static_cast<int>(texture.GetWidth()),
-        static_cast<int>(texture.GetHeight()), texture.GetFormat());
+    auto *dawn = DawnContext::tryGetInstance();
+    if (dawn == nullptr) {
+      throw SkiaErrors::gpuUnavailable(DawnContext::getGpuInfo().error);
+    }
+    auto width = static_cast<int>(texture.GetWidth());
+    auto height = static_cast<int>(texture.GetHeight());
+    if (DawnContext::isDeviceLost()) {
+      return makeJsiObject(
+          runtime, JsiSkImage::makeDead(getContext(), width, height, 0));
+    }
+    if (!(texture.GetUsage() & wgpu::TextureUsage::TextureBinding)) {
+      throw SkiaErrors::validation(
+          "MakeFromGPUTexture: the texture needs the TEXTURE_BINDING usage");
+    }
+    auto image =
+        dawn->MakeImageFromTexture(texture, width, height, texture.GetFormat());
     if (image == nullptr) {
-      throw std::runtime_error(
-          "MakeFromGPUTexture: failed to wrap the texture");
+      if (DawnContext::isDeviceLost()) {
+        return makeJsiObject(
+            runtime, JsiSkImage::makeDead(getContext(), width, height, 0));
+      }
+      throw SkiaErrors::validation(
+          "MakeFromGPUTexture: the texture cannot be sampled: it must be made "
+          "on the shared device, in a format Skia samples");
     }
     return makeJsiObject(
         runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
   }
 
+  // Like a WebGPU device's createTexture(), the texture of a lost device is
+  // made all the same: a destroyed GPUTexture once adopted.
   JSI_HOST_FUNCTION(MakeGPUTextureFromImage) {
     if (count < 1) {
-      throw std::runtime_error(
+      throw SkiaErrors::typeError(
           "MakeGPUTextureFromImage requires an SkImage argument");
     }
     auto image = JsiSkImage::fromValue(runtime, arguments[0]);
     if (!image) {
-      throw std::runtime_error("Invalid SkImage object");
+      throw SkiaErrors::typeError(
+          "MakeGPUTextureFromImage requires an SkImage argument");
     }
-    auto &dawnContext = DawnContext::getInstance();
-    wgpu::Texture texture = dawnContext.MakeTextureFromImage(image);
+    auto *dawn = DawnContext::tryGetInstance();
+    if (dawn == nullptr) {
+      throw SkiaErrors::gpuUnavailable(DawnContext::getGpuInfo().error);
+    }
+    wgpu::Texture texture = dawn->MakeTextureFromImage(image);
     if (!texture) {
-      throw std::runtime_error(
-          "MakeGPUTextureFromImage: failed to create the texture");
+      throw SkiaErrors::outOfMemory(
+          "MakeGPUTextureFromImage: no GPU memory for the texture");
     }
     // Transfer ownership: the returned pointer carries one reference and must
     // be adopted exactly once (react-native-webgpu's adoptTexture()), which

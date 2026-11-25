@@ -75,19 +75,24 @@ describe("Surfaces", () => {
       const result = await surface.eval(
         (Skia, ctx) => {
           const sf = ctx.gpu
-            ? Skia.Surface.MakeOffscreen(16, 16)!
-            : Skia.Surface.MakeRaster(16, 16)!;
+            ? Skia.Surface.MakeOffscreen(16, 16)
+            : Skia.Surface.MakeRaster(16, 16);
           sf.getCanvas().drawColor(Skia.Color("cyan"));
           sf.flush();
           const output = Skia.Image.MakeNull();
           sf.makeImageSnapshot(undefined, output);
           // Outside of the surface: there is no snapshot to make.
-          sf.makeImageSnapshot(Skia.XYWHRect(100, 100, 5, 5), output);
-          return [output.width(), output.height()];
+          let thrown = "";
+          try {
+            sf.makeImageSnapshot(Skia.XYWHRect(100, 100, 5, 5), output);
+          } catch (e) {
+            thrown = (e as Error).name;
+          }
+          return [output.width(), output.height(), thrown];
         },
         { gpu: kind === "GPU" }
       );
-      expect(result).toEqual([16, 16]);
+      expect(result).toEqual([16, 16, "SkiaValidationError"]);
     });
   });
 });

@@ -10,6 +10,7 @@
 #include "JsiSkConverters.h"
 #include "JsiSkDispatcher.h"
 #include "JsiSkNativeObjects.h"
+#include "SkiaErrors.h"
 
 #include "JsiSkCanvas.h"
 #include "JsiSkImage.h"
@@ -33,11 +34,21 @@ class JsiSkSurface
 public:
   static constexpr const char *CLASS_NAME = "Surface";
 
+  /**
+   `generation`: the GPU device the surface draws on (see
+   DawnContext::generation()), by default the device in use for a GPU
+   surface and none for a CPU one. A dead surface (see makeDead) gives the
+   lost device's.
+   */
   JsiSkSurface(std::shared_ptr<RNSkPlatformContext> context,
-               sk_sp<SkSurface> surface)
+               sk_sp<SkSurface> surface, uint64_t generation = UINT64_MAX)
       : JsiSkWrappingSkPtrNativeObject<JsiSkSurface, SkSurface>(
-            std::move(context), std::move(surface)),
-        _dispatcher(Dispatcher::getDispatcher()) {
+            std::move(context), surface),
+        _dispatcher(Dispatcher::getDispatcher()),
+        _generation(generation != UINT64_MAX ? generation
+                    : surface != nullptr && surface->recorder() != nullptr
+                        ? DawnContext::generation()
+                        : 0) {
     // The surface belongs to the recorder of this thread, which is also the
     // thread that destroys the surfaces finalized elsewhere (see
     // releaseResources).
@@ -50,6 +61,27 @@ public:
     if (!isDisposed()) {
       releaseSurface();
     }
+  }
+
+  /**
+   A surface of a lost GPU device, like the GPU objects of a lost WebGPU
+   device: its canvas takes the drawing commands and drops them, and its
+   snapshots are dead images (see JsiSkImage::makeDead). What the GPU
+   factories make while the device is lost (see DawnContext::isDeviceLost),
+   in place of throwing.
+   */
+  static std::shared_ptr<JsiSkSurface>
+  makeDead(std::shared_ptr<RNSkPlatformContext> context, int width,
+           int height) {
+    return std::make_shared<JsiSkSurface>(
+        std::move(context),
+        SkSurfaces::Null(std::max(width, 1), std::max(height, 1)),
+        DawnContext::generation());
+  }
+
+  /** Whether the surface draws on a GPU device that was lost. */
+  bool isDead() const {
+    return _generation != 0 && !DawnContext::isCurrent(_generation);
   }
 
   // TODO-API: Properties?
@@ -101,12 +133,17 @@ public:
     auto image = sharesTexture ? SkSurfaces::AsImage(surface)
                                : surface->makeImageSnapshot();
     if (image == nullptr) {
-      throw std::runtime_error(
+      if (_generation != 0) {
+        // A surface of a lost device (or a dead one): a dead image.
+        return JsiSkImage::makeDead(getContext(), surface->width(),
+                                    surface->height(), _generation);
+      }
+      throw SkiaErrors::internal(
           "asImage: the texture of the surface cannot be sampled");
     }
     // The surface already reports the texture as its memory.
     return std::make_shared<JsiSkImage>(getContext(), std::move(image),
-                                        sharesTexture);
+                                        sharesTexture, _generation);
   }
 
   JSI_HOST_FUNCTION(makeImageSnapshot) {
@@ -115,8 +152,15 @@ public:
     sk_sp<SkImage> image;
     if (count > 0 && arguments[0].isObject()) {
       auto rect = JsiSkRect::fromValue(runtime, arguments[0]);
-      image = surface->makeImageSnapshot(SkIRect::MakeXYWH(
-          rect->x(), rect->y(), rect->width(), rect->height()));
+      auto bounds = SkIRect::MakeXYWH(rect->x(), rect->y(), rect->width(),
+                                      rect->height());
+      if (!SkIRect::Intersects(
+              bounds, SkIRect::MakeWH(surface->width(), surface->height()))) {
+        // Nothing of the surface to snapshot: outputImage keeps its content.
+        throw SkiaErrors::validation(
+            "makeImageSnapshot: the bounds lie outside of the surface");
+      }
+      image = surface->makeImageSnapshot(bounds);
     } else {
       image = surface->makeImageSnapshot();
     }
@@ -125,15 +169,25 @@ public:
     if (auto *recorder = surface->recorder()) {
       DawnContext::getInstance().submitRecording(recorder);
     }
-    // Without a snapshot (e.g. bounds outside of the surface), outputImage
-    // keeps its previous content and the image returned is a null one.
-    if (image != nullptr && count > 1 && arguments[1].isObject()) {
+    // The snapshot belongs to the device of the surface; a surface that has
+    // none to give (a dead one) gives a dead image of its size.
+    auto generation =
+        image == nullptr || image->isTextureBacked() ? _generation : 0;
+    if (image == nullptr) {
+      if (_generation == 0) {
+        throw SkiaErrors::outOfMemory(
+            "makeImageSnapshot: no memory for the snapshot");
+      }
+      image = JsiSkImage::makeEmptyImage(surface->width(), surface->height());
+    }
+    if (count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
-      jsiImage->setObject(image);
+      jsiImage->setImage(image, generation);
       return jsi::Value(runtime, arguments[1]);
     }
     return makeJsiObject(
-        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image)));
+        runtime, std::make_shared<JsiSkImage>(getContext(), std::move(image),
+                                              false, generation));
   }
 
   size_t getMemoryPressure() override {
@@ -223,6 +277,7 @@ private:
   }
 
   std::shared_ptr<Dispatcher> _dispatcher;
+  uint64_t _generation;
   std::shared_ptr<JsiSkCanvas> _canvas;
 };
 

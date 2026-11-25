@@ -28,6 +28,7 @@
 
 #include "include/codec/SkEncodedImageFormat.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkPictureRecorder.h"
 #include "include/core/SkPixmap.h"
 #include "include/core/SkStream.h"
 #include "include/encode/SkJpegEncoder.h"
@@ -317,6 +318,9 @@ public:
     auto format = optionalNumber(arguments, count, 0);
     auto quality = optionalNumber(arguments, count, 1);
     auto image = getObject();
+    if (isDead()) {
+      return deadReadback(runtime, method);
+    }
     if (format.has_value() && !isEncodableFormat(*format)) {
       auto error = SkiaErrors::validation(
           std::string(method) +
@@ -559,6 +563,9 @@ public:
   }
 
   JSI_HOST_FUNCTION(readPixels) {
+    if (isDead()) {
+      return deadReadback(runtime, "readPixels");
+    }
     int srcX = 0;
     int srcY = 0;
     if (count > 0 && !arguments[0].isUndefined()) {
@@ -588,9 +595,24 @@ public:
       mipmapped = value.isBool() && value.getBool();
     }
     auto image = getObject();
-    auto texture =
-        DawnContext::getInstance().MakeTextureImage(image, mipmapped);
+    if (isDead()) {
+      // Nothing to upload: it stays the dead image it is.
+      return jsi::Value(runtime, thisValue);
+    }
+    auto *dawn = DawnContext::tryGetInstance();
+    if (dawn == nullptr) {
+      throw SkiaErrors::gpuUnavailable(DawnContext::getGpuInfo().error);
+    }
+    if (DawnContext::isDeviceLost()) {
+      // Nothing can be uploaded until the device is replaced: the image as
+      // it is, which a canvas uploads when it draws it.
+      return jsi::Value(runtime, thisValue);
+    }
+    auto texture = dawn->MakeTextureImage(image, mipmapped);
     if (texture == nullptr) {
+      if (DawnContext::isDeviceLost()) {
+        return jsi::Value(runtime, thisValue);
+      }
       throw SkiaErrors::outOfMemory(
           "makeTextureImage: uploading the image failed");
     }
@@ -607,6 +629,9 @@ public:
   JSI_HOST_FUNCTION(makeRasterImage) {
     auto image = getObject();
     auto context = getContext();
+    if (isDead()) {
+      return deadReadback(runtime, "makeRasterImage");
+    }
     if (!image->isTextureBacked() && !image->isLazyGenerated()) {
       // Already on the CPU: resolves to itself, right away.
       return RNSkAsync::settled(
@@ -689,8 +714,70 @@ public:
   JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image,
              bool sharesTexture = false)
       : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
+                                                            image),
+        _sharesTexture(sharesTexture), _generation(generationOf(image)) {}
+
+  /**
+   An image made on the GPU device of `generation` (see
+   DawnContext::generation()), rather than the device in use: the snapshot
+   of a surface made before a loss, for instance.
+   */
+  JsiSkImage(std::shared_ptr<RNSkPlatformContext> context, sk_sp<SkImage> image,
+             bool sharesTexture, uint64_t generation)
+      : JsiSkWrappingSkPtrNativeObject<JsiSkImage, SkImage>(std::move(context),
                                                             std::move(image)),
-        _sharesTexture(sharesTexture) {}
+        _sharesTexture(sharesTexture), _generation(generation) {}
+
+  /**
+   An image of a lost GPU device, like the GPU objects of a lost WebGPU
+   device: valid to call, it draws nothing, and its readbacks reject with
+   an AbortError. What the GPU factories make while the device is lost (see
+   DawnContext::isDeviceLost), in place of throwing.
+   */
+  static std::shared_ptr<JsiSkImage>
+  makeDead(std::shared_ptr<RNSkPlatformContext> context, int width, int height,
+           uint64_t generation) {
+    return std::make_shared<JsiSkImage>(
+        std::move(context), makeEmptyImage(width, height), false,
+        generation == 0 ? DawnContext::generation() : generation);
+  }
+
+  /**
+   An image of the given size that draws nothing: a picture image of an
+   empty picture, which holds no pixels until something reads it.
+   */
+  static sk_sp<SkImage> makeEmptyImage(int width, int height) {
+    SkPictureRecorder recorder;
+    recorder.beginRecording(SkRect::MakeEmpty());
+    return SkImages::DeferredFromPicture(
+        recorder.finishRecordingAsPicture(),
+        SkISize::Make(std::max(width, 1), std::max(height, 1)), nullptr,
+        nullptr, SkImages::BitDepth::kU8, SkColorSpace::MakeSRGB());
+  }
+
+  /**
+   The GPU device a GPU image belongs to (see DawnContext::generation());
+   0 for a CPU image, which belongs to none.
+   */
+  static uint64_t generationOf(const sk_sp<SkImage> &image) {
+    return image != nullptr && image->isTextureBacked()
+               ? DawnContext::generation()
+               : 0;
+  }
+
+  /** Replaces the image, made on the device of `generation`. */
+  void setImage(sk_sp<SkImage> image, uint64_t generation) {
+    setObject(std::move(image));
+    _generation = generation;
+  }
+
+  /**
+   Whether the image belongs to a GPU device that was lost: it draws
+   nothing, and nothing can be read back from it.
+   */
+  bool isDead() const {
+    return _generation != 0 && !DawnContext::isCurrent(_generation);
+  }
 
   size_t getMemoryPressure() override {
     if (isDisposed()) {
@@ -713,7 +800,16 @@ public:
   }
 
 private:
+  /** A promise rejected with an AbortError, for a readback of a dead image. */
+  static jsi::Value deadReadback(jsi::Runtime &runtime, const char *method) {
+    return RNSkAsync::settled(
+        runtime, settleError(SkiaErrors::abort(
+                     std::string(method) +
+                     ": the image belongs to a GPU device that was lost")));
+  }
+
   bool _sharesTexture;
+  uint64_t _generation;
 };
 
 } // namespace RNSkia

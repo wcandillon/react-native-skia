@@ -15,6 +15,7 @@ React Native Skia reports failures the way WebGPU does: a call that fails throws
 | Data that cannot be decoded, parsed or compiled | Throws a `SkiaDecodeError` or an `SkSLCompilationError` |
 | A GPU or CPU allocation that fails | Throws a `SkiaOutOfMemoryError` or a `SkiaValidationError` |
 | No GPU on the device | Throws a `SkiaGPUUnavailableError` (see [`Skia.gpu`](/docs/webgpu#the-gpu-device)) |
+| The GPU device is lost | Nothing throws: the GPU objects draw nothing and their readbacks reject with an `AbortError`, until they are made again on the new device (see [device loss](/docs/webgpu#device-loss)) |
 | A valid call without a result (a path operation with an empty outcome, the end of an iteration) | Returns `null` |
 | Asynchronous work that fails | Rejects with a named error |
 | An API the platform does not have | Throws an error named `NotSupportedError` |

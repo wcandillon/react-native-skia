@@ -106,7 +106,7 @@ import type { SkImage } from "react-native-skia";
 
 const createTexture = (image: SharedValue<SkImage | null>) => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(200, 200)!;
+  const surface = Skia.Surface.MakeOffscreen(200, 200);
   const canvas = surface.getCanvas();
   canvas.drawColor(Skia.Color("cyan"));
   surface.flush();
@@ -137,7 +137,7 @@ import { Skia, Canvas, Image } from "react-native-skia";
 
 const Demo = () => {
   const image = useMemo(() => {
-    const surface = Skia.Surface.MakeOffscreen(200, 200)!;
+    const surface = Skia.Surface.MakeOffscreen(200, 200);
     const canvas = surface.getCanvas();
     canvas.drawColor(Skia.Color("cyan"));
     surface.flush();
@@ -165,7 +165,7 @@ import { Skia, Canvas, Image, useGpu } from "react-native-skia";
 const Demo = () => {
   // Both are made again once a lost GPU device has been replaced.
   const gpu = useGpu();
-  const surface = useMemo(() => Skia.Surface.MakeOffscreen(200, 200)!, [gpu]);
+  const surface = useMemo(() => Skia.Surface.MakeOffscreen(200, 200), [gpu]);
   // The image is created once per surface and follows it.
   const image = useMemo(() => surface.asImage(), [surface]);
   const t = useSharedValue(0);

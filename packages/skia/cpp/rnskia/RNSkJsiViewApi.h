@@ -17,6 +17,7 @@
 #include "RNSkView.h"
 #include "api/JsiSkGraphiteContext.h"
 #include "api/JsiSkNativeObjects.h"
+#include "api/SkiaErrors.h"
 
 #include "jsi/ViewProperty.h"
 #include <jsi/jsi.h>
@@ -287,23 +288,47 @@ public:
     sk_sp<SkImage> image;
     std::shared_ptr<RNSkView> view =
         ViewRegistry::getInstance().getView(nativeId);
-    if (view != nullptr) {
-      if (count > 1 && !arguments[1].isUndefined() && !arguments[1].isNull()) {
-        auto rect = JsiSkRect::fromValue(runtime, arguments[1]);
-        image = view->makeImageSnapshot(rect.get());
-      } else {
-        image = view->makeImageSnapshot(nullptr);
-      }
-      if (image == nullptr) {
-        throw jsi::JSError(runtime,
-                           "Could not create image from current surface.");
-        return jsi::Value::undefined();
-      }
-      return makeJsiObject(
-          runtime, std::make_shared<JsiSkImage>(_platformContext, image));
+    if (view == nullptr) {
+      throw SkiaErrors::validation(
+          "makeImageSnapshot: the canvas is not mounted");
     }
-    throw jsi::JSError(runtime, "No Skia View currently available.");
-    return jsi::Value::undefined();
+    if (DawnContext::tryGetInstance() == nullptr) {
+      throw SkiaErrors::gpuUnavailable(DawnContext::getGpuInfo().error);
+    }
+    std::shared_ptr<SkRect> rect;
+    if (count > 1 && !arguments[1].isUndefined() && !arguments[1].isNull()) {
+      rect = JsiSkRect::fromValue(runtime, arguments[1]);
+    }
+    // Like the GPU objects of a lost WebGPU device, the snapshot of a view
+    // whose device is lost is a dead image (see JsiSkImage::makeDead).
+    auto deadImage = [&]() {
+      return makeJsiObject(runtime,
+                           JsiSkImage::makeDead(_platformContext,
+                                                view->getScaledWidth(),
+                                                view->getScaledHeight(), 0));
+    };
+    if (DawnContext::isDeviceLost()) {
+      return deadImage();
+    }
+    try {
+      image = view->makeImageSnapshot(rect.get());
+    } catch (const std::exception &error) {
+      if (DawnContext::isDeviceLost()) {
+        return deadImage();
+      }
+      throw SkiaErrors::outOfMemory(
+          std::string("makeImageSnapshot: no GPU memory for the snapshot (") +
+          error.what() + ")");
+    }
+    if (image == nullptr) {
+      if (DawnContext::isDeviceLost()) {
+        return deadImage();
+      }
+      throw SkiaErrors::internal(
+          "makeImageSnapshot: the snapshot of the canvas failed");
+    }
+    return makeJsiObject(runtime,
+                         std::make_shared<JsiSkImage>(_platformContext, image));
   }
 
   JSI_HOST_FUNCTION(size) {

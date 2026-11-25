@@ -613,6 +613,18 @@ public:
   // device (see generation()).
   wgpu::Instance getWGPUInstance() { return wgpu::Instance(instance->Get()); }
 
+  /**
+   The largest width or height of a 2D texture the device in use takes
+   (maxTextureDimension2D); 0 when it cannot say.
+   */
+  uint32_t getMaxTextureDimension() {
+    wgpu::Limits limits{};
+    if (getWGPUDevice().GetLimits(&limits) != wgpu::Status::Success) {
+      return 0;
+    }
+    return limits.maxTextureDimension2D;
+  }
+
   // Get the wgpu::Device for WebGPU bindings: the device in use, which a
   // loss replaces (see generation()); the previous one is then good for
   // nothing, and Skia.gpu.lost tells JS to ask again.

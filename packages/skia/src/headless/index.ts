@@ -16,11 +16,7 @@ export const makeOffscreenSurface = (width: number, height: number) => {
   if (!Skia) {
     Skia = JsiSkApi(CanvasKit);
   }
-  const surface = Skia.Surface.MakeOffscreen(width, height);
-  if (surface === null) {
-    throw new Error("Couldn't create surface!");
-  }
-  return surface;
+  return Skia.Surface.MakeOffscreen(width, height);
 };
 
 export const getSkiaExports = () => {

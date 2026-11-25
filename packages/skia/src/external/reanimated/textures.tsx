@@ -30,7 +30,7 @@ const createTextureFromImage = (
 
 const renderPicture = (picture: SkPicture, size: SkSize) => {
   "worklet";
-  const surface = Skia.Surface.MakeOffscreen(size.width, size.height)!;
+  const surface = Skia.Surface.MakeOffscreen(size.width, size.height);
   const canvas = surface.getCanvas();
   canvas.drawPicture(picture);
   surface.flush();

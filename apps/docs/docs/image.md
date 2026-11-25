@@ -98,7 +98,7 @@ Reading pixels is asynchronous, as the GPU is: `makeRasterImage()`, `encodeToByt
 ```tsx twoslash
 import { Skia } from "react-native-skia";
 
-const surface = Skia.Surface.MakeOffscreen(256, 256)!;
+const surface = Skia.Surface.MakeOffscreen(256, 256);
 surface.getCanvas().drawColor(Skia.Color("cyan"));
 surface.flush();
 // A GPU image: drawing it anywhere costs nothing.
