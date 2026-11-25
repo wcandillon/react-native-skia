@@ -10,6 +10,7 @@
 #include "RNDawnContext.h"
 #include "RNSkGraphiteTarget.h"
 #include "RNSkThreadPool.h"
+#include "RNSkUncapturedErrors.h"
 #include "api/recorder/DrawingCtx.h"
 #include "api/recorder/RNRecorder.h"
 #include "rnsurface/FrameClock.h"
@@ -145,7 +146,7 @@ bool RNSkGraphiteProducer::hasContentLocked() const {
 
 bool RNSkGraphiteProducer::applyUpdatesTo(
     const std::shared_ptr<Recorder> &recorder, jsi::Runtime &runtime,
-    double recorderId, const jsi::Array &values) {
+    double recorderId, const jsi::Array &values, int64_t viewId) {
   if (recorder == nullptr || recorder->id != recorderId) {
     return false;
   }
@@ -155,14 +156,10 @@ bool RNSkGraphiteProducer::applyUpdatesTo(
   // and is reported here, once: an error escaping into the mapper would be
   // fatal and take the other mappers of that frame down with it.
   if (auto error = recorder->readUpdates(runtime, values)) {
-    const auto message = "React Native Skia: a shared value could not be "
-                         "read, its property stays unset: " +
-                         *error;
-    try {
-      RNSkLogger::errorToJavascriptConsole(runtime, message);
-    } catch (const std::exception &) {
-      RNSkLogger::logToConsole(message);
-    }
+    RNSkUncapturedErrors::report(
+        "TypeError",
+        "a shared value could not be read, its property stays unset: " + *error,
+        "recorder", viewId);
   }
   return true;
 }
@@ -178,7 +175,8 @@ bool RNSkGraphiteProducer::applyUpdates(jsi::Runtime &runtime,
   // Outside the lock: a commit replacing the recorder must not wait for the
   // read. Should it land while this runs, the values go into the retired
   // recorder and the commit's own frame draws the new one.
-  if (!applyUpdatesTo(recorder, runtime, recorderId, values)) {
+  if (!applyUpdatesTo(recorder, runtime, recorderId, values,
+                      _viewId.load(std::memory_order_relaxed))) {
     return false;
   }
   std::lock_guard<std::mutex> lock(_mutex);
@@ -313,8 +311,10 @@ void RNSkGraphiteProducer::produce() {
         // RNSkGraphiteTarget::beginRecording).
         canvas = target->beginRecording(context->getThreadRecorder());
       } catch (const std::exception &e) {
-        RNSkLogger::logToConsole("Canvas: beginning the frame failed: %s",
-                                 e.what());
+        RNSkUncapturedErrors::report(
+            "SkiaInternalError",
+            std::string("beginning the frame failed: ") + e.what(), "render",
+            _viewId.load(std::memory_order_relaxed));
       }
     }
     if (canvas != nullptr) {
@@ -322,14 +322,18 @@ void RNSkGraphiteProducer::produce() {
         // The deferred canvas already draws in points.
         drawContent(canvas, recorder.get(), picture, /* pixelDensity= */ 1.0f);
       } catch (const std::exception &e) {
-        RNSkLogger::logToConsole("Canvas: replaying the scene failed: %s",
-                                 e.what());
+        RNSkUncapturedErrors::report(
+            "SkiaInternalError",
+            std::string("replaying the scene failed: ") + e.what(), "recorder",
+            _viewId.load(std::memory_order_relaxed));
       }
       try {
         recording = target->finishRecording();
       } catch (const std::exception &e) {
-        RNSkLogger::logToConsole("Canvas: recording the frame failed: %s",
-                                 e.what());
+        RNSkUncapturedErrors::report(
+            "SkiaInternalError",
+            std::string("recording the frame failed: ") + e.what(), "render",
+            _viewId.load(std::memory_order_relaxed));
       }
     }
   }

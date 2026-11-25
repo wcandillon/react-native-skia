@@ -257,7 +257,8 @@ public:
           auto it = info->props.find("recorder");
           if (it != info->props.end() && it->second.isRecorder()) {
             RNSkGraphiteProducer::applyUpdatesTo(it->second.getRecorder(),
-                                                 runtime, recorderId, values);
+                                                 runtime, recorderId, values,
+                                                 nativeId);
           }
         });
     if (view == nullptr) {

@@ -48,6 +48,58 @@ export interface SkGpuLostInfo {
   readonly message: string;
 }
 
+/** Where an uncaptured error happened (see `SkUncapturedErrorEvent`). */
+export type SkUncapturedErrorSource =
+  /** Producing a frame of a canvas on a render thread. */
+  | "render"
+  /** Replaying the drawing of a canvas, or reading its animated values. */
+  | "recorder"
+  /** Running the recorded GPU work. */
+  | "submit"
+  /** The surface a canvas presents to. */
+  | "surface";
+
+/**
+ * A failure that happened with no caller to throw to, like WebGPU's
+ * GPUUncapturedErrorEvent: on a render thread, while replaying the drawing
+ * of a canvas, while running GPU work.
+ */
+export interface SkUncapturedErrorEvent {
+  readonly type: "uncapturederror";
+  /** The error, with its name (see the Errors documentation page). */
+  readonly error: Error;
+  readonly source: SkUncapturedErrorSource;
+  /** The nativeID of the canvas concerned; null when there is none. */
+  readonly viewId: number | null;
+  /** Whether a listener asked for the error not to be logged. */
+  readonly defaultPrevented: boolean;
+  /** Keeps the error from being logged to the console. */
+  preventDefault(): void;
+}
+
+export type SkUncapturedErrorListener = (event: SkUncapturedErrorEvent) => void;
+
+/**
+ * The uncapturederror event of `Skia.gpu`. The listeners belong to the
+ * runtime, whichever read of `Skia.gpu` they were added through: the events
+ * are dispatched on the React Native runtime (and on the web page), never on
+ * a worklet runtime. The same error from the same source is dispatched once
+ * a second at most. Without a listener that calls `preventDefault()`, the
+ * error is logged with `console.error`.
+ */
+export interface SkGpuEvents {
+  addEventListener(
+    type: "uncapturederror",
+    listener: SkUncapturedErrorListener
+  ): void;
+  removeEventListener(
+    type: "uncapturederror",
+    listener: SkUncapturedErrorListener
+  ): void;
+  /** Runs before the listeners added with `addEventListener`. */
+  onuncapturederror: SkUncapturedErrorListener | null;
+}
+
 /**
  * The GPU Skia renders with, probed once, the first time something needs
  * it (a canvas, a GPU call, or reading this property). On Android Skia
@@ -76,7 +128,7 @@ export interface SkGpuLostInfo {
  * between the loss and the replacement, and stays false, with `error` saying
  * why, if no replacement could be made.
  */
-export interface SkGpuInfo {
+export interface SkGpuInfo extends SkGpuEvents {
   /** Whether Skia can render on this device, right now. */
   readonly isAvailable: boolean;
   /** "Vulkan", "Metal" or "WebGL"; empty when unavailable. */

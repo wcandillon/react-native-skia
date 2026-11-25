@@ -26,6 +26,7 @@
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkUncapturedErrors.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
@@ -458,7 +459,7 @@ public:
    refuse its resources. Called on the recorder's thread. Returns whether
    the recording runs: false when there was nothing to run, when it was
    dropped, or when Graphite could not snap, insert or submit it (which is
-   logged).
+   reported, see RNSkUncapturedErrors).
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
@@ -478,7 +479,8 @@ public:
     }
     // After the check above: a snap failing for a lost device is a drop.
     if (recording == nullptr) {
-      RNSkLogger::logToConsole("Graphite could not snap a recording");
+      RNSkUncapturedErrors::report(
+          "SkiaInternalError", "Graphite could not snap a recording", "submit");
       return false;
     }
     skgpu::graphite::InsertRecordingInfo info;
@@ -487,17 +489,21 @@ public:
     // InsertStatus converts to true on success.
     const bool inserted = static_cast<bool>(status);
     if (!inserted) {
-      RNSkLogger::logToConsole(
-          "Graphite rejected a recording (InsertStatus %d): %s",
-          static_cast<int>(
-              static_cast<skgpu::graphite::InsertStatus::V>(status)),
-          status.message().c_str());
+      RNSkUncapturedErrors::report(
+          "SkiaInternalError",
+          "Graphite rejected a recording (InsertStatus " +
+              std::to_string(static_cast<int>(
+                  static_cast<skgpu::graphite::InsertStatus::V>(status))) +
+              "): " + status.message().c_str(),
+          "submit");
     }
     // Submitted either way, for the work other recordings inserted.
     const bool submitted = current->context->submit(syncToCpu);
     // Unless the device was lost meanwhile: its work is dropped, as above.
     if (!submitted && !current->lost.load(std::memory_order_acquire)) {
-      RNSkLogger::logToConsole("Graphite could not submit a recording");
+      RNSkUncapturedErrors::report("SkiaInternalError",
+                                   "Graphite could not submit a recording",
+                                   "submit");
     }
     return inserted && submitted;
   }
@@ -525,11 +531,13 @@ public:
       auto status = current->context->insertRecording(info);
       // InsertStatus converts to true on success.
       if (!static_cast<bool>(status)) {
-        RNSkLogger::logToConsole(
-            "Graphite rejected a recording (InsertStatus %d): %s",
-            static_cast<int>(
-                static_cast<skgpu::graphite::InsertStatus::V>(status)),
-            status.message().c_str());
+        RNSkUncapturedErrors::report(
+            "SkiaInternalError",
+            "Graphite rejected a recording (InsertStatus " +
+                std::to_string(static_cast<int>(
+                    static_cast<skgpu::graphite::InsertStatus::V>(status))) +
+                "): " + status.message().c_str(),
+            "submit");
       }
     }
     current->context->submit();
@@ -1131,7 +1139,10 @@ private:
           } catch (const std::exception &e) {
             // No recorder could be made: a failed upload, which the provider
             // remembers for a moment (see ImageProvider::Uploader).
-            RNSkLogger::logToConsole("Uploading an image failed: %s", e.what());
+            RNSkUncapturedErrors::report(
+                "SkiaOutOfMemoryError",
+                std::string("uploading an image failed: ") + e.what(),
+                "render");
             return ImageProvider::Upload{nullptr, generation};
           }
         },

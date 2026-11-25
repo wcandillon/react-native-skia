@@ -8,6 +8,7 @@
 #include "RNDawnContext.h"
 #include "RNDawnUtils.h"
 #include "RNSkGpuActivity.h"
+#include "RNSkUncapturedErrors.h"
 #include "utils/RNSkLog.h"
 
 #ifdef __APPLE__
@@ -91,7 +92,9 @@ void RNSkWindowSurface::attach(void *nativeHandle, int width, int height,
   _generation = DawnContext::generation();
   _surface = context->MakeWGPUSurface(nativeHandle);
   if (!_surface) {
-    RNSkLogger::logToConsole("Could not create a surface over the window");
+    RNSkUncapturedErrors::report("SkiaInternalError",
+                                 "could not create a surface over the window",
+                                 "surface");
     releaseWindow();
     return;
   }
@@ -526,7 +529,9 @@ bool RNSkWindowSurface::ensureDevice() {
   _generation = generation;
   _surface = context->MakeWGPUSurface(_nativeHandle);
   if (!_surface) {
-    RNSkLogger::logToConsole("Could not create a surface over the window");
+    RNSkUncapturedErrors::report("SkiaInternalError",
+                                 "could not create a surface over the window",
+                                 "surface");
     return false;
   }
   _usage = supportedSurfaceUsage();
@@ -540,8 +545,10 @@ skgpu::graphite::Recorder *RNSkWindowSurface::presentRecorder() {
   try {
     return DawnContext::getInstance().getRecorder();
   } catch (const std::exception &e) {
-    RNSkLogger::logToConsole("Could not get a recorder to present with: %s",
-                             e.what());
+    RNSkUncapturedErrors::report(
+        "SkiaInternalError",
+        std::string("could not get a recorder to present with: ") + e.what(),
+        "surface");
     return nullptr;
   }
 }

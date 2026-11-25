@@ -60,6 +60,53 @@ describe("GPU info", () => {
     expect(gpu.foreground).toBe(true);
   });
 
+  // Failures with no caller to throw to reach Skia.gpu's uncapturederror
+  // event (see cpp/rnskia/RNSkUncapturedErrors.h), on the React Native
+  // runtime, from any read of Skia.gpu.
+  itRunsE2eOnly("dispatches uncaptured errors on Skia.gpu", async () => {
+    const result = await surface.eval((Skia) => {
+      const received: { name: string; source: string; prevented: boolean }[] =
+        [];
+      const listener = (event: {
+        error: Error;
+        source: string;
+        preventDefault: () => void;
+        defaultPrevented: boolean;
+      }) => {
+        event.preventDefault();
+        received.push({
+          name: event.error.name,
+          source: event.source,
+          prevented: event.defaultPrevented,
+        });
+      };
+      Skia.gpu.addEventListener("uncapturederror", listener);
+      const dispatch = (
+        globalThis as unknown as {
+          __RNSkiaDispatchUncapturedError?: (
+            error: Error,
+            source: string,
+            viewId: number | null
+          ) => void;
+        }
+      ).__RNSkiaDispatchUncapturedError;
+      const error = new Error("test");
+      error.name = "SkiaInternalError";
+      dispatch?.(error, "submit", null);
+      Skia.gpu.removeEventListener("uncapturederror", listener);
+      return {
+        installed: typeof dispatch === "function",
+        received,
+        enumerable: Object.keys(Skia.gpu).includes("addEventListener"),
+      };
+    });
+    expect(result.installed).toBe(true);
+    expect(result.received).toEqual([
+      { name: "SkiaInternalError", source: "submit", prevented: true },
+    ]);
+    expect(result.enumerable).toBe(false);
+  });
+
   // The device harness forces the loss through react-native-webgpu's
   // forceLossForTesting on the device Skia shares (see Tests.tsx). Skia then
   // replaces the device: Skia.gpu.lost resolves, GPU work made afterwards

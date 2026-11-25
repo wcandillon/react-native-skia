@@ -12,6 +12,7 @@ import type {
   SkRuntimeShaderBuilder,
   SkTypeface,
 } from "../types";
+import { withGpuEvents } from "../UncapturedErrors";
 
 import { JsiSkPoint } from "./JsiSkPoint";
 import { JsiSkPaint } from "./JsiSkPaint";
@@ -145,7 +146,7 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
   },
   // CanvasKit renders on WebGL and falls back to software on its own, so
   // the device is never reported lost.
-  gpu: {
+  gpu: withGpuEvents({
     isAvailable: true,
     backend: "WebGL",
     vendor: "",
@@ -159,5 +160,5 @@ export const JsiSkApi = (CanvasKit: CanvasKit): Skia => ({
         typeof document === "undefined" || document.visibilityState !== "hidden"
       );
     },
-  },
+  }),
 });

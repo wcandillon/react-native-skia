@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -71,6 +73,14 @@ public:
   ~RNSkGraphiteProducer();
 
   /**
+   The nativeID of the view, which the failures of its frames name (see
+   RNSkUncapturedErrors). Any thread.
+   */
+  void setViewId(int64_t viewId) {
+    _viewId.store(viewId, std::memory_order_relaxed);
+  }
+
+  /**
    The target to record into. JS thread (the registry side, see
    RNSkView::setNativeId).
    */
@@ -110,11 +120,12 @@ public:
 
   /**
    Same as applyUpdates(), for a recording that no view owns yet (one queued
-   in the view registry until its view registers).
+   in the view registry until its view registers). `viewId` is the view the
+   failures to read a value name (see RNSkUncapturedErrors).
    */
   static bool applyUpdatesTo(const std::shared_ptr<Recorder> &recorder,
                              jsi::Runtime &runtime, double recorderId,
-                             const jsi::Array &values);
+                             const jsi::Array &values, int64_t viewId = -1);
 
   /**
    Marks the content dirty and schedules a frame if one can start. Returns
@@ -172,6 +183,7 @@ public:
   void renderInto(SkCanvas *canvas, float pixelDensity);
 
 private:
+  std::atomic<int64_t> _viewId{-1};
   /**
    Replays declarative content, a recorder if there is one, else a picture,
    into a canvas: clears it and applies the density.
