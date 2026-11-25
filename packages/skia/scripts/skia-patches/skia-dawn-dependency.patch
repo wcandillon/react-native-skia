@@ -1,18 +1,51 @@
-[apple] Configure Skia's Dawn dependency for iOS and tvOS
+[dawn] Configure Skia's Dawn dependency for Apple and generate only headers
 
 Map the GN platform and CPU to CMake, pass the simulator choice, and select
 the matching Apple SDK. Disable Tint command-line tools for cross builds.
 Link Cocoa only on native macOS, excluding iOS, tvOS, and Mac Catalyst.
 
-These rules build Skia's non-shipped libdawn_combined dependency; the
-standalone monolithic Dawn build uses dawn-configuration.ts instead.
+skia_dawn_headers_only makes the dawn_cmake action generate Dawn's headers
+(webgpu.h, webgpu_cpp.h, ...) without compiling Dawn: libskia.a is a static
+library that only needs the headers, and what ships is the monolithic
+libwebgpu_dawn that build-dawn.ts builds from the same checkout. Without it,
+every Skia target compiled all of Dawn into a libdawn_combined.a that was
+never used.
+
+Not sent upstream yet.
 
 ---
-# Keep Cocoa macOS-only and pass the Apple simulator choice to Dawn.
+# Generate only the headers when skia_dawn_headers_only is set, keep Cocoa
+# macOS-only, and pass the Apple simulator choice to Dawn.
 diff --git a/third_party/dawn/BUILD.gn b/third_party/dawn/BUILD.gn
 --- a/third_party/dawn/BUILD.gn
 +++ b/third_party/dawn/BUILD.gn
-@@ -164,8 +164,10 @@
+@@ -10,6 +10,14 @@
+ import("//gn/skia.gni")
+ import("//third_party/dawn/args.gni")
+ 
++declare_args() {
++  # Only generate Dawn's headers (webgpu.h, webgpu_cpp.h, ...) and do not
++  # compile Dawn. For a static Skia whose consumer links its own Dawn, built
++  # from the same checkout: the Graphite sources need the headers, never the
++  # library.
++  skia_dawn_headers_only = false
++}
++
+ if (is_win) {
+   # On Windows, the normal cc/cxx variables are just "clang" and "clang++"
+   # which are not found in the path. CMake needs the full path.
+@@ -154,7 +162,9 @@ config("dawn_api_config") {
+   } else {
+     libs = []
+   }
+-  libs += [ "$root_out_dir/$_dawn_lib_name" ]
++  if (!skia_dawn_headers_only) {
++    libs += [ "$root_out_dir/$_dawn_lib_name" ]
++  }
+ 
+   # https://dawn.googlesource.com/dawn/+/647c352f57aa8a4c2666258455158a36c0c385af/src/dawn/native/BUILD.gn#645
+   if (is_mac || is_ios) {
+@@ -164,8 +174,10 @@ config("dawn_api_config") {
        "IOKit.framework",
        "Metal.framework",
        "QuartzCore.framework",
@@ -24,7 +57,31 @@ diff --git a/third_party/dawn/BUILD.gn b/third_party/dawn/BUILD.gn
    }
  }
  
-@@ -264,6 +266,9 @@
+@@ -219,7 +231,12 @@ action("dawn_cmake") {
+     "cmake_utils.py",
+   ]
+ 
+-  outputs = [ "$root_out_dir/${_dawn_lib_name}" ]
++  if (skia_dawn_headers_only) {
++    # A stamp: the headers are what this produces.
++    outputs = [ "$target_gen_dir/dawn_headers.stamp" ]
++  } else {
++    outputs = [ "$root_out_dir/${_dawn_lib_name}" ]
++  }
+ 
+   depfile = "$target_gen_dir/${_dawn_lib_name}.d"
+ 
+@@ -233,6 +250,9 @@ action("dawn_cmake") {
+     "--target_cpu=" + target_cpu,
+     "--build_dir=cmake_dawn",
+   ]
++  if (skia_dawn_headers_only) {
++    args += [ "--headers_only" ]
++  }
+   if (is_clang) {
+     args += [ "--is_clang" ]
+   }
+@@ -264,6 +284,9 @@ action("dawn_cmake") {
        "--android_platform=android-" + ndk_api,
      ]
    }
@@ -34,11 +91,34 @@ diff --git a/third_party/dawn/BUILD.gn b/third_party/dawn/BUILD.gn
  
    if (dawn_enable_d3d11) {
      args += [ "--dawn_enable_d3d11=true" ]
-# Select the iOS/tvOS SDK and disable Tint command-line tools for cross builds.
+# Select the iOS/tvOS SDK, disable Tint command-line tools for cross builds,
+# and stop after the headers with --headers_only.
 diff --git a/third_party/dawn/build_dawn.py b/third_party/dawn/build_dawn.py
 --- a/third_party/dawn/build_dawn.py
 +++ b/third_party/dawn/build_dawn.py
-@@ -174,9 +174,16 @@
+@@ -56,6 +56,10 @@ def main():
+       "--dawn_enable_metal", default="false", help="Enable Metal backend.")
+   parser.add_argument(
+       "--dawn_enable_vulkan", default="false", help="Enable Vulkan backend.")
++  parser.add_argument(
++      "--headers_only",
++      action="store_true",
++      help="Only generate the headers; output_path is then a stamp file.")
+   args = parser.parse_args()
+ 
+   cmake_exe = shutil.which("cmake")
+@@ -75,6 +79,10 @@ def main():
+   # The headers are a dependency for all libraries.
+   # We want to build the other listed dawn components into one big library.
+   build_targets = ["webgpu_headers_gen", "dawn_proc", "dawn_native"]
++  if args.headers_only:
++    # The interface libraries that carry the generated dawn/ headers
++    # (dawn/webgpu.h, dawn/webgpu_cpp.h, ...) and the webgpu/ ones.
++    build_targets = ["dawn_headers", "dawncpp_headers", "webgpu_headers_gen"]
+   depfile_path = args.depfile_path
+ 
+   # On Windows, Debug build has CRT compatibility issues with Skia (MTd vs MT).
+@@ -174,9 +182,16 @@ def main():
      configure_cmd.append(f"-DCMAKE_C_COMPILER={args.cc.replace(os.sep, '/')}")
      configure_cmd.append(f"-DCMAKE_CXX_COMPILER={args.cxx.replace(os.sep, '/')}")
  
@@ -56,11 +136,23 @@ diff --git a/third_party/dawn/build_dawn.py b/third_party/dawn/build_dawn.py
    env = os.environ.copy()
    # Don't write .pyc files, which can cause race conditions when building
    # tint and dawn in parallel.
+@@ -216,6 +231,11 @@ def main():
+   dependencies, object_files = discover_dependencies(build_dir, build_targets)
+   write_depfile(output_path, depfile_path, dependencies)
+ 
++  if args.headers_only:
++    with open(output_path, "w"):
++      pass
++    return
++
+   combine_into_library(args, output_path, build_dir, target_os, object_files)
+ 
+ if __name__ == "__main__":
 # Accept the simulator option and map iOS/tvOS platforms and CPUs for CMake.
 diff --git a/third_party/dawn/cmake_utils.py b/third_party/dawn/cmake_utils.py
 --- a/third_party/dawn/cmake_utils.py
 +++ b/third_party/dawn/cmake_utils.py
-@@ -56,6 +56,8 @@
+@@ -56,6 +56,8 @@ def add_common_cmake_args(parser):
    parser.add_argument("--is_clang", action=argparse.BooleanOptionalAction)
    parser.add_argument(
        "--enable_rtti", action=argparse.BooleanOptionalAction, help="Enable RTTI.")
@@ -69,7 +161,7 @@ diff --git a/third_party/dawn/cmake_utils.py b/third_party/dawn/cmake_utils.py
  
  def add_next_batch_to_command(base_cmd, workset):
    if sys.platform != 'win32':
-@@ -234,6 +236,13 @@
+@@ -234,6 +236,13 @@ def get_cmake_os_cpu(os, cpu):
      }
      return "Darwin", target_cpu_map[cpu]
  

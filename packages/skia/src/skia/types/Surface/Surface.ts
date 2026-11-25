@@ -19,6 +19,9 @@ export interface SkSurface extends SkJSIInstance<"Surface"> {
 
       @param bounds A rectangle specifying the subset of the surface that
    is of interest.
+      @param outputImage An image to update in place instead of returning a
+   new one. It keeps its previous content when the snapshot cannot be
+   created (e.g. `bounds` is outside of the surface).
       @return  Image initialized with Surface contents
 
       example: https://fiddle.skia.org/c/@Surface_makeImageSnapshot

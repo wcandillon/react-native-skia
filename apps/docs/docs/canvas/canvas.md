@@ -150,7 +150,7 @@ The prop is ignored on iOS and web.
 
 | Option | Type | Effect |
 | --- | --- | --- |
-| `backingView` | `"TextureView" \| "SurfaceView" \| "HardwareBufferView"` | The native view behind the canvas. Defaults to `TextureView` |
+| `backingView` | `"TextureView" \| "SurfaceView"` | The native view behind the canvas. Defaults to `TextureView` |
 | `opaque` | `boolean` | Declares that the canvas covers every pixel of its bounds, so it is composited without blending. Defaults to `false` on a `TextureView` and to `true` on a `SurfaceView`. Applied in place |
 | `zOrderOnTop` | `boolean` | `SurfaceView` only: composites above every React Native view in the window. Defaults to `false` |
 | `zOrderMediaOverlay` | `boolean` | `SurfaceView` only: composites above the other `SurfaceView`s below the window (video players, other canvases). Defaults to `false`; `zOrderOnTop` takes precedence |
@@ -164,9 +164,6 @@ Each frame goes straight to the system compositor as its own layer, with no extr
 The price is that it is not really view content: it punches a hole through the window, so parent transforms, clipping, rounded corners, and z-ordering with sibling views do not apply to it.
 Use it for a canvas that is a plain rectangle: a full-screen scene, a game, a video-like surface.
 On an adaptive display (Android 11 and later) the canvas asks for the display's highest refresh rate while it animates, as the window does for regular views, and lets the rate drop again once the animation stops.
-
-**`HardwareBufferView`** is a plain view that draws each frame's `AHardwareBuffer` inline: composited like a `TextureView`, without its extra copy.
-React Native WebGPU offers it as an opt-in on Android 10 and later; React Native Skia accepts the value, so both canvases take the same options, but does not implement it yet: the canvas uses a `TextureView`, with a warning in development.
 
 | | `TextureView` | `SurfaceView` |
 | --- | --- | --- |

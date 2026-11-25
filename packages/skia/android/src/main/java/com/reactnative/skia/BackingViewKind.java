@@ -12,11 +12,8 @@ enum BackingViewKind {
     TEXTURE_VIEW;
 
     /**
-     * The kind the androidBackingView prop names. "HardwareBufferView" (a plain
-     * view drawing each frame's AHardwareBuffer inline, as React Native WebGPU's
-     * does) is not available here yet: it falls back to a TextureView, which
-     * composites the same way, and the JS side warns about it in development.
-     * The default is a TextureView.
+     * The kind the androidBackingView prop names. The default is a
+     * TextureView.
      */
     static BackingViewKind fromBackingView(@Nullable String backingView) {
         return "SurfaceView".equals(backingView) ? SURFACE_VIEW : TEXTURE_VIEW;

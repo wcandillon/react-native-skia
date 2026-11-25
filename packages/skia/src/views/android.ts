@@ -36,15 +36,8 @@ export const resolveBackingView = (
   android?: AndroidCanvasProps
 ): AndroidBackingView => {
   const { backingView } = options(android);
-  return backingView === "SurfaceView" || backingView === "HardwareBufferView"
-    ? backingView
-    : "TextureView";
+  return backingView === "SurfaceView" ? backingView : "TextureView";
 };
-
-// The view that is created: a HardwareBufferView is not available yet and
-// falls back to a TextureView, see BackingViewKind.fromBackingView().
-const resolveKind = (android?: AndroidCanvasProps) =>
-  resolveBackingView(android) === "SurfaceView" ? "SurfaceView" : "TextureView";
 
 // Whether the canvas gets the 10-bit format, see
 // BackingViewKind.resolveHighBitDepth().
@@ -52,12 +45,11 @@ export const resolveHighBitDepth = ({
   highBitDepth,
   android,
 }: BackingViewProps) =>
-  !!highBitDepth && resolveKind(android) === "SurfaceView";
+  !!highBitDepth && resolveBackingView(android) === "SurfaceView";
 
 // Whether the canvas composites as opaque, see BackingViewKind.resolveOpaque():
 // a SurfaceView is opaque unless asked otherwise, and always with the 10-bit
-// format; a TextureView is translucent unless asked otherwise; a
-// HardwareBufferView always composites with alpha.
+// format; a TextureView is translucent unless asked otherwise.
 export const resolveOpaque = (props: BackingViewProps): boolean => {
   const { opaque } = options(props.android);
   switch (resolveBackingView(props.android)) {
@@ -65,8 +57,6 @@ export const resolveOpaque = (props: BackingViewProps): boolean => {
       return resolveHighBitDepth(props) || opaque !== false;
     case "TextureView":
       return opaque === true;
-    case "HardwareBufferView":
-      return false;
   }
 };
 
@@ -103,12 +93,6 @@ export const warnBackingViewAtMount = (mount: BackingViewProps) => {
     return;
   }
   const backingView = resolveBackingView(mount.android);
-  if (backingView === "HardwareBufferView") {
-    console.warn(
-      "android.backingView: HardwareBufferView is not available in React " +
-        "Native Skia yet, the canvas uses a TextureView."
-    );
-  }
   if (mount.highBitDepth && backingView !== "SurfaceView") {
     console.warn(
       "highBitDepth needs a SurfaceView on Android (android.backingView: " +
@@ -148,7 +132,7 @@ export const warnBackingViewChange = (
   // Only a SurfaceView has a z-order of its own, which Android 11 and later
   // changes in place.
   const zOrderAtMount =
-    resolveKind(mount.android) === "SurfaceView" &&
+    resolveBackingView(mount.android) === "SurfaceView" &&
     Number(Platform.Version) < 30;
   if (zOrderAtMount && !!before.zOrderOnTop !== !!after.zOrderOnTop) {
     warnIgnoredChange("android.zOrderOnTop");

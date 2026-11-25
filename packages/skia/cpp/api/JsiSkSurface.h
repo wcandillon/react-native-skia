@@ -117,7 +117,9 @@ public:
     if (_recorder) {
       _recorder->flush();
     }
-    if (count > 1 && arguments[1].isObject()) {
+    // Without a snapshot (e.g. bounds outside of the surface), outputImage
+    // keeps its previous content and the image returned is a null one.
+    if (image != nullptr && count > 1 && arguments[1].isObject()) {
       auto jsiImage = getJsiObject<JsiSkImage>(runtime, arguments[1]);
       jsiImage->setObject(image);
       return jsi::Value(runtime, arguments[1]);

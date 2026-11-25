@@ -350,8 +350,7 @@ requestDevice(dawn::native::Adapter &nativeAdapter,
       // Dawn holds the commits while the app is in the background, from the
       // application's own notifications, and commits them when it comes back:
       // nothing is lost, nothing is refused. Dawn applies it on iOS and tvOS
-      // only, and a Dawn without it (react-native-webgpu-dawn before the
-      // patch) drops the name. See scripts/dawn-patches.
+      // only, and a Dawn built without the patch drops the name. See scripts/dawn-patches.
       "metal_suspend_submissions_in_background",
 #endif
   };

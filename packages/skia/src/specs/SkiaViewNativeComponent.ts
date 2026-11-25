@@ -11,7 +11,7 @@ export interface NativeProps extends ViewProps {
   colorSpace?: string;
   // The `android` prop, resolved (see views/android.ts)
   androidBackingView?: WithDefault<
-    "TextureView" | "SurfaceView" | "HardwareBufferView",
+    "TextureView" | "SurfaceView",
     "TextureView"
   >;
   androidOpaque?: WithDefault<boolean, false>;

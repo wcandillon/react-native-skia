@@ -100,4 +100,25 @@ describe("Surfaces", () => {
     expect(result.draw).toContain("surface was disposed");
     expect(result.getCanvas).toContain("disposed object");
   });
+
+  ["GPU", "raster"].forEach((kind) => {
+    it(`makeImageSnapshot() keeps outputImage without a snapshot (${kind})`, async () => {
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          const sf = ctx.gpu
+            ? Skia.Surface.MakeOffscreen(16, 16)!
+            : Skia.Surface.MakeRaster(16, 16)!;
+          sf.getCanvas().drawColor(Skia.Color("cyan"));
+          sf.flush();
+          const output = Skia.Image.MakeNull();
+          sf.makeImageSnapshot(undefined, output);
+          // Outside of the surface: there is no snapshot to make.
+          sf.makeImageSnapshot(Skia.XYWHRect(100, 100, 5, 5), output);
+          return [output.width(), output.height()];
+        },
+        { gpu: kind === "GPU" }
+      );
+      expect(result).toEqual([16, 16]);
+    });
+  });
 });
