@@ -597,6 +597,18 @@ jobs:
               exit 1
             }
 
+      # Xcode collects *.signature files from build products into the archive,
+      # and App Store Connect rejects any that is not an XCFramework code
+      # signature (ITMS-91063, #4539). No build phase may leave one there.
+      - name: Check build products for *.signature files
+        run: |
+          signatures=$(find "$DERIVED_DATA/Build/Products" -name '*.signature')
+          if [ -n "$signatures" ]; then
+            echo "::error::Build products contain *.signature files, which App Store Connect rejects (ITMS-91063):"
+            echo "$signatures"
+            exit 1
+          fi
+
       # React Native's prebuilt core, which the example installs since 0.88, is
       # compiled with Metro on 8081: an RCT_METRO_PORT build setting no longer
       # reaches it.
