@@ -14,6 +14,7 @@
 #include "rnskia/RNSkRuntimeScheduler.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkGpuPurge.h"
 
 #include "JsiSkAnimatedImage.h"
 #include "JsiSkAnimatedImageFactory.h"
@@ -168,6 +169,12 @@ public:
   JSI_HOST_FUNCTION(Color) {
     return JsiSkColor::createCtor()(runtime, thisValue, arguments, count);
   }
+  JSI_HOST_FUNCTION(purgeGpuResources) {
+    // The recorders of this thread, which only it may touch, then Dawn.
+    DawnContext::purgeThreadRecorders();
+    RNSkGpuPurge::request();
+    return jsi::Value::undefined();
+  }
   JSI_HOST_FUNCTION(getNativeDevice) {
     // Raw WGPUDevice pointer of the Graphite device, as a BigInt. Consumed by
     // react-native-webgpu's importDevice(), which AddRefs it; the pointer
@@ -267,6 +274,8 @@ public:
   }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
+    installHostMethod(runtime, prototype, "purgeGpuResources",
+                      &JsiSkApi::purgeGpuResources);
     installHostMethod(runtime, prototype, "getNativeDevice",
                       &JsiSkApi::getNativeDevice);
     installGetterWithRuntime(runtime, prototype, "gpu", &JsiSkApi::getGpu);

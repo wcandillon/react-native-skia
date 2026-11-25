@@ -3,6 +3,7 @@
 #include "RNSkGraphiteProducer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -23,19 +24,31 @@ namespace RNSkia {
 namespace {
 
 /**
- The render thread pool, set up on first use to trim the recorders of its
- threads once GPU resources went away (see DawnContext::trimThreadRecorders):
- a view torn down with its content, or textures the image cache let go of.
- A thread that ran no job for RNSkThreadPool::kIdleDelay lets go of all it
- can; one still recording, of what went unused that long.
+ What a render thread that still records lets go of in its idle task: what its
+ recorders did not use for this long. What went away with the request for the
+ task is older than that by the time the task runs (RNSkThreadPool::kIdleDelay
+ after the request), what the views still drawing use is not.
+ */
+constexpr std::chrono::milliseconds kBusyThreadTrimAge =
+    RNSkThreadPool::kIdleDelay / 2;
+
+/**
+ The render thread pool, set up on first use to free what the recorders of its
+ threads hold once GPU resources went away: a view torn down with its content,
+ or textures the image cache let go of. A thread that ran no job for
+ RNSkThreadPool::kIdleDelay purges its recorders (see
+ DawnContext::purgeThreadRecorders); one still recording trims them (see
+ DawnContext::trimThreadRecorders).
  */
 RNSkThreadPool &renderPool() {
   static RNSkThreadPool &pool = []() -> RNSkThreadPool & {
     auto &threads = RNSkThreadPool::getInstance();
     threads.setIdleTask([](bool idle) {
-      // What went away with the request is older than this by the time the
-      // task runs, what the views still drawing use is not.
-      DawnContext::trimThreadRecorders(RNSkThreadPool::kIdleDelay / 2, idle);
+      if (idle) {
+        DawnContext::purgeThreadRecorders();
+      } else {
+        DawnContext::trimThreadRecorders(kBusyThreadTrimAge);
+      }
     });
     ImageProvider::setReleaseListener(
         []() { RNSkThreadPool::getInstance().requestIdleTask(); });

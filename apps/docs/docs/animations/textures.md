@@ -187,6 +187,8 @@ const Demo = () => {
 };
 ```
 
+Flush the surface before drawing its image into another surface too: each surface submits its own drawing only, so flushing the second does not flush the first, and the order of the flushes is the order on the GPU.
+
 Never draw the image onto its own surface: use a second surface for a feedback loop.
 
 :::info
@@ -195,5 +197,14 @@ On the Web, a texture belongs to the WebGL context that created it, and each can
 Read the snapshot back with `makeRasterImage()` before drawing it in a canvas. The texture hooks do it for you, and `asImage()` is a snapshot there.
 
 :::
+
+## GPU memory of offscreen surfaces
+
+Each offscreen surface has a GPU cache of its own, for the scratch textures and atlases its drawing needs, so it can be drawn into on another thread than the one that made it.
+A surface must only be used by one thread at a time.
+
+Skia frees what the cache has not used for a few seconds as you draw into the surface. The rest goes with the surface: call `dispose()` once you are done with it. Keep a snapshot (`makeImageSnapshot()`) if you still need its content.
+
+Disposed surfaces leave their memory to Skia, for the next ones.
 
 Textures can also be shared with WebGPU: see [WebGPU](/docs/webgpu).

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "RNDawnContext.h"
+#include "RNSkGpuPurge.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -182,6 +183,12 @@ void RNSkApplePlatformContext::observeApplicationState() {
                          queue:nil
                     usingBlock:^(NSNotification *) {
                       DawnContext::setForeground(true);
+                    }];
+    [center addObserverForName:UIApplicationDidReceiveMemoryWarningNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      RNSkGpuPurge::onMemoryWarning();
                     }];
   });
 #endif // !TARGET_OS_OSX
