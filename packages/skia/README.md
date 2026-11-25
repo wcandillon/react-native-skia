@@ -24,6 +24,14 @@ React Native Skia has been downloaded more than 60 millions times on npm. And to
   </a>
 </div>
 
+## Gold Sponsors
+
+<div align="center">
+  <a href="https://hark.com/" target="_blank" rel="sponsored">
+    <img width="80" height="80" alt="Hark" src="https://firebasestorage.googleapis.com/v0/b/start-react-native.appspot.com/o/hark.png?alt=media&token=936e04d3-2cdb-4350-bbc6-13c99bc135f3" />
+  </a>
+</div>
+
 ## Getting Started
 
 ```sh
@@ -55,4 +63,4 @@ See the [WebGPU documentation](https://wcandillon.github.io/react-native-skia/do
 
 ## Contributing
 
-For detailed information on library development, building, testing, and contributing guidelines, please see [CONTRIBUTING.md](https://github.com/wcandillon/react-native-skia/blob/main/packages/skia/CONTRIBUTING.md).
+For detailed information on library development, building, testing, and contributing guidelines, please see [CONTRIBUTING.md](packages/skia/CONTRIBUTING.md).
