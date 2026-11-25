@@ -14,7 +14,7 @@
 #include "JsiSkImage.h"
 
 #include "rnskia/RNDawnContext.h"
-#include "rnskia/RNSkSurfaceRecorder.h"
+#include "rnskia/RNSkAsync.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"

@@ -483,6 +483,38 @@ public:
   }
 
   /**
+   The throttle of trimThreadIfDue(), and how long a resource went unused
+   before it goes: the delay of the render pool's idle task
+   (RNSkThreadPool::kIdleDelay).
+   */
+  static constexpr std::chrono::milliseconds kThreadTrimDelay =
+      RNSkThreadPool::kIdleDelay;
+
+  /**
+   trimThreadRecorders(), throttled to once per kThreadTrimDelay: called
+   after a submit by a thread outside the render pool (the JS thread, a
+   worklet runtime), which has no idle task to trim it. Its drawing recorder
+   otherwise keeps every scratch texture, up to Graphite's budget (256 MB by
+   default), for as long as the thread lives. Nothing happens on a render
+   thread (see RNSkGraphiteProducer). Never makes a recorder. Any thread.
+   */
+  static void trimThreadIfDue() {
+    if (RNSkThreadPool::isPoolThread()) {
+      return;
+    }
+    auto &slot = threadSlot();
+    if (slot.recorder == nullptr && uploadSlot().recorder == nullptr) {
+      return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - slot.lastTrim < kThreadTrimDelay) {
+      return;
+    }
+    slot.lastTrim = now;
+    trimThreadRecorders(kThreadTrimDelay);
+  }
+
+  /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
    thread's (see getRecorder); any other submits nothing. A recording made
    for a lost device (see generation()) is dropped: nothing can run it, and
@@ -547,38 +579,6 @@ public:
       RNSkLogger::logToConsole("Graphite could not submit a recording");
     }
     return inserted && submitted;
-  }
-
-  /**
-   The throttle of trimThreadIfDue(), and how long a resource went unused
-   before it goes: the delay of the render pool's idle task
-   (RNSkThreadPool::kIdleDelay).
-   */
-  static constexpr std::chrono::milliseconds kThreadTrimDelay =
-      RNSkThreadPool::kIdleDelay;
-
-  /**
-   trimThreadRecorders(), throttled to once per kThreadTrimDelay: called
-   after a submit by a thread outside the render pool (the JS thread, a
-   worklet runtime), which has no idle task to trim it. Its drawing recorder
-   otherwise keeps every scratch texture, up to Graphite's budget (256 MB by
-   default), for as long as the thread lives. Nothing happens on a render
-   thread (see RNSkGraphiteProducer). Never makes a recorder. Any thread.
-   */
-  static void trimThreadIfDue() {
-    if (RNSkThreadPool::isPoolThread()) {
-      return;
-    }
-    auto &slot = threadSlot();
-    if (slot.recorder == nullptr && uploadSlot().recorder == nullptr) {
-      return;
-    }
-    const auto now = std::chrono::steady_clock::now();
-    if (now - slot.lastTrim < kThreadTrimDelay) {
-      return;
-    }
-    slot.lastTrim = now;
-    trimThreadRecorders(kThreadTrimDelay);
   }
 
   /**

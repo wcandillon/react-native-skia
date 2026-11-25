@@ -1,6 +1,6 @@
-import { itRunsE2eOnly } from "../../../__tests__/setup";
 import { AlphaType, ColorType } from "../../../skia/types";
 import { surface } from "../setup";
+import { itRunsE2eOnly } from "../../../__tests__/setup";
 
 describe("Surfaces", () => {
   it("surface has width and height", async () => {
