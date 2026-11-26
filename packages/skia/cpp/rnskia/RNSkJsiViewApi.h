@@ -28,7 +28,14 @@ namespace jsi = facebook::jsi;
 using RNSkViewInfo = struct RNSkViewInfo {
   RNSkViewInfo() { view = nullptr; }
   std::shared_ptr<RNSkView> view;
+  // The latest value of each property, kept after it reaches a view: a view
+  // that replaces this one for the same id draws it too. Fabric tears native
+  // views down under a mounted canvas (display: none, view recycling), and JS
+  // only sends a recording when the scene changes.
   std::unordered_map<std::string, RNJsi::ViewProperty> props;
+  // Set while the canvas is mounted in JS (retainView/releaseView): the entry
+  // then outlives the native views torn down under the canvas.
+  bool retained = false;
 };
 
 class ViewRegistry {
@@ -50,8 +57,23 @@ public:
   // tombstone and show nothing until its next one (#4312).
   size_t allocateId() { return _nextId.fetch_add(1); }
 
-  void removeViewInfo(size_t id) {
+  // Unregisters `view` (the caller's own view, or nullptr when it has none
+  // any more) from the id. Returns false when another view has taken the id
+  // over: a view torn down late must neither detach nor remove it.
+  bool removeViewInfo(size_t id, const RNSkView *view) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
+    auto it = _registry.find(id);
+    if (it != _registry.end()) {
+      if (it->second->view != nullptr && it->second->view.get() != view) {
+        return false;
+      }
+      if (it->second->retained) {
+        // The canvas is still mounted: the entry waits for the view Fabric
+        // creates for it next.
+        it->second->view = nullptr;
+        return true;
+      }
+    }
     _registry.erase(id);
     // Remember that this id was explicitly unregistered. Property updates
     // can arrive after unregistration (e.g. a Reanimated worklet setting the
@@ -59,6 +81,33 @@ public:
     // the entry and its props (an SkPicture retaining every image it draws)
     // would stay in this global registry forever.
     _unregistered.insert(id);
+    return true;
+  }
+
+  // The canvas for the id is mounted in JS.
+  void retainViewInfo(size_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    _unregistered.erase(id);
+    auto &info = _registry[id];
+    if (info == nullptr) {
+      info = std::make_shared<RNSkViewInfo>();
+    }
+    info->retained = true;
+  }
+
+  // The canvas for the id has unmounted in JS. A view still attached keeps the
+  // entry until it is torn down, as for a canvas that was never retained.
+  void releaseViewInfo(size_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    auto it = _registry.find(id);
+    if (it == _registry.end()) {
+      return;
+    }
+    it->second->retained = false;
+    if (it->second->view == nullptr) {
+      _registry.erase(it);
+      _unregistered.insert(id);
+    }
   }
 
   // Execute a function while holding the registry lock.
@@ -182,14 +231,41 @@ public:
               name, RNJsi::ViewProperty(runtime, arguments[2]));
           // Now let's see if we have a view that we can update
           if (info->view != nullptr) {
-            // Update view!
+            // Update view! It gets the property that changed; the map keeps
+            // every property for the next view (see RNSkViewInfo).
+            std::unordered_map<std::string, RNJsi::ViewProperty> changed{
+                {name, info->props.at(name)}};
             info->view->setNativeId(nativeId);
-            info->view->setJsiProperties(info->props);
-            info->props.clear();
+            info->view->setJsiProperties(changed);
           }
           return nullptr; // Return type for template deduction
         });
 
+    return jsi::Value::undefined();
+  }
+
+  /**
+   Marks the canvas for the id as mounted in JS: (nativeId). Its properties
+   then outlive the native views torn down under it.
+   */
+  JSI_HOST_FUNCTION(retainView) {
+    if (count != 1 || !arguments[0].isNumber()) {
+      throw jsi::JSError(runtime, "retainView: expected (nativeId)");
+    }
+    ViewRegistry::getInstance().retainViewInfo(
+        static_cast<size_t>(arguments[0].asNumber()));
+    return jsi::Value::undefined();
+  }
+
+  /**
+   Marks the canvas for the id as unmounted in JS: (nativeId).
+   */
+  JSI_HOST_FUNCTION(releaseView) {
+    if (count != 1 || !arguments[0].isNumber()) {
+      throw jsi::JSError(runtime, "releaseView: expected (nativeId)");
+    }
+    ViewRegistry::getInstance().releaseViewInfo(
+        static_cast<size_t>(arguments[0].asNumber()));
     return jsi::Value::undefined();
   }
 
@@ -246,9 +322,9 @@ public:
           if (view != nullptr) {
             return;
           }
-          // The view has not registered yet: the recording waits in the
-          // registry and is drawn, with whatever values it holds by then,
-          // once the view registers.
+          // The view has not registered yet (or was torn down under a mounted
+          // canvas): the recording waits in the registry and is drawn, with
+          // whatever values it holds by then, once a view registers.
           // Keep it current, under the registry lock so that a registration
           // cannot slip in between; the recording would otherwise wait,
           // unready (it reads no value while recording), until the next
@@ -394,6 +470,10 @@ public:
                       &RNSkJsiViewApi::setJsiProperty);
     installHostMethod(runtime, prototype, "requestRedraw",
                       &RNSkJsiViewApi::requestRedraw);
+    installHostMethod(runtime, prototype, "retainView",
+                      &RNSkJsiViewApi::retainView);
+    installHostMethod(runtime, prototype, "releaseView",
+                      &RNSkJsiViewApi::releaseView);
     installHostMethod(runtime, prototype, "applyUpdates",
                       &RNSkJsiViewApi::applyUpdates);
 
@@ -423,11 +503,15 @@ public:
     ViewRegistry::getInstance().withViewInfo(
         nativeId,
         [&](std::shared_ptr<RNSkViewInfo> info) {
+          // A view registers again on every props update: it already has
+          // the properties, which only a new view needs.
+          if (info->view == view) {
+            return nullptr;
+          }
           info->view = view;
           info->view->setNativeId(nativeId);
 
           info->view->setJsiProperties(info->props);
-          info->props.clear();
 
           return nullptr;
         },
@@ -437,10 +521,13 @@ public:
   /**
    * Unregisters a Skia draw view
    * @param nativeId View id
+   * @param view The view being torn down: nothing happens when another view
+   * has taken the id over since
    */
-  void unregisterSkiaView(size_t nativeId) {
-    ViewRegistry::getInstance().removeViewInfo(nativeId);
-    RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
+  void unregisterSkiaView(size_t nativeId, const RNSkView *view) {
+    if (ViewRegistry::getInstance().removeViewInfo(nativeId, view)) {
+      RNSkGraphiteTargetRegistry::getInstance().remove(nativeId);
+    }
   }
 
 private:
