@@ -5,6 +5,7 @@ import {
   SkiaValidationError,
   SkiaOutOfMemoryError,
   SkiaGPUUnavailableError,
+  SkiaSurfaceUnavailableError,
   SkiaInternalError,
   SkiaErrorConstructors,
   SkiaErrorBrand,
@@ -19,6 +20,10 @@ describe("Errors", () => {
       [new SkiaValidationError("zero size"), "SkiaValidationError"],
       [new SkiaOutOfMemoryError("oom"), "SkiaOutOfMemoryError"],
       [new SkiaGPUUnavailableError("no vulkan"), "SkiaGPUUnavailableError"],
+      [
+        new SkiaSurfaceUnavailableError("no webgl", "webgl"),
+        "SkiaSurfaceUnavailableError",
+      ],
       [new SkiaInternalError("driver"), "SkiaInternalError"],
     ] as const;
     for (const [error, name] of errors) {
@@ -44,6 +49,8 @@ describe("Errors", () => {
     ]);
     expect(compile.messages).toHaveLength(1);
     expect(compile.messages[0].lineNum).toBe(3);
+    const surface = new SkiaSurfaceUnavailableError("no 2d", "2d");
+    expect(surface.context).toBe("2d");
   });
 
   it("names the errors of the generic class like WebGPU's DOMExceptions", () => {
