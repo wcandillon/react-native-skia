@@ -29,12 +29,15 @@ namespace RNSkia {
 /**
  * When one thread of RNSkThreadPool runs the pool's idle task, and whether it
  * runs it idle (see RNSkThreadPool::setIdleTask). The task is due the delay
- * after the latest request the thread has not served. A thread that runs it
- * busy owes it a run once it ran no job for the delay, and each job puts that
- * run off: the jobs of the views a request comes from can still be running
- * when it is made. A request does not put it off: the thread runs the task at
- * whichever comes first, and a run it owes is idle, so it serves the request
- * too. The caller passes the times; it reads no clock.
+ * after the first request the thread has not served: later ones do not put
+ * it off, and one run serves them all, but for those a busy run is too soon
+ * for (made less than the delay before it), which it runs again for, the
+ * delay after the latest. A thread that runs it busy owes it a
+ * run once it ran no job for the delay, and each job puts that run off: the
+ * jobs of the views a request comes from can still be running when it is
+ * made. A request does not put it off: the thread runs the task at whichever
+ * comes first, and a run it owes is idle, so it serves the request too. The
+ * caller passes the times; it reads no clock.
  */
 class RNSkIdleTaskSchedule {
 public:
@@ -45,14 +48,21 @@ public:
       : _delay(delay), _lastJobEnd(start) {}
 
   /**
-   When the thread runs the idle task next, or nothing while it owes no run:
-   `requests` counts the requests made so far, the latest at `requestTime`.
+   A request is made at `now`. While an earlier one is not served yet, it
+   does not put the run off.
    */
-  std::optional<Clock::time_point> due(uint64_t requests,
-                                       Clock::time_point requestTime) const {
+  void request(Clock::time_point now) {
+    if (!_firstRequest) {
+      _firstRequest = now;
+    }
+    _latestRequest = now;
+  }
+
+  /** When the thread runs the idle task next; nothing while it owes none. */
+  std::optional<Clock::time_point> due() const {
     std::optional<Clock::time_point> due;
-    if (requests != _servedRequests) {
-      due = requestTime + _delay;
+    if (_firstRequest) {
+      due = *_firstRequest + _delay;
     }
     if (_idleRunOwed) {
       // Requests keep coming while views come and go on other threads: one
@@ -65,12 +75,19 @@ public:
   }
 
   /**
-   The thread runs the idle task at `now`, which serves `requests`. Returns
-   whether it runs it idle; run busy, it owes the task an idle run.
+   The thread runs the idle task at `now`. Run idle, it serves every request
+   made so far. Run busy, it serves those made at least the delay before:
+   it lets go only of what went unused for a while, so what went away with
+   a later one is still there, and it runs the task again for that one.
+   Returns whether it runs it idle; run busy, it owes the task an idle run.
    */
-  bool run(uint64_t requests, Clock::time_point now) {
-    _servedRequests = requests;
+  bool run(Clock::time_point now) {
     const bool idle = now - _lastJobEnd >= _delay;
+    if (!idle && _latestRequest && now - *_latestRequest < _delay) {
+      _firstRequest = _latestRequest;
+    } else {
+      _firstRequest.reset();
+    }
     _idleRunOwed = !idle;
     return idle;
   }
@@ -80,7 +97,9 @@ public:
 
 private:
   const Clock::duration _delay;
-  uint64_t _servedRequests = 0;
+  // When the first request the thread has not served was made.
+  std::optional<Clock::time_point> _firstRequest;
+  std::optional<Clock::time_point> _latestRequest;
   bool _idleRunOwed = false;
   Clock::time_point _lastJobEnd;
 };
@@ -182,19 +201,17 @@ public:
    Asks every thread to run the idle task kIdleDelay from now, as soon as no
    job is waiting on it: a thread busy with jobs runs it between two of
    them, once its queue is empty. Requests add up: one run serves every
-   request a thread has not served, kIdleDelay after the latest. Any
-   thread.
+   request a thread has not served (a busy one, those at least kIdleDelay
+   old), kIdleDelay after the first, so that requests that keep coming do
+   not put the run off. Any thread.
    */
   void requestIdleTask() {
-    {
-      std::lock_guard<std::mutex> lock(_idleMutex);
-      _idleRequest++;
-      _idleRequestTime = Clock::now();
-    }
+    const auto now = Clock::now();
     for (auto &worker : _workers) {
       // Under the worker's lock: a thread reads the request under it before
       // waiting (see run), so the request is either read or waited for.
       std::lock_guard<std::mutex> lock(worker->mutex);
+      worker->schedule.request(now);
       worker->condition.notify_all();
     }
   }
@@ -207,6 +224,9 @@ private:
     std::mutex mutex;
     std::condition_variable condition;
     std::deque<std::function<void()>> jobs;
+    // When the thread runs the idle task. Under the lock: requestIdleTask()
+    // writes to it from any thread. Made before any thread starts.
+    RNSkIdleTaskSchedule schedule{kIdleDelay, Clock::now()};
   };
 
   RNSkThreadPool() {
@@ -237,19 +257,9 @@ private:
 #endif
   }
 
-  /**
-   The latest idle request and when it was made, with the task to run for
-   it. Under the idle lock.
-   */
-  struct IdleRequest {
-    uint64_t id;
-    Clock::time_point time;
-    std::function<void(bool)> task;
-  };
-
-  IdleRequest idleRequest() {
+  std::function<void(bool)> idleTask() {
     std::lock_guard<std::mutex> lock(_idleMutex);
-    return {_idleRequest, _idleRequestTime, _idleTask};
+    return _idleTask;
   }
 
   static bool &poolThreadFlag() {
@@ -261,13 +271,18 @@ private:
     poolThreadFlag() = true;
     configureThread(index);
     auto &worker = *_workers[index];
-    RNSkIdleTaskSchedule schedule(kIdleDelay, Clock::now());
+    // When the last job ended, told to the schedule under the next lock.
+    std::optional<Clock::time_point> jobEnd;
     for (;;) {
       std::function<void()> job;
       std::function<void(bool)> idleTask;
       bool idle = false;
       {
         std::unique_lock<std::mutex> lock(worker.mutex);
+        if (jobEnd) {
+          worker.schedule.ranJob(*jobEnd);
+          jobEnd.reset();
+        }
         for (;;) {
           if (!worker.jobs.empty()) {
             job = std::move(worker.jobs.front());
@@ -277,8 +292,7 @@ private:
           // Read while the worker lock is held: requestIdleTask() takes it
           // to notify, so a request cannot land between this read and the
           // wait below unnoticed.
-          const auto request = idleRequest();
-          const auto due = schedule.due(request.id, request.time);
+          const auto due = worker.schedule.due();
           if (!due) {
             worker.condition.wait(lock);
             continue;
@@ -288,14 +302,14 @@ private:
             worker.condition.wait_until(lock, *due);
             continue;
           }
-          idleTask = request.task;
-          idle = schedule.run(request.id, now);
+          idleTask = this->idleTask();
+          idle = worker.schedule.run(now);
           break;
         }
       }
       if (job) {
         job();
-        schedule.ranJob(Clock::now());
+        jobEnd = Clock::now();
       } else if (idleTask) {
         idleTask(idle);
       }
@@ -309,11 +323,9 @@ private:
   std::mutex _lanesMutex;
   std::vector<size_t> _views;
 
-  // The idle task and the latest request for it (see requestIdleTask).
+  // The idle task (see setIdleTask).
   std::mutex _idleMutex;
   std::function<void(bool)> _idleTask;
-  uint64_t _idleRequest = 0;
-  Clock::time_point _idleRequestTime;
 };
 
 } // namespace RNSkia
