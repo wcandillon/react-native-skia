@@ -21,6 +21,10 @@ void JsiPromises::Promise::reject(const jsi::JSError &error) {
   reject_.call(runtime_, error.value());
 }
 
+void JsiPromises::Promise::reject(const NamedError &error) {
+  reject_.call(runtime_, error.toValue(runtime_));
+}
+
 jsi::Value
 JsiPromises::createPromiseAsJSIValue(jsi::Runtime &rt,
                                      PromiseSetupFunctionType &&func) {
@@ -33,8 +37,13 @@ JsiPromises::createPromiseAsJSIValue(jsi::Runtime &rt,
         jsi::Function reject = args[1].getObject(rt2).getFunction(rt2);
         auto wrapper = std::make_shared<Promise>(rt2, std::move(resolve),
                                                  std::move(reject));
-        func(rt2, wrapper);
-        return jsi::Value::undefined();
+        // A NamedError thrown before the work started rejects the promise
+        // with the error of its name (the Promise constructor turns the
+        // executor's exception into the rejection).
+        return guardNamedErrors(rt2, [&]() -> jsi::Value {
+          func(rt2, wrapper);
+          return jsi::Value::undefined();
+        });
       });
 
   return JSPromise.callAsConstructor(rt, fn);

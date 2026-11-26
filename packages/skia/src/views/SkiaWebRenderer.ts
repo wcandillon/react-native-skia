@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { LayoutChangeEvent } from "react-native";
 
 import type { SkRect, SkPicture, SkImage } from "../skia/types";
+import { SkiaSurfaceUnavailableError } from "../skia/types/Errors";
 import { getSharedWebGLContext } from "../skia/web/SharedWebGLContext";
 import type { SharedWebGLContext } from "../skia/web/SharedWebGLContext";
 
@@ -69,7 +70,10 @@ export class WebGLRenderer implements Renderer {
   ) {
     const shared = getSharedWebGLContext(CanvasKit);
     if (!shared) {
-      throw new Error("Could not create a WebGL context");
+      throw new SkiaSurfaceUnavailableError(
+        "Could not create a WebGL context",
+        "webgl"
+      );
     }
     this.shared = shared;
     // Wide gamut, like the shared drawing buffer the frame comes from (see
@@ -77,7 +81,10 @@ export class WebGLRenderer implements Renderer {
     // the frame to sRGB.
     const ctx = canvas.getContext("2d", { colorSpace: "display-p3" });
     if (!ctx) {
-      throw new Error("Could not create a 2D context");
+      throw new SkiaSurfaceUnavailableError(
+        "Could not create a 2D context",
+        "2d"
+      );
     }
     this.ctx = ctx;
     owners.set(canvas, this);

@@ -213,8 +213,10 @@ protected:
         runtime, jsi::PropNameID::forUtf8(runtime, name), 0,
         [method](jsi::Runtime &rt, const jsi::Value &thisValue,
                  const jsi::Value *arguments, size_t count) -> jsi::Value {
-          auto native = fromThis(rt, thisValue);
-          return ((*native).*method)(rt, thisValue, arguments, count);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = fromThis(rt, thisValue);
+            return ((*native).*method)(rt, thisValue, arguments, count);
+          });
         });
     prototype.setProperty(runtime, name, func);
   }
@@ -233,10 +235,12 @@ protected:
         runtime, jsi::PropNameID::forUtf8(runtime, name), sizeof...(Args),
         [method](jsi::Runtime &rt, const jsi::Value &thisValue,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = fromThis(rt, thisValue);
-          invokeChainable(native.get(), method, rt, args,
-                          std::index_sequence_for<Args...>{}, count);
-          return jsi::Value(rt, thisValue);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = fromThis(rt, thisValue);
+            invokeChainable(native.get(), method, rt, args,
+                            std::index_sequence_for<Args...>{}, count);
+            return jsi::Value(rt, thisValue);
+          });
         });
     prototype.setProperty(runtime, name, func);
   }
@@ -254,10 +258,13 @@ protected:
         runtime, jsi::PropNameID::forUtf8(runtime, name), sizeof...(Args),
         [method](jsi::Runtime &rt, const jsi::Value &thisValue,
                  const jsi::Value *args, size_t count) -> jsi::Value {
-          auto native = fromThis(rt, thisValue);
-          invokeChainableWithRuntime(native.get(), method, rt, args,
-                                     std::index_sequence_for<Args...>{}, count);
-          return jsi::Value(rt, thisValue);
+          return RNJsi::guardNamedErrors(rt, [&]() -> jsi::Value {
+            auto native = fromThis(rt, thisValue);
+            invokeChainableWithRuntime(native.get(), method, rt, args,
+                                       std::index_sequence_for<Args...>{},
+                                       count);
+            return jsi::Value(rt, thisValue);
+          });
         });
     prototype.setProperty(runtime, name, func);
   }
@@ -279,9 +286,8 @@ private:
       Derived *obj, ReturnType (Derived::*method)(jsi::Runtime &, Args...),
       jsi::Runtime &runtime, const jsi::Value *args, std::index_sequence<Is...>,
       size_t count) {
-    (obj->*method)(runtime,
-                   RNJsi::JSIConverter<std::decay_t<Args>>::fromJSI(
-                       runtime, args[Is], Is >= count)...);
+    (obj->*method)(runtime, RNJsi::JSIConverter<std::decay_t<Args>>::fromJSI(
+                                runtime, args[Is], Is >= count)...);
   }
 
   std::shared_ptr<RNSkPlatformContext> _context;

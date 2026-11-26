@@ -34,3 +34,4 @@ export * from "./Recorder";
 export * from "./Skottie";
 export * from "./Graphite";
 export * from "./GPUTexture";
+export * from "./Errors";

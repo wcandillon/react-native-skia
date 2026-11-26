@@ -2,8 +2,10 @@ import { Platform } from "../Platform";
 import NativeSkiaModule from "../specs/NativeSkiaModule";
 
 import { registerSkiaWorkletSerialization } from "./SkiaWorkletSerialization";
+import { SkiaErrorConstructors } from "./types/Errors";
 
 declare global {
+  var __RNSkiaErrors: typeof SkiaErrorConstructors | undefined;
   var __skiaScheduleOnUI: ((settle: () => void) => void) | undefined;
 }
 
@@ -33,6 +35,10 @@ const registerUIRuntimeScheduler = () => {
 };
 
 if (Platform.OS !== "web" && global.SkiaApi == null) {
+  // Native code builds the errors it throws with these, on this runtime, so
+  // that `instanceof SkiaDecodeError` holds (see cpp/jsi/NamedError.h).
+  // Registered first: installing the module can already throw one.
+  globalThis.__RNSkiaErrors = SkiaErrorConstructors;
   // Initialize RN Skia
   const SkiaModule = NativeSkiaModule;
   if (SkiaModule == null || typeof SkiaModule.install !== "function") {

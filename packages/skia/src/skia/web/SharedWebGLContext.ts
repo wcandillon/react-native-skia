@@ -5,6 +5,8 @@ import type {
   WebGLContextHandle,
 } from "canvaskit-wasm";
 
+import { SkiaSurfaceUnavailableError } from "../types/Errors";
+
 import { JsiSkSurface } from "./JsiSkSurface";
 
 // One WebGL context per CanvasKit instance, shared by every <Canvas> on the
@@ -107,7 +109,10 @@ export class SharedWebGLContext {
     const gl = getGL(canvas);
     if (!gl) {
       deleteContextHandle(CanvasKit, handle);
-      throw new Error("Could not create a WebGL context");
+      throw new SkiaSurfaceUnavailableError(
+        "Could not create a WebGL context",
+        "webgl"
+      );
     }
     this.gl = gl;
     this.build(handle);
@@ -131,7 +136,10 @@ export class SharedWebGLContext {
   private createHandle() {
     const handle = this.CanvasKit.GetWebGLContext(this.canvas);
     if (!handle) {
-      throw new Error("Could not create a WebGL context");
+      throw new SkiaSurfaceUnavailableError(
+        "Could not create a WebGL context",
+        "webgl"
+      );
     }
     return handle;
   }
@@ -148,7 +156,10 @@ export class SharedWebGLContext {
       }
     }
     if (!grContext) {
-      throw new Error("Could not create a graphics context");
+      throw new SkiaSurfaceUnavailableError(
+        "Could not create a graphics context",
+        "graphics"
+      );
     }
     this.handle = handle;
     this.grContext = grContext;
