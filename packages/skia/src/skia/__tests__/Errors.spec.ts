@@ -7,6 +7,7 @@ import {
   SkiaGPUUnavailableError,
   SkiaInternalError,
   SkiaErrorConstructors,
+  SkiaErrorBrand,
   isSkiaError,
 } from "../types/Errors";
 
@@ -53,15 +54,35 @@ describe("Errors", () => {
     expect(SkiaErrorConstructors.SkiaError("plain").name).toBe("SkiaError");
   });
 
-  it("recognizes an error by its name alone, as a worklet receives it", () => {
+  it("recognizes a branded error, as a worklet receives it", () => {
     const plain = new Error("bad bytes");
     plain.name = "SkiaDecodeError";
+    Object.defineProperty(plain, SkiaErrorBrand, { value: true });
     expect(isSkiaError(plain)).toBe(true);
     expect(isSkiaError(plain, "SkiaDecodeError")).toBe(true);
     expect(isSkiaError(plain, "AbortError")).toBe(false);
     expect(isSkiaError(new TypeError("x"))).toBe(false);
     expect(isSkiaError(null)).toBe(false);
     expect(isSkiaError("SkiaDecodeError")).toBe(false);
+  });
+
+  it("does not take an error of the same name for its own", () => {
+    // The AbortError of an aborted fetch, a DOMException.
+    const abort = new Error("aborted");
+    abort.name = "AbortError";
+    expect(isSkiaError(abort)).toBe(false);
+    expect(isSkiaError(abort, "AbortError")).toBe(false);
+    const decode = new Error("bad bytes");
+    decode.name = "SkiaDecodeError";
+    expect(isSkiaError(decode)).toBe(false);
+  });
+
+  it("brands the errors without showing the brand", () => {
+    const error = new SkiaDecodeError("bad", "image");
+    expect(Object.keys(error)).not.toContain(SkiaErrorBrand);
+    expect((error as unknown as Record<string, unknown>)[SkiaErrorBrand]).toBe(
+      true
+    );
   });
 
   it("builds the errors native code asks for", () => {

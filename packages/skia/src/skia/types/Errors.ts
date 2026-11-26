@@ -27,11 +27,21 @@ export type SkiaErrorName =
   | "AbortError"
   | "NotFoundError";
 
+/**
+ * The non-enumerable property, set to `true`, that marks an error React
+ * Native Skia raised, on every runtime: the classes below set it, and so does
+ * native code when it builds an error on a runtime without them (a worklet
+ * runtime, see cpp/jsi/NamedError.h). Unlike the name, it does not match a
+ * DOMException of the same name (the `AbortError` of an aborted fetch).
+ */
+export const SkiaErrorBrand = "__rnskiaError";
+
 /** The base class of the errors React Native Skia raises. */
 export class SkiaError extends Error {
   constructor(message?: string, name: SkiaErrorName = "SkiaError") {
     super(message);
     this.name = name;
+    Object.defineProperty(this, SkiaErrorBrand, { value: true });
     // Transpiled classes extending Error lose their prototype.
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -114,7 +124,8 @@ export class SkiaInternalError extends SkiaError {
 
 /**
  * Whether `error` is one React Native Skia raised, optionally of the given
- * name. Works on every runtime, worklets included, as it reads the name.
+ * name. Works on every runtime, worklets included, as it reads the
+ * {@link SkiaErrorBrand} rather than the class.
  */
 export const isSkiaError = (
   error: unknown,
@@ -124,29 +135,12 @@ export const isSkiaError = (
   if (
     typeof error !== "object" ||
     error === null ||
-    typeof (error as { name?: unknown }).name !== "string"
+    (error as Record<string, unknown>)[SkiaErrorBrand] !== true
   ) {
     return false;
   }
-  const errorName = (error as { name: string }).name;
-  if (name !== undefined) {
-    return errorName === name;
-  }
-  return SkiaErrorNames.indexOf(errorName as SkiaErrorName) !== -1;
+  return name === undefined || (error as { name?: unknown }).name === name;
 };
-
-const SkiaErrorNames: readonly SkiaErrorName[] = [
-  "SkiaError",
-  "SkiaDecodeError",
-  "SkSLCompilationError",
-  "SkiaValidationError",
-  "SkiaOutOfMemoryError",
-  "SkiaGPUUnavailableError",
-  "SkiaInternalError",
-  "NotSupportedError",
-  "AbortError",
-  "NotFoundError",
-];
 
 /**
  * The constructors native code builds its errors with, on the runtime that

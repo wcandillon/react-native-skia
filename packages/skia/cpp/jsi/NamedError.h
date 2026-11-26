@@ -71,7 +71,9 @@ public:
         return fn.call(runtime, message, extra);
       }
     }
-    // No registry: an Error that keeps the name and the extra field.
+    // No registry: an Error that keeps the name and the extra field, and
+    // carries the brand the classes set (SkiaErrorBrand in Errors.ts), so
+    // that isSkiaError recognizes it.
     auto error = global.getPropertyAsFunction(runtime, "Error")
                      .callAsConstructor(runtime, message)
                      .asObject(runtime);
@@ -80,6 +82,11 @@ public:
     if (!_extraKey.empty()) {
       error.setProperty(runtime, _extraKey.c_str(), extra);
     }
+    auto descriptor = jsi::Object(runtime);
+    descriptor.setProperty(runtime, "value", true);
+    global.getPropertyAsObject(runtime, "Object")
+        .getPropertyAsFunction(runtime, "defineProperty")
+        .call(runtime, error, kBrand, descriptor);
     return jsi::Value(runtime, error);
   }
 
@@ -89,6 +96,9 @@ public:
   }
 
 private:
+  /** SkiaErrorBrand in src/skia/types/Errors.ts. */
+  static constexpr const char *kBrand = "__rnskiaError";
+
   std::string _name;
   std::string _extraKey;
   Extra _extra;

@@ -50,7 +50,7 @@ try {
 }
 ```
 
-`instanceof` holds on the React Native runtime (and on the web). A worklet runtime receives errors that keep their `name`, message and extra field, but not their class. In code that may run in a worklet, check the name, or use `isSkiaError`:
+`instanceof` holds on the React Native runtime (and on the web). A worklet runtime receives errors that keep their `name`, message and extra field, but not their class. In code that may run in a worklet, use `isSkiaError`: it recognizes the errors React Native Skia raised by a marker they carry, so an error of the same name from elsewhere (the `AbortError` of an aborted `fetch`) does not match.
 
 ```tsx
 import { isSkiaError } from "react-native-skia";
