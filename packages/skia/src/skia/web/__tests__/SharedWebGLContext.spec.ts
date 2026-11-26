@@ -15,6 +15,7 @@ import {
 } from "../../../views/__tests__/web-setup";
 import { JsiSkSurfaceFactory } from "../JsiSkSurfaceFactory";
 import { getSharedWebGLContext } from "../SharedWebGLContext";
+import { SkiaSurfaceUnavailableError } from "../../types/Errors";
 
 // Offscreen surfaces on the shared WebGL context: one context for all of
 // them (a context per surface, never released, used to run into the
@@ -134,6 +135,46 @@ describe("SharedWebGLContext", () => {
     // Trying again gets a context.
     expect(Surface.MakeOffscreen(8, 8)).not.toBeNull();
     expect(registry.size).toBe(1);
+  });
+
+  // Apps fall back to an empty state on these: they are recognized by their
+  // class and name, whatever their message says.
+  const surfaceError = (run: () => unknown) => {
+    try {
+      run();
+    } catch (e) {
+      return e;
+    }
+    throw new Error("expected the call to throw");
+  };
+
+  it("throws a SkiaSurfaceUnavailableError without a WebGL context", () => {
+    const { Surface, CanvasKitMock, registry } = factory();
+    CanvasKitMock.GetWebGLContext.mockImplementationOnce(() => 0);
+    const error = surfaceError(() => Surface.MakeOffscreen(8, 8));
+    expect(error).toBeInstanceOf(SkiaSurfaceUnavailableError);
+    expect((error as SkiaSurfaceUnavailableError).context).toBe("webgl");
+    expect(registry.size).toBe(0);
+  });
+
+  it("throws a SkiaSurfaceUnavailableError without a graphics context", () => {
+    const { Surface, CanvasKitMock, registry } = factory();
+    CanvasKitMock.MakeWebGLContext.mockImplementationOnce(() => null);
+    const error = surfaceError(() => Surface.MakeOffscreen(8, 8));
+    expect(error).toBeInstanceOf(SkiaSurfaceUnavailableError);
+    expect((error as SkiaSurfaceUnavailableError).context).toBe("graphics");
+    expect(registry.size).toBe(0);
+  });
+
+  it("does not report other failures as an unavailable surface", () => {
+    const { Surface, CanvasKitMock } = factory();
+    CanvasKitMock.MakeWebGLContext.mockImplementationOnce(() => {
+      throw new Error("Could not create a WebGL context");
+    });
+    // The same words, from somewhere else: not one of ours.
+    const error = surfaceError(() => Surface.MakeOffscreen(8, 8));
+    expect(error).not.toBeInstanceOf(SkiaSurfaceUnavailableError);
+    expect(error).not.toHaveProperty("context");
   });
 
   it("reuses the surfaces of many sizes drawn in turn", () => {
