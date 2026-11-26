@@ -3,10 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Skia } from "../Skia";
 import { FontSlant, FontWeight } from "../types";
-import type { DataModule, DataSourceParam, SkFontMgr } from "../types";
+import type {
+  DataModule,
+  DataSourceParam,
+  SkFontMgr,
+  SkTypeface,
+} from "../types";
 import { Platform } from "../../Platform";
 import type { SkTypefaceFontProvider } from "../types/Paragraph/TypefaceFontProvider";
 
+import { reportError } from "./Data";
 import { useTypeface } from "./Typeface";
 
 const defaultFontSize = 14;
@@ -126,34 +132,63 @@ export const listFontFamilies = (
   return Array.from(families);
 };
 
+type LoadedTypeface =
+  | { familyName: string; typeface: SkTypeface }
+  | { familyName: string; error: Error };
+
+// Every font of every family, loaded or with the reason it was not.
 const loadTypefaces = (typefacesToLoad: Record<string, DataModule[]>) => {
   const promises = Object.keys(typefacesToLoad).flatMap((familyName) => {
-    return typefacesToLoad[familyName].map((typefaceToLoad) => {
-      return Skia.Data.fromURI(Platform.resolveAsset(typefaceToLoad)).then(
-        (data) => {
-          const tf = Skia.Typeface.MakeFromData(data);
-          if (tf === null) {
-            throw new Error(`Couldn't create typeface for ${familyName}`);
-          }
-          return [familyName, tf] as const;
-        }
-      );
-    });
+    return typefacesToLoad[familyName].map(
+      (typefaceToLoad): Promise<LoadedTypeface> =>
+        Skia.Data.fromURI(Platform.resolveAsset(typefaceToLoad))
+          .then((data) => Skia.Typeface.MakeFromData(data))
+          .then(
+            (typeface) => ({ familyName, typeface }),
+            (err: unknown) => ({
+              familyName,
+              error: err instanceof Error ? err : new Error(String(err)),
+            })
+          )
+    );
   });
   return Promise.all(promises);
 };
 
-export const useFonts = (sources: Record<string, DataModule[]>) => {
+/**
+ * Loads the fonts of each family into a font provider: null until they are
+ * loaded. The provider holds every font that loaded; `onError` is called
+ * once for each font that did not, with the error (a `SkiaDecodeError` for
+ * bytes that are not a font) and its family, or the error is logged when
+ * there is no `onError`.
+ */
+export const useFonts = (
+  sources: Record<string, DataModule[]>,
+  onError?: (err: Error, familyName: string) => void
+) => {
   const [fontMgr, setFontMgr] = useState<null | SkTypefaceFontProvider>(null);
 
   useEffect(() => {
+    let mounted = true;
     loadTypefaces(sources).then((result) => {
+      if (!mounted) {
+        return;
+      }
       const fMgr = Skia.TypefaceFontProvider.Make();
-      result.forEach(([familyName, typeface]) => {
-        fMgr.registerFont(typeface, familyName);
+      result.forEach((loaded) => {
+        if ("typeface" in loaded) {
+          fMgr.registerFont(loaded.typeface, loaded.familyName);
+        } else if (onError) {
+          onError(loaded.error, loaded.familyName);
+        } else {
+          reportError(loaded.error);
+        }
       });
       setFontMgr(fMgr);
     });
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return fontMgr;

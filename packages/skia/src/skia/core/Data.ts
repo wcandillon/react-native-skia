@@ -4,41 +4,30 @@ import { Skia } from "../Skia";
 import type { SkData, DataSourceParam, SkJSIInstance } from "../types";
 import { Platform } from "../../Platform";
 
-const factoryWrapper = <T>(
-  data2: SkData,
-  factory: (data: SkData) => T,
-  onError?: (err: Error) => void
-) => {
-  const factoryResult = factory(data2);
-  if (factoryResult === null) {
-    onError && onError(new Error("Could not load data"));
-    return null;
-  } else {
-    return factoryResult;
-  }
-};
-
+/**
+ * Loads the bytes of `source` and makes an object of them with `factory`.
+ * Resolves to null for a null source; rejects with what loading the bytes
+ * or the factory raised (a SkiaDecodeError for bytes the factory cannot
+ * decode, say).
+ */
 export const loadData = <T>(
   source: DataSourceParam,
-  factory: (data: SkData) => T | null,
-  onError?: (err: Error) => void
+  factory: (data: SkData) => T
 ): Promise<T | null> => {
   if (source === null || source === undefined) {
-    return new Promise((resolve) => resolve(null));
+    return Promise.resolve(null);
   } else if (source instanceof Uint8Array) {
     return new Promise((resolve) =>
-      resolve(factoryWrapper(Skia.Data.fromBytes(source), factory, onError))
+      resolve(factory(Skia.Data.fromBytes(source)))
     );
   } else {
     const uri =
       typeof source === "string" ? source : Platform.resolveAsset(source);
-    return Skia.Data.fromURI(uri).then((d) =>
-      factoryWrapper(d, factory, onError)
-    );
+    return Skia.Data.fromURI(uri).then((d) => factory(d));
   }
 };
 
-const reportError = (err: unknown, onError?: (err: Error) => void) => {
+export const reportError = (err: unknown, onError?: (err: Error) => void) => {
   const error = err instanceof Error ? err : new Error(String(err));
   if (onError) {
     onError(error);
@@ -80,42 +69,11 @@ export const useLoading = <T extends SkJSIInstance<string>>(
   return data;
 };
 
-export const useCollectionLoading = <T extends SkJSIInstance<string>>(
-  source: DataSourceParam[],
-  loader: () => Promise<(T | null)[]>
-) => {
-  const mounted = useRef(false);
-  const [data, setData] = useState<T[] | null>(null);
-  const dataRef = useRef<T[] | null>(null);
-
-  useEffect(() => {
-    mounted.current = true;
-    loader().then(
-      (result) => {
-        const value = result.filter((r) => r !== null) as T[];
-        if (mounted.current) {
-          setData(value);
-          dataRef.current = value;
-        }
-      },
-      (err) => reportError(err)
-    );
-
-    return () => {
-      mounted.current = false;
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
-
-  return data;
-};
-
 export const useRawData = <T extends SkJSIInstance<string>>(
   source: DataSourceParam,
-  factory: (data: SkData) => T | null,
+  factory: (data: SkData) => T,
   onError?: (err: Error) => void
-) => useLoading(source, () => loadData<T>(source, factory, onError), onError);
+) => useLoading(source, () => loadData<T>(source, factory), onError);
 
 const identity = (data: SkData) => data;
 

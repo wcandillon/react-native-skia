@@ -2,6 +2,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 
 import type { SkData } from "../types";
 import type { AnimatedImageFactory } from "../types/AnimatedImage/AnimatedImageFactory";
+import { SkiaDecodeError } from "../types/Errors";
 
 import { Host } from "./Host";
 import { JsiSkData } from "./JsiSkData";
@@ -20,7 +21,10 @@ export class JsiSkAnimatedImageFactory
       JsiSkData.fromValue(encoded)
     );
     if (image === null) {
-      return null;
+      throw new SkiaDecodeError(
+        "AnimatedImage.MakeFromEncoded: the data is not an image format Skia can decode",
+        "animated-image"
+      );
     }
     return new JsiSkAnimatedImage(this.CanvasKit, image);
   }

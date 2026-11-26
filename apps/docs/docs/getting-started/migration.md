@@ -16,13 +16,14 @@ If you need any of these, stay on v2 (`yarn add react-native-skia@2`) and use th
 :::
 
 The drawing API is the same as in v2: components, hooks, shaders, and the imperative `Skia` API all work as before.
-What changes is the package name, the platform requirements, and a few `Canvas` props.
-Most apps migrate in three steps, and a fourth one applies to apps that play videos, draw camera frames, or snapshot views:
+What changes is the package name, the platform requirements, a few `Canvas` props, and how failures are reported.
+Most apps migrate in four steps, and one more applies to apps that play videos, draw camera frames, or snapshot views:
 
 1. [Rename the package](#1-rename-the-package)
 2. [Check the platform requirements](#2-check-the-platform-requirements)
 3. [Update the Canvas props](#3-update-the-canvas-props)
 4. [Replace the removed APIs](#4-replace-the-removed-apis)
+5. [Handle errors](#5-handle-errors)
 
 ## 1. Rename the package
 
@@ -176,8 +177,6 @@ The following APIs were removed in favor of it:
 
 Its `mode="continuous"` prop has no replacement: to animate the picture, pass a shared value to `picture` (see [pictures](/docs/shapes/pictures)).
 
-When an image cannot be decoded, `useImage()` now calls `onError` with the message `Could not decode the image` (it was `Could not load data`).
-
 A few methods were renamed so that the name says whether the result lives on the CPU or on the GPU: "raster" is a CPU surface or image, "texture" a GPU one (see [GPU and CPU images](/docs/images#gpu-and-cpu-images)).
 `Skia.Surface.MakeOffscreen()`, which creates a GPU surface, keeps its name.
 
@@ -199,6 +198,38 @@ Factory methods no longer repeat the name of their namespace: `Skia.Image.MakeIm
 | `Skia.Picture.MakePicture()` | `Skia.Picture.Make()` |
 | `Skia.Typeface.MakeFreeTypeFaceFromData()` | `Skia.Typeface.MakeFromData()` |
 | `Skia.ColorFilter.MakeLumaColorFilter()` | `Skia.ColorFilter.MakeLuma()` |
+
+## 5. Handle errors
+
+React Native Skia now reports failures the way WebGPU does: a factory that fails throws an error with a name instead of returning `null`, and `null` is only ever a result (see [Errors](/docs/errors)).
+A `null` check after one of these factories becomes a `try`/`catch`, or goes away where the input is trusted:
+
+| Factory | v2 | v3 |
+|:--|:--|:--|
+| `Skia.Image.MakeFromEncoded()`, `Skia.AnimatedImage.MakeFromEncoded()` | `null` | Throws a `SkiaDecodeError`. |
+| `Skia.SVG.MakeFromData()`, `Skia.SVG.MakeFromString()` | `null` | Throws a `SkiaDecodeError`. |
+| `Skia.Typeface.MakeFromData()` | `null` | Throws a `SkiaDecodeError`. |
+| `Skia.Skottie.Make()` | `null` on native, an `Error` on the web | Throws a `SkiaDecodeError`. |
+| `Skia.Picture.Make(bytes)` | `undefined`, and an empty picture for `null` | Throws a `SkiaDecodeError`; `Skia.Picture.MakeEmpty()` makes an empty picture. `Make` also takes an `SkData`. |
+| `Skia.Path.MakeFromSVGString()` | `null` on the web, an `Error` on native | Throws a `SkiaDecodeError`. |
+| `Skia.Path.MakeFromCmds()` | `null`, with a console message | Throws a `TypeError` naming the command. |
+| `Skia.RuntimeEffect.Make()` | `null` on the web, an `Error` on native | Throws an `SkSLCompilationError`, whose `messages` locate each error in the source. |
+| `Skia.Image.MakeRaster()` | `null` | Throws a `SkiaValidationError`. |
+| `Skia.PathEffect.MakeLine2D()`, `MakePath1D()`, `MakePath2D()`, `MakeDash()`, `MakeDiscrete()` | `null`, or an effect that drew nothing | Throws a `SkiaValidationError`. |
+| `picture.serialize()` | `null` | Throws a `SkiaInternalError`. |
+
+```diff
+  const effect = Skia.RuntimeEffect.Make(source);
+- if (!effect) {
+-   throw new Error("Couldn't compile the shader");
+- }
+```
+
+`Skia.PathEffect.MakeCorner(0)` still returns `null`: a radius of zero has no effect, and `<CornerPathEffect r={0} />` now draws the path as is instead of throwing.
+
+The loading hooks (`useImage()`, `useSVG()`, `useTypeface()`, `useFont()`, `useAnimatedImage()`, `useData()`) still return `null` until loaded and when loading fails, and pass the error the factory raised to `onError`: a `SkiaDecodeError` for bytes that cannot be decoded (it was a generic `Could not load data`).
+`useFonts()` takes an `onError(error, familyName)` as well, called for each font that does not load; the provider holds the fonts that did.
+Without `onError`, the error is logged.
 
 ## What is new
 

@@ -4,14 +4,10 @@ import type { PathDef } from "../../types";
 
 export const processPath = (Skia: Skia, rawPath: PathDef) => {
   "worklet";
-  const path =
-    typeof rawPath === "string"
-      ? Skia.Path.MakeFromSVGString(rawPath)
-      : rawPath;
-  if (!path) {
-    throw new Error("Invalid path: " + rawPath);
-  }
-  return path;
+  // An invalid SVG path string throws a SkiaDecodeError.
+  return typeof rawPath === "string"
+    ? Skia.Path.MakeFromSVGString(rawPath)
+    : rawPath;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

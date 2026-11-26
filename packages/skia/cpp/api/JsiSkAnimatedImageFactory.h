@@ -10,6 +10,7 @@
 #include "JsiSkConverters.h"
 #include "JsiSkData.h"
 #include "JsiSkNativeObjects.h"
+#include "SkiaErrors.h"
 #include "jsi/JsiPromises.h"
 
 namespace RNSkia {
@@ -21,12 +22,13 @@ class JsiSkAnimatedImageFactory
 public:
   static constexpr const char *CLASS_NAME = "AnimatedImageFactory";
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkAnimatedImage>>
-  MakeFromEncoded(sk_sp<SkData> data) {
+  std::shared_ptr<JsiSkAnimatedImage> MakeFromEncoded(sk_sp<SkData> data) {
     auto codec = SkAndroidCodec::MakeFromData(data);
     auto image = SkAnimatedImage::Make(std::move(codec));
     if (image == nullptr) {
-      return nullptr;
+      throw SkiaErrors::decode("AnimatedImage.MakeFromEncoded: the data is not "
+                               "an image format Skia can decode",
+                               "animated-image");
     }
     return std::make_shared<JsiSkAnimatedImage>(getContext(), std::move(image));
   }

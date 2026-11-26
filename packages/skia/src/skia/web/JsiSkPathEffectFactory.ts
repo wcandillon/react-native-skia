@@ -7,6 +7,7 @@ import type {
   SkPath,
   SkPathEffect,
 } from "../types";
+import { SkiaValidationError } from "../types/Errors";
 
 import { getEnum, Host, throwNotImplementedOnRNWeb } from "./Host";
 import { JsiSkMatrix } from "./JsiSkMatrix";
@@ -28,6 +29,11 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
 
   MakeDash(intervals: number[], phase?: number) {
     const pe = this.CanvasKit.PathEffect.MakeDash(intervals, phase);
+    if (pe === null) {
+      throw new SkiaValidationError(
+        "MakeDash: the intervals must be an even count of non-negative numbers whose sum is positive"
+      );
+    }
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }
 
@@ -37,6 +43,9 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
       dev,
       seedAssist
     );
+    if (pe === null) {
+      throw new SkiaValidationError("MakeDiscrete: segLength must be positive");
+    }
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }
 
@@ -54,7 +63,9 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
       JsiSkMatrix.fromValue(matrix)
     );
     if (pe === null) {
-      return null;
+      throw new SkiaValidationError(
+        "MakeLine2D: the width must be 0 or more and the matrix invertible"
+      );
     }
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }
@@ -74,7 +85,9 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
     );
     p.delete();
     if (pe === null) {
-      return null;
+      throw new SkiaValidationError(
+        "MakePath1D: the advance must be positive and the path not empty"
+      );
     }
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }
@@ -87,7 +100,9 @@ export class JsiSkPathEffectFactory extends Host implements PathEffectFactory {
     );
     p.delete();
     if (pe === null) {
-      return null;
+      throw new SkiaValidationError(
+        "MakePath2D: the matrix must be invertible"
+      );
     }
     return new JsiSkPathEffect(this.CanvasKit, pe);
   }

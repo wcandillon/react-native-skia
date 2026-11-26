@@ -17,7 +17,7 @@ export enum Path1DEffectStyle {
 export interface PathEffectFactory {
   /**
    * Returns a PathEffect that can turn sharp corners into rounded corners.
-   * @param radius - if <=0, returns null
+   * @param radius - if <= 0, returns null: no effect, which `setPathEffect()` takes
    */
   MakeCorner(radius: number): SkPathEffect | null;
 
@@ -69,7 +69,7 @@ export interface PathEffectFactory {
    * @param width - must be >= 0
    * @param matrix
    */
-  MakeLine2D(width: number, matrix: SkMatrix): SkPathEffect | null;
+  MakeLine2D(width: number, matrix: SkMatrix): SkPathEffect;
 
   /**
    * Returns a PathEffect which implements dashing by replicating the specified path.
@@ -84,7 +84,7 @@ export interface PathEffectFactory {
     advance: number,
     phase: number,
     style: Path1DEffectStyle
-  ): SkPathEffect | null;
+  ): SkPathEffect;
 
   /**
    * Returns a PathEffect that will fill the drawing path with a pattern by repeating the
@@ -93,5 +93,5 @@ export interface PathEffectFactory {
    * @param matrix
    * @param path
    */
-  MakePath2D(matrix: SkMatrix, path: SkPath): SkPathEffect | null;
+  MakePath2D(matrix: SkMatrix, path: SkPath): SkPathEffect;
 }

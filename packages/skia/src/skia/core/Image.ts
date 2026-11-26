@@ -4,13 +4,7 @@ import type { DataSourceParam, SkData } from "../types";
 
 import { loadData, useLoading } from "./Data";
 
-const decode = (data: SkData) => {
-  const image = Skia.Image.MakeFromEncoded(data);
-  if (image === null) {
-    throw new Error("Could not decode the image");
-  }
-  return image;
-};
+const decode = (data: SkData) => Skia.Image.MakeFromEncoded(data);
 
 /**
  * Loads an image and decodes it off the JS thread. Resolves to a raster
@@ -18,7 +12,8 @@ const decode = (data: SkData) => {
  * once, shared by every canvas (see `makeTextureImage()` to upload it
  * beforehand),
  * reading its pixels is a CPU operation. Resolves to null for a null
- * source, rejects when the image cannot be loaded or decoded.
+ * source, rejects when the image cannot be loaded or decoded (a
+ * `SkiaDecodeError` for bytes that are not an image).
  */
 export const loadImage = async (source: DataSourceParam) => {
   const encoded = await loadData(source, decode);
@@ -39,7 +34,9 @@ export const loadImage = async (source: DataSourceParam) => {
 
 /**
  * Returns a Skia Image object, decoded off the JS thread (see `loadImage`).
- * Null until loaded, or when loading fails: `onError` is then called.
+ * Null until loaded, or when loading fails: `onError` is then called with
+ * the error (a `SkiaDecodeError` for bytes that are not an image), or the
+ * error is logged when there is no `onError`.
  * */
 export const useImage = (
   source: DataSourceParam,

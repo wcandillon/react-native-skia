@@ -1,6 +1,7 @@
 import type { CanvasKit } from "canvaskit-wasm";
 
 import type { SkottieFactory } from "../types";
+import { SkiaDecodeError } from "../types/Errors";
 
 import { Host } from "./Host";
 import { JsiSkottieAnimation } from "./JsiSkottieAnimation";
@@ -18,7 +19,10 @@ export class JsiSkottieFactory extends Host implements SkottieFactory {
     }
     const animation = this.CanvasKit.MakeManagedAnimation(json, rawAssets);
     if (!animation) {
-      throw new Error("Failed to create SkottieAnimation");
+      throw new SkiaDecodeError(
+        "Skottie.Make: the JSON is not a Lottie animation Skottie can read",
+        "skottie"
+      );
     }
     return new JsiSkottieAnimation(this.CanvasKit, animation);
   }

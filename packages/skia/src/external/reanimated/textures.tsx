@@ -113,8 +113,16 @@ export const usePictureAsTexture = (
   return texture;
 };
 
-export const useImageAsTexture = (source: DataSourceParam) => {
-  const image = useImage(source);
+/**
+ * Loads an image (see `useImage`) and uploads it to the GPU on the UI
+ * thread. `onError` is called with the error when the image cannot be
+ * loaded or decoded.
+ */
+export const useImageAsTexture = (
+  source: DataSourceParam,
+  onError?: (err: Error) => void
+) => {
+  const image = useImage(source, onError);
   const texture = Rea.useSharedValue<SkImage | null>(null);
   const gpu = useGpu();
   useEffect(() => {

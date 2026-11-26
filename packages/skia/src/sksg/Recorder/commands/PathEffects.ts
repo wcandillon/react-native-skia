@@ -32,9 +32,6 @@ const declarePath2DPathEffect = (
   const { matrix } = props;
   const path = processPath(ctx.Skia, props.path);
   const pe = ctx.Skia.PathEffect.MakePath2D(matrix, path);
-  if (pe === null) {
-    throw new Error("Path2DPathEffect: invalid path");
-  }
   ctx.pathEffects.push(pe);
 };
 
@@ -55,10 +52,10 @@ const declareCornerPathEffect = (
   "worklet";
   const { r } = props;
   const pe = ctx.Skia.PathEffect.MakeCorner(r);
-  if (pe === null) {
-    throw new Error("CornerPathEffect: couldn't create path effect");
+  // A radius of zero or less has no effect: nothing to push.
+  if (pe !== null) {
+    ctx.pathEffects.push(pe);
   }
-  ctx.pathEffects.push(pe);
 };
 
 const declareSumPathEffect = (ctx: DrawingContext) => {
@@ -79,9 +76,6 @@ const declareLine2DPathEffect = (
   "worklet";
   const { width, matrix } = props;
   const pe = ctx.Skia.PathEffect.MakeLine2D(width, matrix);
-  if (pe === null) {
-    throw new Error("Line2DPathEffect: could not create path effect");
-  }
   ctx.pathEffects.push(pe);
 };
 
@@ -98,9 +92,6 @@ const declarePath1DPathEffect = (
     phase,
     Path1DEffectStyle[enumKey(style)]
   );
-  if (pe === null) {
-    throw new Error("Path1DPathEffect: could not create path effect");
-  }
   ctx.pathEffects.push(pe);
 };
 

@@ -4,6 +4,8 @@ import { Skia } from "../Skia";
 import type { DataSourceParam, SkSVG } from "../types";
 import { Platform } from "../../Platform";
 
+import { reportError } from "./Data";
+
 export const useSVG = (
   source: DataSourceParam,
   onError?: (err: Error) => void
@@ -26,12 +28,11 @@ export const useSVG = (
       }
       const result = await fetch(src);
       const svgStr = await result.text();
-      const newSvg = Skia.SVG.MakeFromString(svgStr);
-      setSVG(newSvg);
-      if (newSvg === null && onError !== undefined) {
-        onError(new Error("Failed to create SVG from source."));
-      }
-    })();
+      setSVG(Skia.SVG.MakeFromString(svgStr));
+    })().catch((err: unknown) => {
+      setSVG(null);
+      reportError(err, onError);
+    });
   }, [onError, source]);
   return svg;
 };

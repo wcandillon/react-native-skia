@@ -35,7 +35,7 @@ uniform shader image;
 half4 main(float2 xy) {
   return image.eval(xy).rbga;
 }
-`)!;
+`);
 
 export const RuntimeShaderDemo = () => {
   const r = 128;
@@ -71,7 +71,7 @@ half4 main(float2 xy) {
   }
   return image.eval(xy).rbga;
 }
-`)!;
+`);
 
 export const RuntimeShaderDemo = () => {
   const r = 128;

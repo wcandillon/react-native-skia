@@ -106,7 +106,7 @@ vec4 main(vec2 pos) {
   vec4 colorA = mix(colors[0], colors[1], uv.x);
   vec4 colorB = mix(colors[2], colors[3], uv.x);
   return mix(colorA, colorB, uv.y);
-}`)!;
+}`);
 
 // Define an array of colors for the gradient to be used in shader uniform
 const colors = [
@@ -317,6 +317,8 @@ if (!fontMgr) {
 }
 // Now the fonts are available
 ```
+
+`useFonts` takes an optional `onError(error, familyName)` callback as its second argument, called for each font that cannot be loaded (a `SkiaDecodeError` for a file that is not a font). The fonts that loaded are available all the same.
 
 You can also list the available system fonts via `listFontFamilies()` function.
 

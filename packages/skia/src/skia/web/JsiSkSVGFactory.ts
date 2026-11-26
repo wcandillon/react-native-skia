@@ -2,6 +2,7 @@ import type { CanvasKit } from "canvaskit-wasm";
 
 import type { SkSVG } from "../types";
 import type { SVGFactory } from "../types/SVG/SVGFactory";
+import { SkiaDecodeError } from "../types/Errors";
 
 import { Host } from "./Host";
 import type { JsiSkData } from "./JsiSkData";
@@ -12,16 +13,26 @@ export class JsiSkSVGFactory extends Host implements SVGFactory {
     super(CanvasKit);
   }
 
-  MakeFromData(data: JsiSkData): SkSVG | null {
+  MakeFromData(data: JsiSkData): SkSVG {
     const decoder = new TextDecoder("utf-8");
     const str = decoder.decode(data.ref);
     return this.MakeFromString(str);
   }
 
-  MakeFromString(str: string): SkSVG | null {
+  MakeFromString(str: string): SkSVG {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(str, "image/svg+xml");
     const svgElement = svgDoc.documentElement;
+    // A document the parser rejects comes back as a <parsererror>.
+    if (
+      svgElement.nodeName !== "svg" ||
+      svgDoc.getElementsByTagName("parsererror").length > 0
+    ) {
+      throw new SkiaDecodeError(
+        "SVG: the document is not an SVG Skia can read",
+        "svg"
+      );
+    }
 
     const attrWidth = svgElement.getAttribute("width");
     const attrHeight = svgElement.getAttribute("height");

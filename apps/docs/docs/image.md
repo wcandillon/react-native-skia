@@ -41,6 +41,8 @@ const data = Skia.Data.fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 const image = Skia.Image.MakeFromEncoded(data);
 ```
 
+It throws a `SkiaDecodeError` when the bytes are not an image format Skia can decode.
+
 ### MakeRaster
 
 `MakeRaster` creates a CPU image from pixel data in the given format. The pixels are copied; see [GPU and CPU images](#gpu-and-cpu-images) for what that means when drawing it.

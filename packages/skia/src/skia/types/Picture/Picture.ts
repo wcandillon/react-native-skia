@@ -31,5 +31,5 @@ export interface SkPicture extends SkJSIInstance<"Picture"> {
    * Returns the serialized format of this SkPicture. The format may change at anytime and
    * no promises are made for backwards or forward compatibility.
    */
-  serialize(): Uint8Array | null;
+  serialize(): Uint8Array;
 }

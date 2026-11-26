@@ -10,6 +10,7 @@
 #include "JsiSkNativeObjects.h"
 #include "JsiSkSVG.h"
 #include "JsiSkTypeface.h"
+#include "SkiaErrors.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -117,7 +118,8 @@ private:
 
     auto svg_dom = builder.make(*stream);
     if (!svg_dom) {
-      return jsi::Value::null();
+      throw SkiaErrors::decode("SVG: the document is not an SVG Skia can read",
+                               "svg");
     }
 
     return makeJsiObject(
