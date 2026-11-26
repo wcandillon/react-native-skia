@@ -11,33 +11,63 @@ import { createContainer } from "./Container";
 
 import "./Elements";
 
-const skiaReconciler = ReactReconciler(sksgHostConfig);
+const createReconciler = () => {
+  const reconciler = ReactReconciler(sksgHostConfig);
+  reconciler.injectIntoDevTools();
+  return reconciler;
+};
 
-skiaReconciler.injectIntoDevTools();
+let skiaReconciler: ReturnType<typeof createReconciler> | null = null;
+
+/**
+ * The reconciler is built by the first render, not when this module is
+ * evaluated: building one hooks it into the React instance for the lifetime
+ * of the process (ReactSharedInternals.S, the DevTools hook). A server that
+ * evaluates the bundle once per request against a single React instance, as
+ * the Expo dev server does for web, would otherwise keep one reconciler, and
+ * the whole bundle behind it, per request.
+ */
+const getReconciler = () => {
+  if (skiaReconciler === null) {
+    skiaReconciler = createReconciler();
+  }
+  return skiaReconciler;
+};
 
 export class SkiaSGRoot {
-  private root: OpaqueRoot;
+  private root: OpaqueRoot | null = null;
   private container: Container;
 
   constructor(
     public Skia: Skia,
     nativeId = -1
   ) {
-    const strictMode = false;
     this.container = createContainer(Skia, nativeId);
-    this.root = skiaReconciler.createContainer(
-      this.container,
-      0,
-      null,
-      strictMode,
-      null,
-      "",
-      console.error,
-      console.error,
-      console.error,
-      () => {},
-      null
-    );
+  }
+
+  /**
+   * The React root, created by the first render: a Canvas constructs its
+   * SkiaSGRoot while it renders, which a server does too, and renders into
+   * it from a layout effect, which a server never runs.
+   */
+  private getRoot() {
+    if (this.root === null) {
+      const strictMode = false;
+      this.root = getReconciler().createContainer(
+        this.container,
+        0,
+        null,
+        strictMode,
+        null,
+        "",
+        console.error,
+        console.error,
+        console.error,
+        () => {},
+        null
+      );
+    }
+    return this.root;
   }
 
   get sg() {
@@ -47,8 +77,9 @@ export class SkiaSGRoot {
 
   private updateContainer(element: ReactNode) {
     const { recordCount } = this.container;
+    const root = this.getRoot();
     return new Promise((resolve) => {
-      skiaReconciler.updateContainer(element, this.root, null, () => {
+      getReconciler().updateContainer(element, root, null, () => {
         if (this.container.recordCount === recordCount) {
           this.container.recordAfterCommit();
         }
@@ -90,8 +121,13 @@ export class SkiaSGRoot {
 
   unmount() {
     this.container.unmount();
+    const { root } = this;
+    if (root === null) {
+      // Never rendered: React holds nothing for this root.
+      return Promise.resolve(true);
+    }
     return new Promise((resolve) => {
-      skiaReconciler.updateContainer(null, this.root, null, () => {
+      getReconciler().updateContainer(null, root, null, () => {
         debug("unmountContainer");
         resolve(true);
       });
