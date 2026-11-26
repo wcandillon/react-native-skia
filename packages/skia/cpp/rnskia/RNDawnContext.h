@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -26,6 +27,7 @@
 #include "RNImageProvider.h"
 #include "RNSkGpuActivity.h"
 #include "RNSkPipelineWarmup.h"
+#include "RNSkThreadPool.h"
 #include "rnwgpu/DawnBlobCache.h"
 #include "utils/RNSkLog.h"
 
@@ -116,6 +118,15 @@ public:
 
   /** The context, or nullptr when the GPU is unavailable. Never throws. */
   static DawnContext *tryGetInstance() noexcept { return probe().instance; }
+
+  /**
+   The context if the GPU was probed already, nullptr otherwise. Unlike
+   tryGetInstance() it never probes: for what must not start the GPU itself
+   (a memory warning, see RNSkGpuPurge). Any thread.
+   */
+  static DawnContext *peekInstance() noexcept {
+    return probedInstance().load(std::memory_order_acquire);
+  }
 
   /**
    Probes the GPU if not done yet and describes it. While the device in use
@@ -212,7 +223,23 @@ public:
 
   /** Sets isForeground(); the platform calls it from its main thread. */
   static void setForeground(bool foreground) noexcept {
-    foregroundFlag().store(foreground, std::memory_order_release);
+    auto &waiters = foregroundWaiters();
+    {
+      // Under the lock, so that waitForForeground() cannot miss it.
+      std::lock_guard<std::mutex> lock(waiters.mutex);
+      foregroundFlag().store(foreground, std::memory_order_release);
+    }
+    waiters.condition.notify_all();
+  }
+
+  /**
+   Blocks until isForeground(). For a background thread whose GPU work can
+   wait (see RNSkGpuPurge): iOS refuses GPU work in the background.
+   */
+  static void waitForForeground() {
+    auto &waiters = foregroundWaiters();
+    std::unique_lock<std::mutex> lock(waiters.mutex);
+    waiters.condition.wait(lock, []() { return isForeground(); });
   }
 
   /**
@@ -324,14 +351,7 @@ public:
       readback.generation = current;
       readback.done = workDone(current);
     }
-    {
-      std::lock_guard<std::mutex> lock(_readbacksMutex);
-      _readbacks.push_back(readback);
-    }
-    std::call_once(_readbackThreadOnce, [this]() {
-      std::thread([this]() { awaitReadbacks(); }).detach();
-    });
-    _readbacksCondition.notify_one();
+    awaitReadback(std::move(readback));
   }
 
   /**
@@ -382,6 +402,23 @@ public:
   }
 
   /**
+   A recorder of its own, as makeRecorder(), for an offscreen surface (see
+   RNSkSurfaceRecorder): with a GPU budget of its own, and `generation`
+   receives the generation it was made for, to submit its recordings with
+   (see submitRecording). Throws when no recorder can be made. Any thread.
+   */
+  std::unique_ptr<skgpu::graphite::Recorder>
+  makeRecorder(size_t budget, uint64_t *generation) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto recorder = makeRecorderLocked(/* forUploads= */ false, budget);
+    if (recorder == nullptr) {
+      throw std::runtime_error("Failed to create graphite context");
+    }
+    *generation = _current.load(std::memory_order_acquire)->id;
+    return recorder;
+  }
+
+  /**
    The recorder of the calling thread, for the device in use: a thread
    whose recorder was made for a lost device gets a new one, and the old one
    stays alive for the surfaces made on it (which draw nothing from then on).
@@ -410,59 +447,94 @@ public:
   }
 
   /**
-   Frees the GPU memory the recorders of the calling thread hold without
-   using it, on that thread (a recorder belongs to the thread it records
-   on): what went unused for `unusedFor`, or, with `everything`, all they
-   can let go of, the pages of their atlases included. `everything` is for a
-   thread that records nothing for now (a render thread once idle, see
-   RNSkGraphiteProducer): the atlases lose no content by it, as Graphite
-   empties them at every snap when recordings may be inserted in any order.
-   The upload recorder lets go of everything either way: what it made
-   belongs to the image cache (see makeRecorderLocked). The GPU work that
-   finished releases its resources first, and Dawn runs the deletions it
-   deferred after. Never makes a recorder. Any thread.
+   Trims the recorders of the calling thread, on that thread (a recorder
+   belongs to the thread it records on): frees the GPU memory they hold and
+   did not use for `unusedFor`. The routine of a thread that keeps recording
+   (see trimThreadIfDue, RNSkGraphiteProducer). The upload recorder lets go
+   of everything either way: what it made belongs to the image cache (see
+   makeRecorderLocked). The GPU work that finished releases its resources
+   first, and Dawn runs the deletions it deferred after. Never makes a
+   recorder. Any thread.
    */
-  static void trimThreadRecorders(std::chrono::milliseconds unusedFor,
-                                  bool everything) {
-    auto *instance = tryGetInstance();
-    if (instance == nullptr) {
+  static void trimThreadRecorders(std::chrono::milliseconds unusedFor) {
+    freeFromThreadRecorders([unusedFor](skgpu::graphite::Recorder &drawing) {
+      drawing.performDeferredCleanup(unusedFor);
+    });
+  }
+
+  /**
+   Purges the recorders of the calling thread: frees all they can let go of,
+   the pages of their atlases included. For a thread that records nothing
+   for now (a render thread once idle, see RNSkGraphiteProducer) and for
+   Skia.purgeGpuResources() (see RNSkGpuPurge). The atlases lose no content
+   by it, as Graphite empties them at every snap when recordings may be
+   inserted in any order. Otherwise as trimThreadRecorders().
+   */
+  static void purgeThreadRecorders() {
+    freeFromThreadRecorders(
+        [](skgpu::graphite::Recorder &drawing) { drawing.freeGpuResources(); });
+  }
+
+  /**
+   The throttle of trimThreadIfDue(), and how long a resource went unused
+   before it goes: the delay of the render pool's idle task
+   (RNSkThreadPool::kIdleDelay).
+   */
+  static constexpr std::chrono::milliseconds kThreadTrimDelay =
+      RNSkThreadPool::kIdleDelay;
+
+  /**
+   trimThreadRecorders(), throttled to once per kThreadTrimDelay: called
+   after a submit by a thread outside the render pool (the JS thread, a
+   worklet runtime), which has no idle task to trim it. Its drawing recorder
+   otherwise keeps every scratch texture, up to Graphite's budget (256 MB by
+   default), for as long as the thread lives. Nothing happens on a render
+   thread (see RNSkGraphiteProducer). Never makes a recorder. Any thread.
+   */
+  static void trimThreadIfDue() {
+    if (RNSkThreadPool::isPoolThread()) {
       return;
     }
-    auto &drawing = threadSlot();
-    auto &uploads = uploadSlot();
-    if (drawing.recorder == nullptr && uploads.recorder == nullptr) {
+    auto &slot = threadSlot();
+    if (slot.recorder == nullptr && uploadSlot().recorder == nullptr) {
       return;
     }
-    instance->checkFinishedWork();
-    if (drawing.recorder != nullptr) {
-      if (everything) {
-        drawing.recorder->freeGpuResources();
-      } else {
-        drawing.recorder->performDeferredCleanup(unusedFor);
-      }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - slot.lastTrim < kThreadTrimDelay) {
+      return;
     }
-    if (uploads.recorder != nullptr) {
-      // Not performDeferredCleanup(0): a resource it takes back from the
-      // return queue counts as used at that moment, so it would keep every
-      // texture the image cache let go of since the last call.
-      uploads.recorder->freeGpuResources();
-    }
-    instance->checkFinishedWork();
+    slot.lastTrim = now;
+    trimThreadRecorders(kThreadTrimDelay);
   }
 
   /**
    Snaps what the recorder recorded and runs it on the GPU. `recorder` is a
-   thread's (see getRecorder), also behind the surfaces made on it; any
-   other submits nothing. A recording made for a lost device (see
-   generation()) is dropped: nothing can run it, and the device in use would
-   refuse its resources. Called on the recorder's thread. Returns whether
-   the recording runs: false when there was nothing to run, when it was
-   dropped, or when Graphite could not snap, insert or submit it (which is
-   logged).
+   thread's (see getRecorder); any other submits nothing. A recording made
+   for a lost device (see generation()) is dropped: nothing can run it, and
+   the device in use would refuse its resources. Called on the recorder's
+   thread. Returns whether the recording runs: false when there was nothing
+   to run, when it was dropped, or when Graphite could not snap, insert or
+   submit it (which is logged).
    */
   bool submitRecording(
       skgpu::graphite::Recorder *recorder,
       skgpu::graphite::SyncToCpu syncToCpu = skgpu::graphite::SyncToCpu::kNo) {
+    const bool inserted = submitRecording(recorder, std::nullopt, syncToCpu);
+    if (recorder != nullptr && recorder == threadSlot().recorder.get()) {
+      trimThreadIfDue();
+    }
+    return inserted;
+  }
+
+  /**
+   Same, for a recorder made for `generation`: one of its own, which the
+   context does not track (see makeRecorder). Without a generation, a
+   thread's, looked up. Never trims: an offscreen surface does that for its
+   own recorder (see RNSkSurfaceRecorder).
+   */
+  bool submitRecording(skgpu::graphite::Recorder *recorder,
+                       std::optional<uint64_t> generation,
+                       skgpu::graphite::SyncToCpu syncToCpu) {
     if (recorder == nullptr) {
       return false;
     }
@@ -472,7 +544,7 @@ public:
     auto recording = recorder->snap();
     std::lock_guard<std::mutex> lock(_mutex);
     auto *current = _current.load(std::memory_order_acquire);
-    if (generationOf(recorder) != current->id ||
+    if (generation.value_or(generationOf(recorder)) != current->id ||
         current->lost.load(std::memory_order_acquire)) {
       return false;
     }
@@ -500,6 +572,115 @@ public:
       RNSkLogger::logToConsole("Graphite could not submit a recording");
     }
     return inserted && submitted;
+  }
+
+  /**
+   submitRecording() for a caller that awaits the GPU (Surface.flushAsync()):
+   `callback` is called exactly once, with an empty string once the GPU has
+   run the recording, or with what lost the draws: Graphite could not snap,
+   insert or submit the recording, the GPU failed to run it, or its device
+   was lost, before or since. It runs on whichever thread sees the work
+   done, inside the context lock, or right away, outside of it, when nothing
+   was submitted: it must not use the context nor a JS runtime (hand the
+   result to the right thread instead). The readback thread waits for the
+   GPU (see awaitReadbacks), so that the callback runs even when nothing
+   else submits. `generation` as for submitRecording(): the one a recorder of
+   its own was made for (see makeRecorder), or none for a thread's, looked
+   up. Never trims (see RNSkSurfaceRecorder). Called on the recorder's
+   thread.
+   */
+  void submitRecordingAsync(skgpu::graphite::Recorder *recorder,
+                            std::optional<uint64_t> generation,
+                            std::function<void(std::string)> callback) {
+    if (recorder == nullptr) {
+      callback("");
+      return;
+    }
+    // Lives until Graphite calls the finished proc, which it does exactly
+    // once, whatever happens to the recording. The fields are guarded by
+    // the context lock, which every call into the context holds.
+    struct Request {
+      std::function<void(std::string)> callback;
+      Generation *generation;
+      std::shared_ptr<std::atomic<bool>> delivered;
+      // While the recording is inserted and submitted, the proc leaves the
+      // result here: only the caller knows what failed by then.
+      bool submitting = true;
+      bool finished = false;
+      bool succeeded = false;
+    };
+    static const char *kLost = "the GPU device was lost";
+    std::string failure;
+    Readback readback;
+    {
+      RNSkGpuActivity::Scope activity;
+      auto recording = recorder->snap();
+      std::unique_lock<std::mutex> lock(_mutex);
+      auto *current = _current.load(std::memory_order_acquire);
+      if (generation.value_or(generationOf(recorder)) != current->id ||
+          current->lost.load(std::memory_order_acquire)) {
+        failure = kLost;
+      } else if (recording == nullptr) {
+        failure = "Graphite could not snap the recording";
+      }
+      if (!failure.empty()) {
+        lock.unlock();
+        callback(failure);
+        return;
+      }
+      readback.delivered = std::make_shared<std::atomic<bool>>(false);
+      auto *request =
+          new Request{std::move(callback), current, readback.delivered};
+      skgpu::graphite::InsertRecordingInfo info;
+      info.fRecording = recording.get();
+      info.fFinishedContext = request;
+      info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
+                              skgpu::CallbackResult result) {
+        auto *request = static_cast<Request *>(context);
+        const bool succeeded = result == skgpu::CallbackResult::kSuccess;
+        if (request->submitting) {
+          request->finished = true;
+          request->succeeded = succeeded;
+          return;
+        }
+        // A lost device reports its work as done: the draws are lost.
+        if (request->generation->lost.load(std::memory_order_acquire)) {
+          request->callback(kLost);
+        } else {
+          request->callback(succeeded ? ""
+                                      : "the GPU could not run the recording");
+        }
+        request->delivered->store(true, std::memory_order_release);
+        delete request;
+      };
+      auto status = current->context->insertRecording(info);
+      // Submitted either way, for the work other recordings inserted.
+      const bool submitted = current->context->submit();
+      request->submitting = false;
+      if (request->finished) {
+        // Failed, or run by the GPU already.
+        if (current->lost.load(std::memory_order_acquire)) {
+          failure = kLost;
+        } else if (!static_cast<bool>(status)) {
+          const int code = static_cast<int>(
+              static_cast<skgpu::graphite::InsertStatus::V>(status));
+          failure = "Graphite rejected the recording (InsertStatus " +
+                    std::to_string(code) + "): " + status.message();
+        } else if (!submitted) {
+          failure = "Graphite could not submit the recording";
+        } else if (!request->succeeded) {
+          failure = "the GPU could not run the recording";
+        }
+        request->callback(failure);
+        delete request;
+        return;
+      }
+      // GPU work from here until the callback ran (see RNSkGpuActivity).
+      readback.activity = std::make_shared<RNSkGpuActivity::Scope>();
+      readback.generation = current;
+      readback.done = workDone(current);
+    }
+    awaitReadback(std::move(readback));
   }
 
   /**
@@ -590,9 +771,11 @@ public:
     return upload(image, mipmapped).texture;
   }
 
-  // Create offscreen surface
-  sk_sp<SkSurface> MakeOffscreen(int width, int height,
-                                 bool useP3ColorSpace = false) {
+  // Create an offscreen surface, on the recorder of this thread unless given
+  // one of its own (see RNSkSurfaceRecorder).
+  sk_sp<SkSurface>
+  MakeOffscreen(int width, int height, bool useP3ColorSpace = false,
+                skgpu::graphite::Recorder *recorder = nullptr) {
     sk_sp<SkColorSpace> colorSpace =
         useP3ColorSpace ? SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
                                                 SkNamedGamut::kDisplayP3)
@@ -600,7 +783,8 @@ public:
     SkImageInfo info =
         SkImageInfo::Make(width, height, DawnUtils::PreferedColorType,
                           kPremul_SkAlphaType, colorSpace);
-    sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(getRecorder(), info);
+    sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(
+        recorder != nullptr ? recorder : getRecorder(), info);
 
     if (!surface) {
       throw std::runtime_error("Failed to create offscreen Skia surface.");
@@ -683,7 +867,9 @@ public:
   // The texture must have RenderAttachment usage; give it TextureBinding too
   // to sample it from WebGPU (e.g. as a three.js texture) after each flush.
   // The surface retains the texture for its lifetime.
-  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture) {
+  // `recorder` is the surface's own (see RNSkSurfaceRecorder).
+  sk_sp<SkSurface> MakeSurfaceFromTexture(wgpu::Texture texture,
+                                          skgpu::graphite::Recorder *recorder) {
     if (!texture) {
       return nullptr;
     }
@@ -702,7 +888,7 @@ public:
 
     // The color type is derived from the texture format.
     return SkSurfaces::WrapBackendTexture(
-        getRecorder(), backendTexture,
+        recorder, backendTexture,
         nullptr, // colorspace
         nullptr, // surfaceProps
         [](void *context) {
@@ -799,6 +985,8 @@ public:
    or for one destroyed already. Any thread.
    */
   void destroyRetiredDevice(uint64_t generation) {
+    // Before the context lock, as in reduceMemoryUsage().
+    std::lock_guard<std::mutex> destroyLock(_destroyMutex);
     std::lock_guard<std::mutex> lock(_mutex);
     for (auto *retired : _retired) {
       if (retired->id == generation && !retired->deviceDestroyed) {
@@ -807,6 +995,37 @@ public:
         return;
       }
     }
+  }
+
+  /**
+   One pass of Dawn's ReduceMemoryUsage() on the device in use: Dawn gives
+   the memory it keeps for reuse (of disposed surfaces and images) back to
+   the system. Returns whether Dawn still has deletions pending on submitted
+   work, in which case another pass shortly frees more. Nothing happens
+   while the device is lost. Any thread; RNSkGpuPurge decides when.
+   */
+  bool reduceMemoryUsage() noexcept {
+    // Keeps destroyRetiredDevice() from destroying the device under Dawn.
+    std::lock_guard<std::mutex> destroyLock(_destroyMutex);
+    wgpu::Device device;
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      auto *current = _current.load(std::memory_order_acquire);
+      if (current->lost.load(std::memory_order_acquire)) {
+        return false;
+      }
+      tick();
+      current->context->checkAsyncWorkCompletion();
+      // Both may have waited for a device.destroy() from JS (the device is
+      // shared with react-native-webgpu) to finish. One that starts after
+      // this is caught by Dawn's ReduceMemoryUsage().
+      if (current->lost.load(std::memory_order_acquire)) {
+        return false;
+      }
+      device = current->backendContext.fDevice;
+    }
+    // Outside the context lock, which frames need.
+    return dawn::native::ReduceMemoryUsage(device.Get());
   }
 
 private:
@@ -848,6 +1067,8 @@ private:
   struct ThreadRecorder {
     std::unique_ptr<skgpu::graphite::Recorder> recorder;
     uint64_t generation = 0;
+    // The latest trim (see trimThreadIfDue).
+    std::chrono::steady_clock::time_point lastTrim{};
     ~ThreadRecorder() {
       if (recorder == nullptr) {
         return;
@@ -885,6 +1106,24 @@ private:
     return foreground;
   }
 
+  // The threads waiting for the foreground (see waitForForeground). Never
+  // destroyed, as the flag.
+  struct ForegroundWaiters {
+    std::mutex mutex;
+    std::condition_variable condition;
+  };
+
+  static ForegroundWaiters &foregroundWaiters() noexcept {
+    static auto *waiters = new ForegroundWaiters();
+    return *waiters;
+  }
+
+  // See peekInstance.
+  static std::atomic<DawnContext *> &probedInstance() noexcept {
+    static std::atomic<DawnContext *> instance{nullptr};
+    return instance;
+  }
+
   static const Probe &probe() noexcept {
     // Attempted once: a device without a usable GPU does not get one by
     // asking again, and the attempt enumerates drivers. The context is never
@@ -895,6 +1134,7 @@ private:
       auto *probe = new Probe();
       try {
         probe->instance = new DawnContext();
+        probedInstance().store(probe->instance, std::memory_order_release);
         probe->info.available = true;
         probe->info.adapter = DawnUtils::describeAdapter(
             probe->instance->getWGPUDevice().GetAdapter());
@@ -1095,8 +1335,10 @@ private:
    A recorder for the device in use; `forUploads` for the upload recorder of
    a thread (see upload()). Called with the context lock held.
    */
-  std::unique_ptr<skgpu::graphite::Recorder>
-  makeRecorderLocked(bool forUploads = false) {
+  std::unique_ptr<skgpu::graphite::Recorder> makeRecorderLocked(
+      bool forUploads = false,
+      size_t budget =
+          skgpu::graphite::RecorderOptions::kDefaultRecorderBudget) {
     auto *current = _current.load(std::memory_order_acquire);
     if (forUploads) {
       // Skia's default image provider, and no budget: the textures it makes
@@ -1109,6 +1351,7 @@ private:
       return current->context->makeRecorder(options);
     }
     skgpu::graphite::RecorderOptions options;
+    options.fGpuBudgetInBytes = budget;
     // The provider uploads through upload() (see ImageProvider), and serves
     // the recorder textures of the device in use only. The context is never
     // destroyed, so the capture is safe.
@@ -1136,9 +1379,9 @@ private:
    */
   ImageProvider::Upload upload(const sk_sp<SkImage> &image, bool mipmapped) {
     // A recorder of its own: snapping the recorder of this thread would also
-    // submit what the offscreen surfaces of this thread recorded so far. It
-    // only uploads, so it keeps Skia's default image provider rather than
-    // the image cache, which uploads through here.
+    // submit what was recorded on it so far. It only uploads, so it keeps
+    // Skia's default image provider rather than the image cache, which
+    // uploads through here.
     auto &slot = uploadSlot();
     auto *recorder = currentRecorder(slot, /* forUploads= */ true);
     ImageProvider::Upload result;
@@ -1201,6 +1444,35 @@ private:
     return slot;
   }
 
+  /**
+   What trimThreadRecorders() and purgeThreadRecorders() share: `freeDrawing`
+   frees what the drawing recorder of the calling thread is to let go of.
+   */
+  template <typename FreeDrawing>
+  static void freeFromThreadRecorders(FreeDrawing &&freeDrawing) {
+    // Looked at first: the GPU is not probed for a thread that has nothing.
+    auto &drawing = threadSlot();
+    auto &uploads = uploadSlot();
+    if (drawing.recorder == nullptr && uploads.recorder == nullptr) {
+      return;
+    }
+    auto *instance = tryGetInstance();
+    if (instance == nullptr) {
+      return;
+    }
+    instance->checkFinishedWork();
+    if (drawing.recorder != nullptr) {
+      freeDrawing(*drawing.recorder);
+    }
+    if (uploads.recorder != nullptr) {
+      // Not performDeferredCleanup(0): a resource it takes back from the
+      // return queue counts as used at that moment, so it would keep every
+      // texture the image cache let go of since the last call.
+      uploads.recorder->freeGpuResources();
+    }
+    instance->checkFinishedWork();
+  }
+
   /** The recorder of a thread that ended (see ThreadRecorder). */
   void forgetRecorder(const skgpu::graphite::Recorder *recorder) noexcept {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1217,6 +1489,31 @@ private:
     return generation->backendContext.fQueue.OnSubmittedWorkDone(
         wgpu::CallbackMode::WaitAnyOnly,
         [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+  }
+
+  // What the readback thread waits for (see _readbacks).
+  struct Readback {
+    Generation *generation = nullptr;
+    wgpu::Future done;
+    // Set by the readback's callback (see readPixels), once it ran.
+    std::shared_ptr<std::atomic<bool>> delivered;
+    // The readback as GPU work in flight, until the last copy of this
+    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
+    std::shared_ptr<RNSkGpuActivity::Scope> activity;
+    // The times the context was asked without the callback having run.
+    int retries = 0;
+  };
+
+  // Hands a readback to the readback thread, which the first one starts.
+  void awaitReadback(Readback readback) {
+    {
+      std::lock_guard<std::mutex> lock(_readbacksMutex);
+      _readbacks.push_back(std::move(readback));
+    }
+    std::call_once(_readbackThreadOnce, [this]() {
+      std::thread([this]() { awaitReadbacks(); }).detach();
+    });
+    _readbacksCondition.notify_one();
   }
 
   // The readback thread: for each readback, in order, waits for the GPU to
@@ -1343,6 +1640,9 @@ private:
   // every view (isDeviceLost, isCurrent), hence atomic.
   std::atomic<Generation *> _current{nullptr};
   std::vector<Generation *> _retired;
+  // Held while Dawn is asked to free memory of a device (see
+  // reduceMemoryUsage) and while one is destroyed. Taken before _mutex.
+  std::mutex _destroyMutex;
   uint64_t _lastGenerationId = 0;
   // Guards every Context operation, and the replacement of the device.
   std::mutex _mutex;
@@ -1362,17 +1662,8 @@ private:
 
   // The readbacks waiting for the GPU, for the readback thread (see
   // readPixels and awaitReadbacks); the thread is started by the first one.
-  struct Readback {
-    Generation *generation = nullptr;
-    wgpu::Future done;
-    // Set by the readback's callback (see readPixels), once it ran.
-    std::shared_ptr<std::atomic<bool>> delivered;
-    // The readback as GPU work in flight, until the last copy of this
-    // entry goes: once delivered, or dropped (see RNSkGpuActivity).
-    std::shared_ptr<RNSkGpuActivity::Scope> activity;
-    // The times the context was asked without the callback having run.
-    int retries = 0;
-  };
+  // A recording whose completion is awaited is one too (see
+  // submitRecordingAsync).
   std::once_flag _readbackThreadOnce;
   std::mutex _readbacksMutex;
   std::condition_variable _readbacksCondition;

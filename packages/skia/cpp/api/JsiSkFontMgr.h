@@ -10,6 +10,7 @@
 #include "JsiSkFontStyle.h"
 #include "JsiSkNativeObjects.h"
 #include "JsiSkTypeface.h"
+#include "JsiSkTypefaceFontProvider.h"
 #include "utils/RNSkLog.h"
 #include <jsi/jsi.h>
 
@@ -71,6 +72,11 @@ public:
 
   static sk_sp<SkFontMgr> fromValue(jsi::Runtime &runtime,
                                     const jsi::Value &obj) {
+    // A TypefaceFontProvider (what useFonts returns) is an SkFontMgr too.
+    if (auto provider =
+            tryGetJsiObject<JsiSkTypefaceFontProvider>(runtime, obj)) {
+      return provider->getObject();
+    }
     return objectFromValue(runtime, obj);
   }
 

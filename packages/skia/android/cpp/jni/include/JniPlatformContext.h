@@ -33,6 +33,11 @@ public:
   // and outlives it.
   static void setForegroundNative(jni::alias_ref<jclass>, jboolean foreground);
 
+  // What the system says about memory, as it says it: RNSkGpuPurge decides
+  // what calls for a purge.
+  static void onLowMemoryNative(jni::alias_ref<jclass>);
+  static void onTrimMemoryNative(jni::alias_ref<jclass>, jint level);
+
   static void setCacheDirectoryNative(jni::alias_ref<jclass>,
                                       jni::alias_ref<jni::JString> directory);
 

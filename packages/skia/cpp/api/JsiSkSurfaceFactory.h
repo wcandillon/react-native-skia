@@ -12,6 +12,7 @@
 #include "JsiSkSurface.h"
 
 #include "rnskia/RNDawnContext.h"
+#include "rnskia/RNSkSurfaceRecorder.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -54,14 +55,14 @@ public:
         }
       }
     }
-    auto context = getContext();
-    auto surface =
-        context->makeOffscreenSurface(width, height, useP3ColorSpace);
-    if (surface == nullptr) {
-      return jsi::Value::null();
-    }
-    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
-                                      getContext(), std::move(surface)));
+    // A recorder of its own: the surface may be drawn into on another thread
+    // than this one (see RNSkSurfaceRecorder).
+    auto recorder = RNSkSurfaceRecorder::Make(width, height);
+    auto surface = DawnContext::getInstance().MakeOffscreen(
+        width, height, useP3ColorSpace, recorder->get());
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSurface>(
+                     getContext(), std::move(surface), std::move(recorder)));
   }
 
   // Pointer-based texture interop with react-native-webgpu, the surface
@@ -78,13 +79,18 @@ public:
     // the surface exists.
     wgpu::Texture texture =
         gpuTextureFromValue(runtime, arguments[0], "MakeFromGPUTexture");
-    auto surface = DawnContext::getInstance().MakeSurfaceFromTexture(texture);
+    auto recorder =
+        RNSkSurfaceRecorder::Make(static_cast<int>(texture.GetWidth()),
+                                  static_cast<int>(texture.GetHeight()));
+    auto surface = DawnContext::getInstance().MakeSurfaceFromTexture(
+        texture, recorder->get());
     if (surface == nullptr) {
       throw std::runtime_error(
           "MakeFromGPUTexture: failed to wrap the texture");
     }
-    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
-                                      getContext(), std::move(surface)));
+    return makeJsiObject(
+        runtime, std::make_shared<JsiSkSurface>(
+                     getContext(), std::move(surface), std::move(recorder)));
   }
 
   size_t getMemoryPressure() override { return 2048; }

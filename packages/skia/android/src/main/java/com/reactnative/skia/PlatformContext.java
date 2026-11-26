@@ -1,6 +1,6 @@
 package com.reactnative.skia;
 
-import android.content.ComponentCallbacks;
+import android.content.ComponentCallbacks2;
 import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.Looper;
@@ -35,8 +35,10 @@ public class PlatformContext implements LifecycleEventListener {
     private static ParcelFileDescriptor sMainThreadWakeup;
 
     // The display density can change while the app runs (display size
-    // setting, foldables): the native side follows it.
-    private final ComponentCallbacks mComponentCallbacks = new ComponentCallbacks() {
+    // setting, foldables): the native side follows it. What the system says
+    // about memory goes to the native side as it comes, which decides when
+    // the GPU memory nothing uses goes back to the system (RNSkGpuPurge).
+    private final ComponentCallbacks2 mComponentCallbacks = new ComponentCallbacks2() {
         @Override
         public void onConfigurationChanged(Configuration newConfig) {
             updatePixelDensity();
@@ -44,6 +46,12 @@ public class PlatformContext implements LifecycleEventListener {
 
         @Override
         public void onLowMemory() {
+            onLowMemoryNative();
+        }
+
+        @Override
+        public void onTrimMemory(int level) {
+            onTrimMemoryNative(level);
         }
     };
 
@@ -171,6 +179,12 @@ public class PlatformContext implements LifecycleEventListener {
 
     // Whether the app is in the foreground (DawnContext::setForeground).
     private static native void setForegroundNative(boolean foreground);
+
+    // What the system says about memory (RNSkGpuPurge::onLowMemory,
+    // RNSkGpuPurge::onTrimMemory).
+    private static native void onLowMemoryNative();
+
+    private static native void onTrimMemoryNative(int level);
 
     // Where Dawn's blob cache keeps its entries (DawnContext::setCacheDirectory).
     private static native void setCacheDirectoryNative(String directory);

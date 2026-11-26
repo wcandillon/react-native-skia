@@ -21,17 +21,28 @@ export type SkiaErrorName =
   | "SkiaValidationError"
   | "SkiaOutOfMemoryError"
   | "SkiaGPUUnavailableError"
+  | "SkiaSurfaceUnavailableError"
   | "SkiaInternalError"
   // Named like the DOMException WebGPU uses for the same situation.
   | "NotSupportedError"
   | "AbortError"
   | "NotFoundError";
 
+/**
+ * The non-enumerable property, set to `true`, that marks an error React
+ * Native Skia raised, on every runtime: the classes below set it, and so does
+ * native code when it builds an error on a runtime without them (a worklet
+ * runtime, see cpp/jsi/NamedError.h). Unlike the name, it does not match a
+ * DOMException of the same name (the `AbortError` of an aborted fetch).
+ */
+export const SkiaErrorBrand = "__rnskiaError";
+
 /** The base class of the errors React Native Skia raises. */
 export class SkiaError extends Error {
   constructor(message?: string, name: SkiaErrorName = "SkiaError") {
     super(message);
     this.name = name;
+    Object.defineProperty(this, SkiaErrorBrand, { value: true });
     // Transpiled classes extending Error lose their prototype.
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -105,6 +116,25 @@ export class SkiaGPUUnavailableError extends SkiaError {
   }
 }
 
+/** What a {@link SkiaSurfaceUnavailableError} could not get. */
+export type SkiaSurfaceContext = "webgl" | "graphics" | "2d";
+
+/**
+ * The browser would not give a drawing surface to render or present with:
+ * no WebGL context (WebGL disabled or blocked, too many contexts on the
+ * page), no graphics context on top of it, or no 2D context to present the
+ * frame through. On the web only, where a view can fall back to an empty
+ * state. Identify it by its class or name, never by its message, which may
+ * change.
+ */
+export class SkiaSurfaceUnavailableError extends SkiaError {
+  readonly context: SkiaSurfaceContext;
+  constructor(message: string, context: SkiaSurfaceContext) {
+    super(message, "SkiaSurfaceUnavailableError");
+    this.context = context;
+  }
+}
+
 /** Skia or the graphics driver failed on its own. */
 export class SkiaInternalError extends SkiaError {
   constructor(message: string) {
@@ -114,7 +144,8 @@ export class SkiaInternalError extends SkiaError {
 
 /**
  * Whether `error` is one React Native Skia raised, optionally of the given
- * name. Works on every runtime, worklets included, as it reads the name.
+ * name. Works on every runtime, worklets included, as it reads the
+ * {@link SkiaErrorBrand} rather than the class.
  */
 export const isSkiaError = (
   error: unknown,
@@ -124,29 +155,12 @@ export const isSkiaError = (
   if (
     typeof error !== "object" ||
     error === null ||
-    typeof (error as { name?: unknown }).name !== "string"
+    (error as Record<string, unknown>)[SkiaErrorBrand] !== true
   ) {
     return false;
   }
-  const errorName = (error as { name: string }).name;
-  if (name !== undefined) {
-    return errorName === name;
-  }
-  return SkiaErrorNames.indexOf(errorName as SkiaErrorName) !== -1;
+  return name === undefined || (error as { name?: unknown }).name === name;
 };
-
-const SkiaErrorNames: readonly SkiaErrorName[] = [
-  "SkiaError",
-  "SkiaDecodeError",
-  "SkSLCompilationError",
-  "SkiaValidationError",
-  "SkiaOutOfMemoryError",
-  "SkiaGPUUnavailableError",
-  "SkiaInternalError",
-  "NotSupportedError",
-  "AbortError",
-  "NotFoundError",
-];
 
 /**
  * The constructors native code builds its errors with, on the runtime that
@@ -166,5 +180,7 @@ export const SkiaErrorConstructors = {
   SkiaOutOfMemoryError: (message: string) => new SkiaOutOfMemoryError(message),
   SkiaGPUUnavailableError: (message: string) =>
     new SkiaGPUUnavailableError(message),
+  SkiaSurfaceUnavailableError: (message: string, context: SkiaSurfaceContext) =>
+    new SkiaSurfaceUnavailableError(message, context),
   SkiaInternalError: (message: string) => new SkiaInternalError(message),
 };
