@@ -3,7 +3,9 @@ import fs from "fs";
 import React from "react";
 
 import { checkImage, docPath, itRunsE2eOnly } from "../../../__tests__/setup";
-import { importSkia, surface } from "../setup";
+import { importSkia, resolveFile, surface } from "../setup";
+import { AlphaType, ColorType } from "../../../skia/types";
+import type { SkFontMgr } from "../../../skia/types";
 import {
   Blur,
   ColorMatrix,
@@ -39,6 +41,14 @@ const tiger = new SVGAsset(
   800,
   800
 );
+
+const RobotoRegular = Array.from(
+  resolveFile("skia/__tests__/assets/Roboto-Regular.ttf")
+);
+
+const robotoText = `<svg viewBox='0 0 64 32' width="64" height="32" xmlns='http://www.w3.org/2000/svg'>
+<text x="2" y="26" font-family="Roboto" font-size="24" fill="black">Hi</text>
+</svg>`;
 
 const svgWithoutSize = new SVGAsset(
   `<svg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'>
@@ -207,4 +217,82 @@ describe("Displays SVGs", () => {
     );
     checkImage(image, docPath("svg.png"));
   });
+
+  itRunsE2eOnly(
+    "should accept a TypefaceFontProvider as the font manager",
+    async () => {
+      const result = await surface.eval(
+        (Skia, ctx) => {
+          const roboto = Skia.Typeface.MakeFreeTypeFaceFromData(
+            Skia.Data.fromBytes(new Uint8Array(ctx.RobotoRegular))
+          )!;
+          const provider = Skia.TypefaceFontProvider.Make();
+          provider.registerFont(roboto, "Roboto");
+          const fromString = Skia.SVG.MakeFromString(ctx.svg, provider)!;
+          const fromData = Skia.SVG.MakeFromData(
+            Skia.Data.fromBytes(new Uint8Array(ctx.svgBytes)),
+            provider
+          )!;
+          const fromSystem = Skia.SVG.MakeFromString(
+            ctx.svg,
+            Skia.FontMgr.System()
+          );
+          const offscreen = Skia.Surface.MakeOffscreen(64, 32)!;
+          const canvas = offscreen.getCanvas();
+          canvas.drawColor(Skia.Color("white"));
+          canvas.drawSvg(fromString);
+          const pixels = canvas.readPixels(0, 0, {
+            width: 64,
+            height: 32,
+            colorType: ctx.colorType,
+            alphaType: ctx.alphaType,
+          })!;
+          let inked = 0;
+          for (let i = 0; i < pixels.length; i += 4) {
+            if (pixels[i] < 128) {
+              inked++;
+            }
+          }
+          return {
+            fromString: [fromString.width(), fromString.height()],
+            fromData: [fromData.width(), fromData.height()],
+            fromSystem: fromSystem !== null,
+            inked,
+          };
+        },
+        {
+          RobotoRegular,
+          svg: robotoText,
+          svgBytes: Array.from(Buffer.from(robotoText)),
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        }
+      );
+      expect(result.fromString).toEqual([64, 32]);
+      expect(result.fromData).toEqual([64, 32]);
+      expect(result.fromSystem).toBe(true);
+      expect(result.inked).toBeGreaterThan(0);
+    }
+  );
+
+  itRunsE2eOnly(
+    "should reject a font manager of a different type",
+    async () => {
+      const message = await surface.eval(
+        (Skia, ctx) => {
+          try {
+            Skia.SVG.MakeFromString(
+              ctx.svg,
+              Skia.Paint() as unknown as SkFontMgr
+            );
+            return "did not throw";
+          } catch (e) {
+            return (e as Error).message;
+          }
+        },
+        { svg: robotoText }
+      );
+      expect(message).toContain("Expected FontMgr but got different type");
+    }
+  );
 });
