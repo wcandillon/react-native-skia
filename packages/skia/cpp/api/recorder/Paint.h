@@ -86,24 +86,26 @@ public:
       ctx->canvas->concat(m3);
     }
     if (clip.has_value()) {
+      // Anti-aliased like the JS recorder (CTM.ts), so clips look the same on
+      // every platform.
       const auto &c = clip.value();
       if (std::holds_alternative<SkPath>(c)) {
         const auto &path = std::get<SkPath>(c);
-        ctx->canvas->clipPath(path, op);
+        ctx->canvas->clipPath(path, op, true);
       } else if (std::holds_alternative<std::string>(c)) {
         const auto &pathString = std::get<std::string>(c);
         SkPath result;
         if (SkParsePath::FromSVGString(pathString.c_str(), &result)) {
-          ctx->canvas->clipPath(result, op);
+          ctx->canvas->clipPath(result, op, true);
         } else {
           throw std::runtime_error("Could not parse path from string.");
         }
       } else if (std::holds_alternative<SkRect>(c)) {
         const auto &rect = std::get<SkRect>(c);
-        ctx->canvas->clipRect(rect, op);
+        ctx->canvas->clipRect(rect, op, true);
       } else if (std::holds_alternative<SkRRect>(c)) {
         const auto &rrect = std::get<SkRRect>(c);
-        ctx->canvas->clipRRect(rrect, op);
+        ctx->canvas->clipRRect(rrect, op, true);
       }
     }
   }
