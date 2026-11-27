@@ -17,6 +17,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
 
+#include "include/core/SkColorSpace.h"
 #include "include/core/SkSurface.h"
 
 #pragma clang diagnostic pop
@@ -29,14 +30,34 @@ class JsiSkSurfaceFactory : public JsiSkNativeObject<JsiSkSurfaceFactory> {
 public:
   static constexpr const char *CLASS_NAME = "SurfaceFactory";
 
-  std::variant<std::nullptr_t, std::shared_ptr<JsiSkSurface>> Make(int width,
-                                                                   int height) {
-    auto imageInfo = SkImageInfo::MakeN32Premul(width, height);
+  JSI_HOST_FUNCTION(Make) {
+    auto width = static_cast<int>(arguments[0].asNumber());
+    auto height = static_cast<int>(arguments[1].asNumber());
+    // Without a color space the raster surface is untagged: images with an
+    // ICC profile (e.g. Display P3 photos) are drawn without conversion.
+    sk_sp<SkColorSpace> colorSpace = nullptr;
+    if (count >= 3 && arguments[2].isObject()) {
+      auto opts = arguments[2].asObject(runtime);
+      if (opts.hasProperty(runtime, "colorSpace")) {
+        auto colorSpaceVal = opts.getProperty(runtime, "colorSpace");
+        if (colorSpaceVal.isString()) {
+          auto name = colorSpaceVal.asString(runtime).utf8(runtime);
+          if (name == "srgb") {
+            colorSpace = SkColorSpace::MakeSRGB();
+          } else if (name == "display-p3") {
+            colorSpace = SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
+                                               SkNamedGamut::kDisplayP3);
+          }
+        }
+      }
+    }
+    auto imageInfo = SkImageInfo::MakeN32Premul(width, height, colorSpace);
     auto surface = SkSurfaces::Raster(imageInfo);
     if (surface == nullptr) {
-      return nullptr;
+      return jsi::Value::null();
     }
-    return std::make_shared<JsiSkSurface>(getContext(), std::move(surface));
+    return makeJsiObject(runtime, std::make_shared<JsiSkSurface>(
+                                      getContext(), std::move(surface)));
   }
 
   JSI_HOST_FUNCTION(MakeOffscreen) {
@@ -101,7 +122,7 @@ public:
   size_t getMemoryPressure() override { return 2048; }
 
   static void definePrototype(jsi::Runtime &runtime, jsi::Object &prototype) {
-    installMethod(runtime, prototype, "Make", &JsiSkSurfaceFactory::Make);
+    installHostMethod(runtime, prototype, "Make", &JsiSkSurfaceFactory::Make);
     installHostMethod(runtime, prototype, "MakeOffscreen",
                       &JsiSkSurfaceFactory::MakeOffscreen);
     installHostMethod(runtime, prototype, "MakeFromNativeTexture",
